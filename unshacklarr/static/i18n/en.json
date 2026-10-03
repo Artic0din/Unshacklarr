@@ -1949,6 +1949,9 @@
  "no language tag": [],
  "no language tagged": [],
  "no output": [],
+ "no release in GitHub's answer ({0})": [
+  "r.status_code"
+ ],
  "no subs": [],
  "none on {0}": [
   "svc"

@@ -935,10 +935,12 @@ async def watch_health():
 
 # ---- Updates: a newer release of Unshacklarr, said in the page's header ----
 
-RELEASES = "https://api.github.com/repos/OwnzZzZ/Unshacklarr/releases/latest"
-UPDATE_FILE = sonarr_sync.DATA / "update.json"  # GitHub's last answer: {"checked", "version", "url"}
-UPDATE_EVERY = 12 * 3600
-UPDATE_HEADERS = {"Accept": "application/vnd.github+json", "User-Agent": f"Unshacklarr/{__version__}"}
+# The site's own page, not GitHub's API: the API allows 60 anonymous calls an hour per address, which a
+# home connection shares with every other program; this page redirects to the latest release's tag.
+RELEASES = "https://github.com/OwnzZzZ/Unshacklarr/releases/latest"
+UPDATE_FILE = sonarr_sync.DATA / "update.json"  # the last answer: {"checked", "version", "url"}
+UPDATE_EVERY, UPDATE_RETRY = 12 * 3600, 3600
+UPDATE_HEADERS = {"User-Agent": f"Unshacklarr/{__version__}"}
 
 
 def version_key(version: str) -> tuple[int, ...]:
@@ -947,11 +949,11 @@ def version_key(version: str) -> tuple[int, ...]:
 
 def check_update() -> None:
     """The latest release published on GitHub (no draft, no pre-release), kept on disk."""
-    r = requests.get(RELEASES, timeout=15, headers=UPDATE_HEADERS)
-    r.raise_for_status()
-    release = r.json()
-    write_atomic(UPDATE_FILE, json.dumps({"checked": datetime.now(timezone.utc).isoformat(),
-                                          "version": str(release["tag_name"]).lstrip("v"), "url": release["html_url"]}))
+    r = requests.get(RELEASES, timeout=15, headers=UPDATE_HEADERS, allow_redirects=False)
+    tag = re.search(r"/releases/tag/v?([^/?#]+)$", r.headers.get("Location", "")) if r.status_code in (301, 302) else None
+    if not tag:  # no release yet (it redirects to the list), or an answer that is not GitHub's
+        raise ValueError(f"no release in GitHub's answer ({r.status_code})")
+    write_atomic(UPDATE_FILE, json.dumps({"checked": datetime.now(timezone.utc).isoformat(), "version": tag[1], "url": r.headers["Location"]}))
 
 
 def update_info() -> dict | None:
@@ -962,13 +964,15 @@ def update_info() -> dict | None:
 
 
 async def watch_updates():
-    """At start, then twice a day. GitHub out of reach (or the repository private): its last answer stands."""
+    """At start, then twice a day; an hour later when GitHub did not answer (its last answer stands)."""
     while True:
         try:
             await asyncio.to_thread(check_update)
-        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+            wait = UPDATE_EVERY
+        except (requests.RequestException, ValueError) as e:
             print(f"Update check: {no_credentials(e)}", flush=True)
-        await asyncio.sleep(UPDATE_EVERY)
+            wait = UPDATE_RETRY
+        await asyncio.sleep(wait)
 
 
 ALERTS_FILE = sonarr_sync.DATA / "alerts.json"  # what was told already: {key: state}, told again only when it changes

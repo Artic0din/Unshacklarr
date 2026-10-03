@@ -857,10 +857,9 @@ def test_a_newer_release_is_told_and_github_out_of_reach_keeps_the_last_answer(t
     monkeypatch.setattr(web, "__version__", "1.9.0")
     assert web.update_info() is None  # nothing asked yet
 
-    class Answer:
-        def __init__(self, tag): self.tag = tag
-        def raise_for_status(self): pass
-        def json(self): return {"tag_name": self.tag, "html_url": f"https://github.com/o/r/releases/tag/{self.tag}"}
+    class Answer:  # GitHub's latest-release page: a redirect to its tag
+        status_code = 302
+        def __init__(self, tag): self.headers = {"Location": f"https://github.com/o/r/releases/tag/{tag}"}
 
     for tag, told in (("v1.9.0", None), ("v1.8.3", None), ("v1.10.0", "1.10.0")):
         monkeypatch.setattr(web.requests, "get", lambda *a, tag=tag, **k: Answer(tag))
@@ -868,9 +867,12 @@ def test_a_newer_release_is_told_and_github_out_of_reach_keeps_the_last_answer(t
         assert (web.update_info() or {}).get("version") == told, tag
     def down(*a, **k):
         raise requests.ConnectionError("no network")
-    monkeypatch.setattr(web.requests, "get", down)
-    try:
-        web.check_update()
-    except requests.RequestException:
-        pass  # watch_updates logs it
+    no_release = type("NoRelease", (), {"status_code": 302, "headers": {"Location": "https://github.com/o/r/releases"}})()
+    for answer in (down, lambda *a, **k: no_release):
+        monkeypatch.setattr(web.requests, "get", answer)
+        try:
+            web.check_update()
+            raise AssertionError("an answer with no release was taken")
+        except (requests.RequestException, ValueError):
+            pass  # watch_updates logs it and asks again in an hour
     assert web.update_info() == {"version": "1.10.0", "url": "https://github.com/o/r/releases/tag/v1.10.0"}
