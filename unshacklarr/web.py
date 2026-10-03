@@ -1830,8 +1830,13 @@ GENERIC_TITLE = re.compile(r"(tba|tbd|episode|episodio|folge|aflevering)( \d+)?"
 
 
 def usable_title(text: str | None) -> str:
-    """A title worth comparing, plain; "" for none or a placeholder ("TBA", "Episode 3"). An episode
-    number ahead of the name goes (Molotov's "E6 Franck Dubosc")."""
+    """A title worth comparing, plain; "" for none, a placeholder ("TBA", "Episode 3") or one written mostly
+    in another alphabet (TMDB's Japanese title of an anime, before its translations). An episode number
+    ahead of the name goes (Molotov's "E6 Franck Dubosc")."""
+    letters = [c for c in text or "" if c.isalpha()]
+    latin = sum(unicodedata.normalize("NFKD", c).encode("ascii", "ignore").isalpha() for c in letters)
+    if letters and latin * 2 < len(letters):  # another alphabet: "修行DEディナー" is not a title "de"
+        return ""
     plain = plain_title(text or "")
     if GENERIC_TITLE.fullmatch(plain):
         return ""
