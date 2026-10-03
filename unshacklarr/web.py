@@ -2000,6 +2000,22 @@ def probe_series(show: dict, series_id: int, title: str = "") -> dict:
             clash = comparable and theirs_name and known[e["id"]] and not any(same_title(theirs_name, t) for t in known[e["id"]])
             if sxxeyy in mapped or not clash:
                 available[e["id"]] = {"service": theirs, "name": hit.get("name")}
+    # Numbered from the series' first episode (Netflix's anime: Sonarr's S02E01, the 13th, is its S02E13; a single
+    # season on 6play): by Sonarr's absolute number, in the episode's season, else in the first. Only a number no
+    # other episode has there, and whose title doesn't say another episode.
+    taken = {a["service"] for a in available.values()}
+    for e in every:
+        absolute = e.get("absoluteEpisodeNumber")
+        if e["id"] in available or not absolute or e["seasonNumber"] < 1 or f"S{e['seasonNumber']:02}E{e['episodeNumber']:02}" in mapped:
+            continue
+        for key in dict.fromkeys((f"S{e['seasonNumber']:02}E{absolute:02}", f"S01E{absolute:02}")):
+            hit = by_key.get(key)
+            theirs_name = usable_title((hit or {}).get("name"))
+            clash = comparable and theirs_name and known[e["id"]] and not any(same_title(theirs_name, t) for t in known[e["id"]])
+            if hit and key not in taken and key not in by_title and not clash:
+                available[e["id"]] = {"service": key, "name": hit.get("name"), "match": "absolute"}
+                taken.add(key)
+                break
     return {
         "available": available,
         "local_titles": local,  # TVDB's titles in your language, for the page to show over Sonarr's "TBA"
@@ -2027,10 +2043,11 @@ def keep_service_list(tvdb: int, show: dict, found: dict) -> None:
 
 def title_matches(show: dict, ep: dict) -> dict[int, str]:
     """For the sync, when an episode's number gives nothing: the episodes the service lists under another
-    number, found by their title (Sonarr id -> the service's number), the list kept for the page too."""
+    number, found by their title or their absolute number (Sonarr id -> {"service", "match"}), the list kept
+    for the page too."""
     found = probe_series(show, ep["seriesId"], ep["series"]["title"])
     keep_service_list(ep["series"]["tvdbId"], show, found)
-    return {int(i): m["service"] for i, m in found["available"].items() if m.get("match") == "title"}
+    return {int(i): m for i, m in found["available"].items() if m.get("match") in ("title", "absolute")}
 
 
 sonarr_sync.find_by_title = title_matches

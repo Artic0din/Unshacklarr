@@ -102,7 +102,6 @@
  "Before {0}'s first episode: nothing to ask for": "Vor der ersten Episode bei {0}: nichts anzufragen",
  "Blocked in this browser's settings for this site.": "In den Einstellungen dieses Browsers für diese Seite blockiert.",
  "Broadcast schedule": "Sendeplan",
- "By their title: {0}": "Über ihren Titel: {0}",
  "Bypass proxy for all downloads. Manifest, license, and auth still use proxy.": "Proxy für alle Downloads umgehen. Manifest, Lizenz und Anmeldung nutzen weiter den Proxy.",
  "Bypass title cache for this download.": "Titel-Cache für diesen Download umgehen.",
  "CDM version": "CDM-Version",
@@ -1518,5 +1517,9 @@
  "Unshacklarr {0} is out: see what's new": "Unshacklarr {0} ist erschienen: Neuerungen ansehen",
  "Update {0}": "Update {0}",
  "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "unshackle.yaml weist kein Gerät zu und hat kein Standardgerät: Downloads werden abgelehnt. Wähle eines unter Einstellungen, CDM, oder Kein CDM, wenn es kein DRM hat.",
- "{0}: not on {1} as {2}, found by its title as {3}": "{0}: nicht auf {1} als {2}, über den Titel gefunden als {3}"
+ "Numbered there from the series' first episode, as Sonarr's absolute number: a Download asks for it as {0}": "Dort ab der ersten Folge der Serie gezählt, wie Sonarrs absolute Nummer: ein Download fragt sie als {0} an",
+ "Under the service's own number: {0}": "Unter der Nummer des Dienstes: {0}",
+ "its absolute number": "seine absolute Nummer",
+ "its title": "seinen Titel",
+ "{0}: not on {1} as {2}, found by {3} as {4}": "{0}: nicht auf {1} als {2}, über {3} gefunden als {4}"
 }

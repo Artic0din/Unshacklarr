@@ -3259,6 +3259,7 @@ function onBadge(e) {
     el("b", { textContent: found.name || `On ${svc}` }),
     el("small", {}, `${svc} lists it as `, el("code", { textContent: found.service })),
     ...(found.match === "title" ? [el("small", { className: "diff", textContent: `Found by its title, whatever its number: a Download asks for it as ${found.service}` })]
+      : found.match === "absolute" ? [el("small", { className: "diff", textContent: `Numbered there from the series' first episode, as Sonarr's absolute number: a Download asks for it as ${found.service}` })]
       : found.service !== sxxeyy ? [el("small", { className: "diff", textContent: `Sonarr numbers it ${sxxeyy}: this series' numbering maps it there` })] : []),
   ]);
 }
@@ -3406,8 +3407,8 @@ $("#ep-go-edit").onclick = () => {
   $("#oneoff-slot").append($("#d-adv"));
   $("#d-adv").open = true;
   oneOff.join_parts = false;  // not ticked at first here: the preview says what joining would change
-  for (const e of Object.values(epSeasons).flat().filter((e) => picked.has(e.id) && epAvail?.[e.id]?.match === "title"))
-    oneOff.episode_map = { ...(oneOff.episode_map || {}), [`S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`]: epAvail[e.id].service };  // found by its title
+  for (const e of Object.values(epSeasons).flat().filter((e) => picked.has(e.id) && elsewhere(e)))
+    oneOff.episode_map = { ...(oneOff.episode_map || {}), [`S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`]: epAvail[e.id].service };  // found by its title or absolute number
   fillAdv(oneOff, current.title);
   renderPreview();
   $("#oneoff-cdm").replaceChildren(cdmNote(conf.service));
@@ -3439,7 +3440,7 @@ function pickServiceEpisode(e, sx, theirs, svc, missing) {
     } else opts.push([key, `${key}${items[0].name ? ` · ${items[0].name}` : ""}`]);
   }
   if (!opts.some(([v]) => v === (theirs || ""))) opts.unshift([theirs || "", theirs ? `${theirs} · not on ${svc}` : "Nothing: before the first episode"]);
-  const titled = epAvail?.[e.id]?.match === "title" && epAvail[e.id].service;
+  const titled = elsewhere(e) && epAvail[e.id].service;
   if (titled) opts.forEach((o) => { if (o[0] === titled) o[1] += " ✓"; });  // the one with the same title, in the list too
   const select = el("select", { className: missing ? "bad" : "", ariaLabel: `${sx} on ${svc}`, onchange: () => {
     const map = { ...(oneOff.episode_map || {}) };
@@ -3487,6 +3488,9 @@ function renderPreview() {
 }
 /* Whether the service's episode picked is Sonarr's: the same title, another one, or none there. */
 const plainTitle = (t) => (t || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\(\s*\d+\s*\/\s*\d+\s*\)/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+/* Found on the service under another number than the series' numbering gives: by its title, or by Sonarr's
+   absolute number (a service numbering an anime from its first episode). A Download asks for it as found. */
+const elsewhere = (e) => ["title", "absolute"].includes(epAvail?.[e.id]?.match);
 function agreement(e, theirs, found, svc) {
   if (!theirs) return "";
   if (!found.length) return el("span", { className: "st bad", textContent: `Not on ${svc}` });
@@ -3526,14 +3530,14 @@ async function startDownload(numbering = null) {
     if (choice === "cancel") return;
     replace = choice === "force";
   }
-  if (!numbering) {  // episodes found by their title where the series' numbering says otherwise: asked as found, not saved
-    const byTitle = Object.values(epSeasons).flat().filter((e) => picked.has(e.id) && epAvail?.[e.id]?.match === "title"
+  if (!numbering) {  // episodes found by their title or absolute number where the series' numbering says otherwise: asked as found, not saved
+    const byTitle = Object.values(epSeasons).flat().filter((e) => picked.has(e.id) && elsewhere(e)
       && epAvail[e.id].service !== serviceEpisode(conf, e.seasonNumber, e.episodeNumber));
     if (byTitle.length) {
       numbering = structuredClone(Object.fromEntries(NUMBERING.filter((k) => conf[k] !== undefined).map((k) => [k, conf[k]])));
       numbering.episode_map = { ...(numbering.episode_map || {}),
         ...Object.fromEntries(byTitle.map((e) => [`S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`, epAvail[e.id].service])) };
-      toast(`By their title: ${byTitle.map((e) => `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)} as ${epAvail[e.id].service}`).join(", ")}`);
+      toast(`Under the service's own number: ${byTitle.map((e) => `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)} as ${epAvail[e.id].service}`).join(", ")}`);
     }
   }
   try {

@@ -105,7 +105,6 @@
  "Blocked in this browser's settings for this site.": "このブラウザのサイト設定でブロックされています。",
  "Broadcast schedule": "放送スケジュール",
  "Build": "ビルド",
- "By their title: {0}": "タイトルで一致：{0}",
  "Bypass proxy for all downloads. Manifest, license, and auth still use proxy.": "すべてのダウンロードでプロキシを使いません。マニフェスト、ライセンス、認証は引き続きプロキシを使います。",
  "Bypass title cache for this download.": "今回のダウンロードでタイトルキャッシュを使いません。",
  "CDM version": "CDM バージョン",
@@ -1549,5 +1548,9 @@
  "Unshacklarr {0} is out: see what's new": "Unshacklarr {0} が公開されました：新機能を見る",
  "Update {0}": "{0} に更新",
  "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "unshackle.yaml がデバイスを割り当てておらず、デフォルトもありません：ダウンロードは拒否されます。設定 › CDM で選ぶか、DRM がなければ「CDM なし」にしてください。",
- "{0}: not on {1} as {2}, found by its title as {3}": "{0}：{1} に {2} としてはなく、タイトルから {3} として見つかりました"
+ "Numbered there from the series' first episode, as Sonarr's absolute number: a Download asks for it as {0}": "そこではシリーズ第1話から通し番号で、Sonarr の絶対番号と同じです：ダウンロードは {0} として要求します",
+ "Under the service's own number: {0}": "サービス側の番号で：{0}",
+ "its absolute number": "絶対番号",
+ "its title": "タイトル",
+ "{0}: not on {1} as {2}, found by {3} as {4}": "{0}：{1} に {2} としてはなく、{3}から {4} として見つかりました"
 }

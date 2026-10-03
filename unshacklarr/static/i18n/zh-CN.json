@@ -105,7 +105,6 @@
  "Blocked in this browser's settings for this site.": "已在此浏览器的网站设置中被阻止。",
  "Broadcast schedule": "播出时间表",
  "Build": "构建",
- "By their title: {0}": "按标题找到：{0}",
  "Bypass proxy for all downloads. Manifest, license, and auth still use proxy.": "所有下载不使用代理。清单、许可证和认证仍使用代理。",
  "Bypass title cache for this download.": "本次下载跳过标题缓存。",
  "CDM version": "CDM 版本",
@@ -1553,5 +1552,9 @@
  "Unshacklarr {0} is out: see what's new": "Unshacklarr {0} 已发布：查看新内容",
  "Update {0}": "更新到 {0}",
  "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "unshackle.yaml 没有为它指定设备，也没有默认设备：它的下载会被拒绝。请在设置 › CDM 中选择一个；如果没有 DRM，选择“无 CDM”。",
- "{0}: not on {1} as {2}, found by its title as {3}": "{0}：在 {1} 上没有 {2}，按标题找到为 {3}"
+ "Numbered there from the series' first episode, as Sonarr's absolute number: a Download asks for it as {0}": "在那里从该剧第一集起连续编号，与 Sonarr 的绝对编号一致：下载时按 {0} 请求",
+ "Under the service's own number: {0}": "按服务自己的编号：{0}",
+ "its absolute number": "它的绝对编号",
+ "its title": "它的标题",
+ "{0}: not on {1} as {2}, found by {3} as {4}": "{0}：在 {1} 上没有 {2}，按{3}找到为 {4}"
 }

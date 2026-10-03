@@ -105,7 +105,6 @@
  "Blocked in this browser's settings for this site.": "Заблокировано в настройках браузера для этого сайта.",
  "Broadcast schedule": "График выхода",
  "Build": "Сборка",
- "By their title: {0}": "По названию: {0}",
  "Bypass proxy for all downloads. Manifest, license, and auth still use proxy.": "Не использовать прокси для загрузок. Манифест, лицензия и авторизация по-прежнему идут через прокси.",
  "Bypass title cache for this download.": "Не использовать кеш тайтлов для этой загрузки.",
  "CDM version": "Версия CDM",
@@ -1544,5 +1543,9 @@
  "Unshacklarr {0} is out: see what's new": "Вышел Unshacklarr {0}: что нового",
  "Update {0}": "Обновить до {0}",
  "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "unshackle.yaml не назначает ему устройство, и устройства по умолчанию нет: его загрузки отклоняются. Выберите его в Настройках, CDM, или «Без CDM», если у него нет DRM.",
- "{0}: not on {1} as {2}, found by its title as {3}": "{0}: нет на {1} как {2}, найдено по названию как {3}"
+ "Numbered there from the series' first episode, as Sonarr's absolute number: a Download asks for it as {0}": "Там нумерация идёт с первой серии сериала, как абсолютный номер в Sonarr: «Скачать» запросит его как {0}",
+ "Under the service's own number: {0}": "Под номером сервиса: {0}",
+ "its absolute number": "его абсолютному номеру",
+ "its title": "его названию",
+ "{0}: not on {1} as {2}, found by {3} as {4}": "{0}: нет на {1} как {2}, найдено по {3} как {4}"
 }

@@ -249,9 +249,6 @@
  "Bot token": [],
  "Broadcast schedule": [],
  "Build": [],
- "By their title: {0}": [
-  "byTitle.map((e) => `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)} as ${epAvail[e.id].service}`).join(\", \")"
- ],
  "Bypass proxy for all downloads. Manifest, license, and auth still use proxy.": [],
  "Bypass title cache for this download.": [],
  "CDM": [],
@@ -996,6 +993,9 @@
   "hsCards.length",
   "keep"
  ],
+ "Numbered there from the series' first episode, as Sonarr's absolute number: a Download asks for it as {0}": [
+  "found.service"
+ ],
  "Numbering and file names": [],
  "Numbering and file names, for this download": [],
  "Off here: off for every address and this device. The bell in the page keeps them all.": [],
@@ -1656,6 +1656,9 @@
  "Type your password first": [],
  "URL or ID of the series": [],
  "UTC": [],
+ "Under the service's own number: {0}": [
+  "byTitle.map((e) => `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)} as ${epAvail[e.id].service}`).join(\", \")"
+ ],
  "Undo": [],
  "Unknown download": [],
  "Unknown episode name mode {0}": [
@@ -1928,8 +1931,10 @@
   "until(next)",
   "every === 24 ? \"once a day\" : every === 1 ? \"every hour\" : `every ${every} hours`"
  ],
+ "its absolute number": [],
  "its first episode must look like S01E01": [],
  "its time must look like 20:39": [],
+ "its title": [],
  "just now": [],
  "key saved": [],
  "license granted": [],
@@ -2662,10 +2667,11 @@
   "label",
   "e"
  ],
- "{0}: not on {1} as {2}, found by its title as {3}": [
+ "{0}: not on {1} as {2}, found by {3} as {4}": [
   "label",
   "show['service']",
   "service_sxxeyy",
+  "how",
   "other"
  ],
  "{0}: not on {1} yet{2}": [

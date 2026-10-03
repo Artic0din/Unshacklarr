@@ -4,6 +4,17 @@ Every change worth knowing, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/): until 1.0.0, a minor version may change how things work.
 
+## [1.2.0] - 2026-10-03
+
+An anime its service numbers from its first episode is found by Sonarr's absolute number.
+
+### Added
+
+- **Found by its absolute number.** A service that numbers a series from its first episode (Netflix's
+  Ranma ½: Sonarr's S02E01, the 13th, is its S02E13; a single season on 6play) is matched by Sonarr's
+  absolute number, on the series' page and in the sync, even with no title to go by. Only a number no
+  other episode has there.
+
 ## [1.1.1] - 2026-10-03
 
 ### Fixed
@@ -178,6 +189,7 @@ A full audit found nothing critical nor high; what it found is fixed:
 - **Dependencies.** oauthlib 4.0.0, for two advisories on OAuth servers that never reached Unshacklarr
   (Apprise only uses it as a client).
 
+[1.2.0]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.2.0
 [1.1.1]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.1.1
 [1.1.0]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.1.0
 [1.0.0]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.0.0

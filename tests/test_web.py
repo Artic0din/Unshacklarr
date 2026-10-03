@@ -876,3 +876,31 @@ def test_a_newer_release_is_told_and_github_out_of_reach_keeps_the_last_answer(t
         except (requests.RequestException, ValueError):
             pass  # watch_updates logs it and asks again in an hour
     assert web.update_info() == {"version": "1.10.0", "url": "https://github.com/o/r/releases/tag/v1.10.0"}
+
+
+def test_an_anime_numbered_from_its_first_episode_is_found_by_its_absolute_number(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    # Ranma 1/2 on Netflix: season 2 numbered on from season 1 (S02E13), its titles in French and Sonarr's in English
+    service = [{"type": "episode", "season": s, "number": n, "name": f"Épisode français {n}"} for s, n in
+               [(1, 1), (1, 2), (2, 3), (2, 4)]]
+    sonarr = [{"id": i, "seasonNumber": s, "episodeNumber": e, "absoluteEpisodeNumber": a, "title": f"English {a}"}
+              for i, (s, e, a) in enumerate([(1, 1, 1), (1, 2, 2), (2, 1, 3), (2, 2, 4), (3, 1, 5)], start=10)]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "NF", "cli_params": []}]})
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {"tvdbId": 451479})
+    monkeypatch.setattr(web, "tmdb_key", lambda: "")
+    monkeypatch.setattr(web, "tvdb_titles", lambda tvdb: {})
+    probe = web.probe_series({"service": "NF", "title": "x"}, 1)
+    found = {i: (a["service"], a.get("match")) for i, a in probe["available"].items()}
+    assert found == {10: ("S01E01", None), 11: ("S01E02", None), 12: ("S02E03", "absolute"), 13: ("S02E04", "absolute")}
+    # 14 (S03E01, the 5th): the service has nothing as S03E05 or S01E05, so nothing is guessed
+
+    # A single season on the service (6play): S01E<absolute>, but never a number another episode has
+    service[:] = [{"type": "episode", "season": 1, "number": n, "name": f"É{n}"} for n in (1, 2, 3, 4)]
+    probe = web.probe_series({"service": "NF", "title": "x"}, 1)
+    assert {i: a["service"] for i, a in probe["available"].items()} == {10: "S01E01", 11: "S01E02", 12: "S01E03", 13: "S01E04"}
+    probe = web.probe_series({"service": "NF", "title": "x", "episode_map": {"S01E02": "S01E03"}}, 1)
+    assert 12 not in probe["available"]  # S01E03 is S01E02's here, by the series' own table

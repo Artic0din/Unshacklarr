@@ -1241,7 +1241,7 @@ def test_an_episode_its_number_misses_is_found_by_its_title(tmp_path, monkeypatc
 
     def find(show, ep):
         listed.append(ep["id"])
-        return {201: "S01E07"}  # S02E01 by its title; S02E02 not out yet
+        return {201: {"service": "S01E07", "match": "title"}}  # S02E01 by its title; S02E02 not out yet
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
     monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})

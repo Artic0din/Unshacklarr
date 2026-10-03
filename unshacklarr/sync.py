@@ -901,7 +901,7 @@ def episode_lock(out: Path):
                 busy_episodes.discard(out.name)
 
 
-# The series listed on its service, its episodes matched by title (web.py sets it: the page's own lookup).
+# The series listed on its service, its episodes matched by title or absolute number (web.py sets it: the page's own lookup).
 # Asked when an episode's number gives nothing, its answer kept a while: the bursts at a release time
 # try every 30 s, and the other episodes of a job ask the same.
 find_by_title = None
@@ -909,8 +909,9 @@ TITLE_KEEP = 15 * 60  # ponytail: one listing per series every 15 min; a fresher
 title_matches: dict[int, tuple[float, dict]] = {}
 
 
-def by_title(show: dict, ep: dict, asked: str, run) -> str | None:
-    """The service's own number for an episode it has under another one than asked, found by its title."""
+def by_title(show: dict, ep: dict, asked: str, run) -> dict | None:
+    """Where the service has an episode under another number than asked, found by its title or its absolute
+    number: {"service": its number there, "match": "title" or "absolute"}."""
     tvdb = ep["series"]["tvdbId"]
     when, found = title_matches.get(tvdb, (None, {}))
     if when is None or time.monotonic() - when > TITLE_KEEP:
@@ -923,7 +924,7 @@ def by_title(show: dict, ep: dict, asked: str, run) -> str | None:
             found = {}
         title_matches[tvdb] = (time.monotonic(), found)
     other = found.get(ep["id"])
-    return other if other and other != asked else None
+    return other if other and other["service"] != asked else None
 
 
 def stacked(show: dict, config: dict) -> tuple[dict, dict]:
@@ -1536,8 +1537,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     ask(service_sxxeyy)
                     error = cause = None
                     # Nothing under its number: the service may have it under another, found by its title
-                    if not videos_in(out) and int(show.get("parts") or 0) <= 1 and (other := by_title(show, ep, service_sxxeyy, run)):
-                        run.say(f"{label}: not on {show['service']} as {service_sxxeyy}, found by its title as {other}")
+                    if not videos_in(out) and int(show.get("parts") or 0) <= 1 and (found := by_title(show, ep, service_sxxeyy, run)):
+                        other = found["service"]
+                        how = "its absolute number" if found.get("match") == "absolute" else "its title"
+                        run.say(f"{label}: not on {show['service']} as {service_sxxeyy}, found by {how} as {other}")
                         service_sxxeyy = other
                         own = {k: show[k] for k in NUMBERING if k in show}  # a retry asks the same again
                         run.card.update(serviceEpisode=other, numbering={**own, "episode_map": {**(own.get("episode_map") or {}), sxxeyy: other}})
