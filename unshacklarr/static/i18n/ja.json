@@ -1543,5 +1543,11 @@
  "unshackle.yaml's directories: {0}: {1} is no folder next to it": "unshackle.yaml の directories: {0}: {1} は、隣にあるフォルダではありません",
  "{0} is a symbolic link: replace it with the file itself": "{0} はシンボリックリンクです。ファイル本体に置き換えてください",
  "{0} is already there: the parts are kept, nothing joined": "{0} はすでに存在します。パートは保持され、結合は行っていません",
- "{0} must be a full path, from / (or a drive letter), without ..": "{0} は / （またはドライブ文字）から始まる完全なパスで、.. を含めずに指定してください"
+ "{0} must be a full path, from / (or a drive letter), without ..": "{0} は / （またはドライブ文字）から始まる完全なパスで、.. を含めずに指定してください",
+ "Could not look for it by its title on {0}: {1}": "{0} でタイトルから探せませんでした：{1}",
+ "No CDM for {0}: unshackle.yaml gives it no device and has no default one. Pick one in Settings, CDM, or No CDM if it has no DRM": "{0} に CDM がありません：unshackle.yaml がデバイスを割り当てておらず、デフォルトもありません。設定 › CDM で選ぶか、DRM がなければ「CDM なし」にしてください",
+ "Unshacklarr {0} is out: see what's new": "Unshacklarr {0} が公開されました：新機能を見る",
+ "Update {0}": "{0} に更新",
+ "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "unshackle.yaml がデバイスを割り当てておらず、デフォルトもありません：ダウンロードは拒否されます。設定 › CDM で選ぶか、DRM がなければ「CDM なし」にしてください。",
+ "{0}: not on {1} as {2}, found by its title as {3}": "{0}：{1} に {2} としてはなく、タイトルから {3} として見つかりました"
 }

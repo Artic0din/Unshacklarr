@@ -379,6 +379,10 @@
  "Could not load the schedule: {0}": [
   "e.message"
  ],
+ "Could not look for it by its title on {0}: {1}": [
+  "show['service']",
+  "e"
+ ],
  "Could not reach Sonarr with these settings: {0}": [
   "e"
  ],
@@ -837,6 +841,9 @@
  "No CDM for {0}": [
   "svcName(tag)"
  ],
+ "No CDM for {0}: unshackle.yaml gives it no device and has no default one. Pick one in Settings, CDM, or No CDM if it has no DRM": [
+  "tag"
+ ],
  "No DRM, nothing to decrypt": [],
  "No address yet": [],
  "No address yet: add Discord, Telegram, ntfy or another.": [],
@@ -895,7 +902,7 @@
  "None": [],
  "None.": [],
  "Not a notification URL Apprise knows: {0}…": [
-  "url[:40]"
+  "url.partition('://')[0] + '://'"
  ],
  "Not a push subscription": [],
  "Not a service: {0}": [
@@ -1689,6 +1696,9 @@
  "Unshacklarr {0}": [
   "data.version"
  ],
+ "Unshacklarr {0} is out: see what's new": [
+  "data.update.version"
+ ],
  "Unshacklarr · Today at {0}": [
   "now"
  ],
@@ -1708,6 +1718,9 @@
  "Unshackle tries its series at their release time, or at the first sync after airing. Add any other series in one tap, or hide the ones you don't follow.": [],
  "Unshackle: {0}": [
   "data.unshackle_error"
+ ],
+ "Update {0}": [
+  "data.update.version"
  ],
  "Use a remote unshackle server from remote_services in unshackle.yaml for the service's own calls and its licences; the files still download here. Set it for one service in Per service.": [],
  "Use exact language matching (no variants). With this flag, -l es-419 matches ONLY es-419, not es-ES or other variants.": [],
@@ -1843,7 +1856,7 @@
  "asking for {0} {1} {2}, into {3}": [
   "request['service']",
   "request['title_id']",
-  "service_sxxeyy",
+  "wanted",
   "request['output_dir']"
  ],
  "audio of {0}: {1} (wanted: {2})": [
@@ -2106,6 +2119,7 @@
  "unshackle-*": [],
  "unshackle.yaml": [],
  "unshackle.yaml changed since you opened it (Settings, CDM writes to it too): open it again": [],
+ "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": [],
  "unshackle.yaml gives it none, so the default one{0} decrypts it: a download fails if the service wants the other DRM (Widevine or PlayReady). Set one under cdm: in Settings, unshackle.yaml.": [
   "cdm.default ? ` (${cdm.default})` : \"\""
  ],
@@ -2644,6 +2658,12 @@
  "{0}: not imported, the library keeps its file: {1}": [
   "label",
   "e"
+ ],
+ "{0}: not on {1} as {2}, found by its title as {3}": [
+  "label",
+  "show['service']",
+  "service_sxxeyy",
+  "other"
  ],
  "{0}: not on {1} yet{2}": [
   "label",

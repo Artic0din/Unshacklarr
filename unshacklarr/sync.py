@@ -901,6 +901,31 @@ def episode_lock(out: Path):
                 busy_episodes.discard(out.name)
 
 
+# The series listed on its service, its episodes matched by title (web.py sets it: the page's own lookup).
+# Asked when an episode's number gives nothing, its answer kept a while: the bursts at a release time
+# try every 30 s, and the other episodes of a job ask the same.
+find_by_title = None
+TITLE_KEEP = 15 * 60  # ponytail: one listing per series every 15 min; a fresher one only from the page
+title_matches: dict[int, tuple[float, dict]] = {}
+
+
+def by_title(show: dict, ep: dict, asked: str, run) -> str | None:
+    """The service's own number for an episode it has under another one than asked, found by its title."""
+    tvdb = ep["series"]["tvdbId"]
+    when, found = title_matches.get(tvdb, (None, {}))
+    if when is None or time.monotonic() - when > TITLE_KEEP:
+        if find_by_title is None:
+            return None
+        try:
+            found = find_by_title(show, ep)
+        except Exception as e:  # a listing that fails leaves the episode as not out yet
+            run.say(f"Could not look for it by its title on {show['service']}: {e}")
+            found = {}
+        title_matches[tvdb] = (time.monotonic(), found)
+    other = found.get(ep["id"])
+    return other if other and other != asked else None
+
+
 def stacked(show: dict, config: dict) -> tuple[dict, dict]:
     """The options for this series: the defaults, then the service's, then the series' own;
     each level overrides the one before for the same flag."""
@@ -1366,7 +1391,7 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
         with jobs_lock:
             running_jobs[batch] = job  # a job's episode started again once it closed takes its place here
     try:
-        return run_episodes(config, settings, episodes, manual, replace, kind, batch)
+        return run_episodes(config, settings, episodes, manual, replace, kind, batch, numbering)
     finally:
         with jobs_lock:
             for episode_id in job["stubs"]:
@@ -1378,7 +1403,8 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
                 paused_jobs.discard(batch)
 
 
-def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, replace: bool, kind: str, batch: str | None = None) -> int:
+def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, replace: bool, kind: str, batch: str | None = None,
+                 numbering: dict | None = None) -> int:
     series = config.get("series") or {}
     failures, started = 0, time.monotonic()
 
@@ -1492,17 +1518,30 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     print(f"{label}: imported meanwhile, nothing to download")
                     continue
                 run = EpisodeRun(ep, show, kind, service_sxxeyy, batch)
+                if numbering is not None:  # this download's own numbering: a retry asks the service the same again
+                    run.card["numbering"] = numbering
+                    run.save()
                 on_service = f" as {service_sxxeyy}" if service_sxxeyy != sxxeyy else ""
                 run.say(f"{label}: downloading from {show['service']}{on_service}")
-                try:
-                    request = download_request(show, config, service_sxxeyy, out)
+                def ask(wanted: str) -> None:
+                    request = download_request(show, config, wanted, out)
                     asked = {k: v for k, v in request.items() if k not in ("service", "title_id", "wanted", "output_dir", "debug")}
-                    trace(f"asking for {request['service']} {request['title_id']} {service_sxxeyy}, into {request['output_dir']}")
+                    trace(f"asking for {request['service']} {request['title_id']} {wanted}, into {request['output_dir']}")
                     trace("options: " + (", ".join(f"{k}={options.HIDDEN.sub('//***@', str(v))}" for k, v in asked.items()) or "none"))  # no proxy password in the log
                     run.card["setup"] = setup_of(request)
                     run.save()
                     run_job_retrying(request, run)
+
+                try:
+                    ask(service_sxxeyy)
                     error = cause = None
+                    # Nothing under its number: the service may have it under another, found by its title
+                    if not videos_in(out) and int(show.get("parts") or 0) <= 1 and (other := by_title(show, ep, service_sxxeyy, run)):
+                        run.say(f"{label}: not on {show['service']} as {service_sxxeyy}, found by its title as {other}")
+                        service_sxxeyy = other
+                        own = {k: show[k] for k in NUMBERING if k in show}  # a retry asks the same again
+                        run.card.update(serviceEpisode=other, numbering={**own, "episode_map": {**(own.get("episode_map") or {}), sxxeyy: other}})
+                        ask(other)
                 except JobFailed as e:
                     if e.status == "cancelled":  # stopped from Activity: not a failure, nothing to import
                         shutil.rmtree(out, ignore_errors=True)

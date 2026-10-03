@@ -1540,5 +1540,11 @@
  "unshackle.yaml's directories: {0}: {1} is no folder next to it": "Dossiers de unshackle.yaml: {0}: {1} n'est pas un dossier à côté de lui",
  "{0} is a symbolic link: replace it with the file itself": "{0} est un lien symbolique: le remplacer par le fichier lui-même",
  "{0} is already there: the parts are kept, nothing joined": "{0} existe déjà: les parties sont conservées, rien n'a été collé",
- "{0} must be a full path, from / (or a drive letter), without ..": "{0} doit être un chemin complet, à partir de / (ou d'une lettre de lecteur), sans .."
+ "{0} must be a full path, from / (or a drive letter), without ..": "{0} doit être un chemin complet, à partir de / (ou d'une lettre de lecteur), sans ..",
+ "Could not look for it by its title on {0}: {1}": "Impossible de le chercher par son titre sur {0}: {1}",
+ "No CDM for {0}: unshackle.yaml gives it no device and has no default one. Pick one in Settings, CDM, or No CDM if it has no DRM": "Aucun CDM pour {0}: unshackle.yaml ne lui donne aucun appareil et n'en a pas par défaut. Choisissez-en un dans Paramètres, CDM, ou Aucun CDM s'il n'a pas de DRM",
+ "Unshacklarr {0} is out: see what's new": "Unshacklarr {0} est sorti: voir les nouveautés",
+ "Update {0}": "Mise à jour {0}",
+ "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "unshackle.yaml ne lui donne aucun appareil et n'en a pas par défaut: ses téléchargements sont refusés. Choisissez-en un dans Paramètres, CDM, ou Aucun CDM s'il n'a pas de DRM.",
+ "{0}: not on {1} as {2}, found by its title as {3}": "{0}: absent de {1} en {2}, trouvé par son titre en {3}"
 }

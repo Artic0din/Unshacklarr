@@ -1547,5 +1547,11 @@
  "unshackle.yaml's directories: {0}: {1} is no folder next to it": "unshackle.yaml 的 directories：{0}：{1} 不是它旁边的文件夹",
  "{0} is a symbolic link: replace it with the file itself": "{0} 是符号链接：请用文件本身替换",
  "{0} is already there: the parts are kept, nothing joined": "{0} 已存在：各部分已保留，未合并",
- "{0} must be a full path, from / (or a drive letter), without ..": "{0} 必须是完整路径，以 / （或盘符）开头，且不含 .."
+ "{0} must be a full path, from / (or a drive letter), without ..": "{0} 必须是完整路径，以 / （或盘符）开头，且不含 ..",
+ "Could not look for it by its title on {0}: {1}": "无法在 {0} 上按标题查找：{1}",
+ "No CDM for {0}: unshackle.yaml gives it no device and has no default one. Pick one in Settings, CDM, or No CDM if it has no DRM": "{0} 没有 CDM：unshackle.yaml 没有为它指定设备，也没有默认设备。请在设置 › CDM 中选择一个；如果没有 DRM，选择“无 CDM”",
+ "Unshacklarr {0} is out: see what's new": "Unshacklarr {0} 已发布：查看新内容",
+ "Update {0}": "更新到 {0}",
+ "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "unshackle.yaml 没有为它指定设备，也没有默认设备：它的下载会被拒绝。请在设置 › CDM 中选择一个；如果没有 DRM，选择“无 CDM”。",
+ "{0}: not on {1} as {2}, found by its title as {3}": "{0}：在 {1} 上没有 {2}，按标题找到为 {3}"
 }

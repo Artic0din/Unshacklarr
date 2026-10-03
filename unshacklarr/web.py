@@ -402,6 +402,7 @@ async def state(_):
         "service_names": names,
         "unshackle_error": unshackle_error,
         "version": __version__,
+        "update": update_info(),
         "dl_options": options.dl_specs(),
         "cdm": {str(k): v for k, v in cdm.items()},
         "service_domains": domains,
@@ -550,7 +551,7 @@ def check_urls(urls, saved=()) -> list[str]:
     urls = [str(u).strip() for u in urls or [] if str(u).strip()]
     for url in urls:
         if url not in saved and not apprise.Apprise().add(url):
-            raise web.HTTPBadRequest(text=f"Not a notification URL Apprise knows: {url.partition('://')[0]}://…")
+            raise web.HTTPBadRequest(text=f"Not a notification URL Apprise knows: {url.partition('://')[0] + '://'}…")  # its scheme only
     return urls
 
 
@@ -930,6 +931,44 @@ async def watch_health():
         except Exception as e:
             print(f"Health check: {e}", flush=True)
         await asyncio.sleep(HEALTH_EVERY)
+
+
+# ---- Updates: a newer release of Unshacklarr, said in the page's header ----
+
+RELEASES = "https://api.github.com/repos/OwnzZzZ/Unshacklarr/releases/latest"
+UPDATE_FILE = sonarr_sync.DATA / "update.json"  # GitHub's last answer: {"checked", "version", "url"}
+UPDATE_EVERY = 12 * 3600
+UPDATE_HEADERS = {"Accept": "application/vnd.github+json", "User-Agent": f"Unshacklarr/{__version__}"}
+
+
+def version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(n) for n in re.findall(r"\d+", version)[:3])
+
+
+def check_update() -> None:
+    """The latest release published on GitHub (no draft, no pre-release), kept on disk."""
+    r = requests.get(RELEASES, timeout=15, headers=UPDATE_HEADERS)
+    r.raise_for_status()
+    release = r.json()
+    write_atomic(UPDATE_FILE, json.dumps({"checked": datetime.now(timezone.utc).isoformat(),
+                                          "version": str(release["tag_name"]).lstrip("v"), "url": release["html_url"]}))
+
+
+def update_info() -> dict | None:
+    """A release newer than this one, for the header; None when this is the latest or none is known."""
+    last = read_json(UPDATE_FILE, {})
+    newer = last.get("version") and version_key(last["version"]) > version_key(__version__)
+    return {"version": last["version"], "url": last.get("url")} if newer else None
+
+
+async def watch_updates():
+    """At start, then twice a day. GitHub out of reach (or the repository private): its last answer stands."""
+    while True:
+        try:
+            await asyncio.to_thread(check_update)
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+            print(f"Update check: {no_credentials(e)}", flush=True)
+        await asyncio.sleep(UPDATE_EVERY)
 
 
 ALERTS_FILE = sonarr_sync.DATA / "alerts.json"  # what was told already: {key: state}, told again only when it changes
@@ -1982,6 +2021,17 @@ def keep_service_list(tvdb: int, show: dict, found: dict) -> None:
     write_atomic(SERVICE_LISTS, json.dumps(lists))
 
 
+def title_matches(show: dict, ep: dict) -> dict[int, str]:
+    """For the sync, when an episode's number gives nothing: the episodes the service lists under another
+    number, found by their title (Sonarr id -> the service's number), the list kept for the page too."""
+    found = probe_series(show, ep["seriesId"], ep["series"]["title"])
+    keep_service_list(ep["series"]["tvdbId"], show, found)
+    return {int(i): m["service"] for i, m in found["available"].items() if m.get("match") == "title"}
+
+
+sonarr_sync.find_by_title = title_matches
+
+
 async def service_list(request):
     """The series' last check of what its service has, if recent and for the service and URL it has now."""
     tvdb = request.match_info["tvdb"]
@@ -2088,6 +2138,23 @@ async def push_test(request):
     return web.json_response({"sent": sent})
 
 
+def retried_numbering(ids: list[int], batch: str) -> dict | None:
+    """The numbering a download was given for itself (from the page: by title, or set for it), which a retry
+    of it repeats; None when its last attempt used the series' own. The episodes of one retry come from one
+    job, given one numbering: the first found stands for them all."""
+    if not sonarr_sync.RUNS_DIR.exists():
+        return None
+    seen = set()
+    for card in cards_on_disk():  # newest first: each episode's last attempt decides
+        episode = card.get("episodeId")
+        if episode not in ids or episode in seen or (batch and card.get("batch") != batch):
+            continue
+        seen.add(episode)
+        if card.get("numbering") is not None:
+            return card["numbering"]
+    return None
+
+
 def cdm_refusal(ids: list[int]) -> str:
     """Why these episodes can't be downloaded: a service among theirs has no CDM at all. Sonarr is asked
     which series they belong to only when a series' service lacks one."""
@@ -2118,6 +2185,8 @@ async def download(request):
         raise web.HTTPBadRequest(text="Unknown job")
     if why := await asyncio.to_thread(cdm_refusal, ids):
         raise web.HTTPBadRequest(text=why)
+    if numbering is None and body.get("retry") is True:  # the same numbering as the attempt it retries
+        numbering = await asyncio.to_thread(retried_numbering, ids, batch)
     if batch and len(ids) == 1 and await join_job(batch, ids[0]):
         return web.json_response({"running": True})  # the job still runs: at the end of its queue, one download at a time
     room_for_one_more()
@@ -2787,6 +2856,7 @@ app.cleanup_ctx.append(background(run_automatic_syncs))
 app.cleanup_ctx.append(stop_unshackle)
 app.cleanup_ctx.append(background(watch_health))
 app.cleanup_ctx.append(background(watch_alerts))
+app.cleanup_ctx.append(background(watch_updates))
 app.add_routes([
     web.get("/", index),
     *[web.get(path, static_file) for path in STATIC],

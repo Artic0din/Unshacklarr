@@ -568,6 +568,8 @@ def test_a_download_with_its_own_numbering_leaves_the_series_as_it_is(tmp_path, 
     sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
     assert asked == [["S09E01.2"], ["S02E05"]]  # this download's numbering, then the series' own again
     assert "episode_map" not in sync.read_file()["series"][111]
+    cards = [json.loads(f.read_text()) for f in sorted(sync.RUNS_DIR.glob("*.json"))]  # oldest first
+    assert [c.get("numbering") for c in cards] == [{"episode_map": {"S02E05": "S09E01.2"}}, None]  # kept for a retry
 
 
 def test_the_next_download_starts_while_the_one_before_is_imported(tmp_path, monkeypatch):
@@ -1223,3 +1225,36 @@ def test_a_service_with_no_cdm_at_all_is_refused_but_no_drm_and_the_default_pass
         raise AssertionError("a download with no CDM at all went through")
     except ValueError as e:
         assert "No CDM for NF" in str(e)
+
+
+def test_an_episode_its_number_misses_is_found_by_its_title(tmp_path, monkeypatch):
+    from pathlib import Path
+    sync = load(tmp_path, monkeypatch)
+    asked, listed, imported = [], [], []
+
+    def download(payload, run=None):
+        asked.append(payload["wanted"][0])
+        if payload["wanted"][0] == "S01E07":  # the service numbers the whole series as one season
+            out = Path(payload["output_dir"])
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "Show.S01E07.mkv").write_bytes(b"x")
+
+    def find(show, ep):
+        listed.append(ep["id"])
+        return {201: "S01E07"}  # S02E01 by its title; S02E02 not out yet
+
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "find_by_title", find)
+    monkeypatch.setattr(sync, "finalize", lambda *a, **k: 1)
+    monkeypatch.setattr(sync, "check_audio", lambda *a: None)
+    monkeypatch.setattr(sync, "import_episode", lambda ep, out, replace=False: imported.append(ep["id"]))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    sync.sync(sync.read_file(), {}, [episode(111, 2, 1), episode(111, 2, 2)], manual=True, kind="manual")
+    assert asked == ["S02E01", "S01E07", "S02E02"]
+    assert listed == [201]  # the series listed once: S02E02 is looked up in that same list
+    assert imported == [201]
+    cards = {c["sxxeyy"]: c for c in (json.loads(f.read_text()) for f in sync.RUNS_DIR.glob("*.json"))}
+    assert cards["S02E01"]["serviceEpisode"] == "S01E07"
+    assert cards["S02E01"]["numbering"]["episode_map"] == {"S02E01": "S01E07"}  # a retry asks for S01E07 again
+    assert cards["S02E02"]["outcome"] == "unavailable" and "numbering" not in cards["S02E02"]

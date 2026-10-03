@@ -1538,5 +1538,11 @@
  "unshackle.yaml's directories: {0}: {1} is no folder next to it": "Папки в unshackle.yaml: {0}: {1} не является папкой рядом с ним",
  "{0} is a symbolic link: replace it with the file itself": "{0} — символическая ссылка: замените её самим файлом",
  "{0} is already there: the parts are kept, nothing joined": "{0} уже существует: части сохранены, ничего не склеено",
- "{0} must be a full path, from / (or a drive letter), without ..": "{0} должен быть полным путём, начиная с / (или с буквы диска), без .."
+ "{0} must be a full path, from / (or a drive letter), without ..": "{0} должен быть полным путём, начиная с / (или с буквы диска), без ..",
+ "Could not look for it by its title on {0}: {1}": "Не удалось найти по названию на {0}: {1}",
+ "No CDM for {0}: unshackle.yaml gives it no device and has no default one. Pick one in Settings, CDM, or No CDM if it has no DRM": "Нет CDM для {0}: unshackle.yaml не назначает ему устройство, и устройства по умолчанию нет. Выберите его в Настройках, CDM, или «Без CDM», если у него нет DRM",
+ "Unshacklarr {0} is out: see what's new": "Вышел Unshacklarr {0}: что нового",
+ "Update {0}": "Обновить до {0}",
+ "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "unshackle.yaml не назначает ему устройство, и устройства по умолчанию нет: его загрузки отклоняются. Выберите его в Настройках, CDM, или «Без CDM», если у него нет DRM.",
+ "{0}: not on {1} as {2}, found by its title as {3}": "{0}: нет на {1} как {2}, найдено по названию как {3}"
 }

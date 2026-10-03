@@ -1075,6 +1075,11 @@ button.pill[aria-pressed="true"] { background: rgb(79 179 191 / .16); border-col
 .sched-row .open { margin: 0 14px 12px; }
 .last-sync { color: var(--muted); font-size: 13px; }
 /* Health lights: Unshackle and Sonarr, a tap away from their settings. */
+.update-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; text-decoration: none;
+  font-size: 13px; font-weight: 600; color: var(--accent-ink); background: var(--accent); box-shadow: 0 0 0 4px rgb(79 179 191 / .15); }
+.update-pill:hover, .update-pill:focus-visible { filter: brightness(1.08); }
+.update-pill .ico { width: 15px; height: 15px; stroke-width: 2.6; }
+.update-pill[hidden] { display: none; }
 .health { display: flex; gap: 4px; }
 .health button { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 0; border-radius: 16px; background: none;
   color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
@@ -1266,6 +1271,7 @@ button.pill[aria-pressed="true"] { background: rgb(79 179 191 / .16); border-col
     padding: calc(10px + env(safe-area-inset-top)) 16px 10px; gap: 12px; flex-wrap: nowrap; }
   header h1 { font-size: 17px; flex: 1; }
   header .spacer, .last-sync, .health span:not(.dot) { display: none; }
+  .update-pill span { display: none; } .update-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
   .health button { padding: 12px 8px; }
   #sync { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
   #sync span { display: none; }
@@ -1461,6 +1467,7 @@ button.pill[aria-pressed="true"] { background: rgb(79 179 191 / .16); border-col
     <button data-health="unshackle"><i class="dot"></i><span>Unshackle</span></button>
     <button data-health="sonarr"><i class="dot"></i><span>Sonarr</span></button>
   </span>
+  <a class="update-pill" id="update" target="_blank" rel="noopener" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span></span></a>
   <span class="last-sync" id="last-sync"></span>
   <button class="btn" id="bell" aria-label="Notifications"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><b class="count" id="bell-count" hidden></b></button>
   <button class="btn" id="sync" aria-label="Run sync now"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span>Run sync now</span></button>
@@ -6867,6 +6874,13 @@ $("#tz-select").after(settingsZone.input, settingsZone.list);
     S = { series: data.series, config: data.config, services: data.services, serviceNames: data.service_names || {}, dlOptions: data.dl_options, health: data.health || {}, cdm: data.cdm || {}, domains: data.service_domains || {} };
     savedConfig = configKey(S.config);
     $("#set-version").textContent = data.version ? `Unshacklarr ${data.version}` : "";
+    const update = $("#update");  // a newer release: in sight on every page, its notes one click away
+    update.hidden = !data.update;
+    if (data.update) {
+      update.href = data.update.url;
+      update.setAttribute("aria-label", `Unshacklarr ${data.update.version} is out: see what's new`);
+      update.querySelector("span").textContent = `Update ${data.update.version}`;
+    }
     if (data.unshackle_error) toast(`Unshackle: ${data.unshackle_error}`, true);
     renderServiceFilter();
     renderWall();

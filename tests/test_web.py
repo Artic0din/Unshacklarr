@@ -810,3 +810,67 @@ def test_a_refused_notification_address_is_not_echoed_whole(tmp_path, monkeypatc
     except web.web.HTTPBadRequest as e:
         assert "NOTAVALIDTOKEN" not in e.text and "tgram://" in e.text
     assert web.check_urls(["tgram://saved-before/1"], saved=["tgram://saved-before/1"]) == ["tgram://saved-before/1"]  # not checked again
+
+
+def test_a_retry_asks_the_service_what_its_attempt_asked(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    by_title = {"episode_map": {"S02E01": "S01E07"}}  # found by its title on the page, for that download only
+    for run_id, episode, numbering in (("20261003-093229-000001-442345-S02E01", 70, by_title),
+                                       ("20261003-093000-000001-442345-S02E02", 71, None)):
+        card = {"id": run_id, "episodeId": episode, "tvdbId": 442345, "sxxeyy": run_id[-6:], "outcome": "failed",
+                "started": "2026-10-03T09:32:29+00:00", "ended": "2026-10-03T09:33:00+00:00"}
+        if numbering:
+            card["numbering"] = numbering
+        (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    asked = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("numbering"))))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as browser:
+            page = {"X-Unshackle": "1"}
+            await browser.post("/api/login", json={"password": "password1"}, headers=page)
+            for ids in ([70], [71]):
+                assert (await browser.post("/api/download", json={"episodeIds": ids, "retry": True}, headers=page)).status == 200
+            # a download asked anew, not a retry, uses the series' numbering
+            assert (await browser.post("/api/download", json={"episodeIds": [70]}, headers=page)).status == 200
+
+    asyncio.run(go())
+    assert asked == [([70], by_title), ([71], None), ([70], None)]
+
+
+def test_a_newer_release_is_told_and_github_out_of_reach_keeps_the_last_answer(tmp_path, monkeypatch):
+    import requests
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "__version__", "1.9.0")
+    assert web.update_info() is None  # nothing asked yet
+
+    class Answer:
+        def __init__(self, tag): self.tag = tag
+        def raise_for_status(self): pass
+        def json(self): return {"tag_name": self.tag, "html_url": f"https://github.com/o/r/releases/tag/{self.tag}"}
+
+    for tag, told in (("v1.9.0", None), ("v1.8.3", None), ("v1.10.0", "1.10.0")):
+        monkeypatch.setattr(web.requests, "get", lambda *a, tag=tag, **k: Answer(tag))
+        web.check_update()
+        assert (web.update_info() or {}).get("version") == told, tag
+    def down(*a, **k):
+        raise requests.ConnectionError("no network")
+    monkeypatch.setattr(web.requests, "get", down)
+    try:
+        web.check_update()
+    except requests.RequestException:
+        pass  # watch_updates logs it
+    assert web.update_info() == {"version": "1.10.0", "url": "https://github.com/o/r/releases/tag/v1.10.0"}

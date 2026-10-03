@@ -1521,5 +1521,11 @@
  "unshackle.yaml's directories: {0}: {1} is no folder next to it": "Pastas do unshackle.yaml: {0}: {1} não é uma pasta ao lado dele",
  "{0} is a symbolic link: replace it with the file itself": "{0} é um link simbólico: substitua-o pelo próprio arquivo",
  "{0} is already there: the parts are kept, nothing joined": "{0} já existe: as partes foram mantidas, nada foi unido",
- "{0} must be a full path, from / (or a drive letter), without ..": "{0} deve ser um caminho completo, a partir de / (ou de uma letra de unidade), sem .."
+ "{0} must be a full path, from / (or a drive letter), without ..": "{0} deve ser um caminho completo, a partir de / (ou de uma letra de unidade), sem ..",
+ "Could not look for it by its title on {0}: {1}": "Não foi possível procurar pelo título em {0}: {1}",
+ "No CDM for {0}: unshackle.yaml gives it no device and has no default one. Pick one in Settings, CDM, or No CDM if it has no DRM": "Sem CDM para {0}: o unshackle.yaml não atribui nenhum dispositivo e não tem um padrão. Escolha um em Configurações, CDM, ou Sem CDM se não tiver DRM",
+ "Unshacklarr {0} is out: see what's new": "Unshacklarr {0} foi lançado: veja as novidades",
+ "Update {0}": "Atualizar para {0}",
+ "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "o unshackle.yaml não atribui nenhum dispositivo e não tem um padrão: os downloads são recusados. Escolha um em Configurações, CDM, ou Sem CDM se não tiver DRM.",
+ "{0}: not on {1} as {2}, found by its title as {3}": "{0}: não está em {1} como {2}, encontrado pelo título como {3}"
 }

@@ -4,6 +4,21 @@ Every change worth knowing, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/): until 1.0.0, a minor version may change how things work.
 
+## [1.1.0] - 2026-10-03
+
+An episode the service numbers its own way is found by its title, a retry asks what its attempt asked,
+and a new release shows in the header.
+
+### Added
+
+- **Found by its title.** When the service has nothing under an episode's number, the sync looks for it
+  by its title and downloads it under the service's own number (6play's single season, say), and says so.
+- **A new release in sight.** The header shows when a newer Unshacklarr is out, its notes one click away.
+
+### Fixed
+
+- A retry asks the service for what its attempt asked, an episode found by its title included.
+
 ## [1.0.0] - 2026-09-30
 
 The first release: jobs in Activity, what each service has, Settings redesigned, notifications
@@ -155,4 +170,5 @@ A full audit found nothing critical nor high; what it found is fixed:
 - **Dependencies.** oauthlib 4.0.0, for two advisories on OAuth servers that never reached Unshacklarr
   (Apprise only uses it as a client).
 
+[1.1.0]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.1.0
 [1.0.0]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.0.0

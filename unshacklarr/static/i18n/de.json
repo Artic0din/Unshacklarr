@@ -1512,5 +1512,11 @@
  "unshackle.yaml's directories: {0}: {1} is no folder next to it": "Ordner in unshackle.yaml: {0}: {1} ist kein Ordner daneben",
  "{0} is a symbolic link: replace it with the file itself": "{0} ist ein symbolischer Link: Ersetze ihn durch die Datei selbst",
  "{0} is already there: the parts are kept, nothing joined": "{0} ist bereits vorhanden: Die Teile bleiben erhalten, nichts wurde zusammengefügt",
- "{0} must be a full path, from / (or a drive letter), without ..": "{0} muss ein vollständiger Pfad sein, beginnend mit / (oder einem Laufwerksbuchstaben), ohne .."
+ "{0} must be a full path, from / (or a drive letter), without ..": "{0} muss ein vollständiger Pfad sein, beginnend mit / (oder einem Laufwerksbuchstaben), ohne ..",
+ "Could not look for it by its title on {0}: {1}": "Suche nach dem Titel auf {0} nicht möglich: {1}",
+ "No CDM for {0}: unshackle.yaml gives it no device and has no default one. Pick one in Settings, CDM, or No CDM if it has no DRM": "Kein CDM für {0}: unshackle.yaml weist kein Gerät zu und hat kein Standardgerät. Wähle eines unter Einstellungen, CDM, oder Kein CDM, wenn es kein DRM hat",
+ "Unshacklarr {0} is out: see what's new": "Unshacklarr {0} ist erschienen: Neuerungen ansehen",
+ "Update {0}": "Update {0}",
+ "unshackle.yaml gives it no device and has no default one: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": "unshackle.yaml weist kein Gerät zu und hat kein Standardgerät: Downloads werden abgelehnt. Wähle eines unter Einstellungen, CDM, oder Kein CDM, wenn es kein DRM hat.",
+ "{0}: not on {1} as {2}, found by its title as {3}": "{0}: nicht auf {1} als {2}, über den Titel gefunden als {3}"
 }
