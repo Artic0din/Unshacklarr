@@ -907,3 +907,30 @@ def test_an_anime_numbered_from_its_first_episode_is_found_by_its_absolute_numbe
     assert {i: a["service"] for i, a in probe["available"].items()} == {10: "S01E01", 11: "S01E02", 12: "S01E03", 13: "S01E04"}
     probe = web.probe_series({"service": "NF", "title": "x", "episode_map": {"S01E02": "S01E03"}}, 1)
     assert 12 not in probe["available"]  # S01E03 is S01E02's here, by the series' own table
+
+
+def test_a_release_burst_stops_at_a_failure_not_at_not_out_yet(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+
+    def card(outcome, kind="burst", ended=now):
+        (web.sonarr_sync.RUNS_DIR / "20261005-000100-000001-440843-S02E05.json").write_text(json.dumps(
+            {"id": "20261005-000100-000001-440843-S02E05", "episodeId": 9, "kind": kind, "outcome": outcome,
+             "started": ended, "ended": ended}))
+        web.cards_read = (0, [])  # read afresh
+
+    assert not web.burst_failed(9)  # no try yet
+    card("unavailable")
+    assert not web.burst_failed(9)  # not out yet: the burst goes on
+    card("failed")
+    assert web.burst_failed(9)  # refused: the next tries would fail the same way
+    card("failed", ended="2026-01-01T00:00:00+00:00")
+    assert not web.burst_failed(9)  # a failure from another day says nothing of this burst
+    card("failed", kind="manual")
+    assert not web.burst_failed(9)

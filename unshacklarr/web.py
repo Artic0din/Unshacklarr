@@ -842,6 +842,17 @@ def due_releases(now: datetime) -> list[int]:
     return due
 
 
+def burst_failed(episode_id: int) -> bool:
+    """A try of this release burst failed for good (refused, an error: not "not out yet"). The burst is there to
+    catch the episode the minute it is out; trying again every 30 s would only fail the same way. The sync
+    tries it again later."""
+    if not sonarr_sync.RUNS_DIR.exists():
+        return False
+    since = (datetime.now(timezone.utc) - timedelta(minutes=float(sonarr_sync.SETTINGS["burst_minutes"]))).isoformat()
+    card = next((c for c in cards_on_disk() if c.get("episodeId") == episode_id), None)  # its latest try
+    return bool(card and card.get("kind") == "burst" and card.get("outcome") == "failed" and (card.get("ended") or "") >= since)
+
+
 async def watch_releases():
     """At a series' release time, try its new episode every 30 s for 10 min."""
     while True:
@@ -851,7 +862,7 @@ async def watch_releases():
                 continue  # set up first
             for episode_id in await asyncio.to_thread(due_releases, datetime.now(timezone.utc)):
                 run = burst_runs.get(episode_id)
-                if run is None or not run.is_alive():  # the previous try is over
+                if (run is None or not run.is_alive()) and not await asyncio.to_thread(burst_failed, episode_id):  # the previous try is over
                     burst_runs[episode_id] = run_sync([episode_id], kind="burst")
         except Exception as e:  # Sonarr down for a moment: try again next round
             print(f"Release watch: {e}", flush=True)

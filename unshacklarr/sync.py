@@ -467,6 +467,9 @@ def trace(text: str, debug: bool = False) -> None:
         run.raw(f"\r\x1b[2K\x1b[90m{'debug · ' if debug else '· '}{text}\x1b[0m\r\n".replace("\n", "\r\n").replace("\r\r", "\r").encode())
 
 
+AUTOMATIC = ("auto", "burst")  # tries nobody asked for by hand
+
+
 class EpisodeRun:
     """One download attempt's log and card, for the web page's terminal and its history.
 
@@ -494,6 +497,8 @@ class EpisodeRun:
         }
         if kind == "retry" or batch:  # in a job: one card per episode, whatever its tries
             self.take_over_failures(batch)
+        elif kind in AUTOMATIC:  # a sync or a release burst trying again: one card for its failures in a row
+            self.take_over_failures(automatic=True)
         self.log = (RUNS_DIR / f"{self.id}.log").open("ab")
         self.raw(f"\x1b[90m── {now.astimezone(LOCAL):%a %d %b %H:%M:%S} · {kind} ──\x1b[0m\r\n".encode())
         self.save()
@@ -523,9 +528,11 @@ class EpisodeRun:
         self.save()
         prune_runs()
 
-    def take_over_failures(self, batch: str | None = None) -> None:
+    def take_over_failures(self, batch: str | None = None, automatic: bool = False) -> None:
         """A retry takes the place of this episode's failed, stopped, cancelled or cut-off attempts (in a job,
-        that job's): one line in the history, their logs before its own, and how many attempts it makes in all."""
+        that job's): one line in the history, their logs before its own, and how many attempts it makes in all.
+        An automatic try (the sync, a release burst) takes only the automatic tries that failed before it: what
+        was stopped or picked by hand keeps its own card. The failure last told carries over: told once."""
         attempts = 1
         for path in sorted(RUNS_DIR.glob(f"*-{self.card['tvdbId']}-{self.card['sxxeyy']}.json")):
             try:
@@ -537,6 +544,10 @@ class EpisodeRun:
                 continue
             if batch and c.get("batch") != batch:
                 continue  # another job's: its own card there
+            if automatic and (c.get("kind") not in AUTOMATIC or c.get("outcome") != "failed"):
+                continue
+            if c.get("told"):
+                self.card["told"] = c["told"]
             log = RUNS_DIR / f"{c['id']}.log"
             if log.exists():
                 with (RUNS_DIR / f"{self.id}.log").open("ab") as mine:
@@ -571,6 +582,13 @@ class EpisodeRun:
 
     def save(self) -> None:
         write_atomic(RUNS_DIR / f"{self.id}.json", json.dumps(self.card))
+
+
+def tell_failure(run: EpisodeRun, cause: str, send) -> None:
+    """A failure notified once: the same cause again (the next sync, the next try of a burst) says nothing new."""
+    if run.card.get("told") != cause:
+        send()
+        run.card["told"] = cause
 
 
 def prune_runs() -> None:
@@ -1571,8 +1589,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         failures += 1
                     where = seen_by("sonarr_downloads", out)
                     run.say(f"\r\n\x1b[31m{label}: Unshackle FAILED after {parts_in(out)} part(s)\x1b[0m\n{error}".replace("\n", "\r\n"))
+                    tell_failure(run, cause, lambda: notify(settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe parts that came are in {where}.", batch=batch, details=episode_details(ep, show)))
                     run.finish("failed", cause, f"The parts that came are in {where}")
-                    notify(settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe parts that came are in {where}.", batch=batch, details=episode_details(ep, show))
                     continue
                 if not videos_in(out):
                     shutil.rmtree(out, ignore_errors=True)
@@ -1582,11 +1600,11 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         run.say(f"\r\n\x1b[31m{label}: Unshackle FAILED\x1b[0m\n{error}".replace("\n", "\r\n"))
                         if LOGIN.search(cause):
                             hint = f"{show['service']} turned Unshackle away: its cookies may have expired. Update them in Settings, Cookies."
+                            tell_failure(run, cause, lambda: notify(settings, "error", f"Login failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
                             run.finish("failed", cause, hint)
-                            notify(settings, "error", f"Login failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch)
                         else:
+                            tell_failure(run, cause, lambda: notify(settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe history in Activity has Unshackle's full output.", batch=batch, details=episode_details(ep, show)))
                             run.finish("failed", cause)
-                            notify(settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe history in Activity has Unshackle's full output.", batch=batch, details=episode_details(ep, show))
                     else:
                         run.say(f"{label}: not on {show['service']} yet{missing}")
                         run.finish("unavailable", f"Not on {show['service']} yet{missing}")

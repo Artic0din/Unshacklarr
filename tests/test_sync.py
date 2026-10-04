@@ -1258,3 +1258,22 @@ def test_an_episode_its_number_misses_is_found_by_its_title(tmp_path, monkeypatc
     assert cards["S02E01"]["serviceEpisode"] == "S01E07"
     assert cards["S02E01"]["numbering"]["episode_map"] == {"S02E01": "S01E07"}  # a retry asks for S01E07 again
     assert cards["S02E02"]["outcome"] == "unavailable" and "numbering" not in cards["S02E02"]
+
+
+def test_a_bursts_failures_make_one_card_told_once(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    told, causes = [], iter(["key not allowed", "key not allowed", "key not allowed", "no space left"])
+
+    def download(payload, run=None):
+        cause = next(causes)
+        raise sync.JobFailed(cause, "failed", cause)
+
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, message, **k: told.append(message.split("\n")[0]))
+    monkeypatch.setattr(sync, "by_title", lambda *a: None)
+    for kind in ("burst", "burst", "auto", "burst"):  # the release burst, the next sync, a burst again
+        sync.sync(sync.read_file(), {}, [episode(111, 2, 5)], kind=kind)
+    cards = [json.loads(f.read_text()) for f in sync.RUNS_DIR.glob("*.json")]
+    assert len(cards) == 1 and cards[0]["attempts"] == 4  # one line in Activity, its tries counted
+    assert told == ["key not allowed", "no space left"]  # each cause told once

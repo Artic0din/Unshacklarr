@@ -4,6 +4,15 @@ Every change worth knowing, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/): until 1.0.0, a minor version may change how things work.
 
+## [1.2.2] - 2026-10-05
+
+### Fixed
+
+- **One card for failures in a row.** A release burst or the sync that fails an episode again adds to its
+  last failed try, its attempts counted, instead of a card every 30 s; the same failure is notified once.
+- **A release burst stops at a failure** that trying again would only repeat (refused, an error); it goes
+  on only while the episode is not out yet, and the sync tries it again later.
+
 ## [1.2.1] - 2026-10-03
 
 ### Fixed
@@ -197,6 +206,7 @@ A full audit found nothing critical nor high; what it found is fixed:
 - **Dependencies.** oauthlib 4.0.0, for two advisories on OAuth servers that never reached Unshacklarr
   (Apprise only uses it as a client).
 
+[1.2.2]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.2.2
 [1.2.1]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.2.1
 [1.2.0]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.2.0
 [1.1.1]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.1.1
