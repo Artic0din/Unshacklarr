@@ -30,6 +30,8 @@ from urllib.parse import parse_qs, urlparse
 
 import apprise
 import requests
+from rnet import BlockingClient, Impersonate
+from rnet import exceptions as browser_errors
 import yaml
 from aiohttp import web
 
@@ -120,6 +122,27 @@ def unwrap(url: str) -> str:
 TMDB_PAGES = threading.Lock()  # TMDB's site answers 429 to a burst: its pages are fetched one at a time
 TMDB_GAP = 0.4  # seconds between two of them
 tmdb_last = 0.0
+TMDB_CLIENT = BlockingClient(impersonate=Impersonate.Chrome131, allow_redirects=True, timeout=20)
+
+
+def tmdb_response(url: str, params: dict) -> requests.Response:
+    """Keep the existing HTTP error contract while using browser TLS for TMDB's website."""
+    try:
+        response = TMDB_CLIENT.get(url, query=list(params.items()))
+        body = response.bytes()
+    except browser_errors.TimeoutError as e:
+        raise requests.Timeout("TMDB request timed out") from e
+    except (browser_errors.ConnectionError, browser_errors.ConnectionResetError,
+            browser_errors.DNSResolverError, browser_errors.RedirectError,
+            browser_errors.RequestError, browser_errors.BodyError, browser_errors.DecodingError) as e:
+        raise requests.ConnectionError("Could not reach TMDB") from e
+    result = requests.Response()
+    result.status_code = int(str(response.status_code))
+    result.url = response.url
+    result.headers.update({k.decode("latin1"): v.decode("latin1") for k, v in response.headers.items()})
+    result._content = body
+    result.encoding = "utf-8"
+    return result
 
 
 def tmdb_page(url: str, params: dict) -> requests.Response:
@@ -129,7 +152,7 @@ def tmdb_page(url: str, params: dict) -> requests.Response:
     for attempt in range(4):
         with TMDB_PAGES:
             time.sleep(max(0.0, tmdb_last + TMDB_GAP - time.monotonic()))
-            r = requests.get(url, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+            r = tmdb_response(url, params)
             tmdb_last = time.monotonic()
             if r.status_code != 429 or attempt == 3:
                 r.raise_for_status()

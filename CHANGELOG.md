@@ -4,6 +4,12 @@ Every change worth knowing, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/): until 1.0.0, a minor version may change how things work.
 
+## [Unreleased]
+
+### Fixed
+
+- Fixed streaming-service suggestions failing with HTTP 403 when TMDB challenged the website's HTTP client.
+
 ## [1.2.2] - 2026-10-05
 
 ### Fixed
