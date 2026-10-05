@@ -42,8 +42,15 @@ HERE = Path(__file__).parent
 SERIES_FILE = sonarr_sync.CONFIG_FILE
 UNSHACKLE = sonarr_sync.UNSHACKLE
 
-# Service sites that the services' own help does not name.
-EXTRA_DOMAINS = {"m6.fr": "M6", "m6plus.fr": "M6", "hbomax.com": "MAX", "primevideo.com": "AMZN", "amazon.fr": "AMZN"}
+# Streaming sites, and the codes a service for each goes by in one Unshackle or another (HBO Max is MAX here,
+# HMAX there), best first: for a site no installed service names in its help, the first of them installed.
+SITES = {
+    "hbomax.com": ("MAX", "HMAX"), "max.com": ("MAX", "HMAX"),
+    "tv.apple.com": ("ATV", "ATVP"),
+    "primevideo.com": ("AMZN",), "amazon.fr": ("AMZN",), "amazon.com": ("AMZN",),
+    "disneyplus.com": ("DSNP",), "canalplus.com": ("CanalPlus",), "crave.ca": ("CRAVE",),
+    "m6.fr": ("M6",), "m6plus.fr": ("M6",),
+}
 
 sync_threads: list[threading.Thread] = []
 last_sync: datetime | None = None
@@ -65,17 +72,29 @@ def service_name(service: dict) -> str:
 
 
 def service_domains() -> dict[str, str]:
-    """Map each service's site (from its help, e.g. "https://crave.ca") to its tag."""
+    """Map each site to the installed service for it: what the services name in their help (e.g. "https://crave.ca")
+    first, then the SITES the help leaves out, under the code this Unshackle has for them. A site with no installed
+    service for it maps to nothing: a suggestion never names a service Unshackle does not have."""
+    services = UNSHACKLE.services()
+    installed = {s["tag"] for s in services}
     domains = {}
-    for service in sorted(UNSHACKLE.services(), key=lambda s: s["tag"]):
+    for service in sorted(services, key=lambda s: s["tag"]):
         for url in re.findall(r"https?://[^\s,]+", " ".join(filter(None, [service.get("url"), service.get("help")]))):
             try:
-                host = (urlparse(url).hostname or "").removeprefix("www.")
+                host = (urlparse(url.rstrip(").;:")).hostname or "").removeprefix("www.")  # "(https://max.com)." in a help
             except ValueError:  # a service's help may hold a malformed URL ("https://[…]")
                 continue
             if host and service["tag"] != "EXAMPLE":
                 domains.setdefault(host, service["tag"])
-    return {**domains, **EXTRA_DOMAINS}
+    for site, tags in SITES.items():
+        if site not in domains and (tag := next((t for t in tags if t in installed), None)):
+            domains[site] = tag
+    return domains
+
+
+def on_site(url: str, *sites: str) -> bool:
+    host = (urlparse(url).hostname or "").removeprefix("www.")
+    return any(host == site or host.endswith("." + site) for site in sites)
 
 
 def service_for(url: str, domains: dict[str, str]) -> str | None:
@@ -83,21 +102,22 @@ def service_for(url: str, domains: dict[str, str]) -> str | None:
     return next((tag for domain, tag in domains.items() if host == domain or host.endswith("." + domain)), None)
 
 
-def series_title(service: str, url: str) -> str:
-    """What the service accepts as its title argument, when the watch link is not it."""
+def series_title(url: str) -> str:
+    """What the service accepts as its title argument, when the watch link is not it. By the link's site, whatever
+    the code of the service for it (Apple TV+ is ATV here, ATVP there)."""
     query = parse_qs(urlparse(url).query)
-    if service == "ATV" and query.get("showId"):  # the link opens an episode; the show is in showId
+    if on_site(url, "tv.apple.com") and query.get("showId"):  # the link opens an episode; the show is in showId
         return query["showId"][0]
-    if service == "ATV" and (show := re.search(r"/show/[^/]+/(umc\.cmc\.[a-z0-9]+)", url)):
+    if on_site(url, "tv.apple.com") and (show := re.search(r"/show/[^/]+/(umc\.cmc\.[a-z0-9]+)", url)):
         return show.group(1)  # the same show in every country's store
-    if service == "MAX" and (show := re.search(r"/(show|movie)/([0-9a-f-]{36})", url)):
-        # …/ch/en/show/<id>/s1/e1-…: MAX wants <type>/<id> right after the domain
+    if on_site(url, "hbomax.com", "max.com") and (show := re.search(r"/(show|movie)/([0-9a-f-]{36})", url)):
+        # …/ch/en/show/<id>/s1/e1-…: HBO Max wants <type>/<id> right after the domain
         return f"https://play.hbomax.com/{show.group(1)}/{show.group(2)}"
-    if service == "CanalPlus":  # tracking and episode parameters; the /h/<id> path is what counts
+    if on_site(url, "canalplus.com"):  # tracking and episode parameters; the /h/<id> path is what counts
         return url.split("?")[0]
-    if service == "DSNP":  # drop the locale (/fr-fr/, /en-ca/…): one entity, one suggestion
+    if on_site(url, "disneyplus.com"):  # drop the locale (/fr-fr/, /en-ca/…): one entity, one suggestion
         return re.sub(r"(disneyplus\.com)/[a-z]{2}-[a-z]{2}/", r"\1/", url)
-    if service == "AMZN" and query.get("gti"):  # AMZN does not parse app.primevideo.com URLs
+    if on_site(url, "primevideo.com", "amazon.com", "amazon.fr") and query.get("gti"):  # app.primevideo.com: not parsed
         return query["gti"][0]
     return url
 
@@ -119,6 +139,9 @@ def unwrap(url: str) -> str:
 
 TMDB_PAGES = threading.Lock()  # TMDB's site answers 429 to a burst: its pages are fetched one at a time
 TMDB_GAP = 0.4  # seconds between two of them
+# Its own name: TMDB's site answers 403 to a client calling itself a browser ("Mozilla/5.0") that does not
+# talk like one, and lets an honest one through
+TMDB_HEADERS = {"User-Agent": f"Unshacklarr/{__version__} (+https://github.com/OwnzZzZ/Unshacklarr)"}
 tmdb_last = 0.0
 
 
@@ -129,7 +152,7 @@ def tmdb_page(url: str, params: dict) -> requests.Response:
     for attempt in range(4):
         with TMDB_PAGES:
             time.sleep(max(0.0, tmdb_last + TMDB_GAP - time.monotonic()))
-            r = requests.get(url, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+            r = requests.get(url, params=params, headers=TMDB_HEADERS, timeout=20)
             tmdb_last = time.monotonic()
             if r.status_code != 429 or attempt == 3:
                 r.raise_for_status()
@@ -180,8 +203,9 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
         url = unwrap(parse_qs(urlparse(href.replace("&amp;", "&")).query).get("r", [""])[0])
         service = service_for(url, domains)
         if service:
-            link = {"service": service, "url": series_title(service, url), "country": country}
-            if service == "CRAVE" and "/play/" in url:
+            # its site kept: the code for it may change (another Unshackle, a service renamed), the site does not
+            link = {"service": service, "url": series_title(url), "country": country, "site": urlparse(url).hostname}
+            if on_site(url, "crave.ca") and "/play/" in url:
                 # Crave's link opens one episode and holds no series id (…/series/<slug>-<id>)
                 if series := crave_series(url):
                     link["url"] = series
@@ -774,7 +798,23 @@ async def suggest(request):
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(), "links": links}
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
-    return web.json_response({"links": hit["links"], "checked": hit["checked"]})
+    return web.json_response({"links": await asyncio.to_thread(installed_links, hit["links"]), "checked": hit["checked"]})
+
+
+def installed_links(links: list[dict]) -> list[dict]:
+    """Suggestions under the code of the service installed now for their site (one kept under MAX shows as HMAX
+    where the service is HMAX), none for a site no service takes any more. Unshackle out of reach: as kept."""
+    try:
+        domains = service_domains()
+    except UnshackleError:
+        return links
+    out = []
+    for link in links:
+        site = link.get("site") or (urlparse(link["url"]).hostname if link["url"].startswith("http") else None)
+        service = service_for(f"https://{site}/", domains) if site else link["service"]
+        if service:
+            out.append({**link, "service": service})
+    return out
 
 
 def next_sync(now: datetime) -> datetime:

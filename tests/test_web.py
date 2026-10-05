@@ -934,3 +934,43 @@ def test_a_release_burst_stops_at_a_failure_not_at_not_out_yet(tmp_path, monkeyp
     assert not web.burst_failed(9)  # a failure from another day says nothing of this burst
     card("failed", kind="manual")
     assert not web.burst_failed(9)
+
+
+def test_a_streaming_site_maps_to_the_code_this_unshackle_has_for_it(tmp_path, monkeypatch):
+    """HBO Max is MAX in one Unshackle, HMAX in another; Apple TV+ ATV or ATVP (cases from PR #3, by Artic0din)."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+
+    def installed(*tags, help_site=None):
+        services = [{"tag": t, "url": "", "help": ""} for t in tags]
+        if help_site:
+            services.append({"tag": "HBO", "url": "", "help": f"Service code for HBO ({help_site})."})
+        monkeypatch.setattr(web.UNSHACKLE, "services", lambda: services)
+        return web.service_domains()
+
+    assert installed("HMAX", "ATVP")["hbomax.com"] == "HMAX" and installed("HMAX", "ATVP")["tv.apple.com"] == "ATVP"
+    assert installed("MAX", "HMAX")["hbomax.com"] == "MAX"  # both: the first the table names
+    assert "hbomax.com" not in installed("DSNP")  # none installed: never a suggestion Unshackle cannot take
+    assert installed("MAX", help_site="https://www.hbomax.com")["hbomax.com"] == "HBO"  # a service naming the site wins
+    assert "hbomax.com" in installed(help_site="https://www.hbomax.com") and "hbomax.com)." not in installed(help_site="https://www.hbomax.com")
+
+    # A link is put right by its site, whatever the code: an Apple TV+ episode becomes its show, an HBO Max one its series
+    assert web.series_title("https://tv.apple.com/us/episode/pilot/umc.cmc.1?showId=umc.cmc.show") == "umc.cmc.show"
+    assert web.series_title("https://play.hbomax.com/ch/en/show/8931dfbf-d113-43de-8ee2-43bb594330d1/s1/e1-test") \
+        == "https://play.hbomax.com/show/8931dfbf-d113-43de-8ee2-43bb594330d1"
+
+    # Suggestions kept under MAX show under the code installed now, and go when no service takes their site
+    kept = [{"service": "MAX", "url": "https://play.hbomax.com/show/x", "country": "AU", "site": "play.hbomax.com"},
+            {"service": "ATV", "url": "umc.cmc.show", "country": "AU", "site": "tv.apple.com"}]
+    installed("HMAX", "ATVP")
+    assert [l["service"] for l in web.installed_links(kept)] == ["HMAX", "ATVP"]
+    installed("DSNP")
+    assert web.installed_links(kept) == []
+    def down():
+        raise web.UnshackleError("unreachable")
+    monkeypatch.setattr(web, "service_domains", down)
+    assert web.installed_links(kept) == kept  # Unshackle out of reach: as kept
+    assert web.TMDB_HEADERS["User-Agent"].startswith("Unshacklarr/")  # TMDB's site refuses a fake browser (PR #2)

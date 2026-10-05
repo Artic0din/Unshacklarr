@@ -4,6 +4,17 @@ Every change worth knowing, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/): until 1.0.0, a minor version may change how things work.
 
+## [1.2.3] - 2026-10-05
+
+### Fixed
+
+- **Suggestions under the services you have.** A streaming site maps to the code your Unshackle has for it
+  (HBO Max as MAX or HMAX, Apple TV+ as ATV or ATVP), never to a service it does not have; links are put
+  right by their site, whatever the code, and suggestions kept from before follow. Reported, with its
+  first fix, by Artic0din.
+- **Suggest services works again**: TMDB's site refused Unshacklarr as a fake browser; it now gives its own
+  name. Reported by Artic0din.
+
 ## [1.2.2] - 2026-10-05
 
 ### Fixed
@@ -206,6 +217,7 @@ A full audit found nothing critical nor high; what it found is fixed:
 - **Dependencies.** oauthlib 4.0.0, for two advisories on OAuth servers that never reached Unshacklarr
   (Apprise only uses it as a client).
 
+[1.2.3]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.2.3
 [1.2.2]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.2.2
 [1.2.1]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.2.1
 [1.2.0]: https://github.com/OwnzZzZ/Unshacklarr/releases/tag/v1.2.0
