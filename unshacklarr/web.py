@@ -67,7 +67,9 @@ def service_name(service: dict) -> str:
 def service_domains() -> dict[str, str]:
     """Map each service's site (from its help, e.g. "https://crave.ca") to its tag."""
     domains = {}
-    for service in sorted(UNSHACKLE.services(), key=lambda s: s["tag"]):
+    services = UNSHACKLE.services()
+    tags = {service["tag"] for service in services}
+    for service in sorted(services, key=lambda s: s["tag"]):
         for url in re.findall(r"https?://[^\s,]+", " ".join(filter(None, [service.get("url"), service.get("help")]))):
             try:
                 host = (urlparse(url).hostname or "").removeprefix("www.")
@@ -75,7 +77,11 @@ def service_domains() -> dict[str, str]:
                 continue
             if host and service["tag"] != "EXAMPLE":
                 domains.setdefault(host, service["tag"])
-    return {**domains, **EXTRA_DOMAINS}
+    for host, tag in EXTRA_DOMAINS.items():
+        if tag == "MAX" and tag not in tags and "HMAX" in tags:
+            tag = "HMAX"
+        domains.setdefault(host, tag)
+    return domains
 
 
 def service_for(url: str, domains: dict[str, str]) -> str | None:
@@ -90,8 +96,8 @@ def series_title(service: str, url: str) -> str:
         return query["showId"][0]
     if service == "ATV" and (show := re.search(r"/show/[^/]+/(umc\.cmc\.[a-z0-9]+)", url)):
         return show.group(1)  # the same show in every country's store
-    if service == "MAX" and (show := re.search(r"/(show|movie)/([0-9a-f-]{36})", url)):
-        # …/ch/en/show/<id>/s1/e1-…: MAX wants <type>/<id> right after the domain
+    if service in {"MAX", "HMAX"} and (show := re.search(r"/(show|movie)/([0-9a-f-]{36})", url)):
+        # …/ch/en/show/<id>/s1/e1-…: HBO Max wants <type>/<id> right after the domain
         return f"https://play.hbomax.com/{show.group(1)}/{show.group(2)}"
     if service == "CanalPlus":  # tracking and episode parameters; the /h/<id> path is what counts
         return url.split("?")[0]
@@ -740,6 +746,7 @@ async def sent_notifications(_):
 
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
+TMDB_CACHE_VERSION = 1  # Older entries may contain MAX instead of the installed HMAX tag.
 
 
 async def suggest(request):
@@ -748,7 +755,7 @@ async def suggest(request):
     countries = read_config()["tmdb_countries"]
     cache = read_json(TMDB_CACHE, {})
     hit = cache.get(tmdb_id)
-    fresh = hit and hit["countries"] == countries and (
+    fresh = hit and hit.get("version") == TMDB_CACHE_VERSION and hit["countries"] == countries and (
         datetime.now(timezone.utc) - datetime.fromisoformat(hit["checked"]) < timedelta(days=TMDB_CACHE_DAYS)
     )
     if not fresh or request.query.get("refresh"):
@@ -771,7 +778,7 @@ async def suggest(request):
                     seen["country"] = ", ".join(filter(None, [seen["country"], link["country"]]))
             with_series = {l["service"] for l in unique.values() if not l.get("episode")}
             links = [l for l in unique.values() if not (l.get("episode") and l["service"] in with_series)]
-            hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(), "links": links}
+            hit = {"version": TMDB_CACHE_VERSION, "countries": countries, "checked": datetime.now(timezone.utc).isoformat(), "links": links}
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
     return web.json_response({"links": hit["links"], "checked": hit["checked"]})

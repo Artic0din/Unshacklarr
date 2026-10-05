@@ -4,6 +4,12 @@ Every change worth knowing, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/): until 1.0.0, a minor version may change how things work.
 
+## [Unreleased]
+
+### Fixed
+
+- HBO Max watch suggestions used the installed HMAX service, normalized localized series URLs, and refreshed older cached suggestions.
+
 ## [1.2.2] - 2026-10-05
 
 ### Fixed
