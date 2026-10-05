@@ -4,6 +4,12 @@ Every change worth knowing, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/): until 1.0.0, a minor version may change how things work.
 
+## [Unreleased]
+
+### Fixed
+
+- Ended terminal log streams quietly when a browser disconnected, while keeping downloads running.
+
 ## [1.2.3] - 2026-10-05
 
 ### Fixed
