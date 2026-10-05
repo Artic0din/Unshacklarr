@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Reported requested provider import failures before queueing downloads, while allowing healthy providers and explicit remote routes.
 - Ended terminal log streams quietly when a browser disconnected, while keeping downloads running.
 
 ## [1.2.1] - 2026-10-03
