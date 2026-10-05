@@ -4,6 +4,12 @@ Every change worth knowing, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/): until 1.0.0, a minor version may change how things work.
 
+## [Unreleased]
+
+### Fixed
+
+- Reported requested provider import failures before queueing downloads, while allowing healthy providers and explicit remote routes.
+
 ## [1.2.3] - 2026-10-05
 
 ### Fixed

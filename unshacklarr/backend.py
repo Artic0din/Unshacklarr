@@ -7,6 +7,7 @@ and set in memory, so the user's unshackle.yaml is never touched.
 """
 
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -275,6 +276,18 @@ class Unshackle:
         return config
 
     def download(self, payload: dict) -> str:
+        if not payload.get("remote"):
+            # Re-read after a backend restart instead of trusting a cached healthy catalogue.
+            catalogue = self.call("GET", "/api/services")
+            tag = str(payload.get("service") or "")
+            for error in catalogue.get("load_errors") or []:
+                if isinstance(error, str) and error.partition(":")[0].casefold() == tag.casefold():
+                    dependency = re.search(r"No module named '([A-Za-z0-9_.]+)'", error)
+                    detail = f" Missing dependency: {dependency[1]}." if dependency else ""
+                    raise UnshackleError(
+                        f"{tag} failed to load in the configured backend.{detail} "
+                        "Check its startup log and the configured Unshackle environment before retrying."
+                    )
         return self.call("POST", "/api/download", json=payload)["job_id"]
 
     def job(self, job_id: str) -> dict:
