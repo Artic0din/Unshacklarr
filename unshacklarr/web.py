@@ -291,14 +291,9 @@ def unwrap(url: str) -> str:
     """
     for _ in range(3):
         query = parse_qs(urlparse(url).query)
-        inner = next(
-            (
-                query[k][0]
-                for k in ("u", "url", "murl", "$desktop_url", "$canonical_url", "$fallback_url")
-                if query.get(k) and query[k][0].startswith("http")
-            ),
-            None,
-        )
+        # $desktop_url before $canonical_url: Branch's desktop target is the show page we want.
+        inner = next((query[k][0] for k in ("u", "url", "murl", "$desktop_url", "$canonical_url")
+                      if query.get(k) and query[k][0].startswith("http")), None)
         if not inner:
             break
         url = inner
@@ -1436,6 +1431,8 @@ async def sent_notifications(_):
 
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
+# Bump when SITES, NETWORKS, or unwrap rules change so week-old caches re-scrape.
+SUGGEST_MAP = 1
 
 
 async def suggest(request):
@@ -1454,6 +1451,8 @@ async def suggest(request):
             return True
         if age >= timedelta(days=TMDB_CACHE_DAYS):
             return True
+        if entry.get("map") != SUGGEST_MAP:
+            return True  # new site/network/unwrap mapping; re-scrape
         # Before Stream/Buy split and kind labels: refresh so Buy rows and unlabelled chips do not linger.
         return any("kind" not in (link or {}) for link in entry.get("links") or [])
 
@@ -1479,7 +1478,8 @@ async def suggest(request):
             links = [l for l in unique.values() if not (l.get("episode") and l["service"] in with_series)]
             links = await asyncio.to_thread(searched_in_place, links, int(tmdb_id))
             # Prefer at read time only: cache keeps storefronts so a later-uninstalled home still leaves AMZN.
-            hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(), "links": links}
+            hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(),
+                   "map": SUGGEST_MAP, "links": links}
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
     return web.json_response({

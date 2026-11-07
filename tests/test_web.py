@@ -1044,12 +1044,15 @@ def test_a_streaming_site_maps_to_the_code_this_unshackle_has_for_it(tmp_path, m
                            installed("TEN")) == "TEN"
 
     # Travel Guides on JustWatch AU wraps 9now.com.au behind 9now.app.link Branch params.
-    branch = ("https://9now.app.link/?$canonical_url=https%3A%2F%2Fwww.9now.com.au%2Ftravel-guides%2Fseason-1"
-              "&$desktop_url=https%3A%2F%2Fwww.9now.com.au%2Ftravel-guides%2Fseason-1")
-    assert web.unwrap(branch) == "https://www.9now.com.au/travel-guides/season-1"
-    assert web.series_title(web.unwrap(branch)) == "https://www.9now.com.au/travel-guides"
+    desktop = "https://9now.app.link/?$desktop_url=https%3A%2F%2Fwww.9now.com.au%2Ftravel-guides%2Fseason-1"
+    assert web.unwrap(desktop) == "https://www.9now.com.au/travel-guides/season-1"
+    # Desktop wins over a different canonical (Branch sometimes points canonical at an app-only path).
+    both = ("https://9now.app.link/?$canonical_url=https%3A%2F%2Fwww.9now.com.au%2Ftravel-guides%2Fseason-9%2Fepisode-10"
+            "&$desktop_url=https%3A%2F%2Fwww.9now.com.au%2Ftravel-guides%2Fseason-1")
+    assert web.unwrap(both) == "https://www.9now.com.au/travel-guides/season-1"
+    assert web.series_title(web.unwrap(desktop)) == "https://www.9now.com.au/travel-guides"
     assert installed("NINE")["9now.com.au"] == "NINE"
-    assert web.service_for(web.unwrap(branch), installed("NINE")) == "NINE"
+    assert web.service_for(web.unwrap(desktop), installed("NINE")) == "NINE"
     assert web.service_for_network("Nine Network", {"NINE"}) == "NINE"
 
     # Suggestions kept under MAX show under the code installed now, and go when no service takes their site
