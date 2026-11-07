@@ -1091,13 +1091,21 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
     assert [p["name"] for p in channel_only] == ["BINGE", "Paramount+ Amazon Channel"]
     assert channel_only[1]["kind"] == "channel"
 
+    # Buy-style storefront chips hide when any home URL is listed.
     links = web.prefer_download_links([
-        {"service": "PMTP", "url": "https://www.paramountplus.com/shows/x/", "country": "AU"},
-        {"service": "AMZN", "url": "amzn1.dv.gti.one", "country": "AU"},
-        {"service": "AMZN", "url": "amzn1.dv.gti.two", "country": "AU"},
-        {"service": "ATVP", "url": "umc.cmc.show", "country": "AU"},
+        {"service": "PMTP", "url": "https://www.paramountplus.com/shows/x/", "country": "AU", "kind": "native"},
+        {"service": "AMZN", "url": "amzn1.dv.gti.buy", "country": "AU", "kind": "storefront"},
+        {"service": "ATVP", "url": "umc.cmc.buy", "country": "AU", "kind": "storefront"},
     ])
     assert [l["service"] for l in links] == ["PMTP"] and links[0]["kind"] == "native"
+
+    # Stream-row Channel packaging stays beside home (JustWatch differentiates every brand this way).
+    with_channel = web.prefer_download_links([
+        {"service": "PMTP", "url": "https://www.paramountplus.com/shows/x/", "country": "AU", "kind": "native"},
+        {"service": "AMZN", "url": "amzn1.dv.gti.channel", "country": "AU", "kind": "channel"},
+        {"service": "AMZN", "url": "amzn1.dv.gti.channel-b", "country": "AU", "kind": "channel"},
+    ])
+    assert [(l["service"], l["kind"]) for l in with_channel] == [("PMTP", "native"), ("AMZN", "channel")]
 
     storefronts = web.prefer_download_links([
         {"service": "AMZN", "url": "amzn1.dv.gti.one", "country": "AU"},
@@ -1106,6 +1114,59 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
     ])
     assert sorted(l["service"] for l in storefronts) == ["AMZN", "ATVP"]
     assert all(l["kind"] == "storefront" for l in storefronts)
+
+
+def test_tmdb_watch_scrape_keeps_stream_channels_and_skips_buy(tmp_path, monkeypatch):
+    """TMDB's JustWatch embed splits Stream/Ads from Buy; suggestions must follow that for every brand."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+
+    html = """
+    <div class="ott_provider"><h3>Stream</h3><ul class="providers">
+      <li><a href="https://click.justwatch.com/a?r=https%3A%2F%2Fwww.paramountplus.com%2Fshows%2Ffire-country%2F"></a>
+          <span class="wrapper flatrate"></span></li>
+      <li><a href="https://click.justwatch.com/a?r=https%3A%2F%2Fapp.primevideo.com%2Fdetail%3Fgti%3Damzn1.dv.gti.channel"></a>
+          <span class="wrapper flatrate"></span></li>
+      <li><a href="https://click.justwatch.com/a?r=https%3A%2F%2Ftv.apple.com"></a>
+          <span class="wrapper flatrate"></span></li>
+      <li><a href="https://click.justwatch.com/a?r=https%3A%2F%2Fwww.netflix.com%2Ftitle%2F81640603"></a>
+          <span class="wrapper flatrate"></span></li>
+    </ul></div>
+    <div class="ott_provider"><h3>Ads</h3><ul class="providers">
+      <li><a href="https://click.justwatch.com/a?r=https%3A%2F%2F10play.com.au%2Ffire-country%2Fepisodes%2Fs1%2Fe1"></a>
+          <span class="wrapper ads"></span></li>
+    </ul></div>
+    <div class="ott_provider"><h3>Buy</h3><ul class="providers">
+      <li><a href="https://click.justwatch.com/a?r=https%3A%2F%2Ftv.apple.com%2Fau%2Fshow%2Ffire-country%2Fumc.cmc.buy"></a>
+          <span class="wrapper buy"></span></li>
+      <li><a href="https://click.justwatch.com/a?r=https%3A%2F%2Fapp.primevideo.com%2Fdetail%3Fgti%3Damzn1.dv.gti.buy"></a>
+          <span class="wrapper buy"></span></li>
+    </ul></div>
+    """
+    class FakeResp:
+        text = html
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [
+        {"tag": "PMTP", "url": "", "help": "https://www.paramountplus.com"},
+        {"tag": "AMZN", "url": "", "help": "https://www.primevideo.com"},
+        {"tag": "ATVP", "url": "", "help": "https://tv.apple.com"},
+        {"tag": "NF", "url": "", "help": "https://www.netflix.com"},
+        {"tag": "TEN", "url": "", "help": "https://10.com.au"},
+    ])
+    domains = web.service_domains()
+    found = web.tmdb_links(202297, "AU", domains)
+    by_service = {l["service"]: l for l in found}
+    assert set(by_service) == {"PMTP", "AMZN", "NF", "TEN"}  # Buy ATVP/AMZN gone; bare tv.apple.com dropped
+    assert by_service["PMTP"]["kind"] == "native"
+    assert by_service["NF"]["kind"] == "native"
+    assert by_service["TEN"]["kind"] == "native"
+    assert by_service["AMZN"]["kind"] == "channel"
+    assert by_service["TEN"]["url"] == "https://10.com.au/fire-country"
+    assert web.usable_title_url("https://tv.apple.com") is False
+    assert web.usable_title_url("https://app.primevideo.com/detail?gti=x") is True
 
 
 def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):

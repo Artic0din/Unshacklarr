@@ -121,8 +121,9 @@ def link_kind(url: str, service: str | None = None) -> str:
 
 
 def prefer_download_links(links: list[dict]) -> list[dict]:
-    """Tag each suggestion and hide Amazon/Apple storefront rows when a home-service URL is also listed.
+    """Tag each suggestion; hide Amazon/Apple *buy* storefronts when a home-service URL is also listed.
 
+    Channel rows (any brand on Prime/Apple under JustWatch Stream) stay, labelled separately from home.
     Only a real brand URL (paramountplus.com, binge.com.au, …) counts as home — not a Channel listing.
     An Amazon Channel GTI still downloads only as AMZN. Duplicate AMZN/ATVP URLs collapse to one chip.
     """
@@ -132,11 +133,12 @@ def prefer_download_links(links: list[dict]) -> list[dict]:
         tagged = [link for link in tagged if link["kind"] != "storefront"]
     unique: dict[tuple, dict] = {}
     for link in tagged:
-        key = (link.get("service"), link["kind"] if link["kind"] == "storefront" else link.get("url"))
+        # One chip per Channel storefront service; home URLs stay distinct by address.
+        key = (link.get("service"), link["kind"] if link["kind"] in ("storefront", "channel") else link.get("url"))
         seen = unique.setdefault(key, link)
         if link.get("country") and link["country"] not in (seen.get("country") or "").split(", "):
             seen["country"] = ", ".join(filter(None, [seen.get("country"), link["country"]]))
-    order = {"native": 0, "storefront": 1, "channel": 2}
+    order = {"native": 0, "channel": 1, "storefront": 2}
     return sorted(unique.values(), key=lambda l: (order.get(l.get("kind") or "", 9), l.get("service") or "", l.get("url") or ""))
 
 
@@ -342,25 +344,58 @@ def crave_series(url: str) -> str | None:
     return f"https://www.crave.ca/{lang}/series/{slug.group(1)}-{series_id}" if series_id else None
 
 
+# TMDB's watch page groups JustWatch clicks under <h3>Stream</h3> / Free / Ads vs Buy / Rent.
+# Buy and Rent are purchases, not Unshackle subscription downloads; Channel packaging sits under Stream.
+STREAM_SECTIONS = frozenset({"stream", "free", "ads"})
+
+
+def usable_title_url(url: str) -> bool:
+    """Drop bare storefront homes (JustWatch's Apple Channel row often links only tv.apple.com)."""
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.hostname:
+        return False
+    path = (parsed.path or "").rstrip("/")
+    return bool(path or parsed.query)
+
+
 def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict]:
-    """Service URLs from TMDB's "where to watch" page: its JustWatch links carry them in `r`."""
+    """Service URLs from TMDB's "where to watch" page: its JustWatch links carry them in `r`.
+
+    Only Stream / Free / Ads rows: Buy and Rent are ignored (same split as TMDB's watch/providers API).
+    An Amazon/Apple URL under Stream is Channel packaging, not a storefront purchase.
+    """
     r = tmdb_page(f"https://www.themoviedb.org/tv/{tmdb_id}/watch", {"locale": country})
     links = []
-    for href in re.findall(r'href="(https://click\.justwatch\.com/[^"]+)"', r.text):
-        url = unwrap(parse_qs(urlparse(href.replace("&amp;", "&")).query).get("r", [""])[0])
-        service = service_for(url, domains)
-        if service:
-            # its site kept: the code for it may change (another Unshackle, a service renamed), the site does not
-            link = {"service": service, "url": series_title(url), "country": country, "site": urlparse(url).hostname}
-            if on_site(url, "crave.ca") and "/play/" in url:
-                # Crave's link opens one episode and holds no series id (…/series/<slug>-<id>)
-                if series := crave_series(url):
-                    link["url"] = series
-                else:  # the page asks for the series URL
-                    link["needs_series_url"] = True
-            elif re.search(r"-episode-\d+|episodeId=", link["url"]) or episode_link(link["url"]):  # still an episode once normalised
-                link["episode"] = True  # dropped below when the same service also links the series
-            links.append(link)
+    sections = re.findall(
+        r'<div class="ott_provider">\s*<h3>([^<]+)</h3>(.*?)(?=<div class="ott_provider">|$)',
+        r.text, flags=re.S | re.I,
+    )
+    # Older TMDB markup without ott_provider headings: keep every click (Buy cannot be told apart).
+    if not sections:
+        sections = [("Stream", r.text)]
+    for section, body in sections:
+        if section.strip().casefold() not in STREAM_SECTIONS:
+            continue
+        for href in re.findall(r'href="(https://click\.justwatch\.com/[^"]+)"', body):
+            url = unwrap(parse_qs(urlparse(href.replace("&amp;", "&")).query).get("r", [""])[0])
+            if not usable_title_url(url):
+                continue
+            service = service_for(url, domains)
+            if service:
+                # its site kept: the code for it may change (another Unshackle, a service renamed), the site does not
+                # Stream-row Amazon/Apple destinations are Channels; Buy was skipped above.
+                kind = "channel" if on_site(url, *STOREFRONT_HOSTS) else "native"
+                link = {"service": service, "url": series_title(url), "country": country,
+                        "site": urlparse(url).hostname, "kind": kind}
+                if on_site(url, "crave.ca") and "/play/" in url:
+                    # Crave's link opens one episode and holds no series id (…/series/<slug>-<id>)
+                    if series := crave_series(url):
+                        link["url"] = series
+                    else:  # the page asks for the series URL
+                        link["needs_series_url"] = True
+                elif re.search(r"-episode-\d+|episodeId=", link["url"]) or episode_link(link["url"]):  # still an episode once normalised
+                    link["episode"] = True  # dropped below when the same service also links the series
+                links.append(link)
     return links
 
 

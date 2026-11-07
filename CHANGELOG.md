@@ -11,6 +11,7 @@ Every change worth knowing, newest first. The format follows
 - Synced the fork with upstream 1.5.0 while retaining its provider-readiness and terminal-disconnect regression coverage.
 - Labelled TMDB watch offers as home service, Amazon/Apple Channel, or storefront; preferred a brand's own logo over its Channel packaging; and hid Amazon/Apple storefront download suggestions when a real home-service URL is listed. Channel rows are not treated as proof the brand's own app has that exact title (JustWatch can attach the wrong regional catalogue).
 - Mapped JustWatch's `10play.com.au` links to TEN and normalised them to `10.com.au` show URLs so titles like Fire Country suggest 10 Play, matching JustWatch AU.
+- Suggest scrape now follows TMDB/JustWatch sections: only Stream / Free / Ads (Buy and Rent ignored); Amazon/Apple destinations under Stream are labelled Channel for any brand, not mixed with purchase links.
 
 ### Fixed
 
