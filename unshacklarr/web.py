@@ -93,13 +93,15 @@ def rank_watch_providers(providers: list[dict], *, limit: int | None = 3) -> lis
     Amazon/Apple storefront rows are dropped when any native brand remains.
     """
     enriched = [{**p, "kind": p.get("kind") or provider_kind(p.get("name") or ""),
-                 "brand": provider_brand(p.get("name") or "")} for p in providers]
+                 "brand": provider_brand(p.get("name") or ""), "_i": i}
+                for i, p in enumerate(providers)]
     natives = {p["brand"] for p in enriched if p["kind"] == "native" and p["brand"]}
     kept = [p for p in enriched if not (p["kind"] == "channel" and p["brand"] in natives)]
     if any(p["kind"] == "native" for p in kept):
         kept = [p for p in kept if p["kind"] != "storefront"]
     order = {"native": 0, "channel": 1, "storefront": 2}
-    kept.sort(key=lambda p: (order.get(p["kind"], 9), (p.get("name") or "").casefold()))
+    # Kind first; keep TMDB/JustWatch order within a kind (do not alphabetise).
+    kept.sort(key=lambda p: (order.get(p["kind"], 9), p["_i"]))
     out: list[dict] = []
     seen: set[str] = set()
     for p in kept:
@@ -362,7 +364,7 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
     """Service URLs from TMDB's "where to watch" page: its JustWatch links carry them in `r`.
 
     Only Stream / Free / Ads rows: Buy and Rent are ignored (same split as TMDB's watch/providers API).
-    An Amazon/Apple URL under Stream is Channel packaging, not a storefront purchase.
+    Amazon/Apple Stream destinations are labelled storefront (no provider name in the HTML to tell Channel apart).
     """
     r = tmdb_page(f"https://www.themoviedb.org/tv/{tmdb_id}/watch", {"locale": country})
     links = []
@@ -383,10 +385,10 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
             service = service_for(url, domains)
             if service:
                 # its site kept: the code for it may change (another Unshackle, a service renamed), the site does not
-                # Stream-row Amazon/Apple destinations are Channels; Buy was skipped above.
-                kind = "channel" if on_site(url, *STOREFRONT_HOSTS) else "native"
+                # Stream Amazon/Apple URLs are storefront hosts: the scrape has no provider name, so Channel vs
+                # Prime/Apple catalogue cannot be told apart here (schedule badges use TMDB's named API rows).
                 link = {"service": service, "url": series_title(url), "country": country,
-                        "site": urlparse(url).hostname, "kind": kind}
+                        "site": urlparse(url).hostname, "kind": link_kind(url, service)}
                 if on_site(url, "crave.ca") and "/play/" in url:
                     # Crave's link opens one episode and holds no series id (…/series/<slug>-<id>)
                     if series := crave_series(url):
@@ -1411,10 +1413,20 @@ async def suggest(request):
     countries = read_config()["tmdb_countries"]
     cache = read_json(TMDB_CACHE, {})
     hit = cache.get(tmdb_id)
-    fresh = hit and hit["countries"] == countries and (
-        datetime.now(timezone.utc) - datetime.fromisoformat(hit["checked"]) < timedelta(days=TMDB_CACHE_DAYS)
-    )
-    if not fresh or request.query.get("refresh"):
+
+    def suggest_stale(entry: dict | None) -> bool:
+        if not entry or entry.get("countries") != countries:
+            return True
+        try:
+            age = datetime.now(timezone.utc) - datetime.fromisoformat(entry["checked"])
+        except (KeyError, TypeError, ValueError):
+            return True
+        if age >= timedelta(days=TMDB_CACHE_DAYS):
+            return True
+        # Before Stream/Buy split and kind labels: refresh so Buy rows and unlabelled chips do not linger.
+        return any("kind" not in (link or {}) for link in entry.get("links") or [])
+
+    if suggest_stale(hit) or request.query.get("refresh"):
         try:
             domains = await asyncio.to_thread(service_domains)
             found = await asyncio.gather(*(asyncio.to_thread(tmdb_links, int(tmdb_id), c, domains) for c in countries))

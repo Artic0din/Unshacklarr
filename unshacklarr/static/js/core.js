@@ -573,12 +573,15 @@ async function loadSuggestions(s, refresh = false) {
   if (!links.length) return networkPick(s, box, `TMDB lists no supported service in ${S.config.tmdb_countries.join(", ")}. Enter it below by hand.`,
     "TMDB lists no supported service.");
   const kindLabel = (l) => l.kind === "storefront" ? "storefront" : l.kind === "channel" ? "channel" : "home";
+  const kindTitle = (l) => l.kind === "storefront"
+    ? "Amazon/Apple storefront — not another brand's own login (Channels need that brand's Amazon/Apple add-on)"
+    : l.kind === "channel"
+      ? "Amazon/Apple Channels — not proof this exact title is on the brand's own app"
+      : "";
   box.replaceChildren(...links.map((l) => el("button", {
     className: l.kind && l.kind !== "native" ? `kind-${l.kind}` : "",
     ariaLabel: `Use ${l.service} (${kindLabel(l)}): ${l.url}`,
-    title: l.kind === "storefront"
-      ? "Amazon/Apple storefront — not another brand's own login (Channels need that brand's Amazon/Apple add-on)"
-      : "",
+    title: kindTitle(l),
     onclick: () => applySuggestion(l),
   }, el("b", { textContent: l.service }), el("span", { textContent: l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.url }),
     el("small", { textContent: `${l.country} · ${kindLabel(l)}` }))));

@@ -1079,7 +1079,8 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
         {"name": "BINGE", "logo": "binge"},
         {"name": "Foxtel Now", "logo": "fox"},
     ], limit=3)
-    assert [p["name"] for p in ranked] == ["BINGE", "Foxtel Now", "Paramount Plus"]
+    # TMDB order among natives (Channel/storefront dropped), not alphabetical.
+    assert [p["name"] for p in ranked] == ["Paramount Plus", "BINGE", "Foxtel Now"]
     assert all(p["kind"] == "native" for p in ranked)
 
     # UK Gogglebox-style: Channel-only Paramount+ stays a channel, not promoted to a fake home PMTP chip
@@ -1099,7 +1100,7 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
     ])
     assert [l["service"] for l in links] == ["PMTP"] and links[0]["kind"] == "native"
 
-    # Stream-row Channel packaging stays beside home (JustWatch differentiates every brand this way).
+    # Named Channel rows (schedule API) can still sit beside home; scrape cannot invent that label from a URL.
     with_channel = web.prefer_download_links([
         {"service": "PMTP", "url": "https://www.paramountplus.com/shows/x/", "country": "AU", "kind": "native"},
         {"service": "AMZN", "url": "amzn1.dv.gti.channel", "country": "AU", "kind": "channel"},
@@ -1163,8 +1164,10 @@ def test_tmdb_watch_scrape_keeps_stream_channels_and_skips_buy(tmp_path, monkeyp
     assert by_service["PMTP"]["kind"] == "native"
     assert by_service["NF"]["kind"] == "native"
     assert by_service["TEN"]["kind"] == "native"
-    assert by_service["AMZN"]["kind"] == "channel"
+    assert by_service["AMZN"]["kind"] == "storefront"  # HTML has no Channel name; host alone is storefront
     assert by_service["TEN"]["url"] == "https://10.com.au/fire-country"
+    preferred = web.prefer_download_links(found)
+    assert {l["service"] for l in preferred} == {"PMTP", "NF", "TEN"}  # storefront AMZN hidden beside homes
     assert web.usable_title_url("https://tv.apple.com") is False
     assert web.usable_title_url("https://app.primevideo.com/detail?gti=x") is True
 
