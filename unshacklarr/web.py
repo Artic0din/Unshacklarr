@@ -58,21 +58,6 @@ STOREFRONT_SERVICES = frozenset({"AMZN", "ATV", "ATVP"})
 STOREFRONT_HOSTS = ("primevideo.com", "amazon.com", "amazon.fr", "tv.apple.com")
 CHANNEL_NAME = re.compile(r"\b(?:amazon\s+channel|apple\s+tv\s+channel|channels)\b", re.IGNORECASE)
 STOREFRONT_NAME = re.compile(r"^(?:amazon\s+prime\s+video(?:\s+with\s+ads)?|apple\s+tv)$", re.IGNORECASE)
-# TMDB brand key -> Unshackle tags. A "Paramount+ Amazon Channel" row means Paramount+ itself carries it.
-BRAND_SERVICES = {
-    "paramountplus": ("PMTP",),
-    "binge": ("BINGE",),
-    "hbomax": ("HMAX", "MAX"),
-    "disneyplus": ("DSNP",),
-    "netflix": ("NF",),
-    "stan": ("STAN",),
-    "7plus": ("SEVEN", "7plus"),
-    "9now": ("NINE",),
-    "10play": ("TEN",),
-    "10": ("TEN",),
-    "abciview": ("AUBC", "iView"),
-    "sbsondemand": ("SBS",),
-}
 # A network's own catch-up service, by its name's first words (Sonarr's network): what a series TMDB links to
 # nowhere is offered, best code first. Extend per country.
 NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": ("ALL4", "C4"), "more4": ("ALL4", "C4"),
@@ -98,63 +83,32 @@ def provider_brand(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", text.casefold())
 
 
-def brand_label(name: str) -> str:
-    """'Paramount+ Amazon Channel' -> 'Paramount+' for home-service labelling."""
-    text = CHANNEL_NAME.sub(" ", str(name or ""))
-    text = re.sub(r"\b(?:amazon|apple\s*tv)\b", " ", text, flags=re.IGNORECASE)
-    return re.sub(r"\s+", " ", text).strip() or str(name or "").strip()
-
-
 def rank_watch_providers(providers: list[dict], *, limit: int | None = 3) -> list[dict]:
-    """Calendar logos: a Channel listing means the brand's own service carries the title too.
+    """Calendar logos: prefer a brand's own TMDB row over its Amazon/Apple Channel packaging.
 
-    JustWatch often shows only 'Paramount+ on Prime Video Channels' when Paramount+ itself has it.
-    Promote that to the home brand, prefer a true native logo when TMDB also has one, and drop Amazon/Apple
-    storefront rows once any home brand remains.
+    A Channel row is kept only when TMDB has no native row for that brand. It is labelled as a channel:
+    JustWatch sometimes attaches Channel offers to the wrong regional title (UK Gogglebox vs Australia).
+    Amazon/Apple storefront rows are dropped when any native brand remains.
     """
-    enriched = []
-    for p in providers:
-        raw_kind = p.get("kind") or provider_kind(p.get("name") or "")
-        brand = provider_brand(p.get("name") or "")
-        via_channel = raw_kind == "channel"
-        kind = "native" if via_channel else raw_kind
-        name = brand_label(p.get("name") or "") if via_channel else (p.get("name") or "")
-        enriched.append({**p, "name": name, "kind": kind, "brand": brand, "via_channel": via_channel})
-    if any(p["kind"] == "native" for p in enriched):
-        enriched = [p for p in enriched if p["kind"] != "storefront"]
-    # Prefer a true native TMDB row over a Channel composite for the same brand.
-    enriched.sort(key=lambda p: (
-        0 if p["kind"] == "native" else 1,
-        0 if not p.get("via_channel") else 1,
-        (p.get("name") or "").casefold(),
-    ))
+    enriched = [{**p, "kind": p.get("kind") or provider_kind(p.get("name") or ""),
+                 "brand": provider_brand(p.get("name") or "")} for p in providers]
+    natives = {p["brand"] for p in enriched if p["kind"] == "native" and p["brand"]}
+    kept = [p for p in enriched if not (p["kind"] == "channel" and p["brand"] in natives)]
+    if any(p["kind"] == "native" for p in kept):
+        kept = [p for p in kept if p["kind"] != "storefront"]
+    order = {"native": 0, "channel": 1, "storefront": 2}
+    kept.sort(key=lambda p: (order.get(p["kind"], 9), (p.get("name") or "").casefold()))
     out: list[dict] = []
     seen: set[str] = set()
-    for p in enriched:
+    for p in kept:
         key = p["brand"] or (p.get("name") or "")
         if key in seen:
             continue
         seen.add(key)
-        row = {"name": p.get("name"), "logo": p.get("logo"), "kind": p["kind"]}
-        if p.get("via_channel"):
-            row["via_channel"] = True
-        out.append(row)
+        out.append({"name": p.get("name"), "logo": p.get("logo"), "kind": p["kind"]})
         if limit is not None and len(out) >= limit:
             break
     return out
-
-
-def home_services_from_providers(providers: list[dict], installed: set[str]) -> list[str]:
-    """Unshackle tags implied by TMDB home or Channel rows (not Amazon/Apple storefronts)."""
-    tags: list[str] = []
-    for p in providers:
-        kind = provider_kind(p.get("name") or "")
-        if kind not in {"native", "channel"}:
-            continue
-        for tag in BRAND_SERVICES.get(provider_brand(p.get("name") or ""), ()):
-            if tag in installed and tag not in tags:
-                tags.append(tag)
-    return tags
 
 
 def link_kind(url: str, service: str | None = None) -> str:
@@ -165,10 +119,10 @@ def link_kind(url: str, service: str | None = None) -> str:
 
 
 def prefer_download_links(links: list[dict]) -> list[dict]:
-    """Tag each suggestion and hide Amazon/Apple storefront rows when a home service is also listed.
+    """Tag each suggestion and hide Amazon/Apple storefront rows when a home-service URL is also listed.
 
-    An Amazon Channel GTI still downloads only as AMZN; your Paramount+ login does not unlock it.
-    Duplicate AMZN/ATVP URLs collapse to one storefront chip.
+    Only a real brand URL (paramountplus.com, binge.com.au, …) counts as home — not a Channel listing.
+    An Amazon Channel GTI still downloads only as AMZN. Duplicate AMZN/ATVP URLs collapse to one chip.
     """
     tagged = [{**link, "kind": link.get("kind") or link_kind(str(link.get("url") or ""), link.get("service"))}
               for link in links]
@@ -1441,12 +1395,6 @@ async def suggest(request):
             with_series = {l["service"] for l in unique.values() if not l.get("episode")}
             links = [l for l in unique.values() if not (l.get("episode") and l["service"] in with_series)]
             links = await asyncio.to_thread(searched_in_place, links, int(tmdb_id))
-            # JustWatch often lists only 'Brand on Amazon/Apple Channels'; that still means the brand's own service.
-            try:
-                net = await asyncio.to_thread(tmdb_network, int(tmdb_id))
-            except (requests.RequestException, ValueError, KeyError, TypeError):
-                net = {"providers": {}}
-            links = await asyncio.to_thread(links_from_channel_brands, links, net.get("providers") or {}, countries, int(tmdb_id))
             links = prefer_download_links(links)
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(), "links": links}
             cache[tmdb_id] = hit
@@ -1482,31 +1430,6 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
             episode = next(l for l in out if l["service"] == service and l.get("episode"))
             out = [l for l in out if not (l["service"] == service and l.get("episode"))]
             out.append({**{k: v for k, v in episode.items() if k != "episode"}, "url": url, "found_by": "search"})
-    return out
-
-
-def links_from_channel_brands(links: list[dict], providers_by_country: dict, countries: list[str], tmdb_id: int) -> list[dict]:
-    """Add the brand's own Unshackle service when TMDB only surfaces it as an Amazon/Apple Channel."""
-    try:
-        installed = set(service_tags())
-    except UnshackleError:
-        return links
-    have = {l["service"] for l in links if not l.get("episode")}
-    out = list(links)
-    try:
-        series = next((s for s in sonarr_series() if s.get("tmdbId") == tmdb_id), None)
-    except requests.RequestException:
-        series = None
-    for country in countries:
-        for tag in home_services_from_providers(providers_by_country.get(country) or [], installed):
-            if tag in have:
-                continue
-            url = search_series_url(tag, series["title"]) if series else None
-            link = {"service": tag, "url": url or "", "country": country, "kind": "native", "found_by": "channel"}
-            if not url:
-                link["needs_series_url"] = True
-            out.append(link)
-            have.add(tag)
     return out
 
 

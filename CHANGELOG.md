@@ -9,7 +9,7 @@ Every change worth knowing, newest first. The format follows
 ### Changed
 
 - Synced the fork with upstream 1.5.0 while retaining its provider-readiness and terminal-disconnect regression coverage.
-- Labelled TMDB watch offers as home service or Amazon/Apple storefront, treated a Brand-on-Channels listing as that brand's own service (JustWatch often omits the native row), and hid Amazon/Apple storefront download suggestions when a home service is available.
+- Labelled TMDB watch offers as home service, Amazon/Apple Channel, or storefront; preferred a brand's own logo over its Channel packaging; and hid Amazon/Apple storefront download suggestions when a real home-service URL is listed. Channel rows are not treated as proof the brand's own app has that exact title (JustWatch can attach the wrong regional catalogue).
 
 ### Fixed
 

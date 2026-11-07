@@ -1051,7 +1051,7 @@ def test_a_streaming_site_maps_to_the_code_this_unshackle_has_for_it(tmp_path, m
 
 
 def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, monkeypatch):
-    """A Brand-on-Channels listing means the brand itself; Amazon/Apple storefront chips yield when a home service exists."""
+    """Prefer a real home-service URL over Amazon/Apple storefronts; Channel rows stay labelled, not invented as PMTP."""
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
     import unshacklarr.web
@@ -1064,7 +1064,6 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
     assert web.provider_kind("Amazon Prime Video") == "storefront"
     assert web.provider_kind("Apple TV") == "storefront"
     assert web.provider_brand("Paramount Plus") == web.provider_brand("Paramount+ Amazon Channel")
-    assert web.brand_label("Paramount+ Amazon Channel") == "Paramount+"
 
     ranked = web.rank_watch_providers([
         {"name": "Paramount+ Amazon Channel", "logo": "ch"},
@@ -1075,17 +1074,15 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
     ], limit=3)
     assert [p["name"] for p in ranked] == ["BINGE", "Foxtel Now", "Paramount Plus"]
     assert all(p["kind"] == "native" for p in ranked)
-    assert not ranked[2].get("via_channel")  # true native row wins over the Channel composite
 
+    # UK Gogglebox-style: Channel-only Paramount+ stays a channel, not promoted to a fake home PMTP chip
     channel_only = web.rank_watch_providers([
         {"name": "Paramount+ Amazon Channel", "logo": "ch"},
         {"name": "BINGE", "logo": "binge"},
         {"name": "Amazon Prime Video", "logo": "amzn"},
     ], limit=3)
-    assert [p["name"] for p in channel_only] == ["BINGE", "Paramount+"]
-    assert channel_only[1]["kind"] == "native" and channel_only[1].get("via_channel")
-    assert web.home_services_from_providers(
-        [{"name": "Paramount+ Amazon Channel"}], {"PMTP", "AMZN"}) == ["PMTP"]
+    assert [p["name"] for p in channel_only] == ["BINGE", "Paramount+ Amazon Channel"]
+    assert channel_only[1]["kind"] == "channel"
 
     links = web.prefer_download_links([
         {"service": "PMTP", "url": "https://www.paramountplus.com/shows/x/", "country": "AU"},
