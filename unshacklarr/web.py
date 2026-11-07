@@ -49,7 +49,7 @@ UNSHACKLE = sonarr_sync.UNSHACKLE
 SITES = {
     "hbomax.com": ("MAX", "HMAX"), "max.com": ("MAX", "HMAX"),
     "tv.apple.com": ("ATV", "ATVP"),
-    "primevideo.com": ("AMZN",), "amazon.fr": ("AMZN",), "amazon.com": ("AMZN",),
+    "primevideo.com": ("AMZN",), "amazon.fr": ("AMZN",), "amazon.de": ("AMZN",), "amazon.com": ("AMZN",),
     "disneyplus.com": ("DSNP",), "canalplus.com": ("CanalPlus",), "crave.ca": ("CRAVE",),
     "m6.fr": ("M6",), "m6plus.fr": ("M6",), "channel4.com": ("ALL4", "C4"),
     # JustWatch/TMDB still links 10 Play as 10play.com.au; the Unshackle TEN service uses 10.com.au.
@@ -57,9 +57,10 @@ SITES = {
 }
 # Aggregator hosts: Amazon and Apple list other brands as Channels / storefront buys, not the brand's own login.
 STOREFRONT_SERVICES = frozenset({"AMZN", "ATV", "ATVP"})
-STOREFRONT_HOSTS = ("primevideo.com", "amazon.com", "amazon.fr", "tv.apple.com")
+STOREFRONT_HOSTS = ("primevideo.com", "amazon.com", "amazon.de", "amazon.fr", "tv.apple.com")
 CHANNEL_NAME = re.compile(r"\b(?:amazon\s+channel|apple\s+tv\s+channel|channels)\b", re.IGNORECASE)
-STOREFRONT_NAME = re.compile(r"^(?:amazon\s+prime\s+video(?:\s+with\s+ads)?|apple\s+tv)$", re.IGNORECASE)
+# Any Amazon-* catalogue name (Free with Ads, MX Player, Video…); Channel names match CHANNEL_NAME first.
+STOREFRONT_NAME = re.compile(r"^(?:amazon\b.*|apple\s+tv(?:\s+store)?)$", re.IGNORECASE)
 # A network's own catch-up service, by its name's first words (Sonarr's network): what a series TMDB links to
 # nowhere is offered, best code first. Extend per country.
 NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": ("ALL4", "C4"), "more4": ("ALL4", "C4"),
@@ -143,7 +144,8 @@ def prefer_download_links(links: list[dict]) -> list[dict]:
         if link.get("country") and link["country"] not in (seen.get("country") or "").split(", "):
             seen["country"] = ", ".join(filter(None, [seen.get("country"), link["country"]]))
     order = {"native": 0, "storefront": 1, "channel": 2}
-    return sorted(unique.values(), key=lambda l: (order.get(l.get("kind") or "", 9), l.get("service") or "", l.get("url") or ""))
+    # Kind only: stable sort keeps JustWatch / first-country scrape order within a kind.
+    return sorted(unique.values(), key=lambda l: order.get(l.get("kind") or "", 9))
 
 
 def service_for_network(network: str, installed: set[str]) -> str | None:
@@ -399,7 +401,9 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                 # its site kept: the code for it may change (another Unshackle, a service renamed), the site does not
                 title_attr = re.search(r'title="([^"]*)"', attrs)
                 name = offer_provider_name(title_attr.group(1)) if title_attr else ""
-                kind = provider_kind(name) if name else link_kind(url, service)
+                # Title only promotes Channel; storefront hosts are never home (Amazon MX Player, Free with Ads…).
+                titled = provider_kind(name) if name else None
+                kind = "channel" if titled == "channel" else link_kind(url, service)
                 link = {"service": service, "url": series_title(url), "country": country,
                         "site": urlparse(url).hostname, "kind": kind}
                 if on_site(url, "crave.ca") and "/play/" in url:

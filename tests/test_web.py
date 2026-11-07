@@ -1069,8 +1069,20 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
     assert web.provider_kind("Paramount+ Amazon Channel") == "channel"
     assert web.provider_kind("Paramount Plus Apple TV channel") == "channel"
     assert web.provider_kind("Amazon Prime Video") == "storefront"
+    assert web.provider_kind("Amazon Prime Video Free with Ads") == "storefront"
+    assert web.provider_kind("Amazon MX Player") == "storefront"
+    assert web.provider_kind("Amazon Video") == "storefront"
     assert web.provider_kind("Apple TV") == "storefront"
+    assert web.provider_kind("Apple TV Store") == "storefront"
     assert web.provider_brand("Paramount Plus") == web.provider_brand("Paramount+ Amazon Channel")
+
+    # Calendar: Amazon Free with Ads must not outrank Apple TV as a fake home brand.
+    de_ads = web.rank_watch_providers([
+        {"name": "Amazon Prime Video Free with Ads", "logo": "amzn"},
+        {"name": "Apple TV", "logo": "atv"},
+    ])
+    assert [p["name"] for p in de_ads] == ["Amazon Prime Video Free with Ads", "Apple TV"]
+    assert all(p["kind"] == "storefront" for p in de_ads)
 
     ranked = web.rank_watch_providers([
         {"name": "Paramount+ Amazon Channel", "logo": "ch"},
@@ -1140,6 +1152,13 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
     ]
     assert all(l["kind"] == "storefront" for l in storefronts)
 
+    # Stable kind sort keeps first-country / scrape order (TEN before NF), not alphabetical service tags.
+    ordered = web.prefer_download_links([
+        {"service": "TEN", "url": "https://10.com.au/x", "country": "AU", "kind": "native"},
+        {"service": "NF", "url": "https://www.netflix.com/title/1", "country": "GB", "kind": "native"},
+    ])
+    assert [l["service"] for l in ordered] == ["TEN", "NF"]
+
 
 def test_tmdb_watch_scrape_keeps_stream_channels_and_skips_buy(tmp_path, monkeypatch):
     """TMDB's JustWatch embed splits Stream/Ads from Buy; titles label Channel vs home."""
@@ -1156,6 +1175,12 @@ def test_tmdb_watch_scrape_keeps_stream_channels_and_skips_buy(tmp_path, monkeyp
           <span class="wrapper flatrate"></span></li>
       <li><a title="Watch Fire Country on Paramount+ Amazon Channel"
           href="https://click.justwatch.com/a?r=https%3A%2F%2Fapp.primevideo.com%2Fdetail%3Fgti%3Damzn1.dv.gti.channel"></a>
+          <span class="wrapper flatrate"></span></li>
+      <li><a title="Watch Fire Country on Amazon Prime Video Free with Ads"
+          href="https://click.justwatch.com/a?r=https%3A%2F%2Fwatch.amazon.de%2Fdetail%3Fgti%3Damzn1.dv.gti.ads"></a>
+          <span class="wrapper flatrate"></span></li>
+      <li><a title="Watch Fire Country on Amazon MX Player"
+          href="https://click.justwatch.com/a?r=https%3A%2F%2Fwww.amazon.de%2Fgp%2Fvideo%2Fdetail%3Fgti%3Damzn1.dv.gti.mx"></a>
           <span class="wrapper flatrate"></span></li>
       <li><a title="Watch Fire Country on Paramount Plus Apple TV channel"
           href="https://click.justwatch.com/a?r=https%3A%2F%2Ftv.apple.com"></a>
@@ -1190,16 +1215,16 @@ def test_tmdb_watch_scrape_keeps_stream_channels_and_skips_buy(tmp_path, monkeyp
     ])
     domains = web.service_domains()
     found = web.tmdb_links(202297, "AU", domains)
-    by_service = {l["service"]: l for l in found}
-    assert set(by_service) == {"PMTP", "AMZN", "NF", "TEN"}  # Buy ATVP/AMZN gone; bare tv.apple.com dropped
-    assert by_service["PMTP"]["kind"] == "native"
-    assert by_service["NF"]["kind"] == "native"
-    assert by_service["TEN"]["kind"] == "native"
-    assert by_service["AMZN"]["kind"] == "channel"  # title names Paramount+ Amazon Channel
-    assert by_service["TEN"]["url"] == "https://10.com.au/fire-country"
+    by_kind = {(l["service"], l["kind"]): l for l in found}
+    assert {l["service"] for l in found} == {"PMTP", "AMZN", "NF", "TEN"}  # Buy gone; bare tv.apple.com dropped
+    assert by_kind[("PMTP", "native")]["url"].startswith("https://www.paramountplus.com/")
+    assert by_kind[("NF", "native")]
+    assert by_kind[("TEN", "native")]["url"] == "https://10.com.au/fire-country"
+    assert by_kind[("AMZN", "channel")]  # title names Paramount+ Amazon Channel
+    assert by_kind[("AMZN", "storefront")]  # Free with Ads / MX Player stay storefront via host, not native
     assert web.offer_provider_name("Watch Fire Country on Paramount+ Amazon Channel") == "Paramount+ Amazon Channel"
     preferred = web.prefer_download_links(found)
-    assert {l["service"] for l in preferred} == {"PMTP", "NF", "TEN"}  # Channel AMZN hidden beside homes
+    assert {l["service"] for l in preferred} == {"PMTP", "NF", "TEN"}  # Channel + storefront AMZN hidden beside homes
     assert web.usable_title_url("https://tv.apple.com") is False
     assert web.usable_title_url("https://app.primevideo.com/detail?gti=x") is True
 
