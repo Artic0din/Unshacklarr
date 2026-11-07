@@ -1036,6 +1036,13 @@ def test_a_streaming_site_maps_to_the_code_this_unshackle_has_for_it(tmp_path, m
     assert web.series_title("https://play.hbomax.com/ch/en/show/8931dfbf-d113-43de-8ee2-43bb594330d1/s1/e1-test") \
         == "https://play.hbomax.com/show/8931dfbf-d113-43de-8ee2-43bb594330d1"
 
+    # Fire Country on JustWatch AU links 10play.com.au; TEN only speaks 10.com.au.
+    assert installed("TEN")["10play.com.au"] == "TEN"
+    assert web.series_title("https://10play.com.au/fire-country/episodes/season-2/episode-6/tpv241203imzjy") \
+        == "https://10.com.au/fire-country"
+    assert web.service_for("https://10play.com.au/fire-country/episodes/season-2/episode-6/tpv241203imzjy",
+                           installed("TEN")) == "TEN"
+
     # Suggestions kept under MAX show under the code installed now, and go when no service takes their site
     kept = [{"service": "MAX", "url": "https://play.hbomax.com/show/x", "country": "AU", "site": "play.hbomax.com"},
             {"service": "ATV", "url": "umc.cmc.show", "country": "AU", "site": "tv.apple.com"}]

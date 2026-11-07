@@ -52,6 +52,8 @@ SITES = {
     "primevideo.com": ("AMZN",), "amazon.fr": ("AMZN",), "amazon.com": ("AMZN",),
     "disneyplus.com": ("DSNP",), "canalplus.com": ("CanalPlus",), "crave.ca": ("CRAVE",),
     "m6.fr": ("M6",), "m6plus.fr": ("M6",), "channel4.com": ("ALL4", "C4"),
+    # JustWatch/TMDB still links 10 Play as 10play.com.au; the Unshackle TEN service uses 10.com.au.
+    "10play.com.au": ("TEN",), "10.com.au": ("TEN",),
 }
 # Aggregator hosts: Amazon and Apple list other brands as Channels / storefront buys, not the brand's own login.
 STOREFRONT_SERVICES = frozenset({"AMZN", "ATV", "ATVP"})
@@ -231,6 +233,9 @@ def series_title(url: str) -> str:
         return f"https://www.sbs.com.au/ondemand/tv-series/{show.group(1)}"
     if on_site(url, "u.co.uk") and (show := re.match(r"/shows/([a-z0-9-]+)", path)):
         return f"https://u.co.uk/shows/{show.group(1)}/watch-online"
+    if on_site(url, "10play.com.au", "10.com.au") and (show := re.match(r"/([a-z0-9-]+)(?:/|$)", path)):
+        # JustWatch episode links on 10play.com.au; TEN wants the 10.com.au show page.
+        return f"https://10.com.au/{show.group(1)}"
     return url
 
 
