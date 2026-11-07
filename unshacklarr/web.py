@@ -85,12 +85,14 @@ def provider_brand(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", text.casefold())
 
 
-def rank_watch_providers(providers: list[dict], *, limit: int | None = 3) -> list[dict]:
+def rank_watch_providers(providers: list[dict]) -> list[dict]:
     """Calendar logos: prefer a brand's own TMDB row over its Amazon/Apple Channel packaging.
 
     A Channel row is kept only when TMDB has no native row for that brand. It is labelled as a channel:
     JustWatch sometimes attaches Channel offers to the wrong regional title (UK Gogglebox vs Australia).
     Amazon/Apple storefront rows are dropped when any native brand remains.
+    Own-subscription storefronts (Apple TV, Amazon Prime Video) rank above leftover Channels.
+    The schedule UI slices logos to three; this returns every ranked row for the tooltip.
     """
     enriched = [{**p, "kind": p.get("kind") or provider_kind(p.get("name") or ""),
                  "brand": provider_brand(p.get("name") or ""), "_i": i}
@@ -99,7 +101,7 @@ def rank_watch_providers(providers: list[dict], *, limit: int | None = 3) -> lis
     kept = [p for p in enriched if not (p["kind"] == "channel" and p["brand"] in natives)]
     if any(p["kind"] == "native" for p in kept):
         kept = [p for p in kept if p["kind"] != "storefront"]
-    order = {"native": 0, "channel": 1, "storefront": 2}
+    order = {"native": 0, "storefront": 1, "channel": 2}
     # Kind first; keep TMDB/JustWatch order within a kind (do not alphabetise).
     kept.sort(key=lambda p: (order.get(p["kind"], 9), p["_i"]))
     out: list[dict] = []
@@ -110,8 +112,6 @@ def rank_watch_providers(providers: list[dict], *, limit: int | None = 3) -> lis
             continue
         seen.add(key)
         out.append({"name": p.get("name"), "logo": p.get("logo"), "kind": p["kind"]})
-        if limit is not None and len(out) >= limit:
-            break
     return out
 
 
@@ -123,24 +123,26 @@ def link_kind(url: str, service: str | None = None) -> str:
 
 
 def prefer_download_links(links: list[dict]) -> list[dict]:
-    """Tag each suggestion; hide Amazon/Apple *buy* storefronts when a home-service URL is also listed.
+    """Tag each suggestion; hide Amazon/Apple storefront and Channel chips when a usable home URL is listed.
 
-    Channel rows (any brand on Prime/Apple under JustWatch Stream) stay, labelled separately from home.
-    Only a real brand URL (paramountplus.com, binge.com.au, …) counts as home — not a Channel listing.
-    An Amazon Channel GTI still downloads only as AMZN. Duplicate AMZN/ATVP URLs collapse to one chip.
+    Only a real brand URL the user can download (not an episode-only or needs_series_url row) counts as home.
+    Channel listings are not promoted to home. Distinct URLs stay distinct chips.
     """
     tagged = [{**link, "kind": link.get("kind") or link_kind(str(link.get("url") or ""), link.get("service"))}
               for link in links]
-    if any(link["kind"] == "native" for link in tagged):
-        tagged = [link for link in tagged if link["kind"] != "storefront"]
+
+    def usable_home(link: dict) -> bool:
+        return link["kind"] == "native" and not link.get("episode") and not link.get("needs_series_url")
+
+    if any(usable_home(link) for link in tagged):
+        tagged = [link for link in tagged if link["kind"] not in ("storefront", "channel")]
     unique: dict[tuple, dict] = {}
     for link in tagged:
-        # One chip per Channel storefront service; home URLs stay distinct by address.
-        key = (link.get("service"), link["kind"] if link["kind"] in ("storefront", "channel") else link.get("url"))
+        key = (link.get("service"), link.get("url"))
         seen = unique.setdefault(key, link)
         if link.get("country") and link["country"] not in (seen.get("country") or "").split(", "):
             seen["country"] = ", ".join(filter(None, [seen.get("country"), link["country"]]))
-    order = {"native": 0, "channel": 1, "storefront": 2}
+    order = {"native": 0, "storefront": 1, "channel": 2}
     return sorted(unique.values(), key=lambda l: (order.get(l.get("kind") or "", 9), l.get("service") or "", l.get("url") or ""))
 
 
@@ -349,6 +351,8 @@ def crave_series(url: str) -> str | None:
 # TMDB's watch page groups JustWatch clicks under <h3>Stream</h3> / Free / Ads vs Buy / Rent.
 # Buy and Rent are purchases, not Unshackle subscription downloads; Channel packaging sits under Stream.
 STREAM_SECTIONS = frozenset({"stream", "free", "ads"})
+# Anchor title="Watch Fire Country on Paramount+ Amazon Channel" (or Buy/Rent/Stream … on …).
+OFFER_ON = re.compile(r"\b(?:Watch|Stream|Buy|Rent)\s+.+\s+on\s+(.+)$", re.IGNORECASE)
 
 
 def usable_title_url(url: str) -> bool:
@@ -360,11 +364,18 @@ def usable_title_url(url: str) -> bool:
     return bool(path or parsed.query)
 
 
+def offer_provider_name(title: str) -> str:
+    """Provider name from a TMDB JustWatch anchor title, else the whole title."""
+    text = str(title or "").strip()
+    match = OFFER_ON.search(text)
+    return match.group(1).strip() if match else text
+
+
 def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict]:
     """Service URLs from TMDB's "where to watch" page: its JustWatch links carry them in `r`.
 
     Only Stream / Free / Ads rows: Buy and Rent are ignored (same split as TMDB's watch/providers API).
-    Amazon/Apple Stream destinations are labelled storefront (no provider name in the HTML to tell Channel apart).
+    Kind comes from the anchor title ("… on Paramount+ Amazon Channel"), falling back to the URL host.
     """
     r = tmdb_page(f"https://www.themoviedb.org/tv/{tmdb_id}/watch", {"locale": country})
     links = []
@@ -372,23 +383,25 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
         r'<div class="ott_provider">\s*<h3>([^<]+)</h3>(.*?)(?=<div class="ott_provider">|$)',
         r.text, flags=re.S | re.I,
     )
-    # Older TMDB markup without ott_provider headings: keep every click (Buy cannot be told apart).
-    if not sections:
-        sections = [("Stream", r.text)]
+    # No ott_provider headings: skip rather than mix Buy into Stream (markup change).
     for section, body in sections:
         if section.strip().casefold() not in STREAM_SECTIONS:
             continue
-        for href in re.findall(r'href="(https://click\.justwatch\.com/[^"]+)"', body):
-            url = unwrap(parse_qs(urlparse(href.replace("&amp;", "&")).query).get("r", [""])[0])
+        for attrs in re.findall(r"<a\b([^>]*)>", body, flags=re.I):
+            href = re.search(r'href="(https://click\.justwatch\.com/[^"]+)"', attrs)
+            if not href:
+                continue
+            url = unwrap(parse_qs(urlparse(href.group(1).replace("&amp;", "&")).query).get("r", [""])[0])
             if not usable_title_url(url):
                 continue
             service = service_for(url, domains)
             if service:
                 # its site kept: the code for it may change (another Unshackle, a service renamed), the site does not
-                # Stream Amazon/Apple URLs are storefront hosts: the scrape has no provider name, so Channel vs
-                # Prime/Apple catalogue cannot be told apart here (schedule badges use TMDB's named API rows).
+                title_attr = re.search(r'title="([^"]*)"', attrs)
+                name = offer_provider_name(title_attr.group(1)) if title_attr else ""
+                kind = provider_kind(name) if name else link_kind(url, service)
                 link = {"service": service, "url": series_title(url), "country": country,
-                        "site": urlparse(url).hostname, "kind": link_kind(url, service)}
+                        "site": urlparse(url).hostname, "kind": kind}
                 if on_site(url, "crave.ca") and "/play/" in url:
                     # Crave's link opens one episode and holds no series id (…/series/<slug>-<id>)
                     if series := crave_series(url):
@@ -1447,7 +1460,7 @@ async def suggest(request):
             with_series = {l["service"] for l in unique.values() if not l.get("episode")}
             links = [l for l in unique.values() if not (l.get("episode") and l["service"] in with_series)]
             links = await asyncio.to_thread(searched_in_place, links, int(tmdb_id))
-            links = prefer_download_links(links)
+            # Prefer at read time only: cache keeps storefronts so a later-uninstalled home still leaves AMZN.
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(), "links": links}
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
