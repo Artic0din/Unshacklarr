@@ -15,6 +15,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- A series' suggestions no longer fill in an audio-described or Auslan edition of the show (Binge's `audio-description-…`, SBS's and ABC iview's `…-auslan`): the show itself is found by its title where the service can search, else that service gets a "Find it on" button.
 - A brand listed only as an Amazon or Apple Channel (for example Binge Amazon Channel or Paramount+ Amazon Channel) is now routed to that brand's own installed service: its series page is searched there by title and suggested as home, and no Channel chip is shown. If the title search finds nothing, the series page offers to find it on that service. Sonarr country tags such as "(AU)" no longer stop a title search from matching.
 - Series suggestions now include TMDB's own homepage link when it is an installed service, so titles like Paramedics (AU) suggest 9Now instead of only the BINGE Amazon Channel, which Amazon refuses without that add-on. Week-old suggestion caches refresh.
 - Prime Video and Apple TV+ are now treated like any other service in the schedule and the series' suggestions, instead of being hidden as a "storefront" whenever another service carries the show, so Amazon and Apple Originals such as The Rings of Power show Prime Video again. Purchases from Amazon Video and the Apple TV Store are never shown.

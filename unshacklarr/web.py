@@ -143,12 +143,16 @@ def provider_logos(providers: list[dict]) -> dict[str, dict]:
 
 
 def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
-    """The suggestions to show: never a Channel (only its brand, see brand_fallbacks) nor a purchase.
+    """The suggestions to show: never a Channel (only its brand, see brand_fallbacks), a purchase, or an
+    audio-described or Auslan edition (its service is offered to find, see brand_fallbacks).
 
     TMDB homepage links are kept only when they are the series' network's catch-up service.
     Distinct URLs stay distinct chips, in JustWatch / first-country scrape order.
     """
-    tagged = [{**link, "kind": "native"} for link in links if link.get("kind") not in ("purchase", "channel")]
+    tagged = [{**link, "kind": "native"} for link in links
+              # by its link too: a cache from before editions were flagged, kept while TMDB cannot be reached
+              if link.get("kind") not in ("purchase", "channel") and not link.get("edition")
+              and not accessible_edition(str(link.get("url") or ""))]
     # TMDB's homepage is any page of any country's site: trusted only as the series' own network's catch-up.
     tagged = [l for l in tagged if l.get("found_by") != "homepage" or l.get("service") in network_services(network)]
     homes = {l["service"] for l in tagged if l.get("found_by") == "homepage" and not l.get("episode")}
@@ -163,11 +167,13 @@ def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
 
 
 def brand_fallbacks(links: list[dict], shown: list[dict], domains: dict[str, str]) -> list[str]:
-    """Installed services a Channel row names that no shown suggestion already covers: offered to find by hand.
-    Resolved against the services installed now, so one added later is offered."""
+    """Installed services that a Channel row names, or that link only another edition of the show (audio-described,
+    Auslan), and that no shown suggestion already covers: offered to find by hand. Resolved against the services
+    installed now, so one added later is offered."""
     have = {l["service"] for l in shown}
-    found = (service_for_brand(l.get("provider") or "", domains) for l in links if l.get("kind") == "channel")
-    return sorted({b[0] for b in found if b and b[0] not in have})
+    found = {b[0] for l in links if l.get("kind") == "channel" and (b := service_for_brand(l.get("provider") or "", domains))}
+    found |= {t for l in links if l.get("edition") and l.get("site") and (t := service_for(f"https://{l['site']}/", domains))}
+    return sorted(found - have)
 
 
 def network_services(network: str) -> tuple[str, ...]:
@@ -453,6 +459,8 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                         link["needs_series_url"] = True
                 elif still_episode(link["url"]):
                     link["episode"] = True  # dropped below when the same service also links the series
+                if accessible_edition(url):  # searched by title as an episode link is; never shown (prefer_download_links)
+                    link.update(edition=True, episode=True)
                 links.append(link)
     # TMDB's own Homepage link: often the network's catch-up (Paramedics: 9now.com.au) that JustWatch omits.
     anchor = re.search(r'<a\b[^>]*title="Visit Homepage"[^>]*>', r.text, flags=re.I)
@@ -467,8 +475,19 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                 "site": urlparse(url).hostname, "kind": "native", "found_by": "homepage"}
         if still_episode(link["url"]):
             link["episode"] = True
+        if accessible_edition(url):
+            link.update(edition=True, episode=True)
         links.append(link)
     return links
+
+
+# Another edition of the show on its service (Binge's audio-description-<show>, SBS's and iview's <show>-auslan),
+# by a whole word of its link: Unshackle would download that edition, so it is never filled in.
+ACCESSIBLE_EDITION = re.compile(r"(?:^|[/_-])(?:auslan|audio[_-]descri(?:ption|bed))(?=[/._-]|$)")
+
+
+def accessible_edition(url: str) -> bool:
+    return bool(ACCESSIBLE_EDITION.search(urlparse(url).path.lower()))
 
 
 def still_episode(url: str) -> bool:
@@ -1515,7 +1534,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 4
+SUGGEST_MAP = 5
 
 
 async def suggest(request):
@@ -1601,7 +1620,8 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
         if url := search_series_url(service, series["title"]):
             episode = next(l for l in out if l["service"] == service and l.get("episode"))
             out = [l for l in out if not (l["service"] == service and l.get("episode"))]
-            out.append({**{k: v for k, v in episode.items() if k != "episode"}, "url": url, "found_by": "search"})
+            out.append({**{k: v for k, v in episode.items() if k not in ("episode", "edition")}, "url": url,
+                        "found_by": "search"})
     for service, channel in sorted(channels.items()):
         if url := search_series_url(service, series["title"]):
             countries = dict.fromkeys(c for l in links if l.get("brand_service") == service for c in l["country"].split(", "))
@@ -1623,7 +1643,8 @@ def search_series_url(service: str, title: str) -> str | None:
         return None
     # Sonarr's "(AU)" may be absent from the service's title; a result's own other tag ("(UK)") is not the same show
     wanted = {title_key(title), title_key(query)}
-    same = [r for r in found.get("results") or [] if title_key(str(r.get("title") or "")) in wanted and (r.get("url") or r.get("id"))]
+    same = [r for r in found.get("results") or [] if title_key(str(r.get("title") or "")) in wanted
+            and (r.get("url") or r.get("id")) and not accessible_edition(str(r.get("url") or r.get("id")))]
     return str(same[0].get("url") or same[0].get("id")) if len(same) == 1 else None
 
 
