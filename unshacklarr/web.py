@@ -437,6 +437,19 @@ def still_episode(url: str) -> bool:
     return bool(re.search(r"-episode-\d+|episodeId=", url)) or episode_link(url)
 
 
+def merge_countries(found: list[list[dict]]) -> list[dict]:
+    """One link per service and URL across the countries' scrapes, listing its countries. A JustWatch listing
+    outranks the same URL found only as a TMDB homepage, so the homepage check cannot drop it."""
+    unique: dict[tuple, dict] = {}
+    for link in (link for links in found for link in links):
+        seen = unique.setdefault((link["service"], link["url"]), {**link, "country": ""})
+        if link["country"] not in seen["country"].split(", "):
+            seen["country"] = ", ".join(filter(None, [seen["country"], link["country"]]))
+        if seen.get("found_by") == "homepage" and link.get("found_by") != "homepage":
+            seen.pop("found_by")
+    return list(unique.values())
+
+
 def series_linked(links: list[dict]) -> set[str]:
     """Services that link the series itself. A TMDB homepage does not count: it is trusted only after the network
     check (prefer_download_links), so an episode link stays to be searched until then."""
@@ -1496,12 +1509,7 @@ async def suggest(request):
                 raise web.HTTPBadGateway(text=tmdb_error(e))
             found = None  # keep the old links rather than show nothing
         if found is not None:
-            unique: dict[tuple, dict] = {}
-            for link in (link for links in found for link in links):
-                seen = unique.setdefault((link["service"], link["url"]), {**link, "country": ""})
-                if link["country"] not in seen["country"].split(", "):
-                    seen["country"] = ", ".join(filter(None, [seen["country"], link["country"]]))
-            links = without_covered_episodes(list(unique.values()))
+            links = without_covered_episodes(merge_countries(found))
             links = await asyncio.to_thread(searched_in_place, links, int(tmdb_id))
             # Prefer at read time only: cache keeps Channel rows so a later-uninstalled home still leaves them.
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(),

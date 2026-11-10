@@ -1293,6 +1293,22 @@ def test_an_episode_link_is_still_searched_beside_a_homepage_of_its_service(tmp_
     ]
 
 
+def test_country_merge_keeps_justwatch_provenance_over_a_homepage(tmp_path, monkeypatch):
+    """AU contributes only TMDB's homepage; GB's JustWatch lists the same link: the merged link is JustWatch's,
+    so the homepage network check cannot drop an independently listed offer."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    url = "https://www.bbc.co.uk/iplayer/episodes/x"
+    au = [{"service": "iP", "url": url, "country": "AU", "kind": "native", "found_by": "homepage"}]
+    gb = [{"service": "iP", "url": url, "country": "GB", "kind": "native"}]
+    merged = web.merge_countries([au, gb])
+    assert [(l["country"], l.get("found_by")) for l in merged] == [("AU, GB", None)]
+    assert [l["service"] for l in web.prefer_download_links(merged, network="PBS")] == ["iP"]
+
+
 def test_suggest_network_falls_back_to_the_cached_tmdb_network(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
