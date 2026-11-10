@@ -2183,10 +2183,12 @@ def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, mo
     web = importlib.reload(unshacklarr.web)
     from urllib.parse import quote
 
+    nothing = ""  # quote() keeps no character unescaped; a name, as f-strings before 3.12 cannot reuse their quote
+
     def page(*rows):  # a TMDB watch page: (section, provider, url)
         html = "".join(f'<div class="ott_provider"><h3>{sec}</h3><ul class="providers">'
                        f'<li><a title="Watch Stick on {name}" '
-                       f'href="https://click.justwatch.com/a?r={quote(url, safe='')}"></a></li></ul></div>'
+                       f'href="https://click.justwatch.com/a?r={quote(url, safe=nothing)}"></a></li></ul></div>'
                        for sec, name, url in rows)
         return type("Page", (), {"text": html})()
 
