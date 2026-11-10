@@ -26,8 +26,8 @@ const ctx = {
   failed: (t) => ({ failed: t }),
   ago: () => "now",
   svcName: (t) => t,
-  S: { networkServices: scenario.networkServices, config: { tmdb_countries: ["AU"] } },
-  api: async () => ({ links: scenario.links, checked: "x" }),
+  S: { networkServices: scenario.networkServices, services: scenario.services, config: { tmdb_countries: ["AU"] } },
+  api: async () => ({ links: scenario.links, brands: scenario.brands, checked: "x" }),
   current: series,
 };
 vm.createContext(ctx);
@@ -39,10 +39,10 @@ ctx.loadSuggestions(series).then(() => {
 """
 
 
-def render(links, network_services, tmdb_id: int | None = 1):
+def render(links, network_services, tmdb_id: int | None = 1, services=(), brands=()):
     if not shutil.which("node"):
         pytest.skip("node is not installed")
-    scenario = {"links": links, "networkServices": network_services, "tmdbId": tmdb_id}
+    scenario = {"links": links, "networkServices": network_services, "tmdbId": tmdb_id, "services": list(services), "brands": list(brands)}
     out = subprocess.run(["node", "-e", HARNESS, "--", str(CORE), json.dumps(scenario)], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout)
@@ -74,3 +74,12 @@ def test_network_service_alone_when_tmdb_lists_none():
 
 def test_network_service_without_a_tmdb_id():
     assert buttons(render([], {"1": "TEN"}, tmdb_id=None)) == ["TEN"]
+
+
+def test_a_channel_brand_is_offered_as_its_own_service_never_as_the_channel():
+    # The server lists the installed brands a Channel names; the page offers each to find on its own service.
+    assert buttons(render([], {"1": "SEVEN"}, brands=["BINGE"])) == ["SEVEN", "BINGE"]
+    # Beside another service's home link, the brand stays offered (it is a different service).
+    assert buttons(render([link("NINE")], {}, brands=["BINGE"])) == ["NINE", "BINGE"]
+    # The network's own service is offered once.
+    assert buttons(render([], {"1": "BINGE"}, brands=["BINGE"])) == ["BINGE"]
