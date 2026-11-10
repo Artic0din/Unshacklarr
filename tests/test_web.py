@@ -2173,6 +2173,34 @@ def test_brand_logos_are_asked_once_a_week_per_country(tmp_path, monkeypatch):
     assert web.brand_logos("GB") == {}  # TMDB unreachable, nothing cached: names only
 
 
+def test_schedule_shows_the_networks_own_catch_up_service(tmp_path, monkeypatch):
+    """Paramedics (AU): TMDB lists Foxtel Now and the Binge Channel; its network, Nine, streams it on 9Now. The
+    schedule shows 9Now too, as the series page does, with 9Now's own logo found by its site, not by a list."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    logos = {"9now": {"name": "9Now", "logo": "nine"}, "abciview": {"name": "ABC iview", "logo": "iv"},
+             "binge": {"name": "BINGE", "logo": "binge"}}
+    domains = {"9now.com.au": "NINE", "iview.abc.net.au": "AUBC", "binge.com.au": "BINGE"}
+    shown = [{"name": "Foxtel Now", "logo": "fox"}, {"name": "BINGE", "logo": "binge"}]
+    assert web.with_network_service(shown, "Nine Network", logos, domains) == [
+        {"name": "9Now", "logo": "nine"}, *shown]
+    assert web.with_network_service([], "ABC (AU)", logos, domains) == [{"name": "ABC iview", "logo": "iv"}]
+    # TVDB's name for the Australian ABC
+    assert web.with_network_service([], "ABC TV", logos, domains) == [{"name": "ABC iview", "logo": "iv"}]
+    # Each network under both names: Sonarr's "Seven" and TMDB's "Seven Network", Sonarr's "Network 10" and TMDB's "10".
+    assert [web.network_services(n) for n in ("Seven", "Seven Network", "Network 10", "10")] == [
+        ("7plus", "SEVEN"), ("7plus", "SEVEN"), ("TEN",), ("TEN",)]
+    # Already listed, not installed, a network with no catch-up rule, or no logo known: unchanged.
+    assert web.with_network_service([{"name": "9Now", "logo": "n"}], "Nine Network", logos, domains) == [
+        {"name": "9Now", "logo": "n"}]
+    assert web.with_network_service(shown, "Nine Network", logos, {"binge.com.au": "BINGE"}) == shown
+    assert web.with_network_service(shown, "Prime Video", logos, domains) == shown
+    assert web.with_network_service(shown, "Nine Network", {}, domains) == shown
+
+
 def test_health_answers_without_login_and_says_only_yes_or_no(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer

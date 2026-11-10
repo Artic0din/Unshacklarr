@@ -64,7 +64,10 @@ PURCHASE_NAME = re.compile(r"^(?:amazon\s+video|apple\s+tv\s+store|itunes)$", re
 # nowhere is offered, best code first. Extend per country.
 NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": ("ALL4", "C4"), "more4": ("ALL4", "C4"),
             "itv": ("ITVX", "ITV"), "channel 5": ("MY5",), "u&": ("UKTV",), "abc (au)": ("iView", "AUBC"), "sbs": ("SBS",),
-            "seven network": ("7plus", "SEVEN"), "nine network": ("NINE",), "network 10": ("TEN",), "tvnz": ("TVNZ",),
+            "abc tv": ("iView", "AUBC"), "seven network": ("7plus", "SEVEN"), "nine network": ("NINE",),
+            "network 10": ("TEN",), "tvnz": ("TVNZ",),
+            # the same networks as TVDB (Sonarr) or TMDB name them
+            "seven": ("7plus", "SEVEN"), "10": ("TEN",),
             "m6": ("M6",), "w9": ("M6",), "6ter": ("M6",)}
 
 
@@ -174,6 +177,25 @@ def network_services(network: str) -> tuple[str, ...]:
     """The service codes a network's catch-up may be under (BBC One: iP), by the network's first words."""
     name = str(network or "").lower().strip()
     return next((tags for key, tags in NETWORKS.items() if name == key or name.startswith(key + " ")), ())
+
+
+def with_network_service(providers: list[dict], network: str, logos: dict[str, dict],
+                         domains: dict[str, str]) -> list[dict]:
+    """The schedule's services plus, first, the series' network's own installed catch-up service (Nine Network:
+    9Now), as the series page offers it. Its logo is the TMDB provider whose site is that service's (brand_logos)."""
+    installed = set(domains.values())
+    tag = next((t for t in network_services(network) if t in installed), None)
+    if not tag:
+        return providers
+    # its sites' names: 9now (9now.com.au), abc and iview (iview.abc.net.au); a provider named by one, at either end
+    labels = {label for host, t in domains.items() if t == tag
+              for label in (site_name(host), re.sub(r"[^a-z0-9]", "", host.removeprefix("www.").split(".")[0]))}
+    own = next((p for brand, p in logos.items() if any(brand == label or (len(label) >= 3 and (
+        brand.startswith(label) or brand.endswith(label))) for label in labels)), None)
+    shown = {provider_brand(p.get("name") or "") for p in providers}
+    if not own or provider_brand(own["name"]) in shown:
+        return providers
+    return [{"name": own["name"], "logo": own["logo"]}, *providers]
 
 
 def service_for_network(network: str, installed: set[str]) -> str | None:
@@ -2995,10 +3017,16 @@ async def networks(request):
         await asyncio.gather(*(one(i) for i in todo))
         write_atomic(NETWORKS_CACHE, json.dumps(cache))
     logos = await asyncio.to_thread(brand_logos, country) if tmdb_key() else {}
+    try:
+        domains = await asyncio.to_thread(service_domains)
+    except UnshackleError:
+        domains = {}
     return web.json_response({
         i: {"name": cache[str(i)].get("name"), "logo": cache[str(i)].get("logo"), "country": country,
             "network_country": cache[str(i)].get("network_country") or "",
-            "providers": rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []), logos)}
+            "providers": with_network_service(
+                rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []), logos),
+                cache[str(i)].get("name") or "", logos, domains)}
         for i in ids if str(i) in cache and "providers" in cache[str(i)]
     })
 
