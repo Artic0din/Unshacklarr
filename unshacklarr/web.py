@@ -155,10 +155,8 @@ def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
     TMDB homepage links are kept only when they are the series' network's catch-up service.
     Distinct URLs stay distinct chips, in JustWatch / first-country scrape order.
     """
-    # A Channel's own title is the Channel, however else it is listed (Stick's free episode as "Amazon Prime Video")
-    channel_titles = {(l.get("service"), l.get("url")) for l in links if l.get("kind") == "channel"}
     tagged = [{**link, "kind": "native"} for link in links if link.get("kind") not in ("purchase", "channel")
-              and (link.get("service"), link.get("url")) not in channel_titles]
+              and not is_channel_title(link, links)]
     # TMDB's homepage is any page of any country's site: trusted only as the series' own network's catch-up.
     tagged = [l for l in tagged if l.get("found_by") != "homepage" or l.get("service") in network_services(network)]
     homes = {l["service"] for l in tagged if l.get("found_by") == "homepage" and not l.get("episode")}
@@ -170,6 +168,18 @@ def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
         if link.get("country") and link["country"] not in (seen.get("country") or "").split(", "):
             seen["country"] = ", ".join(filter(None, [seen.get("country"), link["country"]]))
     return list(unique.values())
+
+
+def countries(link: dict) -> set[str]:
+    return set(filter(None, str(link.get("country") or "").split(", ")))
+
+
+def is_channel_title(link: dict, links: list[dict]) -> bool:
+    """A link to a Channel's own title, however else it is listed (Stick's free episode as "Amazon Prime Video"),
+    in every country it is listed for: the same title elsewhere is that country's own."""
+    shared = set().union(*[countries(l) for l in links if l.get("kind") == "channel"
+                           and (l.get("service"), l.get("url")) == (link.get("service"), link.get("url"))])
+    return link.get("kind") != "channel" and bool(shared) and countries(link) <= shared
 
 
 def brand_fallbacks(links: list[dict], shown: list[dict], domains: dict[str, str]) -> list[str]:
@@ -505,8 +515,8 @@ def series_linked(links: list[dict]) -> set[str]:
     """Services that link the series itself. A Channel row links its host, not the series. A TMDB homepage does
     not count: it is trusted only after the network check (prefer_download_links), so an episode link stays to be
     searched until then."""
-    return {l["service"] for l in links
-            if not l.get("episode") and l.get("found_by") != "homepage" and l.get("kind") != "channel"}
+    return {l["service"] for l in links if not l.get("episode") and l.get("found_by") != "homepage"
+            and l.get("kind") != "channel" and not is_channel_title(l, links)}
 
 
 def without_covered_episodes(links: list[dict]) -> list[dict]:

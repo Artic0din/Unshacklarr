@@ -2192,6 +2192,13 @@ def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, mo
     own = {"service": "AMZN", "url": "amzn1.dv.gti.rop", "country": "AU", "kind": "native"}
     assert [l["url"] for l in web.prefer_download_links([*links, own])] == ["umc.cmc.52w04", "amzn1.dv.gti.rop"]
 
+    # Only where that title is a Channel: the same title listed in another country is that country's own.
+    gb = {"service": "AMZN", "url": gti, "country": "GB", "kind": "native"}
+    assert [(l["service"], l["country"]) for l in web.prefer_download_links([*links, gb])] == [("ATVP", "AU"), ("AMZN", "GB")]
+    # A Channel's title listed as Prime Video does not count as linking the series, so episode links stay.
+    episode = {"service": "AMZN", "url": "amzn1.dv.gti.ep", "country": "AU", "episode": True}
+    assert episode in web.without_covered_episodes([*links, episode])
+
     # Schedule (TMDB's API has no links): Prime Video only free beside an Amazon Channel is that Channel's promo.
     stick = [{"name": "Apple TV", "logo": "atv"}, {"name": "Apple TV Amazon Channel", "logo": "ch"},
              {"name": "Amazon Prime Video", "logo": "pv", "section": "free"},
