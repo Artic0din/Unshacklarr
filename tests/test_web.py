@@ -2194,13 +2194,18 @@ def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, mo
 
     # Schedule (TMDB's API has no links): Prime Video only free beside an Amazon Channel is that Channel's promo.
     stick = [{"name": "Apple TV", "logo": "atv"}, {"name": "Apple TV Amazon Channel", "logo": "ch"},
-             {"name": "Amazon Prime Video", "logo": "pv", "free": True}, {"name": "Apple TV", "logo": "atv", "free": True}]
+             {"name": "Amazon Prime Video", "logo": "pv", "section": "free"},
+             {"name": "Apple TV", "logo": "atv", "section": "free"}]
     assert [p["name"] for p in web.rank_watch_providers(stick)] == ["Apple TV"]
     # Prime Video as a subscription, or free with no Amazon Channel beside it, is Prime Video.
     assert [p["name"] for p in web.rank_watch_providers([
         {"name": "Amazon Prime Video"}, {"name": "Binge Amazon Channel"}])] == ["Amazon Prime Video", "Binge"]
-    assert [p["name"] for p in web.rank_watch_providers([{"name": "Amazon Prime Video", "free": True}])] == [
+    assert [p["name"] for p in web.rank_watch_providers([{"name": "Amazon Prime Video", "section": "free"}])] == [
         "Amazon Prime Video"]
+    # Prime Video's own ad-supported tier beside a Channel (Fire Country) is Prime Video, not a promo.
+    assert [p["name"] for p in web.rank_watch_providers([
+        {"name": "Paramount+ Amazon Channel"}, {"name": "Amazon Prime Video with Ads", "section": "ads"}])] == [
+        "Amazon Prime Video with Ads", "Paramount+"]
 
     class Resp:
         def raise_for_status(self):
@@ -2212,7 +2217,7 @@ def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, mo
 
     monkeypatch.setattr(web.requests, "get", lambda *a, **k: Resp())
     au = web.tmdb_network(248830)["providers"]["AU"]
-    assert [(p["name"], p.get("free", False)) for p in au] == [("Apple TV", False), ("Amazon Prime Video", True)]
+    assert [(p["name"], p["section"]) for p in au] == [("Apple TV", "flatrate"), ("Amazon Prime Video", "free")]
 
 
 def test_health_answers_without_login_and_says_only_yes_or_no(tmp_path, monkeypatch):

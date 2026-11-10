@@ -119,11 +119,12 @@ def rank_watch_providers(providers: list[dict], logos: dict[str, dict] | None = 
     The schedule UI slices logos to three; this returns every ranked row for the tooltip.
     """
     rows = [{"name": p.get("name") or "", "logo": p.get("logo"), "kind": provider_kind(p.get("name") or ""),
-             "brand": provider_brand(p.get("name") or ""), "free": bool(p.get("free"))} for p in providers]
-    # Amazon or Apple listed only free beside a Channel they host is that Channel's free episode (Stick on Prime Video)
+             "brand": provider_brand(p.get("name") or ""), "section": p.get("section")} for p in providers]
+    # Amazon or Apple listed only in TMDB's free section beside a Channel they host is that Channel's free episode
+    # (Stick on Prime Video); a subscription or ad-supported tier (Prime Video with Ads) is the host's own
     hosts = {h for p in rows if p["kind"] == "channel" for h in CHANNEL_HOSTS if re.search(h, p["name"], re.I)}
     promos = {CHANNEL_HOSTS[h] for h in hosts
-              if all(p["free"] for p in rows if p["kind"] == "native" and p["brand"] == CHANNEL_HOSTS[h])}
+              if all(p["section"] == "free" for p in rows if p["kind"] == "native" and p["brand"] == CHANNEL_HOSTS[h])}
     natives = [p for p in rows if p["kind"] == "native" and p["brand"] not in promos]
     brands = [{"name": (logos or {}).get(p["brand"], {}).get("name") or CHANNEL_NAME.sub("", p["name"]).strip(),
                "logo": (logos or {}).get(p["brand"], {}).get("logo"), "brand": p["brand"]}
@@ -2939,7 +2940,7 @@ def tmdb_network(tmdb_id: int) -> dict:
         "providers": {
             country: [
                 {"name": p["provider_name"], "logo": logo_url(p.get("logo_path")),
-                 "kind": provider_kind(p["provider_name"]), "free": section != "flatrate"}
+                 "kind": provider_kind(p["provider_name"]), "section": section}
                 for section in ("flatrate", "free", "ads") for p in offers.get(section) or []
             ]
             for country, offers in by_country.items()
@@ -2986,7 +2987,7 @@ async def networks(request):
             entry.get("checked", "") < fresh_after
             or "providers" not in entry
             or "network_country" not in entry
-            or any("kind" not in (p or {}) or "free" not in (p or {}) for p in providers)  # before kind/free labels
+            or any("kind" not in (p or {}) or "section" not in (p or {}) for p in providers)  # before kind/section
         )
 
     todo = [i for i in ids if stale(cache.get(str(i)) or {})]
