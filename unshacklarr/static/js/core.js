@@ -588,6 +588,9 @@ async function loadSuggestions(s, refresh = false) {
   box.querySelectorAll("button").forEach((b, i) => b.dataset.url = links[i].url);
   const network = S.networkServices?.[s.tvdbId];  // after TMDB's links: theirs keep their order
   if (network && !links.some((l) => l.service === network)) box.append(networkButton(s, network));
+  // A brand seen only as an Amazon/Apple Channel, not found on its own service by title: look it up there by hand.
+  const brands = new Set(links.map((l) => l.brand_service).filter((t) => t && t !== network && S.services?.includes(t)));
+  brands.forEach((t) => { if (!links.some((l) => l.service === t)) box.append(networkButton(s, t)); });
 }
 
 async function applySuggestion(link) {

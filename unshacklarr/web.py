@@ -98,6 +98,20 @@ def provider_brand(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", text.casefold())
 
 
+def service_for_brand(name: str, domains: dict[str, str]) -> tuple[str, str] | None:
+    """The installed service, and its site, of the brand a provider row names ("Binge Amazon Channel": BNGE at
+    binge.com.au): a label of the site equal to the brand, else one the brand starts with (Foxtel Now: foxtel)."""
+    brand = provider_brand(name)
+    if len(brand) < 3:  # "Apple TV Amazon Channel": nothing of a brand left once Amazon/Apple are taken out
+        return None
+    sites = [(host, tag) for host, tag in domains.items() if tag not in STOREFRONT_SERVICES]
+    labels = {host: [re.sub(r"[^a-z0-9]", "", label) for label in host.split(".")] for host, _ in sites}
+    for same in (lambda label: label == brand, lambda label: len(label) >= 4 and brand.startswith(label)):
+        if hit := next(((tag, host) for host, tag in sites if any(same(label) for label in labels[host])), None):
+            return hit
+    return None
+
+
 def rank_watch_providers(providers: list[dict], network: str = "") -> list[dict]:
     """Calendar logos: prefer a brand's own TMDB row over its Amazon/Apple Channel packaging.
 
@@ -442,6 +456,9 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                 kind = "channel" if titled == "channel" else link_kind(url, service)
                 link = {"service": service, "url": series_title(url), "country": country,
                         "site": urlparse(url).hostname, "kind": kind}
+                if kind == "channel" and (brand := service_for_brand(name, domains)):
+                    # Amazon/Apple refuse a Channel title without that add-on: its brand's own service is searched
+                    link.update(provider=name, brand_service=brand[0], brand_site=brand[1])
                 if on_site(url, "crave.ca") and "/play/" in url:
                     # Crave's link opens one episode and holds no series id (…/series/<slug>-<id>)
                     if series := crave_series(url):
@@ -1467,7 +1484,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 2
+SUGGEST_MAP = 3
 
 
 async def suggest(request):
@@ -1524,18 +1541,26 @@ async def suggest(request):
     })
 
 
+# Sonarr's qualifier a service's own title does not carry: "WAR (2026)", "Paramedics (AU)".
+TITLE_QUALIFIER = re.compile(r"\s*\((?:\d{4}|[A-Z]{2})\)\s*$")
+
+
 def title_key(title: str) -> str:
-    """A title compared without its year, case, accents or punctuation: "WAR (2026)" and "War" match."""
-    title = re.sub(r"\s*\(\d{4}\)\s*$", "", unicodedata.normalize("NFKD", title or ""))
+    """A title compared without its year or country, case, accents or punctuation: "WAR (2026)" and "War" match."""
+    title = TITLE_QUALIFIER.sub("", unicodedata.normalize("NFKD", title or ""))
     return re.sub(r"[^a-z0-9]+", "", title.casefold())
 
 
 def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
     """A service TMDB links only by an episode (HBO Max's /video/watch/<id>) is searched with
     Sonarr's title; the one result with that title takes the episode link's place. No match, several, or a service
-    that can't be searched: the episode link stays."""
+    that can't be searched: the episode link stays.
+    A brand listed only as an Amazon/Apple Channel is searched the same way on the brand's own service; what is found
+    is added as a home link beside the Channel row."""
     alone = {l["service"] for l in links if l.get("episode")} - {l["service"] for l in links if not l.get("episode")}
-    if not alone:
+    homes = {l["service"] for l in links if not l.get("episode") and l.get("kind") != "channel"}
+    channels = {l["brand_service"]: l for l in links if l.get("brand_service") and l["brand_service"] not in homes | alone}
+    if not alone and not channels:
         return links
     try:
         series = next((s for s in sonarr_series() if s.get("tmdbId") == tmdb_id), None)
@@ -1549,6 +1574,10 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
             episode = next(l for l in out if l["service"] == service and l.get("episode"))
             out = [l for l in out if not (l["service"] == service and l.get("episode"))]
             out.append({**{k: v for k, v in episode.items() if k != "episode"}, "url": url, "found_by": "search"})
+    for service, channel in sorted(channels.items()):
+        if url := search_series_url(service, series["title"]):
+            out.append({"service": service, "url": url, "country": channel["country"], "site": channel["brand_site"],
+                        "kind": "native", "found_by": "search", "via": channel.get("provider")})
     return out
 
 
@@ -1557,7 +1586,7 @@ def search_series_url(service: str, title: str) -> str | None:
     show = {"service": service}
     dl, _ = sonarr_sync.stacked(show, read_config())
     params = {k: v for k, v in options.to_params(dl, options.dl_specs()).items() if k in ("profile", "proxy", "no_proxy")}
-    query = re.sub(r"\s*\(\d{4}\)\s*$", "", title)
+    query = TITLE_QUALIFIER.sub("", title)
     try:
         found = sonarr_sync.backend_for(service).call("POST", "/api/search", json={**params, "service": service, "query": query})
     except UnshackleError as e:

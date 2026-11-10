@@ -1994,6 +1994,65 @@ def test_an_episode_only_link_gives_way_to_the_series_found_by_its_title(tmp_pat
     assert web.searched_in_place([series_link], 55) == [series_link]  # a series link already: nothing searched
 
 
+def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatch):
+    """Paramedics (AU): JustWatch has only the Binge Amazon Channel. Any brand's Channel row names its own service,
+    found by the brand's site among the installed services, and its series URL is searched there by title."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+
+    domains = {"primevideo.com": "AMZN", "tv.apple.com": "ATVP", "binge.com.au": "BNGE", "foxtel.com.au": "FOXTEL",
+               "paramountplus.com": "PMTP", "max.com": "MAX", "10.com.au": "TEN"}
+    assert web.service_for_brand("Binge Amazon Channel", domains) == ("BNGE", "binge.com.au")
+    assert web.service_for_brand("Paramount+ Amazon Channel", domains) == ("PMTP", "paramountplus.com")
+    assert web.service_for_brand("Paramount Plus Apple TV channel", domains) == ("PMTP", "paramountplus.com")
+    assert web.service_for_brand("Max Amazon Channel", domains) == ("MAX", "max.com")
+    assert web.service_for_brand("Foxtel Now", domains) == ("FOXTEL", "foxtel.com.au")  # brand name longer than its site
+    assert web.service_for_brand("Apple TV Amazon Channel", domains) is None  # no brand left: not a storefront either
+    assert web.service_for_brand("Hayu Amazon Channel", domains) is None  # not installed
+
+    html = """
+    <div class="ott_provider"><h3>Stream</h3><ul class="providers">
+      <li><a title="Watch Paramedics on Binge Amazon Channel"
+          href="https://click.justwatch.com/a?r=https%3A%2F%2Fapp.primevideo.com%2Fdetail%3Fgti%3Damzn1.dv.gti.46b0"></a></li>
+    </ul></div>
+    """
+    class FakeResp:
+        text = html
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: FakeResp())
+    channel = web.tmdb_links(102348, "AU", {"primevideo.com": "AMZN", "binge.com.au": "BNGE"})[0]
+    assert (channel["kind"], channel["brand_service"], channel["brand_site"]) == ("channel", "BNGE", "binge.com.au")
+
+    class Backend:
+        def __init__(self, results):
+            self.results, self.asked = results, []
+
+        def call(self, method, path, json=None, **_):
+            self.asked.append(json)
+            return {"results": self.results}
+
+    backend = Backend([{"title": "Paramedics", "url": "https://binge.com.au/shows/paramedics"}])
+    monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 102348, "title": "Paramedics (AU)"}])
+    monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: backend)
+    links = web.searched_in_place([channel], 102348)
+    assert (backend.asked[0]["service"], backend.asked[0]["query"]) == ("BNGE", "Paramedics")  # Sonarr's "(AU)" off
+    assert links[1] == {"service": "BNGE", "url": "https://binge.com.au/shows/paramedics", "country": "AU",
+                        "site": "binge.com.au", "kind": "native", "found_by": "search",
+                        "via": "Binge Amazon Channel"}
+    # Found on the brand's own service: the Channel chip (Amazon refuses it without that add-on) gives way.
+    assert [l["service"] for l in web.prefer_download_links(links)] == ["BNGE"]
+
+    # Not found by its title: the Channel row stays, still naming the brand service for a "Find it on" button.
+    monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend([]))
+    assert web.searched_in_place([channel], 102348) == [channel]
+    # The brand already linked directly: nothing searched.
+    direct = {"service": "BNGE", "url": "https://binge.com.au/shows/x", "country": "AU", "kind": "native"}
+    monkeypatch.setattr(web, "sonarr_series", lambda: pytest.fail("searched"))
+    assert web.searched_in_place([channel, direct], 102348) == [channel, direct]
+
+
 def test_health_answers_without_login_and_says_only_yes_or_no(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer

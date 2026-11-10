@@ -26,7 +26,7 @@ const ctx = {
   failed: (t) => ({ failed: t }),
   ago: () => "now",
   svcName: (t) => t,
-  S: { networkServices: scenario.networkServices, config: { tmdb_countries: ["AU"] } },
+  S: { networkServices: scenario.networkServices, services: scenario.services, config: { tmdb_countries: ["AU"] } },
   api: async () => ({ links: scenario.links, checked: "x" }),
   current: series,
 };
@@ -39,10 +39,10 @@ ctx.loadSuggestions(series).then(() => {
 """
 
 
-def render(links, network_services, tmdb_id: int | None = 1):
+def render(links, network_services, tmdb_id: int | None = 1, services=()):
     if not shutil.which("node"):
         pytest.skip("node is not installed")
-    scenario = {"links": links, "networkServices": network_services, "tmdbId": tmdb_id}
+    scenario = {"links": links, "networkServices": network_services, "tmdbId": tmdb_id, "services": list(services)}
     out = subprocess.run(["node", "-e", HARNESS, "--", str(CORE), json.dumps(scenario)], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout)
@@ -74,3 +74,10 @@ def test_network_service_alone_when_tmdb_lists_none():
 
 def test_network_service_without_a_tmdb_id():
     assert buttons(render([], {"1": "TEN"}, tmdb_id=None)) == ["TEN"]
+
+
+def test_a_channel_brand_not_found_by_title_is_offered_to_look_up_on_its_own_service():
+    channel = {**link("AMZN"), "kind": "channel", "brand_service": "BNGE"}
+    assert buttons(render([channel], {"1": "SEVEN"}, services=["AMZN", "BNGE", "SEVEN"])) == ["AMZN", "SEVEN", "BNGE"]
+    assert buttons(render([channel, link("BNGE")], {}, services=["AMZN", "BNGE"])) == ["AMZN", "BNGE"]  # linked already
+    assert buttons(render([channel], {}, services=["AMZN"])) == ["AMZN"]  # its brand is not installed
