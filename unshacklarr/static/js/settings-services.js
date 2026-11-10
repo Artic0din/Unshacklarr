@@ -185,7 +185,7 @@ async function openBulk() {
   };
   const one = async (s, li) => {
     let links;
-    try { links = (await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}`)).links; }
+    try { links = (await api(`/api/suggest/${s.tmdbId}`)).links; }
     catch {  // TMDB refuses bursts now and then: say so, and let it be asked again
       li.querySelector(".opts").replaceChildren(el("span", { className: "none", textContent: "TMDB did not answer" }),
         el("button", { type: "button", className: "btn small", textContent: "Retry", onclick: () => one(s, li) }));
@@ -195,12 +195,10 @@ async function openBulk() {
     const usable = links.filter((l) => !l.needs_series_url && !l.episode && S.services.includes(l.service));
     const name = `pick-${s.tvdbId}`;
     // Skip is picked by default: adding a series is a choice
-    const kindLabel = (l) => l.kind === "storefront" ? "storefront" : l.kind === "channel" ? "channel" : "home";
-    const kindTitle = (l) => l.kind === "storefront"
-      ? `Amazon/Apple storefront — your ${l.service === "AMZN" ? "Prime" : "Apple"} login, not another brand's channel: ${l.url}`
-      : l.kind === "channel"
-        ? `Amazon/Apple Channels — not proof this exact title is on the brand's own app: ${l.url}`
-        : l.url;
+    const kindLabel = (l) => l.kind === "channel" ? "channel" : "home";
+    const kindTitle = (l) => l.kind === "channel"
+      ? `Amazon/Apple Channels — not proof this exact title is on the brand's own app: ${l.url}`
+      : l.url;
     const opt = (l, i) => el("label", {
       className: l && l.kind && l.kind !== "native" ? `kind-${l.kind}` : "",
       title: l ? kindTitle(l) : "Leave it without a service",
