@@ -2199,6 +2199,11 @@ def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, mo
     # Only where that title is a Channel: the same title listed in another country is that country's own.
     gb = {"service": "AMZN", "url": gti, "country": "GB", "kind": "native", "section": "free"}
     assert [(l["service"], l["country"]) for l in web.prefer_download_links([*links, gb])] == [("ATVP", "AU"), ("AMZN", "GB")]
+    # Across countries: an AU free promo and a GB Stream offer of one title merge as Stream, so GB's Prime stays.
+    gb_rows = [{**links[1], "country": "GB"}, {**links[2], "country": "GB", "section": "stream"}]
+    merged = web.merge_countries([links, gb_rows])
+    assert [(l["service"], l["country"]) for l in web.prefer_download_links(merged)] == [
+        ("ATVP", "AU"), ("AMZN", "AU, GB")]
     # A Channel's title listed as Prime Video does not count as linking the series, so episode links stay.
     episode = {"service": "AMZN", "url": "amzn1.dv.gti.ep", "country": "AU", "episode": True}  # beside Stick's rows
     assert episode in web.without_covered_episodes([*links, episode])

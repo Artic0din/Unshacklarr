@@ -165,13 +165,17 @@ def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
     for link in tagged:
         key = (link.get("service"), link.get("url"))
         seen = unique.setdefault(key, link)
-        if link.get("country") and link["country"] not in (seen.get("country") or "").split(", "):
-            seen["country"] = ", ".join(filter(None, [seen.get("country"), link["country"]]))
+        seen["country"] = joined_countries(seen, link)
     return list(unique.values())
 
 
 def countries(link: dict) -> set[str]:
     return set(filter(None, str(link.get("country") or "").split(", ")))
+
+
+def joined_countries(*links: dict) -> str:
+    """Their countries ("AU", "AU, GB"), each once, in first-seen order."""
+    return ", ".join(dict.fromkeys(c for l in links for c in str(l.get("country") or "").split(", ") if c))
 
 
 def is_channel_title(link: dict, links: list[dict]) -> bool:
@@ -507,8 +511,9 @@ def merge_countries(found: list[list[dict]]) -> list[dict]:
         # Channels on one shared link (a bare tv.apple.com) are different brands
         key = (link["service"], link["url"], link.get("provider") if link.get("kind") == "channel" else None)
         seen = unique.setdefault(key, {**link, "country": ""})
-        if link["country"] not in seen["country"].split(", "):
-            seen["country"] = ", ".join(filter(None, [seen["country"], link["country"]]))
+        seen["country"] = joined_countries(seen, link)
+        if seen.get("section") == "free" and link.get("section") not in (None, "free"):
+            seen["section"] = link["section"]  # a subscription anywhere outranks a free episode: it is not a promo
         if seen.get("found_by") == "homepage" and link.get("found_by") != "homepage":
             unique[key] = {**link, "country": seen["country"]}  # JustWatch's own row: kind, episode flags
     return list(unique.values())
