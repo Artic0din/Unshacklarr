@@ -261,6 +261,9 @@ def series_title(url: str) -> str:
         return f"https://www.channel5.com/show/{show.group(1)}"
     if on_site(url, "paramountplus.com") and (show := re.match(r"(?:/[a-z]{2})?/shows/(?!video/)([A-Za-z0-9_-]+)", path)):
         return f"https://www.paramountplus.com/shows/{show.group(1)}/"
+    if on_site(url, "7plus.com.au") and (show := re.match(r"/([a-z0-9-]+)/?$", path)):
+        # ?episode-id= makes SEVEN fetch that one episode; the show is the path alone
+        return f"https://7plus.com.au/{show.group(1)}"
     if on_site(url, "iview.abc.net.au") and (show := re.match(r"/show/([A-Za-z0-9_-]+)", path)):
         # …/show/<slug>/series/1/video/<id> opens one episode; AUBC lists the whole show from /show/<slug>
         return f"https://iview.abc.net.au/show/{show.group(1)}"

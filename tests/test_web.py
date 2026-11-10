@@ -1858,6 +1858,9 @@ def test_episode_links_are_taken_back_to_their_series(tmp_path, monkeypatch):
         # Dustfall: JustWatch links episode 1; AUBC lists only that video unless given the show page
         "https://iview.abc.net.au/show/dustfall/series/1/video/DR2501Q001S00": "https://iview.abc.net.au/show/dustfall",
         "https://iview.abc.net.au/show/bad-company": "https://iview.abc.net.au/show/bad-company",
+        # 7plus: SEVEN fetches just the ?episode-id= episode; the show is the path
+        "https://7plus.com.au/9-1-1?episode-id=NINO09-001": "https://7plus.com.au/9-1-1",
+        "https://7plus.com.au/highway-patrol": "https://7plus.com.au/highway-patrol",
     }
     for given, series in cases.items():
         assert web.series_title(given) == series, given
