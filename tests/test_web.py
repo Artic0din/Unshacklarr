@@ -1087,6 +1087,7 @@ def test_prime_video_and_apple_tv_are_ordinary_services_and_purchases_never_show
     for name in ("Amazon Video", "Apple TV Store", "iTunes"):
         assert web.provider_kind(name) == "purchase", name
     assert web.provider_brand("Paramount Plus") == web.provider_brand("Paramount+ Amazon Channel")
+    assert {web.provider_brand(n) for n in ("Apple TV", "Apple TV+", "Apple TV Plus", "Apple TV Amazon Channel")} == {"appletv"}
 
     # Calendar: Prime Video and Apple TV keep their TMDB place among the services; a purchase row never shows.
     ranked = web.rank_watch_providers([
@@ -1100,6 +1101,11 @@ def test_prime_video_and_apple_tv_are_ordinary_services_and_purchases_never_show
     assert [(p["name"], p["kind"]) for p in ranked] == [
         ("Paramount Plus", "native"), ("Amazon Prime Video", "native"), ("BINGE", "native"), ("Apple TV", "native"),
     ]
+
+    # Apple TV's own Channel row gives way to Apple TV, as any brand's does (both once had an empty brand key).
+    assert [p["name"] for p in web.rank_watch_providers([
+        {"name": "Apple TV Amazon Channel", "logo": "ch"}, {"name": "Apple TV", "logo": "atv"},
+    ])] == ["Apple TV"]
 
     # Suggestions: AMZN and ATVP stay beside another home service; purchases are dropped even if listed.
     links = web.prefer_download_links([
