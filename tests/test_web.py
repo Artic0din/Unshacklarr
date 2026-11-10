@@ -1301,8 +1301,11 @@ def test_tmdb_homepage_is_a_home_link_when_justwatch_lists_only_channels(tmp_pat
         ("NINE", "native", "https://www.9now.com.au/paramedics"),
     ]
     assert found[1]["found_by"] == "homepage"
-    # The home URL hides the BINGE Amazon Channel chip (Amazon refuses it without that add-on).
-    assert [l["service"] for l in web.prefer_download_links(found)] == ["NINE"]
+    # The network's home URL hides the BINGE Amazon Channel chip (Amazon refuses it without that add-on).
+    assert [l["service"] for l in web.prefer_download_links(found, network="Nine Network")] == ["NINE"]
+    # Another network's series: a homepage is any page of that site, so it is not trusted to hide anything.
+    assert [l["service"] for l in web.prefer_download_links(found, network="Prime Video")] == ["AMZN"]
+    assert [l["service"] for l in web.prefer_download_links(found)] == ["AMZN"]
 
     # A homepage on a service JustWatch already links adds no second chip.
     monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [

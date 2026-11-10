@@ -145,10 +145,13 @@ def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
 
     Only a real brand URL the user can download (not an episode-only or needs_series_url row) counts as home.
     Channel listings are not promoted to home. Distinct URLs stay distinct chips.
+    TMDB homepage links are kept only when they are the series' network's catch-up service.
     The series' own network's storefront (AMZN for an Amazon Original) counts as home.
     """
     tagged = [{**link, "kind": link.get("kind") or link_kind(str(link.get("url") or ""), link.get("service"))}
               for link in links]
+    # TMDB's homepage is any page of any country's site: trusted only as the series' own network's catch-up.
+    tagged = [l for l in tagged if l.get("found_by") != "homepage" or l.get("service") in network_services(network)]
     if owner := storefront_owner(network):
         for link in tagged:
             url = str(link.get("url") or "")
@@ -173,13 +176,15 @@ def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
     return sorted(unique.values(), key=lambda l: order.get(l.get("kind") or "", 9))
 
 
-def service_for_network(network: str, installed: set[str]) -> str | None:
-    """The installed service a network's catch-up is on (BBC One: iP), by the network's first words."""
+def network_services(network: str) -> tuple[str, ...]:
+    """The service codes a network's catch-up may be under (BBC One: iP), by the network's first words."""
     name = str(network or "").lower().strip()
-    for key, tags in NETWORKS.items():
-        if name == key or name.startswith(key + " "):
-            return next((t for t in tags if t in installed), None)
-    return None
+    return next((tags for key, tags in NETWORKS.items() if name == key or name.startswith(key + " ")), ())
+
+
+def service_for_network(network: str, installed: set[str]) -> str | None:
+    """The installed service a network's catch-up is on (BBC One: iP)."""
+    return next((t for t in network_services(network) if t in installed), None)
 
 sync_threads: list[threading.Thread] = []
 last_sync: datetime | None = None
@@ -451,7 +456,7 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
     homepage = re.search(r'href="([^"]+)"', anchor.group(0)) if anchor else None
     url = unwrap(homepage.group(1).replace("&amp;", "&")) if homepage else ""
     service = service_for(url, domains) if url and usable_title_url(url) else None
-    if service and service not in {l["service"] for l in links}:
+    if service and service not in {l["service"] for l in links if not l.get("episode") and not l.get("needs_series_url")}:
         links.append({"service": service, "url": series_title(url), "country": country,
                       "site": urlparse(url).hostname, "kind": link_kind(url, service), "found_by": "homepage"})
     return links
@@ -1461,7 +1466,7 @@ async def sent_notifications(_):
 
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
-# Bump when SITES, NETWORKS, or unwrap rules change so week-old caches re-scrape.
+# Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
 SUGGEST_MAP = 2
 
 
