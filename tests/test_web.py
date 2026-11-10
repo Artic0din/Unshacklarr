@@ -1254,6 +1254,10 @@ def test_tmdb_homepage_is_a_home_link_when_justwatch_lists_only_channels(tmp_pat
     found = web.tmdb_links(102348, "AU", web.service_domains())
     assert [l["service"] for l in found] == ["FOXTEL", "AMZN"]
 
+    # A homepage TMDB's users typed badly is ignored, not fatal to the lookup.
+    FakeResp.text = html.replace("https://www.9now.com.au/paramedics", "http://[9now")
+    assert [l["service"] for l in web.tmdb_links(102348, "AU", web.service_domains())] == ["FOXTEL", "AMZN"]
+
     # A homepage that opens one episode is marked like any episode link.
     monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "HMAX", "url": "", "help": "https://play.hbomax.com"}])
     FakeResp.text = html.replace("https://www.9now.com.au/paramedics", "https://play.hbomax.com/video/watch/abc-1")
@@ -1306,6 +1310,10 @@ def test_country_merge_keeps_justwatch_provenance_over_a_homepage(tmp_path, monk
     gb = [{"service": "iP", "url": url, "country": "GB", "kind": "native"}]
     merged = web.merge_countries([au, gb])
     assert [(l["country"], l.get("found_by")) for l in merged] == [("AU, GB", None)]
+    # JustWatch's whole row wins, not just its provenance: a Channel stays a Channel, an episode an episode.
+    gb_channel = [{**gb[0], "kind": "channel", "episode": True}]
+    assert [(l["kind"], l.get("episode"), l.get("found_by")) for l in web.merge_countries([au, gb_channel])] == [
+        ("channel", True, None)]
     assert [l["service"] for l in web.prefer_download_links(merged, network="PBS")] == ["iP"]
 
 
