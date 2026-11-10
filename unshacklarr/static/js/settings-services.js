@@ -164,17 +164,18 @@ async function showServeLog() {
   document.querySelectorAll(".crow").forEach((r) => r.classList.remove("sel"));
 }
 
-/* Suggest services: every airing series without a service, with what TMDB finds for it, added at once. */
+/* Suggest services: every series without a service, airing ones first, with what TMDB finds for it, added at once. */
 async function openBulk() {
-  const todo = S.series.filter((s) => !S.config.series[s.tvdbId]?.service && s.monitored && s.status !== "ended"
-    && !S.config.hidden_series.includes(s.tvdbId) && s.tmdbId);
+  const todo = S.series.filter((s) => !S.config.series[s.tvdbId]?.service && s.monitored
+    && !S.config.hidden_series.includes(s.tvdbId) && s.tmdbId)
+    .sort((a, b) => (a.status === "ended") - (b.status === "ended"));  // ended ones too, after the airing ones
   const rows = todo.map((s) => {
     const li = el("li", {}, el("img", { alt: "", loading: "lazy", src: posterSrc(s.poster, s.title), onerror: posterFail(s.title) }),
       el("div", {}, el("b", { textContent: s.title }), el("div", { className: "opts" }, loading("Looking on TMDB…"))));
     li.dataset.tvdb = s.tvdbId;
     return li;
   });
-  $("#bulk-rows").replaceChildren(...(rows.length ? rows : [el("li", { className: "none", textContent: "Every airing series you follow already has a service." })]));
+  $("#bulk-rows").replaceChildren(...(rows.length ? rows : [el("li", { className: "none", textContent: "Every series you follow already has a service." })]));
   $("#bulk-add").disabled = true;
   $("#bulk-dialog").showModal();
   let done = 0;
