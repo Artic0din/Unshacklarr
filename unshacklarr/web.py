@@ -656,7 +656,8 @@ def write_config(config: dict) -> None:
 
 
 def sonarr_series() -> list[dict]:
-    r = requests.get(f"{sonarr_sync.SONARR}/api/v3/series", headers=sonarr_sync.HEADERS, timeout=30)
+    r = requests.get(f"{sonarr_sync.SONARR}/api/v3/series", headers=sonarr_sync.HEADERS,
+                     timeout=sonarr_sync.SONARR_READ_TIMEOUT)
     r.raise_for_status()
     return sorted((series_entry(s) for s in r.json()), key=lambda s: s["title"].lower())
 
@@ -1687,7 +1688,8 @@ def calendar_episodes(config: dict, start: datetime, end: datetime) -> list[dict
     ahead = max([-sonarr_sync.release_day(s) for s in config["series"].values()] + [0])  # a release days before airing
     end = end + timedelta(days=ahead)
     r = requests.get(f"{sonarr_sync.sonarr_url()}/api/v3/calendar", headers=sonarr_sync.sonarr_headers(),  # the Sonarr on now
-                     params={"start": start.isoformat(), "end": end.isoformat(), "includeSeries": "true"}, timeout=30)
+                     params={"start": start.isoformat(), "end": end.isoformat(), "includeSeries": "true"},
+                     timeout=sonarr_sync.SONARR_READ_TIMEOUT)
     r.raise_for_status()
     plans = sonarr_sync.broadcast_plans(config)
     dated = sonarr_sync.broadcast_dated(plans)  # dated by its own schedule: Sonarr's date set aside

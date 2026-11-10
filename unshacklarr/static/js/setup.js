@@ -462,7 +462,8 @@ $("#tz-select").after(settingsZone.input, settingsZone.list);
   if (!session.configured) return showSetup(session.setup);
   if (!session.logged_in) return showLogin();
   try {
-    const data = (await stateAsked) || await api("/api/state");
+    // as long as the server waits for a busy Sonarr (SONARR_READ_TIMEOUT, 120 s)
+    const data = (await stateAsked) || await api("/api/state", { signal: AbortSignal.timeout(130000) });
     S = { series: data.series, config: data.config, services: data.services, serviceNames: data.service_names || {}, dlOptions: data.dl_options, health: data.health || {}, cdm: data.cdm || {}, domains: data.service_domains || {}, builtinLadders: data.builtin_ladders || [], networkServices: data.network_services || {}, backups: data.backups || null, news: data.news || {}, update: data.update || null, version: data.version, instances: data.instances || {}, sonarrsOf: data.sonarrs_of || {} };
     savedConfig = configKey(S.config);
     // a test build of a branch shows its branch and commit, not the release it started from

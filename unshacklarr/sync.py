@@ -2318,8 +2318,12 @@ class Kept(Exception):
     """Sonarr keeps the file it has: the download is no better."""
 
 
+# A Sonarr busy importing or moving big files answers its reads late: 43 s for the series list during a batch import.
+SONARR_READ_TIMEOUT = 120
+
+
 def sonarr_get(path: str, **params):
-    r = requests.get(f"{sonarr_url()}/api/v3/{path}", headers=sonarr_headers(), params=params, timeout=120)
+    r = requests.get(f"{sonarr_url()}/api/v3/{path}", headers=sonarr_headers(), params=params, timeout=SONARR_READ_TIMEOUT)
     trace(f"Sonarr GET {path} {params or ''} → {r.status_code}, {len(r.content)} bytes", debug=True)
     r.raise_for_status()
     return r.json()
@@ -2394,7 +2398,7 @@ def import_episode(ep: dict, out: Path, replace: bool = False) -> None:
                         f"{sonarr_url()}/api/v3/command",
                         headers=sonarr_headers(),
                         json={"name": "ManualImport", "files": files, "importMode": "move"},
-                        timeout=120,  # as long as its reads: a Sonarr busy moving another big file answers late
+                        timeout=SONARR_READ_TIMEOUT,  # as long as its reads
                     )
                 except (requests.Timeout, requests.ConnectionError) as e:
                     # It may have taken it and imported all the same: the episode's file says, before asking again
