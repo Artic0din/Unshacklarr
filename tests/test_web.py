@@ -1069,8 +1069,9 @@ def test_a_streaming_site_maps_to_the_code_this_unshackle_has_for_it(tmp_path, m
     assert web.TMDB_HEADERS["User-Agent"].startswith("Unshacklarr/")  # TMDB's site refuses a fake browser (PR #2)
 
 
-def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, monkeypatch):
-    """Prefer a real home-service URL over Amazon/Apple storefronts; Channel rows stay labelled, not invented as PMTP."""
+def test_prime_video_and_apple_tv_are_ordinary_services_and_purchases_never_show(tmp_path, monkeypatch):
+    """Prime Video and Apple TV+ subscriptions rank like any service; Amazon Video and Apple TV Store purchases
+    never appear; a Channel row stays labelled and gives way to its brand's own row."""
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
     import unshacklarr.web
@@ -1080,116 +1081,46 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
     assert web.provider_kind("Paramount Plus") == "native"
     assert web.provider_kind("Paramount+ Amazon Channel") == "channel"
     assert web.provider_kind("Paramount Plus Apple TV channel") == "channel"
-    assert web.provider_kind("Amazon Prime Video") == "storefront"
-    assert web.provider_kind("Amazon Prime Video Free with Ads") == "storefront"
-    assert web.provider_kind("Amazon MX Player") == "storefront"
-    assert web.provider_kind("Amazon Video") == "storefront"
-    assert web.provider_kind("Apple TV") == "storefront"
-    assert web.provider_kind("Apple TV Store") == "storefront"
+    for name in ("Amazon Prime Video", "Amazon Prime Video with Ads", "Amazon Prime Video Free with Ads",
+                 "Amazon MX Player", "Apple TV", "Apple TV Plus"):
+        assert web.provider_kind(name) == "native", name
+    for name in ("Amazon Video", "Apple TV Store", "iTunes"):
+        assert web.provider_kind(name) == "purchase", name
     assert web.provider_brand("Paramount Plus") == web.provider_brand("Paramount+ Amazon Channel")
 
-    # Calendar: Amazon Free with Ads must not outrank Apple TV as a fake home brand.
-    de_ads = web.rank_watch_providers([
-        {"name": "Amazon Prime Video Free with Ads", "logo": "amzn"},
-        {"name": "Apple TV", "logo": "atv"},
-    ])
-    assert [p["name"] for p in de_ads] == ["Amazon Prime Video Free with Ads", "Apple TV"]
-    assert all(p["kind"] == "storefront" for p in de_ads)
-
+    # Calendar: Prime Video and Apple TV keep their TMDB place among the services; a purchase row never shows.
     ranked = web.rank_watch_providers([
         {"name": "Paramount+ Amazon Channel", "logo": "ch"},
         {"name": "Paramount Plus", "logo": "home"},
         {"name": "Amazon Prime Video", "logo": "amzn"},
+        {"name": "Amazon Video", "logo": "buy"},
         {"name": "BINGE", "logo": "binge"},
-        {"name": "Foxtel Now", "logo": "fox"},
-    ])
-    # TMDB order among natives (Channel/storefront dropped), not alphabetical.
-    assert [p["name"] for p in ranked] == ["Paramount Plus", "BINGE", "Foxtel Now"]
-    assert all(p["kind"] == "native" for p in ranked)
-
-    # UK Gogglebox-style: Channel-only Paramount+ stays a channel; native BINGE drops Amazon storefront.
-    channel_only = web.rank_watch_providers([
-        {"name": "Paramount+ Amazon Channel", "logo": "ch"},
-        {"name": "BINGE", "logo": "binge"},
-        {"name": "Amazon Prime Video", "logo": "amzn"},
-    ])
-    assert [p["name"] for p in channel_only] == ["BINGE", "Paramount+ Amazon Channel"]
-    assert channel_only[1]["kind"] == "channel"
-
-    # Severance-shaped: own Apple TV subscription ranks above Channel packaging (no native brand row).
-    severance = web.rank_watch_providers([
-        {"name": "Apple TV Amazon Channel", "logo": "ch"},
         {"name": "Apple TV", "logo": "atv"},
     ])
-    assert [p["name"] for p in severance] == ["Apple TV", "Apple TV Amazon Channel"]
-    assert [p["kind"] for p in severance] == ["storefront", "channel"]
+    assert [(p["name"], p["kind"]) for p in ranked] == [
+        ("Paramount Plus", "native"), ("Amazon Prime Video", "native"), ("BINGE", "native"), ("Apple TV", "native"),
+    ]
 
-    # Storefront chips hide when a usable home URL is listed.
+    # Suggestions: AMZN and ATVP stay beside another home service; purchases are dropped even if listed.
     links = web.prefer_download_links([
-        {"service": "PMTP", "url": "https://www.paramountplus.com/shows/x/", "country": "AU", "kind": "native"},
-        {"service": "AMZN", "url": "amzn1.dv.gti.buy", "country": "AU", "kind": "storefront"},
-        {"service": "ATVP", "url": "umc.cmc.buy", "country": "AU", "kind": "storefront"},
+        {"service": "NINE", "url": "https://www.9now.com.au/x", "country": "AU", "kind": "native"},
+        {"service": "AMZN", "url": "amzn1.dv.gti.rop", "country": "AU"},
+        {"service": "ATVP", "url": "umc.cmc.x", "country": "AU"},
+        {"service": "AMZN", "url": "amzn1.dv.gti.buy", "country": "AU", "kind": "purchase"},
     ])
-    assert [l["service"] for l in links] == ["PMTP"] and links[0]["kind"] == "native"
+    assert [(l["service"], l["url"], l["kind"]) for l in links] == [
+        ("NINE", "https://www.9now.com.au/x", "native"), ("AMZN", "amzn1.dv.gti.rop", "native"),
+        ("ATVP", "umc.cmc.x", "native"),
+    ]
 
-    # Channel chips also hide beside a usable home (Fire Country keeps NF/PMTP/TEN only).
+    # Channel chips still hide beside a usable home (Fire Country keeps NF/PMTP/TEN only).
     with_channel = web.prefer_download_links([
         {"service": "PMTP", "url": "https://www.paramountplus.com/shows/x/", "country": "AU", "kind": "native"},
         {"service": "AMZN", "url": "amzn1.dv.gti.channel", "country": "AU", "kind": "channel"},
-        {"service": "AMZN", "url": "amzn1.dv.gti.channel-b", "country": "AU", "kind": "channel"},
     ])
     assert [(l["service"], l["kind"]) for l in with_channel] == [("PMTP", "native")]
 
-    # Episode-only / needs_series_url homes do not hide a usable storefront.
-    episode_home = web.prefer_download_links([
-        {"service": "MAX", "url": "https://play.hbomax.com/video/watch/x", "country": "AU", "kind": "native", "episode": True},
-        {"service": "AMZN", "url": "amzn1.dv.gti.one", "country": "AU", "kind": "storefront"},
-    ])
-    assert [(l["service"], l.get("episode"), l["kind"]) for l in episode_home] == [
-        ("MAX", True, "native"), ("AMZN", None, "storefront"),
-    ]
-    crave_home = web.prefer_download_links([
-        {"service": "CRAVE", "url": "https://www.crave.ca/play/x", "country": "CA", "kind": "native", "needs_series_url": True},
-        {"service": "AMZN", "url": "amzn1.dv.gti.one", "country": "CA", "kind": "storefront"},
-    ])
-    assert {l["service"] for l in crave_home} == {"CRAVE", "AMZN"}
-
-    storefronts = web.prefer_download_links([
-        {"service": "AMZN", "url": "amzn1.dv.gti.one", "country": "AU"},
-        {"service": "AMZN", "url": "amzn1.dv.gti.two", "country": "AU"},
-        {"service": "ATVP", "url": "umc.cmc.show", "country": "AU"},
-    ])
-    assert [(l["service"], l["url"]) for l in storefronts] == [
-        ("AMZN", "amzn1.dv.gti.one"), ("AMZN", "amzn1.dv.gti.two"), ("ATVP", "umc.cmc.show"),
-    ]
-    assert all(l["kind"] == "storefront" for l in storefronts)
-
-    # Rings of Power: an Amazon Original stays beside 9Now; Prime Video is its home, not a storefront.
-    original = [
-        {"name": "9Now", "logo": "nine"},
-        {"name": "Amazon Prime Video", "logo": "amzn"},
-        {"name": "Paramount+ Amazon Channel", "logo": "ch"},
-    ]
-    rop = web.rank_watch_providers(original, network="Prime Video")
-    assert [(p["name"], p["kind"]) for p in rop] == [
-        ("9Now", "native"), ("Amazon Prime Video", "native"), ("Paramount+ Amazon Channel", "channel"),
-    ]
-    assert [p["name"] for p in web.rank_watch_providers(original, network="Nine Network")] == [
-        "9Now", "Paramount+ Amazon Channel",
-    ]
-    rop_links = [
-        {"service": "NINE", "url": "https://www.9now.com.au/x", "country": "AU", "kind": "native"},
-        {"service": "AMZN", "url": "amzn1.dv.gti.rop", "country": "AU", "kind": "storefront"},
-        {"service": "AMZN", "url": "amzn1.dv.gti.chan", "country": "AU", "kind": "channel"},
-        {"service": "ATVP", "url": "umc.cmc.x", "country": "AU", "kind": "storefront"},
-    ]
-    assert [(l["service"], l["kind"]) for l in web.prefer_download_links(rop_links, network="Prime Video")] == [
-        ("NINE", "native"), ("AMZN", "native"),
-    ]
-    assert [l["service"] for l in web.prefer_download_links(rop_links, network="Apple TV+")] == ["NINE", "ATVP"]
-    assert [l["service"] for l in web.prefer_download_links(rop_links)] == ["NINE"]
-
-    # Stable kind sort keeps first-country / scrape order (TEN before NF), not alphabetical service tags.
+    # Stable sort keeps first-country / scrape order (TEN before NF), not alphabetical service tags.
     ordered = web.prefer_download_links([
         {"service": "TEN", "url": "https://10.com.au/x", "country": "AU", "kind": "native"},
         {"service": "NF", "url": "https://www.netflix.com/title/1", "country": "GB", "kind": "native"},
@@ -1258,10 +1189,10 @@ def test_tmdb_watch_scrape_keeps_stream_channels_and_skips_buy(tmp_path, monkeyp
     assert by_kind[("NF", "native")]
     assert by_kind[("TEN", "native")]["url"] == "https://10.com.au/fire-country"
     assert by_kind[("AMZN", "channel")]  # title names Paramount+ Amazon Channel
-    assert by_kind[("AMZN", "storefront")]  # Free with Ads / MX Player stay storefront via host, not native
+    assert by_kind[("AMZN", "native")]  # Free with Ads / MX Player are Prime Video, an ordinary service
     assert web.offer_provider_name("Watch Fire Country on Paramount+ Amazon Channel") == "Paramount+ Amazon Channel"
     preferred = web.prefer_download_links(found)
-    assert {l["service"] for l in preferred} == {"PMTP", "NF", "TEN"}  # Channel + storefront AMZN hidden beside homes
+    assert {l["service"] for l in preferred} == {"PMTP", "NF", "TEN", "AMZN"}  # Channel AMZN hidden; Prime Video stays
     assert web.usable_title_url("https://tv.apple.com") is False
     assert web.usable_title_url("https://app.primevideo.com/detail?gti=x") is True
 
@@ -1316,6 +1247,34 @@ def test_tmdb_homepage_is_a_home_link_when_justwatch_lists_only_channels(tmp_pat
     FakeResp.text = html.replace("www.9now.com.au/paramedics", "www.foxtel.com.au/paramedics")
     found = web.tmdb_links(102348, "AU", web.service_domains())
     assert [l["service"] for l in found] == ["FOXTEL", "AMZN"]
+
+    # A homepage that opens one episode is marked like any episode link.
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "HMAX", "url": "", "help": "https://play.hbomax.com"}])
+    FakeResp.text = html.replace("https://www.9now.com.au/paramedics", "https://play.hbomax.com/video/watch/abc-1")
+    homepage = web.tmdb_links(102348, "AU", web.service_domains())[-1]
+    assert (homepage["service"], homepage["found_by"], homepage.get("episode")) == ("HMAX", "homepage", True)
+
+    # Before the network check, a homepage does not stand in for the series: the episode link stays to be searched.
+    episode = {"service": "NINE", "url": "https://www.9now.com.au/x/season-1/episode-1", "country": "AU", "episode": True}
+    home = {"service": "NINE", "url": "https://www.9now.com.au/x", "country": "AU", "found_by": "homepage"}
+    direct = {"service": "NINE", "url": "https://www.9now.com.au/x", "country": "AU"}
+    assert web.without_covered_episodes([episode, home]) == [episode, home]
+    assert web.without_covered_episodes([episode, direct]) == [direct]
+    # A trusted homepage then replaces that service's episode link; an untrusted one leaves it.
+    assert [l.get("found_by") for l in web.prefer_download_links([episode, home], network="Nine Network")] == ["homepage"]
+    assert [l.get("episode") for l in web.prefer_download_links([episode, home], network="Prime Video")] == [True]
+
+
+def test_suggest_network_falls_back_to_the_cached_tmdb_network(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.NETWORKS_CACHE.write_text(json.dumps({"102348": {"name": "Nine Network"}}))
+    assert web.series_network("102348", "Seven Network") == "Seven Network"  # Sonarr's network wins
+    assert web.series_network("102348", "") == "Nine Network"
+    assert web.series_network("1", "") == ""
 
 
 def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
