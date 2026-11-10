@@ -179,7 +179,10 @@ def brand_fallbacks(links: list[dict], shown: list[dict], domains: dict[str, str
 def network_services(network: str) -> tuple[str, ...]:
     """The service codes a network's catch-up may be under (BBC One: iP), by the network's first words."""
     name = str(network or "").lower().strip()
-    return next((tags for key, tags in NETWORKS.items() if name == key or name.startswith(key + " ")), ())
+    # TVDB tags a network by country when names clash ("ABC (US)"): such a name matches only a key with its tag
+    tagged = re.search(r"\([a-z]{2}\)$", name)
+    return next((tags for key, tags in NETWORKS.items()
+                 if name == key or (not tagged or key.endswith(tagged[0])) and name.startswith(key + " ")), ())
 
 
 def with_network_service(providers: list[dict], network: str, logos: dict[str, dict],
@@ -190,13 +193,15 @@ def with_network_service(providers: list[dict], network: str, logos: dict[str, d
     tag = next((t for t in network_services(network) if t in installed), None)
     if not tag:
         return providers
-    # its sites' names: 9now (9now.com.au), abc and iview (iview.abc.net.au); a provider named by one, at either end
-    labels = {label for host, t in domains.items() if t == tag
-              for label in (site_name(host), re.sub(r"[^a-z0-9]", "", host.removeprefix("www.").split(".")[0]))}
+    # its sites' names: the site's own (abc for iview.abc.net.au) only whole, since ABC News shares it; the host's
+    # first label (iview, 9now) also at either end of the provider's name (ABC iview)
+    hosts = [host for host, t in domains.items() if t == tag]
+    whole = {site_name(host) for host in hosts}
+    ends = {re.sub(r"[^a-z0-9]", "", host.removeprefix("www.").split(".")[0]) for host in hosts}
 
-    def fit(brand: str) -> int:  # the longest of its labels the provider's name is or starts or ends with
-        return max((len(label) for label in labels if brand == label or (len(label) >= 3 and (
-            brand.startswith(label) or brand.endswith(label)))), default=0)
+    def fit(brand: str) -> int:  # the longest of its labels the provider's name is, or starts or ends with
+        return max((len(label) for label in whole | ends if brand == label or label in ends and len(label) >= 3 and (
+            brand.startswith(label) or brand.endswith(label))), default=0)
 
     # the most specific match: ABC iview by "iview" over ABC News by the generic "abc"
     score, own = max(((fit(brand), p) for brand, p in logos.items()), key=lambda m: m[0], default=(0, None))
