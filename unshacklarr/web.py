@@ -81,10 +81,11 @@ def provider_kind(name: str) -> str:
 
 def provider_brand(name: str) -> str:
     """Collapse 'Paramount Plus' and 'Paramount+ Amazon Channel' to one brand key."""
-    text = CHANNEL_NAME.sub(" ", str(name or ""))
-    text = re.sub(r"\b(?:amazon|apple\s*tv|with ads|premium|basic|standard|free)\b", " ", text, flags=re.IGNORECASE)
-    text = text.replace("+", " plus ")
-    return re.sub(r"[^a-z0-9]+", "", text.casefold())
+    bare = CHANNEL_NAME.sub(" ", str(name or ""))
+    text = re.sub(r"\b(?:amazon|apple\s*tv|with ads|premium|basic|standard|free)\b", " ", bare, flags=re.IGNORECASE)
+    key = lambda t: re.sub(r"[^a-z0-9]+", "", t.replace("+", " plus ").casefold())
+    # Apple TV's own name is all host words: "Apple TV", "Apple TV+" and "Apple TV Amazon Channel" share one key.
+    return k if (k := key(text)) not in ("", "plus") else key(bare).removesuffix("plus")
 
 
 def rank_watch_providers(providers: list[dict]) -> list[dict]:
