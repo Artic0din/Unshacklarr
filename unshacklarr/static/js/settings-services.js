@@ -215,8 +215,10 @@ $("#bulk-form").onsubmit = async (e) => {
   const picks = [...document.querySelectorAll("#bulk-rows input:checked")].filter((i) => i.value);
   for (const input of picks) {
     const [service, title] = JSON.parse(input.value), tvdbId = Number(input.closest("li").dataset.tvdb);
-    // as the series page does: its other settings stay, only the service's own options start again
-    S.config.series[tvdbId] = { options: {}, ...S.config.series[tvdbId], service, title, service_options: {} };
+    // its other settings stay; what belonged to a former service (its options, season pages, the date automatic
+    // downloads started) starts again, and the server sets that date to now
+    const { since, season_pages, ...kept } = S.config.series[tvdbId] || {};
+    S.config.series[tvdbId] = { options: {}, ...kept, service, title, service_options: {} };
   }
   try { await save(); $("#bulk-dialog").close(); toast(`${picks.length} series added: their new episodes download from now on`); }
   catch (err) { toast(err.message, true); }
