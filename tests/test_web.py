@@ -1098,9 +1098,7 @@ def test_prime_video_and_apple_tv_are_ordinary_services_and_purchases_never_show
         {"name": "BINGE", "logo": "binge"},
         {"name": "Apple TV", "logo": "atv"},
     ])
-    assert [(p["name"], p["kind"]) for p in ranked] == [
-        ("Paramount Plus", "native"), ("Amazon Prime Video", "native"), ("BINGE", "native"), ("Apple TV", "native"),
-    ]
+    assert [p["name"] for p in ranked] == ["Paramount Plus", "Amazon Prime Video", "BINGE", "Apple TV"]
 
     # Apple TV's own Channel row gives way to Apple TV, as any brand's does (both once had an empty brand key).
     assert [p["name"] for p in web.rank_watch_providers([
@@ -1190,7 +1188,10 @@ def test_tmdb_watch_scrape_keeps_stream_channels_and_skips_buy(tmp_path, monkeyp
     domains = web.service_domains()
     found = web.tmdb_links(202297, "AU", domains)
     by_kind = {(l["service"], l["kind"]): l for l in found}
-    assert {l["service"] for l in found} == {"PMTP", "AMZN", "NF", "TEN"}  # Buy gone; bare tv.apple.com dropped
+    assert {l["service"] for l in found if l["kind"] != "channel"} == {"PMTP", "AMZN", "NF", "TEN"}  # Buy gone
+    # Channel rows stay for routing to their brand, the bare tv.apple.com one included; they are never offered.
+    assert {l["provider"] for l in found if l["kind"] == "channel"} == {
+        "Paramount+ Amazon Channel", "Paramount Plus Apple TV channel"}
     assert by_kind[("PMTP", "native")]["url"].startswith("https://www.paramountplus.com/")
     assert by_kind[("NF", "native")]
     assert by_kind[("TEN", "native")]["url"] == "https://10.com.au/fire-country"
@@ -1240,9 +1241,9 @@ def test_tmdb_homepage_is_a_home_link_when_justwatch_lists_only_channels(tmp_pat
     assert found[1]["found_by"] == "homepage"
     # The network's home URL hides the BINGE Amazon Channel chip (Amazon refuses it without that add-on).
     assert [l["service"] for l in web.prefer_download_links(found, network="Nine Network")] == ["NINE"]
-    # Another network's series: a homepage is any page of that site, so it is not trusted to hide anything.
-    assert [l["service"] for l in web.prefer_download_links(found, network="Prime Video")] == ["AMZN"]
-    assert [l["service"] for l in web.prefer_download_links(found)] == ["AMZN"]
+    # Another network's series: the homepage is not trusted, and the Channel is never offered either.
+    assert web.prefer_download_links(found, network="Prime Video") == []
+    assert web.prefer_download_links(found) == []
 
     # A homepage on a service JustWatch already links adds no second chip.
     monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [
@@ -2065,6 +2066,103 @@ def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatc
     direct = {"service": "BINGE", "url": "https://binge.com.au/shows/x", "country": "AU", "kind": "native"}
     monkeypatch.setattr(web, "sonarr_series", lambda: pytest.fail("searched"))
     assert web.searched_in_place([channel, direct], 102348) == [channel, direct]
+
+
+def test_channels_never_show_only_their_brand(tmp_path, monkeypatch):
+    """A Channel (a brand sold inside Amazon or Apple) is never offered or shown: only its brand is."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+
+    html = """
+    <div class="ott_provider"><h3>Stream</h3><ul class="providers">
+      <li><a title="Watch Paramedics on Binge Amazon Channel"
+          href="https://click.justwatch.com/a?r=https%3A%2F%2Fapp.primevideo.com%2Fdetail%3Fgti%3Damzn1.dv.gti.46b0"></a></li>
+      <li><a title="Watch Paramedics on Paramount Plus Apple TV channel"
+          href="https://click.justwatch.com/a?r=https%3A%2F%2Ftv.apple.com"></a></li>
+    </ul></div>
+    """
+    class FakeResp:
+        text = html
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: FakeResp())
+    # Neither host (Amazon, Apple) is installed, and Apple's row links only tv.apple.com: both brands are still kept.
+    found = web.tmdb_links(102348, "AU", {"binge.com.au": "BINGE", "paramountplus.com": "PMTP"})
+    assert [(l["kind"], l["provider"], l.get("brand_service")) for l in found] == [
+        ("channel", "Binge Amazon Channel", "BINGE"), ("channel", "Paramount Plus Apple TV channel", "PMTP"),
+    ]
+
+    # Two Channels on one bare link stay two brands through the country merge.
+    apple = [{"service": None, "url": "https://tv.apple.com", "country": "AU", "kind": "channel", "provider": p}
+             for p in ("Paramount Plus Apple TV channel", "Stan Apple TV channel")]
+    assert web.brand_fallbacks(web.merge_countries([apple]), [], {"paramountplus.com": "PMTP", "stan.com.au": "STAN"}) == [
+        "PMTP", "STAN"]
+
+    # Suggestions: a Channel chip never shows, home link or not.
+    channel = {"service": "AMZN", "url": "amzn1.dv.gti.46b0", "country": "AU", "kind": "channel",
+               "provider": "Binge Amazon Channel"}
+    nine = {"service": "NINE", "url": "https://www.9now.com.au/paramedics", "country": "AU", "kind": "native"}
+    assert web.prefer_download_links([channel]) == []
+    assert [l["service"] for l in web.prefer_download_links([channel, nine])] == ["NINE"]
+    # Its brand is offered to find on its own service, resolved against what is installed now, unless already shown.
+    domains = {"binge.com.au": "BINGE", "9now.com.au": "NINE"}
+    assert web.brand_fallbacks([channel, nine], [nine], domains) == ["BINGE"]
+    assert web.brand_fallbacks([channel], [{**nine, "service": "BINGE"}], domains) == []
+    assert web.brand_fallbacks([channel], [], {"9now.com.au": "NINE"}) == []  # brand not installed: nothing to offer
+
+    # Schedule: a Channel-only brand shows as the brand, with its own TMDB logo or its name.
+    logos = {"paramountplus": {"name": "Paramount Plus", "logo": "pp"}, "appletv": {"name": "Apple TV", "logo": "atv"}}
+    ranked = web.rank_watch_providers([
+        {"name": "Paramount+ Amazon Channel", "logo": "ch"},
+        {"name": "Hayu Amazon Channel", "logo": "ch2"},
+        {"name": "Apple TV Amazon Channel", "logo": "ch3"},
+        {"name": "9Now", "logo": "nine"},
+    ], logos)
+    assert ranked == [
+        {"name": "9Now", "logo": "nine"}, {"name": "Paramount Plus", "logo": "pp"},
+        {"name": "Hayu", "logo": None}, {"name": "Apple TV", "logo": "atv"},
+    ]
+    assert web.rank_watch_providers([{"name": "Paramount+ Amazon Channel", "logo": "ch"}]) == [
+        {"name": "Paramount+", "logo": None}]  # no TMDB logo known: the brand's name, never the Channel's logo
+    assert web.rank_watch_providers([{"name": "Apple TV Amazon Channel", "logo": "ch"}, {"name": "Apple TV", "logo": "a"}],
+                                    logos) == [{"name": "Apple TV", "logo": "a"}]
+    assert web.provider_logos([
+        {"provider_name": "Paramount Plus", "logo_path": "/pp.jpg"},
+        {"provider_name": "Paramount+ Amazon Channel", "logo_path": "/ch.jpg"},
+        {"provider_name": "Amazon Video", "logo_path": "/buy.jpg"},
+    ]) == {"paramountplus": {"name": "Paramount Plus", "logo": web.logo_url("/pp.jpg")}}
+
+
+def test_brand_logos_are_asked_once_a_week_per_country(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    asked = []
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"results": [{"provider_name": "Paramount Plus", "logo_path": "/pp.jpg"}]}
+
+    def get(url, params=None, **_):
+        asked.append(params["watch_region"])
+        return Resp()
+
+    monkeypatch.setattr(web.requests, "get", get)
+    monkeypatch.setattr(web, "tmdb_key", lambda: "k")
+    assert web.brand_logos("AU") == {"paramountplus": {"name": "Paramount Plus", "logo": web.logo_url("/pp.jpg")}}
+    assert web.brand_logos("AU")["paramountplus"]["name"] == "Paramount Plus" and asked == ["AU"]  # cached
+
+    def down(*a, **k):
+        raise web.requests.ConnectionError("down")
+
+    monkeypatch.setattr(web.requests, "get", down)
+    assert web.brand_logos("GB") == {}  # TMDB unreachable, nothing cached: names only
 
 
 def test_health_answers_without_login_and_says_only_yes_or_no(tmp_path, monkeypatch):

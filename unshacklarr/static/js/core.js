@@ -562,31 +562,27 @@ async function loadSuggestions(s, refresh = false) {
   $("#d-refresh").hidden = !s.tmdbId;
   if (!s.tmdbId) return networkPick(s, box, "Sonarr has no TMDB ID for this series.", "Sonarr has no TMDB ID for this series.");
   box.replaceChildren(loading("Looking up where to watch it…"));
-  let links;
+  let links, brands;
   try {
     const found = await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}${refresh ? "&refresh=1" : ""}`);
     links = found.links;
+    brands = found.brands || [];
     if (current === s) $("#d-checked").textContent = `checked ${ago(found.checked)}`;
   }
   catch (e) { if (current === s) box.replaceChildren(failed(`TMDB lookup failed: ${e.message}`, () => loadSuggestions(s, refresh))); return; }
   if (current !== s) return;  // another series was opened meanwhile
-  if (!links.length) return networkPick(s, box, `TMDB lists no supported service in ${S.config.tmdb_countries.join(", ")}. Enter it below by hand.`,
+  if (!links.length && !brands.length) return networkPick(s, box, `TMDB lists no supported service in ${S.config.tmdb_countries.join(", ")}. Enter it below by hand.`,
     "TMDB lists no supported service.");
-  const kindLabel = (l) => l.kind === "channel" ? "channel" : "home";
-  const kindTitle = (l) => l.kind === "channel" ? "Amazon/Apple Channels — not proof this exact title is on the brand's own app" : "";
   box.replaceChildren(...links.map((l) => el("button", {
-    className: l.kind && l.kind !== "native" ? `kind-${l.kind}` : "",
-    ariaLabel: `Use ${l.service} (${kindLabel(l)}): ${l.url}`,
-    title: kindTitle(l),
+    ariaLabel: `Use ${l.service}: ${l.url}`,
     onclick: () => applySuggestion(l),
   }, el("b", { textContent: l.service }), el("span", { textContent: l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.found_by === "homepage" ? `TMDB homepage · ${l.url}` : l.url }),
-    el("small", { textContent: `${l.country} · ${kindLabel(l)}` }))));
+    el("small", { textContent: l.country }))));
   box.querySelectorAll("button").forEach((b, i) => b.dataset.url = links[i].url);
   const network = S.networkServices?.[s.tvdbId];  // after TMDB's links: theirs keep their order
   if (network && !links.some((l) => l.service === network)) box.append(networkButton(s, network));
-  // A brand seen only as an Amazon/Apple Channel, not found on its own service by title: look it up there by hand.
-  const brands = new Set(links.map((l) => l.brand_service).filter((t) => t && t !== network && S.services?.includes(t)));
-  brands.forEach((t) => { if (!links.some((l) => l.service === t)) box.append(networkButton(s, t)); });
+  // A brand TMDB lists only inside Amazon/Apple, not found on its own service by title: look it up there by hand.
+  brands.filter((t) => t !== network).forEach((t) => box.append(networkButton(s, t)));
 }
 
 async function applySuggestion(link) {
