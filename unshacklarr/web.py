@@ -175,11 +175,14 @@ def countries(link: dict) -> set[str]:
 
 
 def is_channel_title(link: dict, links: list[dict]) -> bool:
-    """A link to a Channel's own title, however else it is listed (Stick's free episode as "Amazon Prime Video"),
-    in every country it is listed for: the same title elsewhere is that country's own."""
+    """A Channel's own title listed in the free section only, as its free episode (Stick's as "Amazon Prime Video"),
+    in every country it is listed for. The same title in Stream is also included with the host's own subscription
+    (Cross, Fargo: with Prime as well as through a Channel); elsewhere it is that country's own."""
+    if link.get("kind") == "channel" or link.get("section") != "free":
+        return False
     shared = set().union(*[countries(l) for l in links if l.get("kind") == "channel"
                            and (l.get("service"), l.get("url")) == (link.get("service"), link.get("url"))])
-    return link.get("kind") != "channel" and bool(shared) and countries(link) <= shared
+    return bool(shared) and countries(link) <= shared
 
 
 def brand_fallbacks(links: list[dict], shown: list[dict], domains: dict[str, str]) -> list[str]:
@@ -464,7 +467,7 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
             if service:
                 # its site kept: the code for it may change (another Unshackle, a service renamed), the site does not
                 link = {"service": service, "url": series_title(url), "country": country,
-                        "site": urlparse(url).hostname, "kind": kind}
+                        "site": urlparse(url).hostname, "kind": kind, "section": section.strip().casefold()}
                 if on_site(url, "crave.ca") and "/play/" in url:
                     # Crave's link opens one episode and holds no series id (…/series/<slug>-<id>)
                     if series := crave_series(url):
@@ -1535,7 +1538,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 4
+SUGGEST_MAP = 5
 
 
 async def suggest(request):

@@ -2185,18 +2185,22 @@ def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, mo
     links = [
         {"service": "ATVP", "url": "umc.cmc.52w04", "country": "AU", "kind": "native"},
         {"service": "AMZN", "url": gti, "country": "AU", "kind": "channel", "provider": "Apple TV Amazon Channel"},
-        {"service": "AMZN", "url": gti, "country": "AU", "kind": "native"},
+        {"service": "AMZN", "url": gti, "country": "AU", "kind": "native", "section": "free"},
     ]
     assert [l["service"] for l in web.prefer_download_links(links)] == ["ATVP"]
+    # Chicago P.D., Fargo, Cross…: the same Amazon title is included with Prime (Stream) as well as sold as a
+    # Channel. Only a free-section listing is the Channel's free episode; a Stream listing is Prime Video.
+    prime = [{**links[1], "url": "amzn1.dv.gti.cross"}, {**links[2], "url": "amzn1.dv.gti.cross", "section": "stream"}]
+    assert [(l["service"], l["url"]) for l in web.prefer_download_links(prime)] == [("AMZN", "amzn1.dv.gti.cross")]
     # Prime Video's own title (another Amazon title) stays.
     own = {"service": "AMZN", "url": "amzn1.dv.gti.rop", "country": "AU", "kind": "native"}
     assert [l["url"] for l in web.prefer_download_links([*links, own])] == ["umc.cmc.52w04", "amzn1.dv.gti.rop"]
 
     # Only where that title is a Channel: the same title listed in another country is that country's own.
-    gb = {"service": "AMZN", "url": gti, "country": "GB", "kind": "native"}
+    gb = {"service": "AMZN", "url": gti, "country": "GB", "kind": "native", "section": "free"}
     assert [(l["service"], l["country"]) for l in web.prefer_download_links([*links, gb])] == [("ATVP", "AU"), ("AMZN", "GB")]
     # A Channel's title listed as Prime Video does not count as linking the series, so episode links stay.
-    episode = {"service": "AMZN", "url": "amzn1.dv.gti.ep", "country": "AU", "episode": True}
+    episode = {"service": "AMZN", "url": "amzn1.dv.gti.ep", "country": "AU", "episode": True}  # beside Stick's rows
     assert episode in web.without_covered_episodes([*links, episode])
 
     # Schedule (TMDB's API has no links): Prime Video only free beside an Amazon Channel is that Channel's promo.
