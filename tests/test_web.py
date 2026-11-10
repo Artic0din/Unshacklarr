@@ -2003,9 +2003,9 @@ def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatc
     importlib.reload(unshacklarr.sync)
     web = importlib.reload(unshacklarr.web)
 
-    domains = {"primevideo.com": "AMZN", "tv.apple.com": "ATVP", "binge.com.au": "BNGE", "foxtel.com.au": "FOXTEL",
+    domains = {"primevideo.com": "AMZN", "tv.apple.com": "ATVP", "binge.com.au": "BINGE", "foxtel.com.au": "FOXTEL",
                "paramountplus.com": "PMTP", "max.com": "MAX", "10.com.au": "TEN"}
-    assert web.service_for_brand("Binge Amazon Channel", domains) == ("BNGE", "binge.com.au")
+    assert web.service_for_brand("Binge Amazon Channel", domains) == ("BINGE", "binge.com.au")
     assert web.service_for_brand("Paramount+ Amazon Channel", domains) == ("PMTP", "paramountplus.com")
     assert web.service_for_brand("Paramount Plus Apple TV channel", domains) == ("PMTP", "paramountplus.com")
     assert web.service_for_brand("Max Amazon Channel", domains) == ("MAX", "max.com")
@@ -2029,8 +2029,8 @@ def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatc
     class FakeResp:
         text = html
     monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: FakeResp())
-    channel = web.tmdb_links(102348, "AU", {"primevideo.com": "AMZN", "binge.com.au": "BNGE"})[0]
-    assert (channel["kind"], channel["brand_service"], channel["brand_site"]) == ("channel", "BNGE", "binge.com.au")
+    channel = web.tmdb_links(102348, "AU", {"primevideo.com": "AMZN", "binge.com.au": "BINGE"})[0]
+    assert (channel["kind"], channel["brand_service"], channel["brand_site"]) == ("channel", "BINGE", "binge.com.au")
 
     class Backend:
         def __init__(self, results):
@@ -2044,12 +2044,12 @@ def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatc
     monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 102348, "title": "Paramedics (AU)"}])
     monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: backend)
     links = web.searched_in_place([channel], 102348)
-    assert (backend.asked[0]["service"], backend.asked[0]["query"]) == ("BNGE", "Paramedics")  # Sonarr's "(AU)" off
-    assert links[1] == {"service": "BNGE", "url": "https://binge.com.au/shows/paramedics", "country": "AU",
+    assert (backend.asked[0]["service"], backend.asked[0]["query"]) == ("BINGE", "Paramedics")  # Sonarr's "(AU)" off
+    assert links[1] == {"service": "BINGE", "url": "https://binge.com.au/shows/paramedics", "country": "AU",
                         "site": "binge.com.au", "kind": "native", "found_by": "search",
                         "via": "Binge Amazon Channel"}
     # Found on the brand's own service: the Channel chip (Amazon refuses it without that add-on) gives way.
-    assert [l["service"] for l in web.prefer_download_links(links)] == ["BNGE"]
+    assert [l["service"] for l in web.prefer_download_links(links)] == ["BINGE"]
 
     # Another country's show of the same name is not this one.
     monkeypatch.setattr(web.sonarr_sync, "backend_for",
@@ -2059,7 +2059,7 @@ def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatc
     monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend([]))
     assert web.searched_in_place([channel], 102348) == [channel]
     # The brand already linked directly: nothing searched.
-    direct = {"service": "BNGE", "url": "https://binge.com.au/shows/x", "country": "AU", "kind": "native"}
+    direct = {"service": "BINGE", "url": "https://binge.com.au/shows/x", "country": "AU", "kind": "native"}
     monkeypatch.setattr(web, "sonarr_series", lambda: pytest.fail("searched"))
     assert web.searched_in_place([channel, direct], 102348) == [channel, direct]
 

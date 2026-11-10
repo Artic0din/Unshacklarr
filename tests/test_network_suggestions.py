@@ -77,7 +77,7 @@ def test_network_service_without_a_tmdb_id():
 
 
 def test_a_channel_brand_not_found_by_title_is_offered_to_look_up_on_its_own_service():
-    channel = {**link("AMZN"), "kind": "channel", "brand_service": "BNGE"}
-    assert buttons(render([channel], {"1": "SEVEN"}, services=["AMZN", "BNGE", "SEVEN"])) == ["AMZN", "SEVEN", "BNGE"]
-    assert buttons(render([channel, link("BNGE")], {}, services=["AMZN", "BNGE"])) == ["AMZN", "BNGE"]  # linked already
+    channel = {**link("AMZN"), "kind": "channel", "brand_service": "BINGE"}
+    assert buttons(render([channel], {"1": "SEVEN"}, services=["AMZN", "BINGE", "SEVEN"])) == ["AMZN", "SEVEN", "BINGE"]
+    assert buttons(render([channel, link("BINGE")], {}, services=["AMZN", "BINGE"])) == ["AMZN", "BINGE"]  # linked already
     assert buttons(render([channel], {}, services=["AMZN"])) == ["AMZN"]  # its brand is not installed

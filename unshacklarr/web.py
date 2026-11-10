@@ -106,7 +106,7 @@ def site_name(host: str) -> str:
 
 
 def service_for_brand(name: str, domains: dict[str, str]) -> tuple[str, str] | None:
-    """The installed service, and its site, of the brand a provider row names ("Binge Amazon Channel": BNGE at
+    """The installed service, and its site, of the brand a provider row names ("Binge Amazon Channel": BINGE at
     binge.com.au): a site whose own name is the brand, else one the brand starts with (Foxtel Now: foxtel)."""
     brand = provider_brand(name)
     # "Apple TV(+) Amazon Channel": nothing of a brand (or only "plus") left once Amazon/Apple are taken out
