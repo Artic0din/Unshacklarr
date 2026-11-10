@@ -446,6 +446,14 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                 elif re.search(r"-episode-\d+|episodeId=", link["url"]) or episode_link(link["url"]):  # still an episode once normalised
                     link["episode"] = True  # dropped below when the same service also links the series
                 links.append(link)
+    # TMDB's own Homepage link: often the network's catch-up (Paramedics: 9now.com.au) that JustWatch omits.
+    anchor = re.search(r'<a\b[^>]*title="Visit Homepage"[^>]*>', r.text, flags=re.I)
+    homepage = re.search(r'href="([^"]+)"', anchor.group(0)) if anchor else None
+    url = unwrap(homepage.group(1).replace("&amp;", "&")) if homepage else ""
+    service = service_for(url, domains) if url and usable_title_url(url) else None
+    if service and service not in {l["service"] for l in links}:
+        links.append({"service": service, "url": series_title(url), "country": country,
+                      "site": urlparse(url).hostname, "kind": link_kind(url, service), "found_by": "homepage"})
     return links
 
 
@@ -1454,7 +1462,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, or unwrap rules change so week-old caches re-scrape.
-SUGGEST_MAP = 1
+SUGGEST_MAP = 2
 
 
 async def suggest(request):

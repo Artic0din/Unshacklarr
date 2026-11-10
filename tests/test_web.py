@@ -1266,6 +1266,55 @@ def test_tmdb_watch_scrape_keeps_stream_channels_and_skips_buy(tmp_path, monkeyp
     assert web.usable_title_url("https://app.primevideo.com/detail?gti=x") is True
 
 
+def test_tmdb_homepage_is_a_home_link_when_justwatch_lists_only_channels(tmp_path, monkeypatch):
+    """Paramedics (AU): JustWatch has Foxtel Now and the BINGE Amazon Channel; TMDB's homepage is 9now.com.au."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+
+    html = """
+    <div class="ott_provider"><h3>Stream</h3><ul class="providers">
+      <li><a title="Watch Paramedics on Foxtel Now"
+          href="https://click.justwatch.com/a?r=https%3A%2F%2Fwww.foxtel.com.au%2Fwatch%2Ftv-shows%2Fparamedics.html"></a></li>
+      <li><a title="Watch Paramedics on Binge Amazon Channel"
+          href="https://click.justwatch.com/a?r=https%3A%2F%2Fapp.primevideo.com%2Fdetail%3Fgti%3Damzn1.dv.gti.46b0"></a></li>
+    </ul></div>
+    <div class="homepage">
+      <a class="social_link" title="Visit JustWatch" href="https://www.justwatch.com/au/tv-show/paramedics"></a>
+    </div>
+    <div class="homepage">
+      <a class="social_link" title="Visit Homepage" href="https://www.9now.com.au/paramedics" target="_blank"></a>
+    </div>
+    """
+    class FakeResp:
+        text = html
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [
+        {"tag": "AMZN", "url": "", "help": "https://www.primevideo.com"},
+        {"tag": "NINE", "url": "", "help": "https://www.9now.com.au"},
+    ])
+    found = web.tmdb_links(102348, "AU", web.service_domains())
+    assert [(l["service"], l["kind"], l["url"]) for l in found] == [
+        ("AMZN", "channel", "amzn1.dv.gti.46b0"),
+        ("NINE", "native", "https://www.9now.com.au/paramedics"),
+    ]
+    assert found[1]["found_by"] == "homepage"
+    # The home URL hides the BINGE Amazon Channel chip (Amazon refuses it without that add-on).
+    assert [l["service"] for l in web.prefer_download_links(found)] == ["NINE"]
+
+    # A homepage on a service JustWatch already links adds no second chip.
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [
+        {"tag": "AMZN", "url": "", "help": "https://www.primevideo.com"},
+        {"tag": "NINE", "url": "", "help": "https://www.9now.com.au"},
+        {"tag": "FOXTEL", "url": "", "help": "https://www.foxtel.com.au"},
+    ])
+    FakeResp.text = html.replace("www.9now.com.au/paramedics", "www.foxtel.com.au/paramedics")
+    found = web.tmdb_links(102348, "AU", web.service_domains())
+    assert [l["service"] for l in found] == ["FOXTEL", "AMZN"]
+
+
 def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync

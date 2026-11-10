@@ -15,6 +15,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Series suggestions now include TMDB's own homepage link when it is an installed service, so titles like Paramedics (AU) suggest 9Now instead of only the BINGE Amazon Channel, which Amazon refuses without that add-on. Week-old suggestion caches refresh.
 - Amazon and Apple Originals (for example The Rings of Power) now show Prime Video or Apple TV beside other services in the schedule and the series' suggestions, instead of being hidden as a storefront whenever a local service such as 9Now also carries them.
 - Mapped JustWatch AU's `9now.app.link` Branch redirects and `9now.com.au` links to NINE, and Nine Network catch-up, so titles like Travel Guides suggest 9Now instead of "no supported service"; week-old suggest caches refresh when those mappings change.
 - A series' own network catch-up service (for example SEVEN or TEN) is now suggested beside the TMDB links, not only when TMDB lists none.
