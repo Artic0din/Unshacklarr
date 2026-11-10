@@ -1855,6 +1855,9 @@ def test_episode_links_are_taken_back_to_their_series(tmp_path, monkeypatch):
         "https://www.paramountplus.com/shows/mobland/video/abc/x": "https://www.paramountplus.com/shows/mobland/",
         "https://www.sbs.com.au/ondemand/tv-series/blue-lights/season-1/x": "https://www.sbs.com.au/ondemand/tv-series/blue-lights",
         "https://u.co.uk/shows/blue-lights/watch-online/6388360695112": "https://u.co.uk/shows/blue-lights/watch-online",
+        # Dustfall: JustWatch links episode 1; AUBC lists only that video unless given the show page
+        "https://iview.abc.net.au/show/dustfall/series/1/video/DR2501Q001S00": "https://iview.abc.net.au/show/dustfall",
+        "https://iview.abc.net.au/show/bad-company": "https://iview.abc.net.au/show/bad-company",
     }
     for given, series in cases.items():
         assert web.series_title(given) == series, given

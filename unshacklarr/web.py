@@ -261,6 +261,9 @@ def series_title(url: str) -> str:
         return f"https://www.channel5.com/show/{show.group(1)}"
     if on_site(url, "paramountplus.com") and (show := re.match(r"(?:/[a-z]{2})?/shows/(?!video/)([A-Za-z0-9_-]+)", path)):
         return f"https://www.paramountplus.com/shows/{show.group(1)}/"
+    if on_site(url, "iview.abc.net.au") and (show := re.match(r"/show/([A-Za-z0-9_-]+)", path)):
+        # …/show/<slug>/series/1/video/<id> opens one episode; AUBC lists the whole show from /show/<slug>
+        return f"https://iview.abc.net.au/show/{show.group(1)}"
     if on_site(url, "sbs.com.au") and (show := re.match(r"/ondemand/tv-series/([a-z0-9-]+)", path)):
         return f"https://www.sbs.com.au/ondemand/tv-series/{show.group(1)}"
     if on_site(url, "u.co.uk") and (show := re.match(r"/shows/([a-z0-9-]+)", path)):
@@ -1515,7 +1518,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 4
+SUGGEST_MAP = 5
 
 
 async def suggest(request):
