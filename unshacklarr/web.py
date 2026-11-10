@@ -57,15 +57,9 @@ SITES = {
     # 9Now: JustWatch AU often wraps www.9now.com.au behind 9now.app.link Branch redirects.
     "9now.com.au": ("NINE",),
 }
-# Aggregator hosts: Amazon and Apple list other brands as Channels / storefront buys, not the brand's own login.
-STOREFRONT_SERVICES = frozenset({"AMZN", "ATV", "ATVP"})
-STOREFRONT_HOSTS = ("primevideo.com", "amazon.com", "amazon.de", "amazon.fr", "tv.apple.com")
 CHANNEL_NAME = re.compile(r"\b(?:amazon\s+channel|apple\s+tv\s+channel|channels)\b", re.IGNORECASE)
-# Any Amazon-* catalogue name (Free with Ads, MX Player, Video…); Channel names match CHANNEL_NAME first.
-STOREFRONT_NAME = re.compile(r"^(?:amazon\b.*|apple\s+tv(?:\s+store)?)$", re.IGNORECASE)
-# Whose storefront a provider, link or TMDB/Sonarr network is: an Amazon/Apple Original's home is that storefront.
-AMAZON_NAME = re.compile(r"\b(?:amazon|prime\s+video)\b", re.IGNORECASE)
-APPLE_NAME = re.compile(r"\bapple\s*tv\b", re.IGNORECASE)
+# Amazon's and Apple's stores sell seasons; Prime Video and Apple TV+ subscriptions are ordinary services.
+PURCHASE_NAME = re.compile(r"^(?:amazon\s+video|apple\s+tv\s+store|itunes)$", re.IGNORECASE)
 # A network's own catch-up service, by its name's first words (Sonarr's network): what a series TMDB links to
 # nowhere is offered, best code first. Extend per country.
 NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": ("ALL4", "C4"), "more4": ("ALL4", "C4"),
@@ -75,27 +69,23 @@ NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": 
 
 
 def provider_kind(name: str) -> str:
-    """How TMDB names a watch offer: the brand itself, a channel inside Amazon/Apple, or Amazon/Apple's storefront."""
+    """How TMDB names a watch offer: a service (Prime Video and Apple TV+ included), a channel inside
+    Amazon/Apple, or a purchase from Amazon's or Apple's store."""
     text = str(name or "").strip()
     if CHANNEL_NAME.search(text):
         return "channel"
-    if STOREFRONT_NAME.fullmatch(text):
-        return "storefront"
+    if PURCHASE_NAME.fullmatch(text):
+        return "purchase"
     return "native"
-
-
-def storefront_owner(name: str) -> str | None:
-    """'amazon' or 'apple' when a provider or network name is theirs (Prime Video, Apple TV+), else None."""
-    text = str(name or "")
-    return "amazon" if AMAZON_NAME.search(text) else "apple" if APPLE_NAME.search(text) else None
 
 
 def provider_brand(name: str) -> str:
     """Collapse 'Paramount Plus' and 'Paramount+ Amazon Channel' to one brand key."""
-    text = CHANNEL_NAME.sub(" ", str(name or ""))
-    text = re.sub(r"\b(?:amazon|apple\s*tv|with ads|premium|basic|standard|free)\b", " ", text, flags=re.IGNORECASE)
-    text = text.replace("+", " plus ")
-    return re.sub(r"[^a-z0-9]+", "", text.casefold())
+    bare = CHANNEL_NAME.sub(" ", str(name or ""))
+    text = re.sub(r"\b(?:amazon|apple\s*tv|with ads|premium|basic|standard|free)\b", " ", bare, flags=re.IGNORECASE)
+    key = lambda t: re.sub(r"[^a-z0-9]+", "", t.replace("+", " plus ").casefold())
+    # Apple TV's own name is all host words: "Apple TV", "Apple TV+" and "Apple TV Amazon Channel" share one key.
+    return k if (k := key(text)) not in ("", "plus") else key(bare).removesuffix("plus")
 
 
 def site_name(host: str) -> str:
@@ -109,10 +99,9 @@ def service_for_brand(name: str, domains: dict[str, str]) -> tuple[str, str] | N
     """The installed service, and its site, of the brand a provider row names ("Binge Amazon Channel": BINGE at
     binge.com.au): a site whose own name is the brand, else one the brand starts with (Foxtel Now: foxtel)."""
     brand = provider_brand(name)
-    # "Apple TV(+) Amazon Channel": nothing of a brand (or only "plus") left once Amazon/Apple are taken out
-    if len(brand.removesuffix("plus")) < 3:
+    if len(brand.removesuffix("plus")) < 3:  # too short to name a site safely
         return None
-    sites = [(host, tag, site_name(host)) for host, tag in domains.items() if tag not in STOREFRONT_SERVICES]
+    sites = [(host, tag, site_name(host)) for host, tag in domains.items()]
     exact = {brand, brand.removesuffix("plus")}  # RTL+ at rtl.de
     for same in (lambda label: label in exact, lambda label: len(label) >= 4 and brand.startswith(label)):
         if hit := next(((tag, host) for host, tag, label in sites if same(label)), None):
@@ -120,28 +109,19 @@ def service_for_brand(name: str, domains: dict[str, str]) -> tuple[str, str] | N
     return None
 
 
-def rank_watch_providers(providers: list[dict], network: str = "") -> list[dict]:
-    """Calendar logos: prefer a brand's own TMDB row over its Amazon/Apple Channel packaging.
+def rank_watch_providers(providers: list[dict]) -> list[dict]:
+    """Calendar logos: each service in TMDB's order, a brand's own row over its Amazon/Apple Channel packaging.
 
     A Channel row is kept only when TMDB has no native row for that brand. It is labelled as a channel:
     JustWatch sometimes attaches Channel offers to the wrong regional title (UK Gogglebox vs Australia).
-    Amazon/Apple storefront rows are dropped when any native brand remains.
-    Own-subscription storefronts (Apple TV, Amazon Prime Video) rank above leftover Channels.
-    The series' own network's storefront (Prime Video for an Amazon Original) counts as native.
-    The schedule UI slices logos to three; this returns every ranked row for the tooltip.
+    Purchase rows never show. The schedule UI slices logos to three; this returns every ranked row for the tooltip.
     """
-    enriched = [{**p, "kind": p.get("kind") or provider_kind(p.get("name") or ""),
+    enriched = [{**p, "kind": provider_kind(p.get("name") or ""),
                  "brand": provider_brand(p.get("name") or ""), "_i": i}
                 for i, p in enumerate(providers)]
-    if owner := storefront_owner(network):
-        for p in enriched:
-            if p["kind"] == "storefront" and storefront_owner(p.get("name") or "") == owner:
-                p["kind"] = "native"
     natives = {p["brand"] for p in enriched if p["kind"] == "native" and p["brand"]}
-    kept = [p for p in enriched if not (p["kind"] == "channel" and p["brand"] in natives)]
-    if any(p["kind"] == "native" for p in kept):
-        kept = [p for p in kept if p["kind"] != "storefront"]
-    order = {"native": 0, "storefront": 1, "channel": 2}
+    kept = [p for p in enriched if p["kind"] != "purchase" and not (p["kind"] == "channel" and p["brand"] in natives)]
+    order = {"native": 0, "channel": 1}
     # Kind first; keep TMDB/JustWatch order within a kind (do not alphabetise).
     kept.sort(key=lambda p: (order.get(p["kind"], 9), p["_i"]))
     out: list[dict] = []
@@ -155,45 +135,31 @@ def rank_watch_providers(providers: list[dict], network: str = "") -> list[dict]
     return out
 
 
-def link_kind(url: str, service: str | None = None) -> str:
-    """Whether a suggested Unshackle title is the service's own site or an Amazon/Apple storefront."""
-    if service in STOREFRONT_SERVICES or on_site(url, *STOREFRONT_HOSTS):
-        return "storefront"
-    return "native"
-
-
 def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
-    """Tag each suggestion; hide Amazon/Apple storefront and Channel chips when a usable home URL is listed.
+    """Tag each suggestion; hide Channel chips when a usable home URL is listed, and never offer a purchase.
 
     Only a real brand URL the user can download (not an episode-only or needs_series_url row) counts as home.
     Channel listings are not promoted to home. Distinct URLs stay distinct chips.
     TMDB homepage links are kept only when they are the series' network's catch-up service.
-    The series' own network's storefront (AMZN for an Amazon Original) counts as home.
     """
-    tagged = [{**link, "kind": link.get("kind") or link_kind(str(link.get("url") or ""), link.get("service"))}
-              for link in links]
+    tagged = [{**link, "kind": link.get("kind") or "native"} for link in links if link.get("kind") != "purchase"]
     # TMDB's homepage is any page of any country's site: trusted only as the series' own network's catch-up.
     tagged = [l for l in tagged if l.get("found_by") != "homepage" or l.get("service") in network_services(network)]
-    if owner := storefront_owner(network):
-        for link in tagged:
-            url = str(link.get("url") or "")
-            mine = ("apple" if link.get("service") in ("ATV", "ATVP") or on_site(url, "tv.apple.com")
-                    else "amazon" if link.get("service") == "AMZN" or on_site(url, *STOREFRONT_HOSTS[:4]) else None)
-            if link["kind"] == "storefront" and mine == owner:
-                link["kind"] = "native"
+    homes = {l["service"] for l in tagged if l.get("found_by") == "homepage" and not l.get("episode")}
+    tagged = [l for l in tagged if not (l.get("episode") and l.get("service") in homes)]
 
     def usable_home(link: dict) -> bool:
         return link["kind"] == "native" and not link.get("episode") and not link.get("needs_series_url")
 
     if any(usable_home(link) for link in tagged):
-        tagged = [link for link in tagged if link["kind"] not in ("storefront", "channel")]
+        tagged = [link for link in tagged if link["kind"] != "channel"]
     unique: dict[tuple, dict] = {}
     for link in tagged:
         key = (link.get("service"), link.get("url"))
         seen = unique.setdefault(key, link)
         if link.get("country") and link["country"] not in (seen.get("country") or "").split(", "):
             seen["country"] = ", ".join(filter(None, [seen.get("country"), link["country"]]))
-    order = {"native": 0, "storefront": 1, "channel": 2}
+    order = {"native": 0, "channel": 1}
     # Kind only: stable sort keeps JustWatch / first-country scrape order within a kind.
     return sorted(unique.values(), key=lambda l: order.get(l.get("kind") or "", 9))
 
@@ -416,7 +382,7 @@ OFFER_ON = re.compile(r"\b(?:Watch|Stream|Buy|Rent)\s+.+\s+on\s+(.+)$", re.IGNOR
 
 
 def usable_title_url(url: str) -> bool:
-    """Drop bare storefront homes (JustWatch's Apple Channel row often links only tv.apple.com)."""
+    """Drop bare site homes (JustWatch's Apple Channel row often links only tv.apple.com)."""
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.hostname:
         return False
@@ -459,9 +425,9 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                 # its site kept: the code for it may change (another Unshackle, a service renamed), the site does not
                 title_attr = re.search(r'title="([^"]*)"', attrs)
                 name = offer_provider_name(title_attr.group(1)) if title_attr else ""
-                # Title only promotes Channel; storefront hosts are home only for their own Originals (prefer_download_links).
-                titled = provider_kind(name) if name else None
-                kind = "channel" if titled == "channel" else link_kind(url, service)
+                kind = provider_kind(name) if name else "native"
+                if kind == "purchase":
+                    continue
                 link = {"service": service, "url": series_title(url), "country": country,
                         "site": urlparse(url).hostname, "kind": kind}
                 if kind == "channel" and (brand := service_for_brand(name, domains)):
@@ -473,7 +439,7 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                         link["url"] = series
                     else:  # the page asks for the series URL
                         link["needs_series_url"] = True
-                elif re.search(r"-episode-\d+|episodeId=", link["url"]) or episode_link(link["url"]):  # still an episode once normalised
+                elif still_episode(link["url"]):
                     link["episode"] = True  # dropped below when the same service also links the series
                 links.append(link)
     # TMDB's own Homepage link: often the network's catch-up (Paramedics: 9now.com.au) that JustWatch omits.
@@ -482,9 +448,49 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
     url = unwrap(homepage.group(1).replace("&amp;", "&")) if homepage else ""
     service = service_for(url, domains) if url and usable_title_url(url) else None
     if service and service not in {l["service"] for l in links if not l.get("episode") and not l.get("needs_series_url")}:
-        links.append({"service": service, "url": series_title(url), "country": country,
-                      "site": urlparse(url).hostname, "kind": link_kind(url, service), "found_by": "homepage"})
+        link = {"service": service, "url": series_title(url), "country": country,
+                "site": urlparse(url).hostname, "kind": "native", "found_by": "homepage"}
+        if still_episode(link["url"]):
+            link["episode"] = True
+        links.append(link)
     return links
+
+
+def still_episode(url: str) -> bool:
+    """A link that opens one episode even once normalised."""
+    return bool(re.search(r"-episode-\d+|episodeId=", url)) or episode_link(url)
+
+
+def merge_countries(found: list[list[dict]]) -> list[dict]:
+    """One link per service and URL across the countries' scrapes, listing its countries. A JustWatch listing
+    outranks the same URL found only as a TMDB homepage, so the homepage check cannot drop it."""
+    unique: dict[tuple, dict] = {}
+    for link in (link for links in found for link in links):
+        seen = unique.setdefault((link["service"], link["url"]), {**link, "country": ""})
+        if link["country"] not in seen["country"].split(", "):
+            seen["country"] = ", ".join(filter(None, [seen["country"], link["country"]]))
+        if seen.get("found_by") == "homepage" and link.get("found_by") != "homepage":
+            seen.pop("found_by")
+    return list(unique.values())
+
+
+def series_linked(links: list[dict]) -> set[str]:
+    """Services that link the series itself. A Channel row links its host, not the series. A TMDB homepage does
+    not count: it is trusted only after the network check (prefer_download_links), so an episode link stays to be
+    searched until then."""
+    return {l["service"] for l in links
+            if not l.get("episode") and l.get("found_by") != "homepage" and l.get("kind") != "channel"}
+
+
+def without_covered_episodes(links: list[dict]) -> list[dict]:
+    """Drop an episode link once its service also links the series."""
+    covered = series_linked(links)
+    return [l for l in links if not (l.get("episode") and l["service"] in covered)]
+
+
+def series_network(tmdb_id: str, given: str) -> str:
+    """Sonarr's network for the series, else the TMDB network the calendar cached."""
+    return given or str((read_json(NETWORKS_CACHE, {}).get(str(tmdb_id)) or {}).get("name") or "")
 
 
 YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)  # libyaml's, when PyYAML has it
@@ -1529,22 +1535,16 @@ async def suggest(request):
                 raise web.HTTPBadGateway(text=tmdb_error(e))
             found = None  # keep the old links rather than show nothing
         if found is not None:
-            unique: dict[tuple, dict] = {}
-            for link in (link for links in found for link in links):
-                seen = unique.setdefault((link["service"], link["url"]), {**link, "country": ""})
-                if link["country"] not in seen["country"].split(", "):
-                    seen["country"] = ", ".join(filter(None, [seen["country"], link["country"]]))
-            with_series = {l["service"] for l in unique.values() if not l.get("episode")}
-            links = [l for l in unique.values() if not (l.get("episode") and l["service"] in with_series)]
+            links = without_covered_episodes(merge_countries(found))
             links = await asyncio.to_thread(searched_in_place, links, int(tmdb_id))
-            # Prefer at read time only: cache keeps storefronts so a later-uninstalled home still leaves AMZN.
+            # Prefer at read time only: cache keeps Channel rows so a later-uninstalled home still leaves them.
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(),
                    "map": SUGGEST_MAP, "links": links}
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
     return web.json_response({
         "links": await asyncio.to_thread(lambda: prefer_download_links(
-            installed_links(hit["links"]), request.query.get("network", ""))),
+            installed_links(hit["links"]), series_network(tmdb_id, request.query.get("network", "")))),
         "checked": hit["checked"],
     })
 
@@ -1564,10 +1564,10 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
     Sonarr's title; the one result with that title takes the episode link's place. No match, several, or a service
     that can't be searched: the episode link stays.
     A brand listed only as an Amazon/Apple Channel is searched the same way on the brand's own service; what is found
-    is added as a home link beside the Channel row."""
-    alone = {l["service"] for l in links if l.get("episode")} - {l["service"] for l in links if not l.get("episode")}
-    homes = {l["service"] for l in links if not l.get("episode") and l.get("kind") != "channel"}
-    channels = {l["brand_service"]: l for l in links if l.get("brand_service") and l["brand_service"] not in homes | alone}
+    is added as a home link."""
+    linked = series_linked(links)
+    alone = {l["service"] for l in links if l.get("episode")} - linked
+    channels = {l["brand_service"]: l for l in links if l.get("brand_service") and l["brand_service"] not in linked | alone}
     if not alone and not channels:
         return links
     try:
@@ -2954,8 +2954,7 @@ async def networks(request):
     return web.json_response({
         i: {"name": cache[str(i)].get("name"), "logo": cache[str(i)].get("logo"), "country": country,
             "network_country": cache[str(i)].get("network_country") or "",
-            "providers": rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []),
-                                              cache[str(i)].get("name") or "")}
+            "providers": rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []))}
         for i in ids if str(i) in cache and "providers" in cache[str(i)]
     })
 

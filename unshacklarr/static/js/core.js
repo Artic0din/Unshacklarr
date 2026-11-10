@@ -572,12 +572,8 @@ async function loadSuggestions(s, refresh = false) {
   if (current !== s) return;  // another series was opened meanwhile
   if (!links.length) return networkPick(s, box, `TMDB lists no supported service in ${S.config.tmdb_countries.join(", ")}. Enter it below by hand.`,
     "TMDB lists no supported service.");
-  const kindLabel = (l) => l.kind === "storefront" ? "storefront" : l.kind === "channel" ? "channel" : "home";
-  const kindTitle = (l) => l.kind === "storefront"
-    ? "Amazon/Apple storefront — not another brand's own login (Channels need that brand's Amazon/Apple add-on)"
-    : l.kind === "channel"
-      ? "Amazon/Apple Channels — not proof this exact title is on the brand's own app"
-      : "";
+  const kindLabel = (l) => l.kind === "channel" ? "channel" : "home";
+  const kindTitle = (l) => l.kind === "channel" ? "Amazon/Apple Channels — not proof this exact title is on the brand's own app" : "";
   box.replaceChildren(...links.map((l) => el("button", {
     className: l.kind && l.kind !== "native" ? `kind-${l.kind}` : "",
     ariaLabel: `Use ${l.service} (${kindLabel(l)}): ${l.url}`,
