@@ -564,7 +564,7 @@ async function loadSuggestions(s, refresh = false) {
   box.replaceChildren(loading("Looking up where to watch it…"));
   let links;
   try {
-    const found = await api(`/api/suggest/${s.tmdbId}${refresh ? "?refresh=1" : ""}`);
+    const found = await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}${refresh ? "&refresh=1" : ""}`);
     links = found.links;
     if (current === s) $("#d-checked").textContent = `checked ${ago(found.checked)}`;
   }

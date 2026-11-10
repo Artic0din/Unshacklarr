@@ -1164,6 +1164,31 @@ def test_watch_offers_prefer_a_brands_own_service_over_storefronts(tmp_path, mon
     ]
     assert all(l["kind"] == "storefront" for l in storefronts)
 
+    # Rings of Power: an Amazon Original stays beside 9Now; Prime Video is its home, not a storefront.
+    original = [
+        {"name": "9Now", "logo": "nine"},
+        {"name": "Amazon Prime Video", "logo": "amzn"},
+        {"name": "Paramount+ Amazon Channel", "logo": "ch"},
+    ]
+    rop = web.rank_watch_providers(original, network="Prime Video")
+    assert [(p["name"], p["kind"]) for p in rop] == [
+        ("9Now", "native"), ("Amazon Prime Video", "native"), ("Paramount+ Amazon Channel", "channel"),
+    ]
+    assert [p["name"] for p in web.rank_watch_providers(original, network="Nine Network")] == [
+        "9Now", "Paramount+ Amazon Channel",
+    ]
+    rop_links = [
+        {"service": "NINE", "url": "https://www.9now.com.au/x", "country": "AU", "kind": "native"},
+        {"service": "AMZN", "url": "amzn1.dv.gti.rop", "country": "AU", "kind": "storefront"},
+        {"service": "AMZN", "url": "amzn1.dv.gti.chan", "country": "AU", "kind": "channel"},
+        {"service": "ATVP", "url": "umc.cmc.x", "country": "AU", "kind": "storefront"},
+    ]
+    assert [(l["service"], l["kind"]) for l in web.prefer_download_links(rop_links, network="Prime Video")] == [
+        ("NINE", "native"), ("AMZN", "native"),
+    ]
+    assert [l["service"] for l in web.prefer_download_links(rop_links, network="Apple TV+")] == ["NINE", "ATVP"]
+    assert [l["service"] for l in web.prefer_download_links(rop_links)] == ["NINE"]
+
     # Stable kind sort keeps first-country / scrape order (TEN before NF), not alphabetical service tags.
     ordered = web.prefer_download_links([
         {"service": "TEN", "url": "https://10.com.au/x", "country": "AU", "kind": "native"},

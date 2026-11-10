@@ -185,7 +185,7 @@ async function openBulk() {
   };
   const one = async (s, li) => {
     let links;
-    try { links = (await api(`/api/suggest/${s.tmdbId}`)).links; }
+    try { links = (await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}`)).links; }
     catch {  // TMDB refuses bursts now and then: say so, and let it be asked again
       li.querySelector(".opts").replaceChildren(el("span", { className: "none", textContent: "TMDB did not answer" }),
         el("button", { type: "button", className: "btn small", textContent: "Retry", onclick: () => one(s, li) }));

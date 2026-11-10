@@ -63,6 +63,9 @@ STOREFRONT_HOSTS = ("primevideo.com", "amazon.com", "amazon.de", "amazon.fr", "t
 CHANNEL_NAME = re.compile(r"\b(?:amazon\s+channel|apple\s+tv\s+channel|channels)\b", re.IGNORECASE)
 # Any Amazon-* catalogue name (Free with Ads, MX Player, Video…); Channel names match CHANNEL_NAME first.
 STOREFRONT_NAME = re.compile(r"^(?:amazon\b.*|apple\s+tv(?:\s+store)?)$", re.IGNORECASE)
+# Whose storefront a provider, link or TMDB/Sonarr network is: an Amazon/Apple Original's home is that storefront.
+AMAZON_NAME = re.compile(r"\b(?:amazon|prime\s+video)\b", re.IGNORECASE)
+APPLE_NAME = re.compile(r"\bapple\s*tv\b", re.IGNORECASE)
 # A network's own catch-up service, by its name's first words (Sonarr's network): what a series TMDB links to
 # nowhere is offered, best code first. Extend per country.
 NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": ("ALL4", "C4"), "more4": ("ALL4", "C4"),
@@ -81,6 +84,12 @@ def provider_kind(name: str) -> str:
     return "native"
 
 
+def storefront_owner(name: str) -> str | None:
+    """'amazon' or 'apple' when a provider or network name is theirs (Prime Video, Apple TV+), else None."""
+    text = str(name or "")
+    return "amazon" if AMAZON_NAME.search(text) else "apple" if APPLE_NAME.search(text) else None
+
+
 def provider_brand(name: str) -> str:
     """Collapse 'Paramount Plus' and 'Paramount+ Amazon Channel' to one brand key."""
     text = CHANNEL_NAME.sub(" ", str(name or ""))
@@ -89,18 +98,23 @@ def provider_brand(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", text.casefold())
 
 
-def rank_watch_providers(providers: list[dict]) -> list[dict]:
+def rank_watch_providers(providers: list[dict], network: str = "") -> list[dict]:
     """Calendar logos: prefer a brand's own TMDB row over its Amazon/Apple Channel packaging.
 
     A Channel row is kept only when TMDB has no native row for that brand. It is labelled as a channel:
     JustWatch sometimes attaches Channel offers to the wrong regional title (UK Gogglebox vs Australia).
     Amazon/Apple storefront rows are dropped when any native brand remains.
     Own-subscription storefronts (Apple TV, Amazon Prime Video) rank above leftover Channels.
+    The series' own network's storefront (Prime Video for an Amazon Original) counts as native.
     The schedule UI slices logos to three; this returns every ranked row for the tooltip.
     """
     enriched = [{**p, "kind": p.get("kind") or provider_kind(p.get("name") or ""),
                  "brand": provider_brand(p.get("name") or ""), "_i": i}
                 for i, p in enumerate(providers)]
+    if owner := storefront_owner(network):
+        for p in enriched:
+            if p["kind"] == "storefront" and storefront_owner(p.get("name") or "") == owner:
+                p["kind"] = "native"
     natives = {p["brand"] for p in enriched if p["kind"] == "native" and p["brand"]}
     kept = [p for p in enriched if not (p["kind"] == "channel" and p["brand"] in natives)]
     if any(p["kind"] == "native" for p in kept):
@@ -126,14 +140,21 @@ def link_kind(url: str, service: str | None = None) -> str:
     return "native"
 
 
-def prefer_download_links(links: list[dict]) -> list[dict]:
+def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
     """Tag each suggestion; hide Amazon/Apple storefront and Channel chips when a usable home URL is listed.
 
     Only a real brand URL the user can download (not an episode-only or needs_series_url row) counts as home.
     Channel listings are not promoted to home. Distinct URLs stay distinct chips.
+    The series' own network's storefront (AMZN for an Amazon Original) counts as home.
     """
     tagged = [{**link, "kind": link.get("kind") or link_kind(str(link.get("url") or ""), link.get("service"))}
               for link in links]
+    if owner := storefront_owner(network):
+        for link in tagged:
+            url = str(link.get("url") or "")
+            mine = "apple" if link.get("service") in ("ATV", "ATVP") or on_site(url, "tv.apple.com") else "amazon"
+            if link["kind"] == "storefront" and mine == owner:
+                link["kind"] = "native"
 
     def usable_home(link: dict) -> bool:
         return link["kind"] == "native" and not link.get("episode") and not link.get("needs_series_url")
@@ -1483,7 +1504,8 @@ async def suggest(request):
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
     return web.json_response({
-        "links": await asyncio.to_thread(lambda: prefer_download_links(installed_links(hit["links"]))),
+        "links": await asyncio.to_thread(lambda: prefer_download_links(
+            installed_links(hit["links"]), request.query.get("network", ""))),
         "checked": hit["checked"],
     })
 
@@ -2877,7 +2899,8 @@ async def networks(request):
     return web.json_response({
         i: {"name": cache[str(i)].get("name"), "logo": cache[str(i)].get("logo"), "country": country,
             "network_country": cache[str(i)].get("network_country") or "",
-            "providers": rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []))}
+            "providers": rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []),
+                                              cache[str(i)].get("name") or "")}
         for i in ids if str(i) in cache and "providers" in cache[str(i)]
     })
 
