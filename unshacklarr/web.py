@@ -98,16 +98,24 @@ def provider_brand(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", text.casefold())
 
 
+def site_name(host: str) -> str:
+    """A site's own name, without subdomain or suffix: binge for binge.com.au, stan for play.stan.com.au."""
+    parts = host.lower().split(".")
+    second_level = len(parts) >= 3 and len(parts[-1]) == 2 and parts[-2] in ("com", "co", "net", "org")
+    return re.sub(r"[^a-z0-9]", "", parts[-3] if second_level else parts[-2] if len(parts) >= 2 else parts[0])
+
+
 def service_for_brand(name: str, domains: dict[str, str]) -> tuple[str, str] | None:
     """The installed service, and its site, of the brand a provider row names ("Binge Amazon Channel": BNGE at
-    binge.com.au): a label of the site equal to the brand, else one the brand starts with (Foxtel Now: foxtel)."""
+    binge.com.au): a site whose own name is the brand, else one the brand starts with (Foxtel Now: foxtel)."""
     brand = provider_brand(name)
-    if len(brand) < 3:  # "Apple TV Amazon Channel": nothing of a brand left once Amazon/Apple are taken out
+    # "Apple TV(+) Amazon Channel": nothing of a brand (or only "plus") left once Amazon/Apple are taken out
+    if len(brand.removesuffix("plus")) < 3:
         return None
-    sites = [(host, tag) for host, tag in domains.items() if tag not in STOREFRONT_SERVICES]
-    labels = {host: [re.sub(r"[^a-z0-9]", "", label) for label in host.split(".")] for host, _ in sites}
-    for same in (lambda label: label == brand, lambda label: len(label) >= 4 and brand.startswith(label)):
-        if hit := next(((tag, host) for host, tag in sites if any(same(label) for label in labels[host])), None):
+    sites = [(host, tag, site_name(host)) for host, tag in domains.items() if tag not in STOREFRONT_SERVICES]
+    exact = {brand, brand.removesuffix("plus")}  # RTL+ at rtl.de
+    for same in (lambda label: label in exact, lambda label: len(label) >= 4 and brand.startswith(label)):
+        if hit := next(((tag, host) for host, tag, label in sites if same(label)), None):
             return hit
     return None
 
@@ -1541,13 +1549,13 @@ async def suggest(request):
     })
 
 
-# Sonarr's qualifier a service's own title does not carry: "WAR (2026)", "Paramedics (AU)".
+# Sonarr's qualifier a service's own title may not carry: "WAR (2026)", "Paramedics (AU)".
 TITLE_QUALIFIER = re.compile(r"\s*\((?:\d{4}|[A-Z]{2})\)\s*$")
 
 
 def title_key(title: str) -> str:
-    """A title compared without its year or country, case, accents or punctuation: "WAR (2026)" and "War" match."""
-    title = TITLE_QUALIFIER.sub("", unicodedata.normalize("NFKD", title or ""))
+    """A title compared without its year, case, accents or punctuation: "WAR (2026)" and "War" match."""
+    title = re.sub(r"\s*\(\d{4}\)\s*$", "", unicodedata.normalize("NFKD", title or ""))
     return re.sub(r"[^a-z0-9]+", "", title.casefold())
 
 
@@ -1576,7 +1584,8 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
             out.append({**{k: v for k, v in episode.items() if k != "episode"}, "url": url, "found_by": "search"})
     for service, channel in sorted(channels.items()):
         if url := search_series_url(service, series["title"]):
-            out.append({"service": service, "url": url, "country": channel["country"], "site": channel["brand_site"],
+            countries = dict.fromkeys(c for l in links if l.get("brand_service") == service for c in l["country"].split(", "))
+            out.append({"service": service, "url": url, "country": ", ".join(countries), "site": channel["brand_site"],
                         "kind": "native", "found_by": "search", "via": channel.get("provider")})
     return out
 
@@ -1592,7 +1601,9 @@ def search_series_url(service: str, title: str) -> str | None:
     except UnshackleError as e:
         print(f"Search {service} for {query!r}: {no_credentials(e)}", flush=True)
         return None
-    same = [r for r in found.get("results") or [] if title_key(str(r.get("title") or "")) == title_key(title) and (r.get("url") or r.get("id"))]
+    # Sonarr's "(AU)" may be absent from the service's title; a result's own other tag ("(UK)") is not the same show
+    wanted = {title_key(title), title_key(query)}
+    same = [r for r in found.get("results") or [] if title_key(str(r.get("title") or "")) in wanted and (r.get("url") or r.get("id"))]
     return str(same[0].get("url") or same[0].get("id")) if len(same) == 1 else None
 
 
@@ -1608,7 +1619,8 @@ def installed_links(links: list[dict]) -> list[dict]:
         site = link.get("site") or (urlparse(link["url"]).hostname if link["url"].startswith("http") else None)
         service = service_for(f"https://{site}/", domains) if site else link["service"]
         if service:
-            out.append({**link, "service": service})
+            brand = service_for(f"https://{link['brand_site']}/", domains) if link.get("brand_site") else None
+            out.append({**link, "service": service, **({"brand_service": brand} if link.get("brand_site") else {})})
     return out
 
 

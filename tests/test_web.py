@@ -2012,6 +2012,13 @@ def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatc
     assert web.service_for_brand("Foxtel Now", domains) == ("FOXTEL", "foxtel.com.au")  # brand name longer than its site
     assert web.service_for_brand("Apple TV Amazon Channel", domains) is None  # no brand left: not a storefront either
     assert web.service_for_brand("Hayu Amazon Channel", domains) is None  # not installed
+    # Only a site's own name counts, never a subdomain (play., video., plus.) or what is left of "Apple TV+".
+    subdomains = {"plus.rtl.de": "RTLP", "video.sky.it": "SKY", "play.stan.com.au": "STAN"}
+    assert web.service_for_brand("Apple TV Plus Amazon Channel", subdomains) is None
+    assert web.service_for_brand("Videoland Amazon Channel", subdomains) is None
+    assert web.service_for_brand("Playkids Amazon Channel", subdomains) is None
+    assert web.service_for_brand("Stan Amazon Channel", subdomains) == ("STAN", "play.stan.com.au")
+    assert web.service_for_brand("RTL+ Amazon Channel", subdomains) == ("RTLP", "plus.rtl.de")
 
     html = """
     <div class="ott_provider"><h3>Stream</h3><ul class="providers">
@@ -2044,6 +2051,10 @@ def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatc
     # Found on the brand's own service: the Channel chip (Amazon refuses it without that add-on) gives way.
     assert [l["service"] for l in web.prefer_download_links(links)] == ["BNGE"]
 
+    # Another country's show of the same name is not this one.
+    monkeypatch.setattr(web.sonarr_sync, "backend_for",
+                        lambda tag, config=None: Backend([{"title": "Paramedics (UK)", "url": "/uk"}]))
+    assert web.searched_in_place([channel], 102348) == [channel]
     # Not found by its title: the Channel row stays, still naming the brand service for a "Find it on" button.
     monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend([]))
     assert web.searched_in_place([channel], 102348) == [channel]
