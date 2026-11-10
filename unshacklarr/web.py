@@ -436,10 +436,15 @@ def still_episode(url: str) -> bool:
     return bool(re.search(r"-episode-\d+|episodeId=", url)) or episode_link(url)
 
 
+def series_linked(links: list[dict]) -> set[str]:
+    """Services that link the series itself. A TMDB homepage does not count: it is trusted only after the network
+    check (prefer_download_links), so an episode link stays to be searched until then."""
+    return {l["service"] for l in links if not l.get("episode") and l.get("found_by") != "homepage"}
+
+
 def without_covered_episodes(links: list[dict]) -> list[dict]:
-    """Drop an episode link once its service also links the series. A TMDB homepage does not count: it is trusted
-    only after the network check (prefer_download_links), so the episode stays to be searched until then."""
-    covered = {l["service"] for l in links if not l.get("episode") and l.get("found_by") != "homepage"}
+    """Drop an episode link once its service also links the series."""
+    covered = series_linked(links)
     return [l for l in links if not (l.get("episode") and l["service"] in covered)]
 
 
@@ -1519,7 +1524,7 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
     """A service TMDB links only by an episode (HBO Max's /video/watch/<id>) is searched with
     Sonarr's title; the one result with that title takes the episode link's place. No match, several, or a service
     that can't be searched: the episode link stays."""
-    alone = {l["service"] for l in links if l.get("episode")} - {l["service"] for l in links if not l.get("episode")}
+    alone = {l["service"] for l in links if l.get("episode")} - series_linked(links)
     if not alone:
         return links
     try:

@@ -1265,6 +1265,28 @@ def test_tmdb_homepage_is_a_home_link_when_justwatch_lists_only_channels(tmp_pat
     assert [l.get("episode") for l in web.prefer_download_links([episode, home], network="Prime Video")] == [True]
 
 
+def test_an_episode_link_is_still_searched_beside_a_homepage_of_its_service(tmp_path, monkeypatch):
+    """A homepage is trusted only after the network check, so it must not stop the title search."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    episode = {"service": "TEN", "url": "https://10.com.au/x/episodes/s1/e1", "country": "AU", "episode": True}
+    home = {"service": "TEN", "url": "https://10.com.au/press/x", "country": "AU", "found_by": "homepage"}
+
+    class Backend:
+        def call(self, method, path, json=None, **_):
+            return {"results": [{"title": "FBI True", "url": "https://10.com.au/fbi-true"}]}
+
+    monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 7, "title": "FBI True"}])
+    monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend())
+    links = web.searched_in_place([episode, home], 7)
+    assert [(l["service"], l["url"], l.get("found_by")) for l in links] == [
+        ("TEN", "https://10.com.au/press/x", "homepage"), ("TEN", "https://10.com.au/fbi-true", "search"),
+    ]
+
+
 def test_suggest_network_falls_back_to_the_cached_tmdb_network(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
