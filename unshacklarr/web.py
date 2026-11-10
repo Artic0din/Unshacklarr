@@ -114,13 +114,18 @@ def rank_watch_providers(providers: list[dict]) -> list[dict]:
     return out
 
 
-def prefer_download_links(links: list[dict]) -> list[dict]:
+def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
     """Tag each suggestion; hide Channel chips when a usable home URL is listed, and never offer a purchase.
 
     Only a real brand URL the user can download (not an episode-only or needs_series_url row) counts as home.
     Channel listings are not promoted to home. Distinct URLs stay distinct chips.
+    TMDB homepage links are kept only when they are the series' network's catch-up service.
     """
     tagged = [{**link, "kind": link.get("kind") or "native"} for link in links if link.get("kind") != "purchase"]
+    # TMDB's homepage is any page of any country's site: trusted only as the series' own network's catch-up.
+    tagged = [l for l in tagged if l.get("found_by") != "homepage" or l.get("service") in network_services(network)]
+    homes = {l["service"] for l in tagged if l.get("found_by") == "homepage" and not l.get("episode")}
+    tagged = [l for l in tagged if not (l.get("episode") and l.get("service") in homes)]
 
     def usable_home(link: dict) -> bool:
         return link["kind"] == "native" and not link.get("episode") and not link.get("needs_series_url")
@@ -138,13 +143,15 @@ def prefer_download_links(links: list[dict]) -> list[dict]:
     return sorted(unique.values(), key=lambda l: order.get(l.get("kind") or "", 9))
 
 
-def service_for_network(network: str, installed: set[str]) -> str | None:
-    """The installed service a network's catch-up is on (BBC One: iP), by the network's first words."""
+def network_services(network: str) -> tuple[str, ...]:
+    """The service codes a network's catch-up may be under (BBC One: iP), by the network's first words."""
     name = str(network or "").lower().strip()
-    for key, tags in NETWORKS.items():
-        if name == key or name.startswith(key + " "):
-            return next((t for t in tags if t in installed), None)
-    return None
+    return next((tags for key, tags in NETWORKS.items() if name == key or name.startswith(key + " ")), ())
+
+
+def service_for_network(network: str, installed: set[str]) -> str | None:
+    """The installed service a network's catch-up is on (BBC One: iP)."""
+    return next((t for t in network_services(network) if t in installed), None)
 
 sync_threads: list[threading.Thread] = []
 last_sync: datetime | None = None
@@ -408,10 +415,60 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                         link["url"] = series
                     else:  # the page asks for the series URL
                         link["needs_series_url"] = True
-                elif re.search(r"-episode-\d+|episodeId=", link["url"]) or episode_link(link["url"]):  # still an episode once normalised
+                elif still_episode(link["url"]):
                     link["episode"] = True  # dropped below when the same service also links the series
                 links.append(link)
+    # TMDB's own Homepage link: often the network's catch-up (Paramedics: 9now.com.au) that JustWatch omits.
+    anchor = re.search(r'<a\b[^>]*title="Visit Homepage"[^>]*>', r.text, flags=re.I)
+    homepage = re.search(r'href="([^"]+)"', anchor.group(0)) if anchor else None
+    try:  # TMDB's users type the homepage: one that will not parse is ignored
+        url = unwrap(homepage.group(1).replace("&amp;", "&")) if homepage else ""
+        service = service_for(url, domains) if url and usable_title_url(url) else None
+    except ValueError:
+        service = None
+    if service and service not in {l["service"] for l in links if not l.get("episode") and not l.get("needs_series_url")}:
+        link = {"service": service, "url": series_title(url), "country": country,
+                "site": urlparse(url).hostname, "kind": "native", "found_by": "homepage"}
+        if still_episode(link["url"]):
+            link["episode"] = True
+        links.append(link)
     return links
+
+
+def still_episode(url: str) -> bool:
+    """A link that opens one episode even once normalised."""
+    return bool(re.search(r"-episode-\d+|episodeId=", url)) or episode_link(url)
+
+
+def merge_countries(found: list[list[dict]]) -> list[dict]:
+    """One link per service and URL across the countries' scrapes, listing its countries. A JustWatch listing
+    outranks the same URL found only as a TMDB homepage, so the homepage check cannot drop it."""
+    unique: dict[tuple, dict] = {}
+    for link in (link for links in found for link in links):
+        key = (link["service"], link["url"])
+        seen = unique.setdefault(key, {**link, "country": ""})
+        if link["country"] not in seen["country"].split(", "):
+            seen["country"] = ", ".join(filter(None, [seen["country"], link["country"]]))
+        if seen.get("found_by") == "homepage" and link.get("found_by") != "homepage":
+            unique[key] = {**link, "country": seen["country"]}  # JustWatch's own row: kind, episode flags
+    return list(unique.values())
+
+
+def series_linked(links: list[dict]) -> set[str]:
+    """Services that link the series itself. A TMDB homepage does not count: it is trusted only after the network
+    check (prefer_download_links), so an episode link stays to be searched until then."""
+    return {l["service"] for l in links if not l.get("episode") and l.get("found_by") != "homepage"}
+
+
+def without_covered_episodes(links: list[dict]) -> list[dict]:
+    """Drop an episode link once its service also links the series."""
+    covered = series_linked(links)
+    return [l for l in links if not (l.get("episode") and l["service"] in covered)]
+
+
+def series_network(tmdb_id: str, given: str) -> str:
+    """Sonarr's network for the series, else the TMDB network the calendar cached."""
+    return given or str((read_json(NETWORKS_CACHE, {}).get(str(tmdb_id)) or {}).get("name") or "")
 
 
 YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)  # libyaml's, when PyYAML has it
@@ -1418,8 +1475,8 @@ async def sent_notifications(_):
 
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
-# Bump when SITES, NETWORKS, or unwrap rules change so week-old caches re-scrape.
-SUGGEST_MAP = 2
+# Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
+SUGGEST_MAP = 3
 
 
 async def suggest(request):
@@ -1456,13 +1513,7 @@ async def suggest(request):
                 raise web.HTTPBadGateway(text=tmdb_error(e))
             found = None  # keep the old links rather than show nothing
         if found is not None:
-            unique: dict[tuple, dict] = {}
-            for link in (link for links in found for link in links):
-                seen = unique.setdefault((link["service"], link["url"]), {**link, "country": ""})
-                if link["country"] not in seen["country"].split(", "):
-                    seen["country"] = ", ".join(filter(None, [seen["country"], link["country"]]))
-            with_series = {l["service"] for l in unique.values() if not l.get("episode")}
-            links = [l for l in unique.values() if not (l.get("episode") and l["service"] in with_series)]
+            links = without_covered_episodes(merge_countries(found))
             links = await asyncio.to_thread(searched_in_place, links, int(tmdb_id))
             # Prefer at read time only: cache keeps Channel rows so a later-uninstalled home still leaves them.
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(),
@@ -1470,7 +1521,8 @@ async def suggest(request):
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
     return web.json_response({
-        "links": await asyncio.to_thread(lambda: prefer_download_links(installed_links(hit["links"]))),
+        "links": await asyncio.to_thread(lambda: prefer_download_links(
+            installed_links(hit["links"]), series_network(tmdb_id, request.query.get("network", "")))),
         "checked": hit["checked"],
     })
 
@@ -1485,7 +1537,7 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
     """A service TMDB links only by an episode (HBO Max's /video/watch/<id>) is searched with
     Sonarr's title; the one result with that title takes the episode link's place. No match, several, or a service
     that can't be searched: the episode link stays."""
-    alone = {l["service"] for l in links if l.get("episode")} - {l["service"] for l in links if not l.get("episode")}
+    alone = {l["service"] for l in links if l.get("episode")} - series_linked(links)
     if not alone:
         return links
     try:

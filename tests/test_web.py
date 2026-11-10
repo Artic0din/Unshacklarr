@@ -1203,6 +1203,132 @@ def test_tmdb_watch_scrape_keeps_stream_channels_and_skips_buy(tmp_path, monkeyp
     assert web.usable_title_url("https://app.primevideo.com/detail?gti=x") is True
 
 
+def test_tmdb_homepage_is_a_home_link_when_justwatch_lists_only_channels(tmp_path, monkeypatch):
+    """Paramedics (AU): JustWatch has Foxtel Now and the BINGE Amazon Channel; TMDB's homepage is 9now.com.au."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+
+    html = """
+    <div class="ott_provider"><h3>Stream</h3><ul class="providers">
+      <li><a title="Watch Paramedics on Foxtel Now"
+          href="https://click.justwatch.com/a?r=https%3A%2F%2Fwww.foxtel.com.au%2Fwatch%2Ftv-shows%2Fparamedics.html"></a></li>
+      <li><a title="Watch Paramedics on Binge Amazon Channel"
+          href="https://click.justwatch.com/a?r=https%3A%2F%2Fapp.primevideo.com%2Fdetail%3Fgti%3Damzn1.dv.gti.46b0"></a></li>
+    </ul></div>
+    <div class="homepage">
+      <a class="social_link" title="Visit JustWatch" href="https://www.justwatch.com/au/tv-show/paramedics"></a>
+    </div>
+    <div class="homepage">
+      <a class="social_link" title="Visit Homepage" href="https://www.9now.com.au/paramedics" target="_blank"></a>
+    </div>
+    """
+    class FakeResp:
+        text = html
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [
+        {"tag": "AMZN", "url": "", "help": "https://www.primevideo.com"},
+        {"tag": "NINE", "url": "", "help": "https://www.9now.com.au"},
+    ])
+    found = web.tmdb_links(102348, "AU", web.service_domains())
+    assert [(l["service"], l["kind"], l["url"]) for l in found] == [
+        ("AMZN", "channel", "amzn1.dv.gti.46b0"),
+        ("NINE", "native", "https://www.9now.com.au/paramedics"),
+    ]
+    assert found[1]["found_by"] == "homepage"
+    # The network's home URL hides the BINGE Amazon Channel chip (Amazon refuses it without that add-on).
+    assert [l["service"] for l in web.prefer_download_links(found, network="Nine Network")] == ["NINE"]
+    # Another network's series: a homepage is any page of that site, so it is not trusted to hide anything.
+    assert [l["service"] for l in web.prefer_download_links(found, network="Prime Video")] == ["AMZN"]
+    assert [l["service"] for l in web.prefer_download_links(found)] == ["AMZN"]
+
+    # A homepage on a service JustWatch already links adds no second chip.
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [
+        {"tag": "AMZN", "url": "", "help": "https://www.primevideo.com"},
+        {"tag": "NINE", "url": "", "help": "https://www.9now.com.au"},
+        {"tag": "FOXTEL", "url": "", "help": "https://www.foxtel.com.au"},
+    ])
+    FakeResp.text = html.replace("www.9now.com.au/paramedics", "www.foxtel.com.au/paramedics")
+    found = web.tmdb_links(102348, "AU", web.service_domains())
+    assert [l["service"] for l in found] == ["FOXTEL", "AMZN"]
+
+    # A homepage TMDB's users typed badly is ignored, not fatal to the lookup.
+    FakeResp.text = html.replace("https://www.9now.com.au/paramedics", "http://[9now")
+    assert [l["service"] for l in web.tmdb_links(102348, "AU", web.service_domains())] == ["FOXTEL", "AMZN"]
+
+    # A homepage that opens one episode is marked like any episode link.
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "HMAX", "url": "", "help": "https://play.hbomax.com"}])
+    FakeResp.text = html.replace("https://www.9now.com.au/paramedics", "https://play.hbomax.com/video/watch/abc-1")
+    homepage = web.tmdb_links(102348, "AU", web.service_domains())[-1]
+    assert (homepage["service"], homepage["found_by"], homepage.get("episode")) == ("HMAX", "homepage", True)
+
+    # Before the network check, a homepage does not stand in for the series: the episode link stays to be searched.
+    episode = {"service": "NINE", "url": "https://www.9now.com.au/x/season-1/episode-1", "country": "AU", "episode": True}
+    home = {"service": "NINE", "url": "https://www.9now.com.au/x", "country": "AU", "found_by": "homepage"}
+    direct = {"service": "NINE", "url": "https://www.9now.com.au/x", "country": "AU"}
+    assert web.without_covered_episodes([episode, home]) == [episode, home]
+    assert web.without_covered_episodes([episode, direct]) == [direct]
+    # A trusted homepage then replaces that service's episode link; an untrusted one leaves it.
+    assert [l.get("found_by") for l in web.prefer_download_links([episode, home], network="Nine Network")] == ["homepage"]
+    assert [l.get("episode") for l in web.prefer_download_links([episode, home], network="Prime Video")] == [True]
+
+
+def test_an_episode_link_is_still_searched_beside_a_homepage_of_its_service(tmp_path, monkeypatch):
+    """A homepage is trusted only after the network check, so it must not stop the title search."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    episode = {"service": "TEN", "url": "https://10.com.au/x/episodes/s1/e1", "country": "AU", "episode": True}
+    home = {"service": "TEN", "url": "https://10.com.au/press/x", "country": "AU", "found_by": "homepage"}
+
+    class Backend:
+        def call(self, method, path, json=None, **_):
+            return {"results": [{"title": "FBI True", "url": "https://10.com.au/fbi-true"}]}
+
+    monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 7, "title": "FBI True"}])
+    monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend())
+    links = web.searched_in_place([episode, home], 7)
+    assert [(l["service"], l["url"], l.get("found_by")) for l in links] == [
+        ("TEN", "https://10.com.au/press/x", "homepage"), ("TEN", "https://10.com.au/fbi-true", "search"),
+    ]
+
+
+def test_country_merge_keeps_justwatch_provenance_over_a_homepage(tmp_path, monkeypatch):
+    """AU contributes only TMDB's homepage; GB's JustWatch lists the same link: the merged link is JustWatch's,
+    so the homepage network check cannot drop an independently listed offer."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    url = "https://www.bbc.co.uk/iplayer/episodes/x"
+    au = [{"service": "iP", "url": url, "country": "AU", "kind": "native", "found_by": "homepage"}]
+    gb = [{"service": "iP", "url": url, "country": "GB", "kind": "native"}]
+    merged = web.merge_countries([au, gb])
+    assert [(l["country"], l.get("found_by")) for l in merged] == [("AU, GB", None)]
+    # JustWatch's whole row wins, not just its provenance: a Channel stays a Channel, an episode an episode.
+    gb_channel = [{**gb[0], "kind": "channel", "episode": True}]
+    assert [(l["kind"], l.get("episode"), l.get("found_by")) for l in web.merge_countries([au, gb_channel])] == [
+        ("channel", True, None)]
+    assert [l["service"] for l in web.prefer_download_links(merged, network="PBS")] == ["iP"]
+
+
+def test_suggest_network_falls_back_to_the_cached_tmdb_network(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.NETWORKS_CACHE.write_text(json.dumps({"102348": {"name": "Nine Network"}}))
+    assert web.series_network("102348", "Seven Network") == "Seven Network"  # Sonarr's network wins
+    assert web.series_network("102348", "") == "Nine Network"
+    assert web.series_network("1", "") == ""
+
+
 def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync

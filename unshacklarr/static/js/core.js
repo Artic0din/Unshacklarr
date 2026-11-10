@@ -564,7 +564,7 @@ async function loadSuggestions(s, refresh = false) {
   box.replaceChildren(loading("Looking up where to watch it…"));
   let links;
   try {
-    const found = await api(`/api/suggest/${s.tmdbId}${refresh ? "?refresh=1" : ""}`);
+    const found = await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}${refresh ? "&refresh=1" : ""}`);
     links = found.links;
     if (current === s) $("#d-checked").textContent = `checked ${ago(found.checked)}`;
   }
@@ -579,7 +579,7 @@ async function loadSuggestions(s, refresh = false) {
     ariaLabel: `Use ${l.service} (${kindLabel(l)}): ${l.url}`,
     title: kindTitle(l),
     onclick: () => applySuggestion(l),
-  }, el("b", { textContent: l.service }), el("span", { textContent: l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.url }),
+  }, el("b", { textContent: l.service }), el("span", { textContent: l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.found_by === "homepage" ? `TMDB homepage · ${l.url}` : l.url }),
     el("small", { textContent: `${l.country} · ${kindLabel(l)}` }))));
   box.querySelectorAll("button").forEach((b, i) => b.dataset.url = links[i].url);
   const network = S.networkServices?.[s.tvdbId];  // after TMDB's links: theirs keep their order
