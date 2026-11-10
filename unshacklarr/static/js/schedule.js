@@ -126,9 +126,7 @@ function networkBadge(d, extra = "") {
   // country nor for a series Unshackle already downloads (its service is what counts then)
   const kindTip = (p) => p.kind === "channel"
     ? `${p.name} — Amazon/Apple Channels (not proof this exact title is on the brand's own app)`
-    : p.kind === "storefront"
-      ? `${p.name} — Amazon/Apple storefront`
-      : `${p.name} — home service`;
+    : `${p.name} — home service`;
   const local = net.providers.length
     ? el("span", { className: "prov", title: `In ${net.country}: ${net.providers.map((p) => kindTip(p)).join("; ")}` },
         ...net.providers.slice(0, 3).map((p) => {
