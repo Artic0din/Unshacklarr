@@ -457,8 +457,11 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
     # TMDB's own Homepage link: often the network's catch-up (Paramedics: 9now.com.au) that JustWatch omits.
     anchor = re.search(r'<a\b[^>]*title="Visit Homepage"[^>]*>', r.text, flags=re.I)
     homepage = re.search(r'href="([^"]+)"', anchor.group(0)) if anchor else None
-    url = unwrap(homepage.group(1).replace("&amp;", "&")) if homepage else ""
-    service = service_for(url, domains) if url and usable_title_url(url) else None
+    try:  # TMDB's users type the homepage: one that will not parse is ignored
+        url = unwrap(homepage.group(1).replace("&amp;", "&")) if homepage else ""
+        service = service_for(url, domains) if url and usable_title_url(url) else None
+    except ValueError:
+        service = None
     if service and service not in series_linked([l for l in links if not l.get("needs_series_url")]):
         link = {"service": service, "url": series_title(url), "country": country,
                 "site": urlparse(url).hostname, "kind": "native", "found_by": "homepage"}
@@ -484,7 +487,7 @@ def merge_countries(found: list[list[dict]]) -> list[dict]:
         if link["country"] not in seen["country"].split(", "):
             seen["country"] = ", ".join(filter(None, [seen["country"], link["country"]]))
         if seen.get("found_by") == "homepage" and link.get("found_by") != "homepage":
-            seen.pop("found_by")
+            unique[key] = {**link, "country": seen["country"]}  # JustWatch's own row: kind, episode flags
     return list(unique.values())
 
 
