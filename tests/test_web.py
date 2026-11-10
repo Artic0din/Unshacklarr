@@ -2194,8 +2194,13 @@ def test_schedule_shows_the_networks_own_catch_up_service(tmp_path, monkeypatch)
     # TVDB's name for the Australian ABC
     assert web.with_network_service([], "ABC TV", logos, domains) == [{"name": "ABC iview", "logo": "iv"}]
     # Each network under both names: Sonarr's "Seven" and TMDB's "Seven Network", Sonarr's "Network 10" and TMDB's "10".
-    assert [web.network_services(n) for n in ("Seven", "Seven Network", "Network 10", "10")] == [
-        ("7plus", "SEVEN"), ("7plus", "SEVEN"), ("TEN",), ("TEN",)]
+    names = {"SEVEN": ("Seven", "Seven Network", "7plus", "7mate"), "TEN": ("Network 10", "10", "10 Play", "10play"),
+             "NINE": ("Nine Network", "9", "9Now"), "AUBC": ("ABC TV", "ABC iview", "ABC Kids", "ABC (AU)"),
+             "SBS": ("SBS", "SBS On Demand")}
+    for tag, aliases in names.items():
+        for name in aliases:
+            assert tag in web.network_services(name), name
+    assert web.network_services("ABC") == ()  # TMDB's name for the US network
     # Already listed, not installed, a network with no catch-up rule, or no logo known: unchanged.
     assert web.with_network_service([{"name": "9Now", "logo": "n"}], "Nine Network", logos, domains) == [
         {"name": "9Now", "logo": "n"}]

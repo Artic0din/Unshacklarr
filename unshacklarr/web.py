@@ -66,8 +66,11 @@ NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": 
             "itv": ("ITVX", "ITV"), "channel 5": ("MY5",), "u&": ("UKTV",), "abc (au)": ("iView", "AUBC"), "sbs": ("SBS",),
             "abc tv": ("iView", "AUBC"), "seven network": ("7plus", "SEVEN"), "nine network": ("NINE",),
             "network 10": ("TEN",), "tvnz": ("TVNZ",),
-            # the same networks as TVDB (Sonarr) or TMDB name them
-            "seven": ("7plus", "SEVEN"), "10": ("TEN",),
+            # the same networks under the other names TVDB (Sonarr) and TMDB use: Australia's free-to-air channels and
+            # their streaming services ("ABC" alone is TMDB's name for the US network, so not here)
+            "abc iview": ("iView", "AUBC"), "abc kids": ("iView", "AUBC"), "sbs on demand": ("SBS",),
+            "seven": ("7plus", "SEVEN"), "7plus": ("7plus", "SEVEN"), "7mate": ("7plus", "SEVEN"),
+            "9": ("NINE",), "9now": ("NINE",), "10": ("TEN",), "10 play": ("TEN",), "10play": ("TEN",),
             "m6": ("M6",), "w9": ("M6",), "6ter": ("M6",)}
 
 
