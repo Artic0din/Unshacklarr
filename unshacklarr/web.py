@@ -152,7 +152,8 @@ def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
     if owner := storefront_owner(network):
         for link in tagged:
             url = str(link.get("url") or "")
-            mine = "apple" if link.get("service") in ("ATV", "ATVP") or on_site(url, "tv.apple.com") else "amazon"
+            mine = ("apple" if link.get("service") in ("ATV", "ATVP") or on_site(url, "tv.apple.com")
+                    else "amazon" if link.get("service") == "AMZN" or on_site(url, *STOREFRONT_HOSTS[:4]) else None)
             if link["kind"] == "storefront" and mine == owner:
                 link["kind"] = "native"
 
@@ -431,7 +432,7 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                 # its site kept: the code for it may change (another Unshackle, a service renamed), the site does not
                 title_attr = re.search(r'title="([^"]*)"', attrs)
                 name = offer_provider_name(title_attr.group(1)) if title_attr else ""
-                # Title only promotes Channel; storefront hosts are never home (Amazon MX Player, Free with Ads…).
+                # Title only promotes Channel; storefront hosts are home only for their own Originals (prefer_download_links).
                 titled = provider_kind(name) if name else None
                 kind = "channel" if titled == "channel" else link_kind(url, service)
                 link = {"service": service, "url": series_title(url), "country": country,
