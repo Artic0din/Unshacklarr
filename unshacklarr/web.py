@@ -190,10 +190,15 @@ def with_network_service(providers: list[dict], network: str, logos: dict[str, d
     # its sites' names: 9now (9now.com.au), abc and iview (iview.abc.net.au); a provider named by one, at either end
     labels = {label for host, t in domains.items() if t == tag
               for label in (site_name(host), re.sub(r"[^a-z0-9]", "", host.removeprefix("www.").split(".")[0]))}
-    own = next((p for brand, p in logos.items() if any(brand == label or (len(label) >= 3 and (
-        brand.startswith(label) or brand.endswith(label))) for label in labels)), None)
+
+    def fit(brand: str) -> int:  # the longest of its labels the provider's name is or starts or ends with
+        return max((len(label) for label in labels if brand == label or (len(label) >= 3 and (
+            brand.startswith(label) or brand.endswith(label)))), default=0)
+
+    # the most specific match: ABC iview by "iview" over ABC News by the generic "abc"
+    score, own = max(((fit(brand), p) for brand, p in logos.items()), key=lambda m: m[0], default=(0, None))
     shown = {provider_brand(p.get("name") or "") for p in providers}
-    if not own or provider_brand(own["name"]) in shown:
+    if not score or provider_brand(own["name"]) in shown:
         return providers
     return [{"name": own["name"], "logo": own["logo"]}, *providers]
 

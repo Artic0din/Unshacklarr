@@ -2187,7 +2187,10 @@ def test_schedule_shows_the_networks_own_catch_up_service(tmp_path, monkeypatch)
     shown = [{"name": "Foxtel Now", "logo": "fox"}, {"name": "BINGE", "logo": "binge"}]
     assert web.with_network_service(shown, "Nine Network", logos, domains) == [
         {"name": "9Now", "logo": "nine"}, *shown]
-    assert web.with_network_service([], "ABC (AU)", logos, domains) == [{"name": "ABC iview", "logo": "iv"}]
+    # ABC News shares only the generic "abc" label; ABC iview matches the longer "iview": iview wins in either order.
+    for first in ({"abcnews": {"name": "ABC News", "logo": "news"}}, {}):
+        assert web.with_network_service([], "ABC (AU)", {**first, **logos}, domains) == [
+            {"name": "ABC iview", "logo": "iv"}]
     # TVDB's name for the Australian ABC
     assert web.with_network_service([], "ABC TV", logos, domains) == [{"name": "ABC iview", "logo": "iv"}]
     # Each network under both names: Sonarr's "Seven" and TMDB's "Seven Network", Sonarr's "Network 10" and TMDB's "10".
