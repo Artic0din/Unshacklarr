@@ -58,6 +58,8 @@ SITES = {
     "9now.com.au": ("NINE",),
 }
 CHANNEL_NAME = re.compile(r"\b(?:amazon\s+channel|apple\s+tv\s+channel|channels)\b", re.IGNORECASE)
+# The host a Channel name sells through, and that host's own brand key (provider_brand).
+CHANNEL_HOSTS = {r"\bamazon\s+channel\b": "primevideo", r"\bapple\s+tv\s+channel\b": "appletv"}
 # Amazon's and Apple's stores sell seasons; Prime Video and Apple TV+ subscriptions are ordinary services.
 PURCHASE_NAME = re.compile(r"^(?:amazon\s+video|apple\s+tv\s+store|itunes)$", re.IGNORECASE)
 # A network's own catch-up service, by its name's first words (Sonarr's network): what a series TMDB links to
@@ -117,8 +119,12 @@ def rank_watch_providers(providers: list[dict], logos: dict[str, dict] | None = 
     The schedule UI slices logos to three; this returns every ranked row for the tooltip.
     """
     rows = [{"name": p.get("name") or "", "logo": p.get("logo"), "kind": provider_kind(p.get("name") or ""),
-             "brand": provider_brand(p.get("name") or "")} for p in providers]
-    natives = [p for p in rows if p["kind"] == "native"]
+             "brand": provider_brand(p.get("name") or ""), "free": bool(p.get("free"))} for p in providers]
+    # Amazon or Apple listed only free beside a Channel they host is that Channel's free episode (Stick on Prime Video)
+    hosts = {h for p in rows if p["kind"] == "channel" for h in CHANNEL_HOSTS if re.search(h, p["name"], re.I)}
+    promos = {CHANNEL_HOSTS[h] for h in hosts
+              if all(p["free"] for p in rows if p["kind"] == "native" and p["brand"] == CHANNEL_HOSTS[h])}
+    natives = [p for p in rows if p["kind"] == "native" and p["brand"] not in promos]
     brands = [{"name": (logos or {}).get(p["brand"], {}).get("name") or CHANNEL_NAME.sub("", p["name"]).strip(),
                "logo": (logos or {}).get(p["brand"], {}).get("logo"), "brand": p["brand"]}
               for p in rows if p["kind"] == "channel"]
@@ -148,7 +154,10 @@ def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
     TMDB homepage links are kept only when they are the series' network's catch-up service.
     Distinct URLs stay distinct chips, in JustWatch / first-country scrape order.
     """
-    tagged = [{**link, "kind": "native"} for link in links if link.get("kind") not in ("purchase", "channel")]
+    # A Channel's own title is the Channel, however else it is listed (Stick's free episode as "Amazon Prime Video")
+    channel_titles = {(l.get("service"), l.get("url")) for l in links if l.get("kind") == "channel"}
+    tagged = [{**link, "kind": "native"} for link in links if link.get("kind") not in ("purchase", "channel")
+              and (link.get("service"), link.get("url")) not in channel_titles]
     # TMDB's homepage is any page of any country's site: trusted only as the series' own network's catch-up.
     tagged = [l for l in tagged if l.get("found_by") != "homepage" or l.get("service") in network_services(network)]
     homes = {l["service"] for l in tagged if l.get("found_by") == "homepage" and not l.get("episode")}
@@ -2930,8 +2939,8 @@ def tmdb_network(tmdb_id: int) -> dict:
         "providers": {
             country: [
                 {"name": p["provider_name"], "logo": logo_url(p.get("logo_path")),
-                 "kind": provider_kind(p["provider_name"])}
-                for p in (offers.get("flatrate") or []) + (offers.get("free") or []) + (offers.get("ads") or [])
+                 "kind": provider_kind(p["provider_name"]), "free": section != "flatrate"}
+                for section in ("flatrate", "free", "ads") for p in offers.get(section) or []
             ]
             for country, offers in by_country.items()
         },
@@ -2977,7 +2986,7 @@ async def networks(request):
             entry.get("checked", "") < fresh_after
             or "providers" not in entry
             or "network_country" not in entry
-            or any("kind" not in (p or {}) for p in providers)  # before native/channel labelling
+            or any("kind" not in (p or {}) or "free" not in (p or {}) for p in providers)  # before kind/free labels
         )
 
     todo = [i for i in ids if stale(cache.get(str(i)) or {})]

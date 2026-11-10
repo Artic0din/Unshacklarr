@@ -2173,6 +2173,48 @@ def test_brand_logos_are_asked_once_a_week_per_country(tmp_path, monkeypatch):
     assert web.brand_logos("GB") == {}  # TMDB unreachable, nothing cached: names only
 
 
+def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, monkeypatch):
+    """Stick: JustWatch lists the Apple TV Amazon Channel title, and the same Amazon title's free episode as plain
+    "Amazon Prime Video". It is the Channel, so it never shows as Prime Video."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    gti = "amzn1.dv.gti.b2472cf3"
+    links = [
+        {"service": "ATVP", "url": "umc.cmc.52w04", "country": "AU", "kind": "native"},
+        {"service": "AMZN", "url": gti, "country": "AU", "kind": "channel", "provider": "Apple TV Amazon Channel"},
+        {"service": "AMZN", "url": gti, "country": "AU", "kind": "native"},
+    ]
+    assert [l["service"] for l in web.prefer_download_links(links)] == ["ATVP"]
+    # Prime Video's own title (another Amazon title) stays.
+    own = {"service": "AMZN", "url": "amzn1.dv.gti.rop", "country": "AU", "kind": "native"}
+    assert [l["url"] for l in web.prefer_download_links([*links, own])] == ["umc.cmc.52w04", "amzn1.dv.gti.rop"]
+
+    # Schedule (TMDB's API has no links): Prime Video only free beside an Amazon Channel is that Channel's promo.
+    stick = [{"name": "Apple TV", "logo": "atv"}, {"name": "Apple TV Amazon Channel", "logo": "ch"},
+             {"name": "Amazon Prime Video", "logo": "pv", "free": True}, {"name": "Apple TV", "logo": "atv", "free": True}]
+    assert [p["name"] for p in web.rank_watch_providers(stick)] == ["Apple TV"]
+    # Prime Video as a subscription, or free with no Amazon Channel beside it, is Prime Video.
+    assert [p["name"] for p in web.rank_watch_providers([
+        {"name": "Amazon Prime Video"}, {"name": "Binge Amazon Channel"}])] == ["Amazon Prime Video", "Binge"]
+    assert [p["name"] for p in web.rank_watch_providers([{"name": "Amazon Prime Video", "free": True}])] == [
+        "Amazon Prime Video"]
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"networks": [], "watch/providers": {"results": {"AU": {
+                "flatrate": [{"provider_name": "Apple TV"}], "free": [{"provider_name": "Amazon Prime Video"}]}}}}
+
+    monkeypatch.setattr(web.requests, "get", lambda *a, **k: Resp())
+    au = web.tmdb_network(248830)["providers"]["AU"]
+    assert [(p["name"], p.get("free", False)) for p in au] == [("Apple TV", False), ("Amazon Prime Video", True)]
+
+
 def test_health_answers_without_login_and_says_only_yes_or_no(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer
