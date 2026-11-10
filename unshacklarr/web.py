@@ -135,14 +135,19 @@ def rank_watch_providers(providers: list[dict], logos: dict[str, dict] | None = 
     return out
 
 
+def channel_hosts(rows: list[dict]) -> set[str]:
+    """The hosts (provider_brand keys: primevideo, appletv) that sell a Channel among these rows (name, kind)."""
+    return {brand for r in rows if r["kind"] == "channel"
+            for host, brand in CHANNEL_HOSTS.items() if re.search(host, r["name"], re.I)}
+
+
 def channel_promos(rows: list[dict]) -> set[str]:
-    """The hosts (provider_brand keys) whose own rows here are a Channel's free episode: Amazon or Apple listed only
-    in the free section beside a Channel they host (Stick, Dexter: Resurrection on Prime Video). A subscription or
-    ad-supported tier (Prime Video with Ads), or any Stream listing, is the host's own. Rows: name, kind, section."""
-    hosts = {brand for r in rows if r["kind"] == "channel"
-             for host, brand in CHANNEL_HOSTS.items() if re.search(host, r["name"], re.I)}
-    return {brand for brand in hosts if all(r.get("section") == "free" for r in rows
-                                            if r["kind"] == "native" and provider_brand(r["name"]) == brand)}
+    """For the schedule, which has no links: the hosts whose own rows here are a Channel's free episode, Amazon or
+    Apple listed only in the free section beside a Channel they host (Stick, Dexter: Resurrection on Prime Video).
+    A subscription, an ad-supported tier (Prime Video with Ads) or any Stream listing is the host's own."""
+    return {brand for brand in channel_hosts(rows)
+            if all(r.get("section") == "free" for r in rows
+                   if r["kind"] == "native" and provider_brand(r["name"]) == brand)}
 
 
 def provider_logos(providers: list[dict]) -> dict[str, dict]:
@@ -471,10 +476,16 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                 elif still_episode(link["url"]):
                     link["episode"] = True  # dropped below when the same service also links the series
                 links.append(link)
-    # A Channel's free episode listed as its host's own (Stick's as "Amazon Prime Video"), judged on this country's
-    # page alone so that another country's subscription cannot be mistaken for it
-    promos = channel_promos([{**l, "name": l["provider"]} for l in links])
-    links = [l for l in links if not (l["kind"] == "native" and provider_brand(l["provider"]) in promos)]
+    # A Channel's free episode listed as its host's own (Stick's as "Amazon Prime Video"): a host title listed only in
+    # Free beside a Channel it hosts. Judged per title, as links tell titles apart (Prime's own title in Stream stays),
+    # and on this country's page alone so that another country's subscription cannot be mistaken for it.
+    hosts = channel_hosts([{**l, "name": l["provider"]} for l in links])
+    sections: dict[tuple, set] = {}
+    for l in links:
+        if l["kind"] == "native":
+            sections.setdefault((l["service"], l["url"]), set()).add(l.get("section"))
+    links = [l for l in links if not (l["kind"] == "native" and provider_brand(l["provider"]) in hosts
+                                      and sections[(l["service"], l["url"])] == {"free"})]
     # TMDB's own Homepage link: often the network's catch-up (Paramedics: 9now.com.au) that JustWatch omits.
     anchor = re.search(r'<a\b[^>]*title="Visit Homepage"[^>]*>', r.text, flags=re.I)
     homepage = re.search(r'href="([^"]+)"', anchor.group(0)) if anchor else None

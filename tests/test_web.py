@@ -2216,6 +2216,13 @@ def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, mo
         ("Free", "Amazon Prime Video", "https://app.primevideo.com/detail?gti=amzn1.dv.gti.s2")))
     assert web.prefer_download_links(web.tmdb_links(2, "AU", domains)) == []
 
+    # Judged per title: Prime's own title in Stream stays, the Channel's other title listed only in Free does not.
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: page(
+        ("Stream", "Paramount+ Amazon Channel", "https://app.primevideo.com/detail?gti=amzn1.dv.gti.s1"),
+        ("Stream", "Amazon Prime Video", "https://app.primevideo.com/detail?gti=amzn1.dv.gti.own"),
+        ("Free", "Amazon Prime Video", "https://app.primevideo.com/detail?gti=amzn1.dv.gti.s2")))
+    assert [l["url"] for l in web.prefer_download_links(web.tmdb_links(3, "AU", domains))] == ["amzn1.dv.gti.own"]
+
     # Each country is judged on its own page before merging: an AU promo cannot pass for GB's subscription.
     gb = [{"service": "AMZN", "url": "amzn1.dv.gti.b2472cf3", "country": "GB", "kind": "native"}]
     merged = web.merge_countries([found, gb])
