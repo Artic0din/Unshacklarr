@@ -186,20 +186,21 @@ async function openBulk() {
   };
   const one = async (s, li) => {
     let links;
-    try { links = (await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}`)).links; }
+    try { links = (await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}`, { wait: 120 })).links; }
     catch {  // TMDB refuses bursts now and then: say so, and let it be asked again
       li.querySelector(".opts").replaceChildren(el("span", { className: "none", textContent: "TMDB did not answer" }),
         el("button", { type: "button", className: "btn small", textContent: "Retry", onclick: () => one(s, li) }));
       $("#bulk-progress").textContent = `Checked ${++done} of ${todo.length}`;
       return;
     }
-    const usable = links.filter((l) => !l.needs_series_url && !l.episode && S.services.includes(l.service));
+    // other_title: another title of the series' service (its specials): never the series itself
+    const usable = links.filter((l) => !l.needs_series_url && !l.episode && !l.other_title && S.services.includes(l.service));
     const name = `pick-${s.tvdbId}`;
     // Skip is picked by default: adding a series is a choice
     const opt = (l, i) => el("label", {
       title: l ? l.url : "Leave it without a service",
     }, el("input", { type: "radio", name, value: l ? JSON.stringify([l.service, l.url]) : "",
-      checked: !l, onchange: pickCount }), l ? l.service : "Skip",
+      checked: !l, onchange: pickCount }), l ? (l.name ? `${l.service} · ${l.name}` : l.service) : "Skip",
       l ? el("small", { textContent: l.country }) : "");
     li.querySelector(".opts").replaceChildren(...(usable.length ? [...usable.map(opt), opt(null, -1)] : [el("span", { className: "none", textContent: "Nothing found on TMDB" })]));
     $("#bulk-progress").textContent = `Checked ${++done} of ${todo.length}`;

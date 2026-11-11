@@ -564,7 +564,8 @@ async function loadSuggestions(s, refresh = false) {
   box.replaceChildren(loading("Looking up where to watch it…"));
   let links, brands;
   try {
-    const found = await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}${refresh ? "&refresh=1" : ""}`);
+    // as long as /api/probe: a service linking several titles is asked for their names (named_titles)
+    const found = await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}${refresh ? "&refresh=1" : ""}`, { wait: 120 });
     links = found.links;
     brands = found.brands || [];
     if (current === s) $("#d-checked").textContent = `checked ${ago(found.checked)}`;
@@ -574,9 +575,10 @@ async function loadSuggestions(s, refresh = false) {
   if (!links.length && !brands.length) return networkPick(s, box, `TMDB lists no supported service in ${S.config.tmdb_countries.join(", ")}. Enter it below by hand.`,
     "TMDB lists no supported service.");
   box.replaceChildren(...links.map((l) => el("button", {
-    ariaLabel: `Use ${l.service}: ${l.url}`,
+    ariaLabel: `Use ${l.service}: ${[l.name, l.url].filter(Boolean).join(", ")}`,
     onclick: () => applySuggestion(l),
-  }, el("b", { textContent: l.service }), el("span", { textContent: l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.found_by === "homepage" ? `TMDB homepage · ${l.url}` : l.url }),
+  }, el("b", { textContent: l.service }), el("span", { textContent: (l.name ? `${l.name} · ` : "")  // a service linking several titles names each
+    + (l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.found_by === "homepage" ? `TMDB homepage · ${l.url}` : l.url) }),
     el("small", { textContent: l.country }))));
   box.querySelectorAll("button").forEach((b, i) => b.dataset.url = links[i].url);
   const network = S.networkServices?.[s.tvdbId];  // after TMDB's links: theirs keep their order

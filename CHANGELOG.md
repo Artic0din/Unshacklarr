@@ -16,6 +16,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- A series' suggestions now name each title when one service links several (Netflix's Kath & Kim and its 20th Anniversary Specials): the one with the series' own title comes first, and Suggest services no longer offers the others for the series.
 - The page no longer says Sonarr is unreachable while Sonarr is busy importing a batch of downloads: the series list and the schedule now wait up to 2 minutes, as Unshacklarr's other Sonarr reads already did, instead of 30 seconds. The release check, which runs every 30 seconds, still gives up after 30. A request that takes too long now says how long it waited, not always 30 seconds.
 - A series' suggestions no longer fill in an audio-described or Auslan edition of the show (Binge's `audio-description-…`, SBS's and ABC iview's `…-auslan`): the show itself is found by its title where the service can search, else that service gets a "Find it on" button.
 - ABC iview and 7plus suggestions now link the show's page (`iview.abc.net.au/show/<name>`, `7plus.com.au/<name>` without its `?episode-id=`) instead of one episode, so Unshackle sees every episode; before, a series like Dustfall showed only episode 1 as on iview. Series already set to an episode link need their Series URL replaced once.
