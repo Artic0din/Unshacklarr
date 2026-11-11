@@ -31,6 +31,26 @@ def test_unreachable_is_notified_once_after_two_checks_then_back(tmp_path, monke
     assert sent == [("error", "Unshackle is unreachable"), ("success", "Unshackle is back")]
 
 
+def test_a_local_unshackle_that_cannot_start_is_down_and_the_other_states_still_refresh(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    command = tmp_path / ".venv" / "bin" / "unshackle"
+    command.parent.mkdir(parents=True)
+    command.write_text(f"#!{tmp_path}/no-such-python\n")  # its Python is gone
+    command.chmod(0o755)
+    web.UNSHACKLE.configure({"unshackle_mode": "local", "unshackle_command": str(command)})
+    monkeypatch.setattr(web, "sonarr_health", lambda: {"ok": True, "version": "4.0"})
+
+    web.check_health()
+
+    assert web.health["unshackle"]["ok"] is False
+    assert "no-such-python" in web.health["unshackle"]["error"]
+    assert web.health["sonarr"]["ok"] is True
+
+
 def test_the_unshackle_test_needs_the_setup_code_before_the_setup(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer
@@ -170,6 +190,72 @@ def test_stats_weeks_start_on_monday_in_the_app_s_time_zone(tmp_path, monkeypatc
     assert [(w["start"], w["downloaded"]) for w in s["weeks"][-2:]] == [("2026-11-02", 1), ("2026-11-09", 1)]
 
 
+# Runs one of the page's own functions, so its previews are held to what the server does.
+PREVIEW_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[1] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const { fn, args } = JSON.parse(process.argv[2]);
+const code = {
+  serviceEpisode: () => [pick(js("series.js"), /^const pad2 = .*$/m), pick(js("series.js"), /^function serviceEpisode\(.*?^\}/ms)],
+  nextSyncAt: () => [pick(js("settings-services.js"), /^function nextSyncAt\(.*?^\}/ms)],
+}[fn]().join("\n");
+const box = { Intl, Date, Number, String };
+vm.createContext(box);
+vm.runInContext(code + `\nthis.out = ${fn};`, box);
+const [first, ...rest] = args;
+const result = fn === "nextSyncAt" ? box.out(new Date(first), ...rest).toISOString() : box.out(first, ...rest);
+console.log(JSON.stringify(result));
+"""
+
+
+def run_page_function(fn, *args):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    out = subprocess.run(["node", "-e", PREVIEW_HARNESS, "--", str(static), json.dumps({"fn": fn, "args": args})], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def reloaded_web(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    return importlib.reload(unshacklarr.web)
+
+
+def test_the_page_preview_skips_episode_zero_as_the_server_does(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    for conf, number in (({"episode_offset": -1}, 1), ({}, 0), ({"episode_offset": -3}, 3)):
+        assert run_page_function("serviceEpisode", conf, 1, number) is None
+        assert web.sonarr_sync.service_episode(conf, 1, number) is None
+    assert run_page_function("serviceEpisode", {"episode_offset": -1}, 1, 2) == "S01E01"
+
+
+def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    web = reloaded_web(tmp_path, monkeypatch)
+    noon = datetime(2026, 11, 11, 12, 30, tzinfo=timezone.utc)  # the browser (the suite runs in Paris) and the app differ
+    cases = [(noon, "Australia/Melbourne", 4), (noon, "Asia/Kolkata", 2), (noon, "America/St_Johns", 3), (noon, "UTC", 24),
+             (datetime(2026, 10, 3, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # Melbourne's clocks go forward that night
+             (datetime(2026, 4, 4, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # and back
+             (datetime(2026, 10, 3, 15, 30, tzinfo=timezone.utc), "Australia/Melbourne", 2),  # 02:00 is skipped that night
+             (datetime(2026, 10, 5, 19, 30, tzinfo=timezone.utc), "Europe/Paris", 5)]  # 21:30: the grid starts again at midnight
+    for now, zone, every in cases:
+        monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo(zone))
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        server = web.next_sync(now).astimezone(timezone.utc)
+        page = run_page_function("nextSyncAt", now.isoformat(), every, zone)
+        assert datetime.fromisoformat(page.replace("Z", "+00:00")) == server, zone
+
+
 def test_the_page_script_parses(tmp_path):
     import shutil
     import subprocess
@@ -272,7 +358,7 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), options = js("settings-options.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(options, /^async function save\(\) \{.*?^\}/ms),
   pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
@@ -363,6 +449,84 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "sinceSentBack": True,  # so a later Save does not stamp it again
         "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
         "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
+    }
+
+
+# Runs the page's real numbering handlers and hideSeries against the save bar.
+NUMBERING_BAR_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const core = js("core.js"), series = js("series.js"), schedule = js("schedule.js");
+const code = [
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(series, /^let oneOff = null;.*?(?=^\$\("#d-join"\))/ms),
+  pick(schedule, /^async function hideSeries\(.*?^\}/ms),
+].join("\n");
+const nodes = {};
+const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true }, "#tab-schedule": { hidden: false } };
+const box = {
+  JSON, Object, Math, parseInt, Number, console, structuredClone, current: { tvdbId: 7 },
+  $: (sel) => bars[sel] || nodes[sel] || (nodes[sel] = { value: "", hidden: true, replaceChildren() {} }),
+  api: () => Promise.resolve(box.hiddenAfter),
+  renderCommands() {}, renderInherited() {}, renderPreview() {}, renderHideToggle() {}, renderWall() {}, rerenderSchedule() {},
+  renderHiddenButton() {}, toast() {}, S: null,
+};
+vm.createContext(box);
+vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), baseline: () => { savedConfig = configKey(S.config); } };", box);
+const page = box.page;
+const fresh = () => {
+  box.S = { config: { settings: { theme: "dark" }, hidden_series: [], series: { 7: { service: "iV", title: "https://example.com/show" } } } };
+  page.baseline();
+  bars["#savebar"].hidden = bars["#d-save"].hidden = true;
+};
+(async () => {
+  const out = {};
+  for (const [name, id, typed] of [["episodeOffset", "#d-offset", "5"], ["seasonOffset", "#d-soffset", "2"],
+      ["seasonFrom", "#d-sfrom", "3"], ["episodeTable", "#d-epmap", "S01E01=S01E02"]]) {
+    fresh(); page.input(id, typed);
+    const shown = !bars["#savebar"].hidden;
+    page.input(id, "");
+    out[name] = shown && bars["#savebar"].hidden && bars["#d-save"].hidden;
+  }
+  fresh(); Object.assign(box.S.config.series[7], { episode_offset: 5, season_offset: 2 }); page.baseline();
+  page.input("#d-offset", ""); page.input("#d-offset", "5");  // cleared and typed again: it comes back after season_offset
+  out.restoredOffsetBarHidden = bars["#savebar"].hidden;
+  fresh(); box.hiddenAfter = [7];
+  await page.hideSeries({ tvdbId: 7, series: "Show" }, true);
+  out.hidingLeavesBarHidden = bars["#savebar"].hidden;
+  box.S.config.settings.theme = "light"; page.dirty();
+  const shown = !bars["#savebar"].hidden;
+  box.S.config.settings.theme = "dark"; page.dirty();
+  out.changeThenUndoAfterHiding = shown && bars["#savebar"].hidden;
+  box.hiddenAfter = [];
+  await page.hideSeries({ tvdbId: 7, series: "Show" }, false);
+  out.showingLeavesBarHidden = bars["#savebar"].hidden;
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hidden(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    harness = tmp_path / "harness.js"
+    harness.write_text(NUMBERING_BAR_HARNESS)
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "episodeOffset": True, "seasonOffset": True, "seasonFrom": True, "episodeTable": True,  # typed, then cleared: nothing to save
+        "hidingLeavesBarHidden": True,  # saved at once, so it is not a pending change
+        "changeThenUndoAfterHiding": True,
+        "showingLeavesBarHidden": True,
+        "restoredOffsetBarHidden": True,  # the same settings, whatever the order of their keys
     }
 
 
@@ -3163,6 +3327,27 @@ def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(
     for host in ("SONARR.LAN", "sonarr.lan", "fd00::1234", "dl.proxy.lan", "'nas'", "example.org", "8786", "8989", "8080", "9443"):
         assert host not in text, host
     assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
+
+
+def test_the_downloads_list_is_the_queued_then_every_download_newest_first(tmp_path, monkeypatch):
+    # docs/API.md promised the running ones before the history; a running download that started before a finished one stays below it (#60)
+    from aiohttp.test_utils import make_mocked_request
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    started = {"20261001-090000-000001-1-S01E01": "2026-10-01T09:00:00+00:00", "20261001-100000-000001-1-S01E02": "2026-10-01T10:00:00+00:00"}
+    for run_id, when in started.items():
+        card = {"id": run_id, "series": "Show", "tvdbId": 1, "sxxeyy": run_id[-6:], "started": when}
+        if run_id.endswith("E02"):
+            card |= {"outcome": "downloaded", "ended": "2026-10-01T10:05:00+00:00"}
+        (tmp_path / f"{run_id}.json").write_text(json.dumps(card))
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"20261001-090000-000001-1-S01E01"})
+    queued = {"id": "waiting-9", "series": "Show", "tvdbId": 1, "sxxeyy": "S01E09", "waiting": True, "started": "2026-10-01T08:00:00+00:00"}  # older than both: still first
+    monkeypatch.setitem(web.sonarr_sync.waiting, 9, queued)
+
+    async def ask():
+        return json.loads((await web.v1_downloads(make_mocked_request("GET", "/api/v1/downloads"))).text)
+    assert [(d["id"], d["state"]) for d in asyncio.run(ask())] == [
+        ("waiting-9", "queued"), ("20261001-100000-000001-1-S01E02", "downloaded"), ("20261001-090000-000001-1-S01E01", "running")]
 
 
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):

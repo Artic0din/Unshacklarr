@@ -47,6 +47,9 @@ const inScope = (d) => !isHidden(d) && ({ all: true, mine: d.managed, other: !d.
 async function hideSeries(d, hidden, quiet = false) {
   try { S.config.hidden_series = await api("/api/hidden", { method: "POST", body: JSON.stringify({ tvdbId: d.tvdbId, hidden }) }); }
   catch (e) { return toast(`Could not ${hidden ? "hide" : "show"} ${d.series}: ${e.message}`, true); }
+  const saved = JSON.parse(savedConfig);  // saved already: not a change for the save bar
+  saved.hidden_series = S.config.hidden_series;
+  savedConfig = stableJSON(saved);
   if (!quiet) toast(hidden ? `${d.series} hidden from the schedule` : `${d.series} is back in the schedule`, false,
     ["Undo", () => hideSeries(d, !hidden)]);
   renderHideToggle();
@@ -314,7 +317,7 @@ function schedRow(d, when) {
 }
 
 const LOCALE = LANG === "en" ? "en-GB" : LANG;  // English: a 24-hour clock, the day before the month
-const time = (d) => isNaN(d) ? "" : d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+const time = (d, timeZone) => isNaN(d) ? "" : d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", timeZone });
 function day(d) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - today) / 86400000);

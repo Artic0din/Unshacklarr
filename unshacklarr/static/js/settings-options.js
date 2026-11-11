@@ -381,7 +381,7 @@ $("#bo-send").onclick = async (e) => {
     // saved on the server already, these fields only: another unsaved edit stays unsaved
     const saved = JSON.parse(savedConfig);
     for (const k of Object.keys(settings).concat(["backup_remote_secret_set", "backup_passphrase_set"])) S.config.settings[k] = saved.settings[k] = r.settings[k];
-    savedConfig = JSON.stringify(saved);
+    savedConfig = stableJSON(saved);
     $("#bo-secret").value = $("#bo-pass").value = $("#bo-pw").value = "";
     if (r.sent.at) S.backups = { ...(S.backups || {}), offsite: r.sent };
     boKind = null;
@@ -659,7 +659,7 @@ async function save() {
     const now = S.config.series[id];  // stopped meanwhile (no service): its date stays cleared
     if (now?.service && !now.since) now.since = conf.since;
   }
-  savedConfig = JSON.stringify(base);
+  savedConfig = stableJSON(base);
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
   const open = drawerSnapshot && JSON.parse(drawerSnapshot.conf || "{}");  // its drawer, open since or opened meanwhile
   if (open && stamped[drawerSnapshot.id] && !open.since) drawerSnapshot.conf = JSON.stringify({ ...open, since: stamped[drawerSnapshot.id] });
