@@ -1151,6 +1151,65 @@ def test_a_session_cookie_copied_before_logging_out_is_refused_after(tmp_path, m
     assert asyncio.run(go()) is False
 
 
+def test_a_session_cookie_with_a_non_ascii_digit_is_refused_not_a_500(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            client.session.cookie_jar.update_cookies({web.SESSION_COOKIE: "\u00b2.abc"})
+            return (await client.get("/api/session")).status
+
+    assert asyncio.run(go()) == 200
+
+
+def test_two_sessions_made_in_the_same_second_log_out_separately(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    monkeypatch.setattr(web.time, "time", lambda: 1_800_000_000.0)
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as first, TestClient(TestServer(web.app)) as second:
+            for client in (first, second):
+                await client.post("/api/login", json={"password": "password1"}, headers={"X-Unshackle": "1"})
+            await first.post("/api/logout", headers={"X-Unshackle": "1"})
+            return [(await (await c.get("/api/session")).json())["logged_in"] for c in (first, second)]
+
+    assert asyncio.run(go()) == [False, True]
+
+
+def test_a_session_cookie_made_before_the_nonce_is_still_accepted_until_it_expires(tmp_path, monkeypatch):
+    import hmac
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    auth = {"secret": "s1"}
+    expires = int(web.time.time()) + 3600
+    old = f"{expires}.{hmac.new(b's1', str(expires).encode(), 'sha256').hexdigest()}"
+
+    class Request:
+        def __init__(self, value):
+            self.cookies = {web.SESSION_COOKIE: value}
+
+    assert web.logged_in(Request(old), auth) is True
+    assert web.logged_in(Request(web.session_value(auth)), auth) is True
+    assert web.logged_in(Request(old[:-1] + "0"), auth) is False
+
+
 def test_a_refused_notification_address_is_not_echoed_whole(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync

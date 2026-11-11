@@ -4924,8 +4924,17 @@ def password_ok(password: str, stored: str) -> bool:
 
 
 def session_value(auth: dict) -> str:
-    expires = int(time.time()) + SESSION_DAYS * 86400
-    return f"{expires}.{hmac.new(auth['secret'].encode(), str(expires).encode(), 'sha256').hexdigest()}"
+    signed = f"{int(time.time()) + SESSION_DAYS * 86400}.{secrets.token_hex(8)}"  # the nonce: two sessions never share a signature
+    return f"{signed}.{hmac.new(auth['secret'].encode(), signed.encode(), 'sha256').hexdigest()}"
+
+
+def read_session(value: str) -> tuple[int, str, str] | None:
+    """(expires, what was signed, signature) of "expires.nonce.signature", or of the older "expires.signature"."""
+    signed, _, signature = value.rpartition(".")
+    expires = signed.partition(".")[0]
+    if not (expires.isascii() and expires.isdigit() and signature):
+        return None
+    return int(expires), signed, signature
 
 
 def proxy_user(request) -> str:
@@ -4945,10 +4954,11 @@ def proxy_user(request) -> str:
 
 
 def logged_in(request, auth: dict) -> bool:
-    expires, _, signature = request.cookies.get(SESSION_COOKIE, "").partition(".")
-    if not expires.isdigit() or int(expires) < time.time() or not auth.get("secret"):
+    session = read_session(request.cookies.get(SESSION_COOKIE, ""))
+    if not session or session[0] < time.time() or not auth.get("secret"):
         return False
-    expected = hmac.new(auth["secret"].encode(), expires.encode(), "sha256").hexdigest()
+    _, signed, signature = session
+    expected = hmac.new(auth["secret"].encode(), signed.encode(), "sha256").hexdigest()
     return hmac.compare_digest(signature, expected) and signature not in read_json(LOGGED_OUT_FILE, {})
 
 
@@ -4957,11 +4967,12 @@ LOGGED_OUT_FILE = sonarr_sync.DATA / "logged_out.json"  # sessions closed before
 
 def forget_session(value: str) -> None:
     """Log out for good: the cookie, copied before, is refused until it would have expired."""
-    expires, _, signature = value.partition(".")
-    if not expires.isdigit() or not signature:
+    session = read_session(value)
+    if not session:
         return
+    expires, _, signature = session
     closed = {sig: until for sig, until in read_json(LOGGED_OUT_FILE, {}).items() if until > time.time()}  # the expired ones go
-    write_atomic(LOGGED_OUT_FILE, json.dumps({**closed, signature: int(expires)}), PRIVATE)
+    write_atomic(LOGGED_OUT_FILE, json.dumps({**closed, signature: expires}), PRIVATE)
 
 
 def with_session(request, response, auth: dict):
@@ -5195,7 +5206,7 @@ async def session(request):
     if by_proxy:
         body["proxy_user"] = by_proxy
     if body["logged_in"]:  # for Settings, Account: until when, and since when the password is the same
-        body["expires"] = int(request.cookies[SESSION_COOKIE].partition(".")[0]) if logged_in(request, auth) else None
+        body["expires"] = read_session(request.cookies[SESSION_COOKIE])[0] if logged_in(request, auth) else None
         body["password_changed"] = auth.get("changed")
         body["api_key"] = {"set": bool(auth.get("api_key")), "created": auth.get("api_key_created")}
     if not body["configured"]:  # what the setup starts from; addresses and paths only with the setup code
