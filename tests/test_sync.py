@@ -2931,6 +2931,62 @@ def test_picks_keep_their_order_whichever_is_ready_to_download_first(tmp_path, m
     assert sync.job_order == {}
 
 
+def test_a_job_stays_downloading_while_any_of_its_downloads_runs(tmp_path, monkeypatch):
+    # a retry with another Replace choice runs beside its job under the same batch: one ending is not both
+    sync = load(tmp_path, monkeypatch)
+    run = lambda: type("Run", (), {"card": {"batch": "J"}, "id": "r", "say": lambda self, text: None})()
+    with sync.download_slot("serve", run()):
+        with sync.download_slot("serve", run()):
+            pass
+        assert "J" in sync.slot_active  # the other still downloads: its slots are not idle
+    assert "J" not in sync.slot_active
+
+
+def test_a_waiting_job_gives_back_a_slot_once_its_last_download_there_ends(tmp_path, monkeypatch):
+    # J holds A, downloading, and waits for B, which K holds while it waits for A: once J's download on A ends, J
+    # must give A back, or neither job ever goes on (#45)
+    import threading
+    sync = load(tmp_path, monkeypatch)
+    sync.SETTINGS["downloads_at_once"] = 1
+    j_waits = threading.Event()
+    run = lambda batch, rid: type("Run", (), {"card": {"batch": batch}, "id": rid,
+                                               "say": lambda self, text: rid == "j2" and j_waits.set()})()
+    on_a, a_done, k_has_a = threading.Event(), threading.Event(), threading.Event()
+
+    def j_on_a():
+        with sync.download_slot("A", run("J", "j1")):
+            on_a.set()
+            a_done.wait(10)
+
+    def j_waits_for_b():
+        try:
+            with sync.download_slot("B", run("J", "j2")):
+                pass
+        except sync.JobFailed:
+            pass
+
+    def k_waits_for_a():
+        try:
+            with sync.download_slot("A", run("K", "k1")):
+                k_has_a.set()
+        except sync.JobFailed:
+            pass
+    with sync.download_slot("B", run("K", "k0")):  # K holds B, between its episodes
+        threads = [threading.Thread(target=j_on_a, daemon=True)]
+        threads[0].start()
+        on_a.wait(5)
+        threads += [threading.Thread(target=f, daemon=True) for f in (j_waits_for_b, k_waits_for_a)]
+        for t in threads[1:]:
+            t.start()
+        assert j_waits.wait(5)  # J waits for B while its download on A still runs
+        a_done.set()  # that download ends: J only waits now
+        got = k_has_a.wait(6)
+        sync.stop_waiting.update({"j2", "k1"})
+        for t in threads:
+            t.join(6)
+    assert got
+
+
 def test_a_paused_job_marks_its_waiting_episodes_whether_or_not_one_downloads(tmp_path, monkeypatch):
     # Its queued episodes say "paused" in Activity, and lose it once resumed, while one of them downloads too
     sync = load(tmp_path, monkeypatch)
