@@ -54,6 +54,13 @@ def test_s3_signs_the_endpoints_own_path():
     assert seen["headers"]["Authorization"].endswith("Signature=" + _signature("/s3/bucket/a%20b.enc", "nas.example"))
 
 
+def test_s3_signs_the_path_as_requests_sends_it():
+    seen = _put_s3("https://nas.example/storage%7Ebackup")  # requests sends %7E as ~
+    sent = requests.Request("PUT", seen["url"]).prepare().url
+    assert sent == seen["url"]
+    assert seen["headers"]["Authorization"].endswith("Signature=" + _signature(offsite.urlsplit(sent).path, "nas.example"))
+
+
 def test_s3_signs_the_host_the_client_sends():
     # requests sends no :443 for https, and a lower-case name
     seen = _put_s3("https://NAS.example:443")

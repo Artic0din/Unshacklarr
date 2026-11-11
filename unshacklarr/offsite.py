@@ -70,6 +70,8 @@ def s3_put(endpoint: str, bucket: str, region: str, access_key: str, secret_key:
         host += f":{parts.port}"
     # the signature covers the whole path requested, the endpoint's own included
     path = quote(parts.path.rstrip("/"), safe="/-_.~%") + quote(f"/{bucket.strip('/')}/{name}", safe="/-_.~")
+    url = requests.Request("PUT", f"{parts.scheme}://{parts.netloc}{path}").prepare().url  # as requests sends it (%7E is ~)
+    path = urlsplit(url).path
     payload = hashlib.sha256(body).hexdigest()
     canonical = f"PUT\n{path}\n\nhost:{host}\nx-amz-content-sha256:{payload}\nx-amz-date:{stamp}\n\nhost;x-amz-content-sha256;x-amz-date\n{payload}"
     scope = f"{day}/{region}/s3/aws4_request"
@@ -77,7 +79,7 @@ def s3_put(endpoint: str, bucket: str, region: str, access_key: str, secret_key:
     key = _sign(_sign(_sign(_sign(f"AWS4{secret_key}".encode(), day), region), "s3"), "aws4_request")
     auth = (f"AWS4-HMAC-SHA256 Credential={access_key}/{scope}, SignedHeaders=host;x-amz-content-sha256;x-amz-date, "
             f"Signature={hmac.new(key, to_sign.encode(), hashlib.sha256).hexdigest()}")
-    r = requests.put(f"{parts.scheme}://{parts.netloc}{path}", data=body, timeout=TIMEOUT,
+    r = requests.put(url, data=body, timeout=TIMEOUT,
                      headers={"x-amz-content-sha256": payload, "x-amz-date": stamp, "Authorization": auth})
     if r.status_code in (401, 403):
         raise requests.HTTPError("The S3 service refused the access key or secret key, or the bucket is not theirs", response=r)
