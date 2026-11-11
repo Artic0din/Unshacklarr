@@ -64,10 +64,9 @@ function followLive() {
   };
   liveFeed.onerror = () => { liveFeed?.close(); liveFeed = null; };  // polling takes over; the next load tries again
 }
-// a reload the feed started is on its way: a message saying a download started or ended is kept for after it, and
-// every download the messages name is noted; after it, one the answer has no card for (started and ended meanwhile)
-// has the history asked once more, else the kept message asks again only if it still differs. It is never drawn:
-// the answer it came before may be newer than its progress
+// a reload the feed started is on its way: the newest message is kept for after it, and every download the messages
+// name is noted; after it, one the answer has no card for (started and ended meanwhile) has the history asked once
+// more, else the kept message asks again if it differs from the answer. It is never drawn: the answer may be newer
 let feedReloading = false, feedMissed = null, feedSeen = new Set();
 const feedChanged = (live) => {
   const known = new Set(runCards.filter((c) => isLive(c) && !c.waiting).map((c) => c.id));  // the queued aren't in the feed
@@ -87,10 +86,12 @@ function feedReload(again = false) {  // again: the one follow-up, never a loop 
 function liveTick(data) {
   if (data === null || $("#tab-log").hidden) return;
   const live = JSON.parse(data), ids = new Set(live.map((c) => c.id));
-  if (feedReloading) ids.forEach((id) => feedSeen.add(id));
+  if (feedReloading) {  // the newest kept for after it (the feed says a change once), and what each one names
+    feedMissed = data;
+    ids.forEach((id) => feedSeen.add(id));
+  }
   if (feedChanged(live)) {
-    if (feedReloading) feedMissed = data;  // the feed says a change once: kept for after the reload
-    else feedReload();
+    if (!feedReloading) feedReload();
     return;
   }
   runCards = runCards.map((c) => (ids.has(c.id) ? live.find((x) => x.id === c.id) : c));

@@ -392,6 +392,12 @@ const settle = () => new Promise((r) => setImmediate(r));
     liveTick(JSON.stringify([{ id: 1, outcome: "running", p: 10 }]));  // the second ended; the first at 10
     pending[1]([card(1, "running", 60), card(2, "downloaded", 100)]); await settle();  // newer: the first at 60
     console.log(JSON.stringify({ asked: pending.length, progress: runCards.map((c) => c.p) }));
+  } else if (scenario === "ended") {
+    tick([1]); pending[0]([card(1, "running")]); await settle();
+    tick([1, 2]);  // a second starts: the feed's reload
+    tick([1]);  // and ends while it is on its way
+    pending[1]([card(1, "running"), card(2, "running")]); await settle();  // an answer from before it ended
+    console.log(JSON.stringify({ asked: pending.length }));
   } else if (scenario === "progress") {
     const at = (p) => liveTick(JSON.stringify([{ id: 1, outcome: "running", p }, { id: 2, outcome: "running", p }]));
     tick([1]);  // the feed's reload
@@ -444,6 +450,10 @@ def test_a_download_that_starts_and_ends_during_the_feeds_reload_is_asked_for_af
 
 def test_the_feed_never_draws_older_progress_over_its_reloads_answer():
     assert run_activity("newer") == {"asked": 2, "progress": [60, 100]}
+
+
+def test_a_download_that_ends_during_the_feeds_reload_is_not_left_running():
+    assert run_activity("ended")["asked"] == 3  # the newest message differs from the answer: asked again
 
 
 def test_a_manual_reload_meanwhile_keeps_the_newer_progress():
