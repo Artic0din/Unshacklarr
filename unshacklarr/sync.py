@@ -561,6 +561,7 @@ unqueued: set[int] = set()  # episodes taken out of a job's queue from Activity:
 running_jobs: dict[str, dict] = {}
 jobs_lock = threading.Lock()
 paused_jobs: set[str] = set()  # jobs paused from Activity: the download going on ends, the next waits
+batch_syncs: dict[str, int] = {}  # syncs running under a batch now: a retry with another Replace runs beside its job
 
 
 def pause_job(batch: str, pause: bool) -> None:
@@ -2850,10 +2851,13 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
             if show.get("service") and ep["id"] not in waiting:
                 with jobs_lock:
                     waiting[ep["id"]] = job["stubs"][ep["id"]] = queued_card(ep, show, kind, batch, replace, proxy, video)
+                    if batch in paused_jobs:  # queued under a paused job: shown paused, Resume offered
+                        waiting[ep["id"]]["paused"] = True
     if batch:
         number_job(batch)  # its place for a download slot: the order it was picked in (#10)
         with jobs_lock:
             running_jobs[batch] = job  # a job's episode started again once it closed takes its place here
+            batch_syncs[batch] = batch_syncs.get(batch, 0) + 1
     try:
         return run_episodes(config, settings, episodes, manual, replace, kind, batch, numbering)
     finally:
@@ -2865,7 +2869,13 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
             if running_jobs.get(batch) is job:
                 running_jobs.pop(batch)
                 paused_jobs.discard(batch)
-        release_job(batch)  # the job is over: its download slot goes to the next pick in line (#10)
+            last = not batch or batch_syncs.get(batch, 1) <= 1
+            if batch and last:
+                batch_syncs.pop(batch, None)
+            elif batch:
+                batch_syncs[batch] -= 1
+        if last:  # the job is over: its download slot goes to the next pick in line (#10); not while another sync of it runs
+            release_job(batch)
 
 
 def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, replace: bool, kind: str, batch: str | None = None,
