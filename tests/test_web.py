@@ -206,7 +206,7 @@ let release, offsiteReply;
 const box = {
   JSON, Object, console, current: null, currentTab: "series", boKind: null, drawerSnapshot: null,
   $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
-  api: (url) => url === "/api/config" ? new Promise((resolve) => { release = resolve; }) : Promise.resolve(offsiteReply),
+  api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
   renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
   boWrong() {}, toast() {}, el: () => ({}), S: null,
 };
@@ -237,6 +237,28 @@ const fresh = () => {
   out.offsiteKeepsOtherEdit = page.state().unsaved && !bars["#savebar"].hidden;
   box.S.config.settings.theme = "dark"; page.dirty();
   out.offsiteFieldsAreSaved = !page.state().unsaved;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();  // a series just added
+  saving = page.save(); release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.sinceLearnt = box.S.config.series[7].since === "2026-11-11T00:00:00+00:00" && bars["#savebar"].hidden && !page.state().unsaved;
+  saving = page.save(); release({ series: {} }); await saving;  // the next Save sends it back: the server keeps it
+  out.sinceSentBack = JSON.parse(box.sentBody).series[7].since === "2026-11-11T00:00:00+00:00";
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.S.config.series[7].service = ""; delete box.S.config.series[7].since;  // Stop pressed while the Save runs
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.stopKeepsDateCleared = box.S.config.series[7].since === undefined;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };  // opened meanwhile
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.drawerOpenedMeanwhileSeesNoChange = JSON.stringify(box.S.config.series[7]) === box.drawerSnapshot.conf;
+  box.current = null; box.drawerSnapshot = null;
   console.log(JSON.stringify(out));
 })();
 """
@@ -261,6 +283,10 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "revertToSentHides": True,  # back to what was sent is saved
         "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
         "offsiteFieldsAreSaved": True,
+        "sinceLearnt": True,  # the date the server stamped a new series with, kept on the page (#27)
+        "sinceSentBack": True,  # so a later Save does not stamp it again
+        "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
+        "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
     }
 
 
