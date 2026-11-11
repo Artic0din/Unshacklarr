@@ -7,6 +7,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 import responses
 from aiohttp import web as aioweb
 from aiohttp.test_utils import TestClient, TestServer
@@ -478,6 +479,24 @@ def test_a_failure_is_notified_by_its_cause_and_paths_as_sonarr_sees_them(tmp_pa
     assert "en not found in tracks" in message and "Service: RTLP" in message and "Stdout" not in message
     assert sync.seen_by("sonarr_downloads", sync.episode_folder(records[0])) == "/Syno/0.Temp/unshackle-111-S02E05"
 
+
+def test_a_new_run_is_active_before_its_card_is_on_disk(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.EpisodeRun, "active", set())
+    seen = []
+    save = sync.EpisodeRun.save
+    monkeypatch.setattr(sync.EpisodeRun, "save", lambda self: (seen.append(self.id in sync.EpisodeRun.active), save(self))[1])
+    sync.EpisodeRun(episode(111, 2, 5), {"service": "RTLP"}, "manual", "S02E05")
+    assert seen and all(seen)  # the history's Delete and Clear skip active runs, so a card is never removable while being born
+
+
+def test_a_run_whose_first_card_cannot_be_saved_is_not_left_active(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.EpisodeRun, "active", set())
+    monkeypatch.setattr(sync.EpisodeRun, "save", lambda self: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError):
+        sync.EpisodeRun(episode(111, 2, 5), {"service": "RTLP"}, "manual", "S02E05")
+    assert sync.EpisodeRun.active == set()  # active, it would be kept from Delete and Clear for good
 
 def test_a_run_keeps_every_track_it_saw_and_its_parts(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
@@ -2114,6 +2133,47 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     assert not sync.same_source({"sceneName": "Show.S01E01.ip.WEB-DL"}, "iP")  # a short tag as Unshackle writes it
 
 
+@pytest.mark.parametrize("code", [2, -9])  # an error, or the process killed (a signal: a negative code)
+@pytest.mark.parametrize("audio", ["audio.mka", "audio.mkv"])  # the audio alone may come in a video container
+def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch, code, audio):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+
+    def download(payload, run=None):
+        (Path(payload["output_dir"]) / audio).parent.mkdir(parents=True, exist_ok=True)
+        (Path(payload["output_dir"]) / audio).write_bytes(b"fr")
+
+    def tools(cmd, **_):
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")  # disk full: the output is cut short
+        return subprocess.CompletedProcess(cmd, code, stdout="Error: disk full")
+
+    imported = []
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append(out))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    assert sync.add_track(205, "fr") is True
+    folder = tmp_path / "unshackle-111-S02E05"
+    assert not (folder / "Show - S02E05.mkv").exists() and not folder.exists()  # nothing left for Import to pick up
+    assert imported == []
+    card = next(json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))
+    assert card["outcome"] == "failed" and "mkvmerge could not add the audio: Error: disk full" in card["cause"]
+
+
 def test_a_series_can_send_only_its_failures_or_nothing(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     sent, boxed = [], []
@@ -2401,6 +2461,37 @@ def test_a_job_keeps_its_slot_so_picks_run_whole_in_order(tmp_path, monkeypatch)
     b.start(); a.join(); b.join()
     assert order == ["A1", "B1", "A2", "A3"]  # paused: B's turn; resumed, A goes on
     assert sync.slot_jobs[""] == [] and not sync.slot_line.get("")
+
+
+def test_two_jobs_taking_two_servers_in_opposite_order_do_not_wait_on_each_other(tmp_path, monkeypatch):
+    # Downloads at once 1: job X holds the main server and asks for "b", job Y holds "b" and asks for the main one;
+    # a job waiting in one line gives back its idle slot on the other server (#45)
+    import threading
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setitem(sync.SETTINGS, "downloads_at_once", 1)
+    both_hold = threading.Barrier(2)
+    done = []
+
+    class Run:
+        def __init__(self, batch, n): self.card, self.id = {"batch": batch}, f"{batch}-{n}"
+        def say(self, text): pass
+
+    def job(batch, first, second):
+        with sync.download_slot(first, Run(batch, 1)):
+            pass  # its episode ends; the job still holds the slot, as the next episode may use it
+        both_hold.wait(2)
+        with sync.download_slot(second, Run(batch, 2)):
+            done.append(batch)
+        sync.release_job(batch)
+
+    for b in ("X", "Y"):
+        sync.number_job(b)
+    jobs = [threading.Thread(target=job, args=a, daemon=True) for a in (("X", "", "b"), ("Y", "b", ""))]
+    for t in jobs: t.start()
+    for t in jobs: t.join(6)
+    assert not any(t.is_alive() for t in jobs), "the two jobs wait on each other"
+    assert sorted(done) == ["X", "Y"]
+    assert sync.slot_jobs == {"": [], "b": []} and not any(sync.slot_line.values())
 
 
 def test_picks_keep_their_order_whichever_is_ready_to_download_first(tmp_path, monkeypatch):

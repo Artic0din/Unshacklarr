@@ -467,6 +467,7 @@ def crave_series(url: str) -> str | None:
 # Buy and Rent are purchases, not Unshackle subscription downloads; Channel packaging sits under Stream.
 STREAM_SECTIONS = frozenset({"stream", "free", "ads"})
 # Anchor title="Watch Fire Country on Paramount+ Amazon Channel" (or Buy/Rent/Stream … on …).
+CLOCK_TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")  # HH:MM, 24-hour
 OFFER_ON = re.compile(r"\b(?:Watch|Stream|Buy|Rent)\s+.+\s+on\s+(.+)$", re.IGNORECASE)
 
 
@@ -1040,7 +1041,7 @@ async def save_config(request):
         if not -sonarr_sync.EARLY_DAYS_MAX <= day <= 1:
             raise web.HTTPBadRequest(text=f"The release day of {key} must be from {sonarr_sync.EARLY_DAYS_MAX} days before airing to the day after")
         if release_time := str(show.get("release_time") or "").strip():
-            if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", release_time):
+            if not CLOCK_TIME.fullmatch(release_time):
                 raise web.HTTPBadRequest(text=f"The release time of {key} must look like 23:30")
             series[int(key)]["release_time"] = release_time
         if day and (release_time or day < 0):  # the day after means nothing without a time; days before do
@@ -1331,7 +1332,7 @@ def check_quiet(quiet) -> dict | None:
     if not quiet or not quiet.get("from") or not quiet.get("to"):
         return None
     for at in (quiet["from"], quiet["to"]):
-        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(at)):
+        if not CLOCK_TIME.fullmatch(str(at)):
             raise web.HTTPBadRequest(text="Quiet hours look like 23:00")
     return {"from": quiet["from"], "to": quiet["to"]}
 
@@ -1349,7 +1350,7 @@ def check_broadcast(plan: dict, key: str) -> dict:
         start = date.fromisoformat(str(plan.get("start")))
     except ValueError:
         raise bad("pick the day of its first episode") from None
-    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(plan.get("time") or "")):
+    if not CLOCK_TIME.fullmatch(str(plan.get("time") or "")):
         raise bad("its time must look like 20:39")
     every = plan.get("every") if plan.get("every") in ("weekly", "daily") else "weekly"
     days = sorted({int(d) for d in plan.get("days") or [] if str(d).isdigit() and 0 <= int(d) <= 6})
@@ -1555,7 +1556,7 @@ def check_settings(body: dict, previous: dict) -> dict:
     settings["release_learn"] = body.get("release_learn") is True
     for name in ("download_from", "download_to"):
         at = str(body.get(name) or "").strip()
-        if at and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", at):
+        if at and not CLOCK_TIME.fullmatch(at):
             raise web.HTTPBadRequest(text="Download window times look like 01:00")
         settings[name] = at
     if bool(settings["download_from"]) != bool(settings["download_to"]):
@@ -2515,6 +2516,7 @@ async def cdm_action(request):
         raise web.HTTPBadRequest(text=str(e))
     except OSError as e:
         raise web.HTTPBadGateway(text=f"Could not write Unshackle's files: {e}")
+    UNSHACKLE.configure(UNSHACKLE.settings)  # its cdm: section changed: the next download asks serve, not the copy kept 10 minutes
     return web.json_response(await asyncio.to_thread(cdm_state))
 
 
@@ -2931,14 +2933,17 @@ async def requeue(request):
 
 
 def forget_runs(keep) -> int:
-    """Delete finished attempts from the history (card and log), all but those `keep` says; never a running one."""
+    """Delete attempts from the history (card and log), all but those `keep` says; never a running one.
+
+    A card with no end that is not running was cut off by a restart: it goes like a finished one.
+    """
     gone = 0
     for card in sonarr_sync.RUNS_DIR.glob("*.json"):
         try:
             c = json.loads(card.read_text())
         except (OSError, ValueError):
             continue
-        if card.stem in sonarr_sync.EpisodeRun.active or not c.get("ended") or keep(c):
+        if card.stem in sonarr_sync.EpisodeRun.active or keep(c):
             continue
         for path in sonarr_sync.RUNS_DIR.glob(f"{card.stem}.*"):
             path.unlink(missing_ok=True)
@@ -3505,7 +3510,6 @@ def tvdb_titles(tvdb_id: int) -> dict[str, str]:
     return titles
 
 
-TITLE_PART = re.compile(r"\bpart (\d+)$")
 TITLE_NUMBER = re.compile(r"(?:^|\D)(\d+)$")  # a plain title's last number: "… part 2", "… episode 2", "… 2"
 
 
@@ -4033,37 +4037,30 @@ async def push_test(request):
     return web.json_response({"sent": sent})
 
 
-def retried_numbering(ids: list[int], batch: str) -> dict | None:
-    """The numbering a download was given for itself (from the page: by title, or set for it), which a retry
-    of it repeats; None when its last attempt used the series' own. The episodes of one retry come from one
-    job, given one numbering: the first found stands for them all."""
+def last_attempts(ids: list[int], batch: str):
+    """The cards of the episodes' last attempts, newest first: each episode's last one decides."""
     if not sonarr_sync.RUNS_DIR.exists():
-        return None
+        return
     seen = set()
-    for card in cards_on_disk():  # newest first: each episode's last attempt decides
+    for card in cards_on_disk():
         episode = card.get("episodeId")
         if episode not in ids or episode in seen or (batch and card.get("batch") != batch):
             continue
         seen.add(episode)
-        if card.get("numbering") is not None:
-            return card["numbering"]
-    return None
+        yield card
+
+
+def retried_numbering(ids: list[int], batch: str) -> dict | None:
+    """The numbering a download was given for itself (from the page: by title, or set for it), which a retry
+    of it repeats; None when its last attempt used the series' own. The episodes of one retry come from one
+    job, given one numbering: the first found stands for them all."""
+    return next((card["numbering"] for card in last_attempts(ids, batch) if card.get("numbering") is not None), None)
 
 
 def retried_replace(ids: list[int], batch: str) -> bool:
     """Whether the attempts a retry repeats were picked with Replace anyway: the retry replaces too (an attempt
     the library kept the same file for is otherwise kept again)."""
-    if not sonarr_sync.RUNS_DIR.exists():
-        return False
-    seen = set()
-    for card in cards_on_disk():  # newest first: each episode's last attempt decides
-        episode = card.get("episodeId")
-        if episode not in ids or episode in seen or (batch and card.get("batch") != batch):
-            continue
-        seen.add(episode)
-        if card.get("replace") is True:
-            return True
-    return False
+    return any(card.get("replace") is True for card in last_attempts(ids, batch))
 
 
 def cdm_refusal(ids: list[int]) -> str:
@@ -4693,7 +4690,8 @@ def stats_of(cards: list[dict], now: datetime) -> dict:
     ended = [c for c in cards if c.get("ended") and c.get("outcome") in ("downloaded", "failed", "kept", "import")]
     recent = [c for c in ended if now - when(c) <= timedelta(days=30)]
     took = lambda c: (datetime.fromisoformat(c["ended"]) - when(c)).total_seconds()
-    week0 = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    local = now.astimezone(sonarr_sync.LOCAL)  # weeks start on Monday where the user is, not in UTC
+    week0 = (local - timedelta(days=local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     weeks = []
     for i in range(7, -1, -1):
         start = week0 - timedelta(weeks=i)

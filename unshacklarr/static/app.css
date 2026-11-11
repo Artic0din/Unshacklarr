@@ -1589,7 +1589,7 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .probe-warn { margin: 8px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--warn) 8%, transparent); font-size: 13px; } .probe-warn b { color: var(--warn); }
 .ql-langs { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); } .ql-langs .field small.bad { color: var(--err); }
 .miss-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; } .miss-bar .ax-seg { margin: 0; }
-#oneoff-slot .ds-programmes, #oneoff-slot #d-progmap-field { display: none; }  /* a download's own numbering: not the series' setting */
+#oneoff-slot .ds-programmes, #oneoff-slot #d-progmap-field, #oneoff-slot #d-pages-field { display: none; }  /* a download's own numbering: not the series' setting */
 #d-progmap { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; min-height: 64px; border-radius: 9px; padding: 9px 12px; }  /* one "S2026E14 URL" per line */
 .ds-programmes { margin-bottom: var(--gap-field); }
 .up-card > summary { list-style: none; } .up-card > summary::-webkit-details-marker { display: none; } .up-card > summary::after { content: "▸"; color: var(--muted); }
