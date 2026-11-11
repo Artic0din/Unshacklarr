@@ -396,8 +396,9 @@ async function showLeftovers() {
   $("#cd-raw").hidden = true;
   $("#cd-foot").replaceChildren();
   let r;
-  try { r = await api("/api/leftovers"); } catch (e) { return $("#cd-main").replaceChildren(failed(e.message, showLeftovers)); }
+  try { r = await api("/api/leftovers"); } catch (e) { return picked_run === "left" ? $("#cd-main").replaceChildren(failed(e.message, showLeftovers)) : undefined; }
   $("#con-left-n").textContent = r.items.length ? `(${r.items.length})` : "";
+  if (picked_run !== "left") return;  // another pane was picked while this answer was on its way
   const act = (item, action, label, cls) => el("button", { className: `btn small ${cls}`, textContent: label, onclick: async (e) => {
     if (action === "delete" && e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure?"; return; }
     e.target.disabled = true;
@@ -578,7 +579,8 @@ async function showStats() {
   $("#cd-raw").hidden = true;
   $("#cd-foot").replaceChildren();
   let st;
-  try { st = await api("/api/stats"); } catch (e) { return $("#cd-main").replaceChildren(failed(e.message, showStats)); }
+  try { st = await api("/api/stats"); } catch (e) { return picked_run === "stats" ? $("#cd-main").replaceChildren(failed(e.message, showStats)) : undefined; }
+  if (picked_run !== "stats") return;  // another pane was picked while this answer was on its way
   const m = st.month, fmt = (v, unit = "") => v === null || v === undefined ? "–" : `${v}${unit}`;
   const max = Math.max(1, ...st.weeks.map((w) => w.downloaded + w.failed + w.kept));
   const weeks = el("div", { className: "weeks", role: "img", ariaLabel: "Downloads per week, the last 8 weeks" }, ...st.weeks.map((w) => {
