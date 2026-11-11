@@ -2874,8 +2874,8 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
                 batch_syncs.pop(batch, None)
             elif batch:
                 batch_syncs[batch] -= 1
-        if last:  # the job is over: its download slot goes to the next pick in line (#10); not while another sync of it runs
-            release_job(batch)
+            if last:  # the job is over: its slot goes to the next pick in line (#10); not while another sync of it runs,
+                release_job(batch)  # and under the lock, so none can start under the batch in between
 
 
 def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, replace: bool, kind: str, batch: str | None = None,
