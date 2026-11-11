@@ -3390,3 +3390,34 @@ def test_a_series_that_names_its_cdm_is_not_refused_for_want_of_one(tmp_path, mo
         assert "No CDM" in str(e)
     request = sync.download_request({**show, "options": {"--cdm": "my_l3"}}, config, "S01E01", tmp_path)
     assert request["cdm"] == "my_l3"
+
+
+def test_a_sync_ending_keeps_the_slot_its_batchs_other_sync_still_uses(tmp_path, monkeypatch):
+    # a retry with another Replace choice runs beside its job under the same batch: the first to end frees nothing
+    # the other still holds, and an episode it queues under the paused batch shows paused
+    import threading
+    sync = load(tmp_path, monkeypatch)
+    run = type("Run", (), {"card": {"batch": "J"}, "id": "r", "say": lambda self, text: None})()
+    downloading, done = threading.Event(), threading.Event()
+
+    def long_job(*a, **k):
+        with sync.download_slot("serve", run):
+            downloading.set()
+            done.wait(5)
+        return 0
+    monkeypatch.setattr(sync, "run_episodes", long_job)
+    first = threading.Thread(target=sync.sync, args=({}, {}, []), kwargs={"kind": "manual", "batch": "J"})
+    first.start()
+    assert downloading.wait(5)
+    ep = {"id": 9, "seasonNumber": 1, "episodeNumber": 2, "series": {"title": "Show", "tvdbId": 111}}
+    sync.pause_job("J", True)
+
+    def retry_ends_at_once(*a, **k):
+        assert sync.waiting[9]["paused"] is True  # queued under a paused batch: shown paused
+        return 0
+    monkeypatch.setattr(sync, "run_episodes", retry_ends_at_once)
+    sync.sync({"series": {111: {"service": "iV"}}}, {}, [ep], kind="manual", batch="J")  # the retry, ending first
+    assert "J" in sync.slot_jobs["serve"]  # still the first's, downloading
+    done.set()
+    first.join(5)
+    assert "J" not in sync.slot_jobs["serve"]
