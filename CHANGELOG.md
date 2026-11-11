@@ -49,6 +49,7 @@ Every change worth knowing, newest first. The format follows
 - "Release time set" is now sent once, when the time is written, instead of again for every later episode of the same run.
 - A series' start date no longer moves forward each time you Save from the same open page: the page now keeps the date the server set when the series was added, so episodes aired between two Saves are no longer skipped by the automatic sync.
 - A series set to send no notifications no longer sends a "Not imported" message when an unexpected error stops an episode from finishing.
+- Activity no longer asks the server for the whole history again and again while a download starts or ends: one reload at a time, and its answer is drawn, so the Running list updates even when the history is slow to load.
 
 ## [1.5.0] - 2026-10-17
 

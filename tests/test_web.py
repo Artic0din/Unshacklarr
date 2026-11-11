@@ -190,6 +190,82 @@ def test_the_page_script_parses(tmp_path):
     assert check.returncode == 0, check.stderr
 
 
+# Runs the page's real liveTick and openActivity with a /api/runs that answers only when the test says so.
+ACTIVITY_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const ctx = {
+  scenario: process.argv[2],
+  pending: [],  // one resolver per /api/runs request not answered yet
+  drawn: [],
+  api: (url) => new Promise((resolve) => { if (url === "/api/runs") ctx.pending.push(resolve); else resolve({ items: [] }); }),
+  $: () => ({ hidden: false, textContent: "", replaceChildren() {} }),
+  failed: () => ({}), clearTimeout() {}, setTimeout() {}, setImmediate, console, activityLater() {}, followLive() {}, liveFeed: null,
+};
+vm.createContext(ctx);
+vm.runInContext(`
+let runsSeq = 0, runCards = [], runsTimer = null;
+const isLive = (c) => c.outcome === "running";
+const renderConsole = () => drawn.push(runCards.map((c) => c.id));
+${grab("openActivity")}
+let feedReloading = false, feedMissed = null;
+${grab("liveTick")}
+const tick = (ids) => liveTick(JSON.stringify(ids.map((id) => ({ id }))));
+const card = (id, outcome) => ({ id, outcome });
+const settle = () => new Promise((r) => setImmediate(r));
+(async () => {
+  if (scenario === "feed") {
+    tick([1]); tick([1]); tick([1]);  // a download started: every message still sees a mismatch
+    const inFlight = pending.length;
+    pending[0]([card(1, "running")]); await settle();
+    console.log(JSON.stringify({ inFlight, asked: pending.length, drawn }));
+  } else if (scenario === "missed") {
+    tick([1]);  // the feed's reload
+    tick([1, 2]);  // another started while it was on its way: the feed says so once, and no more while nothing moves
+    pending[0]([card(1, "running")]); await settle();  // an answer from before the second one started
+    const asked = pending.length;
+    pending[1]([card(1, "running"), card(2, "running")]); await settle();
+    console.log(JSON.stringify({ asked, drawn }));
+  } else {
+    tick([1]);  // the feed's reload
+    openActivity();  // Stop pressed meanwhile
+    pending[1]([card(2, "stopped")]); await settle();
+    pending[0]([card(1, "running")]); await settle();  // the older answer arrives last
+    console.log(JSON.stringify({ drawn }));
+  }
+})();
+`, ctx);
+"""
+
+
+def run_activity(scenario):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "activity.js"
+    out = subprocess.run(["node", "-e", ACTIVITY_HARNESS, "--", str(script), scenario], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def test_the_live_feed_has_one_history_reload_in_flight_and_draws_its_answer():
+    result = run_activity("feed")
+    assert result["inFlight"] == 1  # a slow /api/runs is not asked again by every message
+    assert result["asked"] == 1 and result["drawn"][-1] == [1]  # its answer is used, and nothing asked again
+
+
+def test_a_change_the_feed_said_during_its_reload_is_reloaded_after():
+    result = run_activity("missed")
+    assert result["asked"] == 2 and result["drawn"][-1] == [1, 2]
+
+
+def test_a_reload_after_stop_still_wins_over_the_feeds_older_one():
+    assert run_activity("stop")["drawn"] == [[2]]
+
+
 SAVE_BAR_HARNESS = r"""
 const fs = require("fs"), vm = require("vm");
 const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
