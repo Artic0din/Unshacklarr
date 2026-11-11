@@ -479,6 +479,21 @@ const fresh = () => {
   await saving;
   out.drawerOpenedMeanwhileSeesNoChange = JSON.stringify(box.S.config.series[7]) === box.drawerSnapshot.conf;
   box.current = null; box.drawerSnapshot = null;
+
+  // a release time the sync learnt after the page loaded: the server kept it for a series sent without one (#29)
+  const show = { service: "iV", title: "https://example.com/show", since: "2026-11-01T00:00:00+00:00" };
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config);
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };
+  box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); release({ series: { 7: { ...show, release_time: "21:00", release_day: 1 } } }); await saving;
+  const seven = box.S.config.series[7];
+  out.learntTimeShown = seven.release_time === "21:00" && seven.release_day === 1 && bars["#d-release"].value === "21:00"
+    && bars["#d-release-day"].value === "1" && !page.state().unsaved && JSON.parse(box.drawerSnapshot.conf).release_time === "21:00";
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); box.S.config.series[7].release_time = "";  // cleared while the Save ran: stays cleared, and unsaved
+  release({ series: { 7: { ...show, release_time: "21:00" } } }); await saving;
+  out.clearedMeanwhileStays = box.S.config.series[7].release_time === "" && page.state().unsaved;
+  box.current = null; box.drawerSnapshot = null;
   console.log(JSON.stringify(out));
 })();
 """
@@ -507,6 +522,8 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "sinceSentBack": True,  # so a later Save does not stamp it again
         "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
         "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
+        "learntTimeShown": True,  # a release time the server kept is shown and counts as saved (#29)
+        "clearedMeanwhileStays": True,
     }
 
 
@@ -1314,6 +1331,12 @@ def test_a_save_keeps_what_the_server_changed_since_the_page_loaded(tmp_path, mo
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00"}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=new_day)))
     assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("21:00", 1)
+
+    async def other_source():  # moved to another service: the old one's learnt time is not its
+        return {"series": {"7": {**show, "service": "7P", "title": "https://7plus.example/show"}, "8": dict(show)}}
+    web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: dict(show)}})
+    asyncio.run(web.save_config(SimpleNamespace(json=other_source)))
+    assert "release_time" not in web.read_config()["series"][7] and "release_day" not in web.read_config()["series"][7]
     with web.CONFIG_LOCK:  # the sync's write waits for a Save's read and write
         learner = threading.Thread(target=web.release_learned, args=(8, "22:00", 0))
         learner.start()
