@@ -361,13 +361,14 @@ def test_a_broken_unshackle_yaml_still_opens_and_saves_in_its_editor_and_the_ale
                 return answer.status, await answer.text()
 
             opened = await ask("open")
-            saved = await ask("save", text="serve:\n  api_secret: a\n", base=json.loads(opened[1])["base"])
+            saved = await ask("save", text="dl:\n  sub_format: srt\n", base=json.loads(opened[1])["base"])
             conf.write_text("directories:\n  wvds: ..\n")  # not a folder next to the file
             return opened, saved, await ask("open")
 
     opened, saved, bad_folder = asyncio.run(go())
     assert opened[0] == 200 and json.loads(opened[1])["text"] == broken
     assert saved[0] == 200 and json.loads(saved[1])["saved"] is True
+    assert json.loads(saved[1])["restart"] is True  # what serve runs with was unknown: a restart is asked for
     assert bad_folder[0] == 400 and "is not a folder next to it" in bad_folder[1]
     assert [f.read_text() for f in (tmp_path / "history").glob("*.yaml")] == [broken]  # the broken file kept in the history
 

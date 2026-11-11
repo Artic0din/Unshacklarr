@@ -2720,11 +2720,11 @@ def save_unshackle_yaml(path: Path, old: str, new: str) -> dict:
     for extra in sorted(CONFIG_HISTORY.glob("*.yaml"), reverse=True)[CONFIG_KEEP:]:
         extra.unlink(missing_ok=True)
     write_atomic(path, new)
-    before = {} if yaml_problem(old) else yaml.safe_load(old) or {}  # saving over a broken file is how it gets fixed
-    after = yaml.safe_load(new) or {}
+    broken = yaml_problem(old)  # saving over a broken file is how it gets fixed
+    before, after = {} if broken else yaml.safe_load(old) or {}, yaml.safe_load(new) or {}
     UNSHACKLE.configure(UNSHACKLE.settings)  # its services, servers and dl: section may have changed: asked afresh
     return {"saved": True, "base": fingerprint(new), "versions": config_versions(),
-            "restart": before.get("serve") != after.get("serve")}
+            "restart": bool(broken) or before.get("serve") != after.get("serve")}  # what serve runs with is unknown then
 
 
 async def unshackle_yaml(request):
