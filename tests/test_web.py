@@ -2871,6 +2871,7 @@ def test_a_spelled_out_part_number_counts_as_the_digit():
     assert not same_title("the ambush part one", "the ambush part two")
     assert last_number("the ambush part twenty") == 20
     assert last_number("twenty one") is None  # a compound number is not "1": "21" must still match it
+    assert last_number("murder in the city two") == 2 and not same_title("murder in the city two", "murder in the city 1")
     assert last_number("fallen women") is None and same_title("fallen women", "fallen woman")
 
 
