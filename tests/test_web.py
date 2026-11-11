@@ -1293,6 +1293,21 @@ def test_a_save_keeps_what_the_server_changed_since_the_page_loaded(tmp_path, mo
     assert saved["auth"] == new
     assert (saved["series"][7].get("release_time"), saved["series"][7].get("release_day")) == ("21:00", 1)
     assert "release_time" not in saved["series"][8]  # cleared on the page: cleared
+    # each field on its own: a day the page sent stays as sent, one it did not send stays as stored
+    web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: {**show, "release_day": -2}}})
+    monkeypatch.setattr(web, "known_services", lambda: None)
+
+    async def edits():
+        return {"series": {"7": {**show, "release_day": 0}, "8": dict(show)}}
+    asyncio.run(web.save_config(SimpleNamespace(json=edits)))
+    saved = web.read_config()["series"]
+    assert (saved[7].get("release_time"), saved[7].get("release_day")) == ("21:00", None) and saved[8].get("release_day") == -2
+
+    async def new_time():
+        return {"series": {"7": {**show, "release_time": "22:00"}, "8": dict(show)}}
+    web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: dict(show)}})
+    asyncio.run(web.save_config(SimpleNamespace(json=new_time)))
+    assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("22:00", 1)
     with web.CONFIG_LOCK:  # the sync's write waits for a Save's read and write
         learner = threading.Thread(target=web.release_learned, args=(8, "22:00", 0))
         learner.start()

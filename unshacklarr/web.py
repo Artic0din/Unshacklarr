@@ -1126,9 +1126,14 @@ async def save_config(request):
         now = read_config()
         config["auth"] = now["auth"]  # a new password or a revoked API key meanwhile stays
         for key, show in (body.get("series") or {}).items():
-            learned = now["series"].get(int(key)) or {}
-            if "release_time" not in show and learned.get("release_time") and int(key) in series:  # learnt after the page loaded
-                series[int(key)].update({k: learned[k] for k in ("release_time", "release_day") if k in learned})
+            learned, saved = now["series"].get(int(key)) or {}, series.get(int(key))
+            if saved is None:
+                continue
+            # learnt after the page loaded: each field the page did not send at all is kept (it sends "" to clear one)
+            if "release_time" not in show and learned.get("release_time"):
+                saved["release_time"] = learned["release_time"]
+            if "release_day" not in show and learned.get("release_day") and (saved.get("release_time") or learned["release_day"] < 0):
+                saved["release_day"] = learned["release_day"]  # the day after means nothing without a time, as above
         write_config(config)
     if settings.get("upgrade_check_new"):  # by mj23au: a series just set up, its files already on disk, checked once
         upgrade_pending.update(newly_set_up(series, previous.get("series") or {}))
