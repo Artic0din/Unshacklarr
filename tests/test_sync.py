@@ -2395,6 +2395,46 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
     assert card["outcome"] == "failed" and "mkvmerge could not add the audio: Error: disk full" in card["cause"]
 
 
+def test_a_failed_audio_add_never_deletes_through_a_folder_swapped_for_a_link(tmp_path, monkeypatch):
+    code, audio = 2, "audio.mkv"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "film.mkv").write_bytes(b"keep me")
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+
+    def download(payload, run=None):
+        out = Path(payload["output_dir"])
+        shutil.rmtree(out, ignore_errors=True)
+        out.symlink_to(elsewhere, target_is_directory=True)  # another writer of the shared folder swaps it for a link
+
+    def tools(cmd, **_):
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")  # disk full: the output is cut short
+        return subprocess.CompletedProcess(cmd, code, stdout="Error: disk full")
+
+    imported = []
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append(out))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    assert sync.add_track(205, "fr") is True
+    assert (elsewhere / "film.mkv").read_bytes() == b"keep me"  # refused, and nothing deleted through the link
+
+
 def test_a_series_can_send_only_its_failures_or_nothing(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     sent, boxed = [], []

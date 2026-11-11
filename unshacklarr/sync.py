@@ -2031,8 +2031,11 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             return True
         except (RuntimeError, JobFailed, UnshackleError, ValueError, subprocess.CalledProcessError, requests.RequestException) as e:
             run.say(f"{label}: {e}")
+            real = out.resolve()
             for f in got:  # audio alone, maybe in a video container: Import would put it in place of the library's video
-                f.unlink(missing_ok=True)
+                # never through a link: a folder swapped for one would make this delete files elsewhere
+                if not out.is_symlink() and f.resolve().is_relative_to(real):
+                    f.unlink(missing_ok=True)
             run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "")
             return True  # tried: the next day's check tries again, not a second download now
         finally:
