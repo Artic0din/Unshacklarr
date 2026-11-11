@@ -290,10 +290,13 @@ class Unshackle:
             raise UnshackleError(no_credentials(f"unshackle serve is unreachable at {url}: {e}")) from e
         if r.is_redirect:
             to = urlparse(urljoin(r.url, r.headers.get("Location", "")))  # http to https, or a base path, shows as such
-            base = to.path[:-len(path)] if path and to.path.endswith(path) else to.path  # the address, not this call's route
-            target = f"{to.scheme}://{to.netloc.rpartition('@')[2]}{base}" if to.netloc else ""
-            raise UnshackleError(no_credentials(f"{url} redirects to {target or 'another address'}: use that address "
-                                                "for unshackle serve in Settings, Unshackle"))
+            host = f"{to.scheme}://{to.netloc.rpartition('@')[2]}" if to.netloc else ""
+            if host and path and to.path.endswith(path):  # the same route under another address: that address to type
+                raise UnshackleError(no_credentials(f"{url} redirects to {host}{to.path[:-len(path)]}: use that address "
+                                                    "for unshackle serve in Settings, Unshackle"))
+            # another route: no address can be told from it, so none is offered as the one to type
+            raise UnshackleError(no_credentials(f"{url} redirects to {host + to.path if host else 'another address'}, "
+                                                "which is not unshackle serve's: check its address in Settings, Unshackle"))
         if r.status_code == 401:
             raise UnshackleError("unshackle serve refused the API key")
         if r.status_code == 429:  # a limit set on the key (Unshackle 6): waited for, not a lost job
