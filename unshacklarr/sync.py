@@ -879,6 +879,11 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                         raise JobFailed("Stopped before it started", "cancelled")
                     if run and not told:
                         run.say(f"\r\n\x1b[90mWaiting: {limit} download{'s' if limit > 1 else ''} at once on this server\x1b[0m")
+                    if not told:  # waiting here, it keeps no idle slot elsewhere: two jobs holding each other's server would never end (#45)
+                        for other, held in slot_jobs.items():
+                            if other != server and job not in slot_active and job in held:
+                                held.remove(job)
+                                slots.notify_all()
                         told = True
                     slots.wait(2)
             finally:
@@ -1976,6 +1981,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
         if not mine or out.exists():
             return False
         run = EpisodeRun(ep, show, "upgrade", service_sxxeyy)
+        got: list[Path] = []
         try:
             run.say(f"{label}: adding the {want} audio from {show['service']} to the file it has")
             request = download_request(show, config, service_sxxeyy, out)
@@ -1983,7 +1989,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
                 request.pop(k, None)
             request.update(audio_only=True, a_lang=[want])
             run_job_retrying(request, run)
-            got = videos_in(out) + [f for f in out.rglob("*.mka")]
+            got[:] = videos_in(out) + [f for f in out.rglob("*.mka")]
             if not got:
                 raise RuntimeError(f"No {want} audio came from {show['service']}")
             if len(got) > 1:
@@ -2000,7 +2006,8 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             cmd = ["mkvmerge", "-q", "-o", str(joined), *mine, str(have),
                    "--no-video", "--no-subtitles", "--no-chapters", "--no-attachments", *theirs, str(got[0])]
             done = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
-            if done.returncode > 1:
+            if done.returncode not in (0, 1):  # 1: warnings only; below 0: killed by a signal
+                joined.unlink(missing_ok=True)  # a cut-short video would be offered under Waiting in downloads and replace the library's
                 raise RuntimeError(f"mkvmerge could not add the audio: {done.stdout.strip()[-300:]}")
             for f in got:
                 f.unlink(missing_ok=True)
@@ -2015,7 +2022,9 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             return True
         except (RuntimeError, JobFailed, UnshackleError, ValueError, subprocess.CalledProcessError, requests.RequestException) as e:
             run.say(f"{label}: {e}")
-            run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}")
+            for f in got:  # audio alone, maybe in a video container: Import would put it in place of the library's video
+                f.unlink(missing_ok=True)
+            run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "")
             return True  # tried: the next day's check tries again, not a second download now
         finally:
             if not videos_in(out):
