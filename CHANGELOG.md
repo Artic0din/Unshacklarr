@@ -13,6 +13,7 @@ Every change worth knowing, newest first. The format follows
 - Amazon and Apple Channels (a brand sold inside Prime Video or Apple TV) are never shown: the schedule shows the brand's own logo, or its name when TMDB has none, and the series' suggestions offer only the brand's own service, found by its title or with a "Find it on" button, even when Amazon or Apple itself is not installed. A brand's own row is preferred over its Channel in JustWatch order.
 - Mapped JustWatch's `10play.com.au` links to TEN and normalised them to `10.com.au` show URLs so titles like Fire Country suggest 10 Play, matching JustWatch AU.
 - Suggest scrape follows TMDB/JustWatch sections (Stream / Free / Ads only). Anchor titles mark Channel packaging and Amazon/Apple purchases, which are never offered. Stale suggest cache without `kind` is refreshed.
+- Removed a duplicated test file, an unused constant and several repeated helpers (reading a file with `mkvmerge`, the retried download's numbering and Replace, the HH:MM check, the page's local-date helper), with no change in behaviour.
 
 ### Fixed
 
@@ -28,9 +29,22 @@ Every change worth knowing, newest first. The format follows
 - Mapped JustWatch AU's `9now.app.link` Branch redirects and `9now.com.au` links to NINE, and Nine Network catch-up, so titles like Travel Guides suggest 9Now instead of "no supported service"; week-old suggest caches refresh when those mappings change.
 - A series' own network catch-up service (for example SEVEN or TEN) is now suggested beside the TMDB links, not only when TMDB lists none.
 - Preserved the selected Unshackle backend, Sonarr instance, provider programme, and season page across retries and upgrades.
+- Change and download no longer shows "Seasons listed as separate shows", which changed the series' saved settings instead of only the episodes picked, then made Download ask to save first.
 - A series with a fallback service no longer fails with `UnboundLocalError` when its own service has the episode in none of the accepted audio languages and the fallback service downloads it: the episode is now imported, and no login-fallback profile is tried because of an earlier episode's error.
 - A notification address with every level unticked no longer receives every message, and it still shows three unticked boxes after a reload.
 - Choosing a CDM device for one service no longer drops the other services' devices when `cdm:` in unshackle.yaml is written on one line (`cdm: {default: l3, AMZN: l3}`): Unshacklarr now refuses and says to change it by hand, leaving the file as it was.
+- A syntax error in `unshackle.yaml` no longer stops its editor from opening it or saving over it, and no longer silences the hourly alerts: the disk-full alerts still go, and cookies and CDM devices count as not checked.
+- The automatic backup and update-check loops no longer stop for good when a pass fails with an unexpected error: the error is logged and the next pass runs after the usual wait.
+- An interrupted download (cut off by a restart) can now be deleted from Activity, and Clear all removes it, instead of answering "No such download in the history" and staying.
+- Activity's weekly stats now start each week on Monday at midnight in the app's time zone, not in UTC, and the week labels no longer show the day before west of UTC.
+- Saving a remote CDM or allowing Unshackle's proxies no longer deletes the blank lines and `#` comments that follow that section in `unshackle.yaml`.
+- A change made while a Save is still running is no longer marked as saved: the save bar stays up until it is saved, and the off-site backup's "Save and test" only marks its own fields as saved.
+- Two jobs that use two Unshackle servers no longer wait on each other forever when "downloads at once" is set: a job waiting for a slot on one server now gives back its idle slot on the other.
+- Downloads are no longer refused with "No CDM" for up to 10 minutes after a device is picked, changed or removed in Settings, CDM, or after Unshackle is restarted from the page: the next download reads Unshackle's config afresh.
+- A failed "add audio track" no longer leaves a half-written file in the download folder, so Import under Waiting in downloads can no longer replace the library's file with it.
+- Restoring a backup whose number settings are not numbers or are outside the range a Save allows (for example a Sync every of 0 hours, or a History to keep of "lots") is now refused with a message naming the setting, before anything is written; before, it was written and the app could not start until `config.yaml` was fixed by hand.
+- Picking several hundred episodes at once no longer puts every id in one Sonarr request: they are fetched 200 at a time, so a large catch-up is no longer refused for its URL's length.
+- A job paused during its last episode now ends when that episode does, instead of staying "running" until Resume was pressed (Sync now answered that one was already running). A paused job with episodes left still waits for Resume.
 - "Release time set" is now sent once, when the time is written, instead of again for every later episode of the same run.
 
 ## [1.5.0] - 2026-10-17

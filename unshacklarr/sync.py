@@ -539,9 +539,14 @@ def missing_episodes(now: datetime | None = None) -> list[dict]:
     return [ep for ep in episodes if not ep.get("hasFile") and ep.get("monitored", True) and ep["series"].get("monitored", True)]
 
 
+SONARR_IDS_PER_REQUEST = 200  # every id sits in the URL: a few hundred would make one a web server refuses
+
+
 def chosen_episodes(ids: list[int]):
     """Episodes picked by hand in the web page, shaped like /wanted/missing records."""
-    episodes = sonarr_get("episode", episodeIds=ids, includeSeries="true")
+    ids = list(dict.fromkeys(ids))  # one id twice, in two groups, would come back twice
+    episodes = [ep for start in range(0, len(ids), SONARR_IDS_PER_REQUEST)
+                for ep in sonarr_get("episode", episodeIds=ids[start:start + SONARR_IDS_PER_REQUEST], includeSeries="true")]
     return sorted(episodes, key=lambda e: (e["seriesId"], e["seasonNumber"], e["episodeNumber"]))
 
 
@@ -573,14 +578,15 @@ def job_episodes(episodes: list, batch: str | None):
     so an episode queued again after that starts on its own instead of being lost."""
     i = 0
     while True:
-        while batch in paused_jobs:  # paused: the one before is done, this one waits
-            time.sleep(1)
         with jobs_lock:
-            if i >= len(episodes):
+            if i >= len(episodes):  # nothing left, paused or not: the job ends
                 if batch in running_jobs:
                     running_jobs[batch]["closed"] = True
                 return
-            ep = episodes[i]
+            ep = None if batch in paused_jobs else episodes[i]
+        if ep is None:  # paused: the one before is done, this one waits
+            time.sleep(1)
+            continue
         i += 1
         yield ep
 
@@ -667,8 +673,13 @@ class EpisodeRun:
             self.take_over_failures(automatic=True)
         self.log = (RUNS_DIR / f"{self.id}.log").open("ab")
         self.raw(f"\x1b[90m── {now.astimezone(LOCAL):%a %d %b %H:%M:%S} · {kind} ──\x1b[0m\r\n".encode())
-        self.save()
-        EpisodeRun.active.add(self.id)
+        EpisodeRun.active.add(self.id)  # before its first card is saved: the history never offers a card being born for deletion
+        try:
+            self.save()
+        except BaseException:
+            EpisodeRun.active.discard(self.id)  # no card, no run
+            self.log.close()
+            raise
         current.run = self
 
     def say(self, text: str) -> None:
@@ -874,6 +885,11 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                         raise JobFailed("Stopped before it started", "cancelled")
                     if run and not told:
                         run.say(f"\r\n\x1b[90mWaiting: {limit} download{'s' if limit > 1 else ''} at once on this server\x1b[0m")
+                    if not told:  # waiting here, it keeps no idle slot elsewhere: two jobs holding each other's server would never end (#45)
+                        for other, held in slot_jobs.items():
+                            if other != server and job not in slot_active and job in held:
+                                held.remove(job)
+                                slots.notify_all()
                         told = True
                     slots.wait(2)
             finally:
@@ -1769,8 +1785,7 @@ def finalize(out: Path, sxxeyy: str, name: str, join_parts: bool = True, episode
         match = SXXEYY.search(f.name)
         if not match and not programme:
             continue
-        info = subprocess.run(["mkvmerge", "-J", str(f)], stdout=subprocess.PIPE, text=True)
-        title = json.loads(info.stdout or "{}").get("container", {}).get("properties", {}).get("title", "")
+        title = mkvmerge_info(f).get("container", {}).get("properties", {}).get("title", "")
         if not match:  # Britains.Forgotten.Girls.2026.1080p...mkv: BBC.Documentaries.S2026E14.Britains.Forgotten...
             trace(f"renamed {f.name} to {dots(name)}.{sxxeyy}.{f.name}")
             f = f.rename(f.with_name(f"{dots(name)}.{sxxeyy}.{f.name}"))
@@ -1972,6 +1987,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
         if not mine or out.exists():
             return False
         run = EpisodeRun(ep, show, "upgrade", service_sxxeyy)
+        got: list[Path] = []
         try:
             run.say(f"{label}: adding the {want} audio from {show['service']} to the file it has")
             request = download_request(show, config, service_sxxeyy, out)
@@ -1979,7 +1995,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
                 request.pop(k, None)
             request.update(audio_only=True, a_lang=[want])
             run_job_retrying(request, run)
-            got = videos_in(out) + [f for f in out.rglob("*.mka")]
+            got[:] = videos_in(out) + [f for f in out.rglob("*.mka")]
             if not got:
                 raise RuntimeError(f"No {want} audio came from {show['service']}")
             if len(got) > 1:
@@ -1996,7 +2012,8 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             cmd = ["mkvmerge", "-q", "-o", str(joined), *mine, str(have),
                    "--no-video", "--no-subtitles", "--no-chapters", "--no-attachments", *theirs, str(got[0])]
             done = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
-            if done.returncode > 1:
+            if done.returncode not in (0, 1):  # 1: warnings only; below 0: killed by a signal
+                joined.unlink(missing_ok=True)  # a cut-short video would be offered under Waiting in downloads and replace the library's
                 raise RuntimeError(f"mkvmerge could not add the audio: {done.stdout.strip()[-300:]}")
             for f in got:
                 f.unlink(missing_ok=True)
@@ -2011,7 +2028,9 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             return True
         except (RuntimeError, JobFailed, UnshackleError, ValueError, subprocess.CalledProcessError, requests.RequestException) as e:
             run.say(f"{label}: {e}")
-            run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}")
+            for f in got:  # audio alone, maybe in a video container: Import would put it in place of the library's video
+                f.unlink(missing_ok=True)
+            run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "")
             return True  # tried: the next day's check tries again, not a second download now
         finally:
             if not videos_in(out):
@@ -2020,8 +2039,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
 
 def duration_of(path: Path) -> float:
     """A file's length in seconds, as mkvmerge reads it (0 when it can't tell)."""
-    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
-    return (json.loads(info.stdout or "{}").get("container", {}).get("properties", {}).get("duration") or 0) / 1e9
+    return (mkvmerge_info(path).get("container", {}).get("properties", {}).get("duration") or 0) / 1e9
 
 
 def note_upgrade(ep: dict, show: dict, service_sxxeyy: str, lacking: str) -> None:
@@ -2262,18 +2280,21 @@ def first_language(order: list[str], tracks: list[dict]) -> str | None:
     return None
 
 
+def mkvmerge_info(path: Path) -> dict:
+    """What `mkvmerge -J` says of a file ({} when it can't tell)."""
+    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
+    return json.loads(info.stdout or "{}")
+
+
 def mkv_tracks(path: Path) -> list[dict]:
     """A file's tracks, as mkvmerge reads them (their id, type and properties)."""
-    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
-    return json.loads(info.stdout or "{}").get("tracks") or []
+    return mkvmerge_info(path).get("tracks") or []
 
 
 def audio_languages(path: Path, kind: str = "audio") -> set[str]:
     """The languages of a file's audio (or subtitles: forced ones left out), as mkvmerge reads them."""
-    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
-    tracks = json.loads(info.stdout or "{}").get("tracks") or []
     found = set()
-    for t in tracks:
+    for t in mkv_tracks(path):
         if t.get("type") == kind and not (t.get("properties") or {}).get("forced_track"):
             props = t.get("properties") or {}
             for code in (props.get("language_ietf"), props.get("language")):

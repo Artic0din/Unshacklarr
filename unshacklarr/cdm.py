@@ -263,6 +263,16 @@ def remote_delete(yaml_file: Path, name: str) -> None:
     write_remote(yaml_file, config, [e for e in entries if str(e.get("name")) != name])
 
 
+def section_end(lines: list[str], top: int) -> int:
+    """The line after a top-level section: trailing blank lines and unindented comments belong to the next key, so they stay."""
+    end = top + 1
+    while end < len(lines) and (not lines[end].strip() or lines[end][0] in " \t-" or lines[end].lstrip().startswith("#")):
+        end += 1
+    while end > top + 1 and (not lines[end - 1].strip() or lines[end - 1][0] == "#"):
+        end -= 1
+    return end
+
+
 def write_remote(yaml_file: Path, config: dict, entries: list[dict]) -> None:
     """unshackle.yaml with its remote_cdm: block written anew and every other line as it was; checked by reading it back."""
     text = yaml_file.read_text(encoding="utf8")
@@ -272,9 +282,7 @@ def write_remote(yaml_file: Path, config: dict, entries: list[dict]) -> None:
     if top is None:
         new = text + ("" if text.endswith("\n") or not text else "\n") + block
     else:
-        end = top + 1
-        while end < len(lines) and (not lines[end].strip() or lines[end][0] in " \t-" or lines[end].lstrip().startswith("#")):
-            end += 1
+        end = section_end(lines, top)
         new = "".join(lines[:top]) + block + "".join(lines[end:])
     after = yaml.safe_load(new) or {}
     if after.get("remote_cdm") != entries or {k: v for k, v in after.items() if k != "remote_cdm"} != {k: v for k, v in config.items() if k != "remote_cdm"}:
@@ -341,9 +349,7 @@ def allow_proxies(text: str, key: str, wvds: list[str], prds: list[str]) -> str:
     if top is None:
         new = text + ("" if text.endswith("\n") or not text else "\n") + block
     else:
-        end = top + 1
-        while end < len(lines) and (not lines[end].strip() or lines[end][0] in " \t-" or lines[end].lstrip().startswith("#")):
-            end += 1
+        end = section_end(lines, top)
         new = "".join(lines[:top]) + block + "".join(lines[end:])
     after = yaml.safe_load(new) or {}
     if after.get("serve") != serve or {k: v for k, v in after.items() if k != "serve"} != {k: v for k, v in config.items() if k != "serve"}:
