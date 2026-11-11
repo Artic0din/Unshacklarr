@@ -962,7 +962,15 @@ def test_leftovers_are_listed_and_the_old_ones_cleaned(tmp_path, monkeypatch):
         os.utime(f, (time_now := __import__("time").time(), time_now - age_days * 86400))
     (tmp_path / "unshackle-111-S02E07").mkdir()  # empty: nothing waits
     (tmp_path / "someone-else").mkdir()
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "elsewhere" / "Film.mkv").write_bytes(b"x")
+    (tmp_path / "unshackle-111-S02E08").symlink_to(tmp_path / "elsewhere", target_is_directory=True)  # named like ours
     assert [l["folder"] for l in sync.leftovers()] == ["unshackle-111-S02E05", "unshackle-111-S02E06"]
+    try:
+        sync.leftover_path("unshackle-111-S02E08")  # nor imported, nor deleted through, by its name
+        raise AssertionError("a linked folder was taken for a waiting one")
+    except RuntimeError:
+        pass
     assert sync.leftovers()[0]["sxxeyy"] == "S02E05" and sync.leftovers()[0]["size"] == 10
     assert sync.clean_leftovers() == ["unshackle-111-S02E05"]  # 14 days by default
     assert not (tmp_path / "unshackle-111-S02E05").exists() and (tmp_path / "unshackle-111-S02E06").exists()
