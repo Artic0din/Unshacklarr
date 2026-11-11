@@ -1414,7 +1414,8 @@ def test_a_network_error_never_shows_a_discord_webhook_token(tmp_path, monkeypat
     # an @ in the query too: the password mask takes the ?, so the diagnostic hides what follows as the query
     from unshacklarr import web
     for url in ("http://u:p@host?email=a@b.com&token=SECRET1", "http://u:p@host?email=a@b.com!&token=SECRET1",
-                "http://u:p@host?email=a@b.com;token=SECRET1"):
+                "http://u:p@host?email=a@b.com;token=SECRET1", "http://u:p@host?email=a@b.com/path&token=SECRET1",
+                "http://u:p@host#a@b.com&token=SECRET1"):
         assert "SECRET1" not in web.scrubbed(f"GET {url}") and "u:p" not in web.scrubbed(f"GET {url}"), url
     assert sync.no_credentials("http://u:abc@foo?hidden@[fe80::1%25eth0]:8080") == "http://***@[fe80::1%25eth0]:8080"
     import time
