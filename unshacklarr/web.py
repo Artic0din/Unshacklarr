@@ -3510,6 +3510,10 @@ def tvdb_titles(tvdb_id: int) -> dict[str, str]:
 
 
 TITLE_NUMBER = re.compile(r"(?:^|\D)(\d+)$")  # a plain title's last number: "… part 2", "… episode 2", "… 2"
+NUMBER_WORDS = ("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+                "seventeen eighteen nineteen twenty").split()
+# "… part two" ends a number too; not after a tens word ("twenty one" is 21, not 1)
+TITLE_NUMBER_WORD = re.compile(rf"(?:^|(?<!ty) )({'|'.join(NUMBER_WORDS)})$")
 
 
 @functools.lru_cache(maxsize=1 << 16)  # the same pairs again at the "enough" count, each probe
@@ -3546,7 +3550,9 @@ def letters(title: str) -> collections.Counter:
 
 @functools.lru_cache(maxsize=1 << 14)
 def last_number(title: str) -> int | None:
-    return int(m[1]) if (m := TITLE_NUMBER.search(title)) else None
+    if m := TITLE_NUMBER.search(title):
+        return int(m[1])
+    return NUMBER_WORDS.index(m[1]) + 1 if (m := TITLE_NUMBER_WORD.search(title)) else None
 
 
 def titles_of(sonarr_eps: list[dict], tmdb_eps: list[dict], own: bool = True) -> dict[int, set]:
