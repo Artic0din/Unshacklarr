@@ -322,7 +322,7 @@ def series_title(url: str) -> str:
         return url.split("?")[0]
     if on_site(url, "disneyplus.com"):  # drop the locale (/fr-fr/, /en-ca/…): one entity, one suggestion
         return re.sub(r"(disneyplus\.com)/[a-z]{2}-[a-z]{2}/", r"\1/", url)
-    if on_site(url, "primevideo.com", "amazon.com", "amazon.fr") and query.get("gti"):  # app.primevideo.com: not parsed
+    if on_site(url, "primevideo.com", "amazon.com", "amazon.fr", "amazon.de") and query.get("gti"):  # app.primevideo.com: not parsed
         return query["gti"][0]
     # These sites' links open one episode; the series page is in the path (an iPlayer episode's programme comes from
     # BBC's own programme page). From #12, by mj23au.
@@ -1622,7 +1622,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 8
+SUGGEST_MAP = 9
 
 
 async def suggest(request):

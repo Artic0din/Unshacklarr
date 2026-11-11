@@ -2292,9 +2292,17 @@ def test_episode_links_are_taken_back_to_their_series(tmp_path, monkeypatch):
         # 7plus: SEVEN fetches just the ?episode-id= episode; the show is the path
         "https://7plus.com.au/9-1-1?episode-id=NINO09-001": "https://7plus.com.au/9-1-1",
         "https://7plus.com.au/highway-patrol": "https://7plus.com.au/highway-patrol",
+        # Amazon's sites all reduce to the title id, so one title found on two of them is one suggestion
+        "https://www.amazon.de/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.com/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.fr/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.primevideo.com/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
     }
     for given, series in cases.items():
         assert web.series_title(given) == series, given
+    de, com = ({"service": "AMZN", "url": web.series_title(f"https://www.amazon.{tld}/gp/video/detail?gti=amzn1.dv.gti.x"),
+                "country": country, "kind": "native"} for tld, country in (("de", "DE"), ("com", "US")))
+    assert len(web.merge_countries([[de], [com]])) == 1
 
     class Page:
         def __init__(self, data):
