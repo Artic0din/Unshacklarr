@@ -1033,7 +1033,9 @@ async def save_config(request):
         }
         series[int(key)].update(check_numbering(show, str(key)))
         # The automatic sync only takes episodes aired from here on: see sonarr_sync.wanted_automatically.
-        series[int(key)]["since"] = str(show.get("since") or datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        # The page never learns it, so a Save without it keeps the stored one: stamping again would skip the episodes in between.
+        kept = (previous["series"].get(int(key)) or {}).get("since")
+        series[int(key)]["since"] = str(show.get("since") or kept or datetime.now(timezone.utc).isoformat(timespec="seconds"))
         try:  # the day the service publishes, from the day it airs: 1 after, -N days before (up to two weeks)
             day = int(show.get("release_day") or 0)
         except (TypeError, ValueError):

@@ -333,6 +333,29 @@ def test_crave_series_from_the_sitemap(monkeypatch):
     assert web.crave_series("https://www.crave.ca/en/play/weapons/weapons-1") is None  # a movie, not a series
 
 
+def test_a_series_keeps_its_start_date_on_every_save(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "known_services", lambda: None)
+    monkeypatch.setattr(web.sonarr_sync, "apply_settings", lambda s: None)
+
+    def save(show):
+        async def json():
+            return {"series": {"7": {"service": "iV", "title": "https://example.com/show", **show}}}
+        asyncio.run(web.save_config(SimpleNamespace(json=json)))
+        return web.read_config()["series"][7]["since"]
+
+    first = save({})  # saved for the first time: now
+    assert abs((datetime.now(timezone.utc) - datetime.fromisoformat(first)).total_seconds()) < 5
+    web.write_config({**web.read_config(), "series": {7: {**web.read_config()["series"][7], "since": "2026-01-01T00:00:00+00:00"}}})
+    assert save({}) == "2026-01-01T00:00:00+00:00"  # the page never learns it, so it never sends it back
+    assert save({"since": "2026-02-02T00:00:00+00:00"}) == "2026-02-02T00:00:00+00:00"  # one that is sent still wins
+
+
 def test_a_saved_key_never_follows_a_new_url(tmp_path, monkeypatch):
     import pytest
     from unshacklarr import web
