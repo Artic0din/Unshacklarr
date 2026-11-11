@@ -2468,21 +2468,61 @@ def test_a_failed_audio_add_never_deletes_through_a_folder_swapped_after_its_che
         folder["failed"] = True
         return subprocess.CompletedProcess(cmd, code, stdout="Error: disk full")
 
-    real_is_symlink = Path.is_symlink
+    real_is_symlink, real_open = Path.is_symlink, sync.os.open
+
+    def swap():
+        if folder.get("failed") and not folder.get("swapped"):
+            folder["swapped"] = True
+            shutil.rmtree(folder["out"])
+            folder["out"].symlink_to(elsewhere, target_is_directory=True)
 
     def is_symlink(self):
         answer = real_is_symlink(self)
-        if folder.get("failed") and self == folder.get("out") and not answer:  # looked at once it failed: swapped right after
-            shutil.rmtree(self)
-            self.symlink_to(elsewhere, target_is_directory=True)
+        if self == folder.get("out") and not answer:  # looked at once it failed: swapped right after
+            swap()
         return answer
+
+    def open_(path, *a, **k):
+        if Path(path) == folder.get("out"):  # or swapped as it is opened
+            swap()
+        return real_open(path, *a, **k)
     monkeypatch.setattr(Path, "is_symlink", is_symlink)
+    monkeypatch.setattr(sync.os, "open", open_)
     monkeypatch.setattr(sync, "run_job_retrying", download)
     monkeypatch.setattr(sync.subprocess, "run", tools)
     monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: None)
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     assert sync.add_track(205, "fr") is True
-    assert (elsewhere / "audio.mkv").read_bytes() == b"keep me"
+    assert folder["swapped"] and (elsewhere / "audio.mkv").read_bytes() == b"keep me"
+
+
+@pytest.mark.parametrize("handles", [True, False])  # False: Windows, with no folder handles
+def test_unlink_inside_deletes_only_what_is_really_inside(tmp_path, monkeypatch, handles):
+    import errno
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "NO_FOLLOW_FDS", handles and sync.NO_FOLLOW_FDS)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "film.mkv").write_bytes(b"keep me")
+    out = tmp_path / "out"
+    (out / "sub").mkdir(parents=True)
+    plain, nested, loop = out / "audio.mkv", out / "sub" / "audio.mka", out / "loop.mkv"
+    plain.write_bytes(b"a")
+    nested.write_bytes(b"a")
+    loop.symlink_to(loop.name)
+    assert sync.unlink_inside(out, [plain, nested, loop]) == []
+    assert not plain.exists() and not nested.exists() and not loop.is_symlink()
+    linked = tmp_path / "linked"
+    linked.symlink_to(elsewhere, target_is_directory=True)
+    assert sync.unlink_inside(linked, [linked / "film.mkv"]) == []
+    assert (elsewhere / "film.mkv").read_bytes() == b"keep me"  # a linked folder: nothing deleted through it
+    plain.write_bytes(b"a")
+
+    def full(*a, **k):
+        raise OSError(errno.EMFILE, "Too many open files")
+    monkeypatch.setattr(sync.os, "open", full)
+    monkeypatch.setattr(Path, "unlink", full)
+    assert sync.unlink_inside(out, [plain]) == [plain] and plain.exists()  # left, and said: not taken for a link
 
 
 def test_a_failed_audio_add_survives_a_file_that_links_to_itself(tmp_path, monkeypatch):
