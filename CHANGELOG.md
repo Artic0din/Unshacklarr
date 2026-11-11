@@ -27,6 +27,7 @@ Every change worth knowing, newest first. The format follows
 - Mapped JustWatch AU's `9now.app.link` Branch redirects and `9now.com.au` links to NINE, and Nine Network catch-up, so titles like Travel Guides suggest 9Now instead of "no supported service"; week-old suggest caches refresh when those mappings change.
 - A series' own network catch-up service (for example SEVEN or TEN) is now suggested beside the TMDB links, not only when TMDB lists none.
 - Preserved the selected Unshackle backend, Sonarr instance, provider programme, and season page across retries and upgrades.
+- A series with a fallback service no longer fails with `UnboundLocalError` when its own service has the episode in none of the accepted audio languages and the fallback service downloads it: the episode is now imported, and no login-fallback profile is tried because of an earlier episode's error.
 
 ## [1.5.0] - 2026-10-17
 

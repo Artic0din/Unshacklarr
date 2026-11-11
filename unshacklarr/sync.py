@@ -2997,6 +2997,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     run_job_retrying(request, run)
 
                 missed = None  # its own service has it in none of the languages accepted: the fallback's turn
+                error = cause = None  # this episode's own: the login-fallback check below must never see the last one's
                 try:
                   try:
                     # Its number on the service may hold another episode (a same-named series elsewhere, seasons
@@ -3020,7 +3021,6 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                                         numbering={**own, "episode_map": {**(own.get("episode_map") or {}), sxxeyy: wrong["service"]}})
                         service_sxxeyy = wrong["service"]
                     ask(service_sxxeyy)
-                    error = cause = None
                     # Nothing under its number: the service may have it under another, found by its title
                     if not videos_in(out) and int(show.get("parts") or 0) <= 1 and (found := by_title(show, ep, service_sxxeyy, run)):
                         other = found["service"]

@@ -1949,6 +1949,58 @@ def test_a_series_falls_back_on_another_service_when_its_own_has_nothing(tmp_pat
     assert card["service"] == "MLT" and card["fallback"] == "RTLP" and card["outcome"] == "downloaded"
 
 
+def fallback_run(sync, tmp_path, monkeypatch, own, fallback_delivers=True):
+    config = sync.read_file()
+    config["series"][111].update(fallback={"service": "MLT", "title": "https://mlt/show"}, fallback_profiles="default, alt")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "download_request", lambda show, config, wanted, out: {
+        "service": show["service"], "title_id": show["title"], "wanted": [wanted], "output_dir": str(out),
+    })
+    asked = []
+
+    def download(payload, run=None):
+        asked.append((payload["wanted"][0], payload["service"], payload.get("profile") or "default"))
+        if payload["service"] == "MLT":
+            if fallback_delivers:
+                out = Path(payload["output_dir"])
+                out.mkdir(parents=True, exist_ok=True)
+                (out / "Show.S02E05.mkv").write_bytes(b"x")
+            return
+        own(payload)
+
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    for name in ("finalize", "check_audio", "import_episode"):
+        monkeypatch.setattr(sync, name, lambda *a, **k: None)
+    return config, asked
+
+
+def test_the_language_fallback_finishes_when_the_fallback_service_delivers(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+
+    def own(payload):
+        raise sync.Missing("audio", ["fr"], {"en"})
+
+    config, asked = fallback_run(sync, tmp_path, monkeypatch, own)
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+    card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
+    assert asked == [("S02E05", "RTLP", "default"), ("S02E05", "MLT", "default")]
+    assert card["outcome"] == "downloaded" and card["service"] == "MLT" and card["fallback"] == "RTLP"
+
+
+def test_the_language_fallback_never_reads_the_login_error_of_an_earlier_episode(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+
+    def own(payload):
+        if payload["wanted"][0] == "S02E05":
+            raise sync.UnshackleError("unshackle serve: 401 Unauthorized: your session has expired")
+        raise sync.Missing("audio", ["fr"], {"en"})
+
+    config, asked = fallback_run(sync, tmp_path, monkeypatch, own, fallback_delivers=False)
+    sync.sync(config, {}, [episode(111, 2, 5), episode(111, 2, 6)], manual=True, kind="manual")
+    assert [a for a in asked if a[0] == "S02E06"] == [("S02E06", "RTLP", "default"), ("S02E06", "MLT", "default")]  # no profile for it
+
+
 def test_a_release_time_is_learnt_once_clear_and_never_over_one_set(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     seen = {f"unshackle-111-S02E0{n}": {"tvdbId": 111, "aired": f"2026-09-0{n}T19:00:00Z", "not_yet": f"2026-09-0{n}T20:55:00Z",
