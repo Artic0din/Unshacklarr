@@ -62,6 +62,7 @@ Every change worth knowing, newest first. The format follows
 - The library folder guess in Settings now works for a Sonarr on Windows: the Sonarr folder it proposes keeps the drive letter and backslashes (`D:\TV`), so it matches the paths that Sonarr reports.
 - A local Unshackle whose Python is missing or does not answer no longer stops every health update: Unshackle now shows as down with the cause, and the lights for Sonarr and the other servers still refresh.
 - Unshacklarr no longer follows a redirect from unshackle serve: it says which address the redirect points to so you can use that one, and the address in the "did not answer like unshackle serve" message hides any user name and password.
+- The one-off preview no longer shows an episode 00 (S01E00) when an episode offset leads before episode 1, as the sync skips it; and Settings > Automation now shows "Next sync at" in the app's time zone setting, as the sync runs, instead of the browser's. The broadcast calendar's dates still follow the browser's time zone.
 
 ## [1.5.0] - 2026-10-17
 

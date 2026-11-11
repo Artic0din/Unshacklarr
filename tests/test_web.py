@@ -190,6 +190,72 @@ def test_stats_weeks_start_on_monday_in_the_app_s_time_zone(tmp_path, monkeypatc
     assert [(w["start"], w["downloaded"]) for w in s["weeks"][-2:]] == [("2026-11-02", 1), ("2026-11-09", 1)]
 
 
+# Runs one of the page's own functions, so its previews are held to what the server does.
+PREVIEW_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[1] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const { fn, args } = JSON.parse(process.argv[2]);
+const code = {
+  serviceEpisode: () => [pick(js("series.js"), /^const pad2 = .*$/m), pick(js("series.js"), /^function serviceEpisode\(.*?^\}/ms)],
+  nextSyncAt: () => [pick(js("settings-services.js"), /^function nextSyncAt\(.*?^\}/ms)],
+}[fn]().join("\n");
+const box = { Intl, Date, Number, String };
+vm.createContext(box);
+vm.runInContext(code + `\nthis.out = ${fn};`, box);
+const [first, ...rest] = args;
+const result = fn === "nextSyncAt" ? box.out(new Date(first), ...rest).toISOString() : box.out(first, ...rest);
+console.log(JSON.stringify(result));
+"""
+
+
+def run_page_function(fn, *args):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    out = subprocess.run(["node", "-e", PREVIEW_HARNESS, "--", str(static), json.dumps({"fn": fn, "args": args})], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def reloaded_web(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    return importlib.reload(unshacklarr.web)
+
+
+def test_the_page_preview_skips_episode_zero_as_the_server_does(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    for conf, number in (({"episode_offset": -1}, 1), ({}, 0), ({"episode_offset": -3}, 3)):
+        assert run_page_function("serviceEpisode", conf, 1, number) is None
+        assert web.sonarr_sync.service_episode(conf, 1, number) is None
+    assert run_page_function("serviceEpisode", {"episode_offset": -1}, 1, 2) == "S01E01"
+
+
+def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    web = reloaded_web(tmp_path, monkeypatch)
+    noon = datetime(2026, 11, 11, 12, 30, tzinfo=timezone.utc)  # the browser (the suite runs in Paris) and the app differ
+    cases = [(noon, "Australia/Melbourne", 4), (noon, "Asia/Kolkata", 2), (noon, "America/St_Johns", 3), (noon, "UTC", 24),
+             (datetime(2026, 10, 3, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # Melbourne's clocks go forward that night
+             (datetime(2026, 4, 4, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # and back
+             (datetime(2026, 10, 3, 15, 30, tzinfo=timezone.utc), "Australia/Melbourne", 2),  # 02:00 is skipped that night
+             (datetime(2026, 10, 5, 19, 30, tzinfo=timezone.utc), "Europe/Paris", 5)]  # 21:30: the grid starts again at midnight
+    for now, zone, every in cases:
+        monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo(zone))
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        server = web.next_sync(now).astimezone(timezone.utc)
+        page = run_page_function("nextSyncAt", now.isoformat(), every, zone)
+        assert datetime.fromisoformat(page.replace("Z", "+00:00")) == server, zone
+
+
 def test_the_page_script_parses(tmp_path):
     import shutil
     import subprocess
