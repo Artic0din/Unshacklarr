@@ -81,6 +81,7 @@ Every change worth knowing, newest first. The format follows
 - A download serve no longer knows (a 404) is retried at once even when its message starts with `HTTP 500:`, instead of after 12 more status checks.
 - Logging out on two devices at the same moment no longer leaves one of the two sessions usable.
 - An error message, a log line or a shown download command no longer shows the end of a password (an address's or a proxy's) that holds an `@`.
+- Downloading a diagnostic no longer slows down on a log line holding a long run of web addresses.
 
 ## [1.5.0] - 2026-10-17
 
