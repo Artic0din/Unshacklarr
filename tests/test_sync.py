@@ -2126,7 +2126,8 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     assert not sync.same_source({"sceneName": "Show.S01E01.ip.WEB-DL"}, "iP")  # a short tag as Unshackle writes it
 
 
-def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch):
+@pytest.mark.parametrize("code", [2, -9])  # an error, or the process killed (a signal: a negative code)
+def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch, code):
     sync = load(tmp_path, monkeypatch)
     config = sync.read_file()
     config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
@@ -2150,7 +2151,7 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
             tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
             return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
         Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")  # disk full: the output is cut short
-        return subprocess.CompletedProcess(cmd, 2, stdout="Error: disk full")
+        return subprocess.CompletedProcess(cmd, code, stdout="Error: disk full")
 
     imported = []
     monkeypatch.setattr(sync, "run_job_retrying", download)

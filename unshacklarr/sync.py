@@ -2005,7 +2005,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             cmd = ["mkvmerge", "-q", "-o", str(joined), *mine, str(have),
                    "--no-video", "--no-subtitles", "--no-chapters", "--no-attachments", *theirs, str(got[0])]
             done = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
-            if done.returncode > 1:
+            if done.returncode not in (0, 1):  # 1: warnings only; below 0: killed by a signal
                 joined.unlink(missing_ok=True)  # a cut-short video would be offered under Waiting in downloads and replace the library's
                 raise RuntimeError(f"mkvmerge could not add the audio: {done.stdout.strip()[-300:]}")
             for f in got:
