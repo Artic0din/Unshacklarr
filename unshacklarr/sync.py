@@ -2003,7 +2003,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             lengths = [duration_of(have), duration_of(got[0])]
             if all(lengths) and abs(lengths[0] - lengths[1]) > 1:  # the same source: the same length within a second
                 raise RuntimeError(f"The {want} audio lasts {lengths[1]:.0f} s and the file {lengths[0]:.0f} s, so the audio was not added")
-            joined = out / have.name
+            joined = out / have.with_suffix(".mkv").name  # mkvmerge always writes Matroska: never under an .mp4 name
             # the downloads folder is shared: a link planted there must not make mkvmerge write through it (as finalize)
             if out.is_symlink() or joined.exists() or joined.is_symlink() or any(f.is_symlink() for f in out.rglob("*")):
                 raise RuntimeError(f"The download folder {out.name} holds a link or a file with the same name as the library's file, so the audio was not added")
