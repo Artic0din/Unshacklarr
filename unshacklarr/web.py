@@ -4624,12 +4624,15 @@ async def missing(request):
 RUN_ID = re.compile(r"\d{8}-\d{6}-\d{6}-\d+-S\d+E\d+")
 # What a diagnostic never shows: a URL's query (tokens, license contexts), long keys and hashes, e-mail addresses
 SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)\?[^\s\"']+"), r"\1?…"), (re.compile(r"[A-Za-z0-9_+/=-]{32,}"), "…"),
-               (re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), "…@…")]
+               # an address starts where a word does (each start inside a long token tried again was quadratic), and its
+               # name takes token characters too, so a secret glued to it before the @ goes with it
+               (re.compile(r"(?<![\w.+/=-])[\w.+/=-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
 def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
     text = no_credentials(text)
-    text = SECRET_LIKE[-1][0].sub(SECRET_LIKE[-1][1], text)  # e-mail addresses first: masking their domain would leave the name
+    text = SECRET_LIKE[0][0].sub(SECRET_LIKE[0][1], text)  # URL queries first: an address in a URL's path takes its "//"
+    text = SECRET_LIKE[-1][0].sub(SECRET_LIKE[-1][1], text)  # then e-mail addresses: masking their domain would leave the name
     for host in sorted(hosts, key=len, reverse=True):  # before the token rule: a long host label would hide the rest
         name = re.escape(host)
         text = re.sub(rf"host=(['\"]){name}\1(?:, port=\d+)?", "host=…", text, flags=re.I)  # urllib3's HTTPConnectionPool(host='nas', port=8786)
