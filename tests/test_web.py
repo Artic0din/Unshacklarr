@@ -31,6 +31,26 @@ def test_unreachable_is_notified_once_after_two_checks_then_back(tmp_path, monke
     assert sent == [("error", "Unshackle is unreachable"), ("success", "Unshackle is back")]
 
 
+def test_a_local_unshackle_that_cannot_start_is_down_and_the_other_states_still_refresh(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    command = tmp_path / ".venv" / "bin" / "unshackle"
+    command.parent.mkdir(parents=True)
+    command.write_text(f"#!{tmp_path}/no-such-python\n")  # its Python is gone
+    command.chmod(0o755)
+    web.UNSHACKLE.configure({"unshackle_mode": "local", "unshackle_command": str(command)})
+    monkeypatch.setattr(web, "sonarr_health", lambda: {"ok": True, "version": "4.0"})
+
+    web.check_health()
+
+    assert web.health["unshackle"]["ok"] is False
+    assert "no-such-python" in web.health["unshackle"]["error"]
+    assert web.health["sonarr"]["ok"] is True
+
+
 def test_the_unshackle_test_needs_the_setup_code_before_the_setup(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer
@@ -168,6 +188,72 @@ def test_stats_weeks_start_on_monday_in_the_app_s_time_zone(tmp_path, monkeypatc
     # Monday 08:00 and Sunday 23:00 in Tokyo: both still Sunday in UTC
     s = web.stats_of([card("2026-11-08T23:00:00+00:00"), card("2026-11-08T14:00:00+00:00")], now)
     assert [(w["start"], w["downloaded"]) for w in s["weeks"][-2:]] == [("2026-11-02", 1), ("2026-11-09", 1)]
+
+
+# Runs one of the page's own functions, so its previews are held to what the server does.
+PREVIEW_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[1] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const { fn, args } = JSON.parse(process.argv[2]);
+const code = {
+  serviceEpisode: () => [pick(js("series.js"), /^const pad2 = .*$/m), pick(js("series.js"), /^function serviceEpisode\(.*?^\}/ms)],
+  nextSyncAt: () => [pick(js("settings-services.js"), /^function nextSyncAt\(.*?^\}/ms)],
+}[fn]().join("\n");
+const box = { Intl, Date, Number, String };
+vm.createContext(box);
+vm.runInContext(code + `\nthis.out = ${fn};`, box);
+const [first, ...rest] = args;
+const result = fn === "nextSyncAt" ? box.out(new Date(first), ...rest).toISOString() : box.out(first, ...rest);
+console.log(JSON.stringify(result));
+"""
+
+
+def run_page_function(fn, *args):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    out = subprocess.run(["node", "-e", PREVIEW_HARNESS, "--", str(static), json.dumps({"fn": fn, "args": args})], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def reloaded_web(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    return importlib.reload(unshacklarr.web)
+
+
+def test_the_page_preview_skips_episode_zero_as_the_server_does(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    for conf, number in (({"episode_offset": -1}, 1), ({}, 0), ({"episode_offset": -3}, 3)):
+        assert run_page_function("serviceEpisode", conf, 1, number) is None
+        assert web.sonarr_sync.service_episode(conf, 1, number) is None
+    assert run_page_function("serviceEpisode", {"episode_offset": -1}, 1, 2) == "S01E01"
+
+
+def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    web = reloaded_web(tmp_path, monkeypatch)
+    noon = datetime(2026, 11, 11, 12, 30, tzinfo=timezone.utc)  # the browser (the suite runs in Paris) and the app differ
+    cases = [(noon, "Australia/Melbourne", 4), (noon, "Asia/Kolkata", 2), (noon, "America/St_Johns", 3), (noon, "UTC", 24),
+             (datetime(2026, 10, 3, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # Melbourne's clocks go forward that night
+             (datetime(2026, 4, 4, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # and back
+             (datetime(2026, 10, 3, 15, 30, tzinfo=timezone.utc), "Australia/Melbourne", 2),  # 02:00 is skipped that night
+             (datetime(2026, 10, 5, 19, 30, tzinfo=timezone.utc), "Europe/Paris", 5)]  # 21:30: the grid starts again at midnight
+    for now, zone, every in cases:
+        monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo(zone))
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        server = web.next_sync(now).astimezone(timezone.utc)
+        page = run_page_function("nextSyncAt", now.isoformat(), every, zone)
+        assert datetime.fromisoformat(page.replace("Z", "+00:00")) == server, zone
 
 
 def test_the_page_script_parses(tmp_path):
@@ -330,7 +416,7 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), options = js("settings-options.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(options, /^async function save\(\) \{.*?^\}/ms),
   pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
@@ -421,6 +507,84 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "sinceSentBack": True,  # so a later Save does not stamp it again
         "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
         "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
+    }
+
+
+# Runs the page's real numbering handlers and hideSeries against the save bar.
+NUMBERING_BAR_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const core = js("core.js"), series = js("series.js"), schedule = js("schedule.js");
+const code = [
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(series, /^let oneOff = null;.*?(?=^\$\("#d-join"\))/ms),
+  pick(schedule, /^async function hideSeries\(.*?^\}/ms),
+].join("\n");
+const nodes = {};
+const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true }, "#tab-schedule": { hidden: false } };
+const box = {
+  JSON, Object, Math, parseInt, Number, console, structuredClone, current: { tvdbId: 7 },
+  $: (sel) => bars[sel] || nodes[sel] || (nodes[sel] = { value: "", hidden: true, replaceChildren() {} }),
+  api: () => Promise.resolve(box.hiddenAfter),
+  renderCommands() {}, renderInherited() {}, renderPreview() {}, renderHideToggle() {}, renderWall() {}, rerenderSchedule() {},
+  renderHiddenButton() {}, toast() {}, S: null,
+};
+vm.createContext(box);
+vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), baseline: () => { savedConfig = configKey(S.config); } };", box);
+const page = box.page;
+const fresh = () => {
+  box.S = { config: { settings: { theme: "dark" }, hidden_series: [], series: { 7: { service: "iV", title: "https://example.com/show" } } } };
+  page.baseline();
+  bars["#savebar"].hidden = bars["#d-save"].hidden = true;
+};
+(async () => {
+  const out = {};
+  for (const [name, id, typed] of [["episodeOffset", "#d-offset", "5"], ["seasonOffset", "#d-soffset", "2"],
+      ["seasonFrom", "#d-sfrom", "3"], ["episodeTable", "#d-epmap", "S01E01=S01E02"]]) {
+    fresh(); page.input(id, typed);
+    const shown = !bars["#savebar"].hidden;
+    page.input(id, "");
+    out[name] = shown && bars["#savebar"].hidden && bars["#d-save"].hidden;
+  }
+  fresh(); Object.assign(box.S.config.series[7], { episode_offset: 5, season_offset: 2 }); page.baseline();
+  page.input("#d-offset", ""); page.input("#d-offset", "5");  // cleared and typed again: it comes back after season_offset
+  out.restoredOffsetBarHidden = bars["#savebar"].hidden;
+  fresh(); box.hiddenAfter = [7];
+  await page.hideSeries({ tvdbId: 7, series: "Show" }, true);
+  out.hidingLeavesBarHidden = bars["#savebar"].hidden;
+  box.S.config.settings.theme = "light"; page.dirty();
+  const shown = !bars["#savebar"].hidden;
+  box.S.config.settings.theme = "dark"; page.dirty();
+  out.changeThenUndoAfterHiding = shown && bars["#savebar"].hidden;
+  box.hiddenAfter = [];
+  await page.hideSeries({ tvdbId: 7, series: "Show" }, false);
+  out.showingLeavesBarHidden = bars["#savebar"].hidden;
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hidden(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    harness = tmp_path / "harness.js"
+    harness.write_text(NUMBERING_BAR_HARNESS)
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "episodeOffset": True, "seasonOffset": True, "seasonFrom": True, "episodeTable": True,  # typed, then cleared: nothing to save
+        "hidingLeavesBarHidden": True,  # saved at once, so it is not a pending change
+        "changeThenUndoAfterHiding": True,
+        "showingLeavesBarHidden": True,
+        "restoredOffsetBarHidden": True,  # the same settings, whatever the order of their keys
     }
 
 
@@ -824,6 +988,30 @@ def test_the_menu_counts_the_downloads_going_on(tmp_path, monkeypatch):
     assert json.loads(r.body) == {"running": 2, "queued": 1, "sign_in": None}
 
 
+def test_a_calendar_day_click_cycle_reaches_the_usual_number_of_episodes(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "series.js"
+    harness = tmp_path / "harness.js"
+    harness.write_text(
+        'const src = require("fs").readFileSync(process.argv[2], "utf8");'
+        'const next = eval(src.match(/const nextBroadcastCount = [^\\n]*/)[0].replace("const nextBroadcastCount = ", "").replace(/;.*$/, ""));'
+        'const cycle = (usual) => { const seen = []; let n = 0; do { n = next(n, usual); seen.push(n); } while (n !== 0 && seen.length < 12); return seen; };'
+        "console.log(JSON.stringify({ one: cycle(1), four: cycle(4), none: cycle(0) }));"
+    )
+    run = subprocess.run(["node", str(harness), str(script)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "one": [1, 2, 3, 0],  # as before
+        "four": [1, 2, 3, 4, 0],  # the usual 4 is reachable, so the changed day can be put back (#62)
+        "none": [1, 2, 3, 0],  # a day off keeps the cycle of 3
+    }
+
+
 def test_a_broadcast_schedule_is_checked_on_save(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -1207,6 +1395,67 @@ def test_a_session_cookie_copied_before_logging_out_is_refused_after(tmp_path, m
             return (await (await client.get("/api/session")).json())["logged_in"]
 
     assert asyncio.run(go()) is False
+
+
+def test_a_session_cookie_with_a_non_ascii_digit_is_refused_not_a_500(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            client.session.cookie_jar.update_cookies({web.SESSION_COOKIE: "\u00b2.abc"})
+            answer = await client.get("/api/session")
+            return answer.status, await answer.json()
+
+    status, session = asyncio.run(go())
+    assert status == 200 and session["logged_in"] is False  # refused, not a 500, and not let in
+
+
+def test_two_sessions_made_in_the_same_second_log_out_separately(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    monkeypatch.setattr(web.time, "time", lambda: 1_800_000_000.0)
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as first, TestClient(TestServer(web.app)) as second:
+            for client in (first, second):
+                await client.post("/api/login", json={"password": "password1"}, headers={"X-Unshackle": "1"})
+            await first.post("/api/logout", headers={"X-Unshackle": "1"})
+            return [(await (await c.get("/api/session")).json())["logged_in"] for c in (first, second)]
+
+    assert asyncio.run(go()) == [False, True]
+
+
+def test_a_session_cookie_made_before_the_nonce_is_still_accepted_until_it_expires(tmp_path, monkeypatch):
+    import hmac
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    auth = {"secret": "s1"}
+    expires = int(web.time.time()) + 3600
+    old = f"{expires}.{hmac.new(b's1', str(expires).encode(), 'sha256').hexdigest()}"
+
+    class Request:
+        def __init__(self, value):
+            self.cookies = {web.SESSION_COOKIE: value}
+
+    assert web.logged_in(Request(old), auth) is True
+    assert web.logged_in(Request(web.session_value(auth)), auth) is True
+    assert web.logged_in(Request(old[:-1] + ("1" if old.endswith("0") else "0")), auth) is False
 
 
 def test_a_refused_notification_address_is_not_echoed_whole(tmp_path, monkeypatch):
@@ -1700,6 +1949,59 @@ def test_suggest_network_falls_back_to_the_cached_tmdb_network(tmp_path, monkeyp
     assert web.series_network("1", "") == ""
 
 
+def suggest_module(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    monkeypatch.setattr(web, "searched_in_place", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "named_titles", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "series_network", lambda tmdb_id, given: "")
+    return web
+
+
+def ask_suggest(web, tmdb_id):
+    from types import SimpleNamespace
+    return web.suggest(SimpleNamespace(match_info={"tmdb_id": str(tmdb_id)}, query={}))
+
+
+def test_suggestions_looked_up_at_once_all_stay_cached(tmp_path, monkeypatch):
+    import threading
+    web = suggest_module(tmp_path, monkeypatch)
+    both_asking = threading.Barrier(2, timeout=5)  # each waits inside its TMDB request for the other
+
+    def tmdb_links(tmdb_id, country, domains):
+        both_asking.wait()
+        return [{"service": "TEN", "url": f"https://10.com.au/{tmdb_id}", "country": country, "kind": "native"}]
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    async def go():
+        await asyncio.gather(ask_suggest(web, 1), ask_suggest(web, 2))
+
+    asyncio.run(go())
+    assert sorted(json.loads(web.TMDB_CACHE.read_text())) == ["1", "2"]
+
+
+def test_a_failed_suggestion_lookup_keeps_the_cached_entry(tmp_path, monkeypatch):
+    web = suggest_module(tmp_path, monkeypatch)
+    old = {"countries": ["AU"], "checked": "2020-01-01T00:00:00+00:00", "map": web.SUGGEST_MAP,
+           "links": [{"service": "TEN", "url": "https://10.com.au/1", "country": "AU", "kind": "native"}]}
+    web.TMDB_CACHE.write_text(json.dumps({"1": old}))
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    def tmdb_links(tmdb_id, country, domains):
+        raise web.requests.ConnectionError("down")
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    reply = asyncio.run(ask_suggest(web, 1))
+    assert json.loads(reply.text)["checked"] == old["checked"]
+    assert json.loads(web.TMDB_CACHE.read_text()) == {"1": old}
+
+
 def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -1713,6 +2015,36 @@ def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
             raise AssertionError(f"expected {bad!r} to be refused")
         except web.web.HTTPBadRequest as e:
             assert "language code" in e.text
+
+
+def test_the_sync_grid_restarts_at_local_midnight_every_day(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    paris = ZoneInfo("Europe/Paris")
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", paris)
+
+    def next_at(every, *when):
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        return web.next_sync(datetime(*when, tzinfo=paris)).strftime("%m-%d %H:%M")
+
+    assert next_at(5, 2026, 10, 5, 21, 30) == "10-06 00:00"  # the last gap is short: midnight, not 01:00
+    assert next_at(5, 2026, 10, 5, 20, 0) == "10-06 00:00" and next_at(5, 2026, 10, 5, 4, 59) == "10-05 05:00"
+    assert next_at(23, 2026, 10, 5, 22, 0) == "10-05 23:00" and next_at(23, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(2, 2026, 10, 5, 21, 30) == "10-05 22:00" and next_at(2, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(24, 2026, 10, 5, 0, 0) == "10-06 00:00" and next_at(24, 2026, 10, 5, 23, 59) == "10-06 00:00"
+
+    for every, slots in ((2, 12), (5, 5), (23, 2)):  # a clock change leaves no slot of the day without its sync
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        for day in ((2026, 3, 29), (2026, 10, 25), (2026, 10, 5)):
+            now, end, runs = datetime(*day, tzinfo=paris), datetime(*day, tzinfo=paris) + timedelta(days=1), 0
+            while (now := web.next_sync(now)) < end:
+                runs += 1
+            assert runs == slots - 1, (every, day)
 
 
 def test_a_series_is_checked_hours_before_its_release_and_told_once(tmp_path, monkeypatch):
@@ -2267,9 +2599,17 @@ def test_episode_links_are_taken_back_to_their_series(tmp_path, monkeypatch):
         # 7plus: SEVEN fetches just the ?episode-id= episode; the show is the path
         "https://7plus.com.au/9-1-1?episode-id=NINO09-001": "https://7plus.com.au/9-1-1",
         "https://7plus.com.au/highway-patrol": "https://7plus.com.au/highway-patrol",
+        # Amazon's sites all reduce to the title id, so one title found on two of them is one suggestion
+        "https://www.amazon.de/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.com/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.fr/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.primevideo.com/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
     }
     for given, series in cases.items():
         assert web.series_title(given) == series, given
+    de, com = ({"service": "AMZN", "url": web.series_title(f"https://www.amazon.{tld}/gp/video/detail?gti=amzn1.dv.gti.x"),
+                "country": country, "kind": "native"} for tld, country in (("de", "DE"), ("com", "US")))
+    assert len(web.merge_countries([[de], [com]])) == 1
 
     class Page:
         def __init__(self, data):
@@ -3073,6 +3413,27 @@ def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(
     assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
 
 
+def test_the_downloads_list_is_the_queued_then_every_download_newest_first(tmp_path, monkeypatch):
+    # docs/API.md promised the running ones before the history; a running download that started before a finished one stays below it (#60)
+    from aiohttp.test_utils import make_mocked_request
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    started = {"20261001-090000-000001-1-S01E01": "2026-10-01T09:00:00+00:00", "20261001-100000-000001-1-S01E02": "2026-10-01T10:00:00+00:00"}
+    for run_id, when in started.items():
+        card = {"id": run_id, "series": "Show", "tvdbId": 1, "sxxeyy": run_id[-6:], "started": when}
+        if run_id.endswith("E02"):
+            card |= {"outcome": "downloaded", "ended": "2026-10-01T10:05:00+00:00"}
+        (tmp_path / f"{run_id}.json").write_text(json.dumps(card))
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"20261001-090000-000001-1-S01E01"})
+    queued = {"id": "waiting-9", "series": "Show", "tvdbId": 1, "sxxeyy": "S01E09", "waiting": True, "started": "2026-10-01T08:00:00+00:00"}  # older than both: still first
+    monkeypatch.setitem(web.sonarr_sync.waiting, 9, queued)
+
+    async def ask():
+        return json.loads((await web.v1_downloads(make_mocked_request("GET", "/api/v1/downloads"))).text)
+    assert [(d["id"], d["state"]) for d in asyncio.run(ask())] == [
+        ("waiting-9", "queued"), ("20261001-100000-000001-1-S01E02", "downloaded"), ("20261001-090000-000001-1-S01E01", "running")]
+
+
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):
     from unshacklarr.backend import Unshackle, UnshackleError
     serve, asked = Unshackle(tmp_path), []
@@ -3108,6 +3469,17 @@ def test_a_year_in_brackets_is_not_a_part():
     assert plain_title("The Ambush (2)") == "the ambush part 2"
     assert plain_title("Christmas Special (2023)") == "christmas special 2023"  # a year, not part 2023
     assert same_title(plain_title("Christmas Special (2023)"), plain_title("Christmas Special 2023"))
+
+
+def test_a_spelled_out_part_number_counts_as_the_digit():
+    from unshacklarr.web import last_number, same_title
+    assert not same_title("the ambush part two", "the ambush part 1")
+    assert same_title("the ambush part two", "the ambush part 2")
+    assert not same_title("the ambush part one", "the ambush part two")
+    assert last_number("the ambush part twenty") == 20
+    assert last_number("twenty one") is None  # a compound number is not "1": "21" must still match it
+    assert last_number("murder in the city two") == 2 and not same_title("murder in the city two", "murder in the city 1")
+    assert last_number("fallen women") is None and same_title("fallen women", "fallen woman")
 
 
 def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
@@ -3146,6 +3518,22 @@ def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
                         if path == "rootfolder" else [{"path": "/data/tv/Show/S01E01.mkv"}])
     assert web.library_check("", "")["common"] == "/Syno"  # several root folders: the one holding them all
     assert "has no series with a file" in web.library_check("/other", "/x")["why"]
+
+
+def test_the_library_guess_keeps_the_drive_of_a_windows_sonarr(tmp_path, monkeypatch):
+    from unshacklarr import web
+    sync = web.sonarr_sync
+    (tmp_path / "tv" / "Show" / "Season 01").mkdir(parents=True)
+    (tmp_path / "tv" / "Show" / "Season 01" / "file.mkv").write_bytes(b"x")
+    monkeypatch.setattr(web, "LIBRARY_GUESSES", [str(tmp_path / "tv")])
+    windows = "D:\\TV\\Show\\Season 01\\file.mkv"
+    guess = web.library_guess(windows)
+    assert guess == {"sonarr_root": "D:\\TV", "local_root": str(tmp_path / "tv")}
+    assert windows.startswith(guess["sonarr_root"] + "\\")  # a prefix of the path as Sonarr reports it
+    monkeypatch.setitem(sync.SETTINGS, "library_sonarr_root", guess["sonarr_root"])
+    monkeypatch.setitem(sync.SETTINGS, "library_local_root", guess["local_root"])
+    assert sync.library_file(windows).is_file()
+    assert web.library_guess("/data/tv/Show/Season 01/file.mkv") == {"sonarr_root": "/data/tv", "local_root": str(tmp_path / "tv")}
 
 
 def test_another_sonarr_reads_its_own_library(monkeypatch):
