@@ -428,7 +428,7 @@ const box = {
   $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
   api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
   renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
-  boWrong() {}, toast() {}, el: () => ({}), S: null,
+  boWrong() {}, toast() {}, el: () => ({}), S: null, renderReleaseNext() { box.previews = (box.previews || 0) + 1; },
 };
 vm.createContext(box);
 vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); } };", box);
@@ -493,6 +493,16 @@ const fresh = () => {
   saving = page.save(); box.S.config.series[7].release_time = "";  // cleared while the Save ran: stays cleared, and unsaved
   release({ series: { 7: { ...show, release_time: "21:00" } } }); await saving;
   out.clearedMeanwhileStays = box.S.config.series[7].release_time === "" && page.state().unsaved;
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); Object.assign(box.S.config.series[7], { service: "7P", title: "https://7plus.example/show" });  // moved meanwhile
+  release({ series: { 7: { ...show, release_time: "21:00", release_day: 1 } } }); await saving;
+  out.otherSourceTakesNothing = !("release_time" in box.S.config.series[7]) && !("release_day" in box.S.config.series[7]);
+  fresh(); box.S.config.series = { 7: { ...show, release_time: "20:00" } }; page.baseline(box.S.config);
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };
+  bars["#d-release-day"] = { value: "0", hidden: false }; box.previews = 0;
+  box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); release({ series: { 7: { ...show, release_time: "20:00", release_day: 1 } } }); await saving;  // only the day learnt
+  out.learntDayShown = bars["#d-release-day"].value === "1" && box.previews === 1;
   box.current = null; box.drawerSnapshot = null;
   console.log(JSON.stringify(out));
 })();
@@ -524,6 +534,8 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
         "learntTimeShown": True,  # a release time the server kept is shown and counts as saved (#29)
         "clearedMeanwhileStays": True,
+        "otherSourceTakesNothing": True,  # moved to another service while the Save ran: the old one's time is not its
+        "learntDayShown": True,  # a day kept alone shows too, and the next-episode line follows
     }
 
 

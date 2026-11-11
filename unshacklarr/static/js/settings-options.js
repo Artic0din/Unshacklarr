@@ -662,7 +662,8 @@ async function save() {
       if (!was || !conf[k] || !missing(was, k)) continue;
       was[k] = (stamped[id] ??= {})[k] = conf[k];
       const now = S.config.series[id];  // stopped meanwhile (no service): its date stays cleared; edited meanwhile: kept
-      if (now?.service && missing(now, k)) now[k] = conf[k];
+      const same = now?.service === was.service && now?.title === was.title;  // a time learnt for another source is not its
+      if (now?.service && missing(now, k) && (k === "since" || same)) now[k] = conf[k];
     }
   }
   savedConfig = stableJSON(base);
@@ -671,9 +672,11 @@ async function save() {
   const added = open && Object.entries(stamped[drawerSnapshot.id] || {}).filter(([k]) => missing(open, k));
   if (added?.length) drawerSnapshot.conf = JSON.stringify({ ...open, ...Object.fromEntries(added) });
   const shown = current && S.config.series[current.tvdbId];  // its editor shows what is saved
-  if (shown && stamped[current.tvdbId]?.release_time) {
+  const learnt = stamped[current?.tvdbId];
+  if (shown && (learnt?.release_time || learnt?.release_day)) {
     $("#d-release").value = shown.release_time || "";
     $("#d-release-day").value = String(shown.release_day || 0);
+    renderReleaseNext();
   }
   dirty();
   if (currentTab === "schedule") loadSchedule();  // a series just added shows up as managed at once
