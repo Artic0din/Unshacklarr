@@ -5,6 +5,7 @@ import re
 from types import SimpleNamespace
 
 import pytest
+import responses
 from aiohttp import client_exceptions
 
 
@@ -189,6 +190,82 @@ def test_the_page_script_parses(tmp_path):
     assert check.returncode == 0, check.stderr
 
 
+# Runs the page's real liveTick and openActivity with a /api/runs that answers only when the test says so.
+ACTIVITY_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const ctx = {
+  scenario: process.argv[2],
+  pending: [],  // one resolver per /api/runs request not answered yet
+  drawn: [],
+  api: (url) => new Promise((resolve) => { if (url === "/api/runs") ctx.pending.push(resolve); else resolve({ items: [] }); }),
+  $: () => ({ hidden: false, textContent: "", replaceChildren() {} }),
+  failed: () => ({}), clearTimeout() {}, setTimeout() {}, setImmediate, console, activityLater() {}, followLive() {}, liveFeed: null,
+};
+vm.createContext(ctx);
+vm.runInContext(`
+let runsSeq = 0, runCards = [], runsTimer = null;
+const isLive = (c) => c.outcome === "running";
+const renderConsole = () => drawn.push(runCards.map((c) => c.id));
+${grab("openActivity")}
+let feedReloading = false, feedMissed = null;
+${grab("liveTick")}
+const tick = (ids) => liveTick(JSON.stringify(ids.map((id) => ({ id }))));
+const card = (id, outcome) => ({ id, outcome });
+const settle = () => new Promise((r) => setImmediate(r));
+(async () => {
+  if (scenario === "feed") {
+    tick([1]); tick([1]); tick([1]);  // a download started: every message still sees a mismatch
+    const inFlight = pending.length;
+    pending[0]([card(1, "running")]); await settle();
+    console.log(JSON.stringify({ inFlight, asked: pending.length, drawn }));
+  } else if (scenario === "missed") {
+    tick([1]);  // the feed's reload
+    tick([1, 2]);  // another started while it was on its way: the feed says so once, and no more while nothing moves
+    pending[0]([card(1, "running")]); await settle();  // an answer from before the second one started
+    const asked = pending.length;
+    pending[1]([card(1, "running"), card(2, "running")]); await settle();
+    console.log(JSON.stringify({ asked, drawn }));
+  } else {
+    tick([1]);  // the feed's reload
+    openActivity();  // Stop pressed meanwhile
+    pending[1]([card(2, "stopped")]); await settle();
+    pending[0]([card(1, "running")]); await settle();  // the older answer arrives last
+    console.log(JSON.stringify({ drawn }));
+  }
+})();
+`, ctx);
+"""
+
+
+def run_activity(scenario):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "activity.js"
+    out = subprocess.run(["node", "-e", ACTIVITY_HARNESS, "--", str(script), scenario], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def test_the_live_feed_has_one_history_reload_in_flight_and_draws_its_answer():
+    result = run_activity("feed")
+    assert result["inFlight"] == 1  # a slow /api/runs is not asked again by every message
+    assert result["asked"] == 1 and result["drawn"][-1] == [1]  # its answer is used, and nothing asked again
+
+
+def test_a_change_the_feed_said_during_its_reload_is_reloaded_after():
+    result = run_activity("missed")
+    assert result["asked"] == 2 and result["drawn"][-1] == [1, 2]
+
+
+def test_a_reload_after_stop_still_wins_over_the_feeds_older_one():
+    assert run_activity("stop")["drawn"] == [[2]]
+
+
 SAVE_BAR_HARNESS = r"""
 const fs = require("fs"), vm = require("vm");
 const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
@@ -205,7 +282,7 @@ let release, offsiteReply;
 const box = {
   JSON, Object, console, current: null, currentTab: "series", boKind: null, drawerSnapshot: null,
   $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
-  api: (url) => url === "/api/config" ? new Promise((resolve) => { release = resolve; }) : Promise.resolve(offsiteReply),
+  api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
   renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
   boWrong() {}, toast() {}, el: () => ({}), S: null,
 };
@@ -236,6 +313,28 @@ const fresh = () => {
   out.offsiteKeepsOtherEdit = page.state().unsaved && !bars["#savebar"].hidden;
   box.S.config.settings.theme = "dark"; page.dirty();
   out.offsiteFieldsAreSaved = !page.state().unsaved;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();  // a series just added
+  saving = page.save(); release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.sinceLearnt = box.S.config.series[7].since === "2026-11-11T00:00:00+00:00" && bars["#savebar"].hidden && !page.state().unsaved;
+  saving = page.save(); release({ series: {} }); await saving;  // the next Save sends it back: the server keeps it
+  out.sinceSentBack = JSON.parse(box.sentBody).series[7].since === "2026-11-11T00:00:00+00:00";
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.S.config.series[7].service = ""; delete box.S.config.series[7].since;  // Stop pressed while the Save runs
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.stopKeepsDateCleared = box.S.config.series[7].since === undefined;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };  // opened meanwhile
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.drawerOpenedMeanwhileSeesNoChange = JSON.stringify(box.S.config.series[7]) === box.drawerSnapshot.conf;
+  box.current = null; box.drawerSnapshot = null;
   console.log(JSON.stringify(out));
 })();
 """
@@ -260,6 +359,10 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "revertToSentHides": True,  # back to what was sent is saved
         "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
         "offsiteFieldsAreSaved": True,
+        "sinceLearnt": True,  # the date the server stamped a new series with, kept on the page (#27)
+        "sinceSentBack": True,  # so a later Save does not stamp it again
+        "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
+        "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
     }
 
 
@@ -1607,6 +1710,36 @@ def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
             assert "language code" in e.text
 
 
+def test_the_sync_grid_restarts_at_local_midnight_every_day(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    paris = ZoneInfo("Europe/Paris")
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", paris)
+
+    def next_at(every, *when):
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        return web.next_sync(datetime(*when, tzinfo=paris)).strftime("%m-%d %H:%M")
+
+    assert next_at(5, 2026, 10, 5, 21, 30) == "10-06 00:00"  # the last gap is short: midnight, not 01:00
+    assert next_at(5, 2026, 10, 5, 20, 0) == "10-06 00:00" and next_at(5, 2026, 10, 5, 4, 59) == "10-05 05:00"
+    assert next_at(23, 2026, 10, 5, 22, 0) == "10-05 23:00" and next_at(23, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(2, 2026, 10, 5, 21, 30) == "10-05 22:00" and next_at(2, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(24, 2026, 10, 5, 0, 0) == "10-06 00:00" and next_at(24, 2026, 10, 5, 23, 59) == "10-06 00:00"
+
+    for every, slots in ((2, 12), (5, 5), (23, 2)):  # a clock change leaves no slot of the day without its sync
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        for day in ((2026, 3, 29), (2026, 10, 25), (2026, 10, 5)):
+            now, end, runs = datetime(*day, tzinfo=paris), datetime(*day, tzinfo=paris) + timedelta(days=1), 0
+            while (now := web.next_sync(now)) < end:
+                runs += 1
+            assert runs == slots - 1, (every, day)
+
+
 def test_a_series_is_checked_hours_before_its_release_and_told_once(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
@@ -1744,6 +1877,42 @@ def test_the_settings_are_backed_up_and_restored_but_never_the_password(tmp_path
     config = web.read_config()
     assert list(config["series"]) == [222] and config["auth"] == auth  # restored, the password and session kept
     assert "111" in (tmp_path / "config-before-restore.yaml").read_text()  # what it replaced, kept aside
+
+
+def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkeypatch):
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"},
+                      "settings": {"history_keep": 50}})
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+    h = {"X-Unshackle": "1"}
+    before = (tmp_path / "config.yaml").read_text()
+
+    async def restore(client, settings):
+        text = yaml.safe_dump({"settings": settings})
+        return await client.post("/api/restore", json={"password": "password1", "text": text}, headers=h)
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            refused = [await restore(client, s) for s in ({"history_keep": "lots"}, {"sync_every_hours": 0}, {"history_days": 10 ** 400})]
+            texts = [await r.text() for r in refused]
+            unchanged = (tmp_path / "config.yaml").read_text()
+            own = await (await client.post("/api/backup", json={"password": "password1"}, headers=h)).json()
+            ok = await client.post("/api/restore", json={"password": "password1", "text": own["text"]}, headers=h)
+            quoted = await restore(client, {"history_keep": "60", "history_days": "", "backup_every_days": False})  # hand-edited: a number in quotes, an empty default
+            return [r.status for r in refused], texts, unchanged, ok.status, quoted.status
+
+    statuses, texts, unchanged, ok, quoted = asyncio.run(go())
+    assert statuses == [400] * 3 and unchanged == before and ok == 200  # nothing written, the app's own backup restored
+    assert quoted == 200 and web.read_config()["settings"]["history_keep"] == 60  # stored as the number a Save would
+    assert web.read_config()["settings"]["backup_every_days"] == 0  # false: off, as a Save reads it
+    assert "history_keep" in texts[0] and "sync_every_hours" in texts[1] and "history_days" in texts[2]
 
 
 def test_an_episode_without_its_preferred_audio_is_got_again_once_it_comes(tmp_path, monkeypatch):
@@ -2879,6 +3048,55 @@ def test_a_diagnostic_shows_no_address_folder_or_account(tmp_path, monkeypatch):
     assert "sonarr-4k" in text and '"nas"' in text and "GB" in text
 
 
+def test_a_diagnostic_holds_no_host_in_the_card_the_command_the_cause_or_the_log(tmp_path, monkeypatch):
+    # The card keeps the proxy's host (user and password masked), the cause and the log name the servers' addresses (#36)
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "proxy": "http://***@proxy.lan:3128",
+            "cause": "unshackle serve is unreachable at http://serve.lan:8786: timed out",
+            "setup": {"via": "this computer", "proxy": "http://***@10.0.0.9:3128",
+                      "command": "unshackle dl --proxy http://***@10.0.0.9:3128 ALL4 https://c4/show -w S01E01"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://sonarr.lan:8989 answered 500\nthrough nas:8786 and 10.0.0.9:3128\n"
+                                       "HTTPConnectionPool(host='nas', port=8786): Max retries exceeded; HTTPConnectionPool(host='serve.lan', port=8786)\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy": "nordvpn:fr"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://serve.lan:8786",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"}], "backup_remote_url": "https://s3.backup.example.org"}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")
+    for host in ("proxy.lan", "serve.lan", "sonarr.lan", "10.0.0.9", "nas:8786", "8786", "8989", "3128"):
+        assert host not in text, host
+    assert "unreachable at" in text and "answered 500" in text and "https://c4/show" in text and "Max retries" in text  # the rest stays
+    assert '"--proxy": "nordvpn:fr"' in text  # a provider and region names no machine of the user's
+    card["setup"]["proxy"] = "nordvpn:fr"
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    assert '"proxy": "nordvpn:fr"' in web.diagnostic("r1")
+
+
+
+def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(tmp_path, monkeypatch):
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "cause": "Failed to resolve 'nas' ([Errno 8] nodename nor servname)",
+            "setup": {"via": "this computer", "proxy": "nordvpn:fr", "command": "unshackle dl --proxy-download http://dl.proxy.lan:8080 ALL4 x"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://SONARR.LAN:8989 answered 500\nserve at http://[fd00::1234]:8786 timed out\n"
+                                     "Cannot reach sonarr.lan. Retrying, mail alice@sonarr.lan\nat http://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443/x\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy-download": "http://dl.proxy.lan:8080"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://[fd00::1234]:8786", "backup_passphrase": "https://[broken",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"},
+                                        {"name": "far", "url": "https://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443"}]}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")  # a passphrase that looks like a broken address does not stop it
+    assert "alice" not in text  # an e-mail address on a private domain is masked whole
+    for host in ("SONARR.LAN", "sonarr.lan", "fd00::1234", "dl.proxy.lan", "'nas'", "example.org", "8786", "8989", "8080", "9443"):
+        assert host not in text, host
+    assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
+
 
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):
     from unshacklarr.backend import Unshackle, UnshackleError
@@ -3428,6 +3646,39 @@ def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     assert next(s for s in web.dl_options() if s["flag"] == "--cdm")["choices"] == []  # unseen: typed by hand
     line = options.command_line({"service": "NF", "title_id": "1", "wanted": ["S01E01"], "skip_subtitle_errors": True, "cdm": "my_l3"})
     assert line == "unshackle dl --cdm my_l3 NF 1 -w S01E01"
+
+
+@pytest.mark.parametrize("action, body", [("choose", {"service": "NF", "device": "my_l3"}), ("delete", {"name": "my_l3", "kind": "Widevine"})])
+@responses.activate
+def test_a_cdm_action_makes_the_next_download_read_unshackles_config_again(tmp_path, monkeypatch, action, body):
+    # sync.no_cdm reads serve's config kept for 10 minutes: picking a device must not leave "No CDM" standing for that long
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    (tmp_path / "WVDs").mkdir()
+    (tmp_path / "PRDs").mkdir()
+    (tmp_path / "WVDs" / "my_l3.wvd").write_bytes(b"WVD\x02\x02\x01" + b"k" * 40)
+    (tmp_path / "unshackle.yaml").write_text("cdm:\n  default: other\n" if action == "delete" else "")
+    monkeypatch.setattr(web, "cdm_paths", lambda: (tmp_path / "unshackle.yaml", tmp_path / "WVDs", tmp_path / "PRDs"))
+    monkeypatch.setattr(web, "cdm_state", lambda: {})
+    web.UNSHACKLE.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
+    config = responses.get("http://backend:8786/api/config", json={"config": {"cdm": {}}})
+    assert web.UNSHACKLE.cdm_config() == {} and web.UNSHACKLE.cdm_config() == {}
+    assert config.call_count == 1  # kept
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            return (await client.post(f"/api/cdm/{action}", json=body, headers=page)).status
+
+    assert asyncio.run(go()) == 200
+    web.UNSHACKLE.cdm_config()
+    assert config.call_count == 2  # asked again
 
 
 def test_sonarr_reads_wait_as_long_as_a_busy_sonarr_answers(tmp_path, monkeypatch):

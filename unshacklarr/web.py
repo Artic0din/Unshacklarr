@@ -467,6 +467,7 @@ def crave_series(url: str) -> str | None:
 # Buy and Rent are purchases, not Unshackle subscription downloads; Channel packaging sits under Stream.
 STREAM_SECTIONS = frozenset({"stream", "free", "ads"})
 # Anchor title="Watch Fire Country on Paramount+ Amazon Channel" (or Buy/Rent/Stream … on …).
+CLOCK_TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")  # HH:MM, 24-hour
 OFFER_ON = re.compile(r"\b(?:Watch|Stream|Buy|Rent)\s+.+\s+on\s+(.+)$", re.IGNORECASE)
 
 
@@ -1040,7 +1041,7 @@ async def save_config(request):
         if not -sonarr_sync.EARLY_DAYS_MAX <= day <= 1:
             raise web.HTTPBadRequest(text=f"The release day of {key} must be from {sonarr_sync.EARLY_DAYS_MAX} days before airing to the day after")
         if release_time := str(show.get("release_time") or "").strip():
-            if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", release_time):
+            if not CLOCK_TIME.fullmatch(release_time):
                 raise web.HTTPBadRequest(text=f"The release time of {key} must look like 23:30")
             series[int(key)]["release_time"] = release_time
         if day and (release_time or day < 0):  # the day after means nothing without a time; days before do
@@ -1331,7 +1332,7 @@ def check_quiet(quiet) -> dict | None:
     if not quiet or not quiet.get("from") or not quiet.get("to"):
         return None
     for at in (quiet["from"], quiet["to"]):
-        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(at)):
+        if not CLOCK_TIME.fullmatch(str(at)):
             raise web.HTTPBadRequest(text="Quiet hours look like 23:00")
     return {"from": quiet["from"], "to": quiet["to"]}
 
@@ -1349,7 +1350,7 @@ def check_broadcast(plan: dict, key: str) -> dict:
         start = date.fromisoformat(str(plan.get("start")))
     except ValueError:
         raise bad("pick the day of its first episode") from None
-    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(plan.get("time") or "")):
+    if not CLOCK_TIME.fullmatch(str(plan.get("time") or "")):
         raise bad("its time must look like 20:39")
     every = plan.get("every") if plan.get("every") in ("weekly", "daily") else "weekly"
     days = sorted({int(d) for d in plan.get("days") or [] if str(d).isdigit() and 0 <= int(d) <= 6})
@@ -1555,7 +1556,7 @@ def check_settings(body: dict, previous: dict) -> dict:
     settings["release_learn"] = body.get("release_learn") is True
     for name in ("download_from", "download_to"):
         at = str(body.get(name) or "").strip()
-        if at and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", at):
+        if at and not CLOCK_TIME.fullmatch(at):
             raise web.HTTPBadRequest(text="Download window times look like 01:00")
         settings[name] = at
     if bool(settings["download_from"]) != bool(settings["download_to"]):
@@ -1817,10 +1818,10 @@ def installed_links(links: list[dict]) -> list[dict]:
 
 
 def next_sync(now: datetime) -> datetime:
-    """The next automatic sync: on the hour, every sync_every_hours of the local day."""
+    """The next automatic sync: on the hour, every sync_every_hours of the local day, the grid restarting at midnight."""
     every = int(sonarr_sync.SETTINGS["sync_every_hours"])
     local = now.astimezone(sonarr_sync.LOCAL)
-    hour = (local.hour // every + 1) * every
+    hour = min((local.hour // every + 1) * every, 24)  # an interval that does not divide 24 ends the day at midnight
     return local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=hour - local.hour)
 
 
@@ -2517,6 +2518,7 @@ async def cdm_action(request):
         raise web.HTTPBadRequest(text=str(e))
     except OSError as e:
         raise web.HTTPBadGateway(text=f"Could not write Unshackle's files: {e}")
+    UNSHACKLE.configure(UNSHACKLE.settings)  # its cdm: section changed: the next download asks serve, not the copy kept 10 minutes
     return web.json_response(await asyncio.to_thread(cdm_state))
 
 
@@ -2538,6 +2540,22 @@ def backup_problem(data) -> str | None:
     for key, show in (data.get("series") or {}).items():
         if not str(key).isdigit() or not isinstance(show, dict):
             return f"Its series entry {key!r} is not in the format Unshacklarr writes"
+    settings = data.get("settings") or {}
+    for key, (low, high) in NUMBER_SETTINGS.items():  # a value a Save refuses would stop the app starting, or divide by zero
+        value = settings.get(key)
+        if value is None or value == "":  # absent or empty: the default, as load_settings reads it
+            continue
+        try:
+            number = float(value)  # true and false too, as a Save reads them
+        except OverflowError:  # an integer of hundreds of digits
+            number = float("inf")
+        except (TypeError, ValueError):
+            number = float("nan")
+        if number != number:  # not a number at all
+            return f"Its {key} setting must be a number"
+        if not low <= number <= high:
+            return f"Its {key} setting must be between {low} and {high}"
+        settings[key] = int(number) if number.is_integer() else number  # "50" from a hand-edited file: as a Save stores it
     return None
 
 
@@ -3510,7 +3528,6 @@ def tvdb_titles(tvdb_id: int) -> dict[str, str]:
     return titles
 
 
-TITLE_PART = re.compile(r"\bpart (\d+)$")
 TITLE_NUMBER = re.compile(r"(?:^|\D)(\d+)$")  # a plain title's last number: "… part 2", "… episode 2", "… 2"
 
 
@@ -3912,16 +3929,17 @@ def title_matches(show: dict, ep: dict) -> dict:
 sonarr_sync.find_by_title = title_matches
 
 
-def release_learned(tvdb: int, at: str, day: int) -> None:
-    """A release time the sync learnt (release_learn): in the series' settings, as if typed on its page."""
+def release_learned(tvdb: int, at: str, day: int) -> bool:
+    """A release time the sync learnt (release_learn): in the series' settings, as if typed on its page. Whether it wrote it."""
     config = read_config()
     show = config["series"].get(tvdb)
     if not show or show.get("release_time"):
-        return  # gone, or set meanwhile: never over one set by hand
+        return False  # gone, or set meanwhile: never over one set by hand
     show["release_time"] = at
     if day:
         show["release_day"] = day
     write_config(config)
+    return True
 
 
 sonarr_sync.on_release_learned = release_learned
@@ -4038,37 +4056,30 @@ async def push_test(request):
     return web.json_response({"sent": sent})
 
 
-def retried_numbering(ids: list[int], batch: str) -> dict | None:
-    """The numbering a download was given for itself (from the page: by title, or set for it), which a retry
-    of it repeats; None when its last attempt used the series' own. The episodes of one retry come from one
-    job, given one numbering: the first found stands for them all."""
+def last_attempts(ids: list[int], batch: str):
+    """The cards of the episodes' last attempts, newest first: each episode's last one decides."""
     if not sonarr_sync.RUNS_DIR.exists():
-        return None
+        return
     seen = set()
-    for card in cards_on_disk():  # newest first: each episode's last attempt decides
+    for card in cards_on_disk():
         episode = card.get("episodeId")
         if episode not in ids or episode in seen or (batch and card.get("batch") != batch):
             continue
         seen.add(episode)
-        if card.get("numbering") is not None:
-            return card["numbering"]
-    return None
+        yield card
+
+
+def retried_numbering(ids: list[int], batch: str) -> dict | None:
+    """The numbering a download was given for itself (from the page: by title, or set for it), which a retry
+    of it repeats; None when its last attempt used the series' own. The episodes of one retry come from one
+    job, given one numbering: the first found stands for them all."""
+    return next((card["numbering"] for card in last_attempts(ids, batch) if card.get("numbering") is not None), None)
 
 
 def retried_replace(ids: list[int], batch: str) -> bool:
     """Whether the attempts a retry repeats were picked with Replace anyway: the retry replaces too (an attempt
     the library kept the same file for is otherwise kept again)."""
-    if not sonarr_sync.RUNS_DIR.exists():
-        return False
-    seen = set()
-    for card in cards_on_disk():  # newest first: each episode's last attempt decides
-        episode = card.get("episodeId")
-        if episode not in ids or episode in seen or (batch and card.get("batch") != batch):
-            continue
-        seen.add(episode)
-        if card.get("replace") is True:
-            return True
-    return False
+    return any(card.get("replace") is True for card in last_attempts(ids, batch))
 
 
 def cdm_refusal(ids: list[int]) -> str:
@@ -4585,18 +4596,54 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)\?[^\s\"']+"), r"\1?…"), (re
                (re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
-def scrubbed(text: str) -> str:
+def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
     text = no_credentials(text)
+    text = SECRET_LIKE[-1][0].sub(SECRET_LIKE[-1][1], text)  # e-mail addresses first: masking their domain would leave the name
+    for host in sorted(hosts, key=len, reverse=True):  # before the token rule: a long host label would hide the rest
+        name = re.escape(host)
+        text = re.sub(rf"host=(['\"]){name}\1(?:, port=\d+)?", "host=…", text, flags=re.I)  # urllib3's HTTPConnectionPool(host='nas', port=8786)
+        if ":" in host:  # IPv6, written in brackets
+            name = rf"\[{name}\]"
+        # a name alone ("nas", also a server's name) is masked only as an address: after // or @, with its port, or
+        # quoted in an error ("Failed to resolve 'nas'")
+        pattern = rf"(?<![\w.-]){name}(?::\d+)?(?![\w-]|\.[\w-])" if "." in host or ":" in host \
+            else rf"(?:(?<=//)|(?<=@)){name}(?::\d+)?(?![\w.-])|(?<![\w.-]){name}:\d+|(?<='){name}(?=')"
+        text = re.sub(pattern, "…", text, flags=re.I)  # host names are case-insensitive
     for pattern, by in SECRET_LIKE:
         text = pattern.sub(by, text)
     return text
+
+
+PROXY_OPTIONS = ("--proxy", "--proxy-download")
+
+
+def host_of(address: str) -> str | None:
+    try:
+        return urlparse(address.strip("\"',")).hostname
+    except ValueError:  # not an address after all: a passphrase may look like one (https://[x)
+        return None
+
+
+def hosts_in(value) -> set[str]:
+    """The host of every address (http://user:pw@host:3128) in a value, at any depth."""
+    if isinstance(value, str):
+        return {h.lower() for v in value.split() if "://" in v and (h := host_of(v))}
+    items = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
+    return set().union(*map(hosts_in, items))
+
+
+def proxy_hosts(value) -> set[str]:
+    """The hosts of the proxies given as addresses, at any depth (as no_proxy_host finds them)."""
+    if isinstance(value, dict):
+        return set().union(*[hosts_in(v) if k in PROXY_OPTIONS else proxy_hosts(v) for k, v in value.items()])
+    return set()
 
 
 def no_proxy_host(value):
     """A proxy given as an address (http://host:3128) shows as "…" at any depth (the series' options, per service,
     per Sonarr, its fallback); a provider and region (nordvpn:fr) stays: it names no machine of the user's."""
     if isinstance(value, dict):
-        return {k: "…" if k == "--proxy" and isinstance(v, str) and "://" in v else no_proxy_host(v) for k, v in value.items()}
+        return {k: "…" if k in PROXY_OPTIONS and isinstance(v, str) and "://" in v else no_proxy_host(v) for k, v in value.items()}
     return value
 
 
@@ -4616,6 +4663,10 @@ def diagnostic(run_id: str) -> str:
             settings[key] = [{k: v for k, v in i.items() if k not in ("url", "public_url", "downloads", "api_key") and not private.fullmatch(k)}
                              for i in settings[key] if isinstance(i, dict)]
     show = no_proxy_host(show)
+    # no host of the user's anywhere: the settings' addresses and the proxies the attempt went through
+    setup = card.get("setup") or {}
+    private_hosts = hosts_in(sonarr_sync.load_settings(read_config())) | proxy_hosts(config) | hosts_in([card.get("proxy"), setup.get("proxy")]) \
+        | hosts_in(re.findall(r"--proxy(?:-download)? (\S+)", str(setup.get("command") or "")))
     via = str((card.get("setup") or {}).get("via") or "")
     if via and via != "this computer" and not via.startswith("remote server"):  # another serve's host: its name only
         card = {**card, "setup": {**card["setup"], "via": via.split(" (")[0] if " (" in via else "another computer"}}
@@ -4628,7 +4679,7 @@ def diagnostic(run_id: str) -> str:
         "## The attempt", "```json", json.dumps({k: v for k, v in card.items() if k != "live"}, indent=1, ensure_ascii=False), "```",
         f"## Its log (last {len(tail)} lines)", "```", *tail, "```",
     ]
-    return scrubbed("\n".join(parts)) + "\n"
+    return scrubbed("\n".join(parts), private_hosts) + "\n"
 
 
 async def run_diagnostic(request):
