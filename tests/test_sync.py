@@ -1419,7 +1419,9 @@ def test_a_network_error_never_shows_a_discord_webhook_token(tmp_path, monkeypat
                 "http://u:p@one/path,http://u:p@host?email=a@b.com/path&token=SECRET1",  # two on a line
                 "http://u:p@one/path/http://u:p@host?email=a@b.com/path&token=SECRET1",  # one inside another
                 "http://u:p@host?email=a@b.com/path//tail&token=SECRET1",  # a // in the query
-                "http://u:p@host?email=a@b.com&redirect=https://example.com/path&token=SECRET1"):
+                "http://u:p@host?email=a@b.com&redirect=https://example.com/path&token=SECRET1",
+                'http://u:p@host?mail=a@b.com/path//prefix"admin:SECRET1@internal/path',  # a password past a quote
+                "http://u:p@host?mail=a@b.com/path//prefix'admin:SECRET1@internal/path"):
         assert "SECRET1" not in web.scrubbed(f"GET {url}") and "u:p" not in web.scrubbed(f"GET {url}"), url
     assert sync.no_credentials("http://u:abc@foo?hidden@[fe80::1%25eth0]:8080") == "http://***@[fe80::1%25eth0]:8080"
     import time

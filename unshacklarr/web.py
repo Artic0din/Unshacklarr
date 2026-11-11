@@ -4631,13 +4631,14 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)(\?[^\s\"']+)?"), lambda m: m[
                (re.compile(r"(?<![\w.+/=-])[\w.+/=-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
-WORD_END = re.compile(r"[\s\"']|$")
+WORD_END = re.compile(r"\s|$")  # whitespace only: a password match may cross a quote, never whitespace, so none
+# that starts in a hidden part ends past it
 
 
 def mask_passwords(text: str) -> str:
     """Each address's password masked; one that took a ? or # took the start of a query
     (http://u:p@host?mail=a@b.com/x&token=…), so what is left of it can no longer be told from the query and goes too,
-    up to the next space or quote (addresses inside it with it). One pass: linear."""
+    up to the next space (addresses inside it with it). One pass: linear."""
     out, at = [], 0
     for m in CREDENTIALS.finditer(text):  # as no_credentials: through the last @ before a path
         if m.start() < at:
