@@ -64,6 +64,7 @@ Every change worth knowing, newest first. The format follows
 - Unshacklarr no longer follows a redirect from unshackle serve: it says which address the redirect points to so you can use that one, and the address in the "did not answer like unshackle serve" message hides any user name and password.
 - The one-off preview no longer shows an episode 00 (S01E00) when an episode offset leads before episode 1, as the sync skips it; and Settings > Automation now shows "Next sync at" in the app's time zone setting, as the sync runs, instead of the browser's. The broadcast calendar's dates still follow the browser's time zone.
 - The save bar no longer appears when nothing changed: typing in a series' episode offset, season offset or episode table and clearing it again leaves the series as it was, and hiding or showing a series (saved at once) no longer makes Download refuse with "Save your changes first".
+- A login cookie with a non-ASCII digit in it (such as `²`) is now refused instead of causing a server error, and two logins in the same second no longer end together: logging one out leaves the other signed in. Logins made before this update stay valid until they expire.
 
 ## [1.5.0] - 2026-10-17
 
