@@ -67,6 +67,7 @@ Every change worth knowing, newest first. The format follows
 - A login cookie with a non-ASCII digit in it (such as `²`) is now refused instead of causing a server error, and two logins in the same second no longer end together: logging one out leaves the other signed in. Logins made before this update stay valid until they expire.
 - A series' broadcast calendar day can now be clicked back to its usual number of episodes when that is 4 or more an evening, so a changed day no longer needs the whole schedule reset.
 - The schedule's calendar now shows an episode a service puts out days before it airs on its release day when that day is the last one on screen, instead of leaving it out until the next month is opened.
+- Opening Stats and then Waiting in downloads (or the other way round) while the first answer is slow no longer draws that late answer under the other title; and the Output terminal now says when it cannot connect (behind a reverse proxy that blocks WebSockets) instead of staying an empty box.
 
 ## [1.5.0] - 2026-10-17
 
