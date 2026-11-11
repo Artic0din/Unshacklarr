@@ -3377,3 +3377,24 @@ def test_a_series_that_names_its_cdm_is_not_refused_for_want_of_one(tmp_path, mo
         assert "No CDM" in str(e)
     request = sync.download_request({**show, "options": {"--cdm": "my_l3"}}, config, "S01E01", tmp_path)
     assert request["cdm"] == "my_l3"
+
+
+def test_a_run_keeps_its_slot_while_it_waits_to_try_again(tmp_path, monkeypatch):
+    # serve stopped answering, even the cancel: the download may still run there, so the slot stays held until the
+    # next try finds it (or the run gives up), and no other job starts there meanwhile (#118)
+    sync = load(tmp_path, monkeypatch)
+    run = type("Run", (), {"card": {}, "id": "r1", "say": lambda self, text: None, "save": lambda self: None})()
+    tries = []
+
+    def run_job(payload, run=None, job_id=None):
+        tries.append(job_id)
+        if len(tries) == 1:
+            run.card["unconfirmed_job"] = {"backend": "", "job_id": "j1"}
+            raise sync.UnshackleError(f"{sync.UNREACHABLE} at http://serve: timed out")
+        return ["/downloads/x.mkv"]
+    held = []
+    monkeypatch.setattr(sync, "run_job", run_job)
+    monkeypatch.setattr(sync, "unconfirmed_still_on", lambda run: (run.card.get("unconfirmed_job") or {}).get("job_id"))
+    assert sync.run_job_retrying({}, run, sleep=lambda s: held.append("r1" in sync.slot_jobs.get("", []))) == ["/downloads/x.mkv"]
+    assert held == [True] and tries == [None, "j1"]  # held while it waited, then the same job followed again
+    assert "r1" not in sync.slot_jobs.get("", [])  # done: the slot goes
