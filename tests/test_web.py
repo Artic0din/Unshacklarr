@@ -3218,9 +3218,17 @@ def test_a_service_linking_several_titles_names_each(tmp_path, monkeypatch):
     # No title matches Sonarr's: named, nothing marked, order kept.
     monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 7, "title": "Something Else"}])
     assert [l.get("other_title") for l in web.named_titles([specials, series], 7)] == [None, None]
-    # The service can't be asked: as it was.
+    # A special the service lists as a film is named by the film's own name.
+    names["https://www.netflix.com/title/81663074"] = None
+    monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 7, "title": "Kath & Kim"}])
+    monkeypatch.setattr(web, "list_titles", lambda show: [{"type": "movie", "name": "Kath & Kim: Specials"}]
+                        if show["title"].endswith("81663074") else list_titles(show))
+    assert [(l.get("name"), l.get("other_title")) for l in web.named_titles([specials, series], 7)] == [
+        ("Kath and Kim", None), ("Kath & Kim: Specials", True)]
+    # The service can't be asked: as it was, marked to be asked again soon rather than kept a week.
     def refused(show):
         raise web.UnshackleError("no credentials")
     monkeypatch.setattr(web, "list_titles", refused)
-    assert web.named_titles([specials, series], 7) == [specials, series]
+    assert web.named_titles([specials, series, iview], 7) == [
+        {**specials, "naming_retry": True}, {**series, "naming_retry": True}, iview]
     assert web.title_key("Kath & Kim") == web.title_key("Kath and Kim")

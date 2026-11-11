@@ -23,6 +23,7 @@ import secrets
 import shutil
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import time
 import unicodedata
 import zlib
@@ -1641,6 +1642,8 @@ async def suggest(request):
             return True
         if entry.get("map") != SUGGEST_MAP:
             return True  # new site/network/unwrap mapping; re-scrape
+        if age >= NAMING_RETRY and any((link or {}).get("naming_retry") for link in entry.get("links") or []):
+            return True  # a service's titles couldn't be named then (named_titles)
         # Before Stream/Buy split and kind labels: refresh so Buy rows and unlabelled chips do not linger.
         return any("kind" not in (link or {}) for link in entry.get("links") or [])
 
@@ -1717,6 +1720,23 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
     return out
 
 
+NAMING_AT_ONCE = 4  # a service's titles listed at once, so several fit the page's wait
+NAMING_FAILED = object()
+NAMING_RETRY = timedelta(hours=1)  # a suggestion whose titles couldn't be named is scraped again after this
+
+
+def title_name(service: str, url: str) -> object:
+    """A title's name on its service: its episodes' series, else the film's own (a special listed as a film);
+    None when it lists neither, NAMING_FAILED when the service can't be asked."""
+    try:
+        titles = list_titles({"service": service, "title": url})
+    except (UnshackleError, requests.RequestException, KeyError, TypeError) as e:
+        print(f"Naming {service}'s title {url}: {no_credentials(e)}", flush=True)
+        return NAMING_FAILED
+    return (next((str(t["series_title"]) for t in titles if t.get("series_title")), None)
+            or next((str(t["name"]) for t in titles if t.get("type") == "movie" and t.get("name")), None))
+
+
 def named_titles(links: list[dict], tmdb_id: int) -> list[dict]:
     """A service linking several titles (Netflix: Kath & Kim, and its 20th Anniversary Specials): each named by the
     service. The one with Sonarr's title goes first; the others are marked other_title, never picked for the series
@@ -1730,22 +1750,21 @@ def named_titles(links: list[dict], tmdb_id: int) -> list[dict]:
     several = {s for s, u in urls.items() if len(u) > 1}
     if not several:
         return links
-    names: dict[tuple[str, str], str] = {}
-    for service in sorted(several):
+    pairs = [(s, u) for s in sorted(several) for u in sorted(urls[s])]
+    with ThreadPoolExecutor(max_workers=min(len(pairs), NAMING_AT_ONCE)) as pool:  # each listing may take a minute
+        asked = list(pool.map(lambda p: (p, title_name(*p)), pairs))
+    failed = {p[0] for p, name in asked if name is NAMING_FAILED}
+    names = {p: name for p, name in asked if isinstance(name, str) and p[0] not in failed}
+    series = None
+    if names:
         try:
-            for url in sorted(urls[service]):
-                titles = list_titles({"service": service, "title": url})
-                if name := next((t.get("series_title") for t in titles if t.get("series_title")), None):
-                    names[(service, url)] = str(name)
-        except (UnshackleError, requests.RequestException, KeyError, TypeError) as e:
-            print(f"Naming {service}'s titles: {no_credentials(e)}", flush=True)
-            names = {k: v for k, v in names.items() if k[0] != service}
+            series = next((s for s in sonarr_series() if s.get("tmdbId") == tmdb_id), None)
+        except requests.RequestException:
+            failed = several  # named, but not which is the series': asked again (naming_retry)
+    # a service that couldn't be asked keeps its links, marked to be asked again within the hour, not in a week
+    links = [{**l, "naming_retry": True} if shown(l) and l["service"] in failed else l for l in links]
     if not names:
         return links
-    try:
-        series = next((s for s in sonarr_series() if s.get("tmdbId") == tmdb_id), None)
-    except requests.RequestException:
-        series = None
     wanted = {title_key(series["title"]), title_key(TITLE_QUALIFIER.sub("", series["title"]))} if series else set()
     own = {s for (s, u), n in names.items() if title_key(n) in wanted}
     out = [{**l, "name": names[(l["service"], l["url"])]} if shown(l) and (l["service"], l["url"]) in names else l
