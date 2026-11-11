@@ -4579,6 +4579,7 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)\?[^\s\"']+"), r"\1?…"), (re
 
 def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
     text = no_credentials(text)
+    text = SECRET_LIKE[-1][0].sub(SECRET_LIKE[-1][1], text)  # e-mail addresses first: masking their domain would leave the name
     for host in sorted(hosts, key=len, reverse=True):  # before the token rule: a long host label would hide the rest
         name = re.escape(host)
         text = re.sub(rf"host=(['\"]){name}\1(?:, port=\d+)?", "host=…", text, flags=re.I)  # urllib3's HTTPConnectionPool(host='nas', port=8786)
