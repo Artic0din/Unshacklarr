@@ -434,7 +434,7 @@ const box = {
   $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
   api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
   renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
-  boWrong() {}, toast() {}, el: () => ({}), S: null,
+  boWrong() {}, toast() {}, el: () => ({}), S: null, renderReleaseNext() { box.previews = (box.previews || 0) + 1; },
 };
 vm.createContext(box);
 vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); } };", box);
@@ -485,6 +485,38 @@ const fresh = () => {
   await saving;
   out.drawerOpenedMeanwhileSeesNoChange = JSON.stringify(box.S.config.series[7]) === box.drawerSnapshot.conf;
   box.current = null; box.drawerSnapshot = null;
+
+  // a release time the sync learnt after the page loaded: the server kept it for a series sent without one (#29)
+  const show = { service: "iV", title: "https://example.com/show", since: "2026-11-01T00:00:00+00:00" };
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config);
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };
+  box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); release({ series: { 7: { ...show, release_time: "21:00", release_day: 1 } } }); await saving;
+  const seven = box.S.config.series[7];
+  out.learntTimeShown = seven.release_time === "21:00" && seven.release_day === 1 && bars["#d-release"].value === "21:00"
+    && bars["#d-release-day"].value === "1" && !page.state().unsaved && JSON.parse(box.drawerSnapshot.conf).release_time === "21:00";
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); box.S.config.series[7].release_time = "";  // cleared while the Save ran: stays cleared, and unsaved
+  release({ series: { 7: { ...show, release_time: "21:00" } } }); await saving;
+  out.clearedMeanwhileStays = box.S.config.series[7].release_time === "" && page.state().unsaved;
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); Object.assign(box.S.config.series[7], { service: "7P", title: "https://7plus.example/show" });  // moved meanwhile
+  release({ series: { 7: { ...show, release_time: "21:00", release_day: 1 } } }); await saving;
+  out.otherSourceTakesNothing = !("release_time" in box.S.config.series[7]) && !("release_day" in box.S.config.series[7]);
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.theme = "light"; page.dirty();
+  box.current = null; box.drawerSnapshot = null;  // its panel closed when the Save starts
+  saving = page.save(); Object.assign(box.S.config.series[7], { service: "7P", title: "https://7plus.example/show" });
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };  // opened meanwhile
+  release({ series: { 7: { ...show, release_time: "21:00", release_day: 1 } } }); await saving;
+  out.otherSourceSnapshotTakesNothing = !("release_time" in JSON.parse(box.drawerSnapshot.conf));
+  box.current = null; box.drawerSnapshot = null;
+  fresh(); box.S.config.series = { 7: { ...show, release_time: "20:00" } }; page.baseline(box.S.config);
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };
+  bars["#d-release-day"] = { value: "0", hidden: false }; box.previews = 0;
+  box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); release({ series: { 7: { ...show, release_time: "20:00", release_day: 1 } } }); await saving;  // only the day learnt
+  out.learntDayShown = bars["#d-release-day"].value === "1" && box.previews === 1;
+  box.current = null; box.drawerSnapshot = null;
   console.log(JSON.stringify(out));
 })();
 """
@@ -513,6 +545,11 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "sinceSentBack": True,  # so a later Save does not stamp it again
         "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
         "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
+        "learntTimeShown": True,  # a release time the server kept is shown and counts as saved (#29)
+        "clearedMeanwhileStays": True,
+        "otherSourceTakesNothing": True,  # moved to another service while the Save ran: the old one's time is not its
+        "otherSourceSnapshotTakesNothing": True,  # nor its panel's snapshot, so closing it asks nothing
+        "learntDayShown": True,  # a day kept alone shows too, and the next-episode line follows
     }
 
 
@@ -1329,6 +1366,12 @@ def test_a_save_keeps_what_the_server_changed_since_the_page_loaded(tmp_path, mo
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00"}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=new_day)))
     assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("21:00", 1)
+
+    async def other_source():  # moved to another service: the old one's learnt time is not its
+        return {"series": {"7": {**show, "service": "7P", "title": "https://7plus.example/show"}, "8": dict(show)}}
+    web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: dict(show)}})
+    asyncio.run(web.save_config(SimpleNamespace(json=other_source)))
+    assert "release_time" not in web.read_config()["series"][7] and "release_day" not in web.read_config()["series"][7]
     web.write_config({**web.read_config(), "hidden_series": [7]})  # hidden from the Schedule while the Save ran
 
     async def stale_hidden():  # the page's list from before
