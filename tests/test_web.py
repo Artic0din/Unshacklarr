@@ -3184,3 +3184,43 @@ def test_sonarr_reads_wait_as_long_as_a_busy_sonarr_answers(tmp_path, monkeypatc
     monkeypatch.setattr(web, "read_config", lambda: {"series": {1: {"service": "NINE", "release_time": "06:00"}}})
     assert web.due_in(now, None) == []
     assert waited == [web.RELEASE_CHECK_TIMEOUT] and web.RELEASE_CHECK_TIMEOUT < 60
+
+
+def test_a_service_linking_several_titles_names_each(tmp_path, monkeypatch):
+    """Kath & Kim: TMDB links two Netflix titles, the series and its 20th Anniversary Specials. Each is named from
+    the service; the one with the series' own title comes first, the other is marked as another title."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    names = {"https://www.netflix.com/title/81014647": "Kath and Kim",
+             "https://www.netflix.com/title/81663074": "Kath & Kim: 20th Anniversary Specials"}
+    asked = []
+
+    def list_titles(show):
+        asked.append(show["title"])
+        return [{"type": "episode", "series_title": names[show["title"]]}]
+    monkeypatch.setattr(web, "list_titles", list_titles)
+    monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 7, "title": "Kath & Kim"}])
+    link = lambda url, service="NF": {"service": service, "url": url, "country": "AU", "kind": "native"}
+    specials, series = link("https://www.netflix.com/title/81663074"), link("https://www.netflix.com/title/81014647")
+    iview = link("https://iview.abc.net.au/show/kath-and-kim", "AUBC")
+    # Listed specials first: the series' own title comes first and the specials right after it, both named.
+    assert web.named_titles([specials, iview, series], 7) == [
+        {**series, "name": "Kath and Kim"},
+        {**specials, "name": "Kath & Kim: 20th Anniversary Specials", "other_title": True}, iview]
+    assert "AUBC" not in str(asked)  # one link on its service: nothing asked
+    # A TMDB homepage link (shown only for the network's own service) is not one of the service's titles to name.
+    asked.clear()
+    assert web.named_titles([series, {**specials, "found_by": "homepage"}], 7) == [series, {**specials, "found_by": "homepage"}]
+    assert asked == []
+    # No title matches Sonarr's: named, nothing marked, order kept.
+    monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 7, "title": "Something Else"}])
+    assert [l.get("other_title") for l in web.named_titles([specials, series], 7)] == [None, None]
+    # The service can't be asked: as it was.
+    def refused(show):
+        raise web.UnshackleError("no credentials")
+    monkeypatch.setattr(web, "list_titles", refused)
+    assert web.named_titles([specials, series], 7) == [specials, series]
+    assert web.title_key("Kath & Kim") == web.title_key("Kath and Kim")

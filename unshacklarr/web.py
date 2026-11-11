@@ -173,7 +173,8 @@ def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
     audio-described or Auslan edition (its service is offered to find, see brand_fallbacks).
 
     TMDB homepage links are kept only when they are the series' network's catch-up service.
-    Distinct URLs stay distinct chips, in JustWatch / first-country scrape order.
+    Distinct URLs stay distinct chips, in JustWatch / first-country scrape order (a service linking several titles
+    has them together, its series' own first: named_titles).
     """
     tagged = [{**link, "kind": "native"} for link in links
               # by its link too: a cache from before editions were flagged, kept while TMDB cannot be reached
@@ -1619,7 +1620,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 7
+SUGGEST_MAP = 8
 
 
 async def suggest(request):
@@ -1658,6 +1659,7 @@ async def suggest(request):
         if found is not None:
             links = without_covered_episodes(merge_countries(found))
             links = await asyncio.to_thread(searched_in_place, links, int(tmdb_id))
+            links = await asyncio.to_thread(named_titles, links, int(tmdb_id))
             # Prefer at read time only: cache keeps Channel rows so a later-uninstalled home still leaves them.
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(),
                    "map": SUGGEST_MAP, "links": links}
@@ -1680,7 +1682,7 @@ TITLE_QUALIFIER = re.compile(r"\s*\((?:\d{4}|[A-Z]{2})\)\s*$")
 def title_key(title: str) -> str:
     """A title compared without its year, case, accents or punctuation: "WAR (2026)" and "War" match."""
     title = re.sub(r"\s*\(\d{4}\)\s*$", "", unicodedata.normalize("NFKD", title or ""))
-    return re.sub(r"[^a-z0-9]+", "", title.casefold())
+    return re.sub(r"[^a-z0-9]+", "", title.casefold().replace("&", "and"))  # Kath & Kim, Kath and Kim
 
 
 def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
@@ -1713,6 +1715,49 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
             out.append({"service": service, "url": url, "country": ", ".join(countries), "site": channel["brand_site"],
                         "kind": "native", "found_by": "search", "via": channel.get("provider")})
     return out
+
+
+def named_titles(links: list[dict], tmdb_id: int) -> list[dict]:
+    """A service linking several titles (Netflix: Kath & Kim, and its 20th Anniversary Specials): each named by the
+    service. The one with Sonarr's title goes first; the others are marked other_title, never picked for the series
+    by Suggest services. A service that can't be asked keeps its links as they are."""
+    # as prefer_download_links shows them; a TMDB homepage is shown only for its network: not asked about
+    shown = lambda l: (l.get("kind") not in ("channel", "purchase") and not l.get("edition") and not l.get("episode")
+                       and l.get("found_by") != "homepage")
+    urls: dict[str, set[str]] = {}
+    for l in filter(shown, links):
+        urls.setdefault(l["service"], set()).add(l["url"])
+    several = {s for s, u in urls.items() if len(u) > 1}
+    if not several:
+        return links
+    names: dict[tuple[str, str], str] = {}
+    for service in sorted(several):
+        try:
+            for url in sorted(urls[service]):
+                titles = list_titles({"service": service, "title": url})
+                if name := next((t.get("series_title") for t in titles if t.get("series_title")), None):
+                    names[(service, url)] = str(name)
+        except (UnshackleError, requests.RequestException, KeyError, TypeError) as e:
+            print(f"Naming {service}'s titles: {no_credentials(e)}", flush=True)
+            names = {k: v for k, v in names.items() if k[0] != service}
+    if not names:
+        return links
+    try:
+        series = next((s for s in sonarr_series() if s.get("tmdbId") == tmdb_id), None)
+    except requests.RequestException:
+        series = None
+    wanted = {title_key(series["title"]), title_key(TITLE_QUALIFIER.sub("", series["title"]))} if series else set()
+    own = {s for (s, u), n in names.items() if title_key(n) in wanted}
+    out = [{**l, "name": names[(l["service"], l["url"])]} if shown(l) and (l["service"], l["url"]) in names else l
+           for l in links]
+    out = [{**l, "other_title": True} if l.get("name") and l["service"] in own and title_key(l["name"]) not in wanted
+           else l for l in out]
+    # a service's links together, where its first one was: the series' own title first, its other titles after
+    first = {}
+    for i, l in enumerate(out):
+        first.setdefault(l["service"], i)
+    rank = lambda il: (first[il[1]["service"]], bool(il[1].get("other_title")), il[0])
+    return [l for _, l in sorted(enumerate(out), key=rank)]
 
 
 def search_series_url(service: str, title: str) -> str | None:
