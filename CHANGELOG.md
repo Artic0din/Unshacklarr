@@ -84,6 +84,7 @@ Every change worth knowing, newest first. The format follows
 - Downloading a diagnostic no longer slows down on a log line holding a long run of web addresses.
 - Waiting in downloads no longer lists, imports or deletes through an episode folder that is a link to another place.
 - A job and a retry of one of its episodes running side by side no longer free each other's download slot when one ends, so a server never goes over its "downloads at once" limit; an episode queued under a paused job shows as paused.
+- A link named like an episode's download folder no longer blocks that episode's downloads: the link is removed (never what it points to) and the episode downloads.
 
 ## [1.5.0] - 2026-10-17
 
