@@ -79,6 +79,7 @@ function liveTick(data) {
       if (missed !== null) liveTick(missed);
     });
   }
+  if (feedReloading && feedMissed !== null) feedMissed = data;  // the newest is what its reload replays, never an older one
   runCards = runCards.map((c) => (ids.has(c.id) ? live.find((x) => x.id === c.id) : c));
   renderConsole(true);
 }

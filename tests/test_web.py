@@ -377,6 +377,15 @@ const settle = () => new Promise((r) => setImmediate(r));
     const asked = pending.length;
     pending[1]([card(1, "running"), card(2, "running")]); await settle();
     console.log(JSON.stringify({ asked, drawn }));
+  } else if (scenario === "progress") {
+    const at = (p) => liveTick(JSON.stringify([{ id: 1, outcome: "running", p }, { id: 2, outcome: "running", p }]));
+    tick([1]);  // the feed's reload
+    at(10);  // another started while it was on its way: kept for after it
+    openActivity();  // Reload pressed meanwhile: its answer brings both
+    pending[1]([card(1, "running"), card(2, "running")]); await settle();
+    at(60);  // newer progress, the cards now match: drawn at once
+    pending[0]([card(1, "running")]); await settle();  // the feed's own reload ends last, and replays what it kept
+    console.log(JSON.stringify({ progress: runCards.map((c) => c.p) }));
   } else {
     tick([1]);  // the feed's reload
     openActivity();  // Stop pressed meanwhile
@@ -410,6 +419,10 @@ def test_the_live_feed_has_one_history_reload_in_flight_and_draws_its_answer():
 def test_a_change_the_feed_said_during_its_reload_is_reloaded_after():
     result = run_activity("missed")
     assert result["asked"] == 2 and result["drawn"][-1] == [1, 2]
+
+
+def test_the_feed_replays_its_newest_message_after_its_reload():
+    assert run_activity("progress")["progress"] == [60, 60]  # never the older 10 drawn over the newer 60
 
 
 def test_a_reload_after_stop_still_wins_over_the_feeds_older_one():
