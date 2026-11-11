@@ -1716,6 +1716,59 @@ def test_suggest_network_falls_back_to_the_cached_tmdb_network(tmp_path, monkeyp
     assert web.series_network("1", "") == ""
 
 
+def suggest_module(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    monkeypatch.setattr(web, "searched_in_place", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "named_titles", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "series_network", lambda tmdb_id, given: "")
+    return web
+
+
+def ask_suggest(web, tmdb_id):
+    from types import SimpleNamespace
+    return web.suggest(SimpleNamespace(match_info={"tmdb_id": str(tmdb_id)}, query={}))
+
+
+def test_suggestions_looked_up_at_once_all_stay_cached(tmp_path, monkeypatch):
+    import threading
+    web = suggest_module(tmp_path, monkeypatch)
+    both_asking = threading.Barrier(2, timeout=5)  # each waits inside its TMDB request for the other
+
+    def tmdb_links(tmdb_id, country, domains):
+        both_asking.wait()
+        return [{"service": "TEN", "url": f"https://10.com.au/{tmdb_id}", "country": country, "kind": "native"}]
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    async def go():
+        await asyncio.gather(ask_suggest(web, 1), ask_suggest(web, 2))
+
+    asyncio.run(go())
+    assert sorted(json.loads(web.TMDB_CACHE.read_text())) == ["1", "2"]
+
+
+def test_a_failed_suggestion_lookup_keeps_the_cached_entry(tmp_path, monkeypatch):
+    web = suggest_module(tmp_path, monkeypatch)
+    old = {"countries": ["AU"], "checked": "2020-01-01T00:00:00+00:00", "map": web.SUGGEST_MAP,
+           "links": [{"service": "TEN", "url": "https://10.com.au/1", "country": "AU", "kind": "native"}]}
+    web.TMDB_CACHE.write_text(json.dumps({"1": old}))
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    def tmdb_links(tmdb_id, country, domains):
+        raise web.requests.ConnectionError("down")
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    reply = asyncio.run(ask_suggest(web, 1))
+    assert json.loads(reply.text)["checked"] == old["checked"]
+    assert json.loads(web.TMDB_CACHE.read_text()) == {"1": old}
+
+
 def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -1729,6 +1782,36 @@ def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
             raise AssertionError(f"expected {bad!r} to be refused")
         except web.web.HTTPBadRequest as e:
             assert "language code" in e.text
+
+
+def test_the_sync_grid_restarts_at_local_midnight_every_day(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    paris = ZoneInfo("Europe/Paris")
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", paris)
+
+    def next_at(every, *when):
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        return web.next_sync(datetime(*when, tzinfo=paris)).strftime("%m-%d %H:%M")
+
+    assert next_at(5, 2026, 10, 5, 21, 30) == "10-06 00:00"  # the last gap is short: midnight, not 01:00
+    assert next_at(5, 2026, 10, 5, 20, 0) == "10-06 00:00" and next_at(5, 2026, 10, 5, 4, 59) == "10-05 05:00"
+    assert next_at(23, 2026, 10, 5, 22, 0) == "10-05 23:00" and next_at(23, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(2, 2026, 10, 5, 21, 30) == "10-05 22:00" and next_at(2, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(24, 2026, 10, 5, 0, 0) == "10-06 00:00" and next_at(24, 2026, 10, 5, 23, 59) == "10-06 00:00"
+
+    for every, slots in ((2, 12), (5, 5), (23, 2)):  # a clock change leaves no slot of the day without its sync
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        for day in ((2026, 3, 29), (2026, 10, 25), (2026, 10, 5)):
+            now, end, runs = datetime(*day, tzinfo=paris), datetime(*day, tzinfo=paris) + timedelta(days=1), 0
+            while (now := web.next_sync(now)) < end:
+                runs += 1
+            assert runs == slots - 1, (every, day)
 
 
 def test_a_series_is_checked_hours_before_its_release_and_told_once(tmp_path, monkeypatch):
@@ -3038,6 +3121,55 @@ def test_a_diagnostic_shows_no_address_folder_or_account(tmp_path, monkeypatch):
         assert private not in text, private
     assert "sonarr-4k" in text and '"nas"' in text and "GB" in text
 
+
+def test_a_diagnostic_holds_no_host_in_the_card_the_command_the_cause_or_the_log(tmp_path, monkeypatch):
+    # The card keeps the proxy's host (user and password masked), the cause and the log name the servers' addresses (#36)
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "proxy": "http://***@proxy.lan:3128",
+            "cause": "unshackle serve is unreachable at http://serve.lan:8786: timed out",
+            "setup": {"via": "this computer", "proxy": "http://***@10.0.0.9:3128",
+                      "command": "unshackle dl --proxy http://***@10.0.0.9:3128 ALL4 https://c4/show -w S01E01"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://sonarr.lan:8989 answered 500\nthrough nas:8786 and 10.0.0.9:3128\n"
+                                       "HTTPConnectionPool(host='nas', port=8786): Max retries exceeded; HTTPConnectionPool(host='serve.lan', port=8786)\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy": "nordvpn:fr"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://serve.lan:8786",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"}], "backup_remote_url": "https://s3.backup.example.org"}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")
+    for host in ("proxy.lan", "serve.lan", "sonarr.lan", "10.0.0.9", "nas:8786", "8786", "8989", "3128"):
+        assert host not in text, host
+    assert "unreachable at" in text and "answered 500" in text and "https://c4/show" in text and "Max retries" in text  # the rest stays
+    assert '"--proxy": "nordvpn:fr"' in text  # a provider and region names no machine of the user's
+    card["setup"]["proxy"] = "nordvpn:fr"
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    assert '"proxy": "nordvpn:fr"' in web.diagnostic("r1")
+
+
+
+def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(tmp_path, monkeypatch):
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "cause": "Failed to resolve 'nas' ([Errno 8] nodename nor servname)",
+            "setup": {"via": "this computer", "proxy": "nordvpn:fr", "command": "unshackle dl --proxy-download http://dl.proxy.lan:8080 ALL4 x"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://SONARR.LAN:8989 answered 500\nserve at http://[fd00::1234]:8786 timed out\n"
+                                     "Cannot reach sonarr.lan. Retrying, mail alice@sonarr.lan\nat http://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443/x\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy-download": "http://dl.proxy.lan:8080"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://[fd00::1234]:8786", "backup_passphrase": "https://[broken",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"},
+                                        {"name": "far", "url": "https://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443"}]}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")  # a passphrase that looks like a broken address does not stop it
+    assert "alice" not in text  # an e-mail address on a private domain is masked whole
+    for host in ("SONARR.LAN", "sonarr.lan", "fd00::1234", "dl.proxy.lan", "'nas'", "example.org", "8786", "8989", "8080", "9443"):
+        assert host not in text, host
+    assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
 
 
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):
