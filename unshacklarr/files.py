@@ -17,7 +17,7 @@ def shared_or_private(folder: Path) -> int:
     return 0o660 if folder.stat().st_mode & 0o2020 == 0o2020 else PRIVATE
 
 
-CREDENTIALS = re.compile(r"//[^@/\s]+@")  # http://user:password@host
+CREDENTIALS = re.compile(r"//[^/\s]+@")  # http://user:password@host, through the last @ before a path: a password may hold @, ? or #
 
 
 def no_credentials(text) -> str:

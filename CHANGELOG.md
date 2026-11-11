@@ -80,6 +80,7 @@ Every change worth knowing, newest first. The format follows
 - Downloading a diagnostic no longer takes minutes when the log holds a long key or license, and no longer shows the start of a secret written just before an e-mail address.
 - A download serve no longer knows (a 404) is retried at once even when its message starts with `HTTP 500:`, instead of after 12 more status checks.
 - Logging out on two devices at the same moment no longer leaves one of the two sessions usable.
+- An error message, a log line or a shown download command no longer shows the end of a password (an address's or a proxy's) that holds an `@`.
 - Waiting in downloads no longer lists, imports or deletes through an episode folder that is a link to another place.
 
 ## [1.5.0] - 2026-10-17
