@@ -5001,6 +5001,7 @@ def logged_in(request, auth: dict) -> bool:
 
 
 LOGGED_OUT_FILE = sonarr_sync.DATA / "logged_out.json"  # sessions closed before their end: {signature: expires}
+LOGGED_OUT_LOCK = threading.Lock()  # two logouts at once each read, then write the whole list: one would drop the other
 
 
 def forget_session(value: str) -> None:
@@ -5009,8 +5010,9 @@ def forget_session(value: str) -> None:
     if not session:
         return
     expires, _, signature = session
-    closed = {sig: until for sig, until in read_json(LOGGED_OUT_FILE, {}).items() if until > time.time()}  # the expired ones go
-    write_atomic(LOGGED_OUT_FILE, json.dumps({**closed, signature: expires}), PRIVATE)
+    with LOGGED_OUT_LOCK:
+        closed = {sig: until for sig, until in read_json(LOGGED_OUT_FILE, {}).items() if until > time.time()}  # the expired ones go
+        write_atomic(LOGGED_OUT_FILE, json.dumps({**closed, signature: expires}), PRIVATE)
 
 
 def with_session(request, response, auth: dict):
