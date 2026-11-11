@@ -36,6 +36,7 @@ Every change worth knowing, newest first. The format follows
 - Choosing a CDM device for one service no longer drops the other services' devices when `cdm:` in unshackle.yaml is written on one line (`cdm: {default: l3, AMZN: l3}`): Unshacklarr now refuses and says to change it by hand, leaving the file as it was.
 - A syntax error in `unshackle.yaml` no longer stops its editor from opening it or saving over it, and no longer silences the hourly alerts: the disk-full alerts still go, and cookies and CDM devices count as not checked.
 - The automatic backup and update-check loops no longer stop for good when a pass fails with an unexpected error: the error is logged and the next pass runs after the usual wait.
+- Off-site backups to S3-style storage whose address has a path (`https://nas.example/s3`) or a default port (`:443`) are no longer refused as a wrong access key: the signature now covers the path and host actually sent.
 - An interrupted download (cut off by a restart) can now be deleted from Activity, and Clear all removes it, instead of answering "No such download in the history" and staying.
 - Activity's weekly stats now start each week on Monday at midnight in the app's time zone, not in UTC, and the week labels no longer show the day before west of UTC.
 - Saving a remote CDM or allowing Unshackle's proxies no longer deletes the blank lines and `#` comments that follow that section in `unshackle.yaml`.
@@ -50,6 +51,17 @@ Every change worth knowing, newest first. The format follows
 - "Release time set" is now sent once, when the time is written, instead of again for every later episode of the same run.
 - A series' start date no longer moves forward each time you Save from the same open page: the page now keeps the date the server set when the series was added, so episodes aired between two Saves are no longer skipped by the automatic sync.
 - A series set to send no notifications no longer sends a "Not imported" message when an unexpected error stops an episode from finishing.
+- Activity no longer asks the server for the whole history again and again while a download starts or ends: one reload at a time, and its answer is drawn, so the Running list updates even when the history is slow to load.
+- A single HTTP 500 answer to a download's status check no longer cancels the download: it counts as a miss, like a 502 to 504, and the download is only given up after 12 misses in a row.
+- The diagnostic file no longer keeps the host of a proxy, Sonarr, an Unshackle server or the off-site backup, in the attempt, its command line, its cause or its log.
+- An automatic sync interval that does not divide 24 hours (5 or 23, set through the API or the config file) now ends each day with a sync at midnight instead of running unevenly, and the next sync shown on the page matches it.
+- Opening several series at once no longer loses their cached where-to-watch suggestions: each one stays cached instead of the last to finish replacing the others, so they are not asked from TMDB again.
+- A title linked from amazon.de is now reduced to its Amazon title id like the other Amazon sites, so it no longer shows as a second suggestion next to the same title from amazon.com, amazon.fr or Prime Video.
+- A track at a standard height, such as 1998x1080 or 4096x2160, is now classed by that height in a quality ladder instead of a class that matches no step.
+- A title ending in a spelled-out number ("Part Two") is no longer matched to the same title with another number ("Part 1"); one to twenty, in English.
+- The library folder guess in Settings now works for a Sonarr on Windows: the Sonarr folder it proposes keeps the drive letter and backslashes (`D:\TV`), so it matches the paths that Sonarr reports.
+- A local Unshackle whose Python is missing or does not answer no longer stops every health update: Unshackle now shows as down with the cause, and the lights for Sonarr and the other servers still refresh.
+- Unshacklarr no longer follows a redirect from unshackle serve: it says which address the redirect points to so you can use that one, and the address in the "did not answer like unshackle serve" message hides any user name and password.
 
 ## [1.5.0] - 2026-10-17
 

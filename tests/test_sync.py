@@ -1237,6 +1237,73 @@ def test_a_missed_job_status_waits_instead_of_downloading_twice(tmp_path, monkey
     assert sync.run_job_retrying({"service": "X"}) == [] and len(started) == 1  # the same job, followed to its end
 
 
+SERVE = "http://serve:8786"
+
+
+def serve_answering_jobs(monkeypatch, sync, answers):
+    """The real Unshackle client over `responses`: each status poll gets the next of (HTTP status, JSON body)."""
+    monkeypatch.setattr(sync.UNSHACKLE, "settings", {"unshackle_url": SERVE, "unshackle_api_key": "a-long-random-key"})
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda payload: "j1")
+    monkeypatch.setattr(sync.time, "sleep", lambda _: None)
+    for status, body in answers:
+        responses.add(responses.GET, f"{SERVE}/api/download/jobs/j1", status=status, json=body)
+    responses.add(responses.DELETE, f"{SERVE}/api/download/jobs/j1", json={})
+
+
+def cancels():
+    return [c for c in responses.calls if c.request.method == "DELETE"]
+
+
+@responses.activate
+def test_one_http_500_from_a_status_poll_does_not_cancel_the_job(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    serve_answering_jobs(monkeypatch, sync, [(500, {"message": "database is locked"}),
+                                             (200, {"status": "completed", "output_files": ["/downloads/x.mkv"]})])
+    assert sync.run_job({"service": "X"}) == ["/downloads/x.mkv"]
+    assert not cancels()
+
+
+@responses.activate
+def test_a_job_whose_status_answers_500_every_time_is_cancelled_after_the_usual_misses(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    assert sync.POLL_MISSES == 12  # the usual misses, as before
+    assert not sync.STATUS_MISS.search("unshackle serve: job failed: HTTP 500: from the CDN")  # the status, not words in a body
+    serve_answering_jobs(monkeypatch, sync, [(500, {"message": "database is locked"})] * sync.POLL_MISSES)
+    try:
+        sync.run_job({"service": "X"})
+        raise AssertionError("a job whose status never came went on")
+    except sync.UnshackleError:
+        pass
+    polls = [c for c in responses.calls if c.request.method == "GET"]
+    assert len(polls) == sync.POLL_MISSES and len(cancels()) == 1
+
+
+@responses.activate
+def test_a_job_serve_does_not_know_still_ends_the_wait_at_once(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    serve_answering_jobs(monkeypatch, sync, [(404, {"message": "Job not found"})])
+    try:
+        sync.run_job({"service": "X"})
+        raise AssertionError("a job that does not exist was waited for")
+    except sync.UnshackleError:
+        pass
+    assert len([c for c in responses.calls if c.request.method == "GET"]) == 1 and len(cancels()) == 1
+
+
+def test_a_download_that_failed_on_a_500_is_not_started_again(tmp_path, monkeypatch):
+    # serve may have queued the job before it answered 500: a retry could run it twice into the same folder
+    sync = load(tmp_path, monkeypatch)
+    started = []
+
+    def run_job(payload, run=None, **kw):
+        started.append(payload)
+        raise sync.JobFailed("unshackle serve: HTTP 500: Internal Server Error", "failed", "unshackle serve: HTTP 500: Internal Server Error")
+    monkeypatch.setattr(sync, "run_job", run_job)
+    with pytest.raises(sync.JobFailed):
+        sync.run_job_retrying({"service": "X"}, sleep=lambda s: None)
+    assert len(started) == 1
+
+
 def test_shown_commands_hide_a_proxy_password_and_hand_written_dates_count_as_utc(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     assert sync.to_args({"--proxy": "http://user:secret@proxy:8080"}) == ["--proxy", "http://***@proxy:8080"]
@@ -1701,6 +1768,28 @@ def test_the_rename_keeps_the_resolution_and_a_title_starting_with_a_number(tmp_
     use_tools(monkeypatch, sync, fake_tools([], lambda *a: None, {}))
     sync.finalize(out, "S17E03", "Bake Off")
     assert [f.name for f in out.iterdir()] == ["Bake.Off.S17E03.1080p.ALL4.WEB-DL.mkv"]
+
+
+def test_a_track_at_a_standard_height_keeps_that_class_however_wide_it_is(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    assert sync.eq_height({"width": 1998, "height": 1080}) == 1080 and sync.eq_height({"width": 4096, "height": 2160}) == 2160
+    assert sync.eq_height({"width": 1920, "height": 800}) == 1080 and sync.eq_height({"width": 1920, "height": 960}) == 1080
+    assert sync.eq_height({"width": 1918, "height": 802}) == 1080 and sync.eq_height({"width": 3840, "height": 1920}) == 2160
+    assert sync.eq_height({"width": 4096, "height": 1440}) == 2304  # far wider: a crop of a bigger picture, by its width as before
+    assert sync.eq_height({"width": 2160, "height": 1080}) == 1080  # 2:1 at full height
+
+
+def test_the_page_classes_tracks_as_the_server_does(tmp_path, monkeypatch):
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    sync = load(tmp_path, monkeypatch)
+    src = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "quality.js").read_text()
+    code = re.search(r"^const HEIGHTS = .*?^const eqHeight = (?:[^\n]*;$|.*?^\};$)", src, re.M | re.S).group(0)  # the page's copy
+    sizes = [(1998, 1080), (4096, 2160), (4096, 1440), (2160, 1080), (1920, 800), (1920, 960), (1918, 802), (3840, 1920), (1280, 534), (1280, 720), (1920, 1080), (1000, 1000)]
+    run = subprocess.run(["node", "-e", code + f"\nconsole.log(JSON.stringify({json.dumps(sizes)}.map(([width, height]) => eqHeight({{width, height}}))))"],
+                         capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == [sync.eq_height({"width": w, "height": h}) for w, h in sizes]
 
 
 def test_a_ladder_takes_widescreen_tracks_by_their_16_9_height_and_its_language_order(tmp_path, monkeypatch):

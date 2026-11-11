@@ -5,7 +5,7 @@ function renderAutomation() {
   const every = Number(select.value || S.config.settings?.sync_every_hours || 2);
   document.querySelectorAll(".ax-seg button[data-hours]").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.hours) === every)));
   const now = new Date(), next = new Date(now);
-  next.setHours((Math.floor(now.getHours() / every) + 1) * every, 0, 0, 0);
+  next.setHours(Math.min((Math.floor(now.getHours() / every) + 1) * every, 24), 0, 0, 0);
   $("#ax-state b").textContent = `Next sync at ${time(next)}`;
   $("#ax-state small").textContent = `in ${until(next)} · ${every === 24 ? "once a day" : every === 1 ? "every hour" : `every ${every} hours`}`;
   // How many a day, said in words
