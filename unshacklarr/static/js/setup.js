@@ -226,7 +226,7 @@ function showSetup(found) {
     if (bad) return showWrong(bad);
     restoreSay.replaceChildren(loading("Restoring, then testing Sonarr and Unshackle…"));
     try {
-      const r = await api("/api/setup/restore", { method: "POST", signal: AbortSignal.timeout(180000),
+      const r = await api("/api/setup/restore", { method: "POST", wait: 180,
         body: JSON.stringify({ setup_code: f.setup_code.value, password: f.password.value, passphrase: phrase.value, ...pick }) });
       try { sessionStorage.removeItem("setup-draft"); } catch {}
       restored(r);
@@ -454,7 +454,9 @@ $("#tz-select").after(settingsZone.input, settingsZone.list);
 (async () => {
   // asked at once, while the translations load: the state only when logged in (else it answers 401, and is dropped)
   const sessionAsked = api("/api/session"), stateAsked = fetch("/api/state", { headers: { "X-Unshackle": "1" } })
-    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    // 401: not logged in yet, asked again below; any other answer is the state's own error, shown, not asked again
+    .then(async (r) => (r.ok ? r.json() : r.status === 401 ? null : new Error(await r.text() || `${r.status} ${r.statusText}`)))
+    .catch(() => null);
   await i18nReady;
   let session;
   try { session = await sessionAsked; }
@@ -462,8 +464,10 @@ $("#tz-select").after(settingsZone.input, settingsZone.list);
   if (!session.configured) return showSetup(session.setup);
   if (!session.logged_in) return showLogin();
   try {
+    const asked = await stateAsked;
+    if (asked instanceof Error) throw asked;
     // as long as the server waits for a busy Sonarr (SONARR_READ_TIMEOUT, 120 s)
-    const data = (await stateAsked) || await api("/api/state", { signal: AbortSignal.timeout(130000) });
+    const data = asked || await api("/api/state", { wait: 130 });
     S = { series: data.series, config: data.config, services: data.services, serviceNames: data.service_names || {}, dlOptions: data.dl_options, health: data.health || {}, cdm: data.cdm || {}, domains: data.service_domains || {}, builtinLadders: data.builtin_ladders || [], networkServices: data.network_services || {}, backups: data.backups || null, news: data.news || {}, update: data.update || null, version: data.version, instances: data.instances || {}, sonarrsOf: data.sonarrs_of || {} };
     savedConfig = configKey(S.config);
     // a test build of a branch shows its branch and commit, not the release it started from

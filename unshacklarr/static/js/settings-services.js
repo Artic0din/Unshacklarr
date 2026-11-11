@@ -147,7 +147,7 @@ async function loadUnshackleStatus() {
 }
 async function restartUnshackle() {
   $("#u-status").replaceChildren(loading("Restarting Unshackle…"));
-  try { renderUnshackleStatus(await api("/api/unshackle/restart", { method: "POST", signal: AbortSignal.timeout(120000) })); toast("unshackle restarted"); }
+  try { renderUnshackleStatus(await api("/api/unshackle/restart", { method: "POST", wait: 120 })); toast("unshackle restarted"); }
   catch (e) { toast(e.message, true); loadUnshackleStatus(); }
 }
 async function showServeLog() {
@@ -252,7 +252,7 @@ $("#d-probe").onclick = async () => {
   out.replaceChildren();
   const slow = slowHint(svcName(conf.service));
   try {
-    const r = await api("/api/probe", { method: "POST", signal: AbortSignal.timeout(120000),
+    const r = await api("/api/probe", { method: "POST", wait: 120,
       body: JSON.stringify({ show: conf, seriesId: current.id, title: current.title }) });
     state.textContent = "";
     const seasons = r.seasons.map((x) => `S${x.season} (${x.episodes})`).join(", ");

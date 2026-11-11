@@ -12,7 +12,7 @@ async function importKept(c, button) {
   button.disabled = true;
   if (worded) button.textContent = "Importing…";
   try {  // another Sonarr's copy waits in a folder named after it
-    await api("/api/leftovers/import", { method: "POST", signal: AbortSignal.timeout(360000), body: JSON.stringify({ folder: `unshackle-${c.instance ? `${c.instance}-` : ""}${c.tvdbId}-${c.sxxeyy}` }) });
+    await api("/api/leftovers/import", { method: "POST", wait: 360, body: JSON.stringify({ folder: `unshackle-${c.instance ? `${c.instance}-` : ""}${c.tvdbId}-${c.sxxeyy}` }) });
     toast(`${c.series} ${c.sxxeyy}: imported by Sonarr`);
     openActivity();
   } catch (e) { button.disabled = false; if (worded) button.textContent = c.outcome === "kept" ? "Import anyway" : "Import"; toast(e.message, true); }

@@ -1713,14 +1713,19 @@ def first_try(show: dict, ep: dict, aired: datetime | None, now: datetime) -> st
 burst_runs: dict[tuple[str, int], threading.Thread] = {}  # (Sonarr name, "" the main one; episode id): its try
 
 
-def calendar_episodes(config: dict, start: datetime, end: datetime) -> list[dict]:
+# The release check runs every 30 s and must catch a burst a minute long: it gives up on a busy Sonarr sooner.
+RELEASE_CHECK_TIMEOUT = 30
+
+
+def calendar_episodes(config: dict, start: datetime, end: datetime,
+                      timeout: float = sonarr_sync.SONARR_READ_TIMEOUT) -> list[dict]:
     """Sonarr's calendar from start to end, its series' own broadcast schedules put in; reaching as many days
     further as a series publishes before airing."""
     ahead = max([-sonarr_sync.release_day(s) for s in config["series"].values()] + [0])  # a release days before airing
     end = end + timedelta(days=ahead)
     r = requests.get(f"{sonarr_sync.sonarr_url()}/api/v3/calendar", headers=sonarr_sync.sonarr_headers(),  # the Sonarr on now
                      params={"start": start.isoformat(), "end": end.isoformat(), "includeSeries": "true"},
-                     timeout=sonarr_sync.SONARR_READ_TIMEOUT)
+                     timeout=timeout)
     r.raise_for_status()
     plans = sonarr_sync.broadcast_plans(config)
     dated = sonarr_sync.broadcast_dated(plans)  # dated by its own schedule: Sonarr's date set aside
@@ -1742,7 +1747,7 @@ def due_in(now: datetime, inst: dict | None) -> list[int]:
     if not timed:
         return []  # no series has a release time: no need to ask Sonarr every 30 s
     due = []
-    for ep in calendar_episodes(config, now - timedelta(days=2), now + timedelta(days=1)):
+    for ep in calendar_episodes(config, now - timedelta(days=2), now + timedelta(days=1), RELEASE_CHECK_TIMEOUT):
         show = config["series"].get(ep["series"]["tvdbId"])
         if show and inst and sonarr_sync.off_in(inst, show):
             continue  # that library switched off for the series

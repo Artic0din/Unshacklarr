@@ -2988,7 +2988,7 @@ def test_another_sonarr_gets_its_copy_at_the_release_time_too(tmp_path, monkeypa
     monkeypatch.setattr(web, "read_config", lambda: {"series": {7: show}})
     ids = {"": 501, "4k": 9501}  # the same episode, each Sonarr its own id
 
-    def calendar(config, start, end):
+    def calendar(config, start, end, timeout=None):
         name = (sync.instance() or {}).get("name", "")
         return [{"id": ids[name], "series": {"tvdbId": 7, "title": "S"}, "seasonNumber": 1, "episodeNumber": 1,
                  "hasFile": False, "airDateUtc": "2026-10-16T21:00:00Z"}]
@@ -3072,3 +3072,8 @@ def test_sonarr_reads_wait_as_long_as_a_busy_sonarr_answers(tmp_path, monkeypatc
     web.calendar_episodes({"series": {}}, now, now)
     web.sonarr_sync.sonarr_get("series")
     assert waited == [web.sonarr_sync.SONARR_READ_TIMEOUT] * 3 and web.sonarr_sync.SONARR_READ_TIMEOUT >= 60
+    # The release check, every 30 s for a burst a minute long, does not wait two minutes on it.
+    waited.clear()
+    monkeypatch.setattr(web, "read_config", lambda: {"series": {1: {"service": "NINE", "release_time": "06:00"}}})
+    assert web.due_in(now, None) == []
+    assert waited == [web.RELEASE_CHECK_TIMEOUT] and web.RELEASE_CHECK_TIMEOUT < 60

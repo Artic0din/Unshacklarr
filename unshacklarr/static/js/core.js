@@ -151,13 +151,13 @@ let S = { series: [], config: { defaults: {}, series: {}, notifications: {} }, s
 const serviceOptions = {};
 let current = null;
 
-async function api(path, opts = {}) {
+async function api(path, { wait = 30, ...opts } = {}) {
   let r;
   try {
-    // 30 s at most: a request lost in a server restart fails visibly instead of spinning forever
-    r = await fetch(path, { headers: { "Content-Type": "application/json", "X-Unshackle": "1" }, signal: AbortSignal.timeout(30000), ...opts });
+    // wait seconds at most (30 unless said): a request lost in a server restart fails visibly instead of spinning forever
+    r = await fetch(path, { headers: { "Content-Type": "application/json", "X-Unshackle": "1" }, signal: AbortSignal.timeout(wait * 1000), ...opts });
   } catch (e) {
-    throw new Error(e.name === "TimeoutError" ? "No answer after 30 s." : "The server can't be reached.");
+    throw new Error(e.name === "TimeoutError" ? `No answer after ${wait} s.` : "The server can't be reached.");
   }
   if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw new Error("Log in first"); }
   if (!r.ok) throw new Error(await r.text() || `${r.status} ${r.statusText}`);

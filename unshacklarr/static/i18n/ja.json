@@ -432,7 +432,7 @@
  "No CDM": "CDM なし",
  "No CDM for {0}": "{0} の CDM がありません",
  "No DRM, nothing to decrypt": "DRM なし。復号は不要です",
- "No answer after 30 s.": "30 秒たっても応答がありません。",
+ "No answer after {0} s.": "{0} 秒たっても応答がありません。",
  "No change to save": "保存する変更はありません",
  "No change.": "変更なし。",
  "No cookie found: export them in the Netscape (cookies.txt) or JSON format": "Cookie が見つかりません。Netscape（cookies.txt）または JSON 形式でエクスポートしてください",
