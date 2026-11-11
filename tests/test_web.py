@@ -324,6 +324,54 @@ def test_unshackle_yaml_is_checked_kept_and_saved_with_its_permissions(tmp_path,
     assert web.save_unshackle_yaml(conf, text, "serve:\n  api_secret: b\n")["restart"] is True
 
 
+def test_a_broken_unshackle_yaml_still_opens_and_saves_in_its_editor_and_the_alerts_still_go(tmp_path, monkeypatch):
+    """A syntax error in unshackle.yaml answered 500 from the editor, the one tool that fixes it, and stopped the hourly
+    check before the disk alert went out."""
+    import asyncio
+    from datetime import datetime, timezone
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path / "data"))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    conf = tmp_path / "unshackle.yaml"
+    broken = "serve:\n  api_secret: [a\ncdm:\n"
+    conf.write_text(broken)
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", str(tmp_path))
+    monkeypatch.setattr(web, "CONFIG_HISTORY", tmp_path / "history")
+    monkeypatch.setattr(web.UNSHACKLE, "configure", lambda settings: None)
+
+    async def right_password(request, password):
+        return True
+
+    monkeypatch.setattr(web, "password_try", right_password)
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+
+    told = []
+    monkeypatch.setattr(web.sonarr_sync, "free_space_problem", lambda: "Only 1.0 GB free in the downloads folder")
+    monkeypatch.setattr(web.sonarr_sync, "notify", lambda settings, level, title, message, *a, **kw: told.append(title))
+    web.check_alerts(datetime(2026, 11, 11, 12, tzinfo=timezone.utc))
+    assert told == ["The downloads folder is almost full"]
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            async def ask(action, **body):
+                answer = await client.post(f"/api/unshackle/config-file/{action}", json=body, headers={"X-Unshackle": "1"})
+                return answer.status, await answer.text()
+
+            opened = await ask("open")
+            saved = await ask("save", text="serve:\n  api_secret: a\n", base=json.loads(opened[1])["base"])
+            conf.write_text("directories:\n  wvds: ..\n")  # not a folder next to the file
+            return opened, saved, await ask("open")
+
+    opened, saved, bad_folder = asyncio.run(go())
+    assert opened[0] == 200 and json.loads(opened[1])["text"] == broken
+    assert saved[0] == 200 and json.loads(saved[1])["saved"] is True
+    assert bad_folder[0] == 400 and "is not a folder next to it" in bad_folder[1]
+    assert [f.read_text() for f in (tmp_path / "history").glob("*.yaml")] == [broken]  # the broken file kept in the history
+
+
 def test_the_yaml_editor_files_are_served_and_know_unshackle_keys():
     import json
     from pathlib import Path
