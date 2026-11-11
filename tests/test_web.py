@@ -2890,6 +2890,27 @@ def test_a_diagnostic_shows_no_address_folder_or_account(tmp_path, monkeypatch):
 
 
 
+def test_the_downloads_list_is_the_queued_then_every_download_newest_first(tmp_path, monkeypatch):
+    # docs/API.md promised the running ones before the history; a running download that started before a finished one stays below it (#60)
+    from aiohttp.test_utils import make_mocked_request
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    started = {"20261001-090000-000001-1-S01E01": "2026-10-01T09:00:00+00:00", "20261001-100000-000001-1-S01E02": "2026-10-01T10:00:00+00:00"}
+    for run_id, when in started.items():
+        card = {"id": run_id, "series": "Show", "tvdbId": 1, "sxxeyy": run_id[-6:], "started": when}
+        if run_id.endswith("E02"):
+            card |= {"outcome": "downloaded", "ended": "2026-10-01T10:05:00+00:00"}
+        (tmp_path / f"{run_id}.json").write_text(json.dumps(card))
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"20261001-090000-000001-1-S01E01"})
+    queued = {"id": "waiting-9", "series": "Show", "tvdbId": 1, "sxxeyy": "S01E09", "waiting": True, "started": "2026-10-01T11:00:00+00:00"}
+    monkeypatch.setitem(web.sonarr_sync.waiting, 9, queued)
+
+    async def ask():
+        return json.loads((await web.v1_downloads(make_mocked_request("GET", "/api/v1/downloads"))).text)
+    assert [(d["id"], d["state"]) for d in asyncio.run(ask())] == [
+        ("waiting-9", "queued"), ("20261001-100000-000001-1-S01E02", "downloaded"), ("20261001-090000-000001-1-S01E01", "running")]
+
+
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):
     from unshacklarr.backend import Unshackle, UnshackleError
     serve, asked = Unshackle(tmp_path), []
