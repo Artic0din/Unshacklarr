@@ -301,6 +301,38 @@ def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path
         local.stop()
 
 
+def broken_command(tmp_path):
+    """An unshackle command whose Python (its shebang) is gone, as after the venv was removed or moved."""
+    command = tmp_path / ".venv" / "bin" / "unshackle"
+    command.parent.mkdir(parents=True)
+    command.write_text(f"#!{tmp_path}/no-such-python\n")
+    command.chmod(0o755)
+    return str(command)
+
+
+def test_a_local_serve_whose_python_is_missing_is_an_unshackle_error(tmp_path):
+    from unshacklarr.backend import Local
+    local = Local(tmp_path / "serve.log")
+    with pytest.raises(UnshackleError, match="no-such-python"):
+        local.start(broken_command(tmp_path))
+    assert local.process is None
+
+
+def test_asking_where_unshackle_keeps_its_files_is_an_unshackle_error_when_it_cannot_run_or_hangs(tmp_path, monkeypatch):
+    import subprocess
+    from unshacklarr.backend import Local
+    local = Local(tmp_path / "serve.log")
+    command = broken_command(tmp_path)
+    with pytest.raises(UnshackleError, match="no-such-python"):
+        local.paths(command)
+
+    def hangs(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+    monkeypatch.setattr("unshacklarr.backend.subprocess.run", hangs)
+    with pytest.raises(UnshackleError, match="did not answer"):
+        local.paths(command)
+
+
 # From #5, by Artic0din: serve's load_errors (Unshackle after 5.4.0)
 @responses.activate
 def test_a_service_that_failed_to_load_is_refused_before_the_job_others_go_on(tmp_path):
