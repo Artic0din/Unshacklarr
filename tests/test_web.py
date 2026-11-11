@@ -366,6 +366,80 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
     }
 
 
+# Runs the page's real numbering handlers and hideSeries against the save bar.
+NUMBERING_BAR_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const core = js("core.js"), series = js("series.js"), schedule = js("schedule.js");
+const code = [
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(series, /^let oneOff = null;.*?(?=^\$\("#d-join"\))/ms),
+  pick(schedule, /^async function hideSeries\(.*?^\}/ms),
+].join("\n");
+const nodes = {};
+const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true }, "#tab-schedule": { hidden: false } };
+const box = {
+  JSON, Object, Math, parseInt, Number, console, structuredClone, current: { tvdbId: 7 },
+  $: (sel) => bars[sel] || nodes[sel] || (nodes[sel] = { value: "", hidden: true, replaceChildren() {} }),
+  api: () => Promise.resolve(box.hiddenAfter),
+  renderCommands() {}, renderInherited() {}, renderPreview() {}, renderHideToggle() {}, renderWall() {}, rerenderSchedule() {},
+  renderHiddenButton() {}, toast() {}, S: null,
+};
+vm.createContext(box);
+vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), baseline: () => { savedConfig = configKey(S.config); } };", box);
+const page = box.page;
+const fresh = () => {
+  box.S = { config: { settings: { theme: "dark" }, hidden_series: [], series: { 7: { service: "iV", title: "https://example.com/show" } } } };
+  page.baseline();
+  bars["#savebar"].hidden = bars["#d-save"].hidden = true;
+};
+(async () => {
+  const out = {};
+  for (const [name, id, typed] of [["episodeOffset", "#d-offset", "5"], ["seasonOffset", "#d-soffset", "2"],
+      ["seasonFrom", "#d-sfrom", "3"], ["episodeTable", "#d-epmap", "S01E01=S01E02"]]) {
+    fresh(); page.input(id, typed);
+    const shown = !bars["#savebar"].hidden;
+    page.input(id, "");
+    out[name] = shown && bars["#savebar"].hidden && bars["#d-save"].hidden;
+  }
+  fresh(); box.hiddenAfter = [7];
+  await page.hideSeries({ tvdbId: 7, series: "Show" }, true);
+  out.hidingLeavesBarHidden = bars["#savebar"].hidden;
+  box.S.config.settings.theme = "light"; page.dirty();
+  const shown = !bars["#savebar"].hidden;
+  box.S.config.settings.theme = "dark"; page.dirty();
+  out.changeThenUndoAfterHiding = shown && bars["#savebar"].hidden;
+  box.hiddenAfter = [];
+  await page.hideSeries({ tvdbId: 7, series: "Show" }, false);
+  out.showingLeavesBarHidden = bars["#savebar"].hidden;
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hidden(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    harness = tmp_path / "harness.js"
+    harness.write_text(NUMBERING_BAR_HARNESS)
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "episodeOffset": True, "seasonOffset": True, "seasonFrom": True, "episodeTable": True,  # typed, then cleared: nothing to save
+        "hidingLeavesBarHidden": True,  # saved at once, so it is not a pending change
+        "changeThenUndoAfterHiding": True,
+        "showingLeavesBarHidden": True,
+    }
+
+
 def test_season_maps_are_suggested_by_dates_else_by_order(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
