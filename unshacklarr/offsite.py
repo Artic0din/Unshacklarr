@@ -68,6 +68,8 @@ def s3_put(endpoint: str, bucket: str, region: str, access_key: str, secret_key:
     host = f"[{parts.hostname}]" if ":" in (parts.hostname or "") else parts.hostname or ""
     if parts.port not in (None, {"http": 80, "https": 443}.get(parts.scheme)):
         host += f":{parts.port}"
+    if any(seg in (".", "..") for seg in f"{bucket}/{name}".split("/")):
+        raise ValueError("The S3 bucket and folder cannot hold a . or .. folder: a URL drops them")
     # the signature covers the whole path requested, the endpoint's own included
     path = quote(parts.path.rstrip("/"), safe="/-_.~%") + quote(f"/{bucket.strip('/')}/{name}", safe="/-_.~")
     url = requests.Request("PUT", f"{parts.scheme}://{parts.netloc}{path}").prepare().url  # as requests sends it (%7E is ~)
