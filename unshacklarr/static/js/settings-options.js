@@ -654,9 +654,10 @@ async function save() {
   // or the next Save would send it without one and the server would stamp it again, skipping the episodes in between.
   const base = JSON.parse(sent);
   for (const [id, conf] of Object.entries(saved?.series || {})) {
-    if (!conf.since || !series[id] || series[id].since) continue;
+    if (!conf.since || !base.series[id] || base.series[id].since) continue;  // what was sent, not what the page holds now
     base.series[id].since = conf.since;
-    if (S.config.series[id] && !S.config.series[id].since) S.config.series[id].since = conf.since;
+    const now = S.config.series[id];  // stopped meanwhile (no service): its date stays cleared
+    if (now?.service && !now.since) now.since = conf.since;
     if (sentDrawer?.id === Number(id)) sentDrawer.conf = JSON.stringify({ ...JSON.parse(sentDrawer.conf), since: conf.since });
   }
   savedConfig = JSON.stringify(base);

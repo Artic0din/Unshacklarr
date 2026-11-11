@@ -244,6 +244,13 @@ const fresh = () => {
   out.sinceLearnt = box.S.config.series[7].since === "2026-11-11T00:00:00+00:00" && bars["#savebar"].hidden && !page.state().unsaved;
   saving = page.save(); release({ series: {} }); await saving;  // the next Save sends it back: the server keeps it
   out.sinceSentBack = JSON.parse(box.sentBody).series[7].since === "2026-11-11T00:00:00+00:00";
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.S.config.series[7].service = ""; delete box.S.config.series[7].since;  // Stop pressed while the Save runs
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.stopKeepsDateCleared = box.S.config.series[7].since === undefined;
   console.log(JSON.stringify(out));
 })();
 """
@@ -270,6 +277,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "offsiteFieldsAreSaved": True,
         "sinceLearnt": True,  # the date the server stamped a new series with, kept on the page (#27)
         "sinceSentBack": True,  # so a later Save does not stamp it again
+        "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
     }
 
 
