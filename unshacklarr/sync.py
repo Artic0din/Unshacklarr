@@ -2134,10 +2134,12 @@ HEIGHTS = (4320, 2160, 1440, 1080, 720, 576, 540, 480, 360, 240)  # the classes 
 
 def eq_height(track: dict) -> int:
     """A track's class, as a ladder reads it: its height, or its width's at 16:9, each taken to the class within 2%
-    of it (a 1920x800 film and a 2:1 1920x960 series are 1080p, Apple's 1918x802 too, a 3840x1920 one 2160p)."""
+    of it (a 1920x800 film and a 2:1 1920x960 series are 1080p, Apple's 1918x802 too, a 3840x1920 one 2160p).
+    A height already a class stays it when the width's is no class (1998x1080 is 1080p, not 1123)."""
     def classed(value: float) -> int:
         return next((h for h in HEIGHTS if abs(value - h) <= h * 0.02), int(value))
-    return max(classed(int(track.get("height") or 0)), classed(int(track.get("width") or 0) * 9 / 16))
+    by_height, by_width = classed(int(track.get("height") or 0)), classed(int(track.get("width") or 0) * 9 / 16)
+    return by_height if by_height in HEIGHTS and by_width not in HEIGHTS else max(by_height, by_width)
 
 
 def fits(step: dict, track: dict) -> bool:

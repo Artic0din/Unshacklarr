@@ -1617,6 +1617,13 @@ def test_the_rename_keeps_the_resolution_and_a_title_starting_with_a_number(tmp_
     assert [f.name for f in out.iterdir()] == ["Bake.Off.S17E03.1080p.ALL4.WEB-DL.mkv"]
 
 
+def test_a_track_at_a_standard_height_keeps_that_class_however_wide_it_is(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    assert sync.eq_height({"width": 1998, "height": 1080}) == 1080 and sync.eq_height({"width": 4096, "height": 2160}) == 2160
+    assert sync.eq_height({"width": 1920, "height": 800}) == 1080 and sync.eq_height({"width": 1920, "height": 960}) == 1080
+    assert sync.eq_height({"width": 1918, "height": 802}) == 1080 and sync.eq_height({"width": 3840, "height": 1920}) == 2160
+
+
 def test_a_ladder_takes_widescreen_tracks_by_their_16_9_height_and_its_language_order(tmp_path, monkeypatch):
     # From #11, by mj23au: a cropped 1920x800 film is 1080p to Unshackle's own --quality
     sync = load(tmp_path, monkeypatch)
