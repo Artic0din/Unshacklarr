@@ -1815,10 +1815,10 @@ def installed_links(links: list[dict]) -> list[dict]:
 
 
 def next_sync(now: datetime) -> datetime:
-    """The next automatic sync: on the hour, every sync_every_hours of the local day."""
+    """The next automatic sync: on the hour, every sync_every_hours of the local day, the grid restarting at midnight."""
     every = int(sonarr_sync.SETTINGS["sync_every_hours"])
     local = now.astimezone(sonarr_sync.LOCAL)
-    hour = (local.hour // every + 1) * every
+    hour = min((local.hour // every + 1) * every, 24)  # an interval that does not divide 24 ends the day at midnight
     return local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=hour - local.hour)
 
 
