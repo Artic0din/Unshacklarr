@@ -2173,6 +2173,89 @@ def test_brand_logos_are_asked_once_a_week_per_country(tmp_path, monkeypatch):
     assert web.brand_logos("GB") == {}  # TMDB unreachable, nothing cached: names only
 
 
+def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, monkeypatch):
+    """Stick: JustWatch lists the Apple TV Amazon Channel title, and the same Amazon title's free episode as plain
+    "Amazon Prime Video". It is the Channel, so it never shows as Prime Video."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    from urllib.parse import quote
+
+    nothing = ""  # quote() keeps no character unescaped; a name, as f-strings before 3.12 cannot reuse their quote
+
+    def page(*rows):  # a TMDB watch page: (section, provider, url)
+        html = "".join(f'<div class="ott_provider"><h3>{sec}</h3><ul class="providers">'
+                       f'<li><a title="Watch Stick on {name}" '
+                       f'href="https://click.justwatch.com/a?r={quote(url, safe=nothing)}"></a></li></ul></div>'
+                       for sec, name, url in rows)
+        return type("Page", (), {"text": html})()
+
+    domains = {"primevideo.com": "AMZN", "tv.apple.com": "ATVP"}
+    stick = "https://app.primevideo.com/detail?gti=amzn1.dv.gti.b2472cf3"
+    apple = "https://tv.apple.com/au/show/stick/umc.cmc.52w04"
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: page(
+        ("Stream", "Apple TV", apple), ("Stream", "Apple TV Amazon Channel", stick),
+        ("Free", "Amazon Prime Video", stick)))
+    found = web.tmdb_links(248830, "AU", domains)
+    assert [l["service"] for l in web.prefer_download_links(found)] == ["ATVP"]
+    assert "AMZN" not in web.series_linked(found)  # nothing left that could hide an AMZN episode link
+
+    # Cross, Fargo, Chicago P.D.: the same Amazon title is included with Prime (Stream) and sold as a Channel.
+    cross = "https://app.primevideo.com/detail?gti=amzn1.dv.gti.cross"
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: page(
+        ("Stream", "Paramount+ Amazon Channel", cross), ("Stream", "Amazon Prime Video", cross),
+        ("Free", "Amazon Prime Video", cross)))
+    assert [(l["service"], l["url"]) for l in web.prefer_download_links(web.tmdb_links(1, "AU", domains))] == [
+        ("AMZN", "amzn1.dv.gti.cross")]
+
+    # Dexter: Resurrection: the free episode is another Amazon title than the Channel's, still the Channel's promo.
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: page(
+        ("Stream", "Paramount+ Amazon Channel", "https://app.primevideo.com/detail?gti=amzn1.dv.gti.s1"),
+        ("Free", "Amazon Prime Video", "https://app.primevideo.com/detail?gti=amzn1.dv.gti.s2")))
+    assert web.prefer_download_links(web.tmdb_links(2, "AU", domains)) == []
+
+    # Judged per title: Prime's own title in Stream stays, the Channel's other title listed only in Free does not.
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: page(
+        ("Stream", "Paramount+ Amazon Channel", "https://app.primevideo.com/detail?gti=amzn1.dv.gti.s1"),
+        ("Stream", "Amazon Prime Video", "https://app.primevideo.com/detail?gti=amzn1.dv.gti.own"),
+        ("Free", "Amazon Prime Video", "https://app.primevideo.com/detail?gti=amzn1.dv.gti.s2")))
+    assert [l["url"] for l in web.prefer_download_links(web.tmdb_links(3, "AU", domains))] == ["amzn1.dv.gti.own"]
+
+    # Each country is judged on its own page before merging: an AU promo cannot pass for GB's subscription.
+    gb = [{"service": "AMZN", "url": "amzn1.dv.gti.b2472cf3", "country": "GB", "kind": "native"}]
+    merged = web.merge_countries([found, gb])
+    assert [(l["service"], l["country"]) for l in web.prefer_download_links(merged)] == [("ATVP", "AU"), ("AMZN", "GB")]
+
+    # Schedule (TMDB's API has no links): Prime Video only free beside an Amazon Channel is that Channel's promo.
+    stick = [{"name": "Apple TV", "logo": "atv"}, {"name": "Apple TV Amazon Channel", "logo": "ch"},
+             {"name": "Amazon Prime Video", "logo": "pv", "section": "free"},
+             {"name": "Apple TV", "logo": "atv", "section": "free"}]
+    assert [p["name"] for p in web.rank_watch_providers(stick)] == ["Apple TV"]
+    # Prime Video as a subscription, or free with no Amazon Channel beside it, is Prime Video.
+    assert [p["name"] for p in web.rank_watch_providers([
+        {"name": "Amazon Prime Video"}, {"name": "Binge Amazon Channel"}])] == ["Amazon Prime Video", "Binge"]
+    assert [p["name"] for p in web.rank_watch_providers([{"name": "Amazon Prime Video", "section": "free"}])] == [
+        "Amazon Prime Video"]
+    # Prime Video's own ad-supported tier beside a Channel (Fire Country) is Prime Video, not a promo.
+    assert [p["name"] for p in web.rank_watch_providers([
+        {"name": "Paramount+ Amazon Channel"}, {"name": "Amazon Prime Video with Ads", "section": "ads"}])] == [
+        "Amazon Prime Video with Ads", "Paramount+"]
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"networks": [], "watch/providers": {"results": {"AU": {
+                "flatrate": [{"provider_name": "Apple TV"}], "free": [{"provider_name": "Amazon Prime Video"}]}}}}
+
+    monkeypatch.setattr(web.requests, "get", lambda *a, **k: Resp())
+    au = web.tmdb_network(248830)["providers"]["AU"]
+    assert [(p["name"], p["section"]) for p in au] == [("Apple TV", "flatrate"), ("Amazon Prime Video", "free")]
+
+
 def test_schedule_shows_the_networks_own_catch_up_service(tmp_path, monkeypatch):
     """Paramedics (AU): TMDB lists Foxtel Now and the Binge Channel; its network, Nine, streams it on 9Now. The
     schedule shows 9Now too, as the series page does, with 9Now's own logo found by its site, not by a list."""
