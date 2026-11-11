@@ -2862,14 +2862,16 @@ def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(
     card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "cause": "Failed to resolve 'nas' ([Errno 8] nodename nor servname)",
             "setup": {"via": "this computer", "proxy": "nordvpn:fr", "command": "unshackle dl --proxy-download http://dl.proxy.lan:8080 ALL4 x"}}
     (tmp_path / "r1.json").write_text(json.dumps(card))
-    (tmp_path / "r1.log").write_text("Sonarr at http://SONARR.LAN:8989 answered 500\nserve at http://[fd00::1234]:8786 timed out\n")
+    (tmp_path / "r1.log").write_text("Sonarr at http://SONARR.LAN:8989 answered 500\nserve at http://[fd00::1234]:8786 timed out\n"
+                                     "Cannot reach sonarr.lan. Retrying\nat http://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443/x\n")
     config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy-download": "http://dl.proxy.lan:8080"}}},
               "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://[fd00::1234]:8786", "backup_passphrase": "https://[broken",
-                           "backends": [{"name": "nas", "url": "http://nas:8786"}]}}
+                           "backends": [{"name": "nas", "url": "http://nas:8786"},
+                                        {"name": "far", "url": "https://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443"}]}}
     monkeypatch.setattr(web, "read_config", lambda: config)
     monkeypatch.setattr(web, "public_config", lambda c: c)
     text = web.diagnostic("r1")  # a passphrase that looks like a broken address does not stop it
-    for host in ("SONARR.LAN", "fd00::1234", "dl.proxy.lan", "'nas'", "8786", "8989", "8080"):
+    for host in ("SONARR.LAN", "sonarr.lan", "fd00::1234", "dl.proxy.lan", "'nas'", "example.org", "8786", "8989", "8080", "9443"):
         assert host not in text, host
     assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
 

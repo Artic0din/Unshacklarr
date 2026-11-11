@@ -4579,18 +4579,18 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)\?[^\s\"']+"), r"\1?…"), (re
 
 def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
     text = no_credentials(text)
-    for pattern, by in SECRET_LIKE:
-        text = pattern.sub(by, text)
-    for host in sorted(hosts, key=len, reverse=True):
+    for host in sorted(hosts, key=len, reverse=True):  # before the token rule: a long host label would hide the rest
         name = re.escape(host)
         text = re.sub(rf"host=(['\"]){name}\1(?:, port=\d+)?", "host=…", text, flags=re.I)  # urllib3's HTTPConnectionPool(host='nas', port=8786)
         if ":" in host:  # IPv6, written in brackets
             name = rf"\[{name}\]"
         # a name alone ("nas", also a server's name) is masked only as an address: after // or @, with its port, or
         # quoted in an error ("Failed to resolve 'nas'")
-        pattern = rf"(?<![\w.-]){name}(?::\d+)?(?![\w.-])" if "." in host or ":" in host \
+        pattern = rf"(?<![\w.-]){name}(?::\d+)?(?![\w-]|\.[\w-])" if "." in host or ":" in host \
             else rf"(?:(?<=//)|(?<=@)){name}(?::\d+)?(?![\w.-])|(?<![\w.-]){name}:\d+|(?<='){name}(?=')"
         text = re.sub(pattern, "…", text, flags=re.I)  # host names are case-insensitive
+    for pattern, by in SECRET_LIKE:
+        text = pattern.sub(by, text)
     return text
 
 
