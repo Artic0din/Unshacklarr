@@ -64,15 +64,20 @@ function followLive() {
   };
   liveFeed.onerror = () => { liveFeed?.close(); liveFeed = null; };  // polling takes over; the next load tries again
 }
-let feedReloading = false;  // a reload the feed started is on its way: the next messages wait for it, so its answer is drawn
+let feedReloading = false, feedMissed = null;  // a reload the feed started is on its way: the next messages wait for it
 function liveTick(data) {
   if (data === null || $("#tab-log").hidden) return;
   const live = JSON.parse(data), ids = new Set(live.map((c) => c.id));
   const known = new Set(runCards.filter((c) => isLive(c) && !c.waiting).map((c) => c.id));  // the queued aren't in the feed
   if (live.length !== known.size || live.some((c) => !known.has(c.id))) {  // one started or ended
-    if (feedReloading) return;
+    if (feedReloading) { feedMissed = data; return; }  // the feed says a change once: kept for after the reload
     feedReloading = true;
-    return openActivity().finally(() => { feedReloading = false; });
+    return openActivity().finally(() => {
+      feedReloading = false;
+      const missed = feedMissed;
+      feedMissed = null;
+      if (missed !== null) liveTick(missed);
+    });
   }
   runCards = runCards.map((c) => (ids.has(c.id) ? live.find((x) => x.id === c.id) : c));
   renderConsole(true);
