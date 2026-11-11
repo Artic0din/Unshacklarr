@@ -48,6 +48,7 @@ Every change worth knowing, newest first. The format follows
 - Adding an audio track to an episode saved as an `.mp4` now writes a `.mkv` file, so the name matches the Matroska format and Sonarr replaces the old `.mp4`.
 - "Release time set" is now sent once, when the time is written, instead of again for every later episode of the same run.
 - A series' start date no longer moves forward each time you Save from the same open page: the page now keeps the date the server set when the series was added, so episodes aired between two Saves are no longer skipped by the automatic sync.
+- A series set to send no notifications no longer sends a "Not imported" message when an unexpected error stops an episode from finishing.
 
 ## [1.5.0] - 2026-10-17
 

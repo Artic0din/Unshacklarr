@@ -2889,7 +2889,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 if not run.card.get("ended"):
                     run.say(f"{job[4]}: {type(e).__name__}: {e}")
                     run.finish("failed", f"{type(e).__name__}: {e}")
-                    notify(settings, "error", f"Not imported: {job[4]}", f"{type(e).__name__}: {e}\nThe files are in {seen_by('sonarr_downloads', job[3])}.", batch=batch)
+                    notify_series(job[2], settings, "error", f"Not imported: {job[4]}", f"{type(e).__name__}: {e}\nThe files are in {seen_by('sonarr_downloads', job[3])}.", batch=batch)
             finally:
                 lock.__exit__(None, None, None)
 

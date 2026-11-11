@@ -2316,6 +2316,27 @@ def test_a_series_can_send_only_its_failures_or_nothing(tmp_path, monkeypatch):
     assert sent == ["error", "success"] and boxed == ["success", "error"]  # the bell keeps what is not sent
 
 
+def test_the_import_catch_all_follows_the_series_notification_setting(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True), (Path(payload["output_dir"]) / "Show.S02E05.mkv").touch()))
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    for name in ("finalize", "check_audio", "check_subs"):
+        monkeypatch.setattr(sync, name, lambda *a, **k: None)
+    monkeypatch.setattr(sync, "import_episode", lambda *a, **k: (_ for _ in ()).throw(ValueError("disk exploded")))  # not one the finish step expects
+    sent = []
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: sent.append((level, title)) or True)
+    boxed = []
+    monkeypatch.setattr(sync, "inbox_add", lambda level, title, *a, **k: boxed.append(title))
+    for mode, number in (("none", 5), (None, 6)):
+        config = sync.read_file()
+        config["series"][111]["notify"] = mode
+        sync.sync(config, {}, [episode(111, 2, number)], manual=True, kind="manual")
+    cards = {c["sxxeyy"]: c for c in (json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))}
+    assert [c["outcome"] for _, c in sorted(cards.items())] == ["failed", "failed"]
+    assert all("ValueError: disk exploded" in c["cause"] for c in cards.values())
+    assert sent == [("error", "Not imported: Show S02E06")] and boxed == ["Not imported: Show S02E05"]  # the bell keeps what the series does not send
+
+
 def test_an_import_sonarr_does_not_answer_is_asked_again(tmp_path, monkeypatch):
     # Sonarr busy moving another big file: the import's answer times out. Asked again, a minute apart (here none);
     # an import it did all the same is not asked twice; one it never answers fails after IMPORT_ASKS
