@@ -28,7 +28,7 @@ import unicodedata
 import zlib
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
-from urllib.parse import urlencode, parse_qs, urlparse
+from urllib.parse import urlencode, parse_qs, unquote, urlparse
 
 import apprise
 import requests
@@ -194,7 +194,9 @@ def brand_fallbacks(links: list[dict], shown: list[dict], domains: dict[str, str
     installed now, so one added later is offered."""
     have = {l["service"] for l in shown}
     found = {b[0] for l in links if l.get("kind") == "channel" and (b := service_for_brand(l.get("provider") or "", domains))}
-    found |= {t for l in links if l.get("edition") and l.get("site") and (t := service_for(f"https://{l['site']}/", domains))}
+    # by its link too, as prefer_download_links: a cache from before editions were flagged
+    found |= {t for l in links if (l.get("edition") or accessible_edition(str(l.get("url") or ""))) and l.get("site")
+              and (t := service_for(f"https://{l['site']}/", domains))}
     return sorted(found - have)
 
 
@@ -519,7 +521,7 @@ ACCESSIBLE_EDITION = re.compile(r"(?:^|[/_-])(?:auslan|audio[_-]descri(?:ption|b
 
 
 def accessible_edition(url: str) -> bool:
-    return bool(ACCESSIBLE_EDITION.search(urlparse(url).path.lower()))
+    return bool(ACCESSIBLE_EDITION.search(unquote(urlparse(url).path).lower()))  # audio%2Ddescription too
 
 
 def still_episode(url: str) -> bool:
@@ -1651,7 +1653,7 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
         if url := search_series_url(service, series["title"]):
             episode = next(l for l in out if l["service"] == service and l.get("episode"))
             out = [l for l in out if not (l["service"] == service and l.get("episode"))]
-            out.append({**{k: v for k, v in episode.items() if k not in ("episode", "edition")}, "url": url,
+            out.append({**{k: v for k, v in episode.items() if k not in ("episode", "edition", "needs_series_url")}, "url": url,
                         "found_by": "search"})
     for service, channel in sorted(channels.items()):
         if url := search_series_url(service, series["title"]):

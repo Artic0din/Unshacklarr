@@ -2112,15 +2112,18 @@ def test_audio_described_and_auslan_editions_are_never_filled_in(tmp_path, monke
             return {"results": [{"title": "Strife", "url": "https://binge.com.au/en-AU/show-detail/strife/ArticleId:9/9"}]}
     monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 1, "title": "Strife"}])
     monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend())
-    searched = web.searched_in_place([found[0]], 1)
-    assert [(l["url"], l.get("edition"), l.get("found_by")) for l in web.prefer_download_links(searched)] == [
-        ("https://binge.com.au/en-AU/show-detail/strife/ArticleId:9/9", None, "search")]
+    searched = web.searched_in_place([{**found[0], "needs_series_url": True}], 1)
+    assert [(l["url"], l.get("edition"), l.get("needs_series_url"), l.get("found_by"))
+            for l in web.prefer_download_links(searched)] == [
+        ("https://binge.com.au/en-AU/show-detail/strife/ArticleId:9/9", None, None, "search")]
     # Words that only contain the edition's name are not it: a show called "Auslander", "padded" slugs.
     assert not web.accessible_edition("https://www.sbs.com.au/ondemand/tv-series/auslander")
     assert web.accessible_edition("https://binge.com.au/en-AU/show-detail/audio-described-x/ArticleId:1/1")
     assert web.accessible_edition("https://example.com/show/bluey_auslan.html")
-    # A cache written before editions were flagged, served while TMDB is down: still never shown.
-    assert web.prefer_download_links([{k: v for k, v in found[0].items() if k not in ("edition", "episode")}]) == []
+    # A cache written before editions were flagged, served while TMDB is down: still never shown, still offered to find.
+    old = {k: v for k, v in found[0].items() if k not in ("edition", "episode")}
+    assert web.prefer_download_links([old]) == [] and web.brand_fallbacks([old], [], domains) == ["BINGE"]
+    assert web.accessible_edition("https://binge.com.au/en-AU/show-detail/audio%2Ddescription-strife/ArticleId:1/1")
     # A title search that also finds the edition under the same title still picks the show itself.
     class Both:
         def call(self, method, path, json=None, **_):
