@@ -1308,6 +1308,12 @@ def test_a_save_keeps_what_the_server_changed_since_the_page_loaded(tmp_path, mo
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=new_time)))
     assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("22:00", 1)
+
+    async def new_day():  # the day after, sent alone: the learnt time makes it count
+        return {"series": {"7": {**show, "release_day": 1}, "8": dict(show)}}
+    web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00"}, 8: dict(show)}})
+    asyncio.run(web.save_config(SimpleNamespace(json=new_day)))
+    assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("21:00", 1)
     with web.CONFIG_LOCK:  # the sync's write waits for a Save's read and write
         learner = threading.Thread(target=web.release_learned, args=(8, "22:00", 0))
         learner.start()

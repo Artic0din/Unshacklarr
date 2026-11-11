@@ -1132,8 +1132,9 @@ async def save_config(request):
             # learnt after the page loaded: each field the page did not send at all is kept (it sends "" to clear one)
             if "release_time" not in show and learned.get("release_time"):
                 saved["release_time"] = learned["release_time"]
-            if "release_day" not in show and learned.get("release_day") and (saved.get("release_time") or learned["release_day"] < 0):
-                saved["release_day"] = learned["release_day"]  # the day after means nothing without a time, as above
+            day = int(show["release_day"] or 0) if "release_day" in show else learned.get("release_day") or 0  # checked above
+            if day and (saved.get("release_time") or day < 0):  # the day after means nothing without a time, as above
+                saved["release_day"] = day
         write_config(config)
     if settings.get("upgrade_check_new"):  # by mj23au: a series just set up, its files already on disk, checked once
         upgrade_pending.update(newly_set_up(series, previous.get("series") or {}))
