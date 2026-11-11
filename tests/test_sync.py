@@ -2193,6 +2193,43 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     assert not sync.same_source({"sceneName": "Show.S01E01.ip.WEB-DL"}, "iP")  # a short tag as Unshackle writes it
 
 
+def test_the_added_audio_is_written_as_a_matroska_file_whatever_the_library_file_is_called(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    file = {}
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (
+        Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True), (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"fr")))
+    calls, imported = [], []
+
+    def tools(cmd, **_):
+        calls.append(cmd)
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined")
+        return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append((sorted(f.name for f in out.iterdir()), replace)))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    for name, written in (("Show - S02E05.mp4", "Show - S02E05.mkv"), ("Show - S02E05.mkv", "Show - S02E05.mkv")):
+        (library / name).write_bytes(b"video")
+        file.update(path=f"/tv/Show/Season 02/{name}", sceneName="Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264")
+        shutil.rmtree(tmp_path / "unshackle-111-S02E05", ignore_errors=True)
+        assert sync.add_track(205, "fr") is True
+        assert calls[-1][:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / written)]
+        assert imported[-1] == ([written], True)  # the one file, in place of the library's: Sonarr drops the old .mp4
+
+
 @pytest.mark.parametrize("code", [2, -9])  # an error, or the process killed (a signal: a negative code)
 @pytest.mark.parametrize("audio", ["audio.mka", "audio.mkv"])  # the audio alone may come in a video container
 def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch, code, audio):
