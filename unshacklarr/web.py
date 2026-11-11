@@ -1728,13 +1728,13 @@ NAMING_RETRY = timedelta(hours=1)  # a suggestion whose titles couldn't be named
 def title_name(service: str, url: str) -> object:
     """A title's name on its service: its episodes' series, else the film's own (a special listed as a film);
     None when it lists neither, NAMING_FAILED when the service can't be asked."""
-    try:
+    try:  # the listing read inside: an answer without a list ("titles": null) is a failure too, asked again
         titles = list_titles({"service": service, "title": url})
-    except (UnshackleError, requests.RequestException, KeyError, TypeError) as e:
+        return (next((str(t["series_title"]) for t in titles if t.get("series_title")), None)
+                or next((str(t["name"]) for t in titles if t.get("type") == "movie" and t.get("name")), None))
+    except (UnshackleError, requests.RequestException, KeyError, TypeError, AttributeError) as e:
         print(f"Naming {service}'s title {url}: {no_credentials(e)}", flush=True)
         return NAMING_FAILED
-    return (next((str(t["series_title"]) for t in titles if t.get("series_title")), None)
-            or next((str(t["name"]) for t in titles if t.get("type") == "movie" and t.get("name")), None))
 
 
 def named_titles(links: list[dict], tmdb_id: int) -> list[dict]:

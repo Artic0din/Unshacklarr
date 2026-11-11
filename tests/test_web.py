@@ -3231,4 +3231,8 @@ def test_a_service_linking_several_titles_names_each(tmp_path, monkeypatch):
     monkeypatch.setattr(web, "list_titles", refused)
     assert web.named_titles([specials, series, iview], 7) == [
         {**specials, "naming_retry": True}, {**series, "naming_retry": True}, iview]
+    # An answer without a list of titles fails the same way, not the whole suggestion.
+    monkeypatch.setattr(web, "list_titles", lambda show: None)
+    assert web.named_titles([specials, series], 7) == [
+        {**specials, "naming_retry": True}, {**series, "naming_retry": True}]
     assert web.title_key("Kath & Kim") == web.title_key("Kath and Kim")
