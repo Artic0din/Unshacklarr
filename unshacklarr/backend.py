@@ -337,6 +337,7 @@ class Unshackle:
         if self.mode == "remote":
             raise UnshackleError("A remote unshackle serve is restarted where it runs")
         self.local.restart(str(self.settings.get("unshackle_command") or ""))
+        self.configure(self.settings)  # a restarted serve reads unshackle.yaml afresh: so does the copy kept 10 minutes
 
     def dl_config(self) -> dict:
         """The `dl:` section of its unshackle.yaml (secrets redacted), kept 10 minutes."""
