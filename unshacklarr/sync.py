@@ -668,7 +668,12 @@ class EpisodeRun:
         self.log = (RUNS_DIR / f"{self.id}.log").open("ab")
         self.raw(f"\x1b[90m── {now.astimezone(LOCAL):%a %d %b %H:%M:%S} · {kind} ──\x1b[0m\r\n".encode())
         EpisodeRun.active.add(self.id)  # before its first card is saved: the history never offers a card being born for deletion
-        self.save()
+        try:
+            self.save()
+        except BaseException:
+            EpisodeRun.active.discard(self.id)  # no card, no run
+            self.log.close()
+            raise
         current.run = self
 
     def say(self, text: str) -> None:
