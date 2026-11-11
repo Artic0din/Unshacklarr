@@ -2538,6 +2538,22 @@ def backup_problem(data) -> str | None:
     for key, show in (data.get("series") or {}).items():
         if not str(key).isdigit() or not isinstance(show, dict):
             return f"Its series entry {key!r} is not in the format Unshacklarr writes"
+    settings = data.get("settings") or {}
+    for key, (low, high) in NUMBER_SETTINGS.items():  # a value a Save refuses would stop the app starting, or divide by zero
+        value = settings.get(key)
+        if value is None or value == "":  # absent or empty: the default, as load_settings reads it
+            continue
+        try:
+            number = float(value)  # true and false too, as a Save reads them
+        except OverflowError:  # an integer of hundreds of digits
+            number = float("inf")
+        except (TypeError, ValueError):
+            number = float("nan")
+        if number != number:  # not a number at all
+            return f"Its {key} setting must be a number"
+        if not low <= number <= high:
+            return f"Its {key} setting must be between {low} and {high}"
+        settings[key] = int(number) if number.is_integer() else number  # "50" from a hand-edited file: as a Save stores it
     return None
 
 
@@ -3911,16 +3927,17 @@ def title_matches(show: dict, ep: dict) -> dict:
 sonarr_sync.find_by_title = title_matches
 
 
-def release_learned(tvdb: int, at: str, day: int) -> None:
-    """A release time the sync learnt (release_learn): in the series' settings, as if typed on its page."""
+def release_learned(tvdb: int, at: str, day: int) -> bool:
+    """A release time the sync learnt (release_learn): in the series' settings, as if typed on its page. Whether it wrote it."""
     config = read_config()
     show = config["series"].get(tvdb)
     if not show or show.get("release_time"):
-        return  # gone, or set meanwhile: never over one set by hand
+        return False  # gone, or set meanwhile: never over one set by hand
     show["release_time"] = at
     if day:
         show["release_day"] = day
     write_config(config)
+    return True
 
 
 sonarr_sync.on_release_learned = release_learned
