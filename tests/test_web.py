@@ -359,8 +359,7 @@ let runsSeq = 0, runCards = [], runsTimer = null;
 const isLive = (c) => c.outcome === "running";
 const renderConsole = () => drawn.push(runCards.map((c) => c.id));
 ${grab("openActivity")}
-let feedReloading = false, feedMissed = null, feedSeen = new Set();
-${grab("feedReload")}
+${src.slice(src.indexOf("let feedReloading"), src.indexOf("function liveTick"))}
 ${grab("liveTick")}
 const tick = (ids) => liveTick(JSON.stringify(ids.map((id) => ({ id }))));
 const card = (id, outcome, p) => ({ id, outcome, p });
@@ -387,6 +386,12 @@ const settle = () => new Promise((r) => setImmediate(r));
     const asked = pending.length;
     pending[2]([card(1, "running", 90), card(2, "running", 90), card(3, "downloaded", 90)]); await settle();
     console.log(JSON.stringify({ asked, progress: runCards.map((c) => c.p) }));  // the follow-up's answer, not the older tick
+  } else if (scenario === "newer") {
+    tick([1]); pending[0]([card(1, "running", 0)]); await settle();
+    tick([1, 2]);  // a second starts: the feed's reload
+    liveTick(JSON.stringify([{ id: 1, outcome: "running", p: 10 }]));  // the second ended; the first at 10
+    pending[1]([card(1, "running", 60), card(2, "downloaded", 100)]); await settle();  // newer: the first at 60
+    console.log(JSON.stringify({ asked: pending.length, progress: runCards.map((c) => c.p) }));
   } else if (scenario === "progress") {
     const at = (p) => liveTick(JSON.stringify([{ id: 1, outcome: "running", p }, { id: 2, outcome: "running", p }]));
     tick([1]);  // the feed's reload
@@ -437,7 +442,11 @@ def test_a_download_that_starts_and_ends_during_the_feeds_reload_is_asked_for_af
     assert result["progress"] == [90, 90, 90]  # and that newer answer is not drawn over by an older message
 
 
-def test_the_feed_replays_its_newest_message_after_its_reload():
+def test_the_feed_never_draws_older_progress_over_its_reloads_answer():
+    assert run_activity("newer") == {"asked": 2, "progress": [60, 100]}
+
+
+def test_a_manual_reload_meanwhile_keeps_the_newer_progress():
     assert run_activity("progress")["progress"] == [60, 60]  # never the older 10 drawn over the newer 60
 
 
