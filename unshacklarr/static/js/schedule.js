@@ -1,12 +1,13 @@
 /* Schedule: the late episodes, then Sonarr's calendar as an endless list or a month grid.
    Episodes come from /api/calendar in chunks; the filter and views only re-render them. */
 const CHUNK_DAYS = 14, LIST_DAYS_MAX = 365;
-const cal = { byDay: new Map(), listFrom: null, listUntil: null, loading: false, done: false, month: null, pick: null, fetched: new Set() };
+const EARLY_DAYS_MAX = 14;  // as in sync.py: a service puts an episode out up to two weeks before it airs
+const cal = { byDay: new Map(), listFrom: null, listUntil: null, loading: false, done: false, month: null, pick: null, fetched: new Set(), placed: new Map() };
 
 async function loadSchedule() {
   loadLate();
   renderHiddenButton();
-  cal.byDay.clear(); cal.fetched.clear();
+  cal.byDay.clear(); cal.fetched.clear(); cal.placed.clear();
   cal.listFrom = cal.listUntil = startOfDay(new Date()); cal.done = false;
   cal.month ??= new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   $("#sched-upcoming").replaceChildren();
@@ -47,6 +48,9 @@ const inScope = (d) => !isHidden(d) && ({ all: true, mine: d.managed, other: !d.
 async function hideSeries(d, hidden, quiet = false) {
   try { S.config.hidden_series = await api("/api/hidden", { method: "POST", body: JSON.stringify({ tvdbId: d.tvdbId, hidden }) }); }
   catch (e) { return toast(`Could not ${hidden ? "hide" : "show"} ${d.series}: ${e.message}`, true); }
+  const saved = JSON.parse(savedConfig);  // saved already: not a change for the save bar
+  saved.hidden_series = S.config.hidden_series;
+  savedConfig = stableJSON(saved);
   if (!quiet) toast(hidden ? `${d.series} hidden from the schedule` : `${d.series} is back in the schedule`, false,
     ["Undo", () => hideSeries(d, !hidden)]);
   renderHideToggle();
@@ -137,17 +141,25 @@ function networkBadge(d, extra = "") {
   return el("span", { className: `badges ${extra}` }, ...(net.providers.length ? [local] : [network, local]));
 }
 
-/* Fetch [from, from + days) once; episodes land in cal.byDay by local day. */
+/* Fetch [from, from + days) once; episodes land in cal.byDay by local day. The route filters by air date, so it is
+   asked EARLY_DAYS_MAX more days: an episode out inside the range may air after it. Each is filed once. */
 async function fetchDays(from, days) {
   const key = `${isoDay(from)}+${days}`;
   if (cal.fetched.has(key)) return;
-  const eps = await api(`/api/calendar?start=${isoDay(from)}&days=${days}`,
+  const eps = await api(`/api/calendar?start=${isoDay(from)}&days=${days + EARLY_DAYS_MAX}`,
     { wait: 130 });  // as long as the server waits for a busy Sonarr (120 s)
   cal.fetched.add(key);
-  for (let i = 0; i < days; i++) cal.byDay.set(isoDay(addDays(from, i)), []);
+  const range = new Set();
+  for (let i = 0; i < days; i++) { const day = isoDay(addDays(from, i)); range.add(day); cal.byDay.set(day, []); }
+  const same = (a, b) => a.tvdbId === b.tvdbId && a.sxxeyy === b.sxxeyy;
   for (const d of eps) {  // on the day it airs; one out days before (a platform ahead of the channel) on the day it's tried
     const aired = isoDay(new Date(d.airDateUtc)), out = d.release && new Date(d.release) < new Date(d.airDateUtc) ? isoDay(new Date(d.release)) : aired;
-    (cal.byDay.get(out) || cal.byDay.get(aired))?.push(d);
+    const id = `${d.tvdbId}|${d.sxxeyy}`, was = cal.placed.get(id), held = (day) => cal.byDay.get(day)?.some((x) => same(x, d));
+    const day = range.has(out) ? out : range.has(aired) && !(was && held(was)) ? aired : null;  // else an earlier or later chunk files it
+    if (!day) continue;
+    if (was && was !== day) { const list = cal.byDay.get(was); const i = list?.findIndex((x) => same(x, d)); if (i >= 0) list.splice(i, 1); }
+    cal.byDay.get(day).push(d);
+    cal.placed.set(id, day);
   }
   fetchNetworks(eps);
 }
@@ -314,7 +326,7 @@ function schedRow(d, when) {
 }
 
 const LOCALE = LANG === "en" ? "en-GB" : LANG;  // English: a 24-hour clock, the day before the month
-const time = (d) => isNaN(d) ? "" : d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+const time = (d, timeZone) => isNaN(d) ? "" : d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", timeZone });
 function day(d) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - today) / 86400000);
