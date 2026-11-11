@@ -282,7 +282,9 @@ class Unshackle:
         except requests.RequestException as e:
             raise UnshackleError(no_credentials(f"unshackle serve is unreachable at {url}: {e}")) from e
         if r.is_redirect:
-            target = urlparse(urljoin(r.url, r.headers.get("Location", ""))).netloc.rpartition("@")[2]
+            to = urlparse(urljoin(r.url, r.headers.get("Location", "")))  # http to https, or a base path, shows as such
+            base = to.path[:-len(path)] if path and to.path.endswith(path) else to.path  # the address, not this call's route
+            target = f"{to.scheme}://{to.netloc.rpartition('@')[2]}{base}" if to.netloc else ""
             raise UnshackleError(no_credentials(f"{url} redirects to {target or 'another address'}: use that address "
                                                 "for unshackle serve in Settings, Unshackle"))
         if r.status_code == 401:
