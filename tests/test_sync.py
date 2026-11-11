@@ -2764,6 +2764,17 @@ def test_picks_keep_their_order_whichever_is_ready_to_download_first(tmp_path, m
     assert sync.job_order == {}
 
 
+def test_a_job_stays_downloading_while_any_of_its_downloads_runs(tmp_path, monkeypatch):
+    # a retry with another Replace choice runs beside its job under the same batch: one ending is not both
+    sync = load(tmp_path, monkeypatch)
+    run = lambda: type("Run", (), {"card": {"batch": "J"}, "id": "r", "say": lambda self, text: None})()
+    with sync.download_slot("serve", run()):
+        with sync.download_slot("serve", run()):
+            pass
+        assert "J" in sync.slot_active  # the other still downloads: its slots are not idle
+    assert "J" not in sync.slot_active
+
+
 def test_a_paused_job_marks_its_waiting_episodes_whether_or_not_one_downloads(tmp_path, monkeypatch):
     # Its queued episodes say "paused" in Activity, and lose it once resumed, while one of them downloads too
     sync = load(tmp_path, monkeypatch)

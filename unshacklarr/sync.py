@@ -845,7 +845,7 @@ slots = threading.Condition()
 slot_jobs: dict[str, list[str]] = {}  # by server name ("" the main one): the jobs holding its download slots
 slot_line: dict[str, list[str]] = {}  # by server name: the jobs waiting for one, in the order they asked
 stop_waiting: set[str] = set()  # runs stopped from Activity while they waited for a slot
-slot_active: set[str] = set()  # jobs with an episode downloading now
+slot_active: dict[str, int] = {}  # jobs with an episode downloading now: how many (a retry with another Replace runs beside its job)
 job_order: dict[str, int] = {}  # job -> its place: numbered when picked, so the line keeps the order picks were made
 job_numbers = itertools.count()
 
@@ -896,12 +896,15 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                 line.remove(job)
                 slots.notify_all()
             holders.append(job)
-        slot_active.add(job)
+        slot_active[job] = slot_active.get(job, 0) + 1
     try:
         yield
     finally:
         with slots:
-            slot_active.discard(job)
+            if slot_active.get(job, 0) > 1:
+                slot_active[job] -= 1
+            else:
+                slot_active.pop(job, None)
         batch = run.card.get("batch") if run else None
         if not batch or batch in paused_jobs:  # on its own (or the sync's), or its job paused: the slot goes with it
             release_job(job)
