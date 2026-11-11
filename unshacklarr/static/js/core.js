@@ -184,7 +184,8 @@ let savedConfig = "";  // the settings as last loaded or saved: a discard that b
 // what a save sends: a series opened without a service is not part of it
 // keys in order: a field cleared and typed again comes back last, and is still the same settings
 const stableJSON = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
-const configKey = (c) => stableJSON({ ...c, series: Object.fromEntries(Object.entries(c.series || {}).filter(([, x]) => x.service)) });
+// hidden_series is left out: hiding saves at once, never through Save
+const configKey = (c) => stableJSON({ ...c, hidden_series: undefined, series: Object.fromEntries(Object.entries(c.series || {}).filter(([, x]) => x.service)) });
 function dirty() {  // a change put back as it was hides the bar again
   renderCommands();
   unsaved = configKey(S.config) !== savedConfig;
@@ -489,7 +490,7 @@ $("#home").onclick = async (e) => {
 let wallScroll = 0;
 /* A series' settings changed since its panel opened, and not saved: closing it asks first. */
 let drawerSnapshot = null;
-const drawerChanged = () => !!current && drawerSnapshot?.id === current.tvdbId && JSON.stringify(S.config.series[current.tvdbId]) !== drawerSnapshot.conf;
+const drawerChanged = () => !!current && drawerSnapshot?.id === current.tvdbId && stableJSON(S.config.series[current.tvdbId]) !== stableJSON(JSON.parse(drawerSnapshot.conf));
 function discardDrawer() {  // the series as it was when its panel opened; the bar goes if nothing else waits
   const { id, existed, conf } = drawerSnapshot;
   if (existed) S.config.series[id] = JSON.parse(conf); else delete S.config.series[id];
