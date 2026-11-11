@@ -1128,8 +1128,8 @@ async def save_config(request):
         config["hidden_series"] = now["hidden_series"]  # saved at once by hide_series, never by Save
         for key, show in (body.get("series") or {}).items():
             learned, saved = now["series"].get(int(key)) or {}, series.get(int(key))
-            if saved is None:
-                continue
+            if saved is None or (learned.get("service"), str(learned.get("title"))) != (saved.get("service"), str(saved.get("title"))):
+                continue  # another service or page now: what was learnt for the old one is not its
             # learnt after the page loaded: each field the page did not send at all is kept (it sends "" to clear one)
             if "release_time" not in show and learned.get("release_time"):
                 saved["release_time"] = learned["release_time"]

@@ -652,17 +652,34 @@ async function save() {
   const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series }) });
   // The server stamps a series saved without a start date (a new one, or one stopped and set up again): kept here,
   // or the next Save would send it without one and the server would stamp it again, skipping the episodes in between.
+  // Also a release time the sync learnt after the page loaded, which the server kept for a series sent without one.
+  // A field is missing when it was not sent at all ("" clears a release time); a start date, when it is empty.
+  const missing = (conf, k) => k === "since" ? !conf.since : !(k in conf);
   const base = JSON.parse(sent), stamped = {};
   for (const [id, conf] of Object.entries(saved?.series || {})) {
-    if (!conf.since || !base.series[id] || base.series[id].since) continue;  // what was sent, not what the page holds now
-    base.series[id].since = stamped[id] = conf.since;
-    const now = S.config.series[id];  // stopped meanwhile (no service): its date stays cleared
-    if (now?.service && !now.since) now.since = conf.since;
+    const was = base.series[id];  // what was sent, not what the page holds now
+    for (const k of ["since", "release_time", "release_day"]) {
+      if (!was || !conf[k] || !missing(was, k)) continue;
+      was[k] = (stamped[id] ??= {})[k] = conf[k];
+      const now = S.config.series[id];  // stopped meanwhile (no service): its date stays cleared; edited meanwhile: kept
+      const same = now?.service === was.service && now?.title === was.title;  // a time learnt for another source is not its
+      if (now?.service && missing(now, k) && (k === "since" || same)) now[k] = conf[k];
+    }
   }
   savedConfig = stableJSON(base);
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
   const open = drawerSnapshot && JSON.parse(drawerSnapshot.conf || "{}");  // its drawer, open since or opened meanwhile
-  if (open && stamped[drawerSnapshot.id] && !open.since) drawerSnapshot.conf = JSON.stringify({ ...open, since: stamped[drawerSnapshot.id] });
+  const sentShow = open && base.series[drawerSnapshot.id];  // and, for a release time, the source it was learnt for
+  const added = open && Object.entries(stamped[drawerSnapshot.id] || {}).filter(([k]) => missing(open, k)
+    && (k === "since" || (open.service === sentShow?.service && open.title === sentShow?.title)));
+  if (added?.length) drawerSnapshot.conf = JSON.stringify({ ...open, ...Object.fromEntries(added) });
+  const shown = current && S.config.series[current.tvdbId];  // its editor shows what is saved
+  const learnt = stamped[current?.tvdbId];
+  if (shown && (learnt?.release_time || learnt?.release_day)) {
+    $("#d-release").value = shown.release_time || "";
+    $("#d-release-day").value = String(shown.release_day || 0);
+    renderReleaseNext();
+  }
   dirty();
   if (currentTab === "schedule") loadSchedule();  // a series just added shows up as managed at once
   renderServiceFilter();
