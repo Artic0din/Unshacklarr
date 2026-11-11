@@ -79,6 +79,7 @@ Every change worth knowing, newest first. The format follows
 - When adding an audio track fails, its clean-up never deletes through a download folder that was swapped for a link to another place.
 - Downloading a diagnostic no longer takes minutes when the log holds a long key or license, and no longer shows the start of a secret written just before an e-mail address.
 - A download serve no longer knows (a 404) is retried at once even when its message starts with `HTTP 500:`, instead of after 12 more status checks.
+- Logging out on two devices at the same moment no longer leaves one of the two sessions usable.
 
 ## [1.5.0] - 2026-10-17
 
