@@ -322,7 +322,7 @@ def series_title(url: str) -> str:
         return url.split("?")[0]
     if on_site(url, "disneyplus.com"):  # drop the locale (/fr-fr/, /en-ca/…): one entity, one suggestion
         return re.sub(r"(disneyplus\.com)/[a-z]{2}-[a-z]{2}/", r"\1/", url)
-    if on_site(url, "primevideo.com", "amazon.com", "amazon.fr") and query.get("gti"):  # app.primevideo.com: not parsed
+    if on_site(url, "primevideo.com", "amazon.com", "amazon.fr", "amazon.de") and query.get("gti"):  # app.primevideo.com: not parsed
         return query["gti"][0]
     # These sites' links open one episode; the series page is in the path (an iPlayer episode's programme comes from
     # BBC's own programme page). From #12, by mj23au.
@@ -1622,7 +1622,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 8
+SUGGEST_MAP = 9
 
 
 async def suggest(request):
@@ -1667,6 +1667,8 @@ async def suggest(request):
             # Prefer at read time only: cache keeps Channel rows so a later-uninstalled home still leaves them.
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(),
                    "map": SUGGEST_MAP, "links": links}
+            # Read again: lookups running at once wrote their entries while this one awaited TMDB.
+            cache = read_json(TMDB_CACHE, {})
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
     try:
@@ -3527,6 +3529,10 @@ def tvdb_titles(tvdb_id: int) -> dict[str, str]:
 
 
 TITLE_NUMBER = re.compile(r"(?:^|\D)(\d+)$")  # a plain title's last number: "… part 2", "… episode 2", "… 2"
+NUMBER_WORDS = ("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+                "seventeen eighteen nineteen twenty").split()
+# "… part two" ends a number too; after a tens word ("twenty one", 21) it is no number of its own
+TITLE_NUMBER_WORD = re.compile(rf"(?:^|\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety) | )({'|'.join(NUMBER_WORDS)})$")
 
 
 @functools.lru_cache(maxsize=1 << 16)  # the same pairs again at the "enough" count, each probe
@@ -3563,7 +3569,9 @@ def letters(title: str) -> collections.Counter:
 
 @functools.lru_cache(maxsize=1 << 14)
 def last_number(title: str) -> int | None:
-    return int(m[1]) if (m := TITLE_NUMBER.search(title)) else None
+    if m := TITLE_NUMBER.search(title):
+        return int(m[1])
+    return NUMBER_WORDS.index(m[2]) + 1 if (m := TITLE_NUMBER_WORD.search(title)) and not m[1] else None
 
 
 def titles_of(sonarr_eps: list[dict], tmdb_eps: list[dict], own: bool = True) -> dict[int, set]:
@@ -4444,6 +4452,9 @@ def library_guess(sonarr_path: str) -> dict | None:
             except OSError:  # a mount it may not read (/boot/efi): not there
                 found = False
             if found:
+                if re.match(r"[A-Za-z]:[\\/]", sonarr_path):  # a Windows Sonarr: its drive and separators, so the root is a prefix of its paths
+                    sep = "\\" if "\\" in sonarr_path else "/"
+                    return {"sonarr_root": sep.join(parts[:k]), "local_root": top}
                 return {"sonarr_root": "/" + "/".join(parts[1:k]), "local_root": top}
     return None
 
