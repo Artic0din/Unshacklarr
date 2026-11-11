@@ -66,8 +66,16 @@ PURCHASE_NAME = re.compile(r"^(?:amazon\s+video|apple\s+tv\s+store|itunes)$", re
 # nowhere is offered, best code first. Extend per country.
 NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": ("ALL4", "C4"), "more4": ("ALL4", "C4"),
             "itv": ("ITVX", "ITV"), "channel 5": ("MY5",), "u&": ("UKTV",), "abc (au)": ("iView", "AUBC"), "sbs": ("SBS",),
-            "seven network": ("7plus", "SEVEN"), "nine network": ("NINE",), "network 10": ("TEN",), "tvnz": ("TVNZ",),
+            "abc tv": ("iView", "AUBC"), "seven network": ("7plus", "SEVEN"), "nine network": ("NINE",),
+            "network 10": ("TEN",), "tvnz": ("TVNZ",),
+            # the same networks under the other names TVDB (Sonarr) and TMDB use: Australia's free-to-air channels and
+            # their streaming services ("ABC" alone is TMDB's name for the US network, so not here)
+            "abc iview": ("iView", "AUBC"), "abc kids": ("iView", "AUBC"), "sbs on demand": ("SBS",),
+            "seven": ("7plus", "SEVEN"), "7plus": ("7plus", "SEVEN"), "7mate": ("7plus", "SEVEN"),
+            "9": ("NINE",), "9now": ("NINE",), "10": ("TEN",), "10 play": ("TEN",), "10play": ("TEN",),
             "m6": ("M6",), "w9": ("M6",), "6ter": ("M6",)}
+# A network name another country's network also uses, by its first word: the country NETWORKS means by it.
+SHARED_NETWORK_NAMES = {"abc": "au", "sbs": "au"}  # ABC (US); SBS (KR), Korea's
 
 
 def provider_kind(name: str) -> str:
@@ -203,7 +211,44 @@ def brand_fallbacks(links: list[dict], shown: list[dict], domains: dict[str, str
 def network_services(network: str) -> tuple[str, ...]:
     """The service codes a network's catch-up may be under (BBC One: iP), by the network's first words."""
     name = str(network or "").lower().strip()
-    return next((tags for key, tags in NETWORKS.items() if name == key or name.startswith(key + " ")), ())
+    # TVDB tags a network by country when names clash ("ABC (US)", "Seven (AU)"): matched without its tag, unless the
+    # tag is another country than the one a shared name means here
+    tagged = re.search(r"\s*\(([a-z]{2})\)$", name)
+    base = name[:tagged.start()] if tagged else name
+
+    def fits(key: str) -> bool:
+        if name == key:
+            return True
+        if tagged and SHARED_NETWORK_NAMES.get(key.split()[0], tagged[1]) != tagged[1]:
+            return False
+        return base == key or base.startswith(key + " ")
+    return next((tags for key, tags in NETWORKS.items() if fits(key)), ())
+
+
+def with_network_service(providers: list[dict], network: str, logos: dict[str, dict],
+                         domains: dict[str, str]) -> list[dict]:
+    """The schedule's services plus, first, the series' network's own installed catch-up service (Nine Network:
+    9Now), as the series page offers it. Its logo is the TMDB provider whose site is that service's (brand_logos)."""
+    installed = set(domains.values())
+    tag = next((t for t in network_services(network) if t in installed), None)
+    if not tag:
+        return providers
+    # its sites' names: the site's own (abc for iview.abc.net.au) only whole, since ABC News shares it; the host's
+    # first label (iview, 9now) also at either end of the provider's name (ABC iview)
+    hosts = [host for host, t in domains.items() if t == tag]
+    whole = {site_name(host) for host in hosts}
+    ends = {re.sub(r"[^a-z0-9]", "", host.removeprefix("www.").split(".")[0]) for host in hosts}
+
+    def fit(brand: str) -> int:  # the longest of its labels the provider's name is, or starts or ends with
+        return max((len(label) for label in whole | ends if brand == label or label in ends and len(label) >= 3 and (
+            brand.startswith(label) or brand.endswith(label))), default=0)
+
+    # the most specific match: ABC iview by "iview" over ABC News by the generic "abc"
+    score, own = max(((fit(brand), p) for brand, p in logos.items()), key=lambda m: m[0], default=(0, None))
+    shown = {provider_brand(p.get("name") or "") for p in providers}
+    if not score or provider_brand(own["name"]) in shown:
+        return providers
+    return [{"name": own["name"], "logo": own["logo"]}, *providers]
 
 
 def service_for_network(network: str, installed: set[str]) -> str | None:
@@ -291,6 +336,12 @@ def series_title(url: str) -> str:
         return f"https://www.channel5.com/show/{show.group(1)}"
     if on_site(url, "paramountplus.com") and (show := re.match(r"(?:/[a-z]{2})?/shows/(?!video/)([A-Za-z0-9_-]+)", path)):
         return f"https://www.paramountplus.com/shows/{show.group(1)}/"
+    if on_site(url, "7plus.com.au") and (show := re.match(r"/([a-z0-9-]+)/?$", path)):
+        # ?episode-id= makes SEVEN fetch that one episode; the show is the path alone
+        return f"https://7plus.com.au/{show.group(1)}"
+    if on_site(url, "iview.abc.net.au") and (show := re.match(r"/show/([A-Za-z0-9_-]+)", path)):
+        # …/show/<slug>/series/1/video/<id> opens one episode; AUBC lists the whole show from /show/<slug>
+        return f"https://iview.abc.net.au/show/{show.group(1)}"
     if on_site(url, "sbs.com.au") and (show := re.match(r"/ondemand/tv-series/([a-z0-9-]+)", path)):
         return f"https://www.sbs.com.au/ondemand/tv-series/{show.group(1)}"
     if on_site(url, "u.co.uk") and (show := re.match(r"/shows/([a-z0-9-]+)", path)):
@@ -3049,10 +3100,16 @@ async def networks(request):
         await asyncio.gather(*(one(i) for i in todo))
         write_atomic(NETWORKS_CACHE, json.dumps(cache))
     logos = await asyncio.to_thread(brand_logos, country) if tmdb_key() else {}
+    try:
+        domains = await asyncio.to_thread(service_domains)
+    except UnshackleError:
+        domains = {}
     return web.json_response({
         i: {"name": cache[str(i)].get("name"), "logo": cache[str(i)].get("logo"), "country": country,
             "network_country": cache[str(i)].get("network_country") or "",
-            "providers": rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []), logos)}
+            "providers": with_network_service(
+                rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []), logos),
+                cache[str(i)].get("name") or "", logos, domains)}
         for i in ids if str(i) in cache and "providers" in cache[str(i)]
     })
 

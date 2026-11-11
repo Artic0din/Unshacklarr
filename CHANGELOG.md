@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Suggest services now also lists ended series without a service, after the airing ones, so their back catalogue can be set up the same way.
 - Synced the fork with upstream 1.5.0 while retaining its provider-readiness and terminal-disconnect regression coverage.
 - Amazon and Apple Channels (a brand sold inside Prime Video or Apple TV) are never shown: the schedule shows the brand's own logo, or its name when TMDB has none, and the series' suggestions offer only the brand's own service, found by its title or with a "Find it on" button, even when Amazon or Apple itself is not installed. A brand's own row is preferred over its Channel in JustWatch order.
 - Mapped JustWatch's `10play.com.au` links to TEN and normalised them to `10.com.au` show URLs so titles like Fire Country suggest 10 Play, matching JustWatch AU.
@@ -16,6 +17,8 @@ Every change worth knowing, newest first. The format follows
 ### Fixed
 
 - A series' suggestions no longer fill in an audio-described or Auslan edition of the show (Binge's `audio-description-…`, SBS's and ABC iview's `…-auslan`): the show itself is found by its title where the service can search, else that service gets a "Find it on" button.
+- ABC iview and 7plus suggestions now link the show's page (`iview.abc.net.au/show/<name>`, `7plus.com.au/<name>` without its `?episode-id=`) instead of one episode, so Unshackle sees every episode; before, a series like Dustfall showed only episode 1 as on iview. Series already set to an episode link need their Series URL replaced once.
+- The schedule now shows a series' network catch-up service (for example 9Now for a Nine Network series) beside TMDB's services, as the series page already suggests it, with that service's own logo. Australia's free-to-air networks are recognised under all the names Sonarr and TMDB use: ABC TV, ABC iview and ABC Kids; Nine, 9 and 9Now; Network 10, 10 and 10 Play; Seven, Seven Network, 7plus and 7mate; SBS and SBS On Demand.
 - A Channel's own Amazon or Apple title is no longer offered as Prime Video when JustWatch also lists it under that name (Stick's free first episode, an Apple TV Amazon Channel title, listed as "Amazon Prime Video"); in the schedule, Prime Video or Apple TV listed only in TMDB's free section beside a Channel they host is that Channel's free episode and is not shown, while an ad-supported tier such as Prime Video with Ads still shows.
 - A brand listed only as an Amazon or Apple Channel (for example Binge Amazon Channel or Paramount+ Amazon Channel) is now routed to that brand's own installed service: its series page is searched there by title and suggested as home, and no Channel chip is shown. If the title search finds nothing, the series page offers to find it on that service. Sonarr country tags such as "(AU)" no longer stop a title search from matching.
 - Series suggestions now include TMDB's own homepage link when it is an installed service, so titles like Paramedics (AU) suggest 9Now instead of only the BINGE Amazon Channel, which Amazon refuses without that add-on. Week-old suggestion caches refresh.

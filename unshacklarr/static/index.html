@@ -79,7 +79,7 @@
       <label class="pill"><input type="checkbox" id="f-missing"> Missing episodes <span id="f-missing-n"></span></label>
       <label class="pill"><input type="checkbox" id="f-monitored"> Monitored <span id="f-monitored-n"></span></label>
       <span class="muted" id="count"></span>
-      <button class="btn small" id="bulk-open" title="Services for your airing series, found on TMDB">Suggest services</button>
+      <button class="btn small" id="bulk-open" title="Services for your series, found on TMDB">Suggest services</button>
       <button class="btn small" id="sel-toggle" type="button" aria-pressed="false">Select</button>
     </div>
     <div class="wall" id="wall" aria-busy="true"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
@@ -1007,7 +1007,7 @@
 <dialog class="modal wide" id="bulk-dialog" aria-labelledby="bulk-title">
   <form method="dialog" id="bulk-form">
     <h2 id="bulk-title">Suggest services</h2>
-    <p id="bulk-sub">Your airing series that Unshackle does not download yet, with the services TMDB finds for them. Pick a service for the ones you want: their new episodes then download on their own.</p>
+    <p id="bulk-sub">Your series that Unshackle does not download yet, with the services TMDB finds for them, airing ones first. Pick a service for the ones you want: new episodes then download on their own, and older ones from each series' Episodes.</p>
     <ul class="bulk-rows" id="bulk-rows"></ul>
     <div class="modal-actions"><span class="muted" id="bulk-progress"></span><button class="btn" value="cancel" formnovalidate>Close</button><button class="btn primary" id="bulk-add" value="add" disabled>Add</button></div>
   </form>
