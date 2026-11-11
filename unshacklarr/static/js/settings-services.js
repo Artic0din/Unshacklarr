@@ -1,17 +1,27 @@
+/* The server's next_sync (web.py): on the hour, every so many hours of the day in the app's time zone, not the browser's. */
+function nextSyncAt(now, every, zone) {
+  const parts = (d) => Object.fromEntries(new Intl.DateTimeFormat("en", { timeZone: zone, hourCycle: "h23", year: "numeric", month: "numeric",
+    day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" }).formatToParts(d).map((p) => [p.type, Number(p.value)]));
+  const offset = (d) => { const p = parts(d); return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(d.getTime() / 1000) * 1000; };
+  const at = parts(now), hour = Math.min((Math.floor(at.hour / every) + 1) * every, 24);  // the grid starts again at midnight
+  // that wall-clock hour in the zone, as the server counts it, across a clock change too
+  const wall = Date.UTC(at.year, at.month - 1, at.day, hour), guess = new Date(wall - offset(now)), exact = new Date(wall - offset(guess));
+  return parts(exact).hour === hour % 24 ? exact : guess;  // an hour the clocks skip: the offset before them, as Python takes it
+}
 /* Settings, Automation: when the next sync comes (on the hour, every so many hours of the day), the interval as chips */
 function renderAutomation() {
   const select = $("[data-set=sync_every_hours]");
   if (!select) return;
   const every = Number(select.value || S.config.settings?.sync_every_hours || 2);
   document.querySelectorAll(".ax-seg button[data-hours]").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.hours) === every)));
-  const now = new Date(), next = new Date(now);
-  next.setHours((Math.floor(now.getHours() / every) + 1) * every, 0, 0, 0);
-  $("#ax-state b").textContent = `Next sync at ${time(next)}`;
+  const zone = S.config.settings?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const next = nextSyncAt(new Date(), every, zone), nextAt = time(next, zone);
+  $("#ax-state b").textContent = `Next sync at ${nextAt}`;
   $("#ax-state small").textContent = `in ${until(next)} · ${every === 24 ? "once a day" : every === 1 ? "every hour" : `every ${every} hours`}`;
   // How many a day, said in words
   const hours = Array.from({ length: Math.ceil(24 / every) }, (_, k) => k * every);
   $("#rs-sum").replaceChildren(el("b", { textContent: every === 24 ? "Once a day" : `${hours.length} syncs a day` }),
-    el("span", { textContent: `on the hour. An episode is tried at the first sync after it airs. Next sync at ${time(next)}` }));
+    el("span", { textContent: `on the hour. An episode is tried at the first sync after it airs. Next sync at ${nextAt}` }));
 
   renderReleaseTries();
 }

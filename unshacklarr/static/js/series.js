@@ -14,13 +14,13 @@ function fillAdv(conf, title) {
   $("#d-epname").value = conf.episode_name || "joined";
   $("#d-parts").value = String(conf.parts || "");
 }
-$("#d-offset").oninput = (e) => { advConf().episode_offset = parseInt(e.target.value, 10) || 0; advDirty(); };
-$("#d-soffset").oninput = (e) => { advConf().season_offset = parseInt(e.target.value, 10) || 0; advDirty(); };
-$("#d-sfrom").oninput = (e) => { advConf().season_offset_from = Math.max(1, parseInt(e.target.value, 10) || 1); advDirty(); };
+const setNumbering = (key, value) => { const conf = advConf(); if (value) conf[key] = value; else delete conf[key]; advDirty(); };  // empty: as if never set, so putting it back hides Save
+$("#d-offset").oninput = (e) => setNumbering("episode_offset", parseInt(e.target.value, 10));
+$("#d-soffset").oninput = (e) => setNumbering("season_offset", parseInt(e.target.value, 10));
+$("#d-sfrom").oninput = (e) => setNumbering("season_offset_from", Math.max(1, parseInt(e.target.value, 10)));
 $("#d-epmap").oninput = (e) => {
   const pairs = [...e.target.value.toUpperCase().matchAll(/(S\d+E\d+)\s*=\s*(S\d+E\d+(?:\.\d+)?)/g)];
-  advConf().episode_map = Object.fromEntries(pairs.map((m) => [m[1], m[2]]));
-  advDirty();
+  setNumbering("episode_map", pairs.length && Object.fromEntries(pairs.map((m) => [m[1], m[2]])));
 };
 $("#d-join").onchange = (e) => { advConf().join_parts = e.target.checked; advDirty(); };
 $("#d-epname").onchange = (e) => { advConf().episode_name = e.target.value; advDirty(); };
@@ -42,6 +42,7 @@ function broadcastCount(plan, d, first) {
   const regular = plan.every === "daily" || (plan.days || []).includes(weekday(d)) || isoDay(d) === first;
   return Number((plan.evenings || {})[isoDay(d)] ?? (regular ? plan.per_evening || 1 : 0));
 }
+const nextBroadcastCount = (n, usual) => (n + 1) % (Math.max(usual, 3) + 1);  // 0 up to 3 or the usual number, round again
 function broadcastDates(plan, eps) {
   const out = new Map();
   if (!plan?.start || !plan.time) return out;
@@ -100,7 +101,7 @@ function renderBroadcast() {
     cells.push(el("button", { type: "button", className: `${n ? "on" : ""}${changed ? " changed" : ""}${iso === today ? " today" : ""}`,
       disabled: iso < plan.start, title: say, ariaLabel: `${d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })} · ${say}`,
       onclick: () => {
-        const next = (n + 1) % 4;  // 0, 1, 2, 3, round again
+        const next = nextBroadcastCount(n, usual);
         plan.evenings = { ...(plan.evenings || {}) };
         if (next === usual) delete plan.evenings[iso]; else plan.evenings[iso] = next;
         changedBroadcast();
@@ -768,7 +769,7 @@ function serviceEpisode(conf, season, number) {
   number += Number(conf.episode_offset || 0);
   season = (conf.season_map || {})[season] != null ? Number(conf.season_map[season])
     : season >= Number(conf.season_offset_from || 1) ? season + Number(conf.season_offset || 0) : season;
-  return number >= 0 ? `S${pad2(season)}E${pad2(number)}` : null;
+  return number >= 1 ? `S${pad2(season)}E${pad2(number)}` : null;
 }
 const dotted = (text) => String(text).replace(/[^\p{L}\p{N}_-]+/gu, ".").replace(/^\.+|\.+$/g, "");  // finalize()'s dots
 /* Which of the service's episodes a Sonarr episode is, picked by name: written into the episode table. */

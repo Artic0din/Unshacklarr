@@ -17,6 +17,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -145,6 +146,8 @@ class Local:
                 stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=folder, env=env,
                 pass_fds=(sock.fileno(),) if handed else (),
             )
+        except OSError as e:  # its Python is gone or not runnable: health and callers handle UnshackleError only
+            raise UnshackleError(f"Could not start unshackle serve with {python}: {e}") from e
         finally:
             if handed:
                 sock.close()  # serve has its own copy
@@ -195,7 +198,12 @@ class Local:
             ask = ("from unshackle.core.config import config, config_path; d = config.directories\n"
                    "print(config_path or ''); print(d.cookies.resolve()); print(d.wvds.resolve()); print(d.prds.resolve());"
                    " print(d.temp.resolve())")
-            out = subprocess.run([python, "-c", ask], cwd=folder, capture_output=True, text=True, timeout=60)
+            try:
+                out = subprocess.run([python, "-c", ask], cwd=folder, capture_output=True, text=True, timeout=60)
+            except subprocess.TimeoutExpired as e:
+                raise UnshackleError(f"unshackle did not answer within 60 s when asked where its files are ({python})") from e
+            except OSError as e:
+                raise UnshackleError(f"Could not ask unshackle where its files are with {python}: {e}") from e
             lines = out.stdout.strip().splitlines()[-5:]
             if out.returncode or len(lines) != 5:
                 raise UnshackleError(f"Could not ask unshackle where its files are: {out.stderr.strip()[-300:]}")
@@ -276,9 +284,16 @@ class Unshackle:
     def call(self, method: str, path: str, **kwargs):
         url, key = self.endpoint()
         try:
-            r = requests.request(method, f"{url}{path}", headers={"X-Secret-Key": key}, timeout=(5, 60), **kwargs)  # a server down: 5 s, not 60
+            r = requests.request(method, f"{url}{path}", headers={"X-Secret-Key": key}, timeout=(5, 60),  # a server down: 5 s, not 60
+                                 allow_redirects=False, **kwargs)  # the key is sent only where it was configured
         except requests.RequestException as e:
             raise UnshackleError(no_credentials(f"unshackle serve is unreachable at {url}: {e}")) from e
+        if r.is_redirect:
+            to = urlparse(urljoin(r.url, r.headers.get("Location", "")))  # http to https, or a base path, shows as such
+            base = to.path[:-len(path)] if path and to.path.endswith(path) else to.path  # the address, not this call's route
+            target = f"{to.scheme}://{to.netloc.rpartition('@')[2]}{base}" if to.netloc else ""
+            raise UnshackleError(no_credentials(f"{url} redirects to {target or 'another address'}: use that address "
+                                                "for unshackle serve in Settings, Unshackle"))
         if r.status_code == 401:
             raise UnshackleError("unshackle serve refused the API key")
         if r.status_code == 429:  # a limit set on the key (Unshackle 6): waited for, not a lost job
@@ -301,7 +316,7 @@ class Unshackle:
         try:
             return r.json()
         except ValueError:  # a proxy's login page, or another program at this address
-            raise UnshackleError(f"{url} did not answer like unshackle serve (no JSON): is the address right?") from None
+            raise UnshackleError(no_credentials(f"{url} did not answer like unshackle serve (no JSON): is the address right?")) from None
 
     def services(self) -> list[dict]:
         """Tag, URL and help of each service, kept 10 minutes."""
