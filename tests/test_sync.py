@@ -1411,6 +1411,11 @@ def test_a_network_error_never_shows_a_discord_webhook_token(tmp_path, monkeypat
     assert sync.no_credentials("at http://admin:pa@ss@sonarr:8989/api") == "at http://***@sonarr:8989/api"
     assert sync.no_credentials("http://sonarr/api?mail=a@b and https://u:p@h") == "http://sonarr/api?mail=a@b and https://***@h"  # a query is not a password
     assert sync.no_credentials("http://user:sec#r?t@proxy:8080") == "http://***@proxy:8080"  # nor stop at a raw # or ?
+    # an @ in the query too: the mask ends at the host, so the query is still there for the diagnostic to hide
+    assert sync.no_credentials("http://u:p@host?email=a@b.com&token=SECRET1") == "http://***@host?email=a@b.com&token=SECRET1"
+    from unshacklarr import web
+    assert "SECRET1" not in web.scrubbed("GET http://u:p@host?email=a@b.com&token=SECRET1")
+    assert sync.no_credentials("http://u:pw@host&x=1") == "http://***@host&x=1"  # no host-shaped end: masked as ever
 
 
 def test_a_service_with_no_cdm_at_all_is_refused_but_no_drm_and_the_default_pass(tmp_path, monkeypatch):
