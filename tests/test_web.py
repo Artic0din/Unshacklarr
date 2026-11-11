@@ -1328,9 +1328,11 @@ def test_a_session_cookie_with_a_non_ascii_digit_is_refused_not_a_500(tmp_path, 
     async def go():
         async with TestClient(TestServer(web.app)) as client:
             client.session.cookie_jar.update_cookies({web.SESSION_COOKIE: "\u00b2.abc"})
-            return (await client.get("/api/session")).status
+            answer = await client.get("/api/session")
+            return answer.status, await answer.json()
 
-    assert asyncio.run(go()) == 200
+    status, session = asyncio.run(go())
+    assert status == 200 and session["logged_in"] is False  # refused, not a 500, and not let in
 
 
 def test_two_sessions_made_in_the_same_second_log_out_separately(tmp_path, monkeypatch):
