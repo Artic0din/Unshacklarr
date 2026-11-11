@@ -363,7 +363,7 @@ let feedReloading = false, feedMissed = null, feedSeen = new Set();
 ${grab("feedReload")}
 ${grab("liveTick")}
 const tick = (ids) => liveTick(JSON.stringify(ids.map((id) => ({ id }))));
-const card = (id, outcome) => ({ id, outcome });
+const card = (id, outcome, p) => ({ id, outcome, p });
 const settle = () => new Promise((r) => setImmediate(r));
 (async () => {
   if (scenario === "feed") {
@@ -384,7 +384,9 @@ const settle = () => new Promise((r) => setImmediate(r));
     tick([1, 2, 3]);  // a third starts while it is on its way: kept
     tick([1, 2]);  // and ends at once: this one matches nothing new on its own
     pending[1]([card(1, "running"), card(2, "running")]); await settle();  // an answer from before the third
-    console.log(JSON.stringify({ asked: pending.length }));
+    const asked = pending.length;
+    pending[2]([card(1, "running", 90), card(2, "running", 90), card(3, "downloaded", 90)]); await settle();
+    console.log(JSON.stringify({ asked, progress: runCards.map((c) => c.p) }));  // the follow-up's answer, not the older tick
   } else if (scenario === "progress") {
     const at = (p) => liveTick(JSON.stringify([{ id: 1, outcome: "running", p }, { id: 2, outcome: "running", p }]));
     tick([1]);  // the feed's reload
@@ -430,7 +432,9 @@ def test_a_change_the_feed_said_during_its_reload_is_reloaded_after():
 
 
 def test_a_download_that_starts_and_ends_during_the_feeds_reload_is_asked_for_after():
-    assert run_activity("brief")["asked"] == 3  # its history card: the history asked again after the reload
+    result = run_activity("brief")
+    assert result["asked"] == 3  # its history card: the history asked again after the reload
+    assert result["progress"] == [90, 90, 90]  # and that newer answer is not drawn over by an older message
 
 
 def test_the_feed_replays_its_newest_message_after_its_reload():

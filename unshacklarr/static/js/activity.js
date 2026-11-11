@@ -75,7 +75,7 @@ function feedReload(again = false) {  // again: the one follow-up, never a loop 
     const unseen = [...feedSeen].some((id) => !have.has(id));
     feedMissed = null;
     feedSeen = new Set();
-    if (unseen && !again) { feedMissed = missed; feedReload(true); } else if (missed !== null) liveTick(missed);
+    if (unseen && !again) feedReload(true); else if (missed !== null) liveTick(missed);  // its answer is newer than missed
   });
 }
 function liveTick(data) {
