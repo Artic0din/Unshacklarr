@@ -32,6 +32,7 @@ Every change worth knowing, newest first. The format follows
 - A notification address with every level unticked no longer receives every message, and it still shows three unticked boxes after a reload.
 - Choosing a CDM device for one service no longer drops the other services' devices when `cdm:` in unshackle.yaml is written on one line (`cdm: {default: l3, AMZN: l3}`): Unshacklarr now refuses and says to change it by hand, leaving the file as it was.
 - A syntax error in `unshackle.yaml` no longer stops its editor from opening it or saving over it, and no longer silences the hourly alerts: the disk-full alerts still go, and cookies and CDM devices count as not checked.
+- The automatic backup and update-check loops no longer stop for good when a pass fails with an unexpected error: the error is logged and the next pass runs after the usual wait.
 
 ## [1.5.0] - 2026-10-17
 

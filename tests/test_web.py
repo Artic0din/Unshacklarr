@@ -1016,6 +1016,42 @@ def test_a_newer_release_is_told_and_github_out_of_reach_keeps_the_last_answer(t
     assert web.update_info() == {"version": "1.10.0", "url": "https://github.com/o/r/releases/tag/v1.10.0"}
 
 
+def test_the_backup_and_update_loops_go_on_after_any_error_and_stop_when_cancelled(tmp_path, monkeypatch, capsys):
+    import yaml
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    waits = []
+
+    async def sleep(seconds):
+        waits.append(seconds)
+        if len(waits) == 2:
+            raise asyncio.CancelledError  # shutdown
+
+    monkeypatch.setattr(web.asyncio, "sleep", sleep)
+    passes = []
+
+    def make_backup():
+        passes.append("backup")
+        raise yaml.YAMLError("bad yaml")
+
+    def check_update():
+        passes.append("update")
+        raise OSError("disk full")
+
+    for loop, name, fail, text, wait in ((web.watch_backups, "make_backup", make_backup, "bad yaml", 3600),
+                                         (web.watch_updates, "check_update", check_update, "disk full", web.UPDATE_RETRY)):
+        passes.clear()
+        waits.clear()
+        monkeypatch.setattr(web, name, fail)
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(loop())
+        assert len(passes) == 2 and waits == [wait, wait], name  # asked again after the wait
+        assert text in capsys.readouterr().out, name
+
+
 def test_an_anime_numbered_from_its_first_episode_is_found_by_its_absolute_number(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
