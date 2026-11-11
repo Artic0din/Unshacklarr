@@ -63,6 +63,7 @@ Every change worth knowing, newest first. The format follows
 - A local Unshackle whose Python is missing or does not answer no longer stops every health update: Unshackle now shows as down with the cause, and the lights for Sonarr and the other servers still refresh.
 - Unshacklarr no longer follows a redirect from unshackle serve: it says which address the redirect points to so you can use that one, and the address in the "did not answer like unshackle serve" message hides any user name and password.
 - The one-off preview no longer shows an episode 00 (S01E00) when an episode offset leads before episode 1, as the sync skips it; and Settings > Automation now shows "Next sync at" in the app's time zone setting, as the sync runs, instead of the browser's. The broadcast calendar's dates still follow the browser's time zone.
+- The save bar no longer appears when nothing changed: typing in a series' episode offset, season offset or episode table and clearing it again leaves the series as it was, and hiding or showing a series (saved at once) no longer makes Download refuse with "Save your changes first".
 
 ## [1.5.0] - 2026-10-17
 

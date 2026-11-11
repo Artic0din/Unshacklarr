@@ -14,13 +14,13 @@ function fillAdv(conf, title) {
   $("#d-epname").value = conf.episode_name || "joined";
   $("#d-parts").value = String(conf.parts || "");
 }
-$("#d-offset").oninput = (e) => { advConf().episode_offset = parseInt(e.target.value, 10) || 0; advDirty(); };
-$("#d-soffset").oninput = (e) => { advConf().season_offset = parseInt(e.target.value, 10) || 0; advDirty(); };
-$("#d-sfrom").oninput = (e) => { advConf().season_offset_from = Math.max(1, parseInt(e.target.value, 10) || 1); advDirty(); };
+const setNumbering = (key, value) => { const conf = advConf(); if (value) conf[key] = value; else delete conf[key]; advDirty(); };  // empty: as if never set, so putting it back hides Save
+$("#d-offset").oninput = (e) => setNumbering("episode_offset", parseInt(e.target.value, 10));
+$("#d-soffset").oninput = (e) => setNumbering("season_offset", parseInt(e.target.value, 10));
+$("#d-sfrom").oninput = (e) => setNumbering("season_offset_from", Math.max(1, parseInt(e.target.value, 10)));
 $("#d-epmap").oninput = (e) => {
   const pairs = [...e.target.value.toUpperCase().matchAll(/(S\d+E\d+)\s*=\s*(S\d+E\d+(?:\.\d+)?)/g)];
-  advConf().episode_map = Object.fromEntries(pairs.map((m) => [m[1], m[2]]));
-  advDirty();
+  setNumbering("episode_map", pairs.length && Object.fromEntries(pairs.map((m) => [m[1], m[2]])));
 };
 $("#d-join").onchange = (e) => { advConf().join_parts = e.target.checked; advDirty(); };
 $("#d-epname").onchange = (e) => { advConf().episode_name = e.target.value; advDirty(); };
