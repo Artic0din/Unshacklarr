@@ -247,11 +247,17 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
              (datetime(2026, 10, 3, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # Melbourne's clocks go forward that night
              (datetime(2026, 4, 4, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # and back
              (datetime(2026, 10, 3, 15, 30, tzinfo=timezone.utc), "Australia/Melbourne", 2),  # 02:00 is skipped that night
+             (datetime(2026, 4, 4, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 1),  # 02:00 comes twice that night
+             (datetime(2026, 4, 4, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 2),
+             (datetime(2026, 10, 25, 1, 30, tzinfo=timezone.utc), "Antarctica/Troll", 1),  # clocks go back two hours
              (datetime(2026, 10, 5, 19, 30, tzinfo=timezone.utc), "Europe/Paris", 5)]  # 21:30: the grid starts again at midnight
     for now, zone, every in cases:
         monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo(zone))
         monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
         server = web.next_sync(now).astimezone(timezone.utc)
+        assert server > now, zone  # a sync already past would run again every second
+        given_local = web.next_sync(now.astimezone(ZoneInfo(zone))).astimezone(timezone.utc)
+        assert given_local == server, zone  # given in the app's zone: the same instant
         page = run_page_function("nextSyncAt", now.isoformat(), every, zone)
         assert datetime.fromisoformat(page.replace("Z", "+00:00")) == server, zone
 
