@@ -145,6 +145,8 @@ class Local:
                 stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=folder, env=env,
                 pass_fds=(sock.fileno(),) if handed else (),
             )
+        except OSError as e:  # its Python is gone or not runnable: health and callers handle UnshackleError only
+            raise UnshackleError(f"Could not start unshackle serve with {python}: {e}") from e
         finally:
             if handed:
                 sock.close()  # serve has its own copy
@@ -195,7 +197,12 @@ class Local:
             ask = ("from unshackle.core.config import config, config_path; d = config.directories\n"
                    "print(config_path or ''); print(d.cookies.resolve()); print(d.wvds.resolve()); print(d.prds.resolve());"
                    " print(d.temp.resolve())")
-            out = subprocess.run([python, "-c", ask], cwd=folder, capture_output=True, text=True, timeout=60)
+            try:
+                out = subprocess.run([python, "-c", ask], cwd=folder, capture_output=True, text=True, timeout=60)
+            except subprocess.TimeoutExpired as e:
+                raise UnshackleError(f"unshackle did not answer within 60 s when asked where its files are ({python})") from e
+            except OSError as e:
+                raise UnshackleError(f"Could not ask unshackle where its files are with {python}: {e}") from e
             lines = out.stdout.strip().splitlines()[-5:]
             if out.returncode or len(lines) != 5:
                 raise UnshackleError(f"Could not ask unshackle where its files are: {out.stderr.strip()[-300:]}")
