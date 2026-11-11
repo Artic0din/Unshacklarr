@@ -472,7 +472,7 @@ def deliver(settings: dict, level: str, title: str, message: str, details: dict 
         print(f"Push notification not sent: {e}", file=sys.stderr)
         to.append({"app": "This device", "ok": False, "error": str(e)[:200]})
     for target in notification_targets(settings):
-        if level not in (target.get("levels") or ALL_LEVELS):
+        if level not in (ALL_LEVELS if target.get("levels") is None else target["levels"]):  # [] is every box unticked: nothing
             continue
         error = send_to(target["url"], level, title, message, details)
         if error:
