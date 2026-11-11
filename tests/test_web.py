@@ -1714,7 +1714,7 @@ def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkey
 
     async def go():
         async with TestClient(TestServer(web.app)) as client:
-            refused = [await restore(client, s) for s in ({"history_keep": "lots"}, {"sync_every_hours": 0}, {"history_days": 99999})]
+            refused = [await restore(client, s) for s in ({"history_keep": "lots"}, {"sync_every_hours": 0}, {"history_days": 10 ** 400})]
             texts = [await r.text() for r in refused]
             unchanged = (tmp_path / "config.yaml").read_text()
             own = await (await client.post("/api/backup", json={"password": "password1"}, headers=h)).json()

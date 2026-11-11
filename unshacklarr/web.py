@@ -2544,6 +2544,8 @@ def backup_problem(data) -> str | None:
             continue
         try:
             number = float(value) if not isinstance(value, bool) else float("nan")
+        except OverflowError:  # an integer of hundreds of digits
+            number = float("inf")
         except (TypeError, ValueError):
             number = float("nan")
         if number != number:  # not a number at all
