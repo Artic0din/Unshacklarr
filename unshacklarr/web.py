@@ -3927,16 +3927,17 @@ def title_matches(show: dict, ep: dict) -> dict:
 sonarr_sync.find_by_title = title_matches
 
 
-def release_learned(tvdb: int, at: str, day: int) -> None:
-    """A release time the sync learnt (release_learn): in the series' settings, as if typed on its page."""
+def release_learned(tvdb: int, at: str, day: int) -> bool:
+    """A release time the sync learnt (release_learn): in the series' settings, as if typed on its page. Whether it wrote it."""
     config = read_config()
     show = config["series"].get(tvdb)
     if not show or show.get("release_time"):
-        return  # gone, or set meanwhile: never over one set by hand
+        return False  # gone, or set meanwhile: never over one set by hand
     show["release_time"] = at
     if day:
         show["release_day"] = day
     write_config(config)
+    return True
 
 
 sonarr_sync.on_release_learned = release_learned
