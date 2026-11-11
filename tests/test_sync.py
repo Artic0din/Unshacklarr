@@ -1275,7 +1275,6 @@ def test_one_http_500_from_a_status_poll_does_not_cancel_the_job(tmp_path, monke
 def test_a_job_whose_status_answers_500_every_time_is_cancelled_after_the_usual_misses(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     assert sync.POLL_MISSES == 12  # the usual misses, as before
-    assert not sync.STATUS_MISS.search("unshackle serve: job failed: HTTP 500: from the CDN")  # the status, not words in a body
     serve_answering_jobs(monkeypatch, sync, [(500, {"message": "database is locked"})] * sync.POLL_MISSES)
     try:
         sync.run_job({"service": "X"})
@@ -1286,10 +1285,11 @@ def test_a_job_whose_status_answers_500_every_time_is_cancelled_after_the_usual_
     assert len(polls) == sync.POLL_MISSES and len(cancels()) == 1
 
 
+@pytest.mark.parametrize("message", ["Job not found", "HTTP 500: upstream failure"])  # a 404 is a 404, whatever it says
 @responses.activate
-def test_a_job_serve_does_not_know_still_ends_the_wait_at_once(tmp_path, monkeypatch):
+def test_a_job_serve_does_not_know_still_ends_the_wait_at_once(tmp_path, monkeypatch, message):
     sync = load(tmp_path, monkeypatch)
-    serve_answering_jobs(monkeypatch, sync, [(404, {"message": "Job not found"})])
+    serve_answering_jobs(monkeypatch, sync, [(404, {"message": message})])
     try:
         sync.run_job({"service": "X"})
         raise AssertionError("a job that does not exist was waited for")
