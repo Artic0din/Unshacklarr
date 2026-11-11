@@ -44,6 +44,7 @@ Every change worth knowing, newest first. The format follows
 - A failed "add audio track" no longer leaves a half-written file in the download folder, so Import under Waiting in downloads can no longer replace the library's file with it.
 - Restoring a backup whose number settings are not numbers or are outside the range a Save allows (for example a Sync every of 0 hours, or a History to keep of "lots") is now refused with a message naming the setting, before anything is written; before, it was written and the app could not start until `config.yaml` was fixed by hand.
 - Picking several hundred episodes at once no longer puts every id in one Sonarr request: they are fetched 200 at a time, so a large catch-up is no longer refused for its URL's length.
+- A job paused during its last episode now ends when that episode does, instead of staying "running" until Resume was pressed (Sync now answered that one was already running). A paused job with episodes left still waits for Resume.
 
 ## [1.5.0] - 2026-10-17
 

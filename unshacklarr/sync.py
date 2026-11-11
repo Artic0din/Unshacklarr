@@ -578,14 +578,15 @@ def job_episodes(episodes: list, batch: str | None):
     so an episode queued again after that starts on its own instead of being lost."""
     i = 0
     while True:
-        while batch in paused_jobs:  # paused: the one before is done, this one waits
-            time.sleep(1)
         with jobs_lock:
-            if i >= len(episodes):
+            if i >= len(episodes):  # nothing left, paused or not: the job ends
                 if batch in running_jobs:
                     running_jobs[batch]["closed"] = True
                 return
-            ep = episodes[i]
+            ep = None if batch in paused_jobs else episodes[i]
+        if ep is None:  # paused: the one before is done, this one waits
+            time.sleep(1)
+            continue
         i += 1
         yield ep
 
