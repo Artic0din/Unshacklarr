@@ -3372,6 +3372,16 @@ def test_a_diagnostic_masks_a_token_glued_to_an_address_and_long_lines_fast():
     assert "secret" not in in_url and "alice" not in in_url  # an address in a URL's path leaves its query masked
 
 
+def test_a_diagnostic_masks_url_queries_fast_on_a_long_run_of_urls():
+    import time
+    from unshacklarr import web
+    urls = ",".join(f"https://h{i}.example/p" for i in range(4000))  # no query in any, no space between
+    start = time.monotonic()
+    assert web.scrubbed(urls) == urls
+    assert time.monotonic() - start < 0.5  # was 1.6 s: each https:// scanned to the end of the run
+    assert web.scrubbed("a https://h.example/p?token=x,https://g.example/q b") == "a https://h.example/p?… b"
+
+
 def test_the_main_sonarr_can_be_named():
     from unshacklarr import web
     saved = {**web.sonarr_sync.SETTINGS_DEFAULTS}

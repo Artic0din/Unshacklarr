@@ -4623,7 +4623,9 @@ async def missing(request):
 
 RUN_ID = re.compile(r"\d{8}-\d{6}-\d{6}-\d+-S\d+E\d+")
 # What a diagnostic never shows: a URL's query (tokens, license contexts), long keys and hashes, e-mail addresses
-SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)\?[^\s\"']+"), r"\1?…"), (re.compile(r"[A-Za-z0-9_+/=-]{32,}"), "…"),
+# the query optional: each URL then matches once, where requiring it made every https:// of a long run of URLs
+# without one scan to the run's end and fail
+SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)(\?[^\s\"']+)?"), lambda m: m[1] + ("?…" if m[2] else "")), (re.compile(r"[A-Za-z0-9_+/=-]{32,}"), "…"),
                # an address starts where a word does (each start inside a long token tried again was quadratic), and its
                # name takes token characters too, so a secret glued to it before the @ goes with it
                (re.compile(r"(?<![\w.+/=-])[\w.+/=-]+@[\w-]+\.[\w.]+"), "…@…")]
