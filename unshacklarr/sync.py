@@ -845,7 +845,7 @@ slots = threading.Condition()
 slot_jobs: dict[str, list[str]] = {}  # by server name ("" the main one): the jobs holding its download slots
 slot_line: dict[str, list[str]] = {}  # by server name: the jobs waiting for one, in the order they asked
 stop_waiting: set[str] = set()  # runs stopped from Activity while they waited for a slot
-slot_active: set[str] = set()  # jobs with an episode downloading now
+slot_active: dict[str, int] = {}  # jobs with an episode downloading now: how many (a retry with another Replace runs beside its job)
 job_order: dict[str, int] = {}  # job -> its place: numbered when picked, so the line keeps the order picks were made
 job_numbers = itertools.count()
 
@@ -885,23 +885,28 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                         raise JobFailed("Stopped before it started", "cancelled")
                     if run and not told:
                         run.say(f"\r\n\x1b[90mWaiting: {limit} download{'s' if limit > 1 else ''} at once on this server\x1b[0m")
-                    if not told:  # waiting here, it keeps no idle slot elsewhere: two jobs holding each other's server would never end (#45)
-                        for other, held in slot_jobs.items():
-                            if other != server and job not in slot_active and job in held:
-                                held.remove(job)
-                                slots.notify_all()
-                        told = True
+                    told = True
+                    # waiting here, it keeps no idle slot elsewhere: two jobs holding each other's server would never
+                    # end (#45); checked on every wake, as its last download elsewhere may end while it waits
+                    for other, held in slot_jobs.items():
+                        if other != server and job not in slot_active and job in held:
+                            held.remove(job)
+                            slots.notify_all()
                     slots.wait(2)
             finally:
                 line.remove(job)
                 slots.notify_all()
             holders.append(job)
-        slot_active.add(job)
+        slot_active[job] = slot_active.get(job, 0) + 1
     try:
         yield
     finally:
         with slots:
-            slot_active.discard(job)
+            if slot_active.get(job, 0) > 1:
+                slot_active[job] -= 1
+            else:
+                slot_active.pop(job, None)
+                slots.notify_all()  # its slots are idle now: a wait of its own elsewhere gives them back
         batch = run.card.get("batch") if run else None
         if not batch or batch in paused_jobs:  # on its own (or the sync's), or its job paused: the slot goes with it
             release_job(job)

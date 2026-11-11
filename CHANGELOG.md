@@ -72,6 +72,7 @@ Every change worth knowing, newest first. The format follows
 - A Save no longer writes back an older password or a revoked API key changed while it ran, and no longer erases a release time the sync learnt after the page was loaded; the sync's own writes and a Save no longer interleave.
 - A redirect from unshackle serve to another route (a login page) is no longer offered as the address to type in Settings, Unshackle.
 - An S3 backup bucket or folder holding a `.` or `..` folder is refused with a message instead of being uploaded under another key than the one in Settings.
+- With a "downloads at once" limit, a job whose retry runs beside it (picked with another Replace choice) no longer gives up a server's slot while one of its downloads still runs there.
 
 ## [1.5.0] - 2026-10-17
 
