@@ -2018,7 +2018,7 @@ def test_a_release_time_is_learnt_once_clear_and_never_over_one_set(tmp_path, mo
                                          "available": f"2026-09-0{n}T21:05:00Z"} for n in (1, 2, 3)}
     sync.write_atomic(sync.SEEN_FILE, json.dumps(seen))
     learnt, told = [], []
-    monkeypatch.setattr(sync, "on_release_learned", lambda tvdb, at, day: learnt.append((tvdb, at, day)))
+    monkeypatch.setattr(sync, "on_release_learned", lambda tvdb, at, day: learnt.append((tvdb, at, day)) or True)
     monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
     ep = episode(111, 2, 4)
     sync.learn_release(ep, {"service": "RTLP"}, {})
@@ -2028,6 +2028,41 @@ def test_a_release_time_is_learnt_once_clear_and_never_over_one_set(tmp_path, mo
     assert learnt == []  # one set by hand stays
     sync.learn_release(ep, {"service": "RTLP"}, {})
     assert learnt == [(111, sync.suggest_release(list(seen.values()))["time"], 0)] and told == ["Release time set: Show"]
+
+
+def test_a_learnt_release_time_is_told_once_for_the_whole_run(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    seen = {f"unshackle-111-S02E0{n}": {"tvdbId": 111, "aired": f"2026-09-0{n}T19:00:00Z", "not_yet": f"2026-09-0{n}T20:55:00Z",
+                                         "available": f"2026-09-0{n}T21:05:00Z"} for n in (1, 2, 3)}
+    sync.write_atomic(sync.SEEN_FILE, json.dumps(seen))
+    stored, told = {}, []
+
+    def learned(tvdb, at, day):  # like web.release_learned: only the first write counts
+        if tvdb in stored:
+            return False
+        stored[tvdb] = at
+        return True
+
+    monkeypatch.setattr(sync, "on_release_learned", learned)
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
+    sync.SETTINGS["release_learn"] = True
+    show = {"service": "RTLP"}  # read once when the run started, so it never shows the time written since
+    for number in (4, 5, 6):
+        sync.learn_release(episode(111, 2, number), show, {})
+    assert told == ["Release time set: Show"]
+
+
+def test_a_release_time_set_by_hand_during_the_run_is_not_told(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    seen = {f"unshackle-111-S02E0{n}": {"tvdbId": 111, "aired": f"2026-09-0{n}T19:00:00Z", "not_yet": f"2026-09-0{n}T20:55:00Z",
+                                         "available": f"2026-09-0{n}T21:05:00Z"} for n in (1, 2, 3)}
+    sync.write_atomic(sync.SEEN_FILE, json.dumps(seen))
+    told = []
+    monkeypatch.setattr(sync, "on_release_learned", lambda tvdb, at, day: False)
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
+    sync.SETTINGS["release_learn"] = True
+    sync.learn_release(episode(111, 2, 4), {"service": "RTLP"}, {})
+    assert told == []
 
 
 def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
