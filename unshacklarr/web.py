@@ -2543,7 +2543,7 @@ def backup_problem(data) -> str | None:
         if value is None or value == "":  # absent or empty: the default, as load_settings reads it
             continue
         try:
-            number = float(value) if not isinstance(value, bool) else float("nan")
+            number = float(value)  # true and false too, as a Save reads them
         except OverflowError:  # an integer of hundreds of digits
             number = float("inf")
         except (TypeError, ValueError):
