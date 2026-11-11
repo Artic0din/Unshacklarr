@@ -317,7 +317,7 @@ function schedRow(d, when) {
 }
 
 const LOCALE = LANG === "en" ? "en-GB" : LANG;  // English: a 24-hour clock, the day before the month
-const time = (d) => isNaN(d) ? "" : d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+const time = (d, timeZone) => isNaN(d) ? "" : d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", timeZone });
 function day(d) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const diff = Math.round((new Date(d).setHours(0, 0, 0, 0) - today) / 86400000);

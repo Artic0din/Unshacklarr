@@ -31,6 +31,26 @@ def test_unreachable_is_notified_once_after_two_checks_then_back(tmp_path, monke
     assert sent == [("error", "Unshackle is unreachable"), ("success", "Unshackle is back")]
 
 
+def test_a_local_unshackle_that_cannot_start_is_down_and_the_other_states_still_refresh(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    command = tmp_path / ".venv" / "bin" / "unshackle"
+    command.parent.mkdir(parents=True)
+    command.write_text(f"#!{tmp_path}/no-such-python\n")  # its Python is gone
+    command.chmod(0o755)
+    web.UNSHACKLE.configure({"unshackle_mode": "local", "unshackle_command": str(command)})
+    monkeypatch.setattr(web, "sonarr_health", lambda: {"ok": True, "version": "4.0"})
+
+    web.check_health()
+
+    assert web.health["unshackle"]["ok"] is False
+    assert "no-such-python" in web.health["unshackle"]["error"]
+    assert web.health["sonarr"]["ok"] is True
+
+
 def test_the_unshackle_test_needs_the_setup_code_before_the_setup(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer
@@ -168,6 +188,72 @@ def test_stats_weeks_start_on_monday_in_the_app_s_time_zone(tmp_path, monkeypatc
     # Monday 08:00 and Sunday 23:00 in Tokyo: both still Sunday in UTC
     s = web.stats_of([card("2026-11-08T23:00:00+00:00"), card("2026-11-08T14:00:00+00:00")], now)
     assert [(w["start"], w["downloaded"]) for w in s["weeks"][-2:]] == [("2026-11-02", 1), ("2026-11-09", 1)]
+
+
+# Runs one of the page's own functions, so its previews are held to what the server does.
+PREVIEW_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[1] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const { fn, args } = JSON.parse(process.argv[2]);
+const code = {
+  serviceEpisode: () => [pick(js("series.js"), /^const pad2 = .*$/m), pick(js("series.js"), /^function serviceEpisode\(.*?^\}/ms)],
+  nextSyncAt: () => [pick(js("settings-services.js"), /^function nextSyncAt\(.*?^\}/ms)],
+}[fn]().join("\n");
+const box = { Intl, Date, Number, String };
+vm.createContext(box);
+vm.runInContext(code + `\nthis.out = ${fn};`, box);
+const [first, ...rest] = args;
+const result = fn === "nextSyncAt" ? box.out(new Date(first), ...rest).toISOString() : box.out(first, ...rest);
+console.log(JSON.stringify(result));
+"""
+
+
+def run_page_function(fn, *args):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    out = subprocess.run(["node", "-e", PREVIEW_HARNESS, "--", str(static), json.dumps({"fn": fn, "args": args})], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def reloaded_web(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    return importlib.reload(unshacklarr.web)
+
+
+def test_the_page_preview_skips_episode_zero_as_the_server_does(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    for conf, number in (({"episode_offset": -1}, 1), ({}, 0), ({"episode_offset": -3}, 3)):
+        assert run_page_function("serviceEpisode", conf, 1, number) is None
+        assert web.sonarr_sync.service_episode(conf, 1, number) is None
+    assert run_page_function("serviceEpisode", {"episode_offset": -1}, 1, 2) == "S01E01"
+
+
+def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    web = reloaded_web(tmp_path, monkeypatch)
+    noon = datetime(2026, 11, 11, 12, 30, tzinfo=timezone.utc)  # the browser (the suite runs in Paris) and the app differ
+    cases = [(noon, "Australia/Melbourne", 4), (noon, "Asia/Kolkata", 2), (noon, "America/St_Johns", 3), (noon, "UTC", 24),
+             (datetime(2026, 10, 3, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # Melbourne's clocks go forward that night
+             (datetime(2026, 4, 4, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # and back
+             (datetime(2026, 10, 3, 15, 30, tzinfo=timezone.utc), "Australia/Melbourne", 2),  # 02:00 is skipped that night
+             (datetime(2026, 10, 5, 19, 30, tzinfo=timezone.utc), "Europe/Paris", 5)]  # 21:30: the grid starts again at midnight
+    for now, zone, every in cases:
+        monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo(zone))
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        server = web.next_sync(now).astimezone(timezone.utc)
+        page = run_page_function("nextSyncAt", now.isoformat(), every, zone)
+        assert datetime.fromisoformat(page.replace("Z", "+00:00")) == server, zone
 
 
 def test_the_page_script_parses(tmp_path):
@@ -2370,9 +2456,17 @@ def test_episode_links_are_taken_back_to_their_series(tmp_path, monkeypatch):
         # 7plus: SEVEN fetches just the ?episode-id= episode; the show is the path
         "https://7plus.com.au/9-1-1?episode-id=NINO09-001": "https://7plus.com.au/9-1-1",
         "https://7plus.com.au/highway-patrol": "https://7plus.com.au/highway-patrol",
+        # Amazon's sites all reduce to the title id, so one title found on two of them is one suggestion
+        "https://www.amazon.de/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.com/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.fr/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.primevideo.com/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
     }
     for given, series in cases.items():
         assert web.series_title(given) == series, given
+    de, com = ({"service": "AMZN", "url": web.series_title(f"https://www.amazon.{tld}/gp/video/detail?gti=amzn1.dv.gti.x"),
+                "country": country, "kind": "native"} for tld, country in (("de", "DE"), ("com", "US")))
+    assert len(web.merge_countries([[de], [com]])) == 1
 
     class Page:
         def __init__(self, data):
@@ -3176,6 +3270,27 @@ def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(
     assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
 
 
+def test_the_downloads_list_is_the_queued_then_every_download_newest_first(tmp_path, monkeypatch):
+    # docs/API.md promised the running ones before the history; a running download that started before a finished one stays below it (#60)
+    from aiohttp.test_utils import make_mocked_request
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    started = {"20261001-090000-000001-1-S01E01": "2026-10-01T09:00:00+00:00", "20261001-100000-000001-1-S01E02": "2026-10-01T10:00:00+00:00"}
+    for run_id, when in started.items():
+        card = {"id": run_id, "series": "Show", "tvdbId": 1, "sxxeyy": run_id[-6:], "started": when}
+        if run_id.endswith("E02"):
+            card |= {"outcome": "downloaded", "ended": "2026-10-01T10:05:00+00:00"}
+        (tmp_path / f"{run_id}.json").write_text(json.dumps(card))
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"20261001-090000-000001-1-S01E01"})
+    queued = {"id": "waiting-9", "series": "Show", "tvdbId": 1, "sxxeyy": "S01E09", "waiting": True, "started": "2026-10-01T08:00:00+00:00"}  # older than both: still first
+    monkeypatch.setitem(web.sonarr_sync.waiting, 9, queued)
+
+    async def ask():
+        return json.loads((await web.v1_downloads(make_mocked_request("GET", "/api/v1/downloads"))).text)
+    assert [(d["id"], d["state"]) for d in asyncio.run(ask())] == [
+        ("waiting-9", "queued"), ("20261001-100000-000001-1-S01E02", "downloaded"), ("20261001-090000-000001-1-S01E01", "running")]
+
+
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):
     from unshacklarr.backend import Unshackle, UnshackleError
     serve, asked = Unshackle(tmp_path), []
@@ -3211,6 +3326,17 @@ def test_a_year_in_brackets_is_not_a_part():
     assert plain_title("The Ambush (2)") == "the ambush part 2"
     assert plain_title("Christmas Special (2023)") == "christmas special 2023"  # a year, not part 2023
     assert same_title(plain_title("Christmas Special (2023)"), plain_title("Christmas Special 2023"))
+
+
+def test_a_spelled_out_part_number_counts_as_the_digit():
+    from unshacklarr.web import last_number, same_title
+    assert not same_title("the ambush part two", "the ambush part 1")
+    assert same_title("the ambush part two", "the ambush part 2")
+    assert not same_title("the ambush part one", "the ambush part two")
+    assert last_number("the ambush part twenty") == 20
+    assert last_number("twenty one") is None  # a compound number is not "1": "21" must still match it
+    assert last_number("murder in the city two") == 2 and not same_title("murder in the city two", "murder in the city 1")
+    assert last_number("fallen women") is None and same_title("fallen women", "fallen woman")
 
 
 def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
@@ -3249,6 +3375,22 @@ def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
                         if path == "rootfolder" else [{"path": "/data/tv/Show/S01E01.mkv"}])
     assert web.library_check("", "")["common"] == "/Syno"  # several root folders: the one holding them all
     assert "has no series with a file" in web.library_check("/other", "/x")["why"]
+
+
+def test_the_library_guess_keeps_the_drive_of_a_windows_sonarr(tmp_path, monkeypatch):
+    from unshacklarr import web
+    sync = web.sonarr_sync
+    (tmp_path / "tv" / "Show" / "Season 01").mkdir(parents=True)
+    (tmp_path / "tv" / "Show" / "Season 01" / "file.mkv").write_bytes(b"x")
+    monkeypatch.setattr(web, "LIBRARY_GUESSES", [str(tmp_path / "tv")])
+    windows = "D:\\TV\\Show\\Season 01\\file.mkv"
+    guess = web.library_guess(windows)
+    assert guess == {"sonarr_root": "D:\\TV", "local_root": str(tmp_path / "tv")}
+    assert windows.startswith(guess["sonarr_root"] + "\\")  # a prefix of the path as Sonarr reports it
+    monkeypatch.setitem(sync.SETTINGS, "library_sonarr_root", guess["sonarr_root"])
+    monkeypatch.setitem(sync.SETTINGS, "library_local_root", guess["local_root"])
+    assert sync.library_file(windows).is_file()
+    assert web.library_guess("/data/tv/Show/Season 01/file.mkv") == {"sonarr_root": "/data/tv", "local_root": str(tmp_path / "tv")}
 
 
 def test_another_sonarr_reads_its_own_library(monkeypatch):

@@ -768,7 +768,7 @@ function serviceEpisode(conf, season, number) {
   number += Number(conf.episode_offset || 0);
   season = (conf.season_map || {})[season] != null ? Number(conf.season_map[season])
     : season >= Number(conf.season_offset_from || 1) ? season + Number(conf.season_offset || 0) : season;
-  return number >= 0 ? `S${pad2(season)}E${pad2(number)}` : null;
+  return number >= 1 ? `S${pad2(season)}E${pad2(number)}` : null;
 }
 const dotted = (text) => String(text).replace(/[^\p{L}\p{N}_-]+/gu, ".").replace(/^\.+|\.+$/g, "");  // finalize()'s dots
 /* Which of the service's episodes a Sonarr episode is, picked by name: written into the episode table. */
