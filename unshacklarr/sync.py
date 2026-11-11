@@ -885,12 +885,13 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                         raise JobFailed("Stopped before it started", "cancelled")
                     if run and not told:
                         run.say(f"\r\n\x1b[90mWaiting: {limit} download{'s' if limit > 1 else ''} at once on this server\x1b[0m")
-                    if not told:  # waiting here, it keeps no idle slot elsewhere: two jobs holding each other's server would never end (#45)
-                        for other, held in slot_jobs.items():
-                            if other != server and job not in slot_active and job in held:
-                                held.remove(job)
-                                slots.notify_all()
-                        told = True
+                    told = True
+                    # waiting here, it keeps no idle slot elsewhere: two jobs holding each other's server would never
+                    # end (#45); checked on every wake, as its last download elsewhere may end while it waits
+                    for other, held in slot_jobs.items():
+                        if other != server and job not in slot_active and job in held:
+                            held.remove(job)
+                            slots.notify_all()
                     slots.wait(2)
             finally:
                 line.remove(job)
@@ -905,6 +906,7 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                 slot_active[job] -= 1
             else:
                 slot_active.pop(job, None)
+                slots.notify_all()  # its slots are idle now: a wait of its own elsewhere gives them back
         batch = run.card.get("batch") if run else None
         if not batch or batch in paused_jobs:  # on its own (or the sync's), or its job paused: the slot goes with it
             release_job(job)
