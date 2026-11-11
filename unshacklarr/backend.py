@@ -296,9 +296,8 @@ class Unshackle:
             if PROXY_REFUSED.search(message):
                 self.proxy_refused = datetime.now(timezone.utc).isoformat()
                 raise UnshackleError(PROXY_HINT)
-            if r.status_code >= 500:  # serve's own words rarely say it: TRANSIENT reads the status from the text
-                message = f"HTTP {r.status_code}: {message}"
-            raise UnshackleError(f"unshackle serve: {message.strip()[:500]}")
+            status = f"HTTP {r.status_code}: " if r.status_code >= 500 else ""  # serve's own words rarely say it
+            raise UnshackleError(f"unshackle serve: {status}{message.strip()[:500]}")
         try:
             return r.json()
         except ValueError:  # a proxy's login page, or another program at this address
