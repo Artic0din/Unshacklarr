@@ -2262,7 +2262,7 @@ def check_alerts(now: datetime | None = None) -> None:
     if events.get("cookies", True):
         try:
             state = cookie_state()
-        except UnshackleError:
+        except (UnshackleError, cdm.CdmError, OSError, yaml.YAMLError):  # a broken unshackle.yaml too: the disk alerts still go
             state, unknown = None, unknown + ["cookies:"]
         for service in (state or {}).get("used", []):
             for f in state["files"].get(service, []):
@@ -2276,7 +2276,7 @@ def check_alerts(now: datetime | None = None) -> None:
     if events.get("cdm", True):
         try:
             state = cdm_state()
-        except UnshackleError:
+        except (UnshackleError, cdm.CdmError, OSError, yaml.YAMLError):
             state, unknown = None, unknown + ["cdm:"]
         for d in (state or {}).get("devices", []):
             if not d.get("used_by") or d.get("folder") or (d.get("info") or {}).get("unreadable"):
@@ -2720,10 +2720,11 @@ def save_unshackle_yaml(path: Path, old: str, new: str) -> dict:
     for extra in sorted(CONFIG_HISTORY.glob("*.yaml"), reverse=True)[CONFIG_KEEP:]:
         extra.unlink(missing_ok=True)
     write_atomic(path, new)
-    before, after = yaml.safe_load(old) or {}, yaml.safe_load(new) or {}
+    broken = yaml_problem(old)  # saving over a broken file is how it gets fixed
+    before, after = {} if broken else yaml.safe_load(old) or {}, yaml.safe_load(new) or {}
     UNSHACKLE.configure(UNSHACKLE.settings)  # its services, servers and dl: section may have changed: asked afresh
     return {"saved": True, "base": fingerprint(new), "versions": config_versions(),
-            "restart": before.get("serve") != after.get("serve")}
+            "restart": bool(broken) or before.get("serve") != after.get("serve")}  # what serve runs with is unknown then
 
 
 async def unshackle_yaml(request):
@@ -2732,7 +2733,9 @@ async def unshackle_yaml(request):
     await reauth(request, str(body.get("password") or ""))
     try:
         path = (await asyncio.to_thread(cdm_paths))[0]
-    except UnshackleError as e:
+    except yaml.YAMLError:  # the folders are read from the file: a syntax error is what the editor is there to fix
+        path = Path(sonarr_sync.SETTINGS["unshackle_config_dir"]) / "unshackle.yaml"
+    except (UnshackleError, cdm.CdmError) as e:
         raise web.HTTPBadRequest(text=str(e))
     if not path.exists():
         raise web.HTTPNotFound(text=f"No unshackle.yaml in {path.parent}")
