@@ -2939,6 +2939,22 @@ def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
     assert "has no series with a file" in web.library_check("/other", "/x")["why"]
 
 
+def test_the_library_guess_keeps_the_drive_of_a_windows_sonarr(tmp_path, monkeypatch):
+    from unshacklarr import web
+    sync = web.sonarr_sync
+    (tmp_path / "tv" / "Show" / "Season 01").mkdir(parents=True)
+    (tmp_path / "tv" / "Show" / "Season 01" / "file.mkv").write_bytes(b"x")
+    monkeypatch.setattr(web, "LIBRARY_GUESSES", [str(tmp_path / "tv")])
+    windows = "D:\\TV\\Show\\Season 01\\file.mkv"
+    guess = web.library_guess(windows)
+    assert guess == {"sonarr_root": "D:\\TV", "local_root": str(tmp_path / "tv")}
+    assert windows.startswith(guess["sonarr_root"] + "\\")  # a prefix of the path as Sonarr reports it
+    monkeypatch.setitem(sync.SETTINGS, "library_sonarr_root", guess["sonarr_root"])
+    monkeypatch.setitem(sync.SETTINGS, "library_local_root", guess["local_root"])
+    assert sync.library_file(windows).is_file()
+    assert web.library_guess("/data/tv/Show/Season 01/file.mkv") == {"sonarr_root": "/data/tv", "local_root": str(tmp_path / "tv")}
+
+
 def test_another_sonarr_reads_its_own_library(monkeypatch):
     from unshacklarr import web
     sync = web.sonarr_sync
