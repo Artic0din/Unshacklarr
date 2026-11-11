@@ -2082,6 +2082,63 @@ def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatc
     assert web.searched_in_place([channel, direct], 102348) == [channel, direct]
 
 
+def test_audio_described_and_auslan_editions_are_never_filled_in(tmp_path, monkeypatch):
+    """Binge's "audio-description-strife" and SBS's "code-of-silence-auslan" are other editions of the show, not it:
+    never offered as its link, only searched by title or offered to find on that service."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    from urllib.parse import quote
+    jw = lambda url: '<li><a title="Watch it on X" href="https://click.justwatch.com/a?r=' + quote(url, safe="") + '"></a></li>'
+    edition_urls = ["https://binge.com.au/en-AU/show-detail/audio-description-strife/ArticleId:c0z81/c0z81",
+                    "https://www.sbs.com.au/ondemand/tv-series/code-of-silence-auslan",
+                    "https://iview.abc.net.au/show/bluey-auslan/series/1/video/CZ1702Q001S00"]
+    html = '<div class="ott_provider"><h3>Stream</h3><ul>' + "".join(map(jw, edition_urls)) + "</ul></div>"
+
+    class FakeResp:
+        text = html
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: FakeResp())
+    domains = {"binge.com.au": "BINGE", "sbs.com.au": "SBS", "iview.abc.net.au": "AUBC"}
+    found = web.tmdb_links(1, "AU", domains)
+    assert [(l["service"], l.get("edition"), l.get("episode")) for l in found] == [
+        ("BINGE", True, True), ("SBS", True, True), ("AUBC", True, True)]
+    # Never a chip, so never filled in; each service is offered to find the show by hand instead.
+    assert web.prefer_download_links(found) == []
+    assert web.brand_fallbacks(found, [], domains) == ["AUBC", "BINGE", "SBS"]
+    # The same service linking the show itself covers it: no edition kept, nothing extra to find.
+    main = {"service": "SBS", "url": "https://www.sbs.com.au/ondemand/tv-series/code-of-silence", "country": "AU",
+            "kind": "native"}
+    kept = web.without_covered_episodes([found[1], main])
+    assert kept == [main] and web.brand_fallbacks(kept, kept, domains) == []
+    # A service that can search finds the show itself by its title: that link is shown, as a normal suggestion.
+    class Backend:
+        def call(self, method, path, json=None, **_):
+            return {"results": [{"title": "Strife", "url": "https://binge.com.au/en-AU/show-detail/strife/ArticleId:9/9"}]}
+    monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 1, "title": "Strife"}])
+    monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend())
+    searched = web.searched_in_place([{**found[0], "needs_series_url": True}], 1)
+    assert [(l["url"], l.get("edition"), l.get("needs_series_url"), l.get("found_by"))
+            for l in web.prefer_download_links(searched)] == [
+        ("https://binge.com.au/en-AU/show-detail/strife/ArticleId:9/9", None, None, "search")]
+    # Words that only contain the edition's name are not it: a show called "Auslander", "padded" slugs.
+    assert not web.accessible_edition("https://www.sbs.com.au/ondemand/tv-series/auslander")
+    assert web.accessible_edition("https://binge.com.au/en-AU/show-detail/audio-described-x/ArticleId:1/1")
+    assert web.accessible_edition("https://example.com/show/bluey_auslan.html")
+    # A cache written before editions were flagged, served while TMDB is down: still never shown, still offered to find.
+    old = {k: v for k, v in found[0].items() if k not in ("edition", "episode")}
+    assert web.prefer_download_links([old]) == [] and web.brand_fallbacks([old], [], domains) == ["BINGE"]
+    assert web.accessible_edition("https://binge.com.au/en-AU/show-detail/audio%2Ddescription-strife/ArticleId:1/1")
+    # A title search that also finds the edition under the same title still picks the show itself.
+    class Both:
+        def call(self, method, path, json=None, **_):
+            return {"results": [{"title": "Strife", "url": "https://binge.com.au/en-AU/show-detail/audio-description-strife/A:1/1"},
+                                {"title": "Strife", "url": "https://binge.com.au/en-AU/show-detail/strife/A:9/9"}]}
+    monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Both())
+    assert web.search_series_url("BINGE", "Strife") == "https://binge.com.au/en-AU/show-detail/strife/A:9/9"
+
+
 def test_channels_never_show_only_their_brand(tmp_path, monkeypatch):
     """A Channel (a brand sold inside Amazon or Apple) is never offered or shown: only its brand is."""
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))

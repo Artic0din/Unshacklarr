@@ -16,6 +16,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- A series' suggestions no longer fill in an audio-described or Auslan edition of the show (Binge's `audio-description-…`, SBS's and ABC iview's `…-auslan`): the show itself is found by its title where the service can search, else that service gets a "Find it on" button.
 - ABC iview and 7plus suggestions now link the show's page (`iview.abc.net.au/show/<name>`, `7plus.com.au/<name>` without its `?episode-id=`) instead of one episode, so Unshackle sees every episode; before, a series like Dustfall showed only episode 1 as on iview. Series already set to an episode link need their Series URL replaced once.
 - The schedule now shows a series' network catch-up service (for example 9Now for a Nine Network series) beside TMDB's services, as the series page already suggests it, with that service's own logo. Australia's free-to-air networks are recognised under all the names Sonarr and TMDB use: ABC TV, ABC iview and ABC Kids; Nine, 9 and 9Now; Network 10, 10 and 10 Play; Seven, Seven Network, 7plus and 7mate; SBS and SBS On Demand.
 - A Channel's own Amazon or Apple title is no longer offered as Prime Video when JustWatch also lists it under that name (Stick's free first episode, an Apple TV Amazon Channel title, listed as "Amazon Prime Video"); in the schedule, Prime Video or Apple TV listed only in TMDB's free section beside a Channel they host is that Channel's free episode and is not shown, while an ad-supported tier such as Prime Video with Ads still shows.
