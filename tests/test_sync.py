@@ -1136,6 +1136,17 @@ def test_each_address_gets_its_levels_and_quiet_hours_hold_messages_for_one_summ
     assert sync.send_held(settings) is False
 
 
+def test_an_address_with_no_level_ticked_gets_nothing_and_one_without_a_levels_key_gets_all(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    got = []
+    monkeypatch.setattr(sync, "send_to", lambda url, level, title, message, details=None: got.append((url, level)) or None)
+    settings = {"targets": [{"url": "ntfy://none", "levels": []}, {"url": "ntfy://old"}]}
+    for level in sync.ALL_LEVELS:
+        sync.deliver(settings, level, "t", "x")
+    assert got == [("ntfy://old", level) for level in sync.ALL_LEVELS]
+
+
 def test_quiet_hours_over_midnight(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     at = lambda hm: datetime.fromisoformat(f"2026-09-30T{hm}:00").replace(tzinfo=sync.LOCAL)

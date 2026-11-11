@@ -1321,7 +1321,7 @@ def check_targets(notifications: dict, saved=()) -> list[dict]:
     if given is None:
         given = [{"url": u} for u in notifications.get("urls") or []]
     urls = check_urls([t.get("url") for t in given], saved)
-    levels = [[lv for lv in (t.get("levels") or sonarr_sync.ALL_LEVELS) if lv in sonarr_sync.ALL_LEVELS] for t in given if str(t.get("url") or "").strip()]
+    levels = [[lv for lv in (sonarr_sync.ALL_LEVELS if t.get("levels") is None else t["levels"]) if lv in sonarr_sync.ALL_LEVELS] for t in given if str(t.get("url") or "").strip()]
     return [{"url": u, "levels": lv} for u, lv in zip(urls, levels)]
 
 

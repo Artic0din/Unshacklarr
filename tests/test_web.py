@@ -660,6 +660,18 @@ def test_wrong_passwords_sent_all_at_once_are_all_counted(tmp_path, monkeypatch)
     assert statuses.count(401) == 5 and statuses.count(429) == 15 and len(checked) == 5  # not one scrypt more than the limit
 
 
+def test_check_targets_keeps_an_empty_level_list_and_defaults_only_a_missing_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    saved = ["ntfy://none", "ntfy://old", "ntfy://some"]
+    got = web.check_targets({"targets": [{"url": "ntfy://none", "levels": []}, {"url": "ntfy://old"}, {"url": "ntfy://some", "levels": ["error", "bogus"]}]}, saved)
+    assert got == [{"url": "ntfy://none", "levels": []}, {"url": "ntfy://old", "levels": ["success", "warning", "error"]}, {"url": "ntfy://some", "levels": ["error"]}]
+    assert web.check_targets({"urls": ["ntfy://old"]}, saved) == [{"url": "ntfy://old", "levels": ["success", "warning", "error"]}]
+
+
 def test_notification_tokens_and_proxy_passwords_never_reach_the_browser(tmp_path, monkeypatch):
     import copy
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
