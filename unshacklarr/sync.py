@@ -879,6 +879,11 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                         raise JobFailed("Stopped before it started", "cancelled")
                     if run and not told:
                         run.say(f"\r\n\x1b[90mWaiting: {limit} download{'s' if limit > 1 else ''} at once on this server\x1b[0m")
+                    if not told:  # waiting here, it keeps no idle slot elsewhere: two jobs holding each other's server would never end (#45)
+                        for other, held in slot_jobs.items():
+                            if other != server and job not in slot_active and job in held:
+                                held.remove(job)
+                                slots.notify_all()
                         told = True
                     slots.wait(2)
             finally:
