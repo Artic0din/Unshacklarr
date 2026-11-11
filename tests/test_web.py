@@ -276,6 +276,64 @@ def test_the_page_script_parses(tmp_path):
     assert check.returncode == 0, check.stderr
 
 
+# Runs the page's real fetchDays against a /api/calendar that, like the route, answers by air date only.
+CALENDAR_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const line = (name) => src.match(new RegExp(`^const ${name} = .*$`, "m"))[0];
+const scenario = JSON.parse(process.argv[2]);
+const at = (offset) => new Date(2026, 0, 1 + offset, 12);  // local noon, offset days from the first loaded day
+const episode = { tvdbId: 1, sxxeyy: "S01E01", airDateUtc: at(scenario.aired).toISOString(), release: at(scenario.released).toISOString() };
+const ctx = { cal: { byDay: new Map(), fetched: new Set(), placed: new Map() }, requests: 0, fetchNetworks() {}, Date, Set, Map };
+ctx.api = async (url) => {
+  ctx.requests++;
+  const [, start, days] = url.match(/start=([\d-]+)&days=(\d+)/);
+  const from = new Date(start + "T00:00"), to = new Date(from); to.setDate(to.getDate() + Number(days));
+  const air = new Date(episode.airDateUtc);
+  return air >= from && air < to ? [episode] : [];
+};
+vm.createContext(ctx);
+vm.runInContext(["startOfDay", "addDays", "isoDay"].map(line).join("\n") + "\n" + (src.match(/^const EARLY_DAYS_MAX = .*$/m) || [""])[0] + "\n" + grab("fetchDays"), ctx);
+(async () => {
+  for (const [from, days] of scenario.fetches) await ctx.fetchDays(at(from), days);
+  const found = [...ctx.cal.byDay].filter(([, list]) => list.length).map(([day, list]) => [day, list.length]);
+  console.log(JSON.stringify({ found, requests: ctx.requests }));
+})();
+"""
+
+
+def calendar_fetches(aired: int, released: int, fetches: list[list[int]]) -> dict:
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "schedule.js"
+    scenario = {"aired": aired, "released": released, "fetches": fetches}
+    out = subprocess.run(["node", "-e", CALENDAR_HARNESS, "--", str(script), json.dumps(scenario)], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def test_calendar_shows_an_early_release_whose_airing_is_after_the_loaded_range():
+    # a month grid of 42 days from day 0; out on its last day, airing 3 days after it
+    shown = calendar_fetches(aired=45, released=41, fetches=[[0, 42]])
+    assert shown["found"] == [["2026-02-11", 1]]
+    assert shown["requests"] == 1
+
+
+def test_calendar_shows_an_early_release_once_after_the_next_month_is_opened():
+    shown = calendar_fetches(aired=45, released=41, fetches=[[0, 42], [42, 42]])
+    assert shown["found"] == [["2026-02-11", 1]]  # on its release day, not also on the day it airs
+    assert shown["requests"] == 2
+
+
+def test_calendar_moves_an_early_release_to_its_release_day_when_the_earlier_month_loads_second():
+    shown = calendar_fetches(aired=45, released=41, fetches=[[42, 42], [0, 42]])
+    assert shown["found"] == [["2026-02-11", 1]]
+
+
 # Runs the page's real liveTick and openActivity with a /api/runs that answers only when the test says so.
 ACTIVITY_HARNESS = r"""
 const fs = require("fs"), vm = require("vm");
