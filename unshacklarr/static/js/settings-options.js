@@ -649,8 +649,17 @@ async function save() {
   const sent = configKey(S.config);
   const sentDrawer = current && { id: current.tvdbId, existed: true, conf: JSON.stringify(S.config.series[current.tvdbId]) };
   // Keep S.config as is: the open editors hold references into it.
-  await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series }) });
-  savedConfig = sent;
+  const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series }) });
+  // The server stamps a series saved without a start date (a new one, or one stopped and set up again): kept here,
+  // or the next Save would send it without one and the server would stamp it again, skipping the episodes in between.
+  const base = JSON.parse(sent);
+  for (const [id, conf] of Object.entries(saved?.series || {})) {
+    if (!conf.since || !series[id] || series[id].since) continue;
+    base.series[id].since = conf.since;
+    if (S.config.series[id] && !S.config.series[id].since) S.config.series[id].since = conf.since;
+    if (sentDrawer?.id === Number(id)) sentDrawer.conf = JSON.stringify({ ...JSON.parse(sentDrawer.conf), since: conf.since });
+  }
+  savedConfig = JSON.stringify(base);
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
   dirty();
   if (currentTab === "schedule") loadSchedule();  // a series just added shows up as managed at once

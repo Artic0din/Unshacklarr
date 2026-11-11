@@ -42,6 +42,7 @@ Every change worth knowing, newest first. The format follows
 - Two jobs that use two Unshackle servers no longer wait on each other forever when "downloads at once" is set: a job waiting for a slot on one server now gives back its idle slot on the other.
 - Downloads are no longer refused with "No CDM" for up to 10 minutes after a device is picked, changed or removed in Settings, CDM, or after Unshackle is restarted from the page: the next download reads Unshackle's config afresh.
 - A series' start date no longer moves forward each time you Save from the same open page: it is kept once set, so episodes aired between two Saves are no longer skipped by the automatic sync.
+- A series' start date no longer moves forward each time you Save from the same open page: the page now keeps the date the server set when the series was added, so episodes aired between two Saves are no longer skipped by the automatic sync.
 
 ## [1.5.0] - 2026-10-17
 

@@ -206,7 +206,7 @@ let release, offsiteReply;
 const box = {
   JSON, Object, console, current: null, currentTab: "series", boKind: null, drawerSnapshot: null,
   $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
-  api: (url) => url === "/api/config" ? new Promise((resolve) => { release = resolve; }) : Promise.resolve(offsiteReply),
+  api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
   renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
   boWrong() {}, toast() {}, el: () => ({}), S: null,
 };
@@ -237,6 +237,13 @@ const fresh = () => {
   out.offsiteKeepsOtherEdit = page.state().unsaved && !bars["#savebar"].hidden;
   box.S.config.settings.theme = "dark"; page.dirty();
   out.offsiteFieldsAreSaved = !page.state().unsaved;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();  // a series just added
+  saving = page.save(); release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.sinceLearnt = box.S.config.series[7].since === "2026-11-11T00:00:00+00:00" && bars["#savebar"].hidden && !page.state().unsaved;
+  saving = page.save(); release({ series: {} }); await saving;  // the next Save sends it back: the server keeps it
+  out.sinceSentBack = JSON.parse(box.sentBody).series[7].since === "2026-11-11T00:00:00+00:00";
   console.log(JSON.stringify(out));
 })();
 """
@@ -261,6 +268,8 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "revertToSentHides": True,  # back to what was sent is saved
         "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
         "offsiteFieldsAreSaved": True,
+        "sinceLearnt": True,  # the date the server stamped a new series with, kept on the page (#27)
+        "sinceSentBack": True,  # so a later Save does not stamp it again
     }
 
 
@@ -331,29 +340,6 @@ def test_crave_series_from_the_sitemap(monkeypatch):
     monkeypatch.setattr(web.requests, "get", lambda url, **kw: SimpleNamespace(text=pages[url], raise_for_status=lambda: None))
     assert web.crave_series("https://www.crave.ca/fr/play/the-rainmaker/episode-1-s1e1-3162951") == "https://www.crave.ca/fr/series/the-rainmaker-58525"
     assert web.crave_series("https://www.crave.ca/en/play/weapons/weapons-1") is None  # a movie, not a series
-
-
-def test_a_series_keeps_its_start_date_on_every_save(tmp_path, monkeypatch):
-    from datetime import datetime, timezone
-    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
-    import unshacklarr.sync
-    import unshacklarr.web
-    importlib.reload(unshacklarr.sync)
-    web = importlib.reload(unshacklarr.web)
-    monkeypatch.setattr(web, "known_services", lambda: None)
-    monkeypatch.setattr(web.sonarr_sync, "apply_settings", lambda s: None)
-
-    def save(show):
-        async def json():
-            return {"series": {"7": {"service": "iV", "title": "https://example.com/show", **show}}}
-        asyncio.run(web.save_config(SimpleNamespace(json=json)))
-        return web.read_config()["series"][7]["since"]
-
-    first = save({})  # saved for the first time: now
-    assert abs((datetime.now(timezone.utc) - datetime.fromisoformat(first)).total_seconds()) < 5
-    web.write_config({**web.read_config(), "series": {7: {**web.read_config()["series"][7], "since": "2026-01-01T00:00:00+00:00"}}})
-    assert save({}) == "2026-01-01T00:00:00+00:00"  # the page never learns it, so it never sends it back
-    assert save({"since": "2026-02-02T00:00:00+00:00"}) == "2026-02-02T00:00:00+00:00"  # one that is sent still wins
 
 
 def test_a_saved_key_never_follows_a_new_url(tmp_path, monkeypatch):
