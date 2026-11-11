@@ -64,22 +64,31 @@ function followLive() {
   };
   liveFeed.onerror = () => { liveFeed?.close(); liveFeed = null; };  // polling takes over; the next load tries again
 }
-let feedReloading = false, feedMissed = null;  // a reload the feed started is on its way: the next messages wait for it
+// a reload the feed started is on its way: the next messages wait for it, the newest kept; a download one of them
+// named that its answer has no card for (one that started and ended meanwhile) has the history asked again
+let feedReloading = false, feedMissed = null, feedSeen = new Set();
+function feedReload(again = false) {  // again: the one follow-up, never a loop (a card the history may never hold)
+  feedReloading = true;
+  return openActivity().finally(() => {
+    feedReloading = false;
+    const missed = feedMissed, have = new Set(runCards.map((c) => c.id));
+    const unseen = [...feedSeen].some((id) => !have.has(id));
+    feedMissed = null;
+    feedSeen = new Set();
+    if (unseen && !again) { feedMissed = missed; feedReload(true); } else if (missed !== null) liveTick(missed);
+  });
+}
 function liveTick(data) {
   if (data === null || $("#tab-log").hidden) return;
   const live = JSON.parse(data), ids = new Set(live.map((c) => c.id));
   const known = new Set(runCards.filter((c) => isLive(c) && !c.waiting).map((c) => c.id));  // the queued aren't in the feed
-  if (live.length !== known.size || live.some((c) => !known.has(c.id))) {  // one started or ended
-    if (feedReloading) { feedMissed = data; return; }  // the feed says a change once: kept for after the reload
-    feedReloading = true;
-    return openActivity().finally(() => {
-      feedReloading = false;
-      const missed = feedMissed;
-      feedMissed = null;
-      if (missed !== null) liveTick(missed);
-    });
+  if (feedReloading) {  // the newest is what the reload replays, never an older one
+    feedMissed = data;
+    ids.forEach((id) => feedSeen.add(id));
   }
-  if (feedReloading && feedMissed !== null) feedMissed = data;  // the newest is what its reload replays, never an older one
+  if (live.length !== known.size || live.some((c) => !known.has(c.id))) {  // one started or ended
+    return feedReloading ? undefined : feedReload();  // the feed says a change once: kept for after the reload
+  }
   runCards = runCards.map((c) => (ids.has(c.id) ? live.find((x) => x.id === c.id) : c));
   renderConsole(true);
 }

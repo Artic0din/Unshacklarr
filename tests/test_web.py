@@ -359,7 +359,8 @@ let runsSeq = 0, runCards = [], runsTimer = null;
 const isLive = (c) => c.outcome === "running";
 const renderConsole = () => drawn.push(runCards.map((c) => c.id));
 ${grab("openActivity")}
-let feedReloading = false, feedMissed = null;
+let feedReloading = false, feedMissed = null, feedSeen = new Set();
+${grab("feedReload")}
 ${grab("liveTick")}
 const tick = (ids) => liveTick(JSON.stringify(ids.map((id) => ({ id }))));
 const card = (id, outcome) => ({ id, outcome });
@@ -377,6 +378,13 @@ const settle = () => new Promise((r) => setImmediate(r));
     const asked = pending.length;
     pending[1]([card(1, "running"), card(2, "running")]); await settle();
     console.log(JSON.stringify({ asked, drawn }));
+  } else if (scenario === "brief") {
+    tick([1]); pending[0]([card(1, "running")]); await settle();  // one download, drawn
+    tick([1, 2]);  // a second starts: the feed's reload
+    tick([1, 2, 3]);  // a third starts while it is on its way: kept
+    tick([1, 2]);  // and ends at once: this one matches nothing new on its own
+    pending[1]([card(1, "running"), card(2, "running")]); await settle();  // an answer from before the third
+    console.log(JSON.stringify({ asked: pending.length }));
   } else if (scenario === "progress") {
     const at = (p) => liveTick(JSON.stringify([{ id: 1, outcome: "running", p }, { id: 2, outcome: "running", p }]));
     tick([1]);  // the feed's reload
@@ -419,6 +427,10 @@ def test_the_live_feed_has_one_history_reload_in_flight_and_draws_its_answer():
 def test_a_change_the_feed_said_during_its_reload_is_reloaded_after():
     result = run_activity("missed")
     assert result["asked"] == 2 and result["drawn"][-1] == [1, 2]
+
+
+def test_a_download_that_starts_and_ends_during_the_feeds_reload_is_asked_for_after():
+    assert run_activity("brief")["asked"] == 3  # its history card: the history asked again after the reload
 
 
 def test_the_feed_replays_its_newest_message_after_its_reload():
