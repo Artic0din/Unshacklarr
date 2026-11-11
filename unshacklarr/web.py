@@ -4452,6 +4452,9 @@ def library_guess(sonarr_path: str) -> dict | None:
             except OSError:  # a mount it may not read (/boot/efi): not there
                 found = False
             if found:
+                if re.match(r"[A-Za-z]:[\\/]", sonarr_path):  # a Windows Sonarr: its drive and separators, so the root is a prefix of its paths
+                    sep = "\\" if "\\" in sonarr_path else "/"
+                    return {"sonarr_root": sep.join(parts[:k]), "local_root": top}
                 return {"sonarr_root": "/" + "/".join(parts[1:k]), "local_root": top}
     return None
 
