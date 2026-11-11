@@ -3266,6 +3266,25 @@ def test_unshacklarrs_key_is_allowed_unshackle_6s_proxies_in_its_yaml(tmp_path):
     assert yaml.safe_load(cdm.allow_proxies(mine, "abc", ["l3"], []))["serve"]["users"]["abc"] == {"devices": ["l1"], "username": "me", "server_proxy": True}
 
 
+def test_rewriting_serve_or_remote_cdm_keeps_the_comments_that_follow_it(tmp_path):
+    # the blank line and the note after a section belong to the next key: only the section itself is regenerated (#33)
+    from unshacklarr import cdm
+    import yaml
+    text = "serve:\n  api_secret: abc\n\n# note\ndl:\n  sub_format: srt\n"
+    new = cdm.allow_proxies(text, "abc", ["l3"], [])
+    assert new.endswith("\n\n# note\ndl:\n  sub_format: srt\n") and yaml.safe_load(new)["serve"]["users"]["abc"]["server_proxy"] is True
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text("remote_cdm:\n  - name: FAR\n    secret: s\n\n# note\ndl:\n  sub_format: srt\n")
+    cdm.remote_save(conf, {"name": "wv_api", "type": "widevine", "host": "https://cdm.example/", "secret": "k", "device_name": "l1"}, None)
+    assert conf.read_text().endswith("\n\n# note\ndl:\n  sub_format: srt\n")
+    assert [e["name"] for e in cdm.read(conf)["remote_cdm"]] == ["FAR", "wv_api"]
+    # a section at the end of the file, with and without a trailing blank line: rewritten as before
+    assert cdm.allow_proxies("dl:\n  a: 1\nserve:\n  api_secret: abc\n", "abc", [], []).startswith("dl:\n  a: 1\nserve:\n  api_secret: abc\n  users:")
+    conf.write_text("dl:\n  a: 1\nremote_cdm:\n  - name: FAR\n    secret: s\n\n")
+    cdm.remote_delete(conf, "FAR")
+    assert conf.read_text() == "dl:\n  a: 1\nremote_cdm: []\n\n"
+
+
 def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     # --cdm (Unshackle 6) names a device: the page offers those Unshackle has, its files and its remote CDMs; the
     # options serve alone takes stay out of the command shown
