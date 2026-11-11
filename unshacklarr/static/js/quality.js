@@ -14,7 +14,7 @@ const HEIGHTS = [4320, 2160, 1440, 1080, 720, 576, 540, 480, 360, 240];  // sync
 const heightClass = (v) => HEIGHTS.find((h) => Math.abs(v - h) <= h * 0.02) ?? Math.floor(v);
 const eqHeight = (t) => {  // sync.eq_height: a height already a class stays it when the width's is no class
   const byHeight = heightClass(t.height || 0), byWidth = heightClass((t.width || 0) * 9 / 16);
-  return HEIGHTS.includes(byHeight) && !HEIGHTS.includes(byWidth) ? byHeight : Math.max(byHeight, byWidth);
+  return HEIGHTS.includes(byHeight) && !HEIGHTS.includes(byWidth) && byWidth < byHeight * 1.1 ? byHeight : Math.max(byHeight, byWidth);
 };
 const ranges = (t) => (t.layers?.length ? t.layers : [t.range]);
 const fitsStep = (st, t) => (!st.codec || t.codec === st.codec)
