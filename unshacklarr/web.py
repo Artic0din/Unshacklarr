@@ -2232,7 +2232,7 @@ async def watch_updates():
         try:
             await asyncio.to_thread(check_update)
             wait = UPDATE_EVERY
-        except (requests.RequestException, ValueError) as e:
+        except Exception as e:
             print(f"Update check: {no_credentials(e)}", flush=True)
             wait = UPDATE_RETRY
         await asyncio.sleep(wait)
@@ -2673,7 +2673,7 @@ async def watch_backups():
                 print(f"Backup: {path.name}", flush=True)
                 if sonarr_sync.SETTINGS.get("backup_remote"):
                     await asyncio.to_thread(send_offsite, path.name, path.read_text(encoding="utf8"))
-        except OSError as e:
+        except Exception as e:
             print(f"Backup: {no_credentials(e)}", flush=True)
         await asyncio.sleep(3600)
 
