@@ -41,7 +41,7 @@ Every change worth knowing, newest first. The format follows
 - A change made while a Save is still running is no longer marked as saved: the save bar stays up until it is saved, and the off-site backup's "Save and test" only marks its own fields as saved.
 - Two jobs that use two Unshackle servers no longer wait on each other forever when "downloads at once" is set: a job waiting for a slot on one server now gives back its idle slot on the other.
 - Downloads are no longer refused with "No CDM" for up to 10 minutes after a device is picked, changed or removed in Settings, CDM, or after Unshackle is restarted from the page: the next download reads Unshackle's config afresh.
-- A series' start date no longer moves forward each time you Save from the same open page: it is kept once set, so episodes aired between two Saves are no longer skipped by the automatic sync.
+- A failed "add audio track" no longer leaves a half-written file in the download folder, so Import under Waiting in downloads can no longer replace the library's file with it.
 - A series' start date no longer moves forward each time you Save from the same open page: the page now keeps the date the server set when the series was added, so episodes aired between two Saves are no longer skipped by the automatic sync.
 
 ## [1.5.0] - 2026-10-17
