@@ -4631,8 +4631,9 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)(\?[^\s\"']+)?"), lambda m: m[
                (re.compile(r"(?<![\w.+/=-])[\w.+/=-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
-# a password through its last @ (as no_credentials) and the rest of its address; one split only (the rest can be empty)
-PASSWORD_AND_REST = re.compile(r"//[^/\s]+@([^\s\"']*)")
+# a password through its last @ (as no_credentials) and the rest of its address, up to the next address on the line
+# (each is masked on its own); one split only, so linear
+PASSWORD_AND_REST = re.compile(r"//[^/\s]+@((?:(?!//)[^\s\"'])*)")
 
 
 def mask_password(m: re.Match) -> str:
