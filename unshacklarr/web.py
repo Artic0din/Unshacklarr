@@ -37,7 +37,7 @@ import yaml
 from aiohttp import web
 
 from unshacklarr import __version__, cdm, cookies, i18n, offsite, options
-from unshacklarr.files import PRIVATE, no_credentials, read_json, write_atomic
+from unshacklarr.files import CREDENTIALS, PRIVATE, no_credentials, read_json, write_atomic
 from unshacklarr import sync as sonarr_sync  # the schedule shows the very downloads the sync will ask for
 from unshacklarr.backend import UnshackleError
 
@@ -4631,8 +4631,30 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)(\?[^\s\"']+)?"), lambda m: m[
                (re.compile(r"(?<![\w.+/=-])[\w.+/=-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
+WORD_END = re.compile(r"\s|$")  # whitespace only: a password match may cross a quote, never whitespace, so none
+# that starts in a hidden part ends past it
+
+
+def mask_passwords(text: str) -> str:
+    """Each address's password masked; one that took a ? or # took the start of a query
+    (http://u:p@host?mail=a@b.com/x&token=…), so what is left of it can no longer be told from the query and goes too,
+    up to the next space (addresses inside it with it). One pass: linear."""
+    out, at = [], 0
+    for m in CREDENTIALS.finditer(text):  # as no_credentials: through the last @ before a path
+        if m.start() < at:
+            continue  # inside a part already gone
+        out.append(text[at:m.start()])
+        if re.search(r"[?#]", m[0]):
+            at = WORD_END.search(text, m.end()).start()
+            out.append("//***@…")
+        else:
+            at = m.end()
+            out.append("//***@")
+    return "".join(out) + text[at:]
+
+
 def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
-    text = no_credentials(text)
+    text = mask_passwords(text)
     text = SECRET_LIKE[0][0].sub(SECRET_LIKE[0][1], text)  # URL queries first: an address in a URL's path takes its "//"
     text = SECRET_LIKE[-1][0].sub(SECRET_LIKE[-1][1], text)  # then e-mail addresses: masking their domain would leave the name
     for host in sorted(hosts, key=len, reverse=True):  # before the token rule: a long host label would hide the rest

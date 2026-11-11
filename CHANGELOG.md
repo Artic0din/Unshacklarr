@@ -88,6 +88,7 @@ Every change worth knowing, newest first. The format follows
 - A link named like an episode's download folder no longer blocks that episode's downloads: the link is removed (never what it points to) and the episode downloads.
 - Activity no longer draws older download progress over newer progress when a history reload ends.
 - Two syncs of one job (a retry beside it) both waiting for a full server no longer leave the second waiting forever once the first gets in.
+- A diagnostic no longer shows a URL's query secrets when both its password and its query hold an `@`.
 
 ## [1.5.0] - 2026-10-17
 
