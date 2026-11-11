@@ -2965,6 +2965,55 @@ def test_a_diagnostic_shows_no_address_folder_or_account(tmp_path, monkeypatch):
     assert "sonarr-4k" in text and '"nas"' in text and "GB" in text
 
 
+def test_a_diagnostic_holds_no_host_in_the_card_the_command_the_cause_or_the_log(tmp_path, monkeypatch):
+    # The card keeps the proxy's host (user and password masked), the cause and the log name the servers' addresses (#36)
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "proxy": "http://***@proxy.lan:3128",
+            "cause": "unshackle serve is unreachable at http://serve.lan:8786: timed out",
+            "setup": {"via": "this computer", "proxy": "http://***@10.0.0.9:3128",
+                      "command": "unshackle dl --proxy http://***@10.0.0.9:3128 ALL4 https://c4/show -w S01E01"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://sonarr.lan:8989 answered 500\nthrough nas:8786 and 10.0.0.9:3128\n"
+                                       "HTTPConnectionPool(host='nas', port=8786): Max retries exceeded; HTTPConnectionPool(host='serve.lan', port=8786)\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy": "nordvpn:fr"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://serve.lan:8786",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"}], "backup_remote_url": "https://s3.backup.example.org"}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")
+    for host in ("proxy.lan", "serve.lan", "sonarr.lan", "10.0.0.9", "nas:8786", "8786", "8989", "3128"):
+        assert host not in text, host
+    assert "unreachable at" in text and "answered 500" in text and "https://c4/show" in text and "Max retries" in text  # the rest stays
+    assert '"--proxy": "nordvpn:fr"' in text  # a provider and region names no machine of the user's
+    card["setup"]["proxy"] = "nordvpn:fr"
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    assert '"proxy": "nordvpn:fr"' in web.diagnostic("r1")
+
+
+
+def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(tmp_path, monkeypatch):
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "cause": "Failed to resolve 'nas' ([Errno 8] nodename nor servname)",
+            "setup": {"via": "this computer", "proxy": "nordvpn:fr", "command": "unshackle dl --proxy-download http://dl.proxy.lan:8080 ALL4 x"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://SONARR.LAN:8989 answered 500\nserve at http://[fd00::1234]:8786 timed out\n"
+                                     "Cannot reach sonarr.lan. Retrying, mail alice@sonarr.lan\nat http://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443/x\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy-download": "http://dl.proxy.lan:8080"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://[fd00::1234]:8786", "backup_passphrase": "https://[broken",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"},
+                                        {"name": "far", "url": "https://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443"}]}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")  # a passphrase that looks like a broken address does not stop it
+    assert "alice" not in text  # an e-mail address on a private domain is masked whole
+    for host in ("SONARR.LAN", "sonarr.lan", "fd00::1234", "dl.proxy.lan", "'nas'", "example.org", "8786", "8989", "8080", "9443"):
+        assert host not in text, host
+    assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
+
 
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):
     from unshacklarr.backend import Unshackle, UnshackleError
