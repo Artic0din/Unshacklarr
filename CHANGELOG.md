@@ -82,6 +82,7 @@ Every change worth knowing, newest first. The format follows
 - Logging out on two devices at the same moment no longer leaves one of the two sessions usable.
 - An error message, a log line or a shown download command no longer shows the end of a password (an address's or a proxy's) that holds an `@`.
 - Downloading a diagnostic no longer slows down on a log line holding a long run of web addresses.
+- Waiting in downloads no longer lists, imports or deletes through an episode folder that is a link to another place.
 
 ## [1.5.0] - 2026-10-17
 
