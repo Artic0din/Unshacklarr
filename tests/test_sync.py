@@ -2415,6 +2415,37 @@ def test_a_job_keeps_its_slot_so_picks_run_whole_in_order(tmp_path, monkeypatch)
     assert sync.slot_jobs[""] == [] and not sync.slot_line.get("")
 
 
+def test_two_jobs_taking_two_servers_in_opposite_order_do_not_wait_on_each_other(tmp_path, monkeypatch):
+    # Downloads at once 1: job X holds the main server and asks for "b", job Y holds "b" and asks for the main one;
+    # a job waiting in one line gives back its idle slot on the other server (#45)
+    import threading
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setitem(sync.SETTINGS, "downloads_at_once", 1)
+    both_hold = threading.Barrier(2)
+    done = []
+
+    class Run:
+        def __init__(self, batch, n): self.card, self.id = {"batch": batch}, f"{batch}-{n}"
+        def say(self, text): pass
+
+    def job(batch, first, second):
+        with sync.download_slot(first, Run(batch, 1)):
+            pass  # its episode ends; the job still holds the slot, as the next episode may use it
+        both_hold.wait(2)
+        with sync.download_slot(second, Run(batch, 2)):
+            done.append(batch)
+        sync.release_job(batch)
+
+    for b in ("X", "Y"):
+        sync.number_job(b)
+    jobs = [threading.Thread(target=job, args=a, daemon=True) for a in (("X", "", "b"), ("Y", "b", ""))]
+    for t in jobs: t.start()
+    for t in jobs: t.join(6)
+    assert not any(t.is_alive() for t in jobs), "the two jobs wait on each other"
+    assert sorted(done) == ["X", "Y"]
+    assert sync.slot_jobs == {"": [], "b": []} and not any(sync.slot_line.values())
+
+
 def test_picks_keep_their_order_whichever_is_ready_to_download_first(tmp_path, monkeypatch):
     # By mj23au (#10): Season 3 picked before Season 4, but Season 4's first episode done checking the service sooner:
     # when the slot frees up, Season 3 still goes first
