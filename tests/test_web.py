@@ -3339,6 +3339,8 @@ def test_a_diagnostic_masks_a_token_glued_to_an_address_and_long_lines_fast():
     assert web.scrubbed(blob) == "…"
     assert time.monotonic() - start < 1  # was minutes: the address rule tried every start inside the word
     assert web.scrubbed("see /users/alice@x.io and bob@nas.lan") == "see …@… and …@…"
+    in_url = web.scrubbed("GET https://example.com/users/alice@x.io?token=secret")
+    assert "secret" not in in_url and "alice" not in in_url  # an address in a URL's path leaves its query masked
 
 
 def test_the_main_sonarr_can_be_named():
