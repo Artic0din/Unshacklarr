@@ -1020,6 +1020,65 @@ def test_every_answer_refuses_frames_and_the_api_replaces_only_when_asked(tmp_pa
     assert too_many == 400
 
 
+def test_saving_the_config_as_the_page_got_it_changes_nothing_and_leaks_no_secret(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "known_services", lambda: None)  # Unshackle out of reach: only the options' shape is checked
+    secrets = {"sonarr": "sonarr-key-1", "tmdb": "tmdb-key-2", "unshackle": "serve-key-3", "backup": "backup-secret-4", "passphrase": "pass-5",
+               "backend": "backend-key-6", "other": "other-key-7", "hook": "hook-token-8"}
+    proxy = lambda name: f"http://user{name}:pw-{name}@proxy.lan:3128"
+    config = {
+        "settings": {"sonarr_url": "http://sonarr:8989", "sonarr_api_key": secrets["sonarr"], "tmdb_api_key": secrets["tmdb"],
+                     "unshackle_url": "http://serve:8786", "unshackle_api_key": secrets["unshackle"],
+                     "backup_remote_secret": secrets["backup"], "backup_passphrase": secrets["passphrase"],
+                     "backends": [{"name": "second", "url": "http://serve2:8786", "api_key": secrets["backend"]}],
+                     "sonarrs": [{"name": "other", "url": "http://sonarr2:8989", "api_key": secrets["other"], "quality_ladder": ""}]},
+        "auth": {"password": web.hash_password("password1"), "secret": "s1"},
+        "defaults": {"--proxy": proxy("defaults")},
+        "service_defaults": {"NF": {"options": {"--proxy": proxy("service")}, "service_options": {"--proxy": proxy("own")}}},
+        "series": {1: {"service": "NF", "title": "https://nf/show", "options": {"--proxy": proxy("series")}, "service_options": {},
+                       "since": "2026-10-01T00:00:00+00:00",
+                       "fallback": {"service": "MAX", "title": "https://max/show", "service_options": {"--proxy": proxy("fallback")}},
+                       "sonarrs": {"other": {"options": {"--proxy": proxy("sonarr")}}}}},
+        "notifications": {"targets": [{"url": f"json://notify.lan/hook/{secrets['hook']}", "levels": ["success", "warning", "error"]}],
+                          "success": True, "warning": True, "error": True, "quiet": {}, "events": {}},
+        "tmdb_countries": ["US"],
+        "hidden_series": [],
+    }
+    web.write_config(config)
+
+    async def save():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            replies = []
+            for _ in range(2):  # the first Save fills in the defaults a hand-made file lacks; the second must change nothing
+                reply = await client.put("/api/config", json=web.public_config(web.read_config()), headers=page)  # as /api/state gives it
+                replies.append((reply.status, await reply.text(), web.read_config()))
+            return replies
+
+    (first_status, first_answer, first), (status, answer, second) = asyncio.run(save())
+    assert first_status == status == 200, answer
+    assert first["auth"] == second["auth"] == config["auth"]  # never from the browser
+    assert second == first
+    # the secrets the browser never saw are still stored, whole
+    assert [first["settings"][k] for k in ("sonarr_api_key", "tmdb_api_key", "unshackle_api_key", "backup_remote_secret", "backup_passphrase")] == [
+        secrets[k] for k in ("sonarr", "tmdb", "unshackle", "backup", "passphrase")]
+    assert first["settings"]["backends"][0]["api_key"] == secrets["backend"] and first["settings"]["sonarrs"][0]["api_key"] == secrets["other"]
+    assert first["defaults"] == config["defaults"] and first["service_defaults"] == config["service_defaults"]
+    assert first["series"][1]["options"] == config["series"][1]["options"]
+    assert first["series"][1]["fallback"] == config["series"][1]["fallback"]
+    assert first["series"][1]["sonarrs"] == config["series"][1]["sonarrs"]
+    assert first["notifications"]["targets"] == config["notifications"]["targets"]
+    hidden = [*secrets.values(), *(f"pw-{n}" for n in ("defaults", "service", "own", "series", "fallback", "sonarr"))]
+    assert not [s for s in hidden if s in first_answer or s in answer]
+
+
 def test_the_api_takes_a_download_s_own_proxy_and_refuses_a_malformed_one(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer
