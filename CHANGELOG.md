@@ -78,6 +78,7 @@ Every change worth knowing, newest first. The format follows
 - After a Save, a release time the sync learnt meanwhile shows in the series panel, and moving a series to another service or page no longer keeps the release time learnt for the old one.
 - When adding an audio track fails, its clean-up never deletes through a download folder that was swapped for a link to another place.
 - Downloading a diagnostic no longer takes minutes when the log holds a long key or license, and no longer shows the start of a secret written just before an e-mail address.
+- Downloading a diagnostic no longer slows down on a log line holding a long run of web addresses.
 
 ## [1.5.0] - 2026-10-17
 
