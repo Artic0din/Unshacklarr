@@ -1391,6 +1391,7 @@ def test_a_network_error_never_shows_a_discord_webhook_token(tmp_path, monkeypat
     # a raw @ in the password: masked through the last @ before the host, not the first
     assert sync.no_credentials("at http://admin:pa@ss@sonarr:8989/api") == "at http://***@sonarr:8989/api"
     assert sync.no_credentials("http://sonarr/api?mail=a@b and https://u:p@h") == "http://sonarr/api?mail=a@b and https://***@h"  # a query is not a password
+    assert sync.no_credentials("http://u:p@sonarr?mail=a@b") == "http://***@sonarr?mail=a@b"  # nor with no path before it
 
 
 def test_a_service_with_no_cdm_at_all_is_refused_but_no_drm_and_the_default_pass(tmp_path, monkeypatch):
