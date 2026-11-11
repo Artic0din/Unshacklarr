@@ -4584,6 +4584,7 @@ def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
     for host in sorted(hosts, key=len, reverse=True):
         # a name alone ("nas", also a server's name) is masked only as an address: after // or @, or with its port
         name = re.escape(host)
+        text = re.sub(rf"host=(['\"]){name}\1(?:, port=\d+)?", "host=…", text)  # urllib3's HTTPConnectionPool(host='nas', port=8786)
         pattern = rf"(?<![\w.-]){name}(?::\d+)?(?![\w.-])" if "." in host else rf"(?:(?<=//)|(?<=@)){name}(?::\d+)?(?![\w.-])|(?<![\w.-]){name}:\d+"
         text = re.sub(pattern, "…", text)
     return text

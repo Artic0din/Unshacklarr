@@ -2837,7 +2837,8 @@ def test_a_diagnostic_holds_no_host_in_the_card_the_command_the_cause_or_the_log
             "setup": {"via": "this computer", "proxy": "http://***@10.0.0.9:3128",
                       "command": "unshackle dl --proxy http://***@10.0.0.9:3128 ALL4 https://c4/show -w S01E01"}}
     (tmp_path / "r1.json").write_text(json.dumps(card))
-    (tmp_path / "r1.log").write_text("Sonarr at http://sonarr.lan:8989 answered 500\nthrough nas:8786 and 10.0.0.9:3128\n")
+    (tmp_path / "r1.log").write_text("Sonarr at http://sonarr.lan:8989 answered 500\nthrough nas:8786 and 10.0.0.9:3128\n"
+                                       "HTTPConnectionPool(host='nas', port=8786): Max retries exceeded; HTTPConnectionPool(host='serve.lan', port=8786)\n")
     config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy": "nordvpn:fr"}}},
               "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://serve.lan:8786",
                            "backends": [{"name": "nas", "url": "http://nas:8786"}], "backup_remote_url": "https://s3.backup.example.org"}}
@@ -2846,7 +2847,7 @@ def test_a_diagnostic_holds_no_host_in_the_card_the_command_the_cause_or_the_log
     text = web.diagnostic("r1")
     for host in ("proxy.lan", "serve.lan", "sonarr.lan", "10.0.0.9", "nas:8786", "8786", "8989", "3128"):
         assert host not in text, host
-    assert "unreachable at" in text and "answered 500" in text and "https://c4/show" in text  # the rest of each line stays
+    assert "unreachable at" in text and "answered 500" in text and "https://c4/show" in text and "Max retries" in text  # the rest stays
     assert '"--proxy": "nordvpn:fr"' in text  # a provider and region names no machine of the user's
     card["setup"]["proxy"] = "nordvpn:fr"
     (tmp_path / "r1.json").write_text(json.dumps(card))
