@@ -897,6 +897,9 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                             held.remove(job)
                             slots.notify_all()
                     slots.wait(2)
+                if run and run.id in stop_waiting:  # stopped, then its batch got in before it woke: still stopped
+                    stop_waiting.discard(run.id)
+                    raise JobFailed("Stopped before it started", "cancelled")
             finally:
                 line.remove(job)
                 slots.notify_all()
