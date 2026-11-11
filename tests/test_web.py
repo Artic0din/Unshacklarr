@@ -1855,6 +1855,12 @@ def test_episode_links_are_taken_back_to_their_series(tmp_path, monkeypatch):
         "https://www.paramountplus.com/shows/mobland/video/abc/x": "https://www.paramountplus.com/shows/mobland/",
         "https://www.sbs.com.au/ondemand/tv-series/blue-lights/season-1/x": "https://www.sbs.com.au/ondemand/tv-series/blue-lights",
         "https://u.co.uk/shows/blue-lights/watch-online/6388360695112": "https://u.co.uk/shows/blue-lights/watch-online",
+        # Dustfall: JustWatch links episode 1; AUBC lists only that video unless given the show page
+        "https://iview.abc.net.au/show/dustfall/series/1/video/DR2501Q001S00": "https://iview.abc.net.au/show/dustfall",
+        "https://iview.abc.net.au/show/bad-company": "https://iview.abc.net.au/show/bad-company",
+        # 7plus: SEVEN fetches just the ?episode-id= episode; the show is the path
+        "https://7plus.com.au/9-1-1?episode-id=NINO09-001": "https://7plus.com.au/9-1-1",
+        "https://7plus.com.au/highway-patrol": "https://7plus.com.au/highway-patrol",
     }
     for given, series in cases.items():
         assert web.series_title(given) == series, given
@@ -2076,6 +2082,63 @@ def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatc
     assert web.searched_in_place([channel, direct], 102348) == [channel, direct]
 
 
+def test_audio_described_and_auslan_editions_are_never_filled_in(tmp_path, monkeypatch):
+    """Binge's "audio-description-strife" and SBS's "code-of-silence-auslan" are other editions of the show, not it:
+    never offered as its link, only searched by title or offered to find on that service."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    from urllib.parse import quote
+    jw = lambda url: '<li><a title="Watch it on X" href="https://click.justwatch.com/a?r=' + quote(url, safe="") + '"></a></li>'
+    edition_urls = ["https://binge.com.au/en-AU/show-detail/audio-description-strife/ArticleId:c0z81/c0z81",
+                    "https://www.sbs.com.au/ondemand/tv-series/code-of-silence-auslan",
+                    "https://iview.abc.net.au/show/bluey-auslan/series/1/video/CZ1702Q001S00"]
+    html = '<div class="ott_provider"><h3>Stream</h3><ul>' + "".join(map(jw, edition_urls)) + "</ul></div>"
+
+    class FakeResp:
+        text = html
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: FakeResp())
+    domains = {"binge.com.au": "BINGE", "sbs.com.au": "SBS", "iview.abc.net.au": "AUBC"}
+    found = web.tmdb_links(1, "AU", domains)
+    assert [(l["service"], l.get("edition"), l.get("episode")) for l in found] == [
+        ("BINGE", True, True), ("SBS", True, True), ("AUBC", True, True)]
+    # Never a chip, so never filled in; each service is offered to find the show by hand instead.
+    assert web.prefer_download_links(found) == []
+    assert web.brand_fallbacks(found, [], domains) == ["AUBC", "BINGE", "SBS"]
+    # The same service linking the show itself covers it: no edition kept, nothing extra to find.
+    main = {"service": "SBS", "url": "https://www.sbs.com.au/ondemand/tv-series/code-of-silence", "country": "AU",
+            "kind": "native"}
+    kept = web.without_covered_episodes([found[1], main])
+    assert kept == [main] and web.brand_fallbacks(kept, kept, domains) == []
+    # A service that can search finds the show itself by its title: that link is shown, as a normal suggestion.
+    class Backend:
+        def call(self, method, path, json=None, **_):
+            return {"results": [{"title": "Strife", "url": "https://binge.com.au/en-AU/show-detail/strife/ArticleId:9/9"}]}
+    monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 1, "title": "Strife"}])
+    monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend())
+    searched = web.searched_in_place([{**found[0], "needs_series_url": True}], 1)
+    assert [(l["url"], l.get("edition"), l.get("needs_series_url"), l.get("found_by"))
+            for l in web.prefer_download_links(searched)] == [
+        ("https://binge.com.au/en-AU/show-detail/strife/ArticleId:9/9", None, None, "search")]
+    # Words that only contain the edition's name are not it: a show called "Auslander", "padded" slugs.
+    assert not web.accessible_edition("https://www.sbs.com.au/ondemand/tv-series/auslander")
+    assert web.accessible_edition("https://binge.com.au/en-AU/show-detail/audio-described-x/ArticleId:1/1")
+    assert web.accessible_edition("https://example.com/show/bluey_auslan.html")
+    # A cache written before editions were flagged, served while TMDB is down: still never shown, still offered to find.
+    old = {k: v for k, v in found[0].items() if k not in ("edition", "episode")}
+    assert web.prefer_download_links([old]) == [] and web.brand_fallbacks([old], [], domains) == ["BINGE"]
+    assert web.accessible_edition("https://binge.com.au/en-AU/show-detail/audio%2Ddescription-strife/ArticleId:1/1")
+    # A title search that also finds the edition under the same title still picks the show itself.
+    class Both:
+        def call(self, method, path, json=None, **_):
+            return {"results": [{"title": "Strife", "url": "https://binge.com.au/en-AU/show-detail/audio-description-strife/A:1/1"},
+                                {"title": "Strife", "url": "https://binge.com.au/en-AU/show-detail/strife/A:9/9"}]}
+    monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Both())
+    assert web.search_series_url("BINGE", "Strife") == "https://binge.com.au/en-AU/show-detail/strife/A:9/9"
+
+
 def test_channels_never_show_only_their_brand(tmp_path, monkeypatch):
     """A Channel (a brand sold inside Amazon or Apple) is never offered or shown: only its brand is."""
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
@@ -2254,6 +2317,50 @@ def test_a_channel_title_listed_as_prime_video_is_still_the_channel(tmp_path, mo
     monkeypatch.setattr(web.requests, "get", lambda *a, **k: Resp())
     au = web.tmdb_network(248830)["providers"]["AU"]
     assert [(p["name"], p["section"]) for p in au] == [("Apple TV", "flatrate"), ("Amazon Prime Video", "free")]
+
+
+def test_schedule_shows_the_networks_own_catch_up_service(tmp_path, monkeypatch):
+    """Paramedics (AU): TMDB lists Foxtel Now and the Binge Channel; its network, Nine, streams it on 9Now. The
+    schedule shows 9Now too, as the series page does, with 9Now's own logo found by its site, not by a list."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    logos = {"9now": {"name": "9Now", "logo": "nine"}, "abciview": {"name": "ABC iview", "logo": "iv"},
+             "binge": {"name": "BINGE", "logo": "binge"}}
+    domains = {"9now.com.au": "NINE", "iview.abc.net.au": "AUBC", "binge.com.au": "BINGE"}
+    shown = [{"name": "Foxtel Now", "logo": "fox"}, {"name": "BINGE", "logo": "binge"}]
+    assert web.with_network_service(shown, "Nine Network", logos, domains) == [
+        {"name": "9Now", "logo": "nine"}, *shown]
+    # ABC News shares only the generic "abc" label; ABC iview matches the longer "iview": iview wins in either order.
+    for first in ({"abcnews": {"name": "ABC News", "logo": "news"}}, {}):
+        assert web.with_network_service([], "ABC (AU)", {**first, **logos}, domains) == [
+            {"name": "ABC iview", "logo": "iv"}]
+    # TVDB's name for the Australian ABC
+    assert web.with_network_service([], "ABC TV", logos, domains) == [{"name": "ABC iview", "logo": "iv"}]
+    # Each network under both names: Sonarr's "Seven" and TMDB's "Seven Network", Sonarr's "Network 10" and TMDB's "10".
+    names = {"SEVEN": ("Seven", "Seven Network", "7plus", "7mate"), "TEN": ("Network 10", "10", "10 Play", "10play"),
+             "NINE": ("Nine Network", "9", "9Now"), "AUBC": ("ABC TV", "ABC iview", "ABC Kids", "ABC (AU)"),
+             "SBS": ("SBS", "SBS On Demand")}
+    for tag, aliases in names.items():
+        for name in aliases:
+            assert tag in web.network_services(name), name
+    assert web.network_services("ABC") == ()  # TMDB's name for the US network
+    # A network another country tags as its own is not the Australian one of the same name.
+    assert web.network_services("ABC Kids (US)") == () and web.network_services("ABC (US)") == ()
+    assert web.network_services("SBS (KR)") == () and web.network_services("SBS Plus (KR)") == ()
+    # Its own country's tag, or any tag on a name no other country shares, is the same network.
+    for name, tag in (("Seven (AU)", "SEVEN"), ("ABC Kids (AU)", "AUBC"), ("BBC One (UK)", "iP")):
+        assert tag in web.network_services(name), name
+    # Without ABC iview's logo, ABC News (the bare "abc" at the front) is not taken for the catch-up service.
+    assert web.with_network_service([], "ABC TV", {"abcnews": {"name": "ABC News", "logo": "news"}}, domains) == []
+    # Already listed, not installed, a network with no catch-up rule, or no logo known: unchanged.
+    assert web.with_network_service([{"name": "9Now", "logo": "n"}], "Nine Network", logos, domains) == [
+        {"name": "9Now", "logo": "n"}]
+    assert web.with_network_service(shown, "Nine Network", logos, {"binge.com.au": "BINGE"}) == shown
+    assert web.with_network_service(shown, "Prime Video", logos, domains) == shown
+    assert web.with_network_service(shown, "Nine Network", {}, domains) == shown
 
 
 def test_health_answers_without_login_and_says_only_yes_or_no(tmp_path, monkeypatch):

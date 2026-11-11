@@ -28,7 +28,7 @@ import unicodedata
 import zlib
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
-from urllib.parse import urlencode, parse_qs, urlparse
+from urllib.parse import urlencode, parse_qs, unquote, urlparse
 
 import apprise
 import requests
@@ -66,8 +66,16 @@ PURCHASE_NAME = re.compile(r"^(?:amazon\s+video|apple\s+tv\s+store|itunes)$", re
 # nowhere is offered, best code first. Extend per country.
 NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": ("ALL4", "C4"), "more4": ("ALL4", "C4"),
             "itv": ("ITVX", "ITV"), "channel 5": ("MY5",), "u&": ("UKTV",), "abc (au)": ("iView", "AUBC"), "sbs": ("SBS",),
-            "seven network": ("7plus", "SEVEN"), "nine network": ("NINE",), "network 10": ("TEN",), "tvnz": ("TVNZ",),
+            "abc tv": ("iView", "AUBC"), "seven network": ("7plus", "SEVEN"), "nine network": ("NINE",),
+            "network 10": ("TEN",), "tvnz": ("TVNZ",),
+            # the same networks under the other names TVDB (Sonarr) and TMDB use: Australia's free-to-air channels and
+            # their streaming services ("ABC" alone is TMDB's name for the US network, so not here)
+            "abc iview": ("iView", "AUBC"), "abc kids": ("iView", "AUBC"), "sbs on demand": ("SBS",),
+            "seven": ("7plus", "SEVEN"), "7plus": ("7plus", "SEVEN"), "7mate": ("7plus", "SEVEN"),
+            "9": ("NINE",), "9now": ("NINE",), "10": ("TEN",), "10 play": ("TEN",), "10play": ("TEN",),
             "m6": ("M6",), "w9": ("M6",), "6ter": ("M6",)}
+# A network name another country's network also uses, by its first word: the country NETWORKS means by it.
+SHARED_NETWORK_NAMES = {"abc": "au", "sbs": "au"}  # ABC (US); SBS (KR), Korea's
 
 
 def provider_kind(name: str) -> str:
@@ -161,12 +169,16 @@ def provider_logos(providers: list[dict]) -> dict[str, dict]:
 
 
 def prefer_download_links(links: list[dict], network: str = "") -> list[dict]:
-    """The suggestions to show: never a Channel (only its brand, see brand_fallbacks) nor a purchase.
+    """The suggestions to show: never a Channel (only its brand, see brand_fallbacks), a purchase, or an
+    audio-described or Auslan edition (its service is offered to find, see brand_fallbacks).
 
     TMDB homepage links are kept only when they are the series' network's catch-up service.
     Distinct URLs stay distinct chips, in JustWatch / first-country scrape order.
     """
-    tagged = [{**link, "kind": "native"} for link in links if link.get("kind") not in ("purchase", "channel")]
+    tagged = [{**link, "kind": "native"} for link in links
+              # by its link too: a cache from before editions were flagged, kept while TMDB cannot be reached
+              if link.get("kind") not in ("purchase", "channel") and not link.get("edition")
+              and not accessible_edition(str(link.get("url") or ""))]
     # TMDB's homepage is any page of any country's site: trusted only as the series' own network's catch-up.
     tagged = [l for l in tagged if l.get("found_by") != "homepage" or l.get("service") in network_services(network)]
     homes = {l["service"] for l in tagged if l.get("found_by") == "homepage" and not l.get("episode")}
@@ -185,17 +197,58 @@ def joined_countries(*links: dict) -> str:
 
 
 def brand_fallbacks(links: list[dict], shown: list[dict], domains: dict[str, str]) -> list[str]:
-    """Installed services a Channel row names that no shown suggestion already covers: offered to find by hand.
-    Resolved against the services installed now, so one added later is offered."""
+    """Installed services that a Channel row names, or that link only another edition of the show (audio-described,
+    Auslan), and that no shown suggestion already covers: offered to find by hand. Resolved against the services
+    installed now, so one added later is offered."""
     have = {l["service"] for l in shown}
-    found = (service_for_brand(l.get("provider") or "", domains) for l in links if l.get("kind") == "channel")
-    return sorted({b[0] for b in found if b and b[0] not in have})
+    found = {b[0] for l in links if l.get("kind") == "channel" and (b := service_for_brand(l.get("provider") or "", domains))}
+    # by its link too, as prefer_download_links: a cache from before editions were flagged
+    found |= {t for l in links if (l.get("edition") or accessible_edition(str(l.get("url") or ""))) and l.get("site")
+              and (t := service_for(f"https://{l['site']}/", domains))}
+    return sorted(found - have)
 
 
 def network_services(network: str) -> tuple[str, ...]:
     """The service codes a network's catch-up may be under (BBC One: iP), by the network's first words."""
     name = str(network or "").lower().strip()
-    return next((tags for key, tags in NETWORKS.items() if name == key or name.startswith(key + " ")), ())
+    # TVDB tags a network by country when names clash ("ABC (US)", "Seven (AU)"): matched without its tag, unless the
+    # tag is another country than the one a shared name means here
+    tagged = re.search(r"\s*\(([a-z]{2})\)$", name)
+    base = name[:tagged.start()] if tagged else name
+
+    def fits(key: str) -> bool:
+        if name == key:
+            return True
+        if tagged and SHARED_NETWORK_NAMES.get(key.split()[0], tagged[1]) != tagged[1]:
+            return False
+        return base == key or base.startswith(key + " ")
+    return next((tags for key, tags in NETWORKS.items() if fits(key)), ())
+
+
+def with_network_service(providers: list[dict], network: str, logos: dict[str, dict],
+                         domains: dict[str, str]) -> list[dict]:
+    """The schedule's services plus, first, the series' network's own installed catch-up service (Nine Network:
+    9Now), as the series page offers it. Its logo is the TMDB provider whose site is that service's (brand_logos)."""
+    installed = set(domains.values())
+    tag = next((t for t in network_services(network) if t in installed), None)
+    if not tag:
+        return providers
+    # its sites' names: the site's own (abc for iview.abc.net.au) only whole, since ABC News shares it; the host's
+    # first label (iview, 9now) also at either end of the provider's name (ABC iview)
+    hosts = [host for host, t in domains.items() if t == tag]
+    whole = {site_name(host) for host in hosts}
+    ends = {re.sub(r"[^a-z0-9]", "", host.removeprefix("www.").split(".")[0]) for host in hosts}
+
+    def fit(brand: str) -> int:  # the longest of its labels the provider's name is, or starts or ends with
+        return max((len(label) for label in whole | ends if brand == label or label in ends and len(label) >= 3 and (
+            brand.startswith(label) or brand.endswith(label))), default=0)
+
+    # the most specific match: ABC iview by "iview" over ABC News by the generic "abc"
+    score, own = max(((fit(brand), p) for brand, p in logos.items()), key=lambda m: m[0], default=(0, None))
+    shown = {provider_brand(p.get("name") or "") for p in providers}
+    if not score or provider_brand(own["name"]) in shown:
+        return providers
+    return [{"name": own["name"], "logo": own["logo"]}, *providers]
 
 
 def service_for_network(network: str, installed: set[str]) -> str | None:
@@ -283,6 +336,12 @@ def series_title(url: str) -> str:
         return f"https://www.channel5.com/show/{show.group(1)}"
     if on_site(url, "paramountplus.com") and (show := re.match(r"(?:/[a-z]{2})?/shows/(?!video/)([A-Za-z0-9_-]+)", path)):
         return f"https://www.paramountplus.com/shows/{show.group(1)}/"
+    if on_site(url, "7plus.com.au") and (show := re.match(r"/([a-z0-9-]+)/?$", path)):
+        # ?episode-id= makes SEVEN fetch that one episode; the show is the path alone
+        return f"https://7plus.com.au/{show.group(1)}"
+    if on_site(url, "iview.abc.net.au") and (show := re.match(r"/show/([A-Za-z0-9_-]+)", path)):
+        # …/show/<slug>/series/1/video/<id> opens one episode; AUBC lists the whole show from /show/<slug>
+        return f"https://iview.abc.net.au/show/{show.group(1)}"
     if on_site(url, "sbs.com.au") and (show := re.match(r"/ondemand/tv-series/([a-z0-9-]+)", path)):
         return f"https://www.sbs.com.au/ondemand/tv-series/{show.group(1)}"
     if on_site(url, "u.co.uk") and (show := re.match(r"/shows/([a-z0-9-]+)", path)):
@@ -475,6 +534,8 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                         link["needs_series_url"] = True
                 elif still_episode(link["url"]):
                     link["episode"] = True  # dropped below when the same service also links the series
+                if accessible_edition(url):  # searched by title as an episode link is; never shown (prefer_download_links)
+                    link.update(edition=True, episode=True)
                 links.append(link)
     # A Channel's free episode listed as its host's own (Stick's as "Amazon Prime Video"): a host title listed only in
     # Free beside a Channel it hosts. Judged per title, as links tell titles apart (Prime's own title in Stream stays),
@@ -499,8 +560,19 @@ def tmdb_links(tmdb_id: int, country: str, domains: dict[str, str]) -> list[dict
                 "site": urlparse(url).hostname, "kind": "native", "found_by": "homepage"}
         if still_episode(link["url"]):
             link["episode"] = True
+        if accessible_edition(url):
+            link.update(edition=True, episode=True)
         links.append(link)
     return links
+
+
+# Another edition of the show on its service (Binge's audio-description-<show>, SBS's and iview's <show>-auslan),
+# by a whole word of its link: Unshackle would download that edition, so it is never filled in.
+ACCESSIBLE_EDITION = re.compile(r"(?:^|[/_-])(?:auslan|audio[_-]descri(?:ption|bed))(?=[/._-]|$)")
+
+
+def accessible_edition(url: str) -> bool:
+    return bool(ACCESSIBLE_EDITION.search(unquote(urlparse(url).path).lower()))  # audio%2Ddescription too
 
 
 def still_episode(url: str) -> bool:
@@ -1547,7 +1619,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 5
+SUGGEST_MAP = 7
 
 
 async def suggest(request):
@@ -1633,7 +1705,8 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
         if url := search_series_url(service, series["title"]):
             episode = next(l for l in out if l["service"] == service and l.get("episode"))
             out = [l for l in out if not (l["service"] == service and l.get("episode"))]
-            out.append({**{k: v for k, v in episode.items() if k != "episode"}, "url": url, "found_by": "search"})
+            out.append({**{k: v for k, v in episode.items() if k not in ("episode", "edition", "needs_series_url")}, "url": url,
+                        "found_by": "search"})
     for service, channel in sorted(channels.items()):
         if url := search_series_url(service, series["title"]):
             countries = dict.fromkeys(c for l in links if l.get("brand_service") == service for c in l["country"].split(", "))
@@ -1655,7 +1728,8 @@ def search_series_url(service: str, title: str) -> str | None:
         return None
     # Sonarr's "(AU)" may be absent from the service's title; a result's own other tag ("(UK)") is not the same show
     wanted = {title_key(title), title_key(query)}
-    same = [r for r in found.get("results") or [] if title_key(str(r.get("title") or "")) in wanted and (r.get("url") or r.get("id"))]
+    same = [r for r in found.get("results") or [] if title_key(str(r.get("title") or "")) in wanted
+            and (r.get("url") or r.get("id")) and not accessible_edition(str(r.get("url") or r.get("id")))]
     return str(same[0].get("url") or same[0].get("id")) if len(same) == 1 else None
 
 
@@ -3033,10 +3107,16 @@ async def networks(request):
         await asyncio.gather(*(one(i) for i in todo))
         write_atomic(NETWORKS_CACHE, json.dumps(cache))
     logos = await asyncio.to_thread(brand_logos, country) if tmdb_key() else {}
+    try:
+        domains = await asyncio.to_thread(service_domains)
+    except UnshackleError:
+        domains = {}
     return web.json_response({
         i: {"name": cache[str(i)].get("name"), "logo": cache[str(i)].get("logo"), "country": country,
             "network_country": cache[str(i)].get("network_country") or "",
-            "providers": rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []), logos)}
+            "providers": with_network_service(
+                rank_watch_providers((cache[str(i)].get("providers") or {}).get(country, []), logos),
+                cache[str(i)].get("name") or "", logos, domains)}
         for i in ids if str(i) in cache and "providers" in cache[str(i)]
     })
 
