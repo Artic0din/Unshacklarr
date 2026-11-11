@@ -3458,7 +3458,7 @@ def test_two_syncs_of_one_batch_waiting_for_a_full_server_both_get_in(tmp_path, 
     def k():
         with sync.download_slot("serve", run(None, "k")):
             k_in.set()
-            k_go.wait(5)
+            k_go.wait(30)  # longer than the wait below for both to be in line: never freed before they are
 
     def j(name):
         try:
