@@ -1774,8 +1774,7 @@ def finalize(out: Path, sxxeyy: str, name: str, join_parts: bool = True, episode
         match = SXXEYY.search(f.name)
         if not match and not programme:
             continue
-        info = subprocess.run(["mkvmerge", "-J", str(f)], stdout=subprocess.PIPE, text=True)
-        title = json.loads(info.stdout or "{}").get("container", {}).get("properties", {}).get("title", "")
+        title = mkvmerge_info(f).get("container", {}).get("properties", {}).get("title", "")
         if not match:  # Britains.Forgotten.Girls.2026.1080p...mkv: BBC.Documentaries.S2026E14.Britains.Forgotten...
             trace(f"renamed {f.name} to {dots(name)}.{sxxeyy}.{f.name}")
             f = f.rename(f.with_name(f"{dots(name)}.{sxxeyy}.{f.name}"))
@@ -2025,8 +2024,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
 
 def duration_of(path: Path) -> float:
     """A file's length in seconds, as mkvmerge reads it (0 when it can't tell)."""
-    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
-    return (json.loads(info.stdout or "{}").get("container", {}).get("properties", {}).get("duration") or 0) / 1e9
+    return (mkvmerge_info(path).get("container", {}).get("properties", {}).get("duration") or 0) / 1e9
 
 
 def note_upgrade(ep: dict, show: dict, service_sxxeyy: str, lacking: str) -> None:
@@ -2267,18 +2265,21 @@ def first_language(order: list[str], tracks: list[dict]) -> str | None:
     return None
 
 
+def mkvmerge_info(path: Path) -> dict:
+    """What `mkvmerge -J` says of a file ({} when it can't tell)."""
+    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
+    return json.loads(info.stdout or "{}")
+
+
 def mkv_tracks(path: Path) -> list[dict]:
     """A file's tracks, as mkvmerge reads them (their id, type and properties)."""
-    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
-    return json.loads(info.stdout or "{}").get("tracks") or []
+    return mkvmerge_info(path).get("tracks") or []
 
 
 def audio_languages(path: Path, kind: str = "audio") -> set[str]:
     """The languages of a file's audio (or subtitles: forced ones left out), as mkvmerge reads them."""
-    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
-    tracks = json.loads(info.stdout or "{}").get("tracks") or []
     found = set()
-    for t in tracks:
+    for t in mkv_tracks(path):
         if t.get("type") == kind and not (t.get("properties") or {}).get("forced_track"):
             props = t.get("properties") or {}
             for code in (props.get("language_ietf"), props.get("language")):
