@@ -930,6 +930,30 @@ def test_the_menu_counts_the_downloads_going_on(tmp_path, monkeypatch):
     assert json.loads(r.body) == {"running": 2, "queued": 1, "sign_in": None}
 
 
+def test_a_calendar_day_click_cycle_reaches_the_usual_number_of_episodes(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "series.js"
+    harness = tmp_path / "harness.js"
+    harness.write_text(
+        'const src = require("fs").readFileSync(process.argv[2], "utf8");'
+        'const next = eval(src.match(/const nextBroadcastCount = [^\\n]*/)[0].replace("const nextBroadcastCount = ", "").replace(/;.*$/, ""));'
+        'const cycle = (usual) => { const seen = []; let n = 0; do { n = next(n, usual); seen.push(n); } while (n !== 0 && seen.length < 12); return seen; };'
+        "console.log(JSON.stringify({ one: cycle(1), four: cycle(4), none: cycle(0) }));"
+    )
+    run = subprocess.run(["node", str(harness), str(script)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "one": [1, 2, 3, 0],  # as before
+        "four": [1, 2, 3, 4, 0],  # the usual 4 is reachable, so the changed day can be put back (#62)
+        "none": [1, 2, 3, 0],  # a day off keeps the cycle of 3
+    }
+
+
 def test_a_broadcast_schedule_is_checked_on_save(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
