@@ -45,6 +45,8 @@ Every change worth knowing, newest first. The format follows
 - Restoring a backup whose number settings are not numbers or are outside the range a Save allows (for example a Sync every of 0 hours, or a History to keep of "lots") is now refused with a message naming the setting, before anything is written; before, it was written and the app could not start until `config.yaml` was fixed by hand.
 - Picking several hundred episodes at once no longer puts every id in one Sonarr request: they are fetched 200 at a time, so a large catch-up is no longer refused for its URL's length.
 - A job paused during its last episode now ends when that episode does, instead of staying "running" until Resume was pressed (Sync now answered that one was already running). A paused job with episodes left still waits for Resume.
+- Adding an audio track to an episode saved as an `.mp4` now writes a `.mkv` file, so the name matches the Matroska format and Sonarr replaces the old `.mp4`.
+- "Release time set" is now sent once, when the time is written, instead of again for every later episode of the same run.
 - A series' start date no longer moves forward each time you Save from the same open page: the page now keeps the date the server set when the series was added, so episodes aired between two Saves are no longer skipped by the automatic sync.
 
 ## [1.5.0] - 2026-10-17

@@ -2104,7 +2104,7 @@ def test_a_release_time_is_learnt_once_clear_and_never_over_one_set(tmp_path, mo
                                          "available": f"2026-09-0{n}T21:05:00Z"} for n in (1, 2, 3)}
     sync.write_atomic(sync.SEEN_FILE, json.dumps(seen))
     learnt, told = [], []
-    monkeypatch.setattr(sync, "on_release_learned", lambda tvdb, at, day: learnt.append((tvdb, at, day)))
+    monkeypatch.setattr(sync, "on_release_learned", lambda tvdb, at, day: learnt.append((tvdb, at, day)) or True)
     monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
     ep = episode(111, 2, 4)
     sync.learn_release(ep, {"service": "RTLP"}, {})
@@ -2114,6 +2114,41 @@ def test_a_release_time_is_learnt_once_clear_and_never_over_one_set(tmp_path, mo
     assert learnt == []  # one set by hand stays
     sync.learn_release(ep, {"service": "RTLP"}, {})
     assert learnt == [(111, sync.suggest_release(list(seen.values()))["time"], 0)] and told == ["Release time set: Show"]
+
+
+def test_a_learnt_release_time_is_told_once_for_the_whole_run(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    seen = {f"unshackle-111-S02E0{n}": {"tvdbId": 111, "aired": f"2026-09-0{n}T19:00:00Z", "not_yet": f"2026-09-0{n}T20:55:00Z",
+                                         "available": f"2026-09-0{n}T21:05:00Z"} for n in (1, 2, 3)}
+    sync.write_atomic(sync.SEEN_FILE, json.dumps(seen))
+    stored, told = {}, []
+
+    def learned(tvdb, at, day):  # like web.release_learned: only the first write counts
+        if tvdb in stored:
+            return False
+        stored[tvdb] = at
+        return True
+
+    monkeypatch.setattr(sync, "on_release_learned", learned)
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
+    sync.SETTINGS["release_learn"] = True
+    show = {"service": "RTLP"}  # read once when the run started, so it never shows the time written since
+    for number in (4, 5, 6):
+        sync.learn_release(episode(111, 2, number), show, {})
+    assert told == ["Release time set: Show"]
+
+
+def test_a_release_time_set_by_hand_during_the_run_is_not_told(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    seen = {f"unshackle-111-S02E0{n}": {"tvdbId": 111, "aired": f"2026-09-0{n}T19:00:00Z", "not_yet": f"2026-09-0{n}T20:55:00Z",
+                                         "available": f"2026-09-0{n}T21:05:00Z"} for n in (1, 2, 3)}
+    sync.write_atomic(sync.SEEN_FILE, json.dumps(seen))
+    told = []
+    monkeypatch.setattr(sync, "on_release_learned", lambda tvdb, at, day: False)
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
+    sync.SETTINGS["release_learn"] = True
+    sync.learn_release(episode(111, 2, 4), {"service": "RTLP"}, {})
+    assert told == []
 
 
 def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
@@ -2191,6 +2226,43 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
         assert sync.add_track(205, "fr") is False
     assert sync.same_source({"path": "/tv/Show - S01E01.mkv", "originalFilePath": "x/Doc.2026.1080p.iP.WEB-DL.mkv"}, "iP")
     assert not sync.same_source({"sceneName": "Show.S01E01.ip.WEB-DL"}, "iP")  # a short tag as Unshackle writes it
+
+
+def test_the_added_audio_is_written_as_a_matroska_file_whatever_the_library_file_is_called(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    file = {}
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (
+        Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True), (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"fr")))
+    calls, imported = [], []
+
+    def tools(cmd, **_):
+        calls.append(cmd)
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined")
+        return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append((sorted(f.name for f in out.iterdir()), replace)))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    for name, written in (("Show - S02E05.mp4", "Show - S02E05.mkv"), ("Show - S02E05.mkv", "Show - S02E05.mkv")):
+        (library / name).write_bytes(b"video")
+        file.update(path=f"/tv/Show/Season 02/{name}", sceneName="Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264")
+        shutil.rmtree(tmp_path / "unshackle-111-S02E05", ignore_errors=True)
+        assert sync.add_track(205, "fr") is True
+        assert calls[-1][:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / written)]
+        assert imported[-1] == ([written], True)  # the one file, in place of the library's: Sonarr drops the old .mp4
 
 
 @pytest.mark.parametrize("code", [2, -9])  # an error, or the process killed (a signal: a negative code)
