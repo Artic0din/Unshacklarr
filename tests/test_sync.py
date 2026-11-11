@@ -2435,6 +2435,43 @@ def test_a_failed_audio_add_never_deletes_through_a_folder_swapped_for_a_link(tm
     assert (elsewhere / "film.mkv").read_bytes() == b"keep me"  # refused, and nothing deleted through the link
 
 
+def test_a_failed_audio_add_survives_a_file_that_links_to_itself(tmp_path, monkeypatch):
+    # on Python 3.12 (the image's) resolving a link to itself raises: the failure must still be recorded, the link removed
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    links = []
+
+    def download(payload, run=None):
+        link = Path(payload["output_dir"]) / "audio.mkv"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(link.name)  # planted in the shared folder: a link to itself
+        links.append(link)
+
+    def tools(cmd, **_):
+        tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+
+    finished = []
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    real_finish = sync.EpisodeRun.finish
+    monkeypatch.setattr(sync.EpisodeRun, "finish", lambda self, outcome, *a: finished.append(outcome) or real_finish(self, outcome, *a))
+    assert sync.add_track(205, "fr") is True
+    assert finished == ["failed"] and not links[0].is_symlink()  # refused, recorded, and the link itself removed
+
+
 def test_a_series_can_send_only_its_failures_or_nothing(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     sent, boxed = [], []
