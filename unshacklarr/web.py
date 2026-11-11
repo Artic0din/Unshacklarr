@@ -2516,6 +2516,7 @@ async def cdm_action(request):
         raise web.HTTPBadRequest(text=str(e))
     except OSError as e:
         raise web.HTTPBadGateway(text=f"Could not write Unshackle's files: {e}")
+    UNSHACKLE.configure(UNSHACKLE.settings)  # its cdm: section changed: the next download asks serve, not the copy kept 10 minutes
     return web.json_response(await asyncio.to_thread(cdm_state))
 
 

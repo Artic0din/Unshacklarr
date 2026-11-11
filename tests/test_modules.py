@@ -341,3 +341,18 @@ def test_a_cdm_named_for_the_download_is_sent_and_its_refusal_said(tmp_path):
         raise AssertionError("refused")
     except UnshackleError as e:
         assert "cdm_overrides" in str(e)
+
+
+@responses.activate
+def test_a_restarted_local_serve_is_asked_for_its_config_again(tmp_path, monkeypatch):
+    # the config is kept 10 minutes: a restart that left it would go on refusing a download "No CDM" after a device was picked
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_mode": "local"})
+    monkeypatch.setattr(backend.local, "endpoint", lambda command: ("http://backend:8786", "test-api-secret"))
+    monkeypatch.setattr(backend.local, "restart", lambda command: None)
+    config = responses.get("http://backend:8786/api/config", json={"config": {"cdm": {}}})
+    assert backend.cdm_config() == {} and backend.cdm_config() == {}
+    assert config.call_count == 1  # kept
+    responses.replace(responses.GET, "http://backend:8786/api/config", json={"config": {"cdm": {"NF": "my_l3"}}})
+    backend.restart()
+    assert backend.cdm_config() == {"NF": "my_l3"}
