@@ -72,6 +72,8 @@ NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": 
             "seven": ("7plus", "SEVEN"), "7plus": ("7plus", "SEVEN"), "7mate": ("7plus", "SEVEN"),
             "9": ("NINE",), "9now": ("NINE",), "10": ("TEN",), "10 play": ("TEN",), "10play": ("TEN",),
             "m6": ("M6",), "w9": ("M6",), "6ter": ("M6",)}
+# A network name another country's network also uses, by its first word: the country NETWORKS means by it.
+SHARED_NETWORK_NAMES = {"abc": "au"}
 
 
 def provider_kind(name: str) -> str:
@@ -179,10 +181,18 @@ def brand_fallbacks(links: list[dict], shown: list[dict], domains: dict[str, str
 def network_services(network: str) -> tuple[str, ...]:
     """The service codes a network's catch-up may be under (BBC One: iP), by the network's first words."""
     name = str(network or "").lower().strip()
-    # TVDB tags a network by country when names clash ("ABC (US)"): such a name matches only a key with its tag
-    tagged = re.search(r"\([a-z]{2}\)$", name)
-    return next((tags for key, tags in NETWORKS.items()
-                 if name == key or (not tagged or key.endswith(tagged[0])) and name.startswith(key + " ")), ())
+    # TVDB tags a network by country when names clash ("ABC (US)", "Seven (AU)"): matched without its tag, unless the
+    # tag is another country than the one a shared name means here
+    tagged = re.search(r"\s*\(([a-z]{2})\)$", name)
+    base = name[:tagged.start()] if tagged else name
+
+    def fits(key: str) -> bool:
+        if name == key:
+            return True
+        if tagged and SHARED_NETWORK_NAMES.get(key.split()[0], tagged[1]) != tagged[1]:
+            return False
+        return base == key or base.startswith(key + " ")
+    return next((tags for key, tags in NETWORKS.items() if fits(key)), ())
 
 
 def with_network_service(providers: list[dict], network: str, logos: dict[str, dict],
