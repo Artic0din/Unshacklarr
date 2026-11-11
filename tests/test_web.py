@@ -1701,6 +1701,59 @@ def test_suggest_network_falls_back_to_the_cached_tmdb_network(tmp_path, monkeyp
     assert web.series_network("1", "") == ""
 
 
+def suggest_module(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    monkeypatch.setattr(web, "searched_in_place", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "named_titles", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "series_network", lambda tmdb_id, given: "")
+    return web
+
+
+def ask_suggest(web, tmdb_id):
+    from types import SimpleNamespace
+    return web.suggest(SimpleNamespace(match_info={"tmdb_id": str(tmdb_id)}, query={}))
+
+
+def test_suggestions_looked_up_at_once_all_stay_cached(tmp_path, monkeypatch):
+    import threading
+    web = suggest_module(tmp_path, monkeypatch)
+    both_asking = threading.Barrier(2, timeout=5)  # each waits inside its TMDB request for the other
+
+    def tmdb_links(tmdb_id, country, domains):
+        both_asking.wait()
+        return [{"service": "TEN", "url": f"https://10.com.au/{tmdb_id}", "country": country, "kind": "native"}]
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    async def go():
+        await asyncio.gather(ask_suggest(web, 1), ask_suggest(web, 2))
+
+    asyncio.run(go())
+    assert sorted(json.loads(web.TMDB_CACHE.read_text())) == ["1", "2"]
+
+
+def test_a_failed_suggestion_lookup_keeps_the_cached_entry(tmp_path, monkeypatch):
+    web = suggest_module(tmp_path, monkeypatch)
+    old = {"countries": ["AU"], "checked": "2020-01-01T00:00:00+00:00", "map": web.SUGGEST_MAP,
+           "links": [{"service": "TEN", "url": "https://10.com.au/1", "country": "AU", "kind": "native"}]}
+    web.TMDB_CACHE.write_text(json.dumps({"1": old}))
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    def tmdb_links(tmdb_id, country, domains):
+        raise web.requests.ConnectionError("down")
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    reply = asyncio.run(ask_suggest(web, 1))
+    assert json.loads(reply.text)["checked"] == old["checked"]
+    assert json.loads(web.TMDB_CACHE.read_text()) == {"1": old}
+
+
 def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -1714,6 +1767,36 @@ def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
             raise AssertionError(f"expected {bad!r} to be refused")
         except web.web.HTTPBadRequest as e:
             assert "language code" in e.text
+
+
+def test_the_sync_grid_restarts_at_local_midnight_every_day(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    paris = ZoneInfo("Europe/Paris")
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", paris)
+
+    def next_at(every, *when):
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        return web.next_sync(datetime(*when, tzinfo=paris)).strftime("%m-%d %H:%M")
+
+    assert next_at(5, 2026, 10, 5, 21, 30) == "10-06 00:00"  # the last gap is short: midnight, not 01:00
+    assert next_at(5, 2026, 10, 5, 20, 0) == "10-06 00:00" and next_at(5, 2026, 10, 5, 4, 59) == "10-05 05:00"
+    assert next_at(23, 2026, 10, 5, 22, 0) == "10-05 23:00" and next_at(23, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(2, 2026, 10, 5, 21, 30) == "10-05 22:00" and next_at(2, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(24, 2026, 10, 5, 0, 0) == "10-06 00:00" and next_at(24, 2026, 10, 5, 23, 59) == "10-06 00:00"
+
+    for every, slots in ((2, 12), (5, 5), (23, 2)):  # a clock change leaves no slot of the day without its sync
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        for day in ((2026, 3, 29), (2026, 10, 25), (2026, 10, 5)):
+            now, end, runs = datetime(*day, tzinfo=paris), datetime(*day, tzinfo=paris) + timedelta(days=1), 0
+            while (now := web.next_sync(now)) < end:
+                runs += 1
+            assert runs == slots - 1, (every, day)
 
 
 def test_a_series_is_checked_hours_before_its_release_and_told_once(tmp_path, monkeypatch):
@@ -2268,9 +2351,17 @@ def test_episode_links_are_taken_back_to_their_series(tmp_path, monkeypatch):
         # 7plus: SEVEN fetches just the ?episode-id= episode; the show is the path
         "https://7plus.com.au/9-1-1?episode-id=NINO09-001": "https://7plus.com.au/9-1-1",
         "https://7plus.com.au/highway-patrol": "https://7plus.com.au/highway-patrol",
+        # Amazon's sites all reduce to the title id, so one title found on two of them is one suggestion
+        "https://www.amazon.de/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.com/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.fr/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.primevideo.com/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
     }
     for given, series in cases.items():
         assert web.series_title(given) == series, given
+    de, com = ({"service": "AMZN", "url": web.series_title(f"https://www.amazon.{tld}/gp/video/detail?gti=amzn1.dv.gti.x"),
+                "country": country, "kind": "native"} for tld, country in (("de", "DE"), ("com", "US")))
+    assert len(web.merge_countries([[de], [com]])) == 1
 
     class Page:
         def __init__(self, data):
@@ -3111,6 +3202,17 @@ def test_a_year_in_brackets_is_not_a_part():
     assert same_title(plain_title("Christmas Special (2023)"), plain_title("Christmas Special 2023"))
 
 
+def test_a_spelled_out_part_number_counts_as_the_digit():
+    from unshacklarr.web import last_number, same_title
+    assert not same_title("the ambush part two", "the ambush part 1")
+    assert same_title("the ambush part two", "the ambush part 2")
+    assert not same_title("the ambush part one", "the ambush part two")
+    assert last_number("the ambush part twenty") == 20
+    assert last_number("twenty one") is None  # a compound number is not "1": "21" must still match it
+    assert last_number("murder in the city two") == 2 and not same_title("murder in the city two", "murder in the city 1")
+    assert last_number("fallen women") is None and same_title("fallen women", "fallen woman")
+
+
 def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
     # Add audio track: folders listed (names only, no file), and a real file of Sonarr's looked for with the two roots
     from unshacklarr import web
@@ -3147,6 +3249,22 @@ def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
                         if path == "rootfolder" else [{"path": "/data/tv/Show/S01E01.mkv"}])
     assert web.library_check("", "")["common"] == "/Syno"  # several root folders: the one holding them all
     assert "has no series with a file" in web.library_check("/other", "/x")["why"]
+
+
+def test_the_library_guess_keeps_the_drive_of_a_windows_sonarr(tmp_path, monkeypatch):
+    from unshacklarr import web
+    sync = web.sonarr_sync
+    (tmp_path / "tv" / "Show" / "Season 01").mkdir(parents=True)
+    (tmp_path / "tv" / "Show" / "Season 01" / "file.mkv").write_bytes(b"x")
+    monkeypatch.setattr(web, "LIBRARY_GUESSES", [str(tmp_path / "tv")])
+    windows = "D:\\TV\\Show\\Season 01\\file.mkv"
+    guess = web.library_guess(windows)
+    assert guess == {"sonarr_root": "D:\\TV", "local_root": str(tmp_path / "tv")}
+    assert windows.startswith(guess["sonarr_root"] + "\\")  # a prefix of the path as Sonarr reports it
+    monkeypatch.setitem(sync.SETTINGS, "library_sonarr_root", guess["sonarr_root"])
+    monkeypatch.setitem(sync.SETTINGS, "library_local_root", guess["local_root"])
+    assert sync.library_file(windows).is_file()
+    assert web.library_guess("/data/tv/Show/Season 01/file.mkv") == {"sonarr_root": "/data/tv", "local_root": str(tmp_path / "tv")}
 
 
 def test_another_sonarr_reads_its_own_library(monkeypatch):

@@ -52,6 +52,12 @@ Every change worth knowing, newest first. The format follows
 - Activity no longer asks the server for the whole history again and again while a download starts or ends: one reload at a time, and its answer is drawn, so the Running list updates even when the history is slow to load.
 - A single HTTP 500 answer to a download's status check no longer cancels the download: it counts as a miss, like a 502 to 504, and the download is only given up after 12 misses in a row.
 - The diagnostic file no longer keeps the host of a proxy, Sonarr, an Unshackle server or the off-site backup, in the attempt, its command line, its cause or its log.
+- An automatic sync interval that does not divide 24 hours (5 or 23, set through the API or the config file) now ends each day with a sync at midnight instead of running unevenly, and the next sync shown on the page matches it.
+- Opening several series at once no longer loses their cached where-to-watch suggestions: each one stays cached instead of the last to finish replacing the others, so they are not asked from TMDB again.
+- A title linked from amazon.de is now reduced to its Amazon title id like the other Amazon sites, so it no longer shows as a second suggestion next to the same title from amazon.com, amazon.fr or Prime Video.
+- A track at a standard height, such as 1998x1080 or 4096x2160, is now classed by that height in a quality ladder instead of a class that matches no step.
+- A title ending in a spelled-out number ("Part Two") is no longer matched to the same title with another number ("Part 1"); one to twenty, in English.
+- The library folder guess in Settings now works for a Sonarr on Windows: the Sonarr folder it proposes keeps the drive letter and backslashes (`D:\TV`), so it matches the paths that Sonarr reports.
 - A login cookie with a non-ASCII digit in it (such as `²`) is now refused instead of causing a server error, and two logins in the same second no longer end together: logging one out leaves the other signed in. Logins made before this update stay valid until they expire.
 
 ## [1.5.0] - 2026-10-17

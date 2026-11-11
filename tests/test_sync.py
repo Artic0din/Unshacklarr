@@ -1770,6 +1770,28 @@ def test_the_rename_keeps_the_resolution_and_a_title_starting_with_a_number(tmp_
     assert [f.name for f in out.iterdir()] == ["Bake.Off.S17E03.1080p.ALL4.WEB-DL.mkv"]
 
 
+def test_a_track_at_a_standard_height_keeps_that_class_however_wide_it_is(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    assert sync.eq_height({"width": 1998, "height": 1080}) == 1080 and sync.eq_height({"width": 4096, "height": 2160}) == 2160
+    assert sync.eq_height({"width": 1920, "height": 800}) == 1080 and sync.eq_height({"width": 1920, "height": 960}) == 1080
+    assert sync.eq_height({"width": 1918, "height": 802}) == 1080 and sync.eq_height({"width": 3840, "height": 1920}) == 2160
+    assert sync.eq_height({"width": 4096, "height": 1440}) == 2304  # far wider: a crop of a bigger picture, by its width as before
+    assert sync.eq_height({"width": 2160, "height": 1080}) == 1080  # 2:1 at full height
+
+
+def test_the_page_classes_tracks_as_the_server_does(tmp_path, monkeypatch):
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    sync = load(tmp_path, monkeypatch)
+    src = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "quality.js").read_text()
+    code = re.search(r"^const HEIGHTS = .*?^const eqHeight = (?:[^\n]*;$|.*?^\};$)", src, re.M | re.S).group(0)  # the page's copy
+    sizes = [(1998, 1080), (4096, 2160), (4096, 1440), (2160, 1080), (1920, 800), (1920, 960), (1918, 802), (3840, 1920), (1280, 534), (1280, 720), (1920, 1080), (1000, 1000)]
+    run = subprocess.run(["node", "-e", code + f"\nconsole.log(JSON.stringify({json.dumps(sizes)}.map(([width, height]) => eqHeight({{width, height}}))))"],
+                         capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == [sync.eq_height({"width": w, "height": h}) for w, h in sizes]
+
+
 def test_a_ladder_takes_widescreen_tracks_by_their_16_9_height_and_its_language_order(tmp_path, monkeypatch):
     # From #11, by mj23au: a cropped 1920x800 film is 1080p to Unshackle's own --quality
     sync = load(tmp_path, monkeypatch)
