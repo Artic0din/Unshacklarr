@@ -1026,7 +1026,7 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             # One status that didn't come is not a failed download: the job still runs on serve, and a
             # retry now would start it a second time into the same folder.
             misses += 1
-            if misses >= POLL_MISSES or not TRANSIENT.search(str(e)):
+            if misses >= POLL_MISSES or not (TRANSIENT.search(str(e)) or STATUS_MISS.search(str(e))):
                 try:
                     backend.cancel(job_id)  # gone for good: nothing of it may go on behind a retry
                 except UnshackleError as refused:
@@ -1137,6 +1137,9 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
 # Worth another try in a moment: the network or the service stumbled, nothing is wrong with the request.
 TRANSIENT = re.compile(r"timed? ?out|timeout|connection (reset|refused|aborted|error)|remote end closed|temporarily|"
                        r"max retries|\b50[234]\b|service unavailable|bad gateway|name resolution|network is unreachable", re.IGNORECASE)
+# A status asked while the job runs that serve answered with its own error: one more miss, not the job given up.
+# Not for a whole download: serve may have queued the job before it answered 500, and a retry would start it twice.
+STATUS_MISS = re.compile(r"^unshackle serve: HTTP 500:")  # the status Unshackle.call puts first, not words in a body
 RETRY_AFTER = (30, 120)  # seconds before each retry
 SERVE_RETRY_AFTER = (60, 180, 600)  # serve itself too slow to answer (its disks saturated): longer, once more (#10)
 UNREACHABLE = "unshackle serve is unreachable"  # Unshackle.call's words when it can't reach serve, not an answer
@@ -2152,10 +2155,13 @@ HEIGHTS = (4320, 2160, 1440, 1080, 720, 576, 540, 480, 360, 240)  # the classes 
 
 def eq_height(track: dict) -> int:
     """A track's class, as a ladder reads it: its height, or its width's at 16:9, each taken to the class within 2%
-    of it (a 1920x800 film and a 2:1 1920x960 series are 1080p, Apple's 1918x802 too, a 3840x1920 one 2160p)."""
+    of it (a 1920x800 film and a 2:1 1920x960 series are 1080p, Apple's 1918x802 too, a 3840x1920 one 2160p).
+    A height already a class stays it when the width's, a little above it, is no class (1998x1080 is 1080p, not 1123)."""
     def classed(value: float) -> int:
         return next((h for h in HEIGHTS if abs(value - h) <= h * 0.02), int(value))
-    return max(classed(int(track.get("height") or 0)), classed(int(track.get("width") or 0) * 9 / 16))
+    by_height, by_width = classed(int(track.get("height") or 0)), classed(int(track.get("width") or 0) * 9 / 16)
+    # up to about 2.2:1 (DCI 1.9:1, 2:1): its height; much wider is a crop of a bigger picture (4096x1440)
+    return by_height if by_height in HEIGHTS and by_width not in HEIGHTS and by_width < by_height * 1.25 else max(by_height, by_width)
 
 
 def fits(step: dict, track: dict) -> bool:

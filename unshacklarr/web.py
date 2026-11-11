@@ -322,7 +322,7 @@ def series_title(url: str) -> str:
         return url.split("?")[0]
     if on_site(url, "disneyplus.com"):  # drop the locale (/fr-fr/, /en-ca/…): one entity, one suggestion
         return re.sub(r"(disneyplus\.com)/[a-z]{2}-[a-z]{2}/", r"\1/", url)
-    if on_site(url, "primevideo.com", "amazon.com", "amazon.fr") and query.get("gti"):  # app.primevideo.com: not parsed
+    if on_site(url, "primevideo.com", "amazon.com", "amazon.fr", "amazon.de") and query.get("gti"):  # app.primevideo.com: not parsed
         return query["gti"][0]
     # These sites' links open one episode; the series page is in the path (an iPlayer episode's programme comes from
     # BBC's own programme page). From #12, by mj23au.
@@ -1622,7 +1622,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 8
+SUGGEST_MAP = 9
 
 
 async def suggest(request):
@@ -1667,6 +1667,8 @@ async def suggest(request):
             # Prefer at read time only: cache keeps Channel rows so a later-uninstalled home still leaves them.
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(),
                    "map": SUGGEST_MAP, "links": links}
+            # Read again: lookups running at once wrote their entries while this one awaited TMDB.
+            cache = read_json(TMDB_CACHE, {})
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
     try:
@@ -1816,10 +1818,10 @@ def installed_links(links: list[dict]) -> list[dict]:
 
 
 def next_sync(now: datetime) -> datetime:
-    """The next automatic sync: on the hour, every sync_every_hours of the local day."""
+    """The next automatic sync: on the hour, every sync_every_hours of the local day, the grid restarting at midnight."""
     every = int(sonarr_sync.SETTINGS["sync_every_hours"])
     local = now.astimezone(sonarr_sync.LOCAL)
-    hour = (local.hour // every + 1) * every
+    hour = min((local.hour // every + 1) * every, 24)  # an interval that does not divide 24 ends the day at midnight
     return local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=hour - local.hour)
 
 
@@ -3527,6 +3529,10 @@ def tvdb_titles(tvdb_id: int) -> dict[str, str]:
 
 
 TITLE_NUMBER = re.compile(r"(?:^|\D)(\d+)$")  # a plain title's last number: "… part 2", "… episode 2", "… 2"
+NUMBER_WORDS = ("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+                "seventeen eighteen nineteen twenty").split()
+# "… part two" ends a number too; after a tens word ("twenty one", 21) it is no number of its own
+TITLE_NUMBER_WORD = re.compile(rf"(?:^|\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety) | )({'|'.join(NUMBER_WORDS)})$")
 
 
 @functools.lru_cache(maxsize=1 << 16)  # the same pairs again at the "enough" count, each probe
@@ -3563,7 +3569,9 @@ def letters(title: str) -> collections.Counter:
 
 @functools.lru_cache(maxsize=1 << 14)
 def last_number(title: str) -> int | None:
-    return int(m[1]) if (m := TITLE_NUMBER.search(title)) else None
+    if m := TITLE_NUMBER.search(title):
+        return int(m[1])
+    return NUMBER_WORDS.index(m[2]) + 1 if (m := TITLE_NUMBER_WORD.search(title)) and not m[1] else None
 
 
 def titles_of(sonarr_eps: list[dict], tmdb_eps: list[dict], own: bool = True) -> dict[int, set]:
@@ -4444,6 +4452,9 @@ def library_guess(sonarr_path: str) -> dict | None:
             except OSError:  # a mount it may not read (/boot/efi): not there
                 found = False
             if found:
+                if re.match(r"[A-Za-z]:[\\/]", sonarr_path):  # a Windows Sonarr: its drive and separators, so the root is a prefix of its paths
+                    sep = "\\" if "\\" in sonarr_path else "/"
+                    return {"sonarr_root": sep.join(parts[:k]), "local_root": top}
                 return {"sonarr_root": "/" + "/".join(parts[1:k]), "local_root": top}
     return None
 
@@ -4594,18 +4605,54 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)\?[^\s\"']+"), r"\1?…"), (re
                (re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
-def scrubbed(text: str) -> str:
+def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
     text = no_credentials(text)
+    text = SECRET_LIKE[-1][0].sub(SECRET_LIKE[-1][1], text)  # e-mail addresses first: masking their domain would leave the name
+    for host in sorted(hosts, key=len, reverse=True):  # before the token rule: a long host label would hide the rest
+        name = re.escape(host)
+        text = re.sub(rf"host=(['\"]){name}\1(?:, port=\d+)?", "host=…", text, flags=re.I)  # urllib3's HTTPConnectionPool(host='nas', port=8786)
+        if ":" in host:  # IPv6, written in brackets
+            name = rf"\[{name}\]"
+        # a name alone ("nas", also a server's name) is masked only as an address: after // or @, with its port, or
+        # quoted in an error ("Failed to resolve 'nas'")
+        pattern = rf"(?<![\w.-]){name}(?::\d+)?(?![\w-]|\.[\w-])" if "." in host or ":" in host \
+            else rf"(?:(?<=//)|(?<=@)){name}(?::\d+)?(?![\w.-])|(?<![\w.-]){name}:\d+|(?<='){name}(?=')"
+        text = re.sub(pattern, "…", text, flags=re.I)  # host names are case-insensitive
     for pattern, by in SECRET_LIKE:
         text = pattern.sub(by, text)
     return text
+
+
+PROXY_OPTIONS = ("--proxy", "--proxy-download")
+
+
+def host_of(address: str) -> str | None:
+    try:
+        return urlparse(address.strip("\"',")).hostname
+    except ValueError:  # not an address after all: a passphrase may look like one (https://[x)
+        return None
+
+
+def hosts_in(value) -> set[str]:
+    """The host of every address (http://user:pw@host:3128) in a value, at any depth."""
+    if isinstance(value, str):
+        return {h.lower() for v in value.split() if "://" in v and (h := host_of(v))}
+    items = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
+    return set().union(*map(hosts_in, items))
+
+
+def proxy_hosts(value) -> set[str]:
+    """The hosts of the proxies given as addresses, at any depth (as no_proxy_host finds them)."""
+    if isinstance(value, dict):
+        return set().union(*[hosts_in(v) if k in PROXY_OPTIONS else proxy_hosts(v) for k, v in value.items()])
+    return set()
 
 
 def no_proxy_host(value):
     """A proxy given as an address (http://host:3128) shows as "…" at any depth (the series' options, per service,
     per Sonarr, its fallback); a provider and region (nordvpn:fr) stays: it names no machine of the user's."""
     if isinstance(value, dict):
-        return {k: "…" if k == "--proxy" and isinstance(v, str) and "://" in v else no_proxy_host(v) for k, v in value.items()}
+        return {k: "…" if k in PROXY_OPTIONS and isinstance(v, str) and "://" in v else no_proxy_host(v) for k, v in value.items()}
     return value
 
 
@@ -4625,6 +4672,10 @@ def diagnostic(run_id: str) -> str:
             settings[key] = [{k: v for k, v in i.items() if k not in ("url", "public_url", "downloads", "api_key") and not private.fullmatch(k)}
                              for i in settings[key] if isinstance(i, dict)]
     show = no_proxy_host(show)
+    # no host of the user's anywhere: the settings' addresses and the proxies the attempt went through
+    setup = card.get("setup") or {}
+    private_hosts = hosts_in(sonarr_sync.load_settings(read_config())) | proxy_hosts(config) | hosts_in([card.get("proxy"), setup.get("proxy")]) \
+        | hosts_in(re.findall(r"--proxy(?:-download)? (\S+)", str(setup.get("command") or "")))
     via = str((card.get("setup") or {}).get("via") or "")
     if via and via != "this computer" and not via.startswith("remote server"):  # another serve's host: its name only
         card = {**card, "setup": {**card["setup"], "via": via.split(" (")[0] if " (" in via else "another computer"}}
@@ -4637,7 +4688,7 @@ def diagnostic(run_id: str) -> str:
         "## The attempt", "```json", json.dumps({k: v for k, v in card.items() if k != "live"}, indent=1, ensure_ascii=False), "```",
         f"## Its log (last {len(tail)} lines)", "```", *tail, "```",
     ]
-    return scrubbed("\n".join(parts)) + "\n"
+    return scrubbed("\n".join(parts), private_hosts) + "\n"
 
 
 async def run_diagnostic(request):
@@ -4884,8 +4935,17 @@ def password_ok(password: str, stored: str) -> bool:
 
 
 def session_value(auth: dict) -> str:
-    expires = int(time.time()) + SESSION_DAYS * 86400
-    return f"{expires}.{hmac.new(auth['secret'].encode(), str(expires).encode(), 'sha256').hexdigest()}"
+    signed = f"{int(time.time()) + SESSION_DAYS * 86400}.{secrets.token_hex(8)}"  # the nonce: two sessions never share a signature
+    return f"{signed}.{hmac.new(auth['secret'].encode(), signed.encode(), 'sha256').hexdigest()}"
+
+
+def read_session(value: str) -> tuple[int, str, str] | None:
+    """(expires, what was signed, signature) of "expires.nonce.signature", or of the older "expires.signature"."""
+    signed, _, signature = value.rpartition(".")
+    expires = signed.partition(".")[0]
+    if not (expires.isascii() and expires.isdigit() and signature):
+        return None
+    return int(expires), signed, signature
 
 
 def proxy_user(request) -> str:
@@ -4905,10 +4965,11 @@ def proxy_user(request) -> str:
 
 
 def logged_in(request, auth: dict) -> bool:
-    expires, _, signature = request.cookies.get(SESSION_COOKIE, "").partition(".")
-    if not expires.isdigit() or int(expires) < time.time() or not auth.get("secret"):
+    session = read_session(request.cookies.get(SESSION_COOKIE, ""))
+    if not session or session[0] < time.time() or not auth.get("secret"):
         return False
-    expected = hmac.new(auth["secret"].encode(), expires.encode(), "sha256").hexdigest()
+    _, signed, signature = session
+    expected = hmac.new(auth["secret"].encode(), signed.encode(), "sha256").hexdigest()
     return hmac.compare_digest(signature, expected) and signature not in read_json(LOGGED_OUT_FILE, {})
 
 
@@ -4917,11 +4978,12 @@ LOGGED_OUT_FILE = sonarr_sync.DATA / "logged_out.json"  # sessions closed before
 
 def forget_session(value: str) -> None:
     """Log out for good: the cookie, copied before, is refused until it would have expired."""
-    expires, _, signature = value.partition(".")
-    if not expires.isdigit() or not signature:
+    session = read_session(value)
+    if not session:
         return
+    expires, _, signature = session
     closed = {sig: until for sig, until in read_json(LOGGED_OUT_FILE, {}).items() if until > time.time()}  # the expired ones go
-    write_atomic(LOGGED_OUT_FILE, json.dumps({**closed, signature: int(expires)}), PRIVATE)
+    write_atomic(LOGGED_OUT_FILE, json.dumps({**closed, signature: expires}), PRIVATE)
 
 
 def with_session(request, response, auth: dict):
@@ -5155,7 +5217,7 @@ async def session(request):
     if by_proxy:
         body["proxy_user"] = by_proxy
     if body["logged_in"]:  # for Settings, Account: until when, and since when the password is the same
-        body["expires"] = int(request.cookies[SESSION_COOKIE].partition(".")[0]) if logged_in(request, auth) else None
+        body["expires"] = read_session(request.cookies[SESSION_COOKIE])[0] if logged_in(request, auth) else None
         body["password_changed"] = auth.get("changed")
         body["api_key"] = {"set": bool(auth.get("api_key")), "created": auth.get("api_key_created")}
     if not body["configured"]:  # what the setup starts from; addresses and paths only with the setup code
