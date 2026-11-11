@@ -52,6 +52,7 @@ Every change worth knowing, newest first. The format follows
 - Activity no longer asks the server for the whole history again and again while a download starts or ends: one reload at a time, and its answer is drawn, so the Running list updates even when the history is slow to load.
 - A single HTTP 500 answer to a download's status check no longer cancels the download: it counts as a miss, like a 502 to 504, and the download is only given up after 12 misses in a row.
 - The diagnostic file no longer keeps the host of a proxy, Sonarr, an Unshackle server or the off-site backup, in the attempt, its command line, its cause or its log.
+- The schedule's calendar now shows an episode a service puts out days before it airs on its release day when that day is the last one on screen, instead of leaving it out until the next month is opened.
 
 ## [1.5.0] - 2026-10-17
 
