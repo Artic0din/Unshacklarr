@@ -153,6 +153,22 @@ def test_stats_add_up_the_history(tmp_path, monkeypatch):
     assert len(s["weeks"]) == 8 and sum(w["downloaded"] for w in s["weeks"]) == 3  # the one 40 days ago is 6 weeks back
 
 
+def test_stats_weeks_start_on_monday_in_the_app_s_time_zone(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo("Asia/Tokyo"))
+    now = datetime(2026, 11, 9, 3, tzinfo=timezone.utc)  # Monday 12:00 in Tokyo
+    card = lambda started: {"started": started, "ended": started, "service": "MLT", "outcome": "downloaded"}
+    # Monday 08:00 and Sunday 23:00 in Tokyo: both still Sunday in UTC
+    s = web.stats_of([card("2026-11-08T23:00:00+00:00"), card("2026-11-08T14:00:00+00:00")], now)
+    assert [(w["start"], w["downloaded"]) for w in s["weeks"][-2:]] == [("2026-11-02", 1), ("2026-11-09", 1)]
+
+
 def test_the_page_script_parses(tmp_path):
     import shutil
     import subprocess

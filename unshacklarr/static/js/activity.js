@@ -573,9 +573,9 @@ async function showStats() {
   const max = Math.max(1, ...st.weeks.map((w) => w.downloaded + w.failed + w.kept));
   const weeks = el("div", { className: "weeks", role: "img", ariaLabel: "Downloads per week, the last 8 weeks" }, ...st.weeks.map((w) => {
     const n = w.downloaded + w.failed + w.kept, h = (k) => `height:${(w[k] / max) * 130}px`;
-    return el("div", { className: "w", title: `Week of ${new Date(w.start).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
+    return el("div", { className: "w", title: `Week of ${new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
       el("span", { className: "stack" }, el("i", { className: "ok", style: h("downloaded") }), el("i", { className: "kp", style: h("kept") }), el("i", { className: "ko", style: h("failed") })),
-      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: new Date(w.start).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) })));
+      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) })));
   }));
   const table = el("table", { className: "svc-table" }, el("thead", {}, el("tr", {}, ...["Service", "Downloaded", "Failed", "Kept", "Success", "Last success", "Average"].map((t) => el("th", { textContent: t })))),
     el("tbody", {}, ...st.services.map((v) => el("tr", {}, el("td", {}, el("b", { textContent: v.service })), el("td", { textContent: v.downloaded }),
