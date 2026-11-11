@@ -137,8 +137,9 @@ def choose(yaml_file: Path, wvds: Path, prds: Path, service: str, device: str | 
         expected[key or service] = device
     # the whole mapping, not one service: a one-line `cdm: {...}` gets a second block, and YAML keeps the last
     same = {str(k): v for k, v in (after.get("cdm") or {}).items()} == expected
+    got = next((v for k, v in (after.get("cdm") or {}).items() if str(k).lower() == service.lower()), None)  # as Unshackle reads it
     others = {k: v for k, v in after.items() if k != "cdm"} == {k: v for k, v in (yaml.safe_load(text) or {}).items() if k != "cdm"}
-    if not same or not others:  # checked by reading it back: never a file Unshackle would read otherwise
+    if not same or got != device or not others:  # checked by reading it back: never a file Unshackle would read otherwise
         raise CdmError("Could not change unshackle.yaml safely: change it by hand")
     write_atomic(yaml_file, new)  # unshackle.yaml keeps its own permissions
 

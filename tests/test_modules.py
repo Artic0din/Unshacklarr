@@ -172,6 +172,9 @@ def test_a_one_line_cdm_mapping_is_never_cut_down_to_one_service(tmp_path):
                 pass
             assert conf.read_text() == before  # refused, the file untouched
             assert read(conf)["cdm"] == yaml.safe_load(line)["cdm"]  # every service keeps its device
+    conf.write_text("cdm:\n  default: l3\n  NF: l3\n  nf: l3\n")  # two spellings: removing one leaves the other in force
+    with pytest.raises(CdmError):
+        choose(conf, wvds, prds, "NF", None)
     conf.write_text("cdm:\n  default: l3\n  AMZN: l3\n")  # block style, as before
     choose(conf, wvds, prds, "NF", "l3")
     assert read(conf)["cdm"] == {"default": "l3", "AMZN": "l3", "NF": "l3"}
