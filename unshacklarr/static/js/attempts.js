@@ -99,8 +99,9 @@ function streamTerm(key, query) {
   socket.binaryType = "arraybuffer";
   let heard = false;
   socket.onmessage = (m) => { heard = true; term.write(filter(new Uint8Array(m.data))); };
-  // a proxy that does not pass WebSockets closes it with no output; a socket the page replaced or closed itself is not this
-  socket.onclose = () => { if (!heard && termSocket === socket) term.write("The output could not connect. Behind a reverse proxy, WebSockets must be allowed for Unshacklarr.\r\n"); };
+  // a proxy that does not pass WebSockets ends it abnormally with no output; a clean end (an empty log), or a socket the
+  // page replaced or closed itself, is not this
+  socket.onclose = (e) => { if (!heard && termSocket === socket && e?.code !== 1000) term.write("The output could not connect. Behind a reverse proxy, WebSockets must be allowed for Unshacklarr.\r\n"); };
 }
 function fitTerminal() {
   const dims = termFit?.proposeDimensions();  // NaN or fractional while its tab is hidden

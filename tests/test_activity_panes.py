@@ -55,7 +55,7 @@ ctx.streamTerm("run", "run=1");
 const sock = sockets[0];
 if (scenario === "output first") sock.onmessage({ data: new ArrayBuffer(1) });
 if (scenario === "replaced") { ctx.termSocket = {}; }
-sock.onclose?.();
+sock.onclose?.(scenario === "clean" ? { code: 1000 } : { code: 1006 });
 console.log(JSON.stringify(written));
 """
 
@@ -81,6 +81,10 @@ def test_terminal_says_so_when_it_closes_before_any_output():
 
 def test_terminal_stays_quiet_when_it_closes_after_output():
     assert node(TERMINAL, str(JS / "attempts.js"), "output first") == ["output"]
+
+
+def test_terminal_stays_quiet_when_the_server_ends_it_cleanly_with_no_output():
+    assert node(TERMINAL, str(JS / "attempts.js"), "clean") == []  # a cancelled episode has no log
 
 
 def test_terminal_ignores_the_close_of_a_socket_it_already_replaced():
