@@ -87,6 +87,7 @@ Every change worth knowing, newest first. The format follows
 - A download waiting to be tried again keeps its server's slot, so with a "downloads at once" limit no other job starts there while a download serve never confirmed stopped may still run.
 - A link named like an episode's download folder no longer blocks that episode's downloads: the link is removed (never what it points to) and the episode downloads.
 - Activity no longer draws older download progress over newer progress when a history reload ends.
+- Two syncs of one job (a retry beside it) both waiting for a full server no longer leave the second waiting forever once the first gets in.
 
 ## [1.5.0] - 2026-10-17
 
