@@ -4631,8 +4631,13 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)(\?[^\s\"']+)?"), lambda m: m[
                (re.compile(r"(?<![\w.+/=-])[\w.+/=-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
+QUERY_AFTER_PASSWORD = re.compile(r"(//\*\*\*@[^\s\"'/?#&=]+)[^\s\"']*[&=][^\s\"']*")
+
+
 def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
     text = no_credentials(text)
+    # a password mask that ran to an @ in the query took its ?: what follows the host there, holding & or =, is the query
+    text = QUERY_AFTER_PASSWORD.sub(r"\1…", text)
     text = SECRET_LIKE[0][0].sub(SECRET_LIKE[0][1], text)  # URL queries first: an address in a URL's path takes its "//"
     text = SECRET_LIKE[-1][0].sub(SECRET_LIKE[-1][1], text)  # then e-mail addresses: masking their domain would leave the name
     for host in sorted(hosts, key=len, reverse=True):  # before the token rule: a long host label would hide the rest

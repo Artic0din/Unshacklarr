@@ -17,10 +17,7 @@ def shared_or_private(folder: Path) -> int:
     return 0o660 if folder.stat().st_mode & 0o2020 == 0o2020 else PRIVATE
 
 
-# http://user:password@host: through the last @ before the host (a password may hold @, ? or #), the host being a
-# name and maybe a port that no query character (& = % +) or @ follows, so an @ in a query is not taken for it;
-# with no such host, through the last @ before a path, as ever
-CREDENTIALS = re.compile(r"//[^/\s]+@(?=[\w.\[\]:-]+(?:[^\w.\[\]:@&=%+-]|$))|//[^/\s]+@")
+CREDENTIALS = re.compile(r"//[^/\s]+@")  # http://user:password@host, through the last @ before a path: a password may hold @, ? or #
 
 
 def no_credentials(text) -> str:
