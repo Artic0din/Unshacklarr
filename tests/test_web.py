@@ -519,6 +519,7 @@ const core = js("core.js"), series = js("series.js"), schedule = js("schedule.js
 const code = [
   pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(core, /^let drawerSnapshot = null;$/m), pick(core, /^const drawerChanged = .*$/m),
   pick(series, /^let oneOff = null;.*?(?=^\$\("#d-join"\))/ms),
   pick(schedule, /^async function hideSeries\(.*?^\}/ms),
 ].join("\n");
@@ -532,7 +533,7 @@ const box = {
   renderHiddenButton() {}, toast() {}, S: null,
 };
 vm.createContext(box);
-vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), baseline: () => { savedConfig = configKey(S.config); } };", box);
+vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), baseline: () => { savedConfig = configKey(S.config); }, snapshot: () => { drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(S.config.series[7]) }; }, drawerChanged };", box);
 const page = box.page;
 const fresh = () => {
   box.S = { config: { settings: { theme: "dark" }, hidden_series: [], series: { 7: { service: "iV", title: "https://example.com/show" } } } };
@@ -551,6 +552,12 @@ const fresh = () => {
   fresh(); Object.assign(box.S.config.series[7], { episode_offset: 5, season_offset: 2 }); page.baseline();
   page.input("#d-offset", ""); page.input("#d-offset", "5");  // cleared and typed again: it comes back after season_offset
   out.restoredOffsetBarHidden = bars["#savebar"].hidden;
+  fresh(); Object.assign(box.S.config.series[7], { episode_offset: 5, season_offset: 2 }); page.baseline(); page.snapshot();
+  page.input("#d-offset", ""); page.input("#d-offset", "5");
+  out.restoredOffsetDrawerUnchanged = !page.drawerChanged();
+  fresh(); const before = box.S.config.hidden_series; box.S.config.hidden_series = [7]; page.dirty();
+  out.hiddenListIsNoPendingChange = bars["#savebar"].hidden;  // a Save that ran meanwhile marked the old list saved
+  box.S.config.hidden_series = before;
   fresh(); box.hiddenAfter = [7];
   await page.hideSeries({ tvdbId: 7, series: "Show" }, true);
   out.hidingLeavesBarHidden = bars["#savebar"].hidden;
@@ -585,6 +592,8 @@ def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hid
         "changeThenUndoAfterHiding": True,
         "showingLeavesBarHidden": True,
         "restoredOffsetBarHidden": True,  # the same settings, whatever the order of their keys
+        "restoredOffsetDrawerUnchanged": True,  # and closing the series asks nothing
+        "hiddenListIsNoPendingChange": True,  # saved at once by itself, never by Save
     }
 
 
@@ -1314,6 +1323,12 @@ def test_a_save_keeps_what_the_server_changed_since_the_page_loaded(tmp_path, mo
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00"}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=new_day)))
     assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("21:00", 1)
+    web.write_config({**web.read_config(), "hidden_series": [7]})  # hidden from the Schedule while the Save ran
+
+    async def stale_hidden():  # the page's list from before
+        return {"series": {"7": dict(show), "8": dict(show)}, "hidden_series": []}
+    asyncio.run(web.save_config(SimpleNamespace(json=stale_hidden)))
+    assert web.read_config()["hidden_series"] == [7]
     with web.CONFIG_LOCK:  # the sync's write waits for a Save's read and write
         learner = threading.Thread(target=web.release_learned, args=(8, "22:00", 0))
         learner.start()

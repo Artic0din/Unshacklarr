@@ -70,6 +70,7 @@ Every change worth knowing, newest first. The format follows
 - Opening Stats and then Waiting in downloads (or the other way round) while the first answer is slow no longer draws that late answer under the other title; and the Output terminal now says when it cannot connect (behind a reverse proxy that blocks WebSockets) instead of staying an empty box.
 - Added a test that saves the settings as the page received them and checks that nothing changes and no secret is sent back, including proxy credentials in service defaults and in a fallback.
 - A Save no longer writes back an older password or a revoked API key changed while it ran, and no longer erases a release time the sync learnt after the page was loaded; the sync's own writes and a Save no longer interleave.
+- Closing a series whose numbering was cleared and typed back no longer asks to save, and hiding a series from the Schedule while a Save runs is no longer undone by that Save.
 
 ## [1.5.0] - 2026-10-17
 
