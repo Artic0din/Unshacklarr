@@ -5,6 +5,7 @@ import re
 from types import SimpleNamespace
 
 import pytest
+import responses
 from aiohttp import client_exceptions
 
 
@@ -263,6 +264,106 @@ def test_a_change_the_feed_said_during_its_reload_is_reloaded_after():
 
 def test_a_reload_after_stop_still_wins_over_the_feeds_older_one():
     assert run_activity("stop")["drawn"] == [[2]]
+
+
+SAVE_BAR_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const core = js("core.js"), options = js("settings-options.js");
+const code = [
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(options, /^async function save\(\) \{.*?^\}/ms),
+  pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
+].join("\n");
+const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true } };
+let release, offsiteReply;
+const box = {
+  JSON, Object, console, current: null, currentTab: "series", boKind: null, drawerSnapshot: null,
+  $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
+  api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
+  renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
+  boWrong() {}, toast() {}, el: () => ({}), S: null,
+};
+vm.createContext(box);
+vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); } };", box);
+const page = box.api_;
+const fresh = () => {
+  box.S = { config: { settings: { theme: "dark", backup_remote: "", backup_remote_url: "" }, series: {} } };
+  page.baseline(box.S.config);
+  bars["#savebar"].hidden = bars["#d-save"].hidden = true;
+};
+(async () => {
+  const out = {};
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  let saving = page.save(); release(); await saving;
+  out.plainSaveHides = bars["#savebar"].hidden && bars["#d-save"].hidden;
+
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); box.S.config.settings.theme = "blue"; page.dirty(); release(); await saving;
+  out.editDuringSaveKeepsBar = !bars["#savebar"].hidden && !bars["#d-save"].hidden && page.state().unsaved;
+  box.S.config.settings.theme = "light"; page.dirty();  // put back as it was sent
+  out.revertToSentHides = bars["#savebar"].hidden;
+
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  offsiteReply = { settings: { backup_remote: "webdav", backup_remote_url: "https://x", backup_remote_secret_set: true, backup_passphrase_set: true }, sent: {} };
+  await page.send({ target: {} });
+  page.dirty();
+  out.offsiteKeepsOtherEdit = page.state().unsaved && !bars["#savebar"].hidden;
+  box.S.config.settings.theme = "dark"; page.dirty();
+  out.offsiteFieldsAreSaved = !page.state().unsaved;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();  // a series just added
+  saving = page.save(); release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.sinceLearnt = box.S.config.series[7].since === "2026-11-11T00:00:00+00:00" && bars["#savebar"].hidden && !page.state().unsaved;
+  saving = page.save(); release({ series: {} }); await saving;  // the next Save sends it back: the server keeps it
+  out.sinceSentBack = JSON.parse(box.sentBody).series[7].since === "2026-11-11T00:00:00+00:00";
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.S.config.series[7].service = ""; delete box.S.config.series[7].since;  // Stop pressed while the Save runs
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.stopKeepsDateCleared = box.S.config.series[7].since === undefined;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };  // opened meanwhile
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.drawerOpenedMeanwhileSeesNoChange = JSON.stringify(box.S.config.series[7]) === box.drawerSnapshot.conf;
+  box.current = null; box.drawerSnapshot = null;
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    harness = tmp_path / "harness.js"
+    harness.write_text(SAVE_BAR_HARNESS)
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "plainSaveHides": True,  # nothing changed meanwhile: the bar goes as before
+        "editDuringSaveKeepsBar": True,  # it was never sent
+        "revertToSentHides": True,  # back to what was sent is saved
+        "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
+        "offsiteFieldsAreSaved": True,
+        "sinceLearnt": True,  # the date the server stamped a new series with, kept on the page (#27)
+        "sinceSentBack": True,  # so a later Save does not stamp it again
+        "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
+        "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
+    }
 
 
 def test_season_maps_are_suggested_by_dates_else_by_order(tmp_path, monkeypatch):
@@ -1693,6 +1794,42 @@ def test_the_settings_are_backed_up_and_restored_but_never_the_password(tmp_path
     config = web.read_config()
     assert list(config["series"]) == [222] and config["auth"] == auth  # restored, the password and session kept
     assert "111" in (tmp_path / "config-before-restore.yaml").read_text()  # what it replaced, kept aside
+
+
+def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkeypatch):
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"},
+                      "settings": {"history_keep": 50}})
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+    h = {"X-Unshackle": "1"}
+    before = (tmp_path / "config.yaml").read_text()
+
+    async def restore(client, settings):
+        text = yaml.safe_dump({"settings": settings})
+        return await client.post("/api/restore", json={"password": "password1", "text": text}, headers=h)
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            refused = [await restore(client, s) for s in ({"history_keep": "lots"}, {"sync_every_hours": 0}, {"history_days": 10 ** 400})]
+            texts = [await r.text() for r in refused]
+            unchanged = (tmp_path / "config.yaml").read_text()
+            own = await (await client.post("/api/backup", json={"password": "password1"}, headers=h)).json()
+            ok = await client.post("/api/restore", json={"password": "password1", "text": own["text"]}, headers=h)
+            quoted = await restore(client, {"history_keep": "60", "history_days": "", "backup_every_days": False})  # hand-edited: a number in quotes, an empty default
+            return [r.status for r in refused], texts, unchanged, ok.status, quoted.status
+
+    statuses, texts, unchanged, ok, quoted = asyncio.run(go())
+    assert statuses == [400] * 3 and unchanged == before and ok == 200  # nothing written, the app's own backup restored
+    assert quoted == 200 and web.read_config()["settings"]["history_keep"] == 60  # stored as the number a Save would
+    assert web.read_config()["settings"]["backup_every_days"] == 0  # false: off, as a Save reads it
+    assert "history_keep" in texts[0] and "sync_every_hours" in texts[1] and "history_days" in texts[2]
 
 
 def test_an_episode_without_its_preferred_audio_is_got_again_once_it_comes(tmp_path, monkeypatch):
@@ -3377,6 +3514,39 @@ def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     assert next(s for s in web.dl_options() if s["flag"] == "--cdm")["choices"] == []  # unseen: typed by hand
     line = options.command_line({"service": "NF", "title_id": "1", "wanted": ["S01E01"], "skip_subtitle_errors": True, "cdm": "my_l3"})
     assert line == "unshackle dl --cdm my_l3 NF 1 -w S01E01"
+
+
+@pytest.mark.parametrize("action, body", [("choose", {"service": "NF", "device": "my_l3"}), ("delete", {"name": "my_l3", "kind": "Widevine"})])
+@responses.activate
+def test_a_cdm_action_makes_the_next_download_read_unshackles_config_again(tmp_path, monkeypatch, action, body):
+    # sync.no_cdm reads serve's config kept for 10 minutes: picking a device must not leave "No CDM" standing for that long
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    (tmp_path / "WVDs").mkdir()
+    (tmp_path / "PRDs").mkdir()
+    (tmp_path / "WVDs" / "my_l3.wvd").write_bytes(b"WVD\x02\x02\x01" + b"k" * 40)
+    (tmp_path / "unshackle.yaml").write_text("cdm:\n  default: other\n" if action == "delete" else "")
+    monkeypatch.setattr(web, "cdm_paths", lambda: (tmp_path / "unshackle.yaml", tmp_path / "WVDs", tmp_path / "PRDs"))
+    monkeypatch.setattr(web, "cdm_state", lambda: {})
+    web.UNSHACKLE.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
+    config = responses.get("http://backend:8786/api/config", json={"config": {"cdm": {}}})
+    assert web.UNSHACKLE.cdm_config() == {} and web.UNSHACKLE.cdm_config() == {}
+    assert config.call_count == 1  # kept
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            return (await client.post(f"/api/cdm/{action}", json=body, headers=page)).status
+
+    assert asyncio.run(go()) == 200
+    web.UNSHACKLE.cdm_config()
+    assert config.call_count == 2  # asked again
 
 
 def test_sonarr_reads_wait_as_long_as_a_busy_sonarr_answers(tmp_path, monkeypatch):
