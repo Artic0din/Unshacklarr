@@ -5,6 +5,7 @@ import re
 from types import SimpleNamespace
 
 import pytest
+import responses
 from aiohttp import client_exceptions
 
 
@@ -153,6 +154,22 @@ def test_stats_add_up_the_history(tmp_path, monkeypatch):
     assert len(s["weeks"]) == 8 and sum(w["downloaded"] for w in s["weeks"]) == 3  # the one 40 days ago is 6 weeks back
 
 
+def test_stats_weeks_start_on_monday_in_the_app_s_time_zone(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo("Asia/Tokyo"))
+    now = datetime(2026, 11, 9, 3, tzinfo=timezone.utc)  # Monday 12:00 in Tokyo
+    card = lambda started: {"started": started, "ended": started, "service": "MLT", "outcome": "downloaded"}
+    # Monday 08:00 and Sunday 23:00 in Tokyo: both still Sunday in UTC
+    s = web.stats_of([card("2026-11-08T23:00:00+00:00"), card("2026-11-08T14:00:00+00:00")], now)
+    assert [(w["start"], w["downloaded"]) for w in s["weeks"][-2:]] == [("2026-11-02", 1), ("2026-11-09", 1)]
+
+
 def test_the_page_script_parses(tmp_path):
     import shutil
     import subprocess
@@ -171,6 +188,80 @@ def test_the_page_script_parses(tmp_path):
     whole.write_text("".join((static / "js" / name).read_text() for name in scripts))
     check = subprocess.run(["node", "--check", str(whole)], capture_output=True, text=True)
     assert check.returncode == 0, check.stderr
+
+
+SAVE_BAR_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const core = js("core.js"), options = js("settings-options.js");
+const code = [
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(options, /^async function save\(\) \{.*?^\}/ms),
+  pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
+].join("\n");
+const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true } };
+let release, offsiteReply;
+const box = {
+  JSON, Object, console, current: null, currentTab: "series", boKind: null, drawerSnapshot: null,
+  $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
+  api: (url) => url === "/api/config" ? new Promise((resolve) => { release = resolve; }) : Promise.resolve(offsiteReply),
+  renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
+  boWrong() {}, toast() {}, el: () => ({}), S: null,
+};
+vm.createContext(box);
+vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); } };", box);
+const page = box.api_;
+const fresh = () => {
+  box.S = { config: { settings: { theme: "dark", backup_remote: "", backup_remote_url: "" }, series: {} } };
+  page.baseline(box.S.config);
+  bars["#savebar"].hidden = bars["#d-save"].hidden = true;
+};
+(async () => {
+  const out = {};
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  let saving = page.save(); release(); await saving;
+  out.plainSaveHides = bars["#savebar"].hidden && bars["#d-save"].hidden;
+
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); box.S.config.settings.theme = "blue"; page.dirty(); release(); await saving;
+  out.editDuringSaveKeepsBar = !bars["#savebar"].hidden && !bars["#d-save"].hidden && page.state().unsaved;
+  box.S.config.settings.theme = "light"; page.dirty();  // put back as it was sent
+  out.revertToSentHides = bars["#savebar"].hidden;
+
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  offsiteReply = { settings: { backup_remote: "webdav", backup_remote_url: "https://x", backup_remote_secret_set: true, backup_passphrase_set: true }, sent: {} };
+  await page.send({ target: {} });
+  page.dirty();
+  out.offsiteKeepsOtherEdit = page.state().unsaved && !bars["#savebar"].hidden;
+  box.S.config.settings.theme = "dark"; page.dirty();
+  out.offsiteFieldsAreSaved = !page.state().unsaved;
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    harness = tmp_path / "harness.js"
+    harness.write_text(SAVE_BAR_HARNESS)
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "plainSaveHides": True,  # nothing changed meanwhile: the bar goes as before
+        "editDuringSaveKeepsBar": True,  # it was never sent
+        "revertToSentHides": True,  # back to what was sent is saved
+        "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
+        "offsiteFieldsAreSaved": True,
+    }
 
 
 def test_season_maps_are_suggested_by_dates_else_by_order(tmp_path, monkeypatch):
@@ -264,10 +355,32 @@ def test_clearing_the_history_spares_running_downloads(tmp_path, monkeypatch):
     for rid, outcome, ended in (("a", "failed", 1), ("b", "downloaded", 1), ("c", "failed", 1), ("d", "running", None)):
         (tmp_path / f"{rid}.json").write_text(json.dumps({"id": rid, "outcome": outcome, "ended": ended}))
         (tmp_path / f"{rid}.log").write_text("x")
-    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"c"})  # still finishing
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"c", "d"})  # c still finishing, d running
     assert web.forget_runs(lambda c: c.get("outcome") != "failed") == 1
     assert sorted(p.name for p in tmp_path.iterdir()) == ["b.json", "b.log", "c.json", "c.log", "d.json", "d.log"]
-    assert web.forget_runs(lambda c: False) == 1  # b; c is active, d has not ended
+    assert web.forget_runs(lambda c: False) == 1  # b; c and d are active
+
+
+def test_an_interrupted_download_can_be_deleted_and_cleared(tmp_path, monkeypatch):
+    import asyncio
+    import json
+    from types import SimpleNamespace
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"live"})
+
+    def cards(*ids):
+        for rid in ids:
+            (tmp_path / f"{rid}.json").write_text(json.dumps({"id": rid, "outcome": None, "ended": None}))
+            (tmp_path / f"{rid}.log").write_text("x")
+
+    cards("cut", "live")  # cut: a restart ended its run without an end time
+    request = SimpleNamespace(match_info={"run_id": "20260101-000000-000000-1-S01E01"})
+    cards("20260101-000000-000000-1-S01E01")
+    assert json.loads(asyncio.run(web.delete_run(request)).text) == {"deleted": 1}
+    assert not list(tmp_path.glob("20260101-*"))
+    assert web.forget_runs(lambda c: False) == 1  # Clear all takes "cut", spares "live"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["live.json", "live.log"]
 
 
 def test_one_version_everywhere():
@@ -322,6 +435,55 @@ def test_unshackle_yaml_is_checked_kept_and_saved_with_its_permissions(tmp_path,
     kept = tmp_path / "history" / f"{answer['versions'][0]['id']}.yaml"
     assert kept.read_text().endswith("tag: T10\n") and stat.S_IMODE(kept.stat().st_mode) == 0o600  # a secret: owner only
     assert web.save_unshackle_yaml(conf, text, "serve:\n  api_secret: b\n")["restart"] is True
+
+
+def test_a_broken_unshackle_yaml_still_opens_and_saves_in_its_editor_and_the_alerts_still_go(tmp_path, monkeypatch):
+    """A syntax error in unshackle.yaml answered 500 from the editor, the one tool that fixes it, and stopped the hourly
+    check before the disk alert went out."""
+    import asyncio
+    from datetime import datetime, timezone
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path / "data"))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    conf = tmp_path / "unshackle.yaml"
+    broken = "serve:\n  api_secret: [a\ncdm:\n"
+    conf.write_text(broken)
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", str(tmp_path))
+    monkeypatch.setattr(web, "CONFIG_HISTORY", tmp_path / "history")
+    monkeypatch.setattr(web.UNSHACKLE, "configure", lambda settings: None)
+
+    async def right_password(request, password):
+        return True
+
+    monkeypatch.setattr(web, "password_try", right_password)
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+
+    told = []
+    monkeypatch.setattr(web.sonarr_sync, "free_space_problem", lambda: "Only 1.0 GB free in the downloads folder")
+    monkeypatch.setattr(web.sonarr_sync, "notify", lambda settings, level, title, message, *a, **kw: told.append(title))
+    web.check_alerts(datetime(2026, 11, 11, 12, tzinfo=timezone.utc))
+    assert told == ["The downloads folder is almost full"]
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            async def ask(action, **body):
+                answer = await client.post(f"/api/unshackle/config-file/{action}", json=body, headers={"X-Unshackle": "1"})
+                return answer.status, await answer.text()
+
+            opened = await ask("open")
+            saved = await ask("save", text="dl:\n  sub_format: srt\n", base=json.loads(opened[1])["base"])
+            conf.write_text("directories:\n  wvds: ..\n")  # not a folder next to the file
+            return opened, saved, await ask("open")
+
+    opened, saved, bad_folder = asyncio.run(go())
+    assert opened[0] == 200 and json.loads(opened[1])["text"] == broken
+    assert saved[0] == 200 and json.loads(saved[1])["saved"] is True
+    assert json.loads(saved[1])["restart"] is True  # what serve runs with was unknown: a restart is asked for
+    assert bad_folder[0] == 400 and "is not a folder next to it" in bad_folder[1]
+    assert [f.read_text() for f in (tmp_path / "history").glob("*.yaml")] == [broken]  # the broken file kept in the history
 
 
 def test_the_yaml_editor_files_are_served_and_know_unshackle_keys():
@@ -967,6 +1129,42 @@ def test_a_newer_release_is_told_and_github_out_of_reach_keeps_the_last_answer(t
     assert web.update_info() == {"version": "1.10.0", "url": "https://github.com/o/r/releases/tag/v1.10.0"}
 
 
+def test_the_backup_and_update_loops_go_on_after_any_error_and_stop_when_cancelled(tmp_path, monkeypatch, capsys):
+    import yaml
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    waits = []
+
+    async def sleep(seconds):
+        waits.append(seconds)
+        if len(waits) == 2:
+            raise asyncio.CancelledError  # shutdown
+
+    monkeypatch.setattr(web.asyncio, "sleep", sleep)
+    passes = []
+
+    def make_backup():
+        passes.append("backup")
+        raise yaml.YAMLError("bad yaml")
+
+    def check_update():
+        passes.append("update")
+        raise OSError("disk full")
+
+    for loop, name, fail, text, wait in ((web.watch_backups, "make_backup", make_backup, "bad yaml", 3600),
+                                         (web.watch_updates, "check_update", check_update, "disk full", web.UPDATE_RETRY)):
+        passes.clear()
+        waits.clear()
+        monkeypatch.setattr(web, name, fail)
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(loop())
+        assert len(passes) == 2 and waits == [wait, wait], name  # asked again after the wait
+        assert text in capsys.readouterr().out, name
+
+
 def test_an_anime_numbered_from_its_first_episode_is_found_by_its_absolute_number(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -1494,6 +1692,42 @@ def test_the_settings_are_backed_up_and_restored_but_never_the_password(tmp_path
     config = web.read_config()
     assert list(config["series"]) == [222] and config["auth"] == auth  # restored, the password and session kept
     assert "111" in (tmp_path / "config-before-restore.yaml").read_text()  # what it replaced, kept aside
+
+
+def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkeypatch):
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"},
+                      "settings": {"history_keep": 50}})
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+    h = {"X-Unshackle": "1"}
+    before = (tmp_path / "config.yaml").read_text()
+
+    async def restore(client, settings):
+        text = yaml.safe_dump({"settings": settings})
+        return await client.post("/api/restore", json={"password": "password1", "text": text}, headers=h)
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            refused = [await restore(client, s) for s in ({"history_keep": "lots"}, {"sync_every_hours": 0}, {"history_days": 10 ** 400})]
+            texts = [await r.text() for r in refused]
+            unchanged = (tmp_path / "config.yaml").read_text()
+            own = await (await client.post("/api/backup", json={"password": "password1"}, headers=h)).json()
+            ok = await client.post("/api/restore", json={"password": "password1", "text": own["text"]}, headers=h)
+            quoted = await restore(client, {"history_keep": "60", "history_days": "", "backup_every_days": False})  # hand-edited: a number in quotes, an empty default
+            return [r.status for r in refused], texts, unchanged, ok.status, quoted.status
+
+    statuses, texts, unchanged, ok, quoted = asyncio.run(go())
+    assert statuses == [400] * 3 and unchanged == before and ok == 200  # nothing written, the app's own backup restored
+    assert quoted == 200 and web.read_config()["settings"]["history_keep"] == 60  # stored as the number a Save would
+    assert web.read_config()["settings"]["backup_every_days"] == 0  # false: off, as a Save reads it
+    assert "history_keep" in texts[0] and "sync_every_hours" in texts[1] and "history_days" in texts[2]
 
 
 def test_an_episode_without_its_preferred_audio_is_got_again_once_it_comes(tmp_path, monkeypatch):
@@ -3143,6 +3377,25 @@ def test_unshacklarrs_key_is_allowed_unshackle_6s_proxies_in_its_yaml(tmp_path):
     assert yaml.safe_load(cdm.allow_proxies(mine, "abc", ["l3"], []))["serve"]["users"]["abc"] == {"devices": ["l1"], "username": "me", "server_proxy": True}
 
 
+def test_rewriting_serve_or_remote_cdm_keeps_the_comments_that_follow_it(tmp_path):
+    # the blank line and the note after a section belong to the next key: only the section itself is regenerated (#33)
+    from unshacklarr import cdm
+    import yaml
+    text = "serve:\n  api_secret: abc\n\n# note\ndl:\n  sub_format: srt\n"
+    new = cdm.allow_proxies(text, "abc", ["l3"], [])
+    assert new.endswith("\n\n# note\ndl:\n  sub_format: srt\n") and yaml.safe_load(new)["serve"]["users"]["abc"]["server_proxy"] is True
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text("remote_cdm:\n  - name: FAR\n    secret: s\n\n# note\ndl:\n  sub_format: srt\n")
+    cdm.remote_save(conf, {"name": "wv_api", "type": "widevine", "host": "https://cdm.example/", "secret": "k", "device_name": "l1"}, None)
+    assert conf.read_text().endswith("\n\n# note\ndl:\n  sub_format: srt\n")
+    assert [e["name"] for e in cdm.read(conf)["remote_cdm"]] == ["FAR", "wv_api"]
+    # a section at the end of the file, with and without a trailing blank line: rewritten as before
+    assert cdm.allow_proxies("dl:\n  a: 1\nserve:\n  api_secret: abc\n", "abc", [], []).startswith("dl:\n  a: 1\nserve:\n  api_secret: abc\n  users:")
+    conf.write_text("dl:\n  a: 1\nremote_cdm:\n  - name: FAR\n    secret: s\n\n")
+    cdm.remote_delete(conf, "FAR")
+    assert conf.read_text() == "dl:\n  a: 1\nremote_cdm: []\n\n"
+
+
 def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     # --cdm (Unshackle 6) names a device: the page offers those Unshackle has, its files and its remote CDMs; the
     # options serve alone takes stay out of the command shown
@@ -3159,6 +3412,39 @@ def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     assert next(s for s in web.dl_options() if s["flag"] == "--cdm")["choices"] == []  # unseen: typed by hand
     line = options.command_line({"service": "NF", "title_id": "1", "wanted": ["S01E01"], "skip_subtitle_errors": True, "cdm": "my_l3"})
     assert line == "unshackle dl --cdm my_l3 NF 1 -w S01E01"
+
+
+@pytest.mark.parametrize("action, body", [("choose", {"service": "NF", "device": "my_l3"}), ("delete", {"name": "my_l3", "kind": "Widevine"})])
+@responses.activate
+def test_a_cdm_action_makes_the_next_download_read_unshackles_config_again(tmp_path, monkeypatch, action, body):
+    # sync.no_cdm reads serve's config kept for 10 minutes: picking a device must not leave "No CDM" standing for that long
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    (tmp_path / "WVDs").mkdir()
+    (tmp_path / "PRDs").mkdir()
+    (tmp_path / "WVDs" / "my_l3.wvd").write_bytes(b"WVD\x02\x02\x01" + b"k" * 40)
+    (tmp_path / "unshackle.yaml").write_text("cdm:\n  default: other\n" if action == "delete" else "")
+    monkeypatch.setattr(web, "cdm_paths", lambda: (tmp_path / "unshackle.yaml", tmp_path / "WVDs", tmp_path / "PRDs"))
+    monkeypatch.setattr(web, "cdm_state", lambda: {})
+    web.UNSHACKLE.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
+    config = responses.get("http://backend:8786/api/config", json={"config": {"cdm": {}}})
+    assert web.UNSHACKLE.cdm_config() == {} and web.UNSHACKLE.cdm_config() == {}
+    assert config.call_count == 1  # kept
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            return (await client.post(f"/api/cdm/{action}", json=body, headers=page)).status
+
+    assert asyncio.run(go()) == 200
+    web.UNSHACKLE.cdm_config()
+    assert config.call_count == 2  # asked again
 
 
 def test_sonarr_reads_wait_as_long_as_a_busy_sonarr_answers(tmp_path, monkeypatch):

@@ -37,11 +37,10 @@ $("#d-release-day").replaceChildren(...RELEASE_DAYS.map((d) => el("option", { va
 /* A series' own broadcast schedule (sync.broadcast_dates, in the browser's time): episode id -> when it airs. From its
    first episode on, every one after it; its first evening always counts, then its days (or every day), so many an
    evening except the days changed on its calendar. */
-const isoLocal = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const weekday = (d) => (d.getDay() + 6) % 7;  // Monday 0, as Python counts
 function broadcastCount(plan, d, first) {
-  const regular = plan.every === "daily" || (plan.days || []).includes(weekday(d)) || isoLocal(d) === first;
-  return Number((plan.evenings || {})[isoLocal(d)] ?? (regular ? plan.per_evening || 1 : 0));
+  const regular = plan.every === "daily" || (plan.days || []).includes(weekday(d)) || isoDay(d) === first;
+  return Number((plan.evenings || {})[isoDay(d)] ?? (regular ? plan.per_evening || 1 : 0));
 }
 function broadcastDates(plan, eps) {
   const out = new Map();
@@ -91,11 +90,11 @@ function renderBroadcast() {
     } })));
   // the month: from the first evening's, one at a time
   bcMonth ??= new Date(`${plan.start}T00:00`);
-  const first = new Date(bcMonth.getFullYear(), bcMonth.getMonth(), 1), today = isoLocal(new Date());
+  const first = new Date(bcMonth.getFullYear(), bcMonth.getMonth(), 1), today = isoDay(new Date());
   const cells = [];
   for (let i = 0; i < weekday(first); i++) cells.push(el("span"));
   for (let d = new Date(first); d.getMonth() === first.getMonth(); d.setDate(d.getDate() + 1)) {
-    const iso = isoLocal(d), n = iso < plan.start ? 0 : broadcastCount(plan, d, plan.start), changed = iso in (plan.evenings || {});
+    const iso = isoDay(d), n = iso < plan.start ? 0 : broadcastCount(plan, d, plan.start), changed = iso in (plan.evenings || {});
     const usual = Number(((plan.every === "daily" || (plan.days || []).includes(weekday(d)) || iso === plan.start) ? plan.per_evening || 1 : 0));
     const say = `${n} episode${n === 1 ? "" : "s"} that day${changed ? " (changed)" : ""}: click to change`;
     cells.push(el("button", { type: "button", className: `${n ? "on" : ""}${changed ? " changed" : ""}${iso === today ? " today" : ""}`,
@@ -135,7 +134,7 @@ $("#d-bc-on").onchange = (e) => {
   if (e.target.checked) {  // a start: the next episode not on disk, tonight, at the release time or 20:00, weekly that day
     const eps = Object.values(epSeasons || {}).flat().filter((x) => x.seasonNumber > 0).sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber);
     const next = eps.find((x) => !x.hasFile) || eps[0], now = new Date();
-    conf.broadcast = { from: next ? `S${pad2(next.seasonNumber)}E${pad2(next.episodeNumber)}` : "S01E01", start: isoLocal(now),
+    conf.broadcast = { from: next ? `S${pad2(next.seasonNumber)}E${pad2(next.episodeNumber)}` : "S01E01", start: isoDay(now),
       time: conf.release_time || "20:00", every: "weekly", days: [weekday(now)], per_evening: 1, evenings: {} };
     bcMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     $("#d-bc").open = true;

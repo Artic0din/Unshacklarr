@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 import responses
+import yaml
 
 from unshacklarr.backend import Unshackle, UnshackleError
 from unshacklarr.cdm import CdmError, NO_CDM, add, choose, delete, folders, read, remote_delete, remote_save, state
@@ -154,6 +155,29 @@ def test_cdm_devices_and_unshackle_yaml_are_edited_safely(tmp_path):
     assert [e["name"] for e in read(conf)["remote_cdm"]] == ["FAR"]
     assert not (prds / "folder_sl2000").exists()
     assert (wvds / "old_l1.wvd").stat().st_mode & 0o077 == 0  # not for other users, nor its group here
+
+
+def test_a_one_line_cdm_mapping_is_never_cut_down_to_one_service(tmp_path):
+    conf = tmp_path / "unshackle.yaml"
+    wvds, prds = folders(conf)
+    add(wvds, prds, "l3.wvd", b"WVD\x02\x02\x03\x00" + b"k" * 40)
+    for line in ("cdm: {default: l3, AMZN: l3}\n", "cdm: {default: l3, AMZN: l3, NF: l3}\n"):
+        conf.write_text("# mine\n" + line + "dl:\n  sub_format: srt\n")
+        before = conf.read_text()
+        for service, device in (("NF", "l3"), ("AMZN", None), ("AMZN", NO_CDM), *([("NF", None)] if "NF: l3" in line else [])):
+            try:
+                choose(conf, wvds, prds, service, device)
+                raise AssertionError((line, service, device))
+            except CdmError:
+                pass
+            assert conf.read_text() == before  # refused, the file untouched
+            assert read(conf)["cdm"] == yaml.safe_load(line)["cdm"]  # every service keeps its device
+    conf.write_text("cdm:\n  default: l3\n  NF: l3\n  nf: l3\n")  # two spellings: removing one leaves the other in force
+    with pytest.raises(CdmError):
+        choose(conf, wvds, prds, "NF", None)
+    conf.write_text("cdm:\n  default: l3\n  AMZN: l3\n")  # block style, as before
+    choose(conf, wvds, prds, "NF", "l3")
+    assert read(conf)["cdm"] == {"default": "l3", "AMZN": "l3", "NF": "l3"}
 
 
 def test_odd_cookie_exports_are_refused_in_words(tmp_path):
@@ -317,3 +341,18 @@ def test_a_cdm_named_for_the_download_is_sent_and_its_refusal_said(tmp_path):
         raise AssertionError("refused")
     except UnshackleError as e:
         assert "cdm_overrides" in str(e)
+
+
+@responses.activate
+def test_a_restarted_local_serve_is_asked_for_its_config_again(tmp_path, monkeypatch):
+    # the config is kept 10 minutes: a restart that left it would go on refusing a download "No CDM" after a device was picked
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_mode": "local"})
+    monkeypatch.setattr(backend.local, "endpoint", lambda command: ("http://backend:8786", "test-api-secret"))
+    monkeypatch.setattr(backend.local, "restart", lambda command: None)
+    config = responses.get("http://backend:8786/api/config", json={"config": {"cdm": {}}})
+    assert backend.cdm_config() == {} and backend.cdm_config() == {}
+    assert config.call_count == 1  # kept
+    responses.replace(responses.GET, "http://backend:8786/api/config", json={"config": {"cdm": {"NF": "my_l3"}}})
+    backend.restart()
+    assert backend.cdm_config() == {"NF": "my_l3"}
