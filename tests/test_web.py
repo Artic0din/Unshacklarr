@@ -256,6 +256,8 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
         monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
         server = web.next_sync(now).astimezone(timezone.utc)
         assert server > now, zone  # a sync already past would run again every second
+        given_local = web.next_sync(now.astimezone(ZoneInfo(zone))).astimezone(timezone.utc)
+        assert given_local == server, zone  # given in the app's zone: the same instant
         page = run_page_function("nextSyncAt", now.isoformat(), every, zone)
         assert datetime.fromisoformat(page.replace("Z", "+00:00")) == server, zone
 
