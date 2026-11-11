@@ -17,6 +17,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -276,9 +277,14 @@ class Unshackle:
     def call(self, method: str, path: str, **kwargs):
         url, key = self.endpoint()
         try:
-            r = requests.request(method, f"{url}{path}", headers={"X-Secret-Key": key}, timeout=(5, 60), **kwargs)  # a server down: 5 s, not 60
+            r = requests.request(method, f"{url}{path}", headers={"X-Secret-Key": key}, timeout=(5, 60),  # a server down: 5 s, not 60
+                                 allow_redirects=False, **kwargs)  # the key is sent only where it was configured
         except requests.RequestException as e:
             raise UnshackleError(no_credentials(f"unshackle serve is unreachable at {url}: {e}")) from e
+        if r.is_redirect:
+            target = urlparse(urljoin(r.url, r.headers.get("Location", ""))).netloc.rpartition("@")[2]
+            raise UnshackleError(no_credentials(f"{url} redirects to {target or 'another address'}: use that address "
+                                                "for unshackle serve in Settings, Unshackle"))
         if r.status_code == 401:
             raise UnshackleError("unshackle serve refused the API key")
         if r.status_code == 429:  # a limit set on the key (Unshackle 6): waited for, not a lost job
@@ -300,7 +306,7 @@ class Unshackle:
         try:
             return r.json()
         except ValueError:  # a proxy's login page, or another program at this address
-            raise UnshackleError(f"{url} did not answer like unshackle serve (no JSON): is the address right?") from None
+            raise UnshackleError(no_credentials(f"{url} did not answer like unshackle serve (no JSON): is the address right?")) from None
 
     def services(self) -> list[dict]:
         """Tag, URL and help of each service, kept 10 minutes."""

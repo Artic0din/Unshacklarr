@@ -213,6 +213,34 @@ def test_an_address_that_is_not_unshackle_serve_is_said_so(monkeypatch, tmp_path
             assert "no JSON" in str(e)
 
 
+def test_the_address_of_unshackle_serve_is_masked_when_it_does_not_answer_like_serve(tmp_path):
+    import responses
+    from unshacklarr.backend import Unshackle, UnshackleError
+    u = Unshackle(tmp_path)
+    u.configure({"unshackle_mode": "remote", "unshackle_url": "http://me:pw0rd@proxy.example", "unshackle_api_key": "k"})
+    with responses.RequestsMock() as r:
+        r.get("http://me:pw0rd@proxy.example/api/health", body="<html>Log in</html>", status=200)
+        with pytest.raises(UnshackleError) as e:
+            u.health()
+    assert "pw0rd" not in str(e.value)
+    assert "no JSON" in str(e.value)
+
+
+def test_a_redirect_from_unshackle_serve_is_not_followed_and_names_the_new_host(tmp_path):
+    import responses
+    from unshacklarr.backend import Unshackle, UnshackleError
+    u = Unshackle(tmp_path)
+    u.configure({"unshackle_mode": "remote", "unshackle_url": "http://old.example", "unshackle_api_key": "k"})
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as r:
+        r.get("http://old.example/api/health", status=302, headers={"Location": "http://me:pw0rd@new.example/api/health"})
+        r.get("http://me:pw0rd@new.example/api/health", json={"status": "ok"})  # followed: the key goes there too
+        with pytest.raises(UnshackleError) as e:
+            u.health()
+        assert [c.request.url for c in r.calls] == ["http://old.example/api/health"]
+    assert "new.example" in str(e.value)
+    assert "pw0rd" not in str(e.value)
+
+
 def test_a_linked_unshackle_yaml_or_a_folder_outside_it_is_refused(tmp_path):
     secret = tmp_path / "config.yaml"
     secret.write_text("auth: {secret: s3cr3t}\n")
