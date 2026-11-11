@@ -74,6 +74,7 @@ Every change worth knowing, newest first. The format follows
 - An S3 backup bucket or folder holding a `.` or `..` folder is refused with a message instead of being uploaded under another key than the one in Settings.
 - With a "downloads at once" limit, a job whose retry runs beside it (picked with another Replace choice) no longer gives up a server's slot while one of its downloads still runs there.
 - Where clocks go back two hours (Antarctica/Troll), the automatic sync no longer runs every second for the half hour after the change.
+- Closing a series whose numbering was cleared and typed back no longer asks to save, and hiding a series from the Schedule while a Save runs is no longer undone by that Save.
 - After a Save, a release time the sync learnt meanwhile shows in the series panel, and moving a series to another service or page no longer keeps the release time learnt for the old one.
 
 ## [1.5.0] - 2026-10-17

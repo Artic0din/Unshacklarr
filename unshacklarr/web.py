@@ -1119,12 +1119,13 @@ async def save_config(request):
             "events": {k: bool((notifications.get("events") or {}).get(k, True)) for k in EVENTS},
         },
         "tmdb_countries": countries or [sonarr_sync.load_settings(previous)["country"]],
-        "hidden_series": sorted({int(i) for i in body.get("hidden_series") or []}),
+        "hidden_series": [],  # the stored list, read under the lock below: config.yaml keeps its key order
         "quality_ladders": ladders,
     }
     with CONFIG_LOCK:  # what changed on the server since the page was loaded, or during the wait on Unshackle above
         now = read_config()
         config["auth"] = now["auth"]  # a new password or a revoked API key meanwhile stays
+        config["hidden_series"] = now["hidden_series"]  # saved at once by hide_series, never by Save
         for key, show in (body.get("series") or {}).items():
             learned, saved = now["series"].get(int(key)) or {}, series.get(int(key))
             if saved is None or (learned.get("service"), str(learned.get("title"))) != (saved.get("service"), str(saved.get("title"))):
@@ -1606,11 +1607,12 @@ async def hide_series(request):
         tvdb_id = int(body.get("tvdbId"))
     except (TypeError, ValueError):
         raise web.HTTPBadRequest(text="tvdbId must be a number")
-    config = read_config()
-    hidden = set(config["hidden_series"])
-    hidden.add(tvdb_id) if body.get("hidden") else hidden.discard(tvdb_id)
-    config["hidden_series"] = sorted(hidden)
-    write_config(config)
+    with CONFIG_LOCK:  # not between a Save's read and its write
+        config = read_config()
+        hidden = set(config["hidden_series"])
+        hidden.add(tvdb_id) if body.get("hidden") else hidden.discard(tvdb_id)
+        config["hidden_series"] = sorted(hidden)
+        write_config(config)
     return web.json_response(config["hidden_series"])
 
 
