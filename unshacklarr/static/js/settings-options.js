@@ -378,8 +378,10 @@ $("#bo-send").onclick = async (e) => {
       backup_remote_user: $("#bo-user").value, backup_remote_secret: $("#bo-secret").value, backup_remote_region: $("#bo-region").value,
       backup_passphrase: $("#bo-pass").value };
     const r = await api("/api/backup/offsite", { method: "POST", body: JSON.stringify({ password: $("#bo-pw").value, settings }) });
-    for (const k of Object.keys(settings).concat(["backup_remote_secret_set", "backup_passphrase_set"])) S.config.settings[k] = r.settings[k];
-    savedConfig = configKey(S.config);  // saved on the server already: no unsaved change
+    // saved on the server already, these fields only: another unsaved edit stays unsaved
+    const saved = JSON.parse(savedConfig);
+    for (const k of Object.keys(settings).concat(["backup_remote_secret_set", "backup_passphrase_set"])) S.config.settings[k] = saved.settings[k] = r.settings[k];
+    savedConfig = JSON.stringify(saved);
     $("#bo-secret").value = $("#bo-pass").value = $("#bo-pw").value = "";
     if (r.sent.at) S.backups = { ...(S.backups || {}), offsite: r.sent };
     boKind = null;
@@ -643,13 +645,25 @@ $("#nt-form").onsubmit = (e) => {
 async function save() {
   // Drop series with no service so the file only lists what Unshackle downloads.
   const series = Object.fromEntries(Object.entries(S.config.series).filter(([, c]) => c.service));
+  // Saved is what was sent: an edit made while the request ran is not in it and stays unsaved.
+  const sent = configKey(S.config);
+  const sentDrawer = current && { id: current.tvdbId, existed: true, conf: JSON.stringify(S.config.series[current.tvdbId]) };
   // Keep S.config as is: the open editors hold references into it.
-  await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series }) });
-  unsaved = false;
-  savedConfig = configKey(S.config);
-  if (current) drawerSnapshot = { id: current.tvdbId, existed: true, conf: JSON.stringify(S.config.series[current.tvdbId]) };
-  $("#savebar").hidden = true;
-  $("#d-save").hidden = true;
+  const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series }) });
+  // The server stamps a series saved without a start date (a new one, or one stopped and set up again): kept here,
+  // or the next Save would send it without one and the server would stamp it again, skipping the episodes in between.
+  const base = JSON.parse(sent), stamped = {};
+  for (const [id, conf] of Object.entries(saved?.series || {})) {
+    if (!conf.since || !base.series[id] || base.series[id].since) continue;  // what was sent, not what the page holds now
+    base.series[id].since = stamped[id] = conf.since;
+    const now = S.config.series[id];  // stopped meanwhile (no service): its date stays cleared
+    if (now?.service && !now.since) now.since = conf.since;
+  }
+  savedConfig = JSON.stringify(base);
+  if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
+  const open = drawerSnapshot && JSON.parse(drawerSnapshot.conf || "{}");  // its drawer, open since or opened meanwhile
+  if (open && stamped[drawerSnapshot.id] && !open.since) drawerSnapshot.conf = JSON.stringify({ ...open, since: stamped[drawerSnapshot.id] });
+  dirty();
   if (currentTab === "schedule") loadSchedule();  // a series just added shows up as managed at once
   renderServiceFilter();
   renderWall();

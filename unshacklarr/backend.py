@@ -296,7 +296,8 @@ class Unshackle:
             if PROXY_REFUSED.search(message):
                 self.proxy_refused = datetime.now(timezone.utc).isoformat()
                 raise UnshackleError(PROXY_HINT)
-            raise UnshackleError(f"unshackle serve: {message.strip()[:500]}")
+            status = f"HTTP {r.status_code}: " if r.status_code >= 500 else ""  # serve's own words rarely say it
+            raise UnshackleError(f"unshackle serve: {status}{message.strip()[:500]}")
         try:
             return r.json()
         except ValueError:  # a proxy's login page, or another program at this address
@@ -337,6 +338,7 @@ class Unshackle:
         if self.mode == "remote":
             raise UnshackleError("A remote unshackle serve is restarted where it runs")
         self.local.restart(str(self.settings.get("unshackle_command") or ""))
+        self.configure(self.settings)  # a restarted serve reads unshackle.yaml afresh: so does the copy kept 10 minutes
 
     def dl_config(self) -> dict:
         """The `dl:` section of its unshackle.yaml (secrets redacted), kept 10 minutes."""

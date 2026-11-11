@@ -64,11 +64,21 @@ function followLive() {
   };
   liveFeed.onerror = () => { liveFeed?.close(); liveFeed = null; };  // polling takes over; the next load tries again
 }
+let feedReloading = false, feedMissed = null;  // a reload the feed started is on its way: the next messages wait for it
 function liveTick(data) {
   if (data === null || $("#tab-log").hidden) return;
   const live = JSON.parse(data), ids = new Set(live.map((c) => c.id));
   const known = new Set(runCards.filter((c) => isLive(c) && !c.waiting).map((c) => c.id));  // the queued aren't in the feed
-  if (live.length !== known.size || live.some((c) => !known.has(c.id))) return openActivity();  // one started or ended
+  if (live.length !== known.size || live.some((c) => !known.has(c.id))) {  // one started or ended
+    if (feedReloading) { feedMissed = data; return; }  // the feed says a change once: kept for after the reload
+    feedReloading = true;
+    return openActivity().finally(() => {
+      feedReloading = false;
+      const missed = feedMissed;
+      feedMissed = null;
+      if (missed !== null) liveTick(missed);
+    });
+  }
   runCards = runCards.map((c) => (ids.has(c.id) ? live.find((x) => x.id === c.id) : c));
   renderConsole(true);
 }
@@ -573,9 +583,9 @@ async function showStats() {
   const max = Math.max(1, ...st.weeks.map((w) => w.downloaded + w.failed + w.kept));
   const weeks = el("div", { className: "weeks", role: "img", ariaLabel: "Downloads per week, the last 8 weeks" }, ...st.weeks.map((w) => {
     const n = w.downloaded + w.failed + w.kept, h = (k) => `height:${(w[k] / max) * 130}px`;
-    return el("div", { className: "w", title: `Week of ${new Date(w.start).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
+    return el("div", { className: "w", title: `Week of ${new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
       el("span", { className: "stack" }, el("i", { className: "ok", style: h("downloaded") }), el("i", { className: "kp", style: h("kept") }), el("i", { className: "ko", style: h("failed") })),
-      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: new Date(w.start).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) })));
+      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) })));
   }));
   const table = el("table", { className: "svc-table" }, el("thead", {}, el("tr", {}, ...["Service", "Downloaded", "Failed", "Kept", "Success", "Last success", "Average"].map((t) => el("th", { textContent: t })))),
     el("tbody", {}, ...st.services.map((v) => el("tr", {}, el("td", {}, el("b", { textContent: v.service })), el("td", { textContent: v.downloaded }),

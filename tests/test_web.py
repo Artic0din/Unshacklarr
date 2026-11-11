@@ -5,6 +5,7 @@ import re
 from types import SimpleNamespace
 
 import pytest
+import responses
 from aiohttp import client_exceptions
 
 
@@ -153,6 +154,22 @@ def test_stats_add_up_the_history(tmp_path, monkeypatch):
     assert len(s["weeks"]) == 8 and sum(w["downloaded"] for w in s["weeks"]) == 3  # the one 40 days ago is 6 weeks back
 
 
+def test_stats_weeks_start_on_monday_in_the_app_s_time_zone(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo("Asia/Tokyo"))
+    now = datetime(2026, 11, 9, 3, tzinfo=timezone.utc)  # Monday 12:00 in Tokyo
+    card = lambda started: {"started": started, "ended": started, "service": "MLT", "outcome": "downloaded"}
+    # Monday 08:00 and Sunday 23:00 in Tokyo: both still Sunday in UTC
+    s = web.stats_of([card("2026-11-08T23:00:00+00:00"), card("2026-11-08T14:00:00+00:00")], now)
+    assert [(w["start"], w["downloaded"]) for w in s["weeks"][-2:]] == [("2026-11-02", 1), ("2026-11-09", 1)]
+
+
 def test_the_page_script_parses(tmp_path):
     import shutil
     import subprocess
@@ -171,6 +188,182 @@ def test_the_page_script_parses(tmp_path):
     whole.write_text("".join((static / "js" / name).read_text() for name in scripts))
     check = subprocess.run(["node", "--check", str(whole)], capture_output=True, text=True)
     assert check.returncode == 0, check.stderr
+
+
+# Runs the page's real liveTick and openActivity with a /api/runs that answers only when the test says so.
+ACTIVITY_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const ctx = {
+  scenario: process.argv[2],
+  pending: [],  // one resolver per /api/runs request not answered yet
+  drawn: [],
+  api: (url) => new Promise((resolve) => { if (url === "/api/runs") ctx.pending.push(resolve); else resolve({ items: [] }); }),
+  $: () => ({ hidden: false, textContent: "", replaceChildren() {} }),
+  failed: () => ({}), clearTimeout() {}, setTimeout() {}, setImmediate, console, activityLater() {}, followLive() {}, liveFeed: null,
+};
+vm.createContext(ctx);
+vm.runInContext(`
+let runsSeq = 0, runCards = [], runsTimer = null;
+const isLive = (c) => c.outcome === "running";
+const renderConsole = () => drawn.push(runCards.map((c) => c.id));
+${grab("openActivity")}
+let feedReloading = false, feedMissed = null;
+${grab("liveTick")}
+const tick = (ids) => liveTick(JSON.stringify(ids.map((id) => ({ id }))));
+const card = (id, outcome) => ({ id, outcome });
+const settle = () => new Promise((r) => setImmediate(r));
+(async () => {
+  if (scenario === "feed") {
+    tick([1]); tick([1]); tick([1]);  // a download started: every message still sees a mismatch
+    const inFlight = pending.length;
+    pending[0]([card(1, "running")]); await settle();
+    console.log(JSON.stringify({ inFlight, asked: pending.length, drawn }));
+  } else if (scenario === "missed") {
+    tick([1]);  // the feed's reload
+    tick([1, 2]);  // another started while it was on its way: the feed says so once, and no more while nothing moves
+    pending[0]([card(1, "running")]); await settle();  // an answer from before the second one started
+    const asked = pending.length;
+    pending[1]([card(1, "running"), card(2, "running")]); await settle();
+    console.log(JSON.stringify({ asked, drawn }));
+  } else {
+    tick([1]);  // the feed's reload
+    openActivity();  // Stop pressed meanwhile
+    pending[1]([card(2, "stopped")]); await settle();
+    pending[0]([card(1, "running")]); await settle();  // the older answer arrives last
+    console.log(JSON.stringify({ drawn }));
+  }
+})();
+`, ctx);
+"""
+
+
+def run_activity(scenario):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "activity.js"
+    out = subprocess.run(["node", "-e", ACTIVITY_HARNESS, "--", str(script), scenario], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def test_the_live_feed_has_one_history_reload_in_flight_and_draws_its_answer():
+    result = run_activity("feed")
+    assert result["inFlight"] == 1  # a slow /api/runs is not asked again by every message
+    assert result["asked"] == 1 and result["drawn"][-1] == [1]  # its answer is used, and nothing asked again
+
+
+def test_a_change_the_feed_said_during_its_reload_is_reloaded_after():
+    result = run_activity("missed")
+    assert result["asked"] == 2 and result["drawn"][-1] == [1, 2]
+
+
+def test_a_reload_after_stop_still_wins_over_the_feeds_older_one():
+    assert run_activity("stop")["drawn"] == [[2]]
+
+
+SAVE_BAR_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const core = js("core.js"), options = js("settings-options.js");
+const code = [
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(options, /^async function save\(\) \{.*?^\}/ms),
+  pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
+].join("\n");
+const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true } };
+let release, offsiteReply;
+const box = {
+  JSON, Object, console, current: null, currentTab: "series", boKind: null, drawerSnapshot: null,
+  $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
+  api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
+  renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
+  boWrong() {}, toast() {}, el: () => ({}), S: null,
+};
+vm.createContext(box);
+vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); } };", box);
+const page = box.api_;
+const fresh = () => {
+  box.S = { config: { settings: { theme: "dark", backup_remote: "", backup_remote_url: "" }, series: {} } };
+  page.baseline(box.S.config);
+  bars["#savebar"].hidden = bars["#d-save"].hidden = true;
+};
+(async () => {
+  const out = {};
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  let saving = page.save(); release(); await saving;
+  out.plainSaveHides = bars["#savebar"].hidden && bars["#d-save"].hidden;
+
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); box.S.config.settings.theme = "blue"; page.dirty(); release(); await saving;
+  out.editDuringSaveKeepsBar = !bars["#savebar"].hidden && !bars["#d-save"].hidden && page.state().unsaved;
+  box.S.config.settings.theme = "light"; page.dirty();  // put back as it was sent
+  out.revertToSentHides = bars["#savebar"].hidden;
+
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  offsiteReply = { settings: { backup_remote: "webdav", backup_remote_url: "https://x", backup_remote_secret_set: true, backup_passphrase_set: true }, sent: {} };
+  await page.send({ target: {} });
+  page.dirty();
+  out.offsiteKeepsOtherEdit = page.state().unsaved && !bars["#savebar"].hidden;
+  box.S.config.settings.theme = "dark"; page.dirty();
+  out.offsiteFieldsAreSaved = !page.state().unsaved;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();  // a series just added
+  saving = page.save(); release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.sinceLearnt = box.S.config.series[7].since === "2026-11-11T00:00:00+00:00" && bars["#savebar"].hidden && !page.state().unsaved;
+  saving = page.save(); release({ series: {} }); await saving;  // the next Save sends it back: the server keeps it
+  out.sinceSentBack = JSON.parse(box.sentBody).series[7].since === "2026-11-11T00:00:00+00:00";
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.S.config.series[7].service = ""; delete box.S.config.series[7].since;  // Stop pressed while the Save runs
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.stopKeepsDateCleared = box.S.config.series[7].since === undefined;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };  // opened meanwhile
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.drawerOpenedMeanwhileSeesNoChange = JSON.stringify(box.S.config.series[7]) === box.drawerSnapshot.conf;
+  box.current = null; box.drawerSnapshot = null;
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    harness = tmp_path / "harness.js"
+    harness.write_text(SAVE_BAR_HARNESS)
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "plainSaveHides": True,  # nothing changed meanwhile: the bar goes as before
+        "editDuringSaveKeepsBar": True,  # it was never sent
+        "revertToSentHides": True,  # back to what was sent is saved
+        "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
+        "offsiteFieldsAreSaved": True,
+        "sinceLearnt": True,  # the date the server stamped a new series with, kept on the page (#27)
+        "sinceSentBack": True,  # so a later Save does not stamp it again
+        "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
+        "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
+    }
 
 
 def test_season_maps_are_suggested_by_dates_else_by_order(tmp_path, monkeypatch):
@@ -264,10 +457,32 @@ def test_clearing_the_history_spares_running_downloads(tmp_path, monkeypatch):
     for rid, outcome, ended in (("a", "failed", 1), ("b", "downloaded", 1), ("c", "failed", 1), ("d", "running", None)):
         (tmp_path / f"{rid}.json").write_text(json.dumps({"id": rid, "outcome": outcome, "ended": ended}))
         (tmp_path / f"{rid}.log").write_text("x")
-    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"c"})  # still finishing
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"c", "d"})  # c still finishing, d running
     assert web.forget_runs(lambda c: c.get("outcome") != "failed") == 1
     assert sorted(p.name for p in tmp_path.iterdir()) == ["b.json", "b.log", "c.json", "c.log", "d.json", "d.log"]
-    assert web.forget_runs(lambda c: False) == 1  # b; c is active, d has not ended
+    assert web.forget_runs(lambda c: False) == 1  # b; c and d are active
+
+
+def test_an_interrupted_download_can_be_deleted_and_cleared(tmp_path, monkeypatch):
+    import asyncio
+    import json
+    from types import SimpleNamespace
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"live"})
+
+    def cards(*ids):
+        for rid in ids:
+            (tmp_path / f"{rid}.json").write_text(json.dumps({"id": rid, "outcome": None, "ended": None}))
+            (tmp_path / f"{rid}.log").write_text("x")
+
+    cards("cut", "live")  # cut: a restart ended its run without an end time
+    request = SimpleNamespace(match_info={"run_id": "20260101-000000-000000-1-S01E01"})
+    cards("20260101-000000-000000-1-S01E01")
+    assert json.loads(asyncio.run(web.delete_run(request)).text) == {"deleted": 1}
+    assert not list(tmp_path.glob("20260101-*"))
+    assert web.forget_runs(lambda c: False) == 1  # Clear all takes "cut", spares "live"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["live.json", "live.log"]
 
 
 def test_one_version_everywhere():
@@ -1611,6 +1826,42 @@ def test_the_settings_are_backed_up_and_restored_but_never_the_password(tmp_path
     assert "111" in (tmp_path / "config-before-restore.yaml").read_text()  # what it replaced, kept aside
 
 
+def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkeypatch):
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"},
+                      "settings": {"history_keep": 50}})
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+    h = {"X-Unshackle": "1"}
+    before = (tmp_path / "config.yaml").read_text()
+
+    async def restore(client, settings):
+        text = yaml.safe_dump({"settings": settings})
+        return await client.post("/api/restore", json={"password": "password1", "text": text}, headers=h)
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            refused = [await restore(client, s) for s in ({"history_keep": "lots"}, {"sync_every_hours": 0}, {"history_days": 10 ** 400})]
+            texts = [await r.text() for r in refused]
+            unchanged = (tmp_path / "config.yaml").read_text()
+            own = await (await client.post("/api/backup", json={"password": "password1"}, headers=h)).json()
+            ok = await client.post("/api/restore", json={"password": "password1", "text": own["text"]}, headers=h)
+            quoted = await restore(client, {"history_keep": "60", "history_days": "", "backup_every_days": False})  # hand-edited: a number in quotes, an empty default
+            return [r.status for r in refused], texts, unchanged, ok.status, quoted.status
+
+    statuses, texts, unchanged, ok, quoted = asyncio.run(go())
+    assert statuses == [400] * 3 and unchanged == before and ok == 200  # nothing written, the app's own backup restored
+    assert quoted == 200 and web.read_config()["settings"]["history_keep"] == 60  # stored as the number a Save would
+    assert web.read_config()["settings"]["backup_every_days"] == 0  # false: off, as a Save reads it
+    assert "history_keep" in texts[0] and "sync_every_hours" in texts[1] and "history_days" in texts[2]
+
+
 def test_an_episode_without_its_preferred_audio_is_got_again_once_it_comes(tmp_path, monkeypatch):
     import json
     from datetime import datetime, timedelta, timezone
@@ -2744,6 +2995,55 @@ def test_a_diagnostic_shows_no_address_folder_or_account(tmp_path, monkeypatch):
     assert "sonarr-4k" in text and '"nas"' in text and "GB" in text
 
 
+def test_a_diagnostic_holds_no_host_in_the_card_the_command_the_cause_or_the_log(tmp_path, monkeypatch):
+    # The card keeps the proxy's host (user and password masked), the cause and the log name the servers' addresses (#36)
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "proxy": "http://***@proxy.lan:3128",
+            "cause": "unshackle serve is unreachable at http://serve.lan:8786: timed out",
+            "setup": {"via": "this computer", "proxy": "http://***@10.0.0.9:3128",
+                      "command": "unshackle dl --proxy http://***@10.0.0.9:3128 ALL4 https://c4/show -w S01E01"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://sonarr.lan:8989 answered 500\nthrough nas:8786 and 10.0.0.9:3128\n"
+                                       "HTTPConnectionPool(host='nas', port=8786): Max retries exceeded; HTTPConnectionPool(host='serve.lan', port=8786)\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy": "nordvpn:fr"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://serve.lan:8786",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"}], "backup_remote_url": "https://s3.backup.example.org"}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")
+    for host in ("proxy.lan", "serve.lan", "sonarr.lan", "10.0.0.9", "nas:8786", "8786", "8989", "3128"):
+        assert host not in text, host
+    assert "unreachable at" in text and "answered 500" in text and "https://c4/show" in text and "Max retries" in text  # the rest stays
+    assert '"--proxy": "nordvpn:fr"' in text  # a provider and region names no machine of the user's
+    card["setup"]["proxy"] = "nordvpn:fr"
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    assert '"proxy": "nordvpn:fr"' in web.diagnostic("r1")
+
+
+
+def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(tmp_path, monkeypatch):
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "cause": "Failed to resolve 'nas' ([Errno 8] nodename nor servname)",
+            "setup": {"via": "this computer", "proxy": "nordvpn:fr", "command": "unshackle dl --proxy-download http://dl.proxy.lan:8080 ALL4 x"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://SONARR.LAN:8989 answered 500\nserve at http://[fd00::1234]:8786 timed out\n"
+                                     "Cannot reach sonarr.lan. Retrying, mail alice@sonarr.lan\nat http://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443/x\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy-download": "http://dl.proxy.lan:8080"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://[fd00::1234]:8786", "backup_passphrase": "https://[broken",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"},
+                                        {"name": "far", "url": "https://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443"}]}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")  # a passphrase that looks like a broken address does not stop it
+    assert "alice" not in text  # an e-mail address on a private domain is masked whole
+    for host in ("SONARR.LAN", "sonarr.lan", "fd00::1234", "dl.proxy.lan", "'nas'", "example.org", "8786", "8989", "8080", "9443"):
+        assert host not in text, host
+    assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
+
 
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):
     from unshacklarr.backend import Unshackle, UnshackleError
@@ -3258,6 +3558,25 @@ def test_unshacklarrs_key_is_allowed_unshackle_6s_proxies_in_its_yaml(tmp_path):
     assert yaml.safe_load(cdm.allow_proxies(mine, "abc", ["l3"], []))["serve"]["users"]["abc"] == {"devices": ["l1"], "username": "me", "server_proxy": True}
 
 
+def test_rewriting_serve_or_remote_cdm_keeps_the_comments_that_follow_it(tmp_path):
+    # the blank line and the note after a section belong to the next key: only the section itself is regenerated (#33)
+    from unshacklarr import cdm
+    import yaml
+    text = "serve:\n  api_secret: abc\n\n# note\ndl:\n  sub_format: srt\n"
+    new = cdm.allow_proxies(text, "abc", ["l3"], [])
+    assert new.endswith("\n\n# note\ndl:\n  sub_format: srt\n") and yaml.safe_load(new)["serve"]["users"]["abc"]["server_proxy"] is True
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text("remote_cdm:\n  - name: FAR\n    secret: s\n\n# note\ndl:\n  sub_format: srt\n")
+    cdm.remote_save(conf, {"name": "wv_api", "type": "widevine", "host": "https://cdm.example/", "secret": "k", "device_name": "l1"}, None)
+    assert conf.read_text().endswith("\n\n# note\ndl:\n  sub_format: srt\n")
+    assert [e["name"] for e in cdm.read(conf)["remote_cdm"]] == ["FAR", "wv_api"]
+    # a section at the end of the file, with and without a trailing blank line: rewritten as before
+    assert cdm.allow_proxies("dl:\n  a: 1\nserve:\n  api_secret: abc\n", "abc", [], []).startswith("dl:\n  a: 1\nserve:\n  api_secret: abc\n  users:")
+    conf.write_text("dl:\n  a: 1\nremote_cdm:\n  - name: FAR\n    secret: s\n\n")
+    cdm.remote_delete(conf, "FAR")
+    assert conf.read_text() == "dl:\n  a: 1\nremote_cdm: []\n\n"
+
+
 def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     # --cdm (Unshackle 6) names a device: the page offers those Unshackle has, its files and its remote CDMs; the
     # options serve alone takes stay out of the command shown
@@ -3274,6 +3593,39 @@ def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     assert next(s for s in web.dl_options() if s["flag"] == "--cdm")["choices"] == []  # unseen: typed by hand
     line = options.command_line({"service": "NF", "title_id": "1", "wanted": ["S01E01"], "skip_subtitle_errors": True, "cdm": "my_l3"})
     assert line == "unshackle dl --cdm my_l3 NF 1 -w S01E01"
+
+
+@pytest.mark.parametrize("action, body", [("choose", {"service": "NF", "device": "my_l3"}), ("delete", {"name": "my_l3", "kind": "Widevine"})])
+@responses.activate
+def test_a_cdm_action_makes_the_next_download_read_unshackles_config_again(tmp_path, monkeypatch, action, body):
+    # sync.no_cdm reads serve's config kept for 10 minutes: picking a device must not leave "No CDM" standing for that long
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    (tmp_path / "WVDs").mkdir()
+    (tmp_path / "PRDs").mkdir()
+    (tmp_path / "WVDs" / "my_l3.wvd").write_bytes(b"WVD\x02\x02\x01" + b"k" * 40)
+    (tmp_path / "unshackle.yaml").write_text("cdm:\n  default: other\n" if action == "delete" else "")
+    monkeypatch.setattr(web, "cdm_paths", lambda: (tmp_path / "unshackle.yaml", tmp_path / "WVDs", tmp_path / "PRDs"))
+    monkeypatch.setattr(web, "cdm_state", lambda: {})
+    web.UNSHACKLE.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
+    config = responses.get("http://backend:8786/api/config", json={"config": {"cdm": {}}})
+    assert web.UNSHACKLE.cdm_config() == {} and web.UNSHACKLE.cdm_config() == {}
+    assert config.call_count == 1  # kept
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            return (await client.post(f"/api/cdm/{action}", json=body, headers=page)).status
+
+    assert asyncio.run(go()) == 200
+    web.UNSHACKLE.cdm_config()
+    assert config.call_count == 2  # asked again
 
 
 def test_sonarr_reads_wait_as_long_as_a_busy_sonarr_answers(tmp_path, monkeypatch):
