@@ -4577,11 +4577,31 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)\?[^\s\"']+"), r"\1?…"), (re
                (re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
-def scrubbed(text: str) -> str:
+def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
     text = no_credentials(text)
     for pattern, by in SECRET_LIKE:
         text = pattern.sub(by, text)
+    for host in sorted(hosts, key=len, reverse=True):
+        # a name alone ("nas", also a server's name) is masked only as an address: after // or @, or with its port
+        name = re.escape(host)
+        pattern = rf"(?<![\w.-]){name}(?::\d+)?(?![\w.-])" if "." in host else rf"(?:(?<=//)|(?<=@)){name}(?::\d+)?(?![\w.-])|(?<![\w.-]){name}:\d+"
+        text = re.sub(pattern, "…", text)
     return text
+
+
+def hosts_in(value) -> set[str]:
+    """The host of every address (http://user:pw@host:3128) in a value, at any depth."""
+    if isinstance(value, str):
+        return {h.lower() for v in value.split() if "://" in v and (h := urlparse(v.strip("\"',")).hostname)}
+    items = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
+    return set().union(*map(hosts_in, items))
+
+
+def proxy_hosts(value) -> set[str]:
+    """The hosts of the proxies given as addresses, at any depth (as no_proxy_host finds them)."""
+    if isinstance(value, dict):
+        return set().union(*[hosts_in(v) if k == "--proxy" else proxy_hosts(v) for k, v in value.items()])
+    return set()
 
 
 def no_proxy_host(value):
@@ -4608,6 +4628,10 @@ def diagnostic(run_id: str) -> str:
             settings[key] = [{k: v for k, v in i.items() if k not in ("url", "public_url", "downloads", "api_key") and not private.fullmatch(k)}
                              for i in settings[key] if isinstance(i, dict)]
     show = no_proxy_host(show)
+    # no host of the user's anywhere: the settings' addresses and the proxies the attempt went through
+    setup = card.get("setup") or {}
+    private_hosts = hosts_in(sonarr_sync.load_settings(read_config())) | proxy_hosts(config) | hosts_in([card.get("proxy"), setup.get("proxy")]) \
+        | hosts_in(re.findall(r"--proxy (\S+)", str(setup.get("command") or "")))
     via = str((card.get("setup") or {}).get("via") or "")
     if via and via != "this computer" and not via.startswith("remote server"):  # another serve's host: its name only
         card = {**card, "setup": {**card["setup"], "via": via.split(" (")[0] if " (" in via else "another computer"}}
@@ -4620,7 +4644,7 @@ def diagnostic(run_id: str) -> str:
         "## The attempt", "```json", json.dumps({k: v for k, v in card.items() if k != "live"}, indent=1, ensure_ascii=False), "```",
         f"## Its log (last {len(tail)} lines)", "```", *tail, "```",
     ]
-    return scrubbed("\n".join(parts)) + "\n"
+    return scrubbed("\n".join(parts), private_hosts) + "\n"
 
 
 async def run_diagnostic(request):
