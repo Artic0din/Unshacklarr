@@ -539,9 +539,14 @@ def missing_episodes(now: datetime | None = None) -> list[dict]:
     return [ep for ep in episodes if not ep.get("hasFile") and ep.get("monitored", True) and ep["series"].get("monitored", True)]
 
 
+SONARR_IDS_PER_REQUEST = 200  # every id sits in the URL: a few hundred would make one a web server refuses
+
+
 def chosen_episodes(ids: list[int]):
     """Episodes picked by hand in the web page, shaped like /wanted/missing records."""
-    episodes = sonarr_get("episode", episodeIds=ids, includeSeries="true")
+    ids = list(dict.fromkeys(ids))  # one id twice, in two groups, would come back twice
+    episodes = [ep for start in range(0, len(ids), SONARR_IDS_PER_REQUEST)
+                for ep in sonarr_get("episode", episodeIds=ids[start:start + SONARR_IDS_PER_REQUEST], includeSeries="true")]
     return sorted(episodes, key=lambda e: (e["seriesId"], e["seasonNumber"], e["episodeNumber"]))
 
 
@@ -573,14 +578,15 @@ def job_episodes(episodes: list, batch: str | None):
     so an episode queued again after that starts on its own instead of being lost."""
     i = 0
     while True:
-        while batch in paused_jobs:  # paused: the one before is done, this one waits
-            time.sleep(1)
         with jobs_lock:
-            if i >= len(episodes):
+            if i >= len(episodes):  # nothing left, paused or not: the job ends
                 if batch in running_jobs:
                     running_jobs[batch]["closed"] = True
                 return
-            ep = episodes[i]
+            ep = None if batch in paused_jobs else episodes[i]
+        if ep is None:  # paused: the one before is done, this one waits
+            time.sleep(1)
+            continue
         i += 1
         yield ep
 
@@ -1981,6 +1987,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
         if not mine or out.exists():
             return False
         run = EpisodeRun(ep, show, "upgrade", service_sxxeyy)
+        got: list[Path] = []
         try:
             run.say(f"{label}: adding the {want} audio from {show['service']} to the file it has")
             request = download_request(show, config, service_sxxeyy, out)
@@ -1988,7 +1995,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
                 request.pop(k, None)
             request.update(audio_only=True, a_lang=[want])
             run_job_retrying(request, run)
-            got = videos_in(out) + [f for f in out.rglob("*.mka")]
+            got[:] = videos_in(out) + [f for f in out.rglob("*.mka")]
             if not got:
                 raise RuntimeError(f"No {want} audio came from {show['service']}")
             if len(got) > 1:
@@ -1996,7 +2003,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             lengths = [duration_of(have), duration_of(got[0])]
             if all(lengths) and abs(lengths[0] - lengths[1]) > 1:  # the same source: the same length within a second
                 raise RuntimeError(f"The {want} audio lasts {lengths[1]:.0f} s and the file {lengths[0]:.0f} s, so the audio was not added")
-            joined = out / have.name
+            joined = out / have.with_suffix(".mkv").name  # mkvmerge always writes Matroska: never under an .mp4 name
             # the downloads folder is shared: a link planted there must not make mkvmerge write through it (as finalize)
             if out.is_symlink() or joined.exists() or joined.is_symlink() or any(f.is_symlink() for f in out.rglob("*")):
                 raise RuntimeError(f"The download folder {out.name} holds a link or a file with the same name as the library's file, so the audio was not added")
@@ -2005,7 +2012,8 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             cmd = ["mkvmerge", "-q", "-o", str(joined), *mine, str(have),
                    "--no-video", "--no-subtitles", "--no-chapters", "--no-attachments", *theirs, str(got[0])]
             done = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
-            if done.returncode > 1:
+            if done.returncode not in (0, 1):  # 1: warnings only; below 0: killed by a signal
+                joined.unlink(missing_ok=True)  # a cut-short video would be offered under Waiting in downloads and replace the library's
                 raise RuntimeError(f"mkvmerge could not add the audio: {done.stdout.strip()[-300:]}")
             for f in got:
                 f.unlink(missing_ok=True)
@@ -2020,7 +2028,9 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             return True
         except (RuntimeError, JobFailed, UnshackleError, ValueError, subprocess.CalledProcessError, requests.RequestException) as e:
             run.say(f"{label}: {e}")
-            run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}")
+            for f in got:  # audio alone, maybe in a video container: Import would put it in place of the library's video
+                f.unlink(missing_ok=True)
+            run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "")
             return True  # tried: the next day's check tries again, not a second download now
         finally:
             if not videos_in(out):

@@ -5,6 +5,7 @@ import re
 from types import SimpleNamespace
 
 import pytest
+import responses
 from aiohttp import client_exceptions
 
 
@@ -1691,6 +1692,42 @@ def test_the_settings_are_backed_up_and_restored_but_never_the_password(tmp_path
     config = web.read_config()
     assert list(config["series"]) == [222] and config["auth"] == auth  # restored, the password and session kept
     assert "111" in (tmp_path / "config-before-restore.yaml").read_text()  # what it replaced, kept aside
+
+
+def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkeypatch):
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"},
+                      "settings": {"history_keep": 50}})
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+    h = {"X-Unshackle": "1"}
+    before = (tmp_path / "config.yaml").read_text()
+
+    async def restore(client, settings):
+        text = yaml.safe_dump({"settings": settings})
+        return await client.post("/api/restore", json={"password": "password1", "text": text}, headers=h)
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            refused = [await restore(client, s) for s in ({"history_keep": "lots"}, {"sync_every_hours": 0}, {"history_days": 10 ** 400})]
+            texts = [await r.text() for r in refused]
+            unchanged = (tmp_path / "config.yaml").read_text()
+            own = await (await client.post("/api/backup", json={"password": "password1"}, headers=h)).json()
+            ok = await client.post("/api/restore", json={"password": "password1", "text": own["text"]}, headers=h)
+            quoted = await restore(client, {"history_keep": "60", "history_days": "", "backup_every_days": False})  # hand-edited: a number in quotes, an empty default
+            return [r.status for r in refused], texts, unchanged, ok.status, quoted.status
+
+    statuses, texts, unchanged, ok, quoted = asyncio.run(go())
+    assert statuses == [400] * 3 and unchanged == before and ok == 200  # nothing written, the app's own backup restored
+    assert quoted == 200 and web.read_config()["settings"]["history_keep"] == 60  # stored as the number a Save would
+    assert web.read_config()["settings"]["backup_every_days"] == 0  # false: off, as a Save reads it
+    assert "history_keep" in texts[0] and "sync_every_hours" in texts[1] and "history_days" in texts[2]
 
 
 def test_an_episode_without_its_preferred_audio_is_got_again_once_it_comes(tmp_path, monkeypatch):
@@ -3386,6 +3423,39 @@ def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     assert next(s for s in web.dl_options() if s["flag"] == "--cdm")["choices"] == []  # unseen: typed by hand
     line = options.command_line({"service": "NF", "title_id": "1", "wanted": ["S01E01"], "skip_subtitle_errors": True, "cdm": "my_l3"})
     assert line == "unshackle dl --cdm my_l3 NF 1 -w S01E01"
+
+
+@pytest.mark.parametrize("action, body", [("choose", {"service": "NF", "device": "my_l3"}), ("delete", {"name": "my_l3", "kind": "Widevine"})])
+@responses.activate
+def test_a_cdm_action_makes_the_next_download_read_unshackles_config_again(tmp_path, monkeypatch, action, body):
+    # sync.no_cdm reads serve's config kept for 10 minutes: picking a device must not leave "No CDM" standing for that long
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    (tmp_path / "WVDs").mkdir()
+    (tmp_path / "PRDs").mkdir()
+    (tmp_path / "WVDs" / "my_l3.wvd").write_bytes(b"WVD\x02\x02\x01" + b"k" * 40)
+    (tmp_path / "unshackle.yaml").write_text("cdm:\n  default: other\n" if action == "delete" else "")
+    monkeypatch.setattr(web, "cdm_paths", lambda: (tmp_path / "unshackle.yaml", tmp_path / "WVDs", tmp_path / "PRDs"))
+    monkeypatch.setattr(web, "cdm_state", lambda: {})
+    web.UNSHACKLE.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
+    config = responses.get("http://backend:8786/api/config", json={"config": {"cdm": {}}})
+    assert web.UNSHACKLE.cdm_config() == {} and web.UNSHACKLE.cdm_config() == {}
+    assert config.call_count == 1  # kept
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            return (await client.post(f"/api/cdm/{action}", json=body, headers=page)).status
+
+    assert asyncio.run(go()) == 200
+    web.UNSHACKLE.cdm_config()
+    assert config.call_count == 2  # asked again
 
 
 def test_sonarr_reads_wait_as_long_as_a_busy_sonarr_answers(tmp_path, monkeypatch):
