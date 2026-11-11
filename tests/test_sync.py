@@ -3421,3 +3421,42 @@ def test_a_sync_ending_keeps_the_slot_its_batchs_other_sync_still_uses(tmp_path,
     done.set()
     first.join(5)
     assert "J" not in sync.slot_jobs["serve"]
+
+
+def test_two_syncs_of_one_batch_waiting_for_a_full_server_both_get_in(tmp_path, monkeypatch):
+    # both wait while another job holds the server: once the first takes the batch's slot, the second shares it
+    # (#114: the first sync no longer frees it while the second is counted, so a second wait would be forever)
+    import threading
+    sync = load(tmp_path, monkeypatch)
+    sync.SETTINGS["downloads_at_once"] = 1
+    run = lambda batch, rid: type("Run", (), {"card": {"batch": batch}, "id": rid, "say": lambda self, text: None})()
+    k_in, k_go = threading.Event(), threading.Event()
+    inside = {"a": threading.Event(), "b": threading.Event()}
+    leave = threading.Event()
+
+    def k():
+        with sync.download_slot("serve", run(None, "k")):
+            k_in.set()
+            k_go.wait(5)
+
+    def j(name):
+        try:
+            with sync.download_slot("serve", run("J", name)):
+                inside[name].set()
+                leave.wait(5)
+        except sync.JobFailed:
+            pass
+    threads = [threading.Thread(target=k, daemon=True)]
+    threads[0].start()
+    assert k_in.wait(5)
+    threads += [threading.Thread(target=j, args=(n,), daemon=True) for n in ("a", "b")]
+    for t in threads[1:]:
+        t.start()
+    k_go.set()  # the other job's download ends: the batch takes the slot
+    both = inside["a"].wait(6) and inside["b"].wait(6)
+    sync.stop_waiting.update({"a", "b"})
+    leave.set()
+    for t in threads:
+        t.join(6)
+    assert both
+    assert sync.slot_jobs["serve"].count("J") <= 1  # one slot for the batch, not one each
