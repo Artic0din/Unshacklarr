@@ -5,8 +5,8 @@ function nextSyncAt(now, every, zone) {
   const offset = (d) => { const p = parts(d); return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(d.getTime() / 1000) * 1000; };
   const at = parts(now), hour = Math.min((Math.floor(at.hour / every) + 1) * every, 24);  // the grid starts again at midnight
   // that wall-clock hour in the zone, as the server counts it, across a clock change too
-  const wall = Date.UTC(at.year, at.month - 1, at.day, hour), guess = new Date(wall - offset(now));
-  return new Date(wall - offset(guess));
+  const wall = Date.UTC(at.year, at.month - 1, at.day, hour), guess = new Date(wall - offset(now)), exact = new Date(wall - offset(guess));
+  return parts(exact).hour === hour % 24 ? exact : guess;  // an hour the clocks skip: the offset before them, as Python takes it
 }
 /* Settings, Automation: when the next sync comes (on the hour, every so many hours of the day), the interval as chips */
 function renderAutomation() {
