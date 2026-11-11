@@ -2902,7 +2902,7 @@ def test_the_downloads_list_is_the_queued_then_every_download_newest_first(tmp_p
             card |= {"outcome": "downloaded", "ended": "2026-10-01T10:05:00+00:00"}
         (tmp_path / f"{run_id}.json").write_text(json.dumps(card))
     monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"20261001-090000-000001-1-S01E01"})
-    queued = {"id": "waiting-9", "series": "Show", "tvdbId": 1, "sxxeyy": "S01E09", "waiting": True, "started": "2026-10-01T11:00:00+00:00"}
+    queued = {"id": "waiting-9", "series": "Show", "tvdbId": 1, "sxxeyy": "S01E09", "waiting": True, "started": "2026-10-01T08:00:00+00:00"}  # older than both: still first
     monkeypatch.setitem(web.sonarr_sync.waiting, 9, queued)
 
     async def ask():

@@ -103,8 +103,8 @@ a height that is not a whole number from 480 to 4320.
 
 ### `GET /api/v1/downloads?limit=50`
 
-Downloads: the queued ones first, then every other download, running ones included, from newest to oldest by
-start time. `limit`: 1 to 500, 50 by default.
+Downloads: the queued ones first, then every other download, running ones included, from newest to oldest (by
+when each started; a queued download cancelled before it started, by when it was cancelled). `limit`: 1 to 500, 50 by default.
 
 ```json
 [
