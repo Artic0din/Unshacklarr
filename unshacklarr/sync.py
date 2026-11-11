@@ -667,8 +667,13 @@ class EpisodeRun:
             self.take_over_failures(automatic=True)
         self.log = (RUNS_DIR / f"{self.id}.log").open("ab")
         self.raw(f"\x1b[90m── {now.astimezone(LOCAL):%a %d %b %H:%M:%S} · {kind} ──\x1b[0m\r\n".encode())
-        self.save()
-        EpisodeRun.active.add(self.id)
+        EpisodeRun.active.add(self.id)  # before its first card is saved: the history never offers a card being born for deletion
+        try:
+            self.save()
+        except BaseException:
+            EpisodeRun.active.discard(self.id)  # no card, no run
+            self.log.close()
+            raise
         current.run = self
 
     def say(self, text: str) -> None:

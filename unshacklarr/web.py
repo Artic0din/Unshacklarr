@@ -2931,14 +2931,17 @@ async def requeue(request):
 
 
 def forget_runs(keep) -> int:
-    """Delete finished attempts from the history (card and log), all but those `keep` says; never a running one."""
+    """Delete attempts from the history (card and log), all but those `keep` says; never a running one.
+
+    A card with no end that is not running was cut off by a restart: it goes like a finished one.
+    """
     gone = 0
     for card in sonarr_sync.RUNS_DIR.glob("*.json"):
         try:
             c = json.loads(card.read_text())
         except (OSError, ValueError):
             continue
-        if card.stem in sonarr_sync.EpisodeRun.active or not c.get("ended") or keep(c):
+        if card.stem in sonarr_sync.EpisodeRun.active or keep(c):
             continue
         for path in sonarr_sync.RUNS_DIR.glob(f"{card.stem}.*"):
             path.unlink(missing_ok=True)

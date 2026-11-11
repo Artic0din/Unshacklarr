@@ -264,10 +264,32 @@ def test_clearing_the_history_spares_running_downloads(tmp_path, monkeypatch):
     for rid, outcome, ended in (("a", "failed", 1), ("b", "downloaded", 1), ("c", "failed", 1), ("d", "running", None)):
         (tmp_path / f"{rid}.json").write_text(json.dumps({"id": rid, "outcome": outcome, "ended": ended}))
         (tmp_path / f"{rid}.log").write_text("x")
-    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"c"})  # still finishing
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"c", "d"})  # c still finishing, d running
     assert web.forget_runs(lambda c: c.get("outcome") != "failed") == 1
     assert sorted(p.name for p in tmp_path.iterdir()) == ["b.json", "b.log", "c.json", "c.log", "d.json", "d.log"]
-    assert web.forget_runs(lambda c: False) == 1  # b; c is active, d has not ended
+    assert web.forget_runs(lambda c: False) == 1  # b; c and d are active
+
+
+def test_an_interrupted_download_can_be_deleted_and_cleared(tmp_path, monkeypatch):
+    import asyncio
+    import json
+    from types import SimpleNamespace
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"live"})
+
+    def cards(*ids):
+        for rid in ids:
+            (tmp_path / f"{rid}.json").write_text(json.dumps({"id": rid, "outcome": None, "ended": None}))
+            (tmp_path / f"{rid}.log").write_text("x")
+
+    cards("cut", "live")  # cut: a restart ended its run without an end time
+    request = SimpleNamespace(match_info={"run_id": "20260101-000000-000000-1-S01E01"})
+    cards("20260101-000000-000000-1-S01E01")
+    assert json.loads(asyncio.run(web.delete_run(request)).text) == {"deleted": 1}
+    assert not list(tmp_path.glob("20260101-*"))
+    assert web.forget_runs(lambda c: False) == 1  # Clear all takes "cut", spares "live"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["live.json", "live.log"]
 
 
 def test_one_version_everywhere():
