@@ -42,6 +42,7 @@ function broadcastCount(plan, d, first) {
   const regular = plan.every === "daily" || (plan.days || []).includes(weekday(d)) || isoDay(d) === first;
   return Number((plan.evenings || {})[isoDay(d)] ?? (regular ? plan.per_evening || 1 : 0));
 }
+const nextBroadcastCount = (n, usual) => (n + 1) % (Math.max(usual, 3) + 1);  // 0 up to 3 or the usual number, round again
 function broadcastDates(plan, eps) {
   const out = new Map();
   if (!plan?.start || !plan.time) return out;
@@ -100,7 +101,7 @@ function renderBroadcast() {
     cells.push(el("button", { type: "button", className: `${n ? "on" : ""}${changed ? " changed" : ""}${iso === today ? " today" : ""}`,
       disabled: iso < plan.start, title: say, ariaLabel: `${d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })} · ${say}`,
       onclick: () => {
-        const next = (n + 1) % 4;  // 0, 1, 2, 3, round again
+        const next = nextBroadcastCount(n, usual);
         plan.evenings = { ...(plan.evenings || {}) };
         if (next === usual) delete plan.evenings[iso]; else plan.evenings[iso] = next;
         changedBroadcast();
