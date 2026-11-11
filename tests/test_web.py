@@ -1090,6 +1090,7 @@ def test_saving_the_config_as_the_page_got_it_changes_nothing_and_leaks_no_secre
     assert first["notifications"]["targets"] == config["notifications"]["targets"]
     hidden = [*secrets.values(), *(f"pw-{n}" for n in ("defaults", "service", "own", "series", "fallback", "sonarr"))]
     assert not [s for s in hidden if s in first_answer or s in answer]
+    assert not [s for s in (config["auth"]["password"], '"s1"', '"auth"') if s in first_answer or s in answer]  # the login stays on the server
 
 
 def test_the_api_takes_a_download_s_own_proxy_and_refuses_a_malformed_one(tmp_path, monkeypatch):
