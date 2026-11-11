@@ -1719,10 +1719,12 @@ def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkey
             unchanged = (tmp_path / "config.yaml").read_text()
             own = await (await client.post("/api/backup", json={"password": "password1"}, headers=h)).json()
             ok = await client.post("/api/restore", json={"password": "password1", "text": own["text"]}, headers=h)
-            return [r.status for r in refused], texts, unchanged, ok.status
+            quoted = await restore(client, {"history_keep": "60", "history_days": ""})  # hand-edited: a number in quotes, an empty default
+            return [r.status for r in refused], texts, unchanged, ok.status, quoted.status
 
-    statuses, texts, unchanged, ok = asyncio.run(go())
+    statuses, texts, unchanged, ok, quoted = asyncio.run(go())
     assert statuses == [400] * 3 and unchanged == before and ok == 200  # nothing written, the app's own backup restored
+    assert quoted == 200 and web.read_config()["settings"]["history_keep"] == 60  # stored as the number a Save would
     assert "history_keep" in texts[0] and "sync_every_hours" in texts[1] and "history_days" in texts[2]
 
 
