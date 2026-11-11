@@ -2286,6 +2286,7 @@ def test_schedule_shows_the_networks_own_catch_up_service(tmp_path, monkeypatch)
     assert web.network_services("ABC") == ()  # TMDB's name for the US network
     # A network another country tags as its own is not the Australian one of the same name.
     assert web.network_services("ABC Kids (US)") == () and web.network_services("ABC (US)") == ()
+    assert web.network_services("SBS (KR)") == () and web.network_services("SBS Plus (KR)") == ()
     # Its own country's tag, or any tag on a name no other country shares, is the same network.
     for name, tag in (("Seven (AU)", "SEVEN"), ("ABC Kids (AU)", "AUBC"), ("BBC One (UK)", "iP")):
         assert tag in web.network_services(name), name

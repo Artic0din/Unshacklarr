@@ -75,7 +75,7 @@ NETWORKS = {"bbc": ("iP",), "cbbc": ("iP",), "channel 4": ("ALL4", "C4"), "e4": 
             "9": ("NINE",), "9now": ("NINE",), "10": ("TEN",), "10 play": ("TEN",), "10play": ("TEN",),
             "m6": ("M6",), "w9": ("M6",), "6ter": ("M6",)}
 # A network name another country's network also uses, by its first word: the country NETWORKS means by it.
-SHARED_NETWORK_NAMES = {"abc": "au"}
+SHARED_NETWORK_NAMES = {"abc": "au", "sbs": "au"}  # ABC (US); SBS (KR), Korea's
 
 
 def provider_kind(name: str) -> str:
