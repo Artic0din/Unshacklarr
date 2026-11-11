@@ -539,9 +539,14 @@ def missing_episodes(now: datetime | None = None) -> list[dict]:
     return [ep for ep in episodes if not ep.get("hasFile") and ep.get("monitored", True) and ep["series"].get("monitored", True)]
 
 
+SONARR_IDS_PER_REQUEST = 200  # every id sits in the URL: a few hundred would make one a web server refuses
+
+
 def chosen_episodes(ids: list[int]):
     """Episodes picked by hand in the web page, shaped like /wanted/missing records."""
-    episodes = sonarr_get("episode", episodeIds=ids, includeSeries="true")
+    ids = list(dict.fromkeys(ids))  # one id twice, in two groups, would come back twice
+    episodes = [ep for start in range(0, len(ids), SONARR_IDS_PER_REQUEST)
+                for ep in sonarr_get("episode", episodeIds=ids[start:start + SONARR_IDS_PER_REQUEST], includeSeries="true")]
     return sorted(episodes, key=lambda e: (e["seriesId"], e["seasonNumber"], e["episodeNumber"]))
 
 
@@ -573,14 +578,15 @@ def job_episodes(episodes: list, batch: str | None):
     so an episode queued again after that starts on its own instead of being lost."""
     i = 0
     while True:
-        while batch in paused_jobs:  # paused: the one before is done, this one waits
-            time.sleep(1)
         with jobs_lock:
-            if i >= len(episodes):
+            if i >= len(episodes):  # nothing left, paused or not: the job ends
                 if batch in running_jobs:
                     running_jobs[batch]["closed"] = True
                 return
-            ep = episodes[i]
+            ep = None if batch in paused_jobs else episodes[i]
+        if ep is None:  # paused: the one before is done, this one waits
+            time.sleep(1)
+            continue
         i += 1
         yield ep
 
@@ -2000,7 +2006,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             lengths = [duration_of(have), duration_of(got[0])]
             if all(lengths) and abs(lengths[0] - lengths[1]) > 1:  # the same source: the same length within a second
                 raise RuntimeError(f"The {want} audio lasts {lengths[1]:.0f} s and the file {lengths[0]:.0f} s, so the audio was not added")
-            joined = out / have.name
+            joined = out / have.with_suffix(".mkv").name  # mkvmerge always writes Matroska: never under an .mp4 name
             # the downloads folder is shared: a link planted there must not make mkvmerge write through it (as finalize)
             if out.is_symlink() or joined.exists() or joined.is_symlink() or any(f.is_symlink() for f in out.rglob("*")):
                 raise RuntimeError(f"The download folder {out.name} holds a link or a file with the same name as the library's file, so the audio was not added")
@@ -2495,19 +2501,20 @@ def in_download_window(now: datetime | None = None) -> bool:
 
 
 LEARN_AFTER = 3  # episodes seen coming out at the same time before a release time is set from them
-on_release_learned = None  # web.py sets it: writes the series' release time in config.yaml
+on_release_learned = None  # web.py sets it: writes the series' release time in config.yaml, True if it wrote one
 
 
 def learn_release(ep: dict, show: dict, settings: dict) -> None:
     """A series with no release time gets one once its episodes are seen coming out at the same time (release_learn):
-    the page's suggestion, applied and told. One set by hand is never changed."""
+    the page's suggestion, applied and told once, when it was written. One set by hand is never changed."""
     if not SETTINGS.get("release_learn") or show.get("release_time") or on_release_learned is None:
         return
     tvdb = ep["series"]["tvdbId"]
     found = suggest_release([e for e in read_json(SEEN_FILE, {}).values() if e.get("tvdbId") == tvdb])
     if not found or found["episodes"] < LEARN_AFTER:
         return
-    on_release_learned(tvdb, found["time"], found["day"])
+    if not on_release_learned(tvdb, found["time"], found["day"]):  # `show` was read when the run started: a time may be stored since
+        return
     when = {0: "the day it airs", 1: "the day after"}.get(found["day"], f"{-found['day']} days before")
     notify_series(show, settings, "success", f"Release time set: {ep['series']['title']}",
            f"{found['episodes']} episodes came out on {show['service']} at {found['time']}, {when}. New episodes are now downloaded at that time. "
@@ -2885,7 +2892,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 if not run.card.get("ended"):
                     run.say(f"{job[4]}: {type(e).__name__}: {e}")
                     run.finish("failed", f"{type(e).__name__}: {e}")
-                    notify(settings, "error", f"Not imported: {job[4]}", f"{type(e).__name__}: {e}\nThe files are in {seen_by('sonarr_downloads', job[3])}.", batch=batch)
+                    notify_series(job[2], settings, "error", f"Not imported: {job[4]}", f"{type(e).__name__}: {e}\nThe files are in {seen_by('sonarr_downloads', job[3])}.", batch=batch)
             finally:
                 lock.__exit__(None, None, None)
 
