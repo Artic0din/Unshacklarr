@@ -1,17 +1,24 @@
+/* The server's next_sync (web.py): on the hour, every so many hours of the day in the app's time zone, not the browser's. */
+function nextSyncAt(now, every, zone) {
+  const at = Object.fromEntries(new Intl.DateTimeFormat("en", { timeZone: zone, hourCycle: "h23", hour: "numeric", minute: "numeric", second: "numeric" })
+    .formatToParts(now).map((p) => [p.type, Number(p.value)]));
+  const hourStart = now.getTime() - ((at.minute * 60 + at.second) * 1000 + now.getMilliseconds());
+  return new Date(hourStart + ((Math.floor(at.hour / every) + 1) * every - at.hour) * 3600000);
+}
 /* Settings, Automation: when the next sync comes (on the hour, every so many hours of the day), the interval as chips */
 function renderAutomation() {
   const select = $("[data-set=sync_every_hours]");
   if (!select) return;
   const every = Number(select.value || S.config.settings?.sync_every_hours || 2);
   document.querySelectorAll(".ax-seg button[data-hours]").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.hours) === every)));
-  const now = new Date(), next = new Date(now);
-  next.setHours((Math.floor(now.getHours() / every) + 1) * every, 0, 0, 0);
-  $("#ax-state b").textContent = `Next sync at ${time(next)}`;
+  const zone = S.config.settings?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const next = nextSyncAt(new Date(), every, zone), nextAt = time(next, zone);
+  $("#ax-state b").textContent = `Next sync at ${nextAt}`;
   $("#ax-state small").textContent = `in ${until(next)} · ${every === 24 ? "once a day" : every === 1 ? "every hour" : `every ${every} hours`}`;
   // How many a day, said in words
   const hours = Array.from({ length: Math.ceil(24 / every) }, (_, k) => k * every);
   $("#rs-sum").replaceChildren(el("b", { textContent: every === 24 ? "Once a day" : `${hours.length} syncs a day` }),
-    el("span", { textContent: `on the hour. An episode is tried at the first sync after it airs. Next sync at ${time(next)}` }));
+    el("span", { textContent: `on the hour. An episode is tried at the first sync after it airs. Next sync at ${nextAt}` }));
 
   renderReleaseTries();
 }

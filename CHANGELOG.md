@@ -48,6 +48,7 @@ Every change worth knowing, newest first. The format follows
 - Adding an audio track to an episode saved as an `.mp4` now writes a `.mkv` file, so the name matches the Matroska format and Sonarr replaces the old `.mp4`.
 - "Release time set" is now sent once, when the time is written, instead of again for every later episode of the same run.
 - A series' start date no longer moves forward each time you Save from the same open page: the page now keeps the date the server set when the series was added, so episodes aired between two Saves are no longer skipped by the automatic sync.
+- The one-off preview no longer shows an episode 00 (S01E00) when an episode offset leads before episode 1, as the sync skips it; and Settings > Automation now shows "Next sync at" in the app's time zone setting, as the sync runs, instead of the browser's. The broadcast calendar's dates still follow the browser's time zone.
 
 ## [1.5.0] - 2026-10-17
 
