@@ -2537,6 +2537,14 @@ def backup_problem(data) -> str | None:
     for key, show in (data.get("series") or {}).items():
         if not str(key).isdigit() or not isinstance(show, dict):
             return f"Its series entry {key!r} is not in the format Unshacklarr writes"
+    for key, (low, high) in NUMBER_SETTINGS.items():  # a value a Save refuses would stop the app starting, or divide by zero
+        value = (data.get("settings") or {}).get(key)
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return f"Its {key} setting must be a number"
+        if not low <= value <= high:
+            return f"Its {key} setting must be between {low} and {high}"
     return None
 
 
