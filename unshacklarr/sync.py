@@ -539,9 +539,13 @@ def missing_episodes(now: datetime | None = None) -> list[dict]:
     return [ep for ep in episodes if not ep.get("hasFile") and ep.get("monitored", True) and ep["series"].get("monitored", True)]
 
 
+SONARR_IDS_PER_REQUEST = 200  # every id sits in the URL: a few hundred would make one a web server refuses
+
+
 def chosen_episodes(ids: list[int]):
     """Episodes picked by hand in the web page, shaped like /wanted/missing records."""
-    episodes = sonarr_get("episode", episodeIds=ids, includeSeries="true")
+    episodes = [ep for start in range(0, len(ids), SONARR_IDS_PER_REQUEST)
+                for ep in sonarr_get("episode", episodeIds=ids[start:start + SONARR_IDS_PER_REQUEST], includeSeries="true")]
     return sorted(episodes, key=lambda e: (e["seriesId"], e["seasonNumber"], e["episodeNumber"]))
 
 

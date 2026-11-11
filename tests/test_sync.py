@@ -1391,6 +1391,25 @@ def test_nothing_is_downloaded_without_room_and_a_click_says_why(tmp_path, monke
     assert sync.free_space_problem() == ""
 
 
+def test_picked_episodes_are_fetched_in_groups_and_come_back_sorted(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    asked = []
+
+    def sonarr_get(path, **params):
+        asked.append(params["episodeIds"])
+        return [{"id": i, "seriesId": 7, "seasonNumber": 1 + i // 100, "episodeNumber": i % 100} for i in params["episodeIds"]]
+
+    monkeypatch.setattr(sync, "sonarr_get", sonarr_get)
+    ids = list(range(500, 0, -1))
+    picked = sync.chosen_episodes(ids)
+    assert len(asked) > 1 and all(len(group) <= sync.SONARR_IDS_PER_REQUEST for group in asked)
+    assert sorted(i for group in asked for i in group) == sorted(ids)
+    assert picked == sorted(picked, key=lambda e: (e["seriesId"], e["seasonNumber"], e["episodeNumber"])) and len(picked) == 500
+    asked.clear()
+    sync.chosen_episodes([205, 206])
+    assert asked == [[205, 206]]  # a small pick is still one request
+
+
 @responses.activate
 def test_the_missing_episodes_come_from_the_calendar_and_the_library_is_asked_once(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
