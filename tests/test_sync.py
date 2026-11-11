@@ -2781,7 +2781,9 @@ def test_a_waiting_job_gives_back_a_slot_once_its_last_download_there_ends(tmp_p
     import threading
     sync = load(tmp_path, monkeypatch)
     sync.SETTINGS["downloads_at_once"] = 1
-    run = lambda batch, rid: type("Run", (), {"card": {"batch": batch}, "id": rid, "say": lambda self, text: None})()
+    j_waits = threading.Event()
+    run = lambda batch, rid: type("Run", (), {"card": {"batch": batch}, "id": rid,
+                                               "say": lambda self, text: rid == "j2" and j_waits.set()})()
     on_a, a_done, k_has_a = threading.Event(), threading.Event(), threading.Event()
 
     def j_on_a():
@@ -2809,7 +2811,8 @@ def test_a_waiting_job_gives_back_a_slot_once_its_last_download_there_ends(tmp_p
         threads += [threading.Thread(target=f, daemon=True) for f in (j_waits_for_b, k_waits_for_a)]
         for t in threads[1:]:
             t.start()
-        a_done.set()  # J's download on A ends: J only waits now
+        assert j_waits.wait(5)  # J waits for B while its download on A still runs
+        a_done.set()  # that download ends: J only waits now
         got = k_has_a.wait(6)
         sync.stop_waiting.update({"j2", "k1"})
         for t in threads:
