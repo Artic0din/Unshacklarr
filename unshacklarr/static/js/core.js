@@ -182,7 +182,9 @@ function toast(msg, err = false, action = null) {  // action: [label, onclick], 
 let unsaved = false;
 let savedConfig = "";  // the settings as last loaded or saved: a discard that brings them back clears the bar
 // what a save sends: a series opened without a service is not part of it
-const configKey = (c) => JSON.stringify({ ...c, series: Object.fromEntries(Object.entries(c.series || {}).filter(([, x]) => x.service)) });
+// keys in order: a field cleared and typed again comes back last, and is still the same settings
+const stableJSON = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
+const configKey = (c) => stableJSON({ ...c, series: Object.fromEntries(Object.entries(c.series || {}).filter(([, x]) => x.service)) });
 function dirty() {  // a change put back as it was hides the bar again
   renderCommands();
   unsaved = configKey(S.config) !== savedConfig;

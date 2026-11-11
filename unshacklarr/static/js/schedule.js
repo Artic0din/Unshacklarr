@@ -49,7 +49,7 @@ async function hideSeries(d, hidden, quiet = false) {
   catch (e) { return toast(`Could not ${hidden ? "hide" : "show"} ${d.series}: ${e.message}`, true); }
   const saved = JSON.parse(savedConfig);  // saved already: not a change for the save bar
   saved.hidden_series = S.config.hidden_series;
-  savedConfig = JSON.stringify(saved);
+  savedConfig = stableJSON(saved);
   if (!quiet) toast(hidden ? `${d.series} hidden from the schedule` : `${d.series} is back in the schedule`, false,
     ["Undo", () => hideSeries(d, !hidden)]);
   renderHideToggle();

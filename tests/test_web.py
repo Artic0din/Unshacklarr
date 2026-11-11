@@ -272,7 +272,7 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), options = js("settings-options.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(options, /^async function save\(\) \{.*?^\}/ms),
   pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
@@ -373,7 +373,7 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), series = js("series.js"), schedule = js("schedule.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(series, /^let oneOff = null;.*?(?=^\$\("#d-join"\))/ms),
   pick(schedule, /^async function hideSeries\(.*?^\}/ms),
@@ -404,6 +404,9 @@ const fresh = () => {
     page.input(id, "");
     out[name] = shown && bars["#savebar"].hidden && bars["#d-save"].hidden;
   }
+  fresh(); Object.assign(box.S.config.series[7], { episode_offset: 5, season_offset: 2 }); page.baseline();
+  page.input("#d-offset", ""); page.input("#d-offset", "5");  // cleared and typed again: it comes back after season_offset
+  out.restoredOffsetBarHidden = bars["#savebar"].hidden;
   fresh(); box.hiddenAfter = [7];
   await page.hideSeries({ tvdbId: 7, series: "Show" }, true);
   out.hidingLeavesBarHidden = bars["#savebar"].hidden;
@@ -437,6 +440,7 @@ def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hid
         "hidingLeavesBarHidden": True,  # saved at once, so it is not a pending change
         "changeThenUndoAfterHiding": True,
         "showingLeavesBarHidden": True,
+        "restoredOffsetBarHidden": True,  # the same settings, whatever the order of their keys
     }
 
 
