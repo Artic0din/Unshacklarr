@@ -916,7 +916,9 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                 slot_active.pop(job, None)
                 slots.notify_all()  # its slots are idle now: a wait of its own elsewhere gives them back
         batch = run.card.get("batch") if run else None
-        if not batch or batch in paused_jobs:  # on its own (or the sync's), or its job paused: the slot goes with it
+        # on its own (or the sync's), or its job paused: the slot goes with it; held around it (a run between its
+        # tries, run_job_retrying): kept till that ends
+        if job not in slot_active and (not batch or batch in paused_jobs):
             release_job(job)
 
 
@@ -1205,6 +1207,12 @@ def run_job_retrying(payload: dict, run: EpisodeRun | None = None, sleep=time.sl
     hiccup (a timeout, a 502...), after 1, 3 then 10 min when serve itself did not answer; at once, without them,
     when subtitles asked for are missing. Other failures
     (not found, login, a language missing) end it."""
+    # the slot held from try to try: a download serve never confirmed stopped may still run there (#118)
+    with download_slot(backend_named(run.card.get("backend")).name or "", run) if run else contextlib.nullcontext():
+        return retrying(payload, run, sleep)
+
+
+def retrying(payload: dict, run: EpisodeRun | None, sleep) -> list[str]:
     subs_tried, tries = False, 0
     while True:
         try:

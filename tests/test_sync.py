@@ -3423,6 +3423,27 @@ def test_a_sync_ending_keeps_the_slot_its_batchs_other_sync_still_uses(tmp_path,
     assert "J" not in sync.slot_jobs["serve"]
 
 
+def test_a_run_keeps_its_slot_while_it_waits_to_try_again(tmp_path, monkeypatch):
+    # serve stopped answering, even the cancel: the download may still run there, so the slot stays held until the
+    # next try finds it (or the run gives up), and no other job starts there meanwhile (#118)
+    sync = load(tmp_path, monkeypatch)
+    run = type("Run", (), {"card": {}, "id": "r1", "say": lambda self, text: None, "save": lambda self: None})()
+    tries = []
+
+    def run_job(payload, run=None, job_id=None):
+        tries.append(job_id)
+        if len(tries) == 1:
+            run.card["unconfirmed_job"] = {"backend": "", "job_id": "j1"}
+            raise sync.UnshackleError(f"{sync.UNREACHABLE} at http://serve: timed out")
+        return ["/downloads/x.mkv"]
+    held = []
+    monkeypatch.setattr(sync, "run_job", run_job)
+    monkeypatch.setattr(sync, "unconfirmed_still_on", lambda run: (run.card.get("unconfirmed_job") or {}).get("job_id"))
+    assert sync.run_job_retrying({}, run, sleep=lambda s: held.append("r1" in sync.slot_jobs.get("", []))) == ["/downloads/x.mkv"]
+    assert held == [True] and tries == [None, "j1"]  # held while it waited, then the same job followed again
+    assert "r1" not in sync.slot_jobs.get("", [])  # done: the slot goes
+
+
 def test_two_syncs_of_one_batch_waiting_for_a_full_server_both_get_in(tmp_path, monkeypatch):
     # both wait while another job holds the server: once the first takes the batch's slot, the second shares it
     # (#114: the first sync no longer frees it while the second is counted, so a second wait would be forever)
