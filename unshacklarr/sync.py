@@ -3001,7 +3001,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 continue  # the episode offset puts it before the service's first episode
             out = episode_folder(ep)
             if out.is_symlink():  # a link named like ours (another writer of the shared folder): never downloaded through,
-                out.unlink()      # never taken for a download that waits; the link alone goes, not what it points to (#117)
+                out.unlink(missing_ok=True)  # never taken for one that waits; the link alone goes, not its target (#117)
                 print(f"{label}: {out.name} in the downloads folder was a link, removed", flush=True)
             if out.exists() and videos_in(out):  # an empty folder (its file gone, or none made) blocks nothing (#10)
                 print(f"{label}: already in the downloads folder ({out.name}), waiting for Sonarr to import it")
