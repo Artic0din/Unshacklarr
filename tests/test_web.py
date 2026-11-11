@@ -31,6 +31,26 @@ def test_unreachable_is_notified_once_after_two_checks_then_back(tmp_path, monke
     assert sent == [("error", "Unshackle is unreachable"), ("success", "Unshackle is back")]
 
 
+def test_a_local_unshackle_that_cannot_start_is_down_and_the_other_states_still_refresh(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    command = tmp_path / ".venv" / "bin" / "unshackle"
+    command.parent.mkdir(parents=True)
+    command.write_text(f"#!{tmp_path}/no-such-python\n")  # its Python is gone
+    command.chmod(0o755)
+    web.UNSHACKLE.configure({"unshackle_mode": "local", "unshackle_command": str(command)})
+    monkeypatch.setattr(web, "sonarr_health", lambda: {"ok": True, "version": "4.0"})
+
+    web.check_health()
+
+    assert web.health["unshackle"]["ok"] is False
+    assert "no-such-python" in web.health["unshackle"]["error"]
+    assert web.health["sonarr"]["ok"] is True
+
+
 def test_the_unshackle_test_needs_the_setup_code_before_the_setup(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer
@@ -190,6 +210,82 @@ def test_the_page_script_parses(tmp_path):
     assert check.returncode == 0, check.stderr
 
 
+# Runs the page's real liveTick and openActivity with a /api/runs that answers only when the test says so.
+ACTIVITY_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const ctx = {
+  scenario: process.argv[2],
+  pending: [],  // one resolver per /api/runs request not answered yet
+  drawn: [],
+  api: (url) => new Promise((resolve) => { if (url === "/api/runs") ctx.pending.push(resolve); else resolve({ items: [] }); }),
+  $: () => ({ hidden: false, textContent: "", replaceChildren() {} }),
+  failed: () => ({}), clearTimeout() {}, setTimeout() {}, setImmediate, console, activityLater() {}, followLive() {}, liveFeed: null,
+};
+vm.createContext(ctx);
+vm.runInContext(`
+let runsSeq = 0, runCards = [], runsTimer = null;
+const isLive = (c) => c.outcome === "running";
+const renderConsole = () => drawn.push(runCards.map((c) => c.id));
+${grab("openActivity")}
+let feedReloading = false, feedMissed = null;
+${grab("liveTick")}
+const tick = (ids) => liveTick(JSON.stringify(ids.map((id) => ({ id }))));
+const card = (id, outcome) => ({ id, outcome });
+const settle = () => new Promise((r) => setImmediate(r));
+(async () => {
+  if (scenario === "feed") {
+    tick([1]); tick([1]); tick([1]);  // a download started: every message still sees a mismatch
+    const inFlight = pending.length;
+    pending[0]([card(1, "running")]); await settle();
+    console.log(JSON.stringify({ inFlight, asked: pending.length, drawn }));
+  } else if (scenario === "missed") {
+    tick([1]);  // the feed's reload
+    tick([1, 2]);  // another started while it was on its way: the feed says so once, and no more while nothing moves
+    pending[0]([card(1, "running")]); await settle();  // an answer from before the second one started
+    const asked = pending.length;
+    pending[1]([card(1, "running"), card(2, "running")]); await settle();
+    console.log(JSON.stringify({ asked, drawn }));
+  } else {
+    tick([1]);  // the feed's reload
+    openActivity();  // Stop pressed meanwhile
+    pending[1]([card(2, "stopped")]); await settle();
+    pending[0]([card(1, "running")]); await settle();  // the older answer arrives last
+    console.log(JSON.stringify({ drawn }));
+  }
+})();
+`, ctx);
+"""
+
+
+def run_activity(scenario):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "activity.js"
+    out = subprocess.run(["node", "-e", ACTIVITY_HARNESS, "--", str(script), scenario], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def test_the_live_feed_has_one_history_reload_in_flight_and_draws_its_answer():
+    result = run_activity("feed")
+    assert result["inFlight"] == 1  # a slow /api/runs is not asked again by every message
+    assert result["asked"] == 1 and result["drawn"][-1] == [1]  # its answer is used, and nothing asked again
+
+
+def test_a_change_the_feed_said_during_its_reload_is_reloaded_after():
+    result = run_activity("missed")
+    assert result["asked"] == 2 and result["drawn"][-1] == [1, 2]
+
+
+def test_a_reload_after_stop_still_wins_over_the_feeds_older_one():
+    assert run_activity("stop")["drawn"] == [[2]]
+
+
 SAVE_BAR_HARNESS = r"""
 const fs = require("fs"), vm = require("vm");
 const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
@@ -206,7 +302,7 @@ let release, offsiteReply;
 const box = {
   JSON, Object, console, current: null, currentTab: "series", boKind: null, drawerSnapshot: null,
   $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
-  api: (url) => url === "/api/config" ? new Promise((resolve) => { release = resolve; }) : Promise.resolve(offsiteReply),
+  api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
   renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
   boWrong() {}, toast() {}, el: () => ({}), S: null,
 };
@@ -237,6 +333,28 @@ const fresh = () => {
   out.offsiteKeepsOtherEdit = page.state().unsaved && !bars["#savebar"].hidden;
   box.S.config.settings.theme = "dark"; page.dirty();
   out.offsiteFieldsAreSaved = !page.state().unsaved;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();  // a series just added
+  saving = page.save(); release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.sinceLearnt = box.S.config.series[7].since === "2026-11-11T00:00:00+00:00" && bars["#savebar"].hidden && !page.state().unsaved;
+  saving = page.save(); release({ series: {} }); await saving;  // the next Save sends it back: the server keeps it
+  out.sinceSentBack = JSON.parse(box.sentBody).series[7].since === "2026-11-11T00:00:00+00:00";
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.S.config.series[7].service = ""; delete box.S.config.series[7].since;  // Stop pressed while the Save runs
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.stopKeepsDateCleared = box.S.config.series[7].since === undefined;
+
+  fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();
+  saving = page.save();
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };  // opened meanwhile
+  release({ series: { 7: { service: "iV", title: "https://example.com/show", since: "2026-11-11T00:00:00+00:00" } } });
+  await saving;
+  out.drawerOpenedMeanwhileSeesNoChange = JSON.stringify(box.S.config.series[7]) === box.drawerSnapshot.conf;
+  box.current = null; box.drawerSnapshot = null;
   console.log(JSON.stringify(out));
 })();
 """
@@ -261,6 +379,10 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "revertToSentHides": True,  # back to what was sent is saved
         "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
         "offsiteFieldsAreSaved": True,
+        "sinceLearnt": True,  # the date the server stamped a new series with, kept on the page (#27)
+        "sinceSentBack": True,  # so a later Save does not stamp it again
+        "stopKeepsDateCleared": True,  # a Stop made while the Save ran is not undone by its answer
+        "drawerOpenedMeanwhileSeesNoChange": True,  # closing it does not ask to discard the stamped date
     }
 
 
@@ -1540,6 +1662,59 @@ def test_suggest_network_falls_back_to_the_cached_tmdb_network(tmp_path, monkeyp
     assert web.series_network("1", "") == ""
 
 
+def suggest_module(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    monkeypatch.setattr(web, "searched_in_place", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "named_titles", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "series_network", lambda tmdb_id, given: "")
+    return web
+
+
+def ask_suggest(web, tmdb_id):
+    from types import SimpleNamespace
+    return web.suggest(SimpleNamespace(match_info={"tmdb_id": str(tmdb_id)}, query={}))
+
+
+def test_suggestions_looked_up_at_once_all_stay_cached(tmp_path, monkeypatch):
+    import threading
+    web = suggest_module(tmp_path, monkeypatch)
+    both_asking = threading.Barrier(2, timeout=5)  # each waits inside its TMDB request for the other
+
+    def tmdb_links(tmdb_id, country, domains):
+        both_asking.wait()
+        return [{"service": "TEN", "url": f"https://10.com.au/{tmdb_id}", "country": country, "kind": "native"}]
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    async def go():
+        await asyncio.gather(ask_suggest(web, 1), ask_suggest(web, 2))
+
+    asyncio.run(go())
+    assert sorted(json.loads(web.TMDB_CACHE.read_text())) == ["1", "2"]
+
+
+def test_a_failed_suggestion_lookup_keeps_the_cached_entry(tmp_path, monkeypatch):
+    web = suggest_module(tmp_path, monkeypatch)
+    old = {"countries": ["AU"], "checked": "2020-01-01T00:00:00+00:00", "map": web.SUGGEST_MAP,
+           "links": [{"service": "TEN", "url": "https://10.com.au/1", "country": "AU", "kind": "native"}]}
+    web.TMDB_CACHE.write_text(json.dumps({"1": old}))
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    def tmdb_links(tmdb_id, country, domains):
+        raise web.requests.ConnectionError("down")
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    reply = asyncio.run(ask_suggest(web, 1))
+    assert json.loads(reply.text)["checked"] == old["checked"]
+    assert json.loads(web.TMDB_CACHE.read_text()) == {"1": old}
+
+
 def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -1553,6 +1728,36 @@ def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
             raise AssertionError(f"expected {bad!r} to be refused")
         except web.web.HTTPBadRequest as e:
             assert "language code" in e.text
+
+
+def test_the_sync_grid_restarts_at_local_midnight_every_day(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    paris = ZoneInfo("Europe/Paris")
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", paris)
+
+    def next_at(every, *when):
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        return web.next_sync(datetime(*when, tzinfo=paris)).strftime("%m-%d %H:%M")
+
+    assert next_at(5, 2026, 10, 5, 21, 30) == "10-06 00:00"  # the last gap is short: midnight, not 01:00
+    assert next_at(5, 2026, 10, 5, 20, 0) == "10-06 00:00" and next_at(5, 2026, 10, 5, 4, 59) == "10-05 05:00"
+    assert next_at(23, 2026, 10, 5, 22, 0) == "10-05 23:00" and next_at(23, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(2, 2026, 10, 5, 21, 30) == "10-05 22:00" and next_at(2, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(24, 2026, 10, 5, 0, 0) == "10-06 00:00" and next_at(24, 2026, 10, 5, 23, 59) == "10-06 00:00"
+
+    for every, slots in ((2, 12), (5, 5), (23, 2)):  # a clock change leaves no slot of the day without its sync
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        for day in ((2026, 3, 29), (2026, 10, 25), (2026, 10, 5)):
+            now, end, runs = datetime(*day, tzinfo=paris), datetime(*day, tzinfo=paris) + timedelta(days=1), 0
+            while (now := web.next_sync(now)) < end:
+                runs += 1
+            assert runs == slots - 1, (every, day)
 
 
 def test_a_series_is_checked_hours_before_its_release_and_told_once(tmp_path, monkeypatch):
@@ -2107,9 +2312,17 @@ def test_episode_links_are_taken_back_to_their_series(tmp_path, monkeypatch):
         # 7plus: SEVEN fetches just the ?episode-id= episode; the show is the path
         "https://7plus.com.au/9-1-1?episode-id=NINO09-001": "https://7plus.com.au/9-1-1",
         "https://7plus.com.au/highway-patrol": "https://7plus.com.au/highway-patrol",
+        # Amazon's sites all reduce to the title id, so one title found on two of them is one suggestion
+        "https://www.amazon.de/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.com/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.amazon.fr/gp/video/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
+        "https://www.primevideo.com/detail?gti=amzn1.dv.gti.x": "amzn1.dv.gti.x",
     }
     for given, series in cases.items():
         assert web.series_title(given) == series, given
+    de, com = ({"service": "AMZN", "url": web.series_title(f"https://www.amazon.{tld}/gp/video/detail?gti=amzn1.dv.gti.x"),
+                "country": country, "kind": "native"} for tld, country in (("de", "DE"), ("com", "US")))
+    assert len(web.merge_countries([[de], [com]])) == 1
 
     class Page:
         def __init__(self, data):
@@ -2863,6 +3076,55 @@ def test_a_diagnostic_shows_no_address_folder_or_account(tmp_path, monkeypatch):
     assert "sonarr-4k" in text and '"nas"' in text and "GB" in text
 
 
+def test_a_diagnostic_holds_no_host_in_the_card_the_command_the_cause_or_the_log(tmp_path, monkeypatch):
+    # The card keeps the proxy's host (user and password masked), the cause and the log name the servers' addresses (#36)
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "proxy": "http://***@proxy.lan:3128",
+            "cause": "unshackle serve is unreachable at http://serve.lan:8786: timed out",
+            "setup": {"via": "this computer", "proxy": "http://***@10.0.0.9:3128",
+                      "command": "unshackle dl --proxy http://***@10.0.0.9:3128 ALL4 https://c4/show -w S01E01"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://sonarr.lan:8989 answered 500\nthrough nas:8786 and 10.0.0.9:3128\n"
+                                       "HTTPConnectionPool(host='nas', port=8786): Max retries exceeded; HTTPConnectionPool(host='serve.lan', port=8786)\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy": "nordvpn:fr"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://serve.lan:8786",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"}], "backup_remote_url": "https://s3.backup.example.org"}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")
+    for host in ("proxy.lan", "serve.lan", "sonarr.lan", "10.0.0.9", "nas:8786", "8786", "8989", "3128"):
+        assert host not in text, host
+    assert "unreachable at" in text and "answered 500" in text and "https://c4/show" in text and "Max retries" in text  # the rest stays
+    assert '"--proxy": "nordvpn:fr"' in text  # a provider and region names no machine of the user's
+    card["setup"]["proxy"] = "nordvpn:fr"
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    assert '"proxy": "nordvpn:fr"' in web.diagnostic("r1")
+
+
+
+def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(tmp_path, monkeypatch):
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "cause": "Failed to resolve 'nas' ([Errno 8] nodename nor servname)",
+            "setup": {"via": "this computer", "proxy": "nordvpn:fr", "command": "unshackle dl --proxy-download http://dl.proxy.lan:8080 ALL4 x"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://SONARR.LAN:8989 answered 500\nserve at http://[fd00::1234]:8786 timed out\n"
+                                     "Cannot reach sonarr.lan. Retrying, mail alice@sonarr.lan\nat http://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443/x\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy-download": "http://dl.proxy.lan:8080"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://[fd00::1234]:8786", "backup_passphrase": "https://[broken",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"},
+                                        {"name": "far", "url": "https://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443"}]}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")  # a passphrase that looks like a broken address does not stop it
+    assert "alice" not in text  # an e-mail address on a private domain is masked whole
+    for host in ("SONARR.LAN", "sonarr.lan", "fd00::1234", "dl.proxy.lan", "'nas'", "example.org", "8786", "8989", "8080", "9443"):
+        assert host not in text, host
+    assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
+
 
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):
     from unshacklarr.backend import Unshackle, UnshackleError
@@ -2901,6 +3163,17 @@ def test_a_year_in_brackets_is_not_a_part():
     assert same_title(plain_title("Christmas Special (2023)"), plain_title("Christmas Special 2023"))
 
 
+def test_a_spelled_out_part_number_counts_as_the_digit():
+    from unshacklarr.web import last_number, same_title
+    assert not same_title("the ambush part two", "the ambush part 1")
+    assert same_title("the ambush part two", "the ambush part 2")
+    assert not same_title("the ambush part one", "the ambush part two")
+    assert last_number("the ambush part twenty") == 20
+    assert last_number("twenty one") is None  # a compound number is not "1": "21" must still match it
+    assert last_number("murder in the city two") == 2 and not same_title("murder in the city two", "murder in the city 1")
+    assert last_number("fallen women") is None and same_title("fallen women", "fallen woman")
+
+
 def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
     # Add audio track: folders listed (names only, no file), and a real file of Sonarr's looked for with the two roots
     from unshacklarr import web
@@ -2937,6 +3210,22 @@ def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
                         if path == "rootfolder" else [{"path": "/data/tv/Show/S01E01.mkv"}])
     assert web.library_check("", "")["common"] == "/Syno"  # several root folders: the one holding them all
     assert "has no series with a file" in web.library_check("/other", "/x")["why"]
+
+
+def test_the_library_guess_keeps_the_drive_of_a_windows_sonarr(tmp_path, monkeypatch):
+    from unshacklarr import web
+    sync = web.sonarr_sync
+    (tmp_path / "tv" / "Show" / "Season 01").mkdir(parents=True)
+    (tmp_path / "tv" / "Show" / "Season 01" / "file.mkv").write_bytes(b"x")
+    monkeypatch.setattr(web, "LIBRARY_GUESSES", [str(tmp_path / "tv")])
+    windows = "D:\\TV\\Show\\Season 01\\file.mkv"
+    guess = web.library_guess(windows)
+    assert guess == {"sonarr_root": "D:\\TV", "local_root": str(tmp_path / "tv")}
+    assert windows.startswith(guess["sonarr_root"] + "\\")  # a prefix of the path as Sonarr reports it
+    monkeypatch.setitem(sync.SETTINGS, "library_sonarr_root", guess["sonarr_root"])
+    monkeypatch.setitem(sync.SETTINGS, "library_local_root", guess["local_root"])
+    assert sync.library_file(windows).is_file()
+    assert web.library_guess("/data/tv/Show/Season 01/file.mkv") == {"sonarr_root": "/data/tv", "local_root": str(tmp_path / "tv")}
 
 
 def test_another_sonarr_reads_its_own_library(monkeypatch):
