@@ -1417,6 +1417,11 @@ def test_a_network_error_never_shows_a_discord_webhook_token(tmp_path, monkeypat
                 "http://u:p@host?email=a@b.com;token=SECRET1"):
         assert "SECRET1" not in web.scrubbed(f"GET {url}") and "u:p" not in web.scrubbed(f"GET {url}"), url
     assert sync.no_credentials("http://u:abc@foo?hidden@[fe80::1%25eth0]:8080") == "http://***@[fe80::1%25eth0]:8080"
+    import time
+    start = time.monotonic()
+    web.scrubbed("//***@a" * 20000)  # many masked addresses on one line: scanned once, not once each to the end
+    assert time.monotonic() - start < 1
+    assert web.scrubbed("http://u:p@sonarr:8989/api/v3?apikey=abc") == "http://***@sonarr:8989/api/v3?…"  # paths kept
 
 
 def test_a_service_with_no_cdm_at_all_is_refused_but_no_drm_and_the_default_pass(tmp_path, monkeypatch):
