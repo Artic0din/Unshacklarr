@@ -727,6 +727,53 @@ def test_a_paused_job_ends_its_download_then_waits(tmp_path, monkeypatch):
     assert started == ["S02E05", "S02E06"] and not sync.paused_jobs
 
 
+def test_a_job_paused_during_its_last_episode_ends(tmp_path, monkeypatch):
+    import threading
+    sync = load(tmp_path, monkeypatch)
+    started = []
+
+    def download(payload, run=None):
+        started.append(payload["wanted"][0])
+        if len(started) == 2:  # paused during the last episode: nothing is left to wait for
+            sync.pause_job(run.card["batch"], True)
+        raise sync.UnshackleError("no such title")
+
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    job = threading.Thread(target=sync.sync, args=(sync.read_file(), {}, [episode(111, 2, 5), episode(111, 2, 6)]),
+                           kwargs={"manual": True, "kind": "manual"}, daemon=True)
+    job.start()
+    job.join(3)
+    ended = not job.is_alive()
+    sync.paused_jobs.clear()  # lets a job that still waits finish, whatever the assertions say
+    job.join(5)
+    assert started == ["S02E05", "S02E06"] and ended and not sync.running_jobs and not sync.paused_jobs
+
+
+def test_an_episode_queued_into_a_paused_job_is_handed_out_after_resume(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    first, second, added = episode(111, 2, 5), episode(111, 2, 6), episode(111, 2, 7)
+    episodes = [first, second]
+    monkeypatch.setitem(sync.running_jobs, "J", {"episodes": episodes, "stubs": {}, "closed": False, "replace": False})
+    taken, sleeps = [], []
+    handed = sync.job_episodes(episodes, "J")
+    taken.append(next(handed))
+    sync.paused_jobs.add("J")
+
+    def sleep(seconds):  # while it waits: an episode is queued into the job, then the job is resumed
+        sleeps.append(seconds)
+        if len(sleeps) == 1:
+            episodes.append(added)
+        if len(sleeps) == 2:
+            sync.paused_jobs.discard("J")
+
+    monkeypatch.setattr(sync.time, "sleep", sleep)
+    taken.extend(handed)
+    assert [ep["id"] for ep in taken] == [205, 206, 207] and len(sleeps) == 2
+    assert sync.running_jobs["J"]["closed"]
+
+
 def test_a_discord_card_has_colour_fields_and_poster():
     from unshacklarr import sync
     card = sync.discord_payload("success", "Downloaded: Show S02E05", "Imported by Sonarr.",

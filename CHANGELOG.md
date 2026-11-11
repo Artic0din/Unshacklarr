@@ -30,6 +30,7 @@ Every change worth knowing, newest first. The format follows
 - Preserved the selected Unshackle backend, Sonarr instance, provider programme, and season page across retries and upgrades.
 - A series with a fallback service no longer fails with `UnboundLocalError` when its own service has the episode in none of the accepted audio languages and the fallback service downloads it: the episode is now imported, and no login-fallback profile is tried because of an earlier episode's error.
 - A notification address with every level unticked no longer receives every message, and it still shows three unticked boxes after a reload.
+- A job paused during its last episode now ends when that episode does, instead of staying "running" until Resume was pressed (Sync now answered that one was already running). A paused job with episodes left still waits for Resume.
 
 ## [1.5.0] - 2026-10-17
 
