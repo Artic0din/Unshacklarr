@@ -1408,6 +1408,7 @@ def test_picked_episodes_are_fetched_in_groups_and_come_back_sorted(tmp_path, mo
     asked.clear()
     sync.chosen_episodes([205, 206])
     assert asked == [[205, 206]]  # a small pick is still one request
+    assert len(sync.chosen_episodes([1] + list(range(2, 202)) + [1])) == 201  # an id picked twice: one episode
 
 
 @responses.activate

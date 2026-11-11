@@ -544,6 +544,7 @@ SONARR_IDS_PER_REQUEST = 200  # every id sits in the URL: a few hundred would ma
 
 def chosen_episodes(ids: list[int]):
     """Episodes picked by hand in the web page, shaped like /wanted/missing records."""
+    ids = list(dict.fromkeys(ids))  # one id twice, in two groups, would come back twice
     episodes = [ep for start in range(0, len(ids), SONARR_IDS_PER_REQUEST)
                 for ep in sonarr_get("episode", episodeIds=ids[start:start + SONARR_IDS_PER_REQUEST], includeSeries="true")]
     return sorted(episodes, key=lambda e: (e["seriesId"], e["seasonNumber"], e["episodeNumber"]))
