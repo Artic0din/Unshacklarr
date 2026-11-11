@@ -61,6 +61,7 @@ TERMINAL = {"completed", "failed", "cancelled"}
 class UnshackleError(Exception):
     """unshackle cannot be reached or refused a request; the message says why."""
     retry_after = 0  # serve's own limit on requests reached (Unshackle 6): seconds before it answers again
+    status = 0  # the HTTP status serve answered with, when it answered one
 
 
 # Unshackle 6 serves its proxies (a country code, a provider) only to a key allowed to (server_proxy)
@@ -315,7 +316,9 @@ class Unshackle:
                 self.proxy_refused = datetime.now(timezone.utc).isoformat()
                 raise UnshackleError(PROXY_HINT)
             status = f"HTTP {r.status_code}: " if r.status_code >= 500 else ""  # serve's own words rarely say it
-            raise UnshackleError(f"unshackle serve: {status}{message.strip()[:500]}")
+            err = UnshackleError(f"unshackle serve: {status}{message.strip()[:500]}")
+            err.status = r.status_code
+            raise err
         try:
             return r.json()
         except ValueError:  # a proxy's login page, or another program at this address
