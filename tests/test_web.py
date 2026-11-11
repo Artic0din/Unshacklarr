@@ -3329,6 +3329,18 @@ def test_a_diagnostic_keeps_no_token_key_or_address():
     assert "https://api.netflix.com/license?…" in text
 
 
+def test_a_diagnostic_masks_a_token_glued_to_an_address_and_long_lines_fast():
+    import time
+    from unshacklarr import web
+    glued = web.scrubbed("token " + "A" * 30 + "/" + "B" * 10 + "name@x.io")
+    assert "A" * 8 not in glued and "name" not in glued  # the address rule must not leave the start of a secret
+    blob = "Q" * 200_000  # a license or a key dumped in Unshackle's output, no @ in it
+    start = time.monotonic()
+    assert web.scrubbed(blob) == "…"
+    assert time.monotonic() - start < 1  # was minutes: the address rule tried every start inside the word
+    assert web.scrubbed("see /users/alice@x.io and bob@nas.lan") == "see …@… and …@…"
+
+
 def test_the_main_sonarr_can_be_named():
     from unshacklarr import web
     saved = {**web.sonarr_sync.SETTINGS_DEFAULTS}
