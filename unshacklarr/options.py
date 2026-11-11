@@ -8,6 +8,8 @@ in unshackle/core/api/handlers.py). A service's own options come from /api/servi
 import re
 import shlex
 
+from .files import CREDENTIALS
+
 # (name, kind, help, choices). Left out: what Unshacklarr sets itself (wanted, output_dir)
 # or what makes no sense unattended (skip_dl, export, latest_episode).
 DL_OPTIONS = [
@@ -176,7 +178,7 @@ def to_params(options: dict, specs: list[dict]) -> dict:
     return params
 
 
-HIDDEN = re.compile(r"//[^@/\s]+@")  # a proxy's user:password
+HIDDEN = CREDENTIALS  # a proxy's user:password, masked as in every message
 
 
 def command_line(request: dict) -> str:
