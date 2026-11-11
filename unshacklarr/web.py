@@ -1667,6 +1667,8 @@ async def suggest(request):
             # Prefer at read time only: cache keeps Channel rows so a later-uninstalled home still leaves them.
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(),
                    "map": SUGGEST_MAP, "links": links}
+            # Read again: lookups running at once wrote their entries while this one awaited TMDB.
+            cache = read_json(TMDB_CACHE, {})
             cache[tmdb_id] = hit
             write_atomic(TMDB_CACHE, json.dumps(cache))
     try:
