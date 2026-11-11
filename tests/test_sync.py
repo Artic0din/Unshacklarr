@@ -2126,6 +2126,47 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     assert not sync.same_source({"sceneName": "Show.S01E01.ip.WEB-DL"}, "iP")  # a short tag as Unshackle writes it
 
 
+@pytest.mark.parametrize("code", [2, -9])  # an error, or the process killed (a signal: a negative code)
+@pytest.mark.parametrize("audio", ["audio.mka", "audio.mkv"])  # the audio alone may come in a video container
+def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch, code, audio):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+
+    def download(payload, run=None):
+        (Path(payload["output_dir"]) / audio).parent.mkdir(parents=True, exist_ok=True)
+        (Path(payload["output_dir"]) / audio).write_bytes(b"fr")
+
+    def tools(cmd, **_):
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")  # disk full: the output is cut short
+        return subprocess.CompletedProcess(cmd, code, stdout="Error: disk full")
+
+    imported = []
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append(out))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    assert sync.add_track(205, "fr") is True
+    folder = tmp_path / "unshackle-111-S02E05"
+    assert not (folder / "Show - S02E05.mkv").exists() and not folder.exists()  # nothing left for Import to pick up
+    assert imported == []
+    card = next(json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))
+    assert card["outcome"] == "failed" and "mkvmerge could not add the audio: Error: disk full" in card["cause"]
+
+
 def test_a_series_can_send_only_its_failures_or_nothing(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     sent, boxed = [], []
