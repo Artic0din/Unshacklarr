@@ -3465,3 +3465,77 @@ def test_a_run_keeps_its_slot_while_it_waits_to_try_again(tmp_path, monkeypatch)
     assert sync.run_job_retrying({}, run, sleep=lambda s: held.append("r1" in sync.slot_jobs.get("", []))) == ["/downloads/x.mkv"]
     assert held == [True] and tries == [None, "j1"]  # held while it waited, then the same job followed again
     assert "r1" not in sync.slot_jobs.get("", [])  # done: the slot goes
+
+
+def test_two_syncs_of_one_batch_waiting_for_a_full_server_both_get_in(tmp_path, monkeypatch):
+    # both wait while another job holds the server: once the first takes the batch's slot, the second shares it
+    # (#114: the first sync no longer frees it while the second is counted, so a second wait would be forever)
+    import threading
+    sync = load(tmp_path, monkeypatch)
+    sync.SETTINGS["downloads_at_once"] = 1
+    run = lambda batch, rid: type("Run", (), {"card": {"batch": batch}, "id": rid, "say": lambda self, text: None})()
+    k_in, k_go = threading.Event(), threading.Event()
+    inside = {"a": threading.Event(), "b": threading.Event()}
+    leave = threading.Event()
+
+    def k():
+        with sync.download_slot("serve", run(None, "k")):
+            k_in.set()
+            k_go.wait(30)  # longer than the wait below for both to be in line: never freed before they are
+
+    def j(name):
+        try:
+            with sync.download_slot("serve", run("J", name)):
+                inside[name].set()
+                leave.wait(5)
+        except sync.JobFailed:
+            pass
+    threads = [threading.Thread(target=k, daemon=True)]
+    threads[0].start()
+    assert k_in.wait(5)
+    threads += [threading.Thread(target=j, args=(n,), daemon=True) for n in ("a", "b")]
+    for t in threads[1:]:
+        t.start()
+    for _ in range(500):  # both in line before the server frees up, or the test proves nothing
+        with sync.slots:
+            if sync.slot_line.get("serve", []).count("J") == 2:
+                break
+        sync.time.sleep(0.01)
+    assert sync.slot_line["serve"].count("J") == 2
+    k_go.set()  # the other job's download ends: the batch takes the slot
+    both = inside["a"].wait(6) and inside["b"].wait(6)
+    sync.stop_waiting.update({"a", "b"})
+    leave.set()
+    for t in threads:
+        t.join(6)
+    assert both
+    assert sync.slot_jobs["serve"].count("J") <= 1  # one slot for the batch, not one each
+
+
+def test_a_retry_stopped_while_it_waited_does_not_start_once_its_batch_gets_in(tmp_path, monkeypatch):
+    # Stop pressed on it in Activity, then its sibling takes the batch's slot before it wakes: it ends, stopped
+    import threading
+    sync = load(tmp_path, monkeypatch)
+    sync.SETTINGS["downloads_at_once"] = 1
+    run = lambda batch, rid: type("Run", (), {"card": {"batch": batch}, "id": rid, "say": lambda self, text: None})()
+    with sync.slots:
+        sync.slot_jobs["serve"] = ["k"]  # another job holds the server
+    waiting, outcome = threading.Event(), {}
+
+    def retry():
+        run_b = run("J", "b")
+        run_b.say = lambda text: waiting.set()
+        try:
+            with sync.download_slot("serve", run_b):
+                outcome["b"] = "started"
+        except sync.JobFailed as e:
+            outcome["b"] = str(e)
+    t = threading.Thread(target=retry, daemon=True)
+    t.start()
+    assert waiting.wait(5)
+    with sync.slots:  # Stop, then the sibling gets in, all before it wakes
+        sync.stop_waiting.add("b")
+        sync.slot_jobs["serve"][:] = ["J"]  # the same list the wait reads
+        sync.slots.notify_all()
+    t.join(5)
+    assert outcome == {"b": "Stopped before it started"} and "b" not in sync.stop_waiting

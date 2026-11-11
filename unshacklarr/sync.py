@@ -881,7 +881,9 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                 line.append(job)
                 # in the order picked, whenever each got here; a job paused while it waited lost its number: last
                 line.sort(key=lambda j: job_order.get(j, float("inf")))
-                while (limit := int(SETTINGS.get("downloads_at_once") or 0)) and (len(holders) >= limit or line[0] != job):
+                # another sync of its batch may take the slot while it waits: it shares that one (#114)
+                while ((limit := int(SETTINGS.get("downloads_at_once") or 0)) and job not in holders
+                       and (len(holders) >= limit or line[0] != job)):
                     if run and run.id in stop_waiting:
                         stop_waiting.discard(run.id)
                         raise JobFailed("Stopped before it started", "cancelled")
@@ -895,10 +897,14 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                             held.remove(job)
                             slots.notify_all()
                     slots.wait(2)
+                if run and run.id in stop_waiting:  # stopped, then its batch got in before it woke: still stopped
+                    stop_waiting.discard(run.id)
+                    raise JobFailed("Stopped before it started", "cancelled")
             finally:
                 line.remove(job)
                 slots.notify_all()
-            holders.append(job)
+            if job not in holders:
+                holders.append(job)
         slot_active[job] = slot_active.get(job, 0) + 1
     try:
         yield
