@@ -4631,7 +4631,8 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)(\?[^\s\"']+)?"), lambda m: m[
                (re.compile(r"(?<![\w.+/=-])[\w.+/=-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
-QUERY_AFTER_PASSWORD = re.compile(r"(//\*\*\*@[^\s\"'/?#&=]+)[^\s\"'/]*[&=][^\s\"']*")  # no / before the & or =: linear
+# the host straight before the & or =, neither of which it can hold: one way to split it, so linear
+QUERY_AFTER_PASSWORD = re.compile(r"(//\*\*\*@[^\s\"'/?#&=]+)[&=][^\s\"']*")
 
 
 def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:

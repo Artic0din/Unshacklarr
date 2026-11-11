@@ -1420,6 +1420,7 @@ def test_a_network_error_never_shows_a_discord_webhook_token(tmp_path, monkeypat
     import time
     start = time.monotonic()
     web.scrubbed("//***@a" * 20000)  # many masked addresses on one line: scanned once, not once each to the end
+    web.scrubbed("https://u:p@host?token=a@" + "A" * 50000)  # a long token straight after: one way to split it
     assert time.monotonic() - start < 1
     assert web.scrubbed("http://u:p@sonarr:8989/api/v3?apikey=abc") == "http://***@sonarr:8989/api/v3?…"  # paths kept
 
