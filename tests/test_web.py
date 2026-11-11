@@ -189,6 +189,80 @@ def test_the_page_script_parses(tmp_path):
     assert check.returncode == 0, check.stderr
 
 
+SAVE_BAR_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
+const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
+const core = js("core.js"), options = js("settings-options.js");
+const code = [
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(options, /^async function save\(\) \{.*?^\}/ms),
+  pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
+].join("\n");
+const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true } };
+let release, offsiteReply;
+const box = {
+  JSON, Object, console, current: null, currentTab: "series", boKind: null, drawerSnapshot: null,
+  $: (sel) => bars[sel] || (bars[sel] = { value: "a long enough phrase", hidden: true, replaceChildren() {} }),
+  api: (url) => url === "/api/config" ? new Promise((resolve) => { release = resolve; }) : Promise.resolve(offsiteReply),
+  renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
+  boWrong() {}, toast() {}, el: () => ({}), S: null,
+};
+vm.createContext(box);
+vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); } };", box);
+const page = box.api_;
+const fresh = () => {
+  box.S = { config: { settings: { theme: "dark", backup_remote: "", backup_remote_url: "" }, series: {} } };
+  page.baseline(box.S.config);
+  bars["#savebar"].hidden = bars["#d-save"].hidden = true;
+};
+(async () => {
+  const out = {};
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  let saving = page.save(); release(); await saving;
+  out.plainSaveHides = bars["#savebar"].hidden && bars["#d-save"].hidden;
+
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); box.S.config.settings.theme = "blue"; page.dirty(); release(); await saving;
+  out.editDuringSaveKeepsBar = !bars["#savebar"].hidden && !bars["#d-save"].hidden && page.state().unsaved;
+  box.S.config.settings.theme = "light"; page.dirty();  // put back as it was sent
+  out.revertToSentHides = bars["#savebar"].hidden;
+
+  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  offsiteReply = { settings: { backup_remote: "webdav", backup_remote_url: "https://x", backup_remote_secret_set: true, backup_passphrase_set: true }, sent: {} };
+  await page.send({ target: {} });
+  page.dirty();
+  out.offsiteKeepsOtherEdit = page.state().unsaved && !bars["#savebar"].hidden;
+  box.S.config.settings.theme = "dark"; page.dirty();
+  out.offsiteFieldsAreSaved = !page.state().unsaved;
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    harness = tmp_path / "harness.js"
+    harness.write_text(SAVE_BAR_HARNESS)
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {
+        "plainSaveHides": True,  # nothing changed meanwhile: the bar goes as before
+        "editDuringSaveKeepsBar": True,  # it was never sent
+        "revertToSentHides": True,  # back to what was sent is saved
+        "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
+        "offsiteFieldsAreSaved": True,
+    }
+
+
 def test_season_maps_are_suggested_by_dates_else_by_order(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
