@@ -1,9 +1,12 @@
 /* The server's next_sync (web.py): on the hour, every so many hours of the day in the app's time zone, not the browser's. */
 function nextSyncAt(now, every, zone) {
-  const at = Object.fromEntries(new Intl.DateTimeFormat("en", { timeZone: zone, hourCycle: "h23", hour: "numeric", minute: "numeric", second: "numeric" })
-    .formatToParts(now).map((p) => [p.type, Number(p.value)]));
-  const hourStart = now.getTime() - ((at.minute * 60 + at.second) * 1000 + now.getMilliseconds());
-  return new Date(hourStart + ((Math.floor(at.hour / every) + 1) * every - at.hour) * 3600000);
+  const parts = (d) => Object.fromEntries(new Intl.DateTimeFormat("en", { timeZone: zone, hourCycle: "h23", year: "numeric", month: "numeric",
+    day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" }).formatToParts(d).map((p) => [p.type, Number(p.value)]));
+  const offset = (d) => { const p = parts(d); return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(d.getTime() / 1000) * 1000; };
+  const at = parts(now), hour = Math.min((Math.floor(at.hour / every) + 1) * every, 24);  // the grid starts again at midnight
+  // that wall-clock hour in the zone, as the server counts it, across a clock change too
+  const wall = Date.UTC(at.year, at.month - 1, at.day, hour), guess = new Date(wall - offset(now));
+  return new Date(wall - offset(guess));
 }
 /* Settings, Automation: when the next sync comes (on the hour, every so many hours of the day), the interval as chips */
 function renderAutomation() {

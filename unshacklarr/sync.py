@@ -1026,7 +1026,7 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             # One status that didn't come is not a failed download: the job still runs on serve, and a
             # retry now would start it a second time into the same folder.
             misses += 1
-            if misses >= POLL_MISSES or not TRANSIENT.search(str(e)):
+            if misses >= POLL_MISSES or not (TRANSIENT.search(str(e)) or STATUS_MISS.search(str(e))):
                 try:
                     backend.cancel(job_id)  # gone for good: nothing of it may go on behind a retry
                 except UnshackleError as refused:
@@ -1137,6 +1137,9 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
 # Worth another try in a moment: the network or the service stumbled, nothing is wrong with the request.
 TRANSIENT = re.compile(r"timed? ?out|timeout|connection (reset|refused|aborted|error)|remote end closed|temporarily|"
                        r"max retries|\b50[234]\b|service unavailable|bad gateway|name resolution|network is unreachable", re.IGNORECASE)
+# A status asked while the job runs that serve answered with its own error: one more miss, not the job given up.
+# Not for a whole download: serve may have queued the job before it answered 500, and a retry would start it twice.
+STATUS_MISS = re.compile(r"^unshackle serve: HTTP 500:")  # the status Unshackle.call puts first, not words in a body
 RETRY_AFTER = (30, 120)  # seconds before each retry
 SERVE_RETRY_AFTER = (60, 180, 600)  # serve itself too slow to answer (its disks saturated): longer, once more (#10)
 UNREACHABLE = "unshackle serve is unreachable"  # Unshackle.call's words when it can't reach serve, not an answer
@@ -2889,7 +2892,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 if not run.card.get("ended"):
                     run.say(f"{job[4]}: {type(e).__name__}: {e}")
                     run.finish("failed", f"{type(e).__name__}: {e}")
-                    notify(settings, "error", f"Not imported: {job[4]}", f"{type(e).__name__}: {e}\nThe files are in {seen_by('sonarr_downloads', job[3])}.", batch=batch)
+                    notify_series(job[2], settings, "error", f"Not imported: {job[4]}", f"{type(e).__name__}: {e}\nThe files are in {seen_by('sonarr_downloads', job[3])}.", batch=batch)
             finally:
                 lock.__exit__(None, None, None)
 

@@ -1237,6 +1237,73 @@ def test_a_missed_job_status_waits_instead_of_downloading_twice(tmp_path, monkey
     assert sync.run_job_retrying({"service": "X"}) == [] and len(started) == 1  # the same job, followed to its end
 
 
+SERVE = "http://serve:8786"
+
+
+def serve_answering_jobs(monkeypatch, sync, answers):
+    """The real Unshackle client over `responses`: each status poll gets the next of (HTTP status, JSON body)."""
+    monkeypatch.setattr(sync.UNSHACKLE, "settings", {"unshackle_url": SERVE, "unshackle_api_key": "a-long-random-key"})
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda payload: "j1")
+    monkeypatch.setattr(sync.time, "sleep", lambda _: None)
+    for status, body in answers:
+        responses.add(responses.GET, f"{SERVE}/api/download/jobs/j1", status=status, json=body)
+    responses.add(responses.DELETE, f"{SERVE}/api/download/jobs/j1", json={})
+
+
+def cancels():
+    return [c for c in responses.calls if c.request.method == "DELETE"]
+
+
+@responses.activate
+def test_one_http_500_from_a_status_poll_does_not_cancel_the_job(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    serve_answering_jobs(monkeypatch, sync, [(500, {"message": "database is locked"}),
+                                             (200, {"status": "completed", "output_files": ["/downloads/x.mkv"]})])
+    assert sync.run_job({"service": "X"}) == ["/downloads/x.mkv"]
+    assert not cancels()
+
+
+@responses.activate
+def test_a_job_whose_status_answers_500_every_time_is_cancelled_after_the_usual_misses(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    assert sync.POLL_MISSES == 12  # the usual misses, as before
+    assert not sync.STATUS_MISS.search("unshackle serve: job failed: HTTP 500: from the CDN")  # the status, not words in a body
+    serve_answering_jobs(monkeypatch, sync, [(500, {"message": "database is locked"})] * sync.POLL_MISSES)
+    try:
+        sync.run_job({"service": "X"})
+        raise AssertionError("a job whose status never came went on")
+    except sync.UnshackleError:
+        pass
+    polls = [c for c in responses.calls if c.request.method == "GET"]
+    assert len(polls) == sync.POLL_MISSES and len(cancels()) == 1
+
+
+@responses.activate
+def test_a_job_serve_does_not_know_still_ends_the_wait_at_once(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    serve_answering_jobs(monkeypatch, sync, [(404, {"message": "Job not found"})])
+    try:
+        sync.run_job({"service": "X"})
+        raise AssertionError("a job that does not exist was waited for")
+    except sync.UnshackleError:
+        pass
+    assert len([c for c in responses.calls if c.request.method == "GET"]) == 1 and len(cancels()) == 1
+
+
+def test_a_download_that_failed_on_a_500_is_not_started_again(tmp_path, monkeypatch):
+    # serve may have queued the job before it answered 500: a retry could run it twice into the same folder
+    sync = load(tmp_path, monkeypatch)
+    started = []
+
+    def run_job(payload, run=None, **kw):
+        started.append(payload)
+        raise sync.JobFailed("unshackle serve: HTTP 500: Internal Server Error", "failed", "unshackle serve: HTTP 500: Internal Server Error")
+    monkeypatch.setattr(sync, "run_job", run_job)
+    with pytest.raises(sync.JobFailed):
+        sync.run_job_retrying({"service": "X"}, sleep=lambda s: None)
+    assert len(started) == 1
+
+
 def test_shown_commands_hide_a_proxy_password_and_hand_written_dates_count_as_utc(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     assert sync.to_args({"--proxy": "http://user:secret@proxy:8080"}) == ["--proxy", "http://***@proxy:8080"]
@@ -2314,6 +2381,27 @@ def test_a_series_can_send_only_its_failures_or_nothing(tmp_path, monkeypatch):
     for mode, level in (("failures", "success"), ("failures", "error"), ("none", "error"), (None, "success")):
         sync.notify_series({"notify": mode} if mode else {}, {}, level, "t", "m")
     assert sent == ["error", "success"] and boxed == ["success", "error"]  # the bell keeps what is not sent
+
+
+def test_the_import_catch_all_follows_the_series_notification_setting(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True), (Path(payload["output_dir"]) / "Show.S02E05.mkv").touch()))
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    for name in ("finalize", "check_audio", "check_subs"):
+        monkeypatch.setattr(sync, name, lambda *a, **k: None)
+    monkeypatch.setattr(sync, "import_episode", lambda *a, **k: (_ for _ in ()).throw(ValueError("disk exploded")))  # not one the finish step expects
+    sent = []
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: sent.append((level, title)) or True)
+    boxed = []
+    monkeypatch.setattr(sync, "inbox_add", lambda level, title, *a, **k: boxed.append(title))
+    for mode, number in (("none", 5), (None, 6)):
+        config = sync.read_file()
+        config["series"][111]["notify"] = mode
+        sync.sync(config, {}, [episode(111, 2, number)], manual=True, kind="manual")
+    cards = {c["sxxeyy"]: c for c in (json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))}
+    assert [c["outcome"] for _, c in sorted(cards.items())] == ["failed", "failed"]
+    assert all("ValueError: disk exploded" in c["cause"] for c in cards.values())
+    assert sent == [("error", "Not imported: Show S02E06")] and boxed == ["Not imported: Show S02E05"]  # the bell keeps what the series does not send
 
 
 def test_an_import_sonarr_does_not_answer_is_asked_again(tmp_path, monkeypatch):

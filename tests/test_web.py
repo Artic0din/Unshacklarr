@@ -170,26 +170,6 @@ def test_stats_weeks_start_on_monday_in_the_app_s_time_zone(tmp_path, monkeypatc
     assert [(w["start"], w["downloaded"]) for w in s["weeks"][-2:]] == [("2026-11-02", 1), ("2026-11-09", 1)]
 
 
-def test_the_page_script_parses(tmp_path):
-    import shutil
-    import subprocess
-    from pathlib import Path
-    import pytest
-    if not shutil.which("node"):
-        pytest.skip("node is not installed")
-    static = Path(__file__).parents[1] / "unshacklarr" / "static"
-    page = (static / "index.html").read_text()
-    scripts = re.findall(r'<script src="/js/([\w-]+\.js)"></script>', page)
-    assert sorted(scripts) == sorted(f.name for f in (static / "js").glob("*.js"))  # each file loaded, none forgotten
-    for name in scripts:
-        check = subprocess.run(["node", "--check", str(static / "js" / name)], capture_output=True, text=True)
-        assert check.returncode == 0, f"{name}: {check.stderr}"
-    whole = tmp_path / "page.js"  # in their order, one scope as the browser runs them: no name declared twice
-    whole.write_text("".join((static / "js" / name).read_text() for name in scripts))
-    check = subprocess.run(["node", "--check", str(whole)], capture_output=True, text=True)
-    assert check.returncode == 0, check.stderr
-
-
 # Runs one of the page's own functions, so its previews are held to what the server does.
 PREVIEW_HARNESS = r"""
 const fs = require("fs"), vm = require("vm");
@@ -242,13 +222,113 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
     from datetime import datetime, timezone
     from zoneinfo import ZoneInfo
     web = reloaded_web(tmp_path, monkeypatch)
-    now = datetime(2026, 11, 11, 12, 30, tzinfo=timezone.utc)  # the browser (the suite runs in Paris) and the app differ
-    for zone, every in (("Australia/Melbourne", 4), ("Asia/Kolkata", 2), ("America/St_Johns", 3), ("UTC", 24)):
+    noon = datetime(2026, 11, 11, 12, 30, tzinfo=timezone.utc)  # the browser (the suite runs in Paris) and the app differ
+    cases = [(noon, "Australia/Melbourne", 4), (noon, "Asia/Kolkata", 2), (noon, "America/St_Johns", 3), (noon, "UTC", 24),
+             (datetime(2026, 10, 3, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # Melbourne's clocks go forward that night
+             (datetime(2026, 4, 4, 14, 30, tzinfo=timezone.utc), "Australia/Melbourne", 4),  # and back
+             (datetime(2026, 10, 5, 19, 30, tzinfo=timezone.utc), "Europe/Paris", 5)]  # 21:30: the grid starts again at midnight
+    for now, zone, every in cases:
         monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo(zone))
         monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
         server = web.next_sync(now).astimezone(timezone.utc)
         page = run_page_function("nextSyncAt", now.isoformat(), every, zone)
         assert datetime.fromisoformat(page.replace("Z", "+00:00")) == server, zone
+
+
+def test_the_page_script_parses(tmp_path):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    page = (static / "index.html").read_text()
+    scripts = re.findall(r'<script src="/js/([\w-]+\.js)"></script>', page)
+    assert sorted(scripts) == sorted(f.name for f in (static / "js").glob("*.js"))  # each file loaded, none forgotten
+    for name in scripts:
+        check = subprocess.run(["node", "--check", str(static / "js" / name)], capture_output=True, text=True)
+        assert check.returncode == 0, f"{name}: {check.stderr}"
+    whole = tmp_path / "page.js"  # in their order, one scope as the browser runs them: no name declared twice
+    whole.write_text("".join((static / "js" / name).read_text() for name in scripts))
+    check = subprocess.run(["node", "--check", str(whole)], capture_output=True, text=True)
+    assert check.returncode == 0, check.stderr
+
+
+# Runs the page's real liveTick and openActivity with a /api/runs that answers only when the test says so.
+ACTIVITY_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const ctx = {
+  scenario: process.argv[2],
+  pending: [],  // one resolver per /api/runs request not answered yet
+  drawn: [],
+  api: (url) => new Promise((resolve) => { if (url === "/api/runs") ctx.pending.push(resolve); else resolve({ items: [] }); }),
+  $: () => ({ hidden: false, textContent: "", replaceChildren() {} }),
+  failed: () => ({}), clearTimeout() {}, setTimeout() {}, setImmediate, console, activityLater() {}, followLive() {}, liveFeed: null,
+};
+vm.createContext(ctx);
+vm.runInContext(`
+let runsSeq = 0, runCards = [], runsTimer = null;
+const isLive = (c) => c.outcome === "running";
+const renderConsole = () => drawn.push(runCards.map((c) => c.id));
+${grab("openActivity")}
+let feedReloading = false, feedMissed = null;
+${grab("liveTick")}
+const tick = (ids) => liveTick(JSON.stringify(ids.map((id) => ({ id }))));
+const card = (id, outcome) => ({ id, outcome });
+const settle = () => new Promise((r) => setImmediate(r));
+(async () => {
+  if (scenario === "feed") {
+    tick([1]); tick([1]); tick([1]);  // a download started: every message still sees a mismatch
+    const inFlight = pending.length;
+    pending[0]([card(1, "running")]); await settle();
+    console.log(JSON.stringify({ inFlight, asked: pending.length, drawn }));
+  } else if (scenario === "missed") {
+    tick([1]);  // the feed's reload
+    tick([1, 2]);  // another started while it was on its way: the feed says so once, and no more while nothing moves
+    pending[0]([card(1, "running")]); await settle();  // an answer from before the second one started
+    const asked = pending.length;
+    pending[1]([card(1, "running"), card(2, "running")]); await settle();
+    console.log(JSON.stringify({ asked, drawn }));
+  } else {
+    tick([1]);  // the feed's reload
+    openActivity();  // Stop pressed meanwhile
+    pending[1]([card(2, "stopped")]); await settle();
+    pending[0]([card(1, "running")]); await settle();  // the older answer arrives last
+    console.log(JSON.stringify({ drawn }));
+  }
+})();
+`, ctx);
+"""
+
+
+def run_activity(scenario):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "activity.js"
+    out = subprocess.run(["node", "-e", ACTIVITY_HARNESS, "--", str(script), scenario], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def test_the_live_feed_has_one_history_reload_in_flight_and_draws_its_answer():
+    result = run_activity("feed")
+    assert result["inFlight"] == 1  # a slow /api/runs is not asked again by every message
+    assert result["asked"] == 1 and result["drawn"][-1] == [1]  # its answer is used, and nothing asked again
+
+
+def test_a_change_the_feed_said_during_its_reload_is_reloaded_after():
+    result = run_activity("missed")
+    assert result["asked"] == 2 and result["drawn"][-1] == [1, 2]
+
+
+def test_a_reload_after_stop_still_wins_over_the_feeds_older_one():
+    assert run_activity("stop")["drawn"] == [[2]]
 
 
 SAVE_BAR_HARNESS = r"""
@@ -1642,6 +1722,36 @@ def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
             assert "language code" in e.text
 
 
+def test_the_sync_grid_restarts_at_local_midnight_every_day(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    paris = ZoneInfo("Europe/Paris")
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", paris)
+
+    def next_at(every, *when):
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        return web.next_sync(datetime(*when, tzinfo=paris)).strftime("%m-%d %H:%M")
+
+    assert next_at(5, 2026, 10, 5, 21, 30) == "10-06 00:00"  # the last gap is short: midnight, not 01:00
+    assert next_at(5, 2026, 10, 5, 20, 0) == "10-06 00:00" and next_at(5, 2026, 10, 5, 4, 59) == "10-05 05:00"
+    assert next_at(23, 2026, 10, 5, 22, 0) == "10-05 23:00" and next_at(23, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(2, 2026, 10, 5, 21, 30) == "10-05 22:00" and next_at(2, 2026, 10, 5, 23, 30) == "10-06 00:00"
+    assert next_at(24, 2026, 10, 5, 0, 0) == "10-06 00:00" and next_at(24, 2026, 10, 5, 23, 59) == "10-06 00:00"
+
+    for every, slots in ((2, 12), (5, 5), (23, 2)):  # a clock change leaves no slot of the day without its sync
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "sync_every_hours", every)
+        for day in ((2026, 3, 29), (2026, 10, 25), (2026, 10, 5)):
+            now, end, runs = datetime(*day, tzinfo=paris), datetime(*day, tzinfo=paris) + timedelta(days=1), 0
+            while (now := web.next_sync(now)) < end:
+                runs += 1
+            assert runs == slots - 1, (every, day)
+
+
 def test_a_series_is_checked_hours_before_its_release_and_told_once(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
@@ -2949,6 +3059,55 @@ def test_a_diagnostic_shows_no_address_folder_or_account(tmp_path, monkeypatch):
         assert private not in text, private
     assert "sonarr-4k" in text and '"nas"' in text and "GB" in text
 
+
+def test_a_diagnostic_holds_no_host_in_the_card_the_command_the_cause_or_the_log(tmp_path, monkeypatch):
+    # The card keeps the proxy's host (user and password masked), the cause and the log name the servers' addresses (#36)
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "proxy": "http://***@proxy.lan:3128",
+            "cause": "unshackle serve is unreachable at http://serve.lan:8786: timed out",
+            "setup": {"via": "this computer", "proxy": "http://***@10.0.0.9:3128",
+                      "command": "unshackle dl --proxy http://***@10.0.0.9:3128 ALL4 https://c4/show -w S01E01"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://sonarr.lan:8989 answered 500\nthrough nas:8786 and 10.0.0.9:3128\n"
+                                       "HTTPConnectionPool(host='nas', port=8786): Max retries exceeded; HTTPConnectionPool(host='serve.lan', port=8786)\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy": "nordvpn:fr"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://serve.lan:8786",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"}], "backup_remote_url": "https://s3.backup.example.org"}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")
+    for host in ("proxy.lan", "serve.lan", "sonarr.lan", "10.0.0.9", "nas:8786", "8786", "8989", "3128"):
+        assert host not in text, host
+    assert "unreachable at" in text and "answered 500" in text and "https://c4/show" in text and "Max retries" in text  # the rest stays
+    assert '"--proxy": "nordvpn:fr"' in text  # a provider and region names no machine of the user's
+    card["setup"]["proxy"] = "nordvpn:fr"
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    assert '"proxy": "nordvpn:fr"' in web.diagnostic("r1")
+
+
+
+def test_a_diagnostic_masks_hosts_whatever_their_case_ipv6_and_download_proxies(tmp_path, monkeypatch):
+    import json
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
+    card = {"tvdbId": 1, "series": "Show", "sxxeyy": "S01E01", "cause": "Failed to resolve 'nas' ([Errno 8] nodename nor servname)",
+            "setup": {"via": "this computer", "proxy": "nordvpn:fr", "command": "unshackle dl --proxy-download http://dl.proxy.lan:8080 ALL4 x"}}
+    (tmp_path / "r1.json").write_text(json.dumps(card))
+    (tmp_path / "r1.log").write_text("Sonarr at http://SONARR.LAN:8989 answered 500\nserve at http://[fd00::1234]:8786 timed out\n"
+                                     "Cannot reach sonarr.lan. Retrying, mail alice@sonarr.lan\nat http://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443/x\n")
+    config = {"series": {1: {"service": "ALL4", "title": "https://c4/show", "options": {"--proxy-download": "http://dl.proxy.lan:8080"}}},
+              "settings": {"sonarr_url": "http://sonarr.lan:8989", "unshackle_url": "http://[fd00::1234]:8786", "backup_passphrase": "https://[broken",
+                           "backends": [{"name": "nas", "url": "http://nas:8786"},
+                                        {"name": "far", "url": "https://a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6.example.org:9443"}]}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web, "public_config", lambda c: c)
+    text = web.diagnostic("r1")  # a passphrase that looks like a broken address does not stop it
+    assert "alice" not in text  # an e-mail address on a private domain is masked whole
+    for host in ("SONARR.LAN", "sonarr.lan", "fd00::1234", "dl.proxy.lan", "'nas'", "example.org", "8786", "8989", "8080", "9443"):
+        assert host not in text, host
+    assert '"proxy": "nordvpn:fr"' in text and "Failed to resolve" in text  # the provider and the words stay
 
 
 def test_an_unreachable_serve_is_said_at_once_for_a_minute(tmp_path):

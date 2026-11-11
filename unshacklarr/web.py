@@ -1816,10 +1816,10 @@ def installed_links(links: list[dict]) -> list[dict]:
 
 
 def next_sync(now: datetime) -> datetime:
-    """The next automatic sync: on the hour, every sync_every_hours of the local day."""
+    """The next automatic sync: on the hour, every sync_every_hours of the local day, the grid restarting at midnight."""
     every = int(sonarr_sync.SETTINGS["sync_every_hours"])
     local = now.astimezone(sonarr_sync.LOCAL)
-    hour = (local.hour // every + 1) * every
+    hour = min((local.hour // every + 1) * every, 24)  # an interval that does not divide 24 ends the day at midnight
     return local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=hour - local.hour)
 
 
@@ -4594,18 +4594,54 @@ SECRET_LIKE = [(re.compile(r"(https?://[^\s\"'?]+)\?[^\s\"']+"), r"\1?…"), (re
                (re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), "…@…")]
 
 
-def scrubbed(text: str) -> str:
+def scrubbed(text: str, hosts: set[str] = frozenset()) -> str:
     text = no_credentials(text)
+    text = SECRET_LIKE[-1][0].sub(SECRET_LIKE[-1][1], text)  # e-mail addresses first: masking their domain would leave the name
+    for host in sorted(hosts, key=len, reverse=True):  # before the token rule: a long host label would hide the rest
+        name = re.escape(host)
+        text = re.sub(rf"host=(['\"]){name}\1(?:, port=\d+)?", "host=…", text, flags=re.I)  # urllib3's HTTPConnectionPool(host='nas', port=8786)
+        if ":" in host:  # IPv6, written in brackets
+            name = rf"\[{name}\]"
+        # a name alone ("nas", also a server's name) is masked only as an address: after // or @, with its port, or
+        # quoted in an error ("Failed to resolve 'nas'")
+        pattern = rf"(?<![\w.-]){name}(?::\d+)?(?![\w-]|\.[\w-])" if "." in host or ":" in host \
+            else rf"(?:(?<=//)|(?<=@)){name}(?::\d+)?(?![\w.-])|(?<![\w.-]){name}:\d+|(?<='){name}(?=')"
+        text = re.sub(pattern, "…", text, flags=re.I)  # host names are case-insensitive
     for pattern, by in SECRET_LIKE:
         text = pattern.sub(by, text)
     return text
+
+
+PROXY_OPTIONS = ("--proxy", "--proxy-download")
+
+
+def host_of(address: str) -> str | None:
+    try:
+        return urlparse(address.strip("\"',")).hostname
+    except ValueError:  # not an address after all: a passphrase may look like one (https://[x)
+        return None
+
+
+def hosts_in(value) -> set[str]:
+    """The host of every address (http://user:pw@host:3128) in a value, at any depth."""
+    if isinstance(value, str):
+        return {h.lower() for v in value.split() if "://" in v and (h := host_of(v))}
+    items = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
+    return set().union(*map(hosts_in, items))
+
+
+def proxy_hosts(value) -> set[str]:
+    """The hosts of the proxies given as addresses, at any depth (as no_proxy_host finds them)."""
+    if isinstance(value, dict):
+        return set().union(*[hosts_in(v) if k in PROXY_OPTIONS else proxy_hosts(v) for k, v in value.items()])
+    return set()
 
 
 def no_proxy_host(value):
     """A proxy given as an address (http://host:3128) shows as "…" at any depth (the series' options, per service,
     per Sonarr, its fallback); a provider and region (nordvpn:fr) stays: it names no machine of the user's."""
     if isinstance(value, dict):
-        return {k: "…" if k == "--proxy" and isinstance(v, str) and "://" in v else no_proxy_host(v) for k, v in value.items()}
+        return {k: "…" if k in PROXY_OPTIONS and isinstance(v, str) and "://" in v else no_proxy_host(v) for k, v in value.items()}
     return value
 
 
@@ -4625,6 +4661,10 @@ def diagnostic(run_id: str) -> str:
             settings[key] = [{k: v for k, v in i.items() if k not in ("url", "public_url", "downloads", "api_key") and not private.fullmatch(k)}
                              for i in settings[key] if isinstance(i, dict)]
     show = no_proxy_host(show)
+    # no host of the user's anywhere: the settings' addresses and the proxies the attempt went through
+    setup = card.get("setup") or {}
+    private_hosts = hosts_in(sonarr_sync.load_settings(read_config())) | proxy_hosts(config) | hosts_in([card.get("proxy"), setup.get("proxy")]) \
+        | hosts_in(re.findall(r"--proxy(?:-download)? (\S+)", str(setup.get("command") or "")))
     via = str((card.get("setup") or {}).get("via") or "")
     if via and via != "this computer" and not via.startswith("remote server"):  # another serve's host: its name only
         card = {**card, "setup": {**card["setup"], "via": via.split(" (")[0] if " (" in via else "another computer"}}
@@ -4637,7 +4677,7 @@ def diagnostic(run_id: str) -> str:
         "## The attempt", "```json", json.dumps({k: v for k, v in card.items() if k != "live"}, indent=1, ensure_ascii=False), "```",
         f"## Its log (last {len(tail)} lines)", "```", *tail, "```",
     ]
-    return scrubbed("\n".join(parts)) + "\n"
+    return scrubbed("\n".join(parts), private_hosts) + "\n"
 
 
 async def run_diagnostic(request):
