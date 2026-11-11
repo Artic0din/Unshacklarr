@@ -1219,6 +1219,7 @@ def test_one_http_500_from_a_status_poll_does_not_cancel_the_job(tmp_path, monke
 @responses.activate
 def test_a_job_whose_status_answers_500_every_time_is_cancelled_after_the_usual_misses(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
+    assert sync.POLL_MISSES == 12  # the usual misses, as before
     serve_answering_jobs(monkeypatch, sync, [(500, {"message": "database is locked"})] * sync.POLL_MISSES)
     try:
         sync.run_job({"service": "X"})
@@ -1241,19 +1242,18 @@ def test_a_job_serve_does_not_know_still_ends_the_wait_at_once(tmp_path, monkeyp
     assert len([c for c in responses.calls if c.request.method == "GET"]) == 1 and len(cancels()) == 1
 
 
-def test_a_download_that_failed_on_a_500_is_tried_again(tmp_path, monkeypatch):
+def test_a_download_that_failed_on_a_500_is_not_started_again(tmp_path, monkeypatch):
+    # serve may have queued the job before it answered 500: a retry could run it twice into the same folder
     sync = load(tmp_path, monkeypatch)
     started = []
 
     def run_job(payload, run=None, **kw):
         started.append(payload)
-        if len(started) == 1:
-            raise sync.JobFailed("HTTP 500: Internal Server Error", "failed", "500 Server Error: Internal Server Error for url")
-        return ["/downloads/x.mkv"]
+        raise sync.JobFailed("unshackle serve: HTTP 500: Internal Server Error", "failed", "unshackle serve: HTTP 500: Internal Server Error")
     monkeypatch.setattr(sync, "run_job", run_job)
-    waits = []
-    assert sync.run_job_retrying({"service": "X"}, sleep=waits.append) == ["/downloads/x.mkv"]
-    assert len(started) == 2 and waits == [sync.RETRY_AFTER[0]]
+    with pytest.raises(sync.JobFailed):
+        sync.run_job_retrying({"service": "X"}, sleep=lambda s: None)
+    assert len(started) == 1
 
 
 def test_shown_commands_hide_a_proxy_password_and_hand_written_dates_count_as_utc(tmp_path, monkeypatch):

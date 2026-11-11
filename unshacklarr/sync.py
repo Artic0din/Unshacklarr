@@ -1020,7 +1020,7 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             # One status that didn't come is not a failed download: the job still runs on serve, and a
             # retry now would start it a second time into the same folder.
             misses += 1
-            if misses >= POLL_MISSES or not TRANSIENT.search(str(e)):
+            if misses >= POLL_MISSES or not (TRANSIENT.search(str(e)) or STATUS_MISS.search(str(e))):
                 try:
                     backend.cancel(job_id)  # gone for good: nothing of it may go on behind a retry
                 except UnshackleError as refused:
@@ -1130,7 +1130,10 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
 
 # Worth another try in a moment: the network or the service stumbled, nothing is wrong with the request.
 TRANSIENT = re.compile(r"timed? ?out|timeout|connection (reset|refused|aborted|error)|remote end closed|temporarily|"
-                       r"max retries|\b50[0234]\b|internal server error|service unavailable|bad gateway|name resolution|network is unreachable", re.IGNORECASE)
+                       r"max retries|\b50[234]\b|service unavailable|bad gateway|name resolution|network is unreachable", re.IGNORECASE)
+# A status asked while the job runs that serve answered with its own error: one more miss, not the job given up.
+# Not for a whole download: serve may have queued the job before it answered 500, and a retry would start it twice.
+STATUS_MISS = re.compile(r"\bHTTP 500:")
 RETRY_AFTER = (30, 120)  # seconds before each retry
 SERVE_RETRY_AFTER = (60, 180, 600)  # serve itself too slow to answer (its disks saturated): longer, once more (#10)
 UNREACHABLE = "unshackle serve is unreachable"  # Unshackle.call's words when it can't reach serve, not an answer
