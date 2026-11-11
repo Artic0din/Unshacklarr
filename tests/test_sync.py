@@ -1056,6 +1056,17 @@ def test_a_click_on_an_episode_waiting_in_downloads_says_why_nothing_happens(tmp
     sync.sync(config, {}, [ep], manual=True, kind="manual")
     assert started == [["S02E05"]]  # downloaded again, not refused
 
+    # a link named like the episode's folder (another writer of the shared folder): not a download that waits, nor
+    # one downloaded through; the link alone goes, never what it points to (#117)
+    import shutil
+    shutil.rmtree(tmp_path / "unshackle-111-S02E05", ignore_errors=True)
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "elsewhere" / "Film.mkv").write_bytes(b"keep me")
+    (tmp_path / "unshackle-111-S02E05").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    sync.sync(config, {}, [ep], manual=True, kind="manual")
+    assert started == [["S02E05"], ["S02E05"]] and not (tmp_path / "unshackle-111-S02E05").is_symlink()
+    assert (tmp_path / "elsewhere" / "Film.mkv").read_bytes() == b"keep me"
+
 
 def test_a_login_code_is_sent_once_and_leaves_the_card_once_done(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
