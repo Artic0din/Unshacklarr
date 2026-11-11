@@ -31,6 +31,26 @@ def test_unreachable_is_notified_once_after_two_checks_then_back(tmp_path, monke
     assert sent == [("error", "Unshackle is unreachable"), ("success", "Unshackle is back")]
 
 
+def test_a_local_unshackle_that_cannot_start_is_down_and_the_other_states_still_refresh(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    command = tmp_path / ".venv" / "bin" / "unshackle"
+    command.parent.mkdir(parents=True)
+    command.write_text(f"#!{tmp_path}/no-such-python\n")  # its Python is gone
+    command.chmod(0o755)
+    web.UNSHACKLE.configure({"unshackle_mode": "local", "unshackle_command": str(command)})
+    monkeypatch.setattr(web, "sonarr_health", lambda: {"ok": True, "version": "4.0"})
+
+    web.check_health()
+
+    assert web.health["unshackle"]["ok"] is False
+    assert "no-such-python" in web.health["unshackle"]["error"]
+    assert web.health["sonarr"]["ok"] is True
+
+
 def test_the_unshackle_test_needs_the_setup_code_before_the_setup(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer
