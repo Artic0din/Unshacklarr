@@ -1066,6 +1066,19 @@ def test_saving_the_config_as_the_page_got_it_changes_nothing_and_leaks_no_secre
     assert first_status == status == 200, answer
     assert first["auth"] == second["auth"] == config["auth"]  # never from the browser
     assert second == first
+
+    def kept(saved, given, where="config"):  # all the file held is still there; a Save may only add the defaults it lacked
+        if isinstance(given, dict):
+            for key, value in given.items():
+                assert key in saved, f"{where}.{key} gone"
+                kept(saved[key], value, f"{where}.{key}")
+        elif isinstance(given, list):
+            assert len(saved) == len(given), where
+            for i, (s, g) in enumerate(zip(saved, given)):
+                kept(s, g, f"{where}[{i}]")
+        else:
+            assert saved == given, f"{where}: {saved!r} != {given!r}"
+    kept(first, config)
     # the secrets the browser never saw are still stored, whole
     assert [first["settings"][k] for k in ("sonarr_api_key", "tmdb_api_key", "unshackle_api_key", "backup_remote_secret", "backup_passphrase")] == [
         secrets[k] for k in ("sonarr", "tmdb", "unshackle", "backup", "passphrase")]
