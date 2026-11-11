@@ -2638,7 +2638,7 @@ def leftovers() -> list[dict]:
     found = []
     for d in sorted(DOWNLOADS.glob("unshackle-*")) if DOWNLOADS.is_dir() else []:
         m = FOLDER.fullmatch(d.name)
-        files = videos_in(d) if m and d.is_dir() else []
+        files = videos_in(d) if m and d.is_dir() and not d.is_symlink() else []  # a link named like ours: not ours
         if not files or d.name in busy_episodes:
             continue
         found.append({"folder": d.name, "instance": m.group(1) or "", "tvdbId": int(m.group(2)), "sxxeyy": f"S{int(m.group(3)):02}E{int(m.group(4)):02}",
@@ -2648,7 +2648,7 @@ def leftovers() -> list[dict]:
 
 
 def leftover_path(folder: str) -> Path:
-    if not FOLDER.fullmatch(folder or ""):
+    if not FOLDER.fullmatch(folder or "") or (DOWNLOADS / folder).is_symlink():
         raise RuntimeError("Not one of Unshacklarr's folders")
     return DOWNLOADS / folder
 
