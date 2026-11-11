@@ -4696,7 +4696,8 @@ def stats_of(cards: list[dict], now: datetime) -> dict:
     ended = [c for c in cards if c.get("ended") and c.get("outcome") in ("downloaded", "failed", "kept", "import")]
     recent = [c for c in ended if now - when(c) <= timedelta(days=30)]
     took = lambda c: (datetime.fromisoformat(c["ended"]) - when(c)).total_seconds()
-    week0 = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    local = now.astimezone(sonarr_sync.LOCAL)  # weeks start on Monday where the user is, not in UTC
+    week0 = (local - timedelta(days=local.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     weeks = []
     for i in range(7, -1, -1):
         start = week0 - timedelta(weeks=i)
