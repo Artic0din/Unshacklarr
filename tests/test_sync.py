@@ -1307,6 +1307,7 @@ def test_a_download_that_failed_on_a_500_is_not_started_again(tmp_path, monkeypa
 def test_shown_commands_hide_a_proxy_password_and_hand_written_dates_count_as_utc(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     assert sync.to_args({"--proxy": "http://user:secret@proxy:8080"}) == ["--proxy", "http://***@proxy:8080"]
+    assert sync.to_args({"--proxy": "http://user:se@cret@proxy:8080"}) == ["--proxy", "http://***@proxy:8080"]  # a raw @ in it
     assert sync.parse_time("2026-09-24").tzinfo is not None  # `since: 2026-09-24` typed in config.yaml
 
 
