@@ -2127,7 +2127,8 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("code", [2, -9])  # an error, or the process killed (a signal: a negative code)
-def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch, code):
+@pytest.mark.parametrize("audio", ["audio.mka", "audio.mkv"])  # the audio alone may come in a video container
+def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch, code, audio):
     sync = load(tmp_path, monkeypatch)
     config = sync.read_file()
     config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
@@ -2143,8 +2144,8 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
     monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
 
     def download(payload, run=None):
-        (Path(payload["output_dir"]) / "audio.mka").parent.mkdir(parents=True, exist_ok=True)
-        (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"fr")
+        (Path(payload["output_dir"]) / audio).parent.mkdir(parents=True, exist_ok=True)
+        (Path(payload["output_dir"]) / audio).write_bytes(b"fr")
 
     def tools(cmd, **_):
         if cmd[:2] == ["mkvmerge", "-J"]:
