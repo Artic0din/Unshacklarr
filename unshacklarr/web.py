@@ -1838,7 +1838,8 @@ def next_sync(now: datetime) -> datetime:
     every = int(sonarr_sync.SETTINGS["sync_every_hours"])
     local = now.astimezone(sonarr_sync.LOCAL)
     hour = min((local.hour // every + 1) * every, 24)  # an interval that does not divide 24 ends the day at midnight
-    return local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=hour - local.hour)
+    due = local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=hour - local.hour)
+    return due if due > now else due.replace(fold=1)  # an hour the clocks repeat, already past once: its second time
 
 
 async def run_automatic_syncs():
