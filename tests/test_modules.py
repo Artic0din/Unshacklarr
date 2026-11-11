@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 import responses
+import yaml
 
 from unshacklarr.backend import Unshackle, UnshackleError
 from unshacklarr.cdm import CdmError, NO_CDM, add, choose, delete, folders, read, remote_delete, remote_save, state
@@ -154,6 +155,26 @@ def test_cdm_devices_and_unshackle_yaml_are_edited_safely(tmp_path):
     assert [e["name"] for e in read(conf)["remote_cdm"]] == ["FAR"]
     assert not (prds / "folder_sl2000").exists()
     assert (wvds / "old_l1.wvd").stat().st_mode & 0o077 == 0  # not for other users, nor its group here
+
+
+def test_a_one_line_cdm_mapping_is_never_cut_down_to_one_service(tmp_path):
+    conf = tmp_path / "unshackle.yaml"
+    wvds, prds = folders(conf)
+    add(wvds, prds, "l3.wvd", b"WVD\x02\x02\x03\x00" + b"k" * 40)
+    for line in ("cdm: {default: l3, AMZN: l3}\n", "cdm: {default: l3, AMZN: l3, NF: l3}\n"):
+        conf.write_text("# mine\n" + line + "dl:\n  sub_format: srt\n")
+        before = conf.read_text()
+        for service, device in (("NF", "l3"), ("AMZN", None), ("AMZN", NO_CDM), *([("NF", None)] if "NF: l3" in line else [])):
+            try:
+                choose(conf, wvds, prds, service, device)
+                raise AssertionError((line, service, device))
+            except CdmError:
+                pass
+            assert conf.read_text() == before  # refused, the file untouched
+            assert read(conf)["cdm"] == yaml.safe_load(line)["cdm"]  # every service keeps its device
+    conf.write_text("cdm:\n  default: l3\n  AMZN: l3\n")  # block style, as before
+    choose(conf, wvds, prds, "NF", "l3")
+    assert read(conf)["cdm"] == {"default": "l3", "AMZN": "l3", "NF": "l3"}
 
 
 def test_odd_cookie_exports_are_refused_in_words(tmp_path):
