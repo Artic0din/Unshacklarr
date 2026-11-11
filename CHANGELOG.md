@@ -38,6 +38,7 @@ Every change worth knowing, newest first. The format follows
 - Activity's weekly stats now start each week on Monday at midnight in the app's time zone, not in UTC, and the week labels no longer show the day before west of UTC.
 - Saving a remote CDM or allowing Unshackle's proxies no longer deletes the blank lines and `#` comments that follow that section in `unshackle.yaml`.
 - A change made while a Save is still running is no longer marked as saved: the save bar stays up until it is saved, and the off-site backup's "Save and test" only marks its own fields as saved.
+- Opening several series at once no longer loses their cached where-to-watch suggestions: each one stays cached instead of the last to finish replacing the others, so they are not asked from TMDB again.
 
 ## [1.5.0] - 2026-10-17
 

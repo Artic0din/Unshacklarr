@@ -1539,6 +1539,59 @@ def test_suggest_network_falls_back_to_the_cached_tmdb_network(tmp_path, monkeyp
     assert web.series_network("1", "") == ""
 
 
+def suggest_module(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    monkeypatch.setattr(web, "searched_in_place", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "named_titles", lambda links, tmdb_id: links)
+    monkeypatch.setattr(web, "series_network", lambda tmdb_id, given: "")
+    return web
+
+
+def ask_suggest(web, tmdb_id):
+    from types import SimpleNamespace
+    return web.suggest(SimpleNamespace(match_info={"tmdb_id": str(tmdb_id)}, query={}))
+
+
+def test_suggestions_looked_up_at_once_all_stay_cached(tmp_path, monkeypatch):
+    import threading
+    web = suggest_module(tmp_path, monkeypatch)
+    both_asking = threading.Barrier(2, timeout=5)  # each waits inside its TMDB request for the other
+
+    def tmdb_links(tmdb_id, country, domains):
+        both_asking.wait()
+        return [{"service": "TEN", "url": f"https://10.com.au/{tmdb_id}", "country": country, "kind": "native"}]
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    async def go():
+        await asyncio.gather(ask_suggest(web, 1), ask_suggest(web, 2))
+
+    asyncio.run(go())
+    assert sorted(json.loads(web.TMDB_CACHE.read_text())) == ["1", "2"]
+
+
+def test_a_failed_suggestion_lookup_keeps_the_cached_entry(tmp_path, monkeypatch):
+    web = suggest_module(tmp_path, monkeypatch)
+    old = {"countries": ["AU"], "checked": "2020-01-01T00:00:00+00:00", "map": web.SUGGEST_MAP,
+           "links": [{"service": "TEN", "url": "https://10.com.au/1", "country": "AU", "kind": "native"}]}
+    web.TMDB_CACHE.write_text(json.dumps({"1": old}))
+    monkeypatch.setattr(web, "read_config", lambda: {"tmdb_countries": ["AU"]})
+
+    def tmdb_links(tmdb_id, country, domains):
+        raise web.requests.ConnectionError("down")
+
+    monkeypatch.setattr(web, "tmdb_links", tmdb_links)
+    reply = asyncio.run(ask_suggest(web, 1))
+    assert json.loads(reply.text)["checked"] == old["checked"]
+    assert json.loads(web.TMDB_CACHE.read_text()) == {"1": old}
+
+
 def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
