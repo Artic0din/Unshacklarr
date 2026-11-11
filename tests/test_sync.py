@@ -1190,6 +1190,72 @@ def test_a_missed_job_status_waits_instead_of_downloading_twice(tmp_path, monkey
     assert sync.run_job_retrying({"service": "X"}) == [] and len(started) == 1  # the same job, followed to its end
 
 
+SERVE = "http://serve:8786"
+
+
+def serve_answering_jobs(monkeypatch, sync, answers):
+    """The real Unshackle client over `responses`: each status poll gets the next of (HTTP status, JSON body)."""
+    monkeypatch.setattr(sync.UNSHACKLE, "settings", {"unshackle_url": SERVE, "unshackle_api_key": "a-long-random-key"})
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda payload: "j1")
+    monkeypatch.setattr(sync.time, "sleep", lambda _: None)
+    for status, body in answers:
+        responses.add(responses.GET, f"{SERVE}/api/download/jobs/j1", status=status, json=body)
+    responses.add(responses.DELETE, f"{SERVE}/api/download/jobs/j1", json={})
+
+
+def cancels():
+    return [c for c in responses.calls if c.request.method == "DELETE"]
+
+
+@responses.activate
+def test_one_http_500_from_a_status_poll_does_not_cancel_the_job(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    serve_answering_jobs(monkeypatch, sync, [(500, {"message": "database is locked"}),
+                                             (200, {"status": "completed", "output_files": ["/downloads/x.mkv"]})])
+    assert sync.run_job({"service": "X"}) == ["/downloads/x.mkv"]
+    assert not cancels()
+
+
+@responses.activate
+def test_a_job_whose_status_answers_500_every_time_is_cancelled_after_the_usual_misses(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    serve_answering_jobs(monkeypatch, sync, [(500, {"message": "database is locked"})] * sync.POLL_MISSES)
+    try:
+        sync.run_job({"service": "X"})
+        raise AssertionError("a job whose status never came went on")
+    except sync.UnshackleError:
+        pass
+    polls = [c for c in responses.calls if c.request.method == "GET"]
+    assert len(polls) == sync.POLL_MISSES and len(cancels()) == 1
+
+
+@responses.activate
+def test_a_job_serve_does_not_know_still_ends_the_wait_at_once(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    serve_answering_jobs(monkeypatch, sync, [(404, {"message": "Job not found"})])
+    try:
+        sync.run_job({"service": "X"})
+        raise AssertionError("a job that does not exist was waited for")
+    except sync.UnshackleError:
+        pass
+    assert len([c for c in responses.calls if c.request.method == "GET"]) == 1 and len(cancels()) == 1
+
+
+def test_a_download_that_failed_on_a_500_is_tried_again(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    started = []
+
+    def run_job(payload, run=None, **kw):
+        started.append(payload)
+        if len(started) == 1:
+            raise sync.JobFailed("HTTP 500: Internal Server Error", "failed", "500 Server Error: Internal Server Error for url")
+        return ["/downloads/x.mkv"]
+    monkeypatch.setattr(sync, "run_job", run_job)
+    waits = []
+    assert sync.run_job_retrying({"service": "X"}, sleep=waits.append) == ["/downloads/x.mkv"]
+    assert len(started) == 2 and waits == [sync.RETRY_AFTER[0]]
+
+
 def test_shown_commands_hide_a_proxy_password_and_hand_written_dates_count_as_utc(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     assert sync.to_args({"--proxy": "http://user:secret@proxy:8080"}) == ["--proxy", "http://***@proxy:8080"]
