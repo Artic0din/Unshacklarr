@@ -1207,7 +1207,7 @@ def test_a_session_cookie_made_before_the_nonce_is_still_accepted_until_it_expir
 
     assert web.logged_in(Request(old), auth) is True
     assert web.logged_in(Request(web.session_value(auth)), auth) is True
-    assert web.logged_in(Request(old[:-1] + "0"), auth) is False
+    assert web.logged_in(Request(old[:-1] + ("1" if old.endswith("0") else "0")), auth) is False
 
 
 def test_a_refused_notification_address_is_not_echoed_whole(tmp_path, monkeypatch):
