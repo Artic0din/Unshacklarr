@@ -3143,6 +3143,17 @@ def test_a_year_in_brackets_is_not_a_part():
     assert same_title(plain_title("Christmas Special (2023)"), plain_title("Christmas Special 2023"))
 
 
+def test_a_spelled_out_part_number_counts_as_the_digit():
+    from unshacklarr.web import last_number, same_title
+    assert not same_title("the ambush part two", "the ambush part 1")
+    assert same_title("the ambush part two", "the ambush part 2")
+    assert not same_title("the ambush part one", "the ambush part two")
+    assert last_number("the ambush part twenty") == 20
+    assert last_number("twenty one") is None  # a compound number is not "1": "21" must still match it
+    assert last_number("murder in the city two") == 2 and not same_title("murder in the city two", "murder in the city 1")
+    assert last_number("fallen women") is None and same_title("fallen women", "fallen woman")
+
+
 def test_the_library_folders_are_browsed_and_checked(tmp_path, monkeypatch):
     # Add audio track: folders listed (names only, no file), and a real file of Sonarr's looked for with the two roots
     from unshacklarr import web
