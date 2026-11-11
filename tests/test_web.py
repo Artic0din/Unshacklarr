@@ -4339,3 +4339,30 @@ def test_a_service_linking_several_titles_names_each(tmp_path, monkeypatch):
     assert web.named_titles([specials, series], 7) == [
         {**specials, "naming_retry": True}, {**series, "naming_retry": True}]
     assert web.title_key("Kath & Kim") == web.title_key("Kath and Kim")
+
+
+def test_two_logouts_at_once_both_stay_logged_out(tmp_path, monkeypatch):
+    # each reads the list of closed sessions, then writes it back with its own: one must not drop the other's
+    import threading
+    web = reloaded_web(tmp_path, monkeypatch)
+    auth = {"secret": "s1"}
+    first, second = web.session_value(auth), web.session_value(auth)
+    both_read = threading.Barrier(2, timeout=0.5)
+    real_read = web.read_json
+
+    def read_then_wait(path, empty):
+        value = real_read(path, empty)
+        if path == web.LOGGED_OUT_FILE:
+            try:
+                both_read.wait()  # the two reads before either write, if nothing keeps them apart
+            except threading.BrokenBarrierError:
+                pass
+        return value
+    monkeypatch.setattr(web, "read_json", read_then_wait)
+    threads = [threading.Thread(target=web.forget_session, args=(v,)) for v in (first, second)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(5)
+    closed = real_read(web.LOGGED_OUT_FILE, {})
+    assert {first.rpartition(".")[2], second.rpartition(".")[2]} <= set(closed)
