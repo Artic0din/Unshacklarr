@@ -1133,7 +1133,7 @@ TRANSIENT = re.compile(r"timed? ?out|timeout|connection (reset|refused|aborted|e
                        r"max retries|\b50[234]\b|service unavailable|bad gateway|name resolution|network is unreachable", re.IGNORECASE)
 # A status asked while the job runs that serve answered with its own error: one more miss, not the job given up.
 # Not for a whole download: serve may have queued the job before it answered 500, and a retry would start it twice.
-STATUS_MISS = re.compile(r"\bHTTP 500:")
+STATUS_MISS = re.compile(r"^unshackle serve: HTTP 500:")  # the status Unshackle.call puts first, not words in a body
 RETRY_AFTER = (30, 120)  # seconds before each retry
 SERVE_RETRY_AFTER = (60, 180, 600)  # serve itself too slow to answer (its disks saturated): longer, once more (#10)
 UNREACHABLE = "unshackle serve is unreachable"  # Unshackle.call's words when it can't reach serve, not an answer

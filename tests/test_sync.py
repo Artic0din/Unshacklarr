@@ -1220,6 +1220,7 @@ def test_one_http_500_from_a_status_poll_does_not_cancel_the_job(tmp_path, monke
 def test_a_job_whose_status_answers_500_every_time_is_cancelled_after_the_usual_misses(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     assert sync.POLL_MISSES == 12  # the usual misses, as before
+    assert not sync.STATUS_MISS.search("unshackle serve: job failed: HTTP 500: from the CDN")  # the status, not words in a body
     serve_answering_jobs(monkeypatch, sync, [(500, {"message": "database is locked"})] * sync.POLL_MISSES)
     try:
         sync.run_job({"service": "X"})
