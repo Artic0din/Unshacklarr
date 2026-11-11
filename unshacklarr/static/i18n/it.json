@@ -424,7 +424,7 @@
  "No CDM": "Nessun CDM",
  "No CDM for {0}": "Nessun CDM per {0}",
  "No DRM, nothing to decrypt": "Nessun DRM, niente da decrittare",
- "No answer after 30 s.": "Nessuna risposta dopo 30 s.",
+ "No answer after {0} s.": "Nessuna risposta dopo {0} s.",
  "No change to save": "Nessuna modifica da salvare",
  "No change.": "Nessuna modifica.",
  "No cookie found: export them in the Netscape (cookies.txt) or JSON format": "Nessun cookie trovato: esportali in formato Netscape (cookies.txt) o JSON",

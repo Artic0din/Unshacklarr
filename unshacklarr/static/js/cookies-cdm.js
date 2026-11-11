@@ -135,7 +135,7 @@ async function testCdm(d) {
   cdmRunning.add(d.name);
   renderCdm();
   try {
-    d.test = await api("/api/cdm/test", { method: "POST", signal: AbortSignal.timeout(90000), body: JSON.stringify({ kind: d.kind, name: d.name }) });
+    d.test = await api("/api/cdm/test", { method: "POST", wait: 90, body: JSON.stringify({ kind: d.kind, name: d.name }) });
   } catch (e) { toast(`${d.name}: ${e.message}`, true); }
   cdmRunning.delete(d.name);
   cdmJust.add(d.name);
@@ -317,7 +317,7 @@ function renderCdm() {
       if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.querySelector("b").textContent = "Sure? New keys"; return; }
       closeCdmPop(); toast(`${cdmShort(d)}: reprovisioning…`);
       try {
-        const r = await api("/api/cdm/reprovision", { method: "POST", signal: AbortSignal.timeout(90000), body: JSON.stringify({ name: d.name }) });
+        const r = await api("/api/cdm/reprovision", { method: "POST", wait: 90, body: JSON.stringify({ name: d.name }) });
         cdmData = r.state;
         const fresh = cdmData.devices.find((x) => x.kind === d.kind && x.name === d.name);
         if (fresh) await testCdm(fresh);

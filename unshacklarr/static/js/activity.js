@@ -392,7 +392,7 @@ async function showLeftovers() {
     if (action === "delete" && e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure?"; return; }
     e.target.disabled = true;
     try {
-      await api(`/api/leftovers/${action}`, { method: "POST", signal: AbortSignal.timeout(360000), body: JSON.stringify({ folder: item.folder }) });
+      await api(`/api/leftovers/${action}`, { method: "POST", wait: 360, body: JSON.stringify({ folder: item.folder }) });
       toast(action === "delete" ? `${item.folder} deleted` : `${item.series || item.folder}: imported by Sonarr`);
       showLeftovers();
     } catch (err) { e.target.disabled = false; toast(err.message, true); }

@@ -141,7 +141,8 @@ function networkBadge(d, extra = "") {
 async function fetchDays(from, days) {
   const key = `${isoDay(from)}+${days}`;
   if (cal.fetched.has(key)) return;
-  const eps = await api(`/api/calendar?start=${isoDay(from)}&days=${days}`);
+  const eps = await api(`/api/calendar?start=${isoDay(from)}&days=${days}`,
+    { wait: 130 });  // as long as the server waits for a busy Sonarr (120 s)
   cal.fetched.add(key);
   for (let i = 0; i < days; i++) cal.byDay.set(isoDay(addDays(from, i)), []);
   for (const d of eps) {  // on the day it airs; one out days before (a platform ahead of the channel) on the day it's tried

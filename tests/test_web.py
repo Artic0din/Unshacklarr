@@ -3095,7 +3095,7 @@ def test_another_sonarr_gets_its_copy_at_the_release_time_too(tmp_path, monkeypa
     monkeypatch.setattr(web, "read_config", lambda: {"series": {7: show}})
     ids = {"": 501, "4k": 9501}  # the same episode, each Sonarr its own id
 
-    def calendar(config, start, end):
+    def calendar(config, start, end, timeout=None):
         name = (sync.instance() or {}).get("name", "")
         return [{"id": ids[name], "series": {"tvdbId": 7, "title": "S"}, "seasonNumber": 1, "episodeNumber": 1,
                  "hasFile": False, "airDateUtc": "2026-10-16T21:00:00Z"}]
@@ -3147,3 +3147,40 @@ def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     assert next(s for s in web.dl_options() if s["flag"] == "--cdm")["choices"] == []  # unseen: typed by hand
     line = options.command_line({"service": "NF", "title_id": "1", "wanted": ["S01E01"], "skip_subtitle_errors": True, "cdm": "my_l3"})
     assert line == "unshackle dl --cdm my_l3 NF 1 -w S01E01"
+
+
+def test_sonarr_reads_wait_as_long_as_a_busy_sonarr_answers(tmp_path, monkeypatch):
+    """Sonarr importing a batch of downloads took 43 s to list its series; the page gave up at 30 s and said
+    Sonarr was unreachable. The series list and the calendar wait as long as every other Sonarr read."""
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    waited = []
+
+    class Answer:
+        status_code, content = 200, b"[]"
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return []
+
+    def get(url, timeout=None, **_):
+        waited.append(timeout)
+        return Answer()
+    monkeypatch.setattr(web.requests, "get", get)
+    monkeypatch.setattr(web.sonarr_sync.requests, "get", get)
+    web.sonarr_series()
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    web.calendar_episodes({"series": {}}, now, now)
+    web.sonarr_sync.sonarr_get("series")
+    assert waited == [web.sonarr_sync.SONARR_READ_TIMEOUT] * 3 and web.sonarr_sync.SONARR_READ_TIMEOUT >= 60
+    # The release check, every 30 s for a burst a minute long, does not wait two minutes on it.
+    waited.clear()
+    monkeypatch.setattr(web, "read_config", lambda: {"series": {1: {"service": "NINE", "release_time": "06:00"}}})
+    assert web.due_in(now, None) == []
+    assert waited == [web.RELEASE_CHECK_TIMEOUT] and web.RELEASE_CHECK_TIMEOUT < 60

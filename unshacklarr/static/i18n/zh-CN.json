@@ -432,7 +432,7 @@
  "No CDM": "无 CDM",
  "No CDM for {0}": "{0} 没有 CDM",
  "No DRM, nothing to decrypt": "无 DRM，无需解密",
- "No answer after 30 s.": "30 秒内无响应。",
+ "No answer after {0} s.": "{0} 秒内无响应。",
  "No change to save": "没有要保存的更改",
  "No change.": "无更改。",
  "No cookie found: export them in the Netscape (cookies.txt) or JSON format": "未找到 Cookie：请以 Netscape（cookies.txt）或 JSON 格式导出",

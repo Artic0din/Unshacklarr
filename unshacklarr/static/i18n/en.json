@@ -1266,7 +1266,9 @@
  ],
  "No address yet": [],
  "No address yet: add Discord, Telegram, ntfy or another.": [],
- "No answer after 30 s.": [],
+ "No answer after {0} s.": [
+  "wait"
+ ],
  "No backup in the data folder's backups folder. Pick a backup file instead.": [],
  "No backup named {0}": [
   "name"
