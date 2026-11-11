@@ -2151,8 +2151,8 @@ def eq_height(track: dict) -> int:
     def classed(value: float) -> int:
         return next((h for h in HEIGHTS if abs(value - h) <= h * 0.02), int(value))
     by_height, by_width = classed(int(track.get("height") or 0)), classed(int(track.get("width") or 0) * 9 / 16)
-    # a little wider than 16:9 (DCI 1.9:1, 1.85:1): its height; much wider is a crop of a bigger picture (4096x1440)
-    return by_height if by_height in HEIGHTS and by_width not in HEIGHTS and by_width < by_height * 1.1 else max(by_height, by_width)
+    # up to about 2.2:1 (DCI 1.9:1, 2:1): its height; much wider is a crop of a bigger picture (4096x1440)
+    return by_height if by_height in HEIGHTS and by_width not in HEIGHTS and by_width < by_height * 1.25 else max(by_height, by_width)
 
 
 def fits(step: dict, track: dict) -> bool:
