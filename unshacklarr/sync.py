@@ -1226,6 +1226,36 @@ PART = re.compile(r"\.Part\.(\d+)", re.IGNORECASE)
 VIDEO = (".mkv", ".mp4")
 
 
+def unlink_inside(folder: Path, files: list[Path]) -> None:
+    """Delete these files under folder, never through a link: another writer of the shared downloads folder may swap
+    the folder, or one inside it, for a link at any moment, so each step is opened refusing one (no check, then use).
+    A link among the files is removed itself, never what it points to."""
+    nofollow = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        root = os.open(folder, nofollow)
+    except OSError:
+        return  # gone, or a link: nothing deleted through it
+    try:
+        for f in files:
+            try:
+                *dirs, name = f.relative_to(folder).parts
+            except ValueError:
+                continue
+            fd = os.dup(root)
+            try:
+                for part in dirs:
+                    inner = os.open(part, nofollow, dir_fd=fd)
+                    os.close(fd)
+                    fd = inner
+                os.unlink(name, dir_fd=fd)
+            except OSError:
+                pass  # gone, or a link on the way: left where it is
+            finally:
+                os.close(fd)
+    finally:
+        os.close(root)
+
+
 def videos_in(folder: Path) -> list[Path]:
     return [f for f in folder.rglob("*") if f.suffix.lower() in VIDEO]
 # In a file name, Unshackle writes a part .Part.N: a bare number after the episode is its resolution
@@ -2031,13 +2061,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             return True
         except (RuntimeError, JobFailed, UnshackleError, ValueError, subprocess.CalledProcessError, requests.RequestException) as e:
             run.say(f"{label}: {e}")
-            # audio alone, maybe in a video container: Import would put it in place of the library's video;
-            # never through a link: a folder swapped for one would make this delete files elsewhere
-            if not out.is_symlink():
-                real = out.resolve()
-                for f in got:  # a link itself is removed, never resolved (one to itself raises before Python 3.13)
-                    if f.is_symlink() or f.resolve().is_relative_to(real):
-                        f.unlink(missing_ok=True)
+            unlink_inside(out, got)  # audio alone, maybe in a video container: Import would put it in place of the library's video
             run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "")
             return True  # tried: the next day's check tries again, not a second download now
         finally:

@@ -2435,6 +2435,56 @@ def test_a_failed_audio_add_never_deletes_through_a_folder_swapped_for_a_link(tm
     assert (elsewhere / "film.mkv").read_bytes() == b"keep me"  # refused, and nothing deleted through the link
 
 
+def test_a_failed_audio_add_never_deletes_through_a_folder_swapped_after_its_check(tmp_path, monkeypatch):
+    # another writer of the shared folder swaps it for a link between the clean-up's look at it and its deletes
+    code = 2
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "audio.mkv").write_bytes(b"keep me")
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    folder = {}
+
+    def download(payload, run=None):
+        out = folder["out"] = Path(payload["output_dir"])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "audio.mkv").write_bytes(b"audio")
+
+    def tools(cmd, **_):
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        folder["failed"] = True
+        return subprocess.CompletedProcess(cmd, code, stdout="Error: disk full")
+
+    real_is_symlink = Path.is_symlink
+
+    def is_symlink(self):
+        answer = real_is_symlink(self)
+        if folder.get("failed") and self == folder.get("out") and not answer:  # looked at once it failed: swapped right after
+            shutil.rmtree(self)
+            self.symlink_to(elsewhere, target_is_directory=True)
+        return answer
+    monkeypatch.setattr(Path, "is_symlink", is_symlink)
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: None)
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    assert sync.add_track(205, "fr") is True
+    assert (elsewhere / "audio.mkv").read_bytes() == b"keep me"
+
+
 def test_a_failed_audio_add_survives_a_file_that_links_to_itself(tmp_path, monkeypatch):
     # on Python 3.12 (the image's) resolving a link to itself raises: the failure must still be recorded, the link removed
     sync = load(tmp_path, monkeypatch)
