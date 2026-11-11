@@ -479,6 +479,16 @@ def test_a_failure_is_notified_by_its_cause_and_paths_as_sonarr_sees_them(tmp_pa
     assert sync.seen_by("sonarr_downloads", sync.episode_folder(records[0])) == "/Syno/0.Temp/unshackle-111-S02E05"
 
 
+def test_a_new_run_is_active_before_its_card_is_on_disk(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.EpisodeRun, "active", set())
+    seen = []
+    save = sync.EpisodeRun.save
+    monkeypatch.setattr(sync.EpisodeRun, "save", lambda self: (seen.append(self.id in sync.EpisodeRun.active), save(self))[1])
+    sync.EpisodeRun(episode(111, 2, 5), {"service": "RTLP"}, "manual", "S02E05")
+    assert seen and all(seen)  # the history's Delete and Clear skip active runs, so a card is never removable while being born
+
+
 def test_a_run_keeps_every_track_it_saw_and_its_parts(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     ep, show = episode(111, 2, 5), {"service": "RTLP"}
