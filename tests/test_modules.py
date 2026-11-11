@@ -243,6 +243,11 @@ def test_a_redirect_from_unshackle_serve_is_not_followed_and_names_the_new_host(
         with pytest.raises(UnshackleError) as e:
             u.health()
     assert "redirects to https://old.example/serve:" in str(e.value)  # http to https behind a base path
+    with responses.RequestsMock() as r:
+        r.get("http://old.example/api/health", status=302, headers={"Location": "http://old.example/login"})
+        with pytest.raises(UnshackleError) as e:
+            u.health()
+    assert "redirects to http://old.example/login, which is not" in str(e.value) and "use that address" not in str(e.value)
 
 
 def test_a_linked_unshackle_yaml_or_a_folder_outside_it_is_refused(tmp_path):

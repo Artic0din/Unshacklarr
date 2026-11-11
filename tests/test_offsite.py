@@ -72,3 +72,12 @@ def test_s3_signs_the_host_the_client_sends():
 def test_nothing_leaves_without_a_passphrase():
     with pytest.raises(ValueError):
         offsite.send({"backup_remote": "webdav", "backup_remote_url": "https://dav.example"}, "b.yaml", "series: {}")
+
+
+@pytest.mark.parametrize("bucket", ["bucket/folder/../archive", "bucket/./archive"])
+def test_s3_refuses_a_folder_a_url_would_rewrite(bucket):
+    # a URL drops "." and "..", so the backup would land under another key than the one in Settings
+    put = mock.Mock()
+    with mock.patch.object(requests, "put", put), pytest.raises(ValueError, match="cannot hold"):
+        offsite.s3_put("https://nas.example", bucket, "", "AKID", "secret", "a.enc", b"hello")
+    put.assert_not_called()
