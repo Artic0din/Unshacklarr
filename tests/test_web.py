@@ -497,6 +497,13 @@ const fresh = () => {
   saving = page.save(); Object.assign(box.S.config.series[7], { service: "7P", title: "https://7plus.example/show" });  // moved meanwhile
   release({ series: { 7: { ...show, release_time: "21:00", release_day: 1 } } }); await saving;
   out.otherSourceTakesNothing = !("release_time" in box.S.config.series[7]) && !("release_day" in box.S.config.series[7]);
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.theme = "light"; page.dirty();
+  box.current = null; box.drawerSnapshot = null;  // its panel closed when the Save starts
+  saving = page.save(); Object.assign(box.S.config.series[7], { service: "7P", title: "https://7plus.example/show" });
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };  // opened meanwhile
+  release({ series: { 7: { ...show, release_time: "21:00", release_day: 1 } } }); await saving;
+  out.otherSourceSnapshotTakesNothing = !("release_time" in JSON.parse(box.drawerSnapshot.conf));
+  box.current = null; box.drawerSnapshot = null;
   fresh(); box.S.config.series = { 7: { ...show, release_time: "20:00" } }; page.baseline(box.S.config);
   box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };
   bars["#d-release-day"] = { value: "0", hidden: false }; box.previews = 0;
@@ -535,6 +542,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "learntTimeShown": True,  # a release time the server kept is shown and counts as saved (#29)
         "clearedMeanwhileStays": True,
         "otherSourceTakesNothing": True,  # moved to another service while the Save ran: the old one's time is not its
+        "otherSourceSnapshotTakesNothing": True,  # nor its panel's snapshot, so closing it asks nothing
         "learntDayShown": True,  # a day kept alone shows too, and the next-episode line follows
     }
 

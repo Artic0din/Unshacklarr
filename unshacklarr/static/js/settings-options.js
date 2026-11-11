@@ -669,7 +669,9 @@ async function save() {
   savedConfig = stableJSON(base);
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
   const open = drawerSnapshot && JSON.parse(drawerSnapshot.conf || "{}");  // its drawer, open since or opened meanwhile
-  const added = open && Object.entries(stamped[drawerSnapshot.id] || {}).filter(([k]) => missing(open, k));
+  const sentShow = open && base.series[drawerSnapshot.id];  // and, for a release time, the source it was learnt for
+  const added = open && Object.entries(stamped[drawerSnapshot.id] || {}).filter(([k]) => missing(open, k)
+    && (k === "since" || (open.service === sentShow?.service && open.title === sentShow?.title)));
   if (added?.length) drawerSnapshot.conf = JSON.stringify({ ...open, ...Object.fromEntries(added) });
   const shown = current && S.config.series[current.tvdbId];  // its editor shows what is saved
   const learnt = stamped[current?.tvdbId];
