@@ -3452,6 +3452,12 @@ def test_two_syncs_of_one_batch_waiting_for_a_full_server_both_get_in(tmp_path, 
     threads += [threading.Thread(target=j, args=(n,), daemon=True) for n in ("a", "b")]
     for t in threads[1:]:
         t.start()
+    for _ in range(500):  # both in line before the server frees up, or the test proves nothing
+        with sync.slots:
+            if sync.slot_line.get("serve", []).count("J") == 2:
+                break
+        sync.time.sleep(0.01)
+    assert sync.slot_line["serve"].count("J") == 2
     k_go.set()  # the other job's download ends: the batch takes the slot
     both = inside["a"].wait(6) and inside["b"].wait(6)
     sync.stop_waiting.update({"a", "b"})
