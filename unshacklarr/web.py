@@ -753,6 +753,9 @@ def tmdb_key() -> str:
     return sonarr_sync.SETTINGS.get("tmdb_api_key") or ""
 
 
+CONFIG_LOCK = threading.Lock()  # a Save and the sync's own writes (a learned release time) read and write it whole
+
+
 def write_config(config: dict) -> None:
     global config_read
     config_read = ((), {})  # read afresh next time, whatever the clock says
@@ -1119,7 +1122,14 @@ async def save_config(request):
         "hidden_series": sorted({int(i) for i in body.get("hidden_series") or []}),
         "quality_ladders": ladders,
     }
-    write_config(config)
+    with CONFIG_LOCK:  # what changed on the server since the page was loaded, or during the wait on Unshackle above
+        now = read_config()
+        config["auth"] = now["auth"]  # a new password or a revoked API key meanwhile stays
+        for key, show in (body.get("series") or {}).items():
+            learned = now["series"].get(int(key)) or {}
+            if "release_time" not in show and learned.get("release_time") and int(key) in series:  # learnt after the page loaded
+                series[int(key)].update({k: learned[k] for k in ("release_time", "release_day") if k in learned})
+        write_config(config)
     if settings.get("upgrade_check_new"):  # by mj23au: a series just set up, its files already on disk, checked once
         upgrade_pending.update(newly_set_up(series, previous.get("series") or {}))
     return web.json_response(public_config(read_config()))
@@ -3937,14 +3947,15 @@ sonarr_sync.find_by_title = title_matches
 
 def release_learned(tvdb: int, at: str, day: int) -> bool:
     """A release time the sync learnt (release_learn): in the series' settings, as if typed on its page. Whether it wrote it."""
-    config = read_config()
-    show = config["series"].get(tvdb)
-    if not show or show.get("release_time"):
-        return False  # gone, or set meanwhile: never over one set by hand
-    show["release_time"] = at
-    if day:
-        show["release_day"] = day
-    write_config(config)
+    with CONFIG_LOCK:
+        config = read_config()
+        show = config["series"].get(tvdb)
+        if not show or show.get("release_time"):
+            return False  # gone, or set meanwhile: never over one set by hand
+        show["release_time"] = at
+        if day:
+            show["release_day"] = day
+        write_config(config)
     return True
 
 
