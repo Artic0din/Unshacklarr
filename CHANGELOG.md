@@ -37,6 +37,7 @@ Every change worth knowing, newest first. The format follows
 - An interrupted download (cut off by a restart) can now be deleted from Activity, and Clear all removes it, instead of answering "No such download in the history" and staying.
 - Activity's weekly stats now start each week on Monday at midnight in the app's time zone, not in UTC, and the week labels no longer show the day before west of UTC.
 - Saving a remote CDM or allowing Unshackle's proxies no longer deletes the blank lines and `#` comments that follow that section in `unshackle.yaml`.
+- Activity no longer asks the server for the whole history again and again while a download starts or ends: one reload at a time, and its answer is drawn, so the Running list updates even when the history is slow to load.
 
 ## [1.5.0] - 2026-10-17
 
