@@ -1622,7 +1622,7 @@ async def sent_notifications(_):
 TMDB_CACHE = sonarr_sync.DATA / "tmdb_cache.json"
 TMDB_CACHE_DAYS = 7
 # Bump when SITES, NETWORKS, unwrap or scrape rules change so week-old caches re-scrape.
-SUGGEST_MAP = 8
+SUGGEST_MAP = 9
 
 
 async def suggest(request):
