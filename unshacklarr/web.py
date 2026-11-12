@@ -1809,8 +1809,9 @@ def named_titles(links: list[dict], tmdb_id: int) -> list[dict]:
     return [l for _, l in sorted(enumerate(out), key=rank)]
 
 
-def search_series_url(service: str, title: str) -> str | None:
-    """The series' address on its service when its search has exactly one result of that title."""
+def search_series_url(service: str, title: str, limited_raises: bool = False) -> str | None:
+    """The series' address on its service when its search has exactly one result of that title. serve's limit
+    raised when asked (a background pass then stops, rather than keep a search that was never made)."""
     show = {"service": service}
     dl, _ = sonarr_sync.stacked(show, read_config())
     params = {k: v for k, v in options.to_params(dl, options.dl_specs()).items() if k in ("profile", "proxy", "no_proxy")}
@@ -1818,6 +1819,8 @@ def search_series_url(service: str, title: str) -> str | None:
     try:
         found = sonarr_sync.backend_for(service).call("POST", "/api/search", json={**params, "service": service, "query": query})
     except UnshackleError as e:
+        if limited_raises and getattr(e, "retry_after", 0):
+            raise
         print(f"Search {service} for {query!r}: {no_credentials(e)}", flush=True)
         return None
     # Sonarr's "(AU)" may be absent from the service's title; a result's own other tag ("(UK)") is not the same show
@@ -4120,7 +4123,7 @@ def seasons_elsewhere(show: dict, serie: dict, found: dict) -> dict:
     for service in sonarr_sync.all_services() if wanted else []:
         if service["tag"] == show["service"] or not service.get("has_search"):
             continue
-        if not (url := search_series_url(service["tag"], serie["title"])):
+        if not (url := search_series_url(service["tag"], serie["title"], limited_raises=True)):
             continue
         try:
             listed = [t for t in list_titles({"service": service["tag"], "title": url}) if t.get("type") == "episode"]

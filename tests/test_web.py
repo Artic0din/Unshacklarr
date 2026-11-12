@@ -1039,8 +1039,8 @@ def test_a_season_missing_from_its_service_is_found_on_another_and_kept(tmp_path
     monkeypatch.setattr(sync, "sonarr_get", lambda path, **q: eps)
     monkeypatch.setattr(sync, "all_services", lambda: [{"tag": "BINGE", "has_search": True}, {"tag": "NOSEARCH"},
                                                        {"tag": "STAN", "has_search": True}, {"tag": "NF", "has_search": True}])
-    searched = []
-    monkeypatch.setattr(web, "search_series_url", lambda tag, title: searched.append(tag) or f"https://{tag.lower()}/x")
+    searched, search = [], web.search_series_url
+    monkeypatch.setattr(web, "search_series_url", lambda tag, title, limited_raises: searched.append(tag) or f"https://{tag.lower()}/x")
     listings = {"STAN": [(2, 1), (2, 2), (5, 1), (5, 1), (5, 9)], "NF": [(5, 1), (5, 2), (1, 1)]}  # S05E01 in two parts, E09 never aired
     monkeypatch.setattr(web, "list_titles", lambda show: [{"type": "episode", "season": s, "number": n} for s, n in listings[show["service"]]])
     monkeypatch.setattr(web.time, "sleep", lambda s: None)
@@ -1067,6 +1067,16 @@ def test_a_season_missing_from_its_service_is_found_on_another_and_kept(tmp_path
     monkeypatch.setattr(web, "list_titles", limited)
     with pytest.raises(web.UnshackleError):
         web.seasons_elsewhere(show, {"id": 8, "title": "X"}, found)
+
+    class Limited:  # the search itself at serve's limit: the pass stops, nothing kept as searched
+        def call(self, *a, **k):
+            limited(None)
+    monkeypatch.setattr(web, "search_series_url", search)
+    monkeypatch.setattr(sync, "backend_for", lambda tag, config=None: Limited())
+    with pytest.raises(web.UnshackleError):
+        web.seasons_elsewhere(show, {"id": 8, "title": "X"}, found)
+    assert web.search_series_url("STAN", "X") is None  # elsewhere (a page's suggestions): no result, as before
+    monkeypatch.setattr(web, "search_series_url", lambda tag, title, limited_raises: searched.append(tag) or f"https://{tag.lower()}/x")
     searched.clear()
     eps[:] = [e for e in eps if e["seasonNumber"] in (1, 3)]  # nothing missing elsewhere: no search at all
     assert web.seasons_elsewhere(show, {"id": 8, "title": "X"}, found) == {} and searched == []
