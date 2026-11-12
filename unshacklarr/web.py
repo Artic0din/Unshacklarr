@@ -3784,6 +3784,8 @@ def probe_series(show: dict, series_id: int, title: str = "", discover: bool = F
         try:
             part = probe_one(sonarr_sync.season_page(show, season), series_id, title, {"only": {season}})
         except (UnshackleError, requests.RequestException, ValueError) as e:
+            if getattr(e, "retry_after", 0):
+                raise  # serve's limit: no other page asked now
             found["pages"][str(season)] = {"url": pages[season]["url"], "error": str(e)[:200]}
             continue
         found["available"].update(part["available"])
@@ -3926,7 +3928,8 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
 
 
 SERVICE_LISTS = sonarr_sync.DATA / "service_lists.json"  # the last "What's on <service>?" of each series
-SERVICE_LIST_HOURS = 12
+SERVICE_LIST_EVERY = timedelta(days=7)  # each series' listing is asked again in the background after this
+SERVICE_LIST_PAUSE = 2.0  # seconds between two series asked of their services
 
 
 SERVICE_LIST_FORMAT = 2  # 2: title matches say whether they are the episode's very title ("same", 1.5.0)
@@ -3937,6 +3940,7 @@ def keep_service_list(tvdb: int, show: dict, found: dict) -> None:
     with service_lists_lock:
         lists = read_json(SERVICE_LISTS, {})
         lists[str(tvdb)] = {"checked": datetime.now(timezone.utc).isoformat(), "service": show["service"], "title": str(show["title"]),
+                            "numbering": listing_numbering(show),
                             "available": found["available"], "titles": found["titles"], "local_titles": found.get("local_titles") or {},
                             "v": SERVICE_LIST_FORMAT}
         write_atomic(SERVICE_LISTS, json.dumps(lists))
@@ -3973,14 +3977,66 @@ def release_learned(tvdb: int, at: str, day: int) -> bool:
 sonarr_sync.on_release_learned = release_learned
 
 
+def listing_numbering(show: dict) -> str:
+    """The settings a listing matched Sonarr's episodes by: changed, the listing no longer holds."""
+    picked = {k: show[k] for k in (*sonarr_sync.FALLBACK_NUMBERING, "season_pages") if show.get(k)}
+    return json.dumps(json.loads(json.dumps(picked)), sort_keys=True)  # season numbers as text, as read back from the file
+
+
+def same_listing(hit: dict | None, show: dict) -> bool:
+    """A kept listing that is of the service, URL and numbering the series has now."""
+    return bool(hit) and hit.get("service") == show.get("service") and hit.get("title") == str(show.get("title")) \
+        and hit.get("numbering", "{}") == listing_numbering(show)
+
+
 async def service_list(request):
-    """The series' last check of what its service has, if recent and for the service and URL it has now."""
+    """The series' last check of what its service has, whatever its age (the page says it), for the service and
+    URL it has now: the weekly refresh keeps it current."""
     tvdb = request.match_info["tvdb"]
-    lists = read_json(SERVICE_LISTS, {})
-    hit, show = lists.get(tvdb), read_config()["series"].get(int(tvdb)) or {}
-    fresh = hit and hit["service"] == show.get("service") and hit["title"] == str(show.get("title")) and (
-        datetime.now(timezone.utc) - datetime.fromisoformat(hit["checked"]) < timedelta(hours=SERVICE_LIST_HOURS))
-    return web.json_response(hit if fresh else None)
+    hit, show = read_json(SERVICE_LISTS, {}).get(tvdb), read_config()["series"].get(int(tvdb)) or {}
+    return web.json_response(hit if same_listing(hit, show) else None)
+
+
+def refresh_service_lists(now: datetime) -> int:
+    """List again each series whose listing is a week old, missing, or of another service or URL: the main Sonarr's
+    series only, as the page's listings hold its episode ids. A failed one is asked again at the next hourly look.
+    How many were listed."""
+    ready = lambda show: bool(show and show.get("service") and show.get("title"))
+    series, lists = read_config()["series"], read_json(SERVICE_LISTS, {})
+    due = [tvdb for tvdb in sorted(sonarr_sync.sonarr_series({k for k, v in series.items() if ready(v)}))
+           if ready(show := series.get(tvdb)) and not (same_listing(hit := lists.get(str(tvdb)), show)
+                                                    and now - datetime.fromisoformat(hit["checked"]) < SERVICE_LIST_EVERY)]
+    library, done = sonarr_sync.sonarr_series(set(due)), 0
+    for tvdb in due:  # the whole library was looked at: its series without a service were passed over
+        show = read_config()["series"].get(tvdb)  # as it is now: one changed during a long pass is listed as changed
+        if not ready(show):
+            continue
+        serie = library[tvdb]
+        try:
+            found = probe_series(show, serie["id"], serie["title"])
+            if failed := [p["error"] for p in (found.get("pages") or {}).values() if p.get("error")]:
+                print(f"What's on {show['service']}: {serie['title']}: a season's page failed ({failed[0]}), asked again next hour", flush=True)
+            else:  # a season's page failed: the last whole listing stays
+                keep_service_list(tvdb, show, found)
+                done += 1
+        except (UnshackleError, requests.RequestException, ValueError) as e:
+            print(f"What's on {show['service']}: {serie['title']}: {e}", flush=True)
+            if getattr(e, "retry_after", 0):  # serve's limit, shared with the downloads: the rest next hour
+                break
+        time.sleep(SERVICE_LIST_PAUSE)
+    return done
+
+
+async def watch_service_lists():
+    """Every hour, the series whose listing is due (refresh_service_lists)."""
+    while True:
+        await asyncio.sleep(600)  # not at start: Sonarr and the services settle first
+        try:
+            if read_config()["auth"] and sonarr_sync.SONARR:
+                await asyncio.to_thread(refresh_service_lists, datetime.now(timezone.utc))
+        except Exception as e:
+            print(f"Weekly service listings: {type(e).__name__}: {e}", flush=True)
+        await asyncio.sleep(3000)
 
 
 async def probe(request):
@@ -5624,6 +5680,7 @@ app.cleanup_ctx.append(background(watch_alerts))
 app.cleanup_ctx.append(background(watch_prechecks))
 app.cleanup_ctx.append(background(watch_upgrades))
 app.cleanup_ctx.append(background(watch_upgrade_checks))
+app.cleanup_ctx.append(background(watch_service_lists))
 app.cleanup_ctx.append(background(watch_updates))
 app.cleanup_ctx.append(background(watch_backups))
 app.add_routes([

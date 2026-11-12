@@ -249,7 +249,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
       epUp = new Set((u.items || []).map((i) => i.episodeId));
       if ($("#ep-list")) renderSeason();
     }).catch(() => {});
-    api(`/api/probe/${s.tvdbId}`).then((hit) => {  // the last check of the service, kept 12 h: no need to ask again
+    api(`/api/probe/${s.tvdbId}`).then((hit) => {  // the last check of the service, refreshed weekly: no need to ask again
       if (!hit || current !== s || epAvail) return;
       epAvail = viewAvail(hit.available); epTitles = hit.titles; epChecked = hit.checked; localTitles(hit.local_titles);
       if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${svcName(S.config.series[s.tvdbId]?.service)}`); }
