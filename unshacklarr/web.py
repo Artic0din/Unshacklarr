@@ -580,7 +580,9 @@ def accessible_edition(url: str) -> bool:
 
 def still_episode(url: str) -> bool:
     """A link that opens one episode even once normalised."""
-    return bool(re.search(r"-episode-\d+|episodeId=", url)) or episode_link(url)
+    return bool(re.search(r"-episode-\d+|episodeId=", url)) or (
+        on_site(url, "hayu.com") and bool(re.match(r"/show/episode/\d+", urlparse(url).path))
+    ) or episode_link(url)
 
 
 def merge_countries(found: list[list[dict]]) -> list[dict]:
