@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- A season listed as a separate show can now be on another service: a URL on another installed service's site under "Seasons listed as separate shows" (for example `S02 https://www.sbs.com.au/ondemand/tv-series/…` for a series on ABC iview) makes that season download from that service. Its episodes, the Schedule, the CDM checks, cookies and Upgrades all use it.
 - Suggest services now also lists ended series without a service, after the airing ones, so their back catalogue can be set up the same way.
 - Synced the fork with upstream 1.5.0 while retaining its provider-readiness and terminal-disconnect regression coverage.
 - Amazon and Apple Channels (a brand sold inside Prime Video or Apple TV) are never shown: the schedule shows the brand's own logo, or its name when TMDB has none, and the series' suggestions offer only the brand's own service, found by its title or with a "Find it on" button, even when Amazon or Apple itself is not installed. A brand's own row is preferred over its Channel in JustWatch order.

@@ -719,7 +719,8 @@ function fillPages(conf) {
 $("#d-pages").oninput = (e) => {
   const rows = [...e.target.value.matchAll(/^\s*S?(\d+)\s+(\S+)(?:\s+(\d+))?\s*$/gim)];
   const conf = S.config.series[current.tvdbId];
-  if (rows.length) conf.season_pages = Object.fromEntries(rows.map((m) => [Number(m[1]), { url: m[2], ...(m[3] && Number(m[3]) !== 1 ? { season: Number(m[3]) } : {}) }]));
+  const other = (url) => { const tag = serviceOfLink(url); return tag ? { service: tag } : {}; };  // its site's service, kept if the series' changes
+  if (rows.length) conf.season_pages = Object.fromEntries(rows.map((m) => [Number(m[1]), { url: m[2], ...(m[3] && Number(m[3]) !== 1 ? { season: Number(m[3]) } : {}), ...other(m[2]) }]));
   else delete conf.season_pages;
   dirty();
 };

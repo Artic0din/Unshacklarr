@@ -3251,6 +3251,10 @@ def test_a_season_on_a_page_of_its_own_downloads_from_there(tmp_path, monkeypatc
     assert sync.service_episode(page, 2, 3) == "S01E03"
     assert sync.service_episode(sync.season_page({**show, "episode_offset": 2}, 2), 2, 3) == "S01E03"  # Paris's offset stays with Paris
     assert sync.season_page({**show, "season_pages": {"2": {"url": "x", "season": 4}}}, 2)["season_map"] == {2: 4}  # yaml keys
+    other = {**show, "service_options": {"--quality": "x"}, "season_pages": {2: {"url": "https://sbs/s2", "service": "SBS2"}}}
+    assert (sync.season_page(other, 2)["service"], sync.season_page(other, 2).get("service_options")) == ("SBS2", None)  # its own service, without the series' service's options
+    assert sync.season_page({**other, "season_pages": {2: {"url": "u"}}}, 2)["service_options"] == {"--quality": "x"}  # same service: kept
+    assert sync.queued_card({"id": 7, "seasonNumber": 2, "episodeNumber": 1, "series": {"title": "T", "tvdbId": 1}}, other, "manual", None)["service"] == "SBS2"
     config = sync.read_file()
     config["series"][111] = {**config["series"][111], **show}
     asked = []

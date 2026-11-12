@@ -3576,6 +3576,29 @@ def test_tvdb_titles_keep_only_true_translations(tmp_path, monkeypatch):
     assert web.tvdb_titles(447183) == {} and asked[-2:] == [asked[-1]] * 2 and "447183:fra:skyhook" not in web.read_json(web.TVDB_TITLES, {})
 
 
+def test_a_season_on_another_service_is_upgraded_and_refused_by_that_services_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync = web.sonarr_sync
+    hevc_first = {"name": "HEVC first", "steps": [{"codec": "HEVC", "range": "SDR", "min": 1080, "max": 1080}]}
+    config = {"series": {2: {"service": "X", "title": "u", "season_pages": {2: {"url": "s", "service": "Y"}}}},
+              "quality_ladders": [hevc_first], "service_defaults": {"Y": {"ladder": "HEVC first"}, "X": {"options": {"--cdm": "own"}}}}
+    monkeypatch.setattr(sync, "sonarr_series", lambda wanted: {2: {"id": 8, "tvdbId": 2, "title": "Split"}})
+    avc = {"id": 70, "mediaInfo": {"resolution": "1920x1080", "videoCodec": "h264"}}
+    eps = [{"id": n, "seasonNumber": n, "episodeNumber": 1, "hasFile": True, "episodeFileId": 70, "episodeFile": avc} for n in (1, 2)]
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: eps)
+    work = web.upgrade_candidates(config)
+    assert [(w[1]["service"], w[3]["seasonNumber"]) for w in work] == [("Y", 2)]  # Y's ladder, for Y's season only
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(sync, "no_cdm", lambda svc, conf=None: f"{svc} has no CDM")
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [{**eps[i - 1], "series": {"tvdbId": 2}} for i in ids])
+    assert web.cdm_refusal([1]) == ""  # X's own device
+    assert web.cdm_refusal([2]) == "Y has no CDM"  # X's device is not Y's
+
+
 def test_upgrades_ask_the_service_for_the_episode_its_title_found():
     from unshacklarr import web
     # 24 Hours in Police Custody: Channel 4 numbers apart, its listing kept by Episodes (or the sync)
@@ -3903,6 +3926,20 @@ def test_a_season_on_a_page_of_its_own_is_listed_from_there(tmp_path, monkeypatc
     import pytest
     with pytest.raises(web.web.HTTPBadRequest):
         web.check_season_pages({2: {"url": "two words"}}, "x")
+    assert web.check_season_pages({2: {"url": "u", "service": "SBS"}}, "x", {"SBS": []}) == {2: {"url": "u", "service": "SBS"}}
+    with pytest.raises(web.web.HTTPBadRequest):
+        web.check_season_pages({2: {"url": "u", "service": "NOPE"}}, "x", {"SBS": []})
+
+
+def test_a_season_on_another_service_is_refused_without_that_services_cdm(monkeypatch):
+    from unshacklarr import web
+    config = {"series": {1: {"service": "IV", "title": "iv", "season_pages": {2: {"url": "sbs", "service": "SBS"}}}}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web.sonarr_sync, "no_cdm", lambda svc, conf=None: "SBS has no CDM" if svc == "SBS" else "")
+    ep = lambda i, season: {"id": i, "seasonNumber": season, "series": {"tvdbId": 1}}
+    monkeypatch.setattr(web.sonarr_sync, "chosen_episodes", lambda ids: [ep(i, i) for i in ids])
+    assert web.cdm_refusal([1]) == ""  # season 1: iview's
+    assert web.cdm_refusal([2]) == "SBS has no CDM"
 
 
 def test_a_season_missing_from_the_page_is_offered_the_show_its_titles_name(tmp_path, monkeypatch):

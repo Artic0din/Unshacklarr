@@ -1082,7 +1082,7 @@ async def save_config(request):
             series[int(key)]["programmes"] = True
         if pasted := check_programme_map(show.get("programme_map"), str(key)):
             series[int(key)]["programme_map"] = pasted
-        if pages := check_season_pages(show.get("season_pages"), str(key)):
+        if pages := check_season_pages(show.get("season_pages"), str(key), known):
             series[int(key)]["season_pages"] = pages
     notifications = body.get("notifications") or {}
     targets = check_targets(notifications, [t["url"] for t in sonarr_sync.notification_targets(previous["notifications"])])
@@ -1150,8 +1150,9 @@ def newly_set_up(series: dict, was: dict) -> set[int]:
             if ready(v) and not v.get("skip_upgrades") and not ready(was.get(k) or was.get(str(k)) or was.get(int(k)))}
 
 
-def check_season_pages(given, key: str) -> dict:
-    """Seasons on a page of their own: {Sonarr season: {"url", "season": its season there, when not 1}} (by mj23au)."""
+def check_season_pages(given, key: str, known: dict | None = None) -> dict:
+    """Seasons on a page of their own: {Sonarr season: {"url", "season": its season there, when not 1, "service":
+    when the page is on another service}} (by mj23au)."""
     out = {}
     for season, page in (given or {}).items() if isinstance(given, dict) else ():
         url = str((page or {}).get("url") or "").strip() if isinstance(page, dict) else ""
@@ -1163,7 +1164,10 @@ def check_season_pages(given, key: str) -> dict:
             raise web.HTTPBadRequest(text=f"Series {key}, seasons listed as separate shows: season {season} or its season {there} on the show's page is not a valid number.")
         if not url or url.startswith("-") or any(c.isspace() for c in url):
             raise web.HTTPBadRequest(text=f"Series {key}, seasons listed as separate shows: season {season} needs one URL or ID, without spaces.")
-        out[season] = {"url": url, **({"season": there} if there != 1 else {})}
+        service = str((page or {}).get("service") or "")
+        if service:
+            check_service(service, known, f"season {season} of {key}")
+        out[season] = {"url": url, **({"season": there} if there != 1 else {}), **({"service": service} if service else {})}
     return out
 
 
@@ -1946,17 +1950,17 @@ def precheck(now: datetime) -> list[str]:
     if not any(s.get("service") and s.get("title") for s in series.values()):
         return []
     done = {k: v for k, v in read_json(PRECHECKED_FILE, {}).items() if now - datetime.fromisoformat(v) < timedelta(days=14)}
-    coming: dict[int, list[dict]] = {}
+    coming: dict[tuple[int, int], list[dict]] = {}  # per series and season: a season on a page of its own is checked there
     for ep in calendar_episodes(config, now - timedelta(days=1), now + PRECHECK_AHEAD):
         show = series.get(ep["series"]["tvdbId"])
         if not show or not show.get("service") or not show.get("title") or ep.get("hasFile") or str(ep["id"]) in done:
             continue
         at = first_try(show, ep, sonarr_sync.parse_time(ep["airDateUtc"]) if ep.get("airDateUtc") else None, now)
         if at and datetime.fromisoformat(at) <= now + PRECHECK_AHEAD:
-            coming.setdefault(ep["series"]["tvdbId"], []).append(ep | {"first_try": at})
+            coming.setdefault((ep["series"]["tvdbId"], ep["seasonNumber"]), []).append(ep | {"first_try": at})
     told = []
-    for tvdb, eps in coming.items():
-        show = series[tvdb]
+    for (tvdb, season), eps in coming.items():
+        show = sonarr_sync.season_page(series[tvdb], season)
         problem = "" if sonarr_sync.stacked(show, config)[0].get("--cdm") else sonarr_sync.no_cdm(show["service"])  # its own device
         if not problem:
             try:
@@ -2001,15 +2005,15 @@ def check_upgrades(now: datetime) -> list[str]:
         if w.get("asked"):
             continue  # waiting for the person: add the audio to a file from another source, or not (see add_track)
         show = config["series"].get(int(w["tvdb"])) or {}
-        if show.get("service") != w["service"] or not show.get("title"):
-            dropped.append(key)  # another service, or none now: what was waited for there means nothing
-            continue
         season = w.get("season")
         if type(season) is not int:
             match = re.search(r"\bS(\d+)E\d+\b", str(w.get("label") or ""))
             season = int(match.group(1)) if match else 0
         if season:
             show = sonarr_sync.season_page(show, season)
+        if show.get("service") != w["service"] or not show.get("title"):
+            dropped.append(key)  # another service, or none now: what was waited for there means nothing
+            continue
         if now - datetime.fromisoformat(w["since"]) > days:
             dropped.append(key)
             sonarr_sync.notify(config["notifications"], "warning", f"Kept without {w['want']} audio: {w['label']}",
@@ -2372,7 +2376,8 @@ def cookies_folder() -> Path:
 def cookie_state() -> dict:
     folder = cookies_folder()
     files = cookies.list_all(folder)
-    used = sorted({c["service"] for c in read_config()["series"].values() if c.get("service")})
+    series = read_config()["series"].values()
+    used = sorted({c["service"] for c in series if c.get("service")} | {p["service"] for c in series for p in (c.get("season_pages") or {}).values() if p.get("service")})
     try:
         wants = {s["tag"] for s in UNSHACKLE.services() if "cookies" in (s.get("auth_methods") or [])}
     except UnshackleError:
@@ -3056,6 +3061,7 @@ def describe_episode(ep: dict, config: dict, now: datetime, all_series: bool = F
     if not show or not show.get("service") or not (show.get("title") or show.get("programmes")):
         # Sonarr's calendar: shown too, so the series can be added to Unshackle from there.
         return {**base, "managed": False} if all_series else None
+    show = sonarr_sync.season_page(show, ep["seasonNumber"])  # a season on a page of its own downloads from there
     service_sxxeyy = sonarr_sync.service_episode(show, ep["seasonNumber"], ep["episodeNumber"])
     folder = sonarr_sync.episode_folder(ep)
     aired = sonarr_sync.parse_time(ep["airDateUtc"]) if ep.get("airDateUtc") else None
@@ -4114,16 +4120,18 @@ def cdm_refusal(ids: list[int]) -> str:
     """Why these episodes can't be downloaded: a service among theirs has no CDM at all. Sonarr is asked
     which series they belong to only when a series' service lacks one."""
     config = read_config()
-    shows = {tvdb: s for tvdb, s in config["series"].items() if s.get("service") and not sonarr_sync.stacked(s, config)[0].get("--cdm")}
-    lacking = {svc: why for svc in {s["service"] for s in shows.values()} if (why := sonarr_sync.no_cdm(svc, config))}
+    shows = {tvdb: s for tvdb, s in config["series"].items() if s.get("service")}
+    services = {s["service"] for s in shows.values()} | {p["service"] for s in shows.values() for p in (s.get("season_pages") or {}).values() if p.get("service")}
+    lacking = {svc: why for svc in services if (why := sonarr_sync.no_cdm(svc, config))}
     if not lacking:
         return ""
     try:
         episodes = sonarr_sync.chosen_episodes(ids)
     except requests.RequestException as e:
         raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
-    return next((lacking[show["service"]] for ep in episodes
-                 if (show := shows.get(ep["series"]["tvdbId"])) and show["service"] in lacking), "")
+    pages = [sonarr_sync.season_page(show, ep["seasonNumber"]) for ep in episodes if (show := shows.get(ep["series"]["tvdbId"]))]
+    return next((lacking[p["service"]] for p in pages  # a device named for the season's service needs no mapping
+                 if p["service"] in lacking and not sonarr_sync.stacked(p, config)[0].get("--cdm")), "")
 
 
 async def download(request):
@@ -4208,10 +4216,11 @@ def upgrade_candidates(config: dict, only: set | None = None) -> list[tuple]:
         if only and tvdb not in only:
             continue
         show = shows.get(tvdb)
-        ladder = show and not show.get("skip_upgrades") and sonarr_sync.ladder_of(show, config)
-        if not ladder:
+        if not show or show.get("skip_upgrades"):
             continue
-        ours = sonarr_sync.release_group_of(show, config)[0] if other_groups else ""
+        pages = {n: sonarr_sync.season_page(show, int(n)) for n in show.get("season_pages") or {}}
+        if not any(sonarr_sync.ladder_of(p, config) for p in [show, *pages.values()]):
+            continue  # no ladder for any of its services: Sonarr not asked
         every = sonarr_sync.sonarr_get("episode", seriesId=serie["id"], includeEpisodeFile="true")  # one call, not two
         files = {e["episodeFile"]["id"]: e["episodeFile"] for e in every if e.get("episodeFile")}
         for e in every:
@@ -4221,6 +4230,10 @@ def upgrade_candidates(config: dict, only: set | None = None) -> list[tuple]:
             if years and e.get("airDateUtc") and \
                     datetime.now(timezone.utc) - sonarr_sync.parse_time(e["airDateUtc"]) > timedelta(days=365.25 * years):
                 continue
+            page = sonarr_sync.season_page(show, e["seasonNumber"])  # its own page, maybe on another service
+            if not (ladder := sonarr_sync.ladder_of(page, config)):
+                continue
+            ours = sonarr_sync.release_group_of(page, config)[0] if other_groups else ""
             file = files[e["episodeFileId"]]
             track = ladder_track(file.get("mediaInfo") or {})
             track["added"] = file.get("dateAdded") or ""  # a download's own answer is for a file added after it
@@ -4229,7 +4242,7 @@ def upgrade_candidates(config: dict, only: set | None = None) -> list[tuple]:
                 if str(file.get("releaseGroup") or "").lower() != ours.lower():
                     track["group"] = file.get("releaseGroup") or "no group"  # not ours: the same step from the service replaces it
             if (step := sonarr_sync.step_of(ladder, track)) > 0 or track.get("group"):
-                work.append((serie, sonarr_sync.season_page(show, e["seasonNumber"]), ladder, e, track, step))  # its own page
+                work.append((serie, page, ladder, e, track, step))
     return work
 
 

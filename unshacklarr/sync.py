@@ -597,7 +597,7 @@ def queued_card(ep: dict, show: dict, kind: str, batch: str | None, replace: boo
                 video: dict | None = None) -> dict:
     """An episode waiting its turn, as Activity shows it until its download starts."""
     return {"id": f"waiting-{ep['id']}", "series": ep["series"]["title"], "tvdbId": ep["series"]["tvdbId"],
-            "sxxeyy": f"S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}", "service": show["service"], "kind": kind,
+            "sxxeyy": f"S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}", "service": season_page(show, ep["seasonNumber"])["service"], "kind": kind,
             "started": datetime.now(timezone.utc).isoformat(), "ended": None, "outcome": "running", "episodeId": ep["id"],
             "step": "queued", "live": {}, "tracks": [], "waiting": True, **({"batch": batch} if batch else {}),
             **({"instance": instance()["name"]} if instance() else {}),
@@ -1790,12 +1790,15 @@ def season_page(show: dict, season: int) -> dict:
     """The series as one Sonarr season downloads: from that season's own page when it has one (`season_pages`: SBS
     lists Has Fallen's S01 as the show "Paris Has Fallen" and S02 as "Apollo Has Fallen"), asked as that page's season
     (1 unless set); else the series as set. The series' own numbering (season and episode offsets) and fallback are the
-    main page's and stay with it (by mj23au)."""
+    main page's and stay with it (by mj23au). A page on another service (its `service`) is asked of that service,
+    without the series' own options for its service."""
     pages = show.get("season_pages") or {}
     page = pages.get(season) or pages.get(str(season))
     if not page or not page.get("url"):
         return show
     own = {k: v for k, v in show.items() if k not in ("season_map", "season_offset", "season_offset_from", "episode_offset", "fallback")}
+    if page.get("service") and page["service"] != show.get("service"):
+        own = {k: v for k, v in own.items() if k != "service_options"} | {"service": page["service"]}
     return {**own, "title": page["url"], "season_map": {season: int(page.get("season") or 1)}, "page_of": season}
 
 

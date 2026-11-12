@@ -252,7 +252,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     api(`/api/probe/${s.tvdbId}`).then((hit) => {  // the last check of the service, kept 12 h: no need to ask again
       if (!hit || current !== s || epAvail) return;
       epAvail = viewAvail(hit.available); epTitles = hit.titles; epChecked = hit.checked; localTitles(hit.local_titles);
-      if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${svcName(S.config.series[s.tvdbId]?.service)}`); }
+      if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${seriesSvcs(S.config.series[s.tvdbId])}`); }
     }).catch(() => {});
   }
   let eps;
@@ -281,7 +281,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
       b.dataset.season = n;
       return b;
     })),
-    cdmNote(S.config.series[s.tvdbId]?.service),
+    ...seriesTags(S.config.series[s.tvdbId]).map(cdmNote),
     el("div", { className: "ep-catchup", id: "ep-catchup", hidden: true }),
     /* Two lines: the season and what the service has; then what to select, and how to show the list. */
     el("div", { className: "ep-tools" },
@@ -310,7 +310,7 @@ function renderCheck(s, changed = false) {
   if (changed && epAvail) { epAvail = epTitles = epChecked = null; renderSeason(); }
   const conf = S.config.series[s.tvdbId];
   if (!conf?.service || !conf.title) return;  // what the service has, listed (unshackle's --list-titles): nothing downloaded
-  const svc = svcName(conf.service);
+  const svc = seriesSvcs(conf);
   const pick = el("button", { type: "button", id: "ep-avail", className: "svc", hidden: !epAvail,
     title: `The missing episodes ${svc} has`, onclick: () => selectSeason((e) => state(e) === "miss" && epAvail?.[e.id]) });
   const check = el("button", { className: "btn ep-check", title: `Ask ${svc} which episodes of this series it has, and mark them in the list`,
@@ -559,15 +559,26 @@ const belowAsked = (e) => {
   const lad = ladderOfSeries(S.config.series[current.tvdbId]);
   return lad ? !!e.file?.track && stepOf(lad, e.file.track) > 0 : e.file?.height && e.file.height < askedHeight() * 0.9;
 };
+/* The service a season downloads from: its own page's when that is on another service, else the series'. */
+function seasonTag(season) {
+  const conf = S.config.series[current.tvdbId] || {};
+  return conf.season_pages?.[season]?.service || conf.service;
+}
+const seasonSvc = (season) => svcName(seasonTag(season));
+/* Every service the series downloads from, for what is said of them all: "ABC iview and SBS". */
+function seriesTags(conf) {
+  return [...new Set([conf?.service, ...Object.values(conf?.season_pages || {}).map((p) => p.service)].filter(Boolean))];
+}
+const seriesSvcs = (conf) => seriesTags(conf).map(svcName).join(" and ");
 /* Once the service was asked, every aired episode says where it stands there: on it (maybe under another
    number, or better than the file on disk) or not; one not aired yet says nothing. */
 function serviceBadge(e) {
   if (epAvail[e.id]) return [e.hasFile && belowAsked(e) ? upgradeBadge(e) : onBadge(e)];
-  return e.hasFile || state(e) === "miss" ? [el("em", { className: "ep-off", textContent: `not on ${svcName(S.config.series[current.tvdbId]?.service)}` })] : [];
+  return e.hasFile || state(e) === "miss" ? [el("em", { className: "ep-off", textContent: `not on ${seasonSvc(e.seasonNumber)}` })] : [];
 }
 /* On disk under the resolution asked of the service, and on the service: worth downloading again. */
 function upgradeBadge(e) {
-  const svc = svcName(S.config.series[current.tvdbId]?.service), lad = ladderOfSeries(S.config.series[current.tvdbId]);
+  const svc = seasonSvc(e.seasonNumber), lad = ladderOfSeries(S.config.series[current.tvdbId]);
   if (lad) {
     const at = stepOf(lad, e.file.track);
     return hoverTip(el("em", { className: "ep-up", textContent: `upgrade on ${svc}` }), () => [
@@ -582,7 +593,7 @@ function upgradeBadge(e) {
 }
 /* "on RMC+": what the service calls the episode, and its number there when not Sonarr's. */
 function onBadge(e) {
-  const svc = svcName(S.config.series[current.tvdbId]?.service), found = epAvail[e.id];
+  const svc = seasonSvc(e.seasonNumber), found = epAvail[e.id];
   const sxxeyy = `S${String(e.seasonNumber).padStart(2, "0")}E${String(e.episodeNumber).padStart(2, "0")}`;
   const other = found.service !== sxxeyy;  // under another number there: Download asks for it as found
   return hoverTip(el("em", { className: "ep-on" + (other ? " other" : ""), textContent: other ? `on ${svc} as ${found.service}` : `on ${svc}` }), () => [
@@ -603,14 +614,14 @@ function checkLabel(text) {
 function renderCatchUp() {
   const box = $("#ep-catchup");
   if (!box) return;
-  const svc = svcName(S.config.series[current.tvdbId]?.service), missing = Object.values(epSeasons).flat().filter((e) => state(e) === "miss");
+  const svc = seriesSvcs(S.config.series[current.tvdbId]), missing = Object.values(epSeasons).flat().filter((e) => state(e) === "miss");
   const there = epAvail ? missing.filter((e) => epAvail[e.id]) : [];
   const upgrades = Object.values(epSeasons).flat().filter((e) => belowAsked(e) && epAvail?.[e.id] && !epBusy.has(e.id));
   document.querySelectorAll(".seasons button").forEach((b) => {
     const n = there.filter((e) => e.seasonNumber === Number(b.dataset.season)).length;
     b.querySelector(".avail")?.remove();
     b.classList.toggle("has-avail", n > 0);
-    if (epAvail && missing.some((e) => e.seasonNumber === Number(b.dataset.season))) b.append(el("small", { className: "avail" + (n ? "" : " none"), textContent: n ? `${n} on ${svc}` : `none on ${svc}` }));
+    if (epAvail && missing.some((e) => e.seasonNumber === Number(b.dataset.season))) b.append(el("small", { className: "avail" + (n ? "" : " none"), textContent: n ? `${n} on ${seasonSvc(Number(b.dataset.season))}` : `none on ${seasonSvc(Number(b.dataset.season))}` }));
   });
   box.hidden = !epAvail || !(missing.length || upgrades.length);
   if (box.hidden) return;
@@ -644,7 +655,7 @@ function renderCatchUp() {
 }
 /* What the service lists of the series (unshackle's --list-titles): marked on the episodes, and for a download's preview. */
 async function askService(s) {
-  const conf = S.config.series[s.tvdbId], svc = svcName(conf.service), check = $(".ep-check");
+  const conf = S.config.series[s.tvdbId], svc = seriesSvcs(conf), check = $(".ep-check");
   if (check) { check.disabled = true; check.replaceChildren(el("span", { className: "spinner", ariaHidden: "true" }), ` Asking ${svc}…`); }
   let r = null;
   const slow = slowHint(svc);
@@ -700,7 +711,7 @@ function renderSeason() {
   $("#ep-odd").textContent = `Outliers (${outliers})`;
   if ($("#ep-avail")) {
     const onService = list.filter((e) => state(e) === "miss" && epAvail?.[e.id]).length;
-    $("#ep-avail").textContent = `Missing, available on ${svcName(S.config.series[current.tvdbId]?.service)} (${onService})`;
+    $("#ep-avail").textContent = `Missing, available on ${seasonSvc(epSeason)} (${onService})`;
     $("#ep-avail").disabled = !onService;
   }
   const named = current.seasonTitles?.[epSeason];  // its name in Sonarr, when it has one
@@ -730,7 +741,8 @@ function cdmNote(tag) {
 function updateEpBar() {
   $("#ep-bar").hidden = !picked.size;
   $("#ep-count").textContent = `${picked.size} selected`;
-  const missing = current && cdmMissing(S.config.series[current.tvdbId]?.service);
+  const seasons = new Set(Object.values(epSeasons).flat().filter((e) => picked.has(e.id)).map((e) => e.seasonNumber));
+  const missing = current && [...seasons].map((n) => cdmMissing(seasonTag(n))).find(Boolean);
   $("#ep-cdm").hidden = !missing;
   $("#ep-cdm").title = missing || "";
   $("#ep-go").textContent = "Download";
@@ -803,10 +815,11 @@ function pickServiceEpisode(e, sx, theirs, svc, missing) {
 function renderPreview() {
   const conf = oneOff;
   if (!conf || !current) return;
-  const svc = svcName(S.config.series[current.tvdbId]?.service), name = conf.file_name || current.title;
+  const svc = seriesSvcs(S.config.series[current.tvdbId]), name = conf.file_name || current.title;
   const eps = Object.values(epSeasons).flat().filter((e) => picked.has(e.id))
     .sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber);
   const rows = eps.map((e) => {
+    const svc = seasonSvc(e.seasonNumber);  // a season on another service: its own name in its row
     const sx = `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`, theirs = serviceEpisode(conf, e.seasonNumber, e.episodeNumber);
     const [plain, part] = (theirs || "").split(".");
     const same = epTitles?.filter((t) => t.key === plain) || [];
