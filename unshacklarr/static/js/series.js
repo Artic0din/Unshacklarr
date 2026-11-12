@@ -780,7 +780,7 @@ $("#ep-go-edit").onclick = () => {
   $("#oneoff-cdm").replaceChildren(cdmNote(conf.service));
   $("#oneoff-dialog").showModal();
   // the preview says what the service has; a listing from before season pages' titles were kept is asked again
-  if (!epTitles || (Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).length && !epTitles.some((t) => t.page))) askService(current);
+  if (!epTitles || Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).some((page) => !epTitles.some((t) => t.page != null && String(t.page) === page))) askService(current);
 };
 /* Sonarr's episode as the service numbers it, the rule sync.service_episode applies: the episode table, else offset and seasons. */
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -842,12 +842,14 @@ function renderPreview() {
     const svc = seasonSvc(e.seasonNumber);  // a season on another service: its own name in its row
     const sx = `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`, theirs = serviceEpisode(seasonNumbering(conf, e.seasonNumber), e.seasonNumber, e.episodeNumber);
     const [plain, part] = (theirs || "").split(".");
-    const same = titlesOf(e.seasonNumber)?.filter((t) => t.key === plain) || [];
-    const found = !epTitles ? null : same.filter((t) => !part || String(t.part) === part);
+    // a season page with no titles kept (its listing failed, or is from before they were): not known, not "not on"
+    const listed = epTitles && !(seasonPage(e.seasonNumber) && !titlesOf(e.seasonNumber).length);
+    const same = listed ? titlesOf(e.seasonNumber).filter((t) => t.key === plain) : [];
+    const found = !listed ? null : same.filter((t) => !part || String(t.part) === part);
     const parts = same.filter((t) => t.part).length;
-    const ask = epTitles ? el("span", { className: "pick" }, pickServiceEpisode(e, sx, theirs, svc, found && !found.length), agreement(e, theirs, found, svc))
+    const ask = listed ? el("span", { className: "pick" }, pickServiceEpisode(e, sx, theirs, svc, found && !found.length), agreement(e, theirs, found, svc))
       : !theirs ? el("span", { className: "bad", textContent: `Before ${svc}'s first episode: nothing to ask for` })
-      : el("span", {}, el("code", { textContent: theirs }), " · checking…");
+      : el("span", {}, el("code", { textContent: theirs }), epTitles ? " · not listed" : " · checking…");
     const joined = parts > 1 && !part && conf.join_parts !== false;
     const dropName = conf.episode_name === "always" || ((conf.episode_name || "joined") === "joined" && joined);
     const epName = found?.[0]?.name && !(parts > 1 && !part && joined) ? found[0].name : "";
