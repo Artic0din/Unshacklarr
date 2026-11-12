@@ -981,7 +981,7 @@ def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monke
         "1": {"checked": (now - timedelta(days=6)).isoformat(), "service": "IV", "title": "https://iview/fresh",
               "qualities": {}, "qualities_checked": (now - timedelta(days=6)).isoformat()},
         "2": {"checked": (now - timedelta(days=8)).isoformat(), "service": "IV", "title": "https://iview/old"},
-        "4": {"checked": (now - timedelta(days=1)).isoformat(), "service": "IV", "title": "https://iview/before"}}))
+        "4": {"checked": (now - timedelta(days=1)).isoformat(), "service": "IV", "title": "https://iview/before", "qualities": {"1": "old URL's"}}}))
     asked = []
 
     def probe(show, series_id, title):
@@ -990,9 +990,11 @@ def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monke
             raise web.UnshackleError("iview is down")
         return {"available": {str(series_id): {"service": "S01E01"}}, "titles": []}
     monkeypatch.setattr(web, "probe_series", probe)
-    monkeypatch.setattr(web, "season_qualities", lambda show, serie, found, before: {})
+    befores = {}
+    monkeypatch.setattr(web, "season_qualities", lambda show, serie, found, before: befores.update({serie["id"]: before}) or {})
     assert web.refresh_service_lists(now) == 2  # the old one and the moved one; the new one failed
     assert asked == [20, 30, 40]  # due: older than a week, never checked, or for another URL
+    assert befores[40] is None  # the old URL's qualities are not kept for a season that fails on the new one
     lists = json.loads(web.SERVICE_LISTS.read_text())
     assert lists["2"]["available"] == {"20": {"service": "S01E01"}} and lists["4"]["title"] == "https://iview/moved"
     assert "3" not in lists  # failed: asked again next hour

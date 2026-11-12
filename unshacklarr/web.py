@@ -4071,7 +4071,8 @@ def refresh_service_lists(now: datetime) -> int:
                 print(f"What's on {show['service']}: {serie['title']}: a season's page failed ({failed[0]}), asked again next hour", flush=True)
             else:  # a season's page failed: the last whole listing stays
                 keep_service_list(tvdb, show, found)  # kept first: a failure asking the qualities keeps the listing
-                if (qualities := season_qualities(show, serie, found, (lists.get(str(tvdb)) or {}).get("qualities"))) is not None:
+                hit = lists.get(str(tvdb))  # its qualities only for the same service, URL and numbering
+                if (qualities := season_qualities(show, serie, found, hit.get("qualities") if same_listing(hit, show) else None)) is not None:
                     keep_service_list(tvdb, show, found, qualities)
                 done += 1
         except (UnshackleError, requests.RequestException, ValueError) as e:
