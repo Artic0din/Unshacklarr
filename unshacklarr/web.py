@@ -3795,6 +3795,7 @@ def probe_series(show: dict, series_id: int, title: str = "", discover: bool = F
             found["pages"][str(season)] = {"url": pages[season]["url"], "error": str(e)[:200]}
             continue
         found["available"].update(part["available"])
+        found["titles"] += [{**t, "page": season} for t in part["titles"]]  # by the page's own numbering, for the page's preview
         found["checks"] = sorted(found["checks"] + part["checks"], key=lambda c: c.get("air") or "")[-4:]
         found["pages"][str(season)] = {"url": pages[season]["url"], "count": part["count"], "series": part.get("series")}
     if discover:
@@ -3954,6 +3955,7 @@ def keep_service_list(tvdb: int, show: dict, found: dict, qualities: dict | None
             kept = {k: was[k] for k in ("qualities", "qualities_checked") if k in was}
         lists[str(tvdb)] = {"checked": datetime.now(timezone.utc).isoformat(), "service": show["service"], "title": str(show["title"]),
                             "numbering": listing_numbering(show),
+                            "pages": {k: {"url": v["url"], "count": v["count"]} for k, v in (found.get("pages") or {}).items() if "count" in v},  # listed, even empty
                             "available": found["available"], "titles": found["titles"], "local_titles": found.get("local_titles") or {},
                             "v": SERVICE_LIST_FORMAT, **kept}
         write_atomic(SERVICE_LISTS, json.dumps(lists))
@@ -3965,7 +3967,8 @@ def title_matches(show: dict, ep: dict) -> dict:
     found = probe_series(show, ep["seriesId"], ep["series"]["title"])
     if not sonarr_sync.instance() and not show.get("page_of"):  # the page's list holds the main Sonarr's episode ids
         keep_service_list(ep["series"]["tvdbId"], show, found)
-    listed = {t["key"] + (f".{t['part']}" if t.get("part") else "") for t in found["titles"]} | {t["key"] for t in found["titles"]}
+    titles = [t for t in found["titles"] if not t.get("page")]  # a season page's numbers are not the main page's
+    listed = {t["key"] + (f".{t['part']}" if t.get("part") else "") for t in titles} | {t["key"] for t in titles}
     return {"available": {int(i): m for i, m in found["available"].items()}, "listed": listed,
             "titled": set(found.get("titled") or ())}  # the numbers another episode's title gives
 
@@ -4407,7 +4410,7 @@ def upgrade_number(lists: dict, serie: dict, show: dict, e: dict) -> str | None:
         return found["service"]
     if own and any(m.get("match") == "title" and m["service"].split(".")[0] == own.split(".")[0] for m in available.values()):
         return None
-    listed = {str(t.get("key") or "").split(".")[0] for t in hit.get("titles") or []}
+    listed = {str(t.get("key") or "").split(".")[0] for t in hit.get("titles") or [] if not t.get("page")}  # the main page's
     if own and listed and own.split(".")[0] not in listed:
         return None  # by mj23au: not in the service's last listing (a long series, its old seasons gone): not asked
     return own

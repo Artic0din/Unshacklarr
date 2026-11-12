@@ -943,12 +943,14 @@ def test_a_service_list_is_kept_for_the_series_as_it_is(tmp_path, monkeypatch):
     web = importlib.reload(unshacklarr.web)
     show = {"service": "RMCP", "title": "https://rmc/x"}
     monkeypatch.setattr(web, "read_config", lambda: {"series": {84095: show}})
-    web.keep_service_list(84095, show, {"available": {"2701": {"service": "S26E11"}}, "titles": []})
+    web.keep_service_list(84095, show, {"available": {"2701": {"service": "S26E11"}}, "titles": [],
+                                        "pages": {"2": {"url": "p", "count": 0}, "3": {"url": "q", "error": "timed out"}}})
 
     class Request:
         match_info = {"tvdb": "84095"}
     kept = lambda: json.loads(asyncio.run(web.service_list(Request())).text)
     assert kept()["available"] == {"2701": {"service": "S26E11"}}
+    assert kept()["pages"] == {"2": {"url": "p", "count": 0}}  # a page listed empty is known; a failed one is not
     show["title"] = "https://rmc/y"  # another URL: another list
     assert kept() is None
     show["title"] = "https://rmc/x"
@@ -3764,6 +3766,8 @@ def test_upgrades_ask_the_service_for_the_episode_its_title_found():
     titled = {"286362": {**lists["286362"], "titles": [{"key": "S06E01"}, {"key": "S07E02"}, {"key": "S08E01"}]}}
     assert web.upgrade_number(titled, serie, show, ep(301, 3, 1)) is None
     assert web.upgrade_number(titled, serie, show, ep(701, 7, 2)) == "S07E02"
+    paged = {"286362": {**titled["286362"], "titles": titled["286362"]["titles"] + [{"key": "S03E01", "page": 9}]}}
+    assert web.upgrade_number(paged, serie, show, ep(301, 3, 1)) is None  # a season page's S03E01 is not the main page's
     assert web.upgrade_number({"286362": {**titled["286362"], "titles": []}}, serie, show, ep(301, 3, 1)) == "S03E01"  # none listed
     # a listing kept by 1.4.0 (no "v"): its title matches can't tell a very title, so the episode goes by its number
     old = {"286362": {k: v for k, v in lists["286362"].items() if k != "v"}}
@@ -4061,6 +4065,11 @@ def test_a_season_on_a_page_of_its_own_is_listed_from_there(tmp_path, monkeypatc
     found = web.probe_series(show, 1, "Has Fallen")
     assert found["available"][103]["service"] == "S01E03" and found["available"][203]["service"] == "S01E03"
     assert found["season_map"] == {} and found["pages"]["2"]["count"] == 8
+    assert [t["key"] for t in found["titles"] if t.get("page") == 2] == [f"S01E0{n}" for n in range(1, 9)]  # Apollo's own, for the page
+    assert len([t for t in found["titles"] if not t.get("page")]) == 8  # Paris's
+    monkeypatch.setattr(web, "keep_service_list", lambda *a: None)
+    listed = web.title_matches(show, {"seriesId": 1, "series": {"title": "Has Fallen", "tvdbId": 9}})["listed"]
+    assert listed == {f"S01E0{n}" for n in range(1, 9)}  # the sync's numbers are the main page's only
     alone = web.probe_series({k: v for k, v in show.items() if k != "season_pages"}, 1, "Has Fallen")
     assert 203 not in alone["available"]  # without it, S02 was looked for on Paris's page: not there
     assert web.check_season_pages({"2": {"url": " https://sbs/apollo "}, 3: {"url": "u", "season": "1"}}, "x") == \
