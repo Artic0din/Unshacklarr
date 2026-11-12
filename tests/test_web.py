@@ -952,6 +952,9 @@ def test_a_service_list_is_kept_for_the_series_as_it_is(tmp_path, monkeypatch):
     show["title"] = "https://rmc/y"  # another URL: another list
     assert kept() is None
     show["title"] = "https://rmc/x"
+    show["episode_offset"] = 2  # another numbering: the listing matched episodes otherwise
+    assert kept() is None
+    del show["episode_offset"]
     lists = json.loads(web.SERVICE_LISTS.read_text())
     lists["84095"]["checked"] = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     web.SERVICE_LISTS.write_text(json.dumps(lists))
@@ -1005,6 +1008,26 @@ def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monke
     library[7] = {"id": 70, "title": "S7"}
     assert web.refresh_service_lists(now) == 0
     assert asked == [30]  # serve's limit reached: the rest waits for the next hour
+
+    def partial(show, series_id, title):  # a season's own page failed: not kept, asked again next hour
+        return {"available": {}, "titles": [], "pages": {"2": {"url": "p", "error": "timed out"}}}
+    monkeypatch.setattr(web, "probe_series", partial)
+    assert web.refresh_service_lists(now) == 0 and "3" not in json.loads(web.SERVICE_LISTS.read_text())
+
+
+def test_a_season_pages_rate_limit_stops_the_listing(monkeypatch):
+    from unshacklarr import web
+    import pytest
+
+    def one(show, series_id, title, seasons):
+        if show.get("page_of"):
+            err = web.UnshackleError("too many requests")
+            err.retry_after = 60
+            raise err
+        return {"available": {}, "checks": [], "count": 0}
+    monkeypatch.setattr(web, "probe_one", one)
+    with pytest.raises(web.UnshackleError):
+        web.probe_series({"service": "IV", "title": "t", "season_pages": {2: {"url": "p"}}}, 1)
 
 
 def test_a_seasons_best_quality_is_asked_of_one_episode_and_kept_with_the_listing(tmp_path, monkeypatch):
