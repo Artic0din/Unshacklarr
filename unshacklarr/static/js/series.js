@@ -325,7 +325,7 @@ function renderCheck(s, changed = false) {
 let epUp = null;  // episode ids Upgrades found better on the service; null: Upgrades hasn't checked the series
 let epPages = {};  // Sonarr season -> a show of its own the service has for it, as the last check found (by mj23au)
 let epAvail = null;  // episode id -> what the service calls it, once "What's on <service>?" asked it
-let epPagesListed = {};  // season -> {count} for each season page the last check listed (a failed one is absent)
+let epPagesListed = {};  // season -> {url, count} for each season page the last check listed (a failed one is absent)
 let epTitles = null;  // everything the service lists then: [{key: "S26E11", part, name}]
 let epChecked = null;  // when that was
 let epQualities = {};  // season -> the best video and audio on the service, from the weekly check
@@ -782,7 +782,8 @@ $("#ep-go-edit").onclick = () => {
   $("#oneoff-cdm").replaceChildren(cdmNote(conf.service));
   $("#oneoff-dialog").showModal();
   // the preview says what the service has; a listing from before season pages' titles were kept is asked again
-  if (!epTitles || Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).some((page) => !epTitles.some((t) => t.page != null && String(t.page) === page) && epPagesListed[page]?.count !== 0)) askService(current);
+  if (!epTitles || Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).some((page) => !epTitles.some((t) => t.page != null && String(t.page) === page) 
+    && !(epPagesListed[page]?.count === 0 && epPagesListed[page].url === S.config.series[current.tvdbId].season_pages[page].url))) askService(current);  // listed empty, at this URL
 };
 /* Sonarr's episode as the service numbers it, the rule sync.service_episode applies: the episode table, else offset and seasons. */
 const pad2 = (n) => String(n).padStart(2, "0");

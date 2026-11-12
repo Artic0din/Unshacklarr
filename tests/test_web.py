@@ -950,7 +950,7 @@ def test_a_service_list_is_kept_for_the_series_as_it_is(tmp_path, monkeypatch):
         match_info = {"tvdb": "84095"}
     kept = lambda: json.loads(asyncio.run(web.service_list(Request())).text)
     assert kept()["available"] == {"2701": {"service": "S26E11"}}
-    assert kept()["pages"] == {"2": {"count": 0}}  # a page listed empty is known; a failed one is not
+    assert kept()["pages"] == {"2": {"url": "p", "count": 0}}  # a page listed empty is known; a failed one is not
     show["title"] = "https://rmc/y"  # another URL: another list
     assert kept() is None
     show["title"] = "https://rmc/x"
