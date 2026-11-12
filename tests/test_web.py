@@ -3718,6 +3718,29 @@ def test_a_season_on_another_service_is_upgraded_and_refused_by_that_services_se
     assert web.cdm_refusal([2]) == "Y has no CDM"  # X's device is not Y's
 
 
+def test_upgrades_ask_each_seasons_service_apart_even_under_one_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync = web.sonarr_sync
+    hevc_first = {"name": "HEVC first", "steps": [{"codec": "HEVC", "range": "SDR", "min": 1080, "max": 1080}]}
+    config = {"series": {2: {"service": "X", "title": "123", "ladder": "HEVC first", "season_pages": {2: {"url": "123", "service": "Y"}}}},
+              "quality_ladders": [hevc_first]}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    monkeypatch.setattr(sync, "sonarr_series", lambda wanted: {2: {"id": 8, "tvdbId": 2, "title": "Split"}})
+    avc = {"id": 70, "mediaInfo": {"resolution": "1920x1080", "videoCodec": "h264"}}
+    eps = [{"id": n, "seasonNumber": n, "episodeNumber": 1, "hasFile": True, "episodeFileId": 70, "episodeFile": avc} for n in (1, 2)]
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: eps)
+    monkeypatch.setattr(sync, "download_request", lambda show, config, wanted, out: {"service": show["service"]})
+    asked = []
+    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder: asked.append((show["service"], request["wanted"])) or [])
+    monkeypatch.setattr(web, "UPGRADE_PAUSE", 0)
+    web.scan_upgrades()
+    assert sorted(asked) == [("X", ["S01E01"]), ("Y", ["S01E01"])]  # one ID on two services: two asks, each its own
+
+
 def test_upgrades_ask_the_service_for_the_episode_its_title_found():
     from unshacklarr import web
     # 24 Hours in Police Custody: Channel 4 numbers apart, its listing kept by Episodes (or the sync)

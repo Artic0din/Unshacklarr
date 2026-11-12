@@ -4441,7 +4441,7 @@ def scan_upgrades_in(inst: dict | None, name: str, only: set | None = None) -> b
                 if hit.get("item"):
                     found.append({**hit["item"], "file": file_label(w[4])})  # labelled as the file is labelled now
             else:
-                ask.setdefault((w[0]["id"], str(w[1].get("title"))), []).append(w)  # per series and page: one listing
+                ask.setdefault((w[0]["id"], w[1]["service"], str(w[1].get("title"))), []).append(w)  # per series, service and page: one listing
         for chunks in ask.values():
             show = chunks[0][1]
             size = 1 if int(show.get("parts") or 0) > 1 else UPGRADE_BATCH  # parts: one episode at a time, as before
