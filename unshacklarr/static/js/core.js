@@ -719,7 +719,12 @@ function fillPages(conf) {
 $("#d-pages").oninput = (e) => {
   const rows = [...e.target.value.matchAll(/^\s*S?(\d+)\s+(\S+)(?:\s+(\d+))?\s*$/gim)];
   const conf = S.config.series[current.tvdbId];
-  if (rows.length) conf.season_pages = Object.fromEntries(rows.map((m) => [Number(m[1]), { url: m[2], ...(m[3] && Number(m[3]) !== 1 ? { season: Number(m[3]) } : {}) }]));
+  const other = (season, url) => {  // its site's service, kept if the series' changes; an ID keeps the one it had
+    const tag = serviceOfLink(url), previous = conf.season_pages?.[season];
+    if (tag) return { service: tag };
+    return previous?.url === url && previous.service ? { service: previous.service } : {};
+  };
+  if (rows.length) conf.season_pages = Object.fromEntries(rows.map((m) => [Number(m[1]), { url: m[2], ...(m[3] && Number(m[3]) !== 1 ? { season: Number(m[3]) } : {}), ...other(Number(m[1]), m[2]) }]));
   else delete conf.season_pages;
   dirty();
 };
