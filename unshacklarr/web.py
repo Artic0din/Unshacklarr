@@ -3955,6 +3955,7 @@ def keep_service_list(tvdb: int, show: dict, found: dict, qualities: dict | None
             kept = {k: was[k] for k in ("qualities", "qualities_checked") if k in was}
         lists[str(tvdb)] = {"checked": datetime.now(timezone.utc).isoformat(), "service": show["service"], "title": str(show["title"]),
                             "numbering": listing_numbering(show),
+                            "pages": {k: {"count": v["count"]} for k, v in (found.get("pages") or {}).items() if "count" in v},  # listed, even empty
                             "available": found["available"], "titles": found["titles"], "local_titles": found.get("local_titles") or {},
                             "v": SERVICE_LIST_FORMAT, **kept}
         write_atomic(SERVICE_LISTS, json.dumps(lists))

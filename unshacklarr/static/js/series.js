@@ -233,6 +233,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
   if (!inst) epSonarr = "";
   if (!keep) {
     epAvail = epTitles = epAvailRaw = null;
+    epPagesListed = {};
     epPages = {};
     epSeasons = {}; epSeason = null; epBusy = new Map();  // nothing of the series open before
     picked.clear();
@@ -252,7 +253,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     }).catch(() => {});
     api(`/api/probe/${s.tvdbId}`).then((hit) => {  // the last check of the service, refreshed weekly: no need to ask again
       if (!hit || current !== s || epAvail) return;
-      epAvail = viewAvail(hit.available); epTitles = hit.titles; epChecked = hit.checked; epQualities = hit.qualities || {}; localTitles(hit.local_titles);
+      epAvail = viewAvail(hit.available); epTitles = hit.titles; epPagesListed = hit.pages || {}; epChecked = hit.checked; epQualities = hit.qualities || {}; localTitles(hit.local_titles);
       if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${seriesSvcs(S.config.series[s.tvdbId])}`); }
     }).catch(() => {});
   }
@@ -309,7 +310,7 @@ function renderCheck(s, changed = false) {
   $(".ep-check")?.remove();
   $("#ep-avail")?.remove();
   if (changed) epQualities = {};  // the old service's or URL's
-  if (changed && epAvail) { epAvail = epTitles = epChecked = null; renderSeason(); }
+  if (changed && epAvail) { epAvail = epTitles = epChecked = null; epPagesListed = {}; renderSeason(); }
   const conf = S.config.series[s.tvdbId];
   if (!conf?.service || !conf.title) return;  // what the service has, listed (unshackle's --list-titles): nothing downloaded
   const svc = seriesSvcs(conf);
@@ -324,6 +325,7 @@ function renderCheck(s, changed = false) {
 let epUp = null;  // episode ids Upgrades found better on the service; null: Upgrades hasn't checked the series
 let epPages = {};  // Sonarr season -> a show of its own the service has for it, as the last check found (by mj23au)
 let epAvail = null;  // episode id -> what the service calls it, once "What's on <service>?" asked it
+let epPagesListed = {};  // season -> {count} for each season page the last check listed (a failed one is absent)
 let epTitles = null;  // everything the service lists then: [{key: "S26E11", part, name}]
 let epChecked = null;  // when that was
 let epQualities = {};  // season -> the best video and audio on the service, from the weekly check
@@ -667,7 +669,7 @@ async function askService(s) {
   try {
     r = await api("/api/probe", { method: "POST", wait: 120, body: JSON.stringify({ show: conf, seriesId: s.id ?? S.sonarrsOf?.[s.tvdbId]?.[0]?.id, tvdbId: s.tvdbId, title: s.title,
       ...(s.id ? {} : { sonarr: S.sonarrsOf?.[s.tvdbId]?.[0]?.name }) }) });  // in no main Sonarr: its own Sonarr's episodes
-    if (current === s) { epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview(); }
+    if (current === s) { epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview(); }
   } catch (e) { toast(e.message, true); }
   clearTimeout(slow);
   if (current === s && $(".ep-check")) { $(".ep-check").disabled = false; checkLabel(epAvail ? `Refresh what's on ${svc}` : `What's on ${svc}?`); }
@@ -780,7 +782,7 @@ $("#ep-go-edit").onclick = () => {
   $("#oneoff-cdm").replaceChildren(cdmNote(conf.service));
   $("#oneoff-dialog").showModal();
   // the preview says what the service has; a listing from before season pages' titles were kept is asked again
-  if (!epTitles || Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).some((page) => !epTitles.some((t) => t.page != null && String(t.page) === page))) askService(current);
+  if (!epTitles || Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).some((page) => !epTitles.some((t) => t.page != null && String(t.page) === page) && epPagesListed[page]?.count !== 0)) askService(current);
 };
 /* Sonarr's episode as the service numbers it, the rule sync.service_episode applies: the episode table, else offset and seasons. */
 const pad2 = (n) => String(n).padStart(2, "0");

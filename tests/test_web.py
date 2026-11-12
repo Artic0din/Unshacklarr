@@ -943,12 +943,14 @@ def test_a_service_list_is_kept_for_the_series_as_it_is(tmp_path, monkeypatch):
     web = importlib.reload(unshacklarr.web)
     show = {"service": "RMCP", "title": "https://rmc/x"}
     monkeypatch.setattr(web, "read_config", lambda: {"series": {84095: show}})
-    web.keep_service_list(84095, show, {"available": {"2701": {"service": "S26E11"}}, "titles": []})
+    web.keep_service_list(84095, show, {"available": {"2701": {"service": "S26E11"}}, "titles": [],
+                                        "pages": {"2": {"url": "p", "count": 0}, "3": {"url": "q", "error": "timed out"}}})
 
     class Request:
         match_info = {"tvdb": "84095"}
     kept = lambda: json.loads(asyncio.run(web.service_list(Request())).text)
     assert kept()["available"] == {"2701": {"service": "S26E11"}}
+    assert kept()["pages"] == {"2": {"count": 0}}  # a page listed empty is known; a failed one is not
     show["title"] = "https://rmc/y"  # another URL: another list
     assert kept() is None
     show["title"] = "https://rmc/x"
