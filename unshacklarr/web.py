@@ -4114,8 +4114,8 @@ def seasons_elsewhere(show: dict, serie: dict, found: dict) -> dict:
     for e in sonarr_sync.sonarr_get("episode", seriesId=serie["id"]):
         if e["seasonNumber"] > 0 and e.get("airDateUtc") and e["airDateUtc"] <= now:
             seasons.setdefault(e["seasonNumber"], []).append(e)
-    wanted = {s: len(eps) for s, eps in seasons.items() if s not in pages and any(not e.get("hasFile") for e in eps)
-              and not any(str(e["id"]) in available for e in eps)}
+    wanted = {s: {e["episodeNumber"] for e in eps} for s, eps in seasons.items() if s not in pages
+              and any(not e.get("hasFile") for e in eps) and not any(str(e["id"]) in available for e in eps)}
     out: dict[str, dict] = {}
     for service in sonarr_sync.all_services() if wanted else []:
         if service["tag"] == show["service"] or not service.get("has_search"):
@@ -4129,12 +4129,10 @@ def seasons_elsewhere(show: dict, serie: dict, found: dict) -> dict:
                 raise  # serve's limit: the rest next hour
             print(f"What's on {service['tag']}: {serie['title']}: {e}", flush=True)
             continue
-        counts: dict[int, int] = {}
-        for t in listed:  # shortcut: by the season's own number; a service numbering it otherwise is not found
-            counts[int(t.get("season") or 0)] = counts.get(int(t.get("season") or 0), 0) + 1
-        for season, aired in wanted.items():
-            if str(season) not in out and counts.get(season, 0) * 2 >= aired:
-                out[str(season)] = {"service": service["tag"], "url": url, "count": counts[season]}
+        for season, aired in wanted.items():  # shortcut: by the season's own numbers; a service numbering it otherwise is not found
+            held = len(aired & {t.get("number") for t in listed if int(t.get("season") or 0) == season})  # a split episode once
+            if str(season) not in out and held * 2 >= len(aired):
+                out[str(season)] = {"service": service["tag"], "url": url, "count": held, **({"season": season} if season != 1 else {})}
         time.sleep(SERVICE_LIST_PAUSE)
     return out
 
