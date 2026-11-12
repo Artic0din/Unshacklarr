@@ -308,6 +308,7 @@ function renderCheck(s, changed = false) {
   if (current !== s || !$("#ep-list")) return;
   $(".ep-check")?.remove();
   $("#ep-avail")?.remove();
+  if (changed) epQualities = {};  // the old service's or URL's
   if (changed && epAvail) { epAvail = epTitles = epChecked = null; renderSeason(); }
   const conf = S.config.series[s.tvdbId];
   if (!conf?.service || !conf.title) return;  // what the service has, listed (unshackle's --list-titles): nothing downloaded

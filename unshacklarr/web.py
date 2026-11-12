@@ -4004,15 +4004,19 @@ async def service_list(request):
     return web.json_response(hit if same_listing(hit, show) else None)
 
 
-def season_qualities(show: dict, serie: dict, found: dict) -> dict:
+EVERY_TRACK = {"name": "every track", "steps": [{"codec": "", "range": ""}]}  # list_tracks asks every range for it
+
+
+def season_qualities(show: dict, serie: dict, found: dict, before: dict | None = None) -> dict | None:
     """Each season's best video and audio on the service, {season: {"video", "audio"}}: the tracks of its latest
-    episode the listing found, one list-tracks a season (a login each), as a service has a season in one quality."""
+    episode the listing found, one list-tracks a season (a login each), as a service has a season in one quality.
+    A season that fails keeps its answer from before; None when every season asked failed (asked again next hour)."""
     config, latest = sonarr_sync.read_file(), {}
     available = {str(k): v for k, v in found["available"].items()}  # Sonarr's ids: numbers until read back from the file
     for e in sonarr_sync.sonarr_get("episode", seriesId=serie["id"]):
         if e["seasonNumber"] > 0 and str(e["id"]) in available and e["episodeNumber"] > latest.get(e["seasonNumber"], {}).get("episodeNumber", 0):
             latest[e["seasonNumber"]] = e
-    out = {}
+    out, asked, failed = {}, 0, 0
     for season, e in sorted(latest.items()):
         page = sonarr_sync.season_page(show, season)
         try:
@@ -4020,11 +4024,15 @@ def season_qualities(show: dict, serie: dict, found: dict) -> dict:
                                                    sonarr_sync.episode_folder({**e, "series": serie}))
             if request.get("remote"):
                 continue  # a --remote download lists no tracks
-            parts = sonarr_sync.list_tracks(page, config, request)
+            asked += 1
+            parts = sonarr_sync.list_tracks(page, config, request, EVERY_TRACK)
         except (UnshackleError, ValueError) as err:
             if getattr(err, "retry_after", 0):
                 raise  # serve's limit: the pass stops (refresh_service_lists)
             print(f"Qualities on {page['service']}: {serie['title']} S{season:02}: {err}", flush=True)
+            failed += 1
+            if str(season) in (before or {}):
+                out[str(season)] = before[str(season)]
             continue
         finally:
             time.sleep(SERVICE_LIST_PAUSE)
@@ -4037,7 +4045,7 @@ def season_qualities(show: dict, serie: dict, found: dict) -> dict:
             "video": sonarr_sync.track_label(best_video) if best_video else "",
             "audio": " ".join(filter(None, [best_audio.get("codec_display") or best_audio.get("codec"), str(best_audio["channels"]) if best_audio.get("channels") else "",
                                             "Atmos" if best_audio.get("atmos") else ""])) if best_audio else ""}
-    return out
+    return None if asked and failed == asked else out
 
 
 def refresh_service_lists(now: datetime) -> int:
@@ -4063,7 +4071,8 @@ def refresh_service_lists(now: datetime) -> int:
                 print(f"What's on {show['service']}: {serie['title']}: a season's page failed ({failed[0]}), asked again next hour", flush=True)
             else:  # a season's page failed: the last whole listing stays
                 keep_service_list(tvdb, show, found)  # kept first: a failure asking the qualities keeps the listing
-                keep_service_list(tvdb, show, found, season_qualities(show, serie, found))
+                if (qualities := season_qualities(show, serie, found, (lists.get(str(tvdb)) or {}).get("qualities"))) is not None:
+                    keep_service_list(tvdb, show, found, qualities)
                 done += 1
         except (UnshackleError, requests.RequestException, ValueError) as e:
             print(f"What's on {show['service']}: {serie['title']}: {e}", flush=True)

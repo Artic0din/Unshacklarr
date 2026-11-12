@@ -990,7 +990,7 @@ def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monke
             raise web.UnshackleError("iview is down")
         return {"available": {str(series_id): {"service": "S01E01"}}, "titles": []}
     monkeypatch.setattr(web, "probe_series", probe)
-    monkeypatch.setattr(web, "season_qualities", lambda show, serie, found: {})
+    monkeypatch.setattr(web, "season_qualities", lambda show, serie, found, before: {})
     assert web.refresh_service_lists(now) == 2  # the old one and the moved one; the new one failed
     assert asked == [20, 30, 40]  # due: older than a week, never checked, or for another URL
     lists = json.loads(web.SERVICE_LISTS.read_text())
@@ -1049,16 +1049,30 @@ def test_a_seasons_best_quality_is_asked_of_one_episode_and_kept_with_the_listin
               "S02E01": {"video": [{"height": 1080, "codec": "HEVC", "range": "HDR10"}],
                       "audio": [{"codec_display": "AAC", "channels": 2.0}, {"codec_display": "EC3", "channels": "5.1.4", "atmos": True},
                                 {"codec_display": "EC3", "channels": 5.1}]}}
-    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request: asked.append(request["wanted"]) or [tracks[request["wanted"][0]]])
+    ladders = []
+
+    def list_tracks(show, config, request, ladder=None):
+        asked.append(request["wanted"])
+        ladders.append(ladder)
+        if request["wanted"][0] in failing:
+            raise web.UnshackleError("timed out")
+        return [tracks[request["wanted"][0]]]
+    failing = set()
+    monkeypatch.setattr(sync, "list_tracks", list_tracks)
     monkeypatch.setattr(web.time, "sleep", lambda s: None)
     found = {"available": {2: {"service": "S01E01"}, 3: {"service": "S01E02"}, 4: {"service": "S02E01"}}}  # as probe_series has them  # S00 and S03: not on it
     got = web.season_qualities(show, {"id": 8, "tvdbId": 1, "title": "Split"}, found)
-    assert asked == [["S01E02"], ["S02E01"]]  # one episode a season, its latest on the service
+    assert asked == [["S01E02"], ["S02E01"]]
+    assert ladders[0]["steps"] == [{"codec": "", "range": ""}]  # every range asked: a service lists only those asked  # one episode a season, its latest on the service
     assert got == {"1": {"video": "1080p AVC SDR", "audio": "AAC 2.0"}, "2": {"video": "1080p HEVC HDR10", "audio": "EC3 5.1.4 Atmos"}}
     web.keep_service_list(1, show, {"available": {}, "titles": []}, got)
     web.keep_service_list(1, show, {"available": {}, "titles": []})  # a listing asked on the page keeps them
     kept = json.loads(web.SERVICE_LISTS.read_text())["1"]
     assert kept["qualities"] == got and kept["qualities_checked"]
+    failing.add("S02E01")  # one season failed: its last answer stays
+    assert web.season_qualities(show, {"id": 8, "tvdbId": 1, "title": "Split"}, found, got) == got
+    failing.add("S01E02")  # all failed: nothing to keep as a new check, asked again next hour
+    assert web.season_qualities(show, {"id": 8, "tvdbId": 1, "title": "Split"}, found, got) is None
 
 
 def test_a_services_episodes_are_found_in_sonarr_by_their_title():
