@@ -932,7 +932,7 @@ def test_a_service_is_named_as_people_know_it():
     assert name("EXAMPLE") == "EXAMPLE"
 
 
-def test_a_service_list_is_kept_12_hours_for_the_series_as_it_is(tmp_path, monkeypatch):
+def test_a_service_list_is_kept_for_the_series_as_it_is(tmp_path, monkeypatch):
     import asyncio
     import json
     from datetime import datetime, timedelta, timezone
@@ -953,9 +953,56 @@ def test_a_service_list_is_kept_12_hours_for_the_series_as_it_is(tmp_path, monke
     assert kept() is None
     show["title"] = "https://rmc/x"
     lists = json.loads(web.SERVICE_LISTS.read_text())
-    lists["84095"]["checked"] = (datetime.now(timezone.utc) - timedelta(hours=13)).isoformat()
+    lists["84095"]["checked"] = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     web.SERVICE_LISTS.write_text(json.dumps(lists))
-    assert kept() is None  # too old
+    assert kept()["available"] == {"2701": {"service": "S26E11"}}  # old, still shown, with its age
+
+
+def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monkeypatch):
+    import json
+    from datetime import datetime, timedelta, timezone
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    now = datetime(2026, 11, 12, 9, tzinfo=timezone.utc)
+    series = {1: {"service": "IV", "title": "https://iview/fresh"}, 2: {"service": "IV", "title": "https://iview/old"},
+              3: {"service": "IV", "title": "https://iview/new"}, 4: {"service": "IV", "title": "https://iview/moved"},
+              5: {"title": "no service"}, 6: {"service": "IV", "title": "https://iview/not-in-sonarr"}}
+    monkeypatch.setattr(web, "read_config", lambda: {"series": series})
+    library = {t: {"id": t * 10, "title": f"S{t}"} for t in (99, 5, 4, 3, 2, 1)}  # the whole library, 99 in no config
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_series", lambda wanted: library)
+    monkeypatch.setattr(web.time, "sleep", lambda s: None)
+    web.SERVICE_LISTS.write_text(json.dumps({
+        "1": {"checked": (now - timedelta(days=6)).isoformat(), "service": "IV", "title": "https://iview/fresh"},
+        "2": {"checked": (now - timedelta(days=8)).isoformat(), "service": "IV", "title": "https://iview/old"},
+        "4": {"checked": (now - timedelta(days=1)).isoformat(), "service": "IV", "title": "https://iview/before"}}))
+    asked = []
+
+    def probe(show, series_id, title):
+        asked.append(series_id)
+        if series_id == 30:
+            raise web.UnshackleError("iview is down")
+        return {"available": {str(series_id): {"service": "S01E01"}}, "titles": []}
+    monkeypatch.setattr(web, "probe_series", probe)
+    assert web.refresh_service_lists(now) == 2  # the old one and the moved one; the new one failed
+    assert asked == [20, 30, 40]  # due: older than a week, never checked, or for another URL
+    lists = json.loads(web.SERVICE_LISTS.read_text())
+    assert lists["2"]["available"] == {"20": {"service": "S01E01"}} and lists["4"]["title"] == "https://iview/moved"
+    assert "3" not in lists  # failed: asked again next hour
+
+    def limited(show, series_id, title):
+        asked.append(series_id)
+        err = web.UnshackleError("too many requests")
+        err.retry_after = 60
+        raise err
+    monkeypatch.setattr(web, "probe_series", limited)
+    asked.clear()
+    series[7] = {"service": "IV", "title": "https://iview/later"}
+    library[7] = {"id": 70, "title": "S7"}
+    assert web.refresh_service_lists(now) == 0
+    assert asked == [30]  # serve's limit reached: the rest waits for the next hour
 
 
 def test_a_services_episodes_are_found_in_sonarr_by_their_title():
