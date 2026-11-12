@@ -21,6 +21,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Hayu suggestions now replace an episode-only link with the show's page found by title, so later seasons are included instead of only that episode's season.
 - Change and download's preview no longer shows a season listed as a separate show as missing or as the wrong episode: it numbers the season as its own page does and matches it against that page's titles, as the download already did.
 - A series' suggestions now name each title when one service links several (Netflix's Kath & Kim and its 20th Anniversary Specials): the one with the series' own title comes first, and Suggest services no longer offers the others for the series.
 - The page no longer says Sonarr is unreachable while Sonarr is busy importing a batch of downloads: the series list and the schedule now wait up to 2 minutes, as Unshacklarr's other Sonarr reads already did, instead of 30 seconds. The release check, which runs every 30 seconds, still gives up after 30. A request that takes too long now says how long it waited, not always 30 seconds.

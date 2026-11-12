@@ -580,7 +580,9 @@ def accessible_edition(url: str) -> bool:
 
 def still_episode(url: str) -> bool:
     """A link that opens one episode even once normalised."""
-    return bool(re.search(r"-episode-\d+|episodeId=", url)) or episode_link(url)
+    return bool(re.search(r"-episode-\d+|episodeId=", url)) or (
+        on_site(url, "hayu.com") and bool(re.match(r"/show/episode/\d+", urlparse(url).path))
+    ) or episode_link(url)
 
 
 def merge_countries(found: list[list[dict]]) -> list[dict]:
@@ -1733,7 +1735,10 @@ def searched_in_place(links: list[dict], tmdb_id: int) -> list[dict]:
     out = list(links)
     for service in sorted(alone):
         if url := search_series_url(service, series["title"]):
-            episode = next(l for l in out if l["service"] == service and l.get("episode"))
+            episodes = [l for l in out if l["service"] == service and l.get("episode")]
+            episode = {**episodes[0], "country": ", ".join(dict.fromkeys(
+                country for link in episodes for country in link["country"].split(", ")
+            ))}
             out = [l for l in out if not (l["service"] == service and l.get("episode"))]
             out.append({**{k: v for k, v in episode.items() if k not in ("episode", "edition", "needs_series_url")}, "url": url,
                         "found_by": "search"})

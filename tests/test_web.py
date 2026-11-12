@@ -3121,6 +3121,37 @@ def test_an_episode_only_link_gives_way_to_the_series_found_by_its_title(tmp_pat
     assert web.searched_in_place([series_link], 55) == [series_link]  # a series link already: nothing searched
 
 
+def test_a_hayu_episode_link_gives_way_to_the_show_found_by_its_title(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+
+    class Response:
+        text = """
+        <div class="ott_provider"><h3>Stream</h3><ul class="providers">
+          <li><a title="Watch The Real Housewives of London on Hayu"
+              href="https://click.justwatch.com/a?r=https%3A%2F%2Fwww.hayu.com%2Fshow%2Fepisode%2F630032936136"></a></li>
+        </ul></div>
+        """
+
+    class Backend:
+        def call(self, method, path, json=None, **_):
+            return {"results": [{"title": "The Real Housewives of London", "url": "https://www.hayu.com/show/630020136307"}]}
+
+    monkeypatch.setattr(web, "tmdb_page", lambda *a, **k: Response())
+    monkeypatch.setattr(web, "sonarr_series", lambda: [{"tmdbId": 55, "title": "The Real Housewives of London"}])
+    monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend())
+
+    links = web.tmdb_links(55, "AU", {"hayu.com": "HAYU"})
+    links.append({**links[0], "url": "https://www.hayu.com/show/episode/630032936137", "country": "GB"})
+    assert web.searched_in_place(links, 55) == [{
+        "service": "HAYU", "url": "https://www.hayu.com/show/630020136307", "country": "AU, GB",
+        "provider": "Hayu", "site": "www.hayu.com", "kind": "native", "section": "stream", "found_by": "search",
+    }]
+
+
 def test_a_channel_listing_routes_to_the_brands_own_service(tmp_path, monkeypatch):
     """Paramedics (AU): JustWatch has only the Binge Amazon Channel. Any brand's Channel row names its own service,
     found by the brand's site among the installed services, and its series URL is searched there by title."""
