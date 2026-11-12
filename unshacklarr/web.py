@@ -3934,12 +3934,19 @@ SERVICE_LIST_FORMAT = 2  # 2: title matches say whether they are the episode's v
 service_lists_lock = threading.Lock()  # the sync's threads and the page's checks write it at once
 
 
-def keep_service_list(tvdb: int, show: dict, found: dict) -> None:
+def keep_service_list(tvdb: int, show: dict, found: dict, qualities: dict | None = None) -> None:
+    """The listing, and each season's best quality there (season_qualities): a listing without them keeps the
+    last ones for the same service and URL."""
     with service_lists_lock:
         lists = read_json(SERVICE_LISTS, {})
+        kept = {}
+        if qualities is not None:
+            kept = {"qualities": qualities, "qualities_checked": datetime.now(timezone.utc).isoformat()}
+        elif same_listing(was := lists.get(str(tvdb)), show):
+            kept = {k: was[k] for k in ("qualities", "qualities_checked") if k in was}
         lists[str(tvdb)] = {"checked": datetime.now(timezone.utc).isoformat(), "service": show["service"], "title": str(show["title"]),
                             "available": found["available"], "titles": found["titles"], "local_titles": found.get("local_titles") or {},
-                            "v": SERVICE_LIST_FORMAT}
+                            "v": SERVICE_LIST_FORMAT, **kept}
         write_atomic(SERVICE_LISTS, json.dumps(lists))
 
 
@@ -3987,6 +3994,42 @@ async def service_list(request):
     return web.json_response(hit if same_listing(hit, show) else None)
 
 
+def season_qualities(show: dict, serie: dict, found: dict) -> dict:
+    """Each season's best video and audio on the service, {season: {"video", "audio"}}: the tracks of its latest
+    episode the listing found, one list-tracks a season (a login each), as a service has a season in one quality."""
+    config, latest = sonarr_sync.read_file(), {}
+    available = {str(k): v for k, v in found["available"].items()}  # Sonarr's ids: numbers until read back from the file
+    for e in sonarr_sync.sonarr_get("episode", seriesId=serie["id"]):
+        if e["seasonNumber"] > 0 and str(e["id"]) in available and e["episodeNumber"] > latest.get(e["seasonNumber"], {}).get("episodeNumber", 0):
+            latest[e["seasonNumber"]] = e
+    out = {}
+    for season, e in sorted(latest.items()):
+        page = sonarr_sync.season_page(show, season)
+        try:
+            request = sonarr_sync.download_request(page, config, available[str(e["id"])]["service"],
+                                                   sonarr_sync.episode_folder({**e, "series": serie}))
+            if request.get("remote"):
+                continue  # a --remote download lists no tracks
+            parts = sonarr_sync.list_tracks(page, config, request)
+        except (UnshackleError, ValueError) as err:
+            if getattr(err, "retry_after", 0):
+                raise  # serve's limit: the pass stops (refresh_service_lists)
+            print(f"Qualities on {page['service']}: {serie['title']} S{season:02}: {err}", flush=True)
+            continue
+        finally:
+            time.sleep(SERVICE_LIST_PAUSE)
+        video = [t for p in parts for t in p.get("video") or []]
+        audio = [t for p in parts for t in p.get("audio") or []]
+        layout = lambda c: tuple(int(n) for n in str(c or 0).split(".") if n.isdigit())  # 2.0, 5.1, or "5.1.4" (immersive)
+        best_audio = max(audio, key=lambda t: (layout(t.get("channels")), bool(t.get("atmos")), int(t.get("bitrate") or 0)), default=None)
+        best_video = max(video, key=lambda t: (sonarr_sync.eq_height(t), (t.get("range") or "SDR") != "SDR", int(t.get("bitrate") or 0)), default=None)
+        out[str(season)] = {
+            "video": sonarr_sync.track_label(best_video) if best_video else "",
+            "audio": " ".join(filter(None, [best_audio.get("codec_display") or best_audio.get("codec"), str(best_audio["channels"]) if best_audio.get("channels") else "",
+                                            "Atmos" if best_audio.get("atmos") else ""])) if best_audio else ""}
+    return out
+
+
 def refresh_service_lists(now: datetime) -> int:
     """List again each series whose listing is a week old, missing, or of another service or URL: the main Sonarr's
     series only, as the page's listings hold its episode ids. A failed one is asked again at the next hourly look.
@@ -3996,11 +4039,14 @@ def refresh_service_lists(now: datetime) -> int:
     for tvdb in sorted(library):  # the whole library: its series without a service are passed over
         show = read_config()["series"].get(tvdb)  # as it is now: one changed during a long pass is listed as changed
         hit = read_json(SERVICE_LISTS, {}).get(str(tvdb))
-        if not ready(show) or same_listing(hit, show) and now - datetime.fromisoformat(hit["checked"]) < SERVICE_LIST_EVERY:
-            continue
+        due = lambda key: not hit.get(key) or now - datetime.fromisoformat(hit[key]) >= SERVICE_LIST_EVERY
+        if not ready(show) or same_listing(hit, show) and not due("checked") and not due("qualities_checked"):
+            continue  # a sync's listing before each download keeps "checked" new: the qualities have their own
         serie = library[tvdb]
         try:
-            keep_service_list(tvdb, show, probe_series(show, serie["id"], serie["title"]))
+            found = probe_series(show, serie["id"], serie["title"])
+            keep_service_list(tvdb, show, found)  # kept first: a failure asking the qualities keeps the listing
+            keep_service_list(tvdb, show, found, season_qualities(show, serie, found))
             done += 1
         except (UnshackleError, requests.RequestException, ValueError) as e:
             print(f"What's on {show['service']}: {serie['title']}: {e}", flush=True)
