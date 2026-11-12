@@ -3145,8 +3145,9 @@ def test_a_hayu_episode_link_gives_way_to_the_show_found_by_its_title(tmp_path, 
     monkeypatch.setattr(web.sonarr_sync, "backend_for", lambda tag, config=None: Backend())
 
     links = web.tmdb_links(55, "AU", {"hayu.com": "HAYU"})
+    links.append({**links[0], "url": "https://www.hayu.com/show/episode/630032936137", "country": "GB"})
     assert web.searched_in_place(links, 55) == [{
-        "service": "HAYU", "url": "https://www.hayu.com/show/630020136307", "country": "AU",
+        "service": "HAYU", "url": "https://www.hayu.com/show/630020136307", "country": "AU, GB",
         "provider": "Hayu", "site": "www.hayu.com", "kind": "native", "section": "stream", "found_by": "search",
     }]
 
