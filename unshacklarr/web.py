@@ -3948,17 +3948,20 @@ SERVICE_LIST_FORMAT = 2  # 2: title matches say whether they are the episode's v
 service_lists_lock = threading.Lock()  # the sync's threads and the page's checks write it at once
 
 
-def keep_service_list(tvdb: int, show: dict, found: dict, qualities: dict | None = None) -> None:
-    """The listing, and each season's best quality there (season_qualities): a listing without them keeps the
-    last ones for the same service and URL."""
+def keep_service_list(tvdb: int, show: dict, found: dict, qualities: dict | None = None, elsewhere: dict | None = None) -> None:
+    """The listing, each season's best quality there (season_qualities) and the seasons found on other services
+    (seasons_elsewhere): a listing without them keeps the last ones for the same service and URL."""
     with service_lists_lock:
         lists = read_json(SERVICE_LISTS, {})
-        kept = {}
+        now = datetime.now(timezone.utc).isoformat()
+        was = lists.get(str(tvdb))
+        kept = {k: was[k] for k in ("qualities", "qualities_checked", "elsewhere", "elsewhere_checked")
+                if k in was} if same_listing(was, show) else {}
         if qualities is not None:
-            kept = {"qualities": qualities, "qualities_checked": datetime.now(timezone.utc).isoformat()}
-        elif same_listing(was := lists.get(str(tvdb)), show):
-            kept = {k: was[k] for k in ("qualities", "qualities_checked") if k in was}
-        lists[str(tvdb)] = {"checked": datetime.now(timezone.utc).isoformat(), "service": show["service"], "title": str(show["title"]),
+            kept.update(qualities=qualities, qualities_checked=now)
+        if elsewhere is not None:
+            kept.update(elsewhere=elsewhere, elsewhere_checked=now)
+        lists[str(tvdb)] = {"checked": now, "service": show["service"], "title": str(show["title"]),
                             "numbering": listing_numbering(show),
                             "pages": {k: {"url": v["url"], "count": v["count"]} for k, v in (found.get("pages") or {}).items() if "count" in v},  # listed, even empty
                             "available": found["available"], "titles": found["titles"], "local_titles": found.get("local_titles") or {},
@@ -4072,7 +4075,8 @@ def refresh_service_lists(now: datetime) -> int:
     # a sync's listing before each download keeps "checked" new: the qualities have their own
     due = [tvdb for tvdb in sorted(sonarr_sync.sonarr_series({k for k, v in series.items() if ready(v)}))
            if ready(show := series.get(tvdb)) and not (same_listing(hit := lists.get(str(tvdb)), show)
-                                                    and fresh(hit, "checked") and fresh(hit, "qualities_checked"))]
+                                                    and fresh(hit, "checked") and fresh(hit, "qualities_checked")
+                                                    and fresh(hit, "elsewhere_checked"))]
     library, done = sonarr_sync.sonarr_series(set(due)), 0
     for tvdb in due:  # the whole library was looked at: its series without a service were passed over
         show = read_config()["series"].get(tvdb)  # as it is now: one changed during a long pass is listed as changed
@@ -4088,6 +4092,8 @@ def refresh_service_lists(now: datetime) -> int:
                 hit = lists.get(str(tvdb))  # its qualities only for the same service, URL and numbering
                 if (qualities := season_qualities(show, serie, found, hit.get("qualities") if same_listing(hit, show) else None)) is not None:
                     keep_service_list(tvdb, show, found, qualities)
+                if not (same_listing(hit, show) and fresh(hit, "elsewhere_checked")):
+                    keep_service_list(tvdb, show, found, elsewhere=seasons_elsewhere(show, serie, found))
                 done += 1
         except (UnshackleError, requests.RequestException, ValueError) as e:
             print(f"What's on {show['service']}: {serie['title']}: {e}", flush=True)
@@ -4095,6 +4101,42 @@ def refresh_service_lists(now: datetime) -> int:
                 break
         time.sleep(SERVICE_LIST_PAUSE)
     return done
+
+
+def seasons_elsewhere(show: dict, serie: dict, found: dict) -> dict:
+    """The seasons missing from the series' service found on another one, offered on its page: {season: {"service",
+    "url", "count"}}. Only aired seasons with an episode not on disk, none of them on the service and no page of
+    their own; asked of each other service that searches, by the one result of the series' title whose listing holds
+    at least half of the season's aired episodes under that season's number."""
+    now = datetime.now(timezone.utc).isoformat()
+    available, pages = {str(k) for k in found["available"]}, {int(k) for k in show.get("season_pages") or {}}
+    seasons: dict[int, list] = {}
+    for e in sonarr_sync.sonarr_get("episode", seriesId=serie["id"]):
+        if e["seasonNumber"] > 0 and e.get("airDateUtc") and e["airDateUtc"] <= now:
+            seasons.setdefault(e["seasonNumber"], []).append(e)
+    wanted = {s: len(eps) for s, eps in seasons.items() if s not in pages and any(not e.get("hasFile") for e in eps)
+              and not any(str(e["id"]) in available for e in eps)}
+    out: dict[str, dict] = {}
+    for service in sonarr_sync.all_services() if wanted else []:
+        if service["tag"] == show["service"] or not service.get("has_search"):
+            continue
+        if not (url := search_series_url(service["tag"], serie["title"])):
+            continue
+        try:
+            listed = [t for t in list_titles({"service": service["tag"], "title": url}) if t.get("type") == "episode"]
+        except (UnshackleError, requests.RequestException) as e:
+            if getattr(e, "retry_after", 0):
+                raise  # serve's limit: the rest next hour
+            print(f"What's on {service['tag']}: {serie['title']}: {e}", flush=True)
+            continue
+        counts: dict[int, int] = {}
+        for t in listed:  # shortcut: by the season's own number; a service numbering it otherwise is not found
+            counts[int(t.get("season") or 0)] = counts.get(int(t.get("season") or 0), 0) + 1
+        for season, aired in wanted.items():
+            if str(season) not in out and counts.get(season, 0) * 2 >= aired:
+                out[str(season)] = {"service": service["tag"], "url": url, "count": counts[season]}
+        time.sleep(SERVICE_LIST_PAUSE)
+    return out
 
 
 async def watch_service_lists():

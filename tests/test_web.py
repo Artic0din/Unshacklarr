@@ -981,7 +981,7 @@ def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monke
     monkeypatch.setattr(web.time, "sleep", lambda s: None)
     web.SERVICE_LISTS.write_text(json.dumps({
         "1": {"checked": (now - timedelta(days=6)).isoformat(), "service": "IV", "title": "https://iview/fresh",
-              "qualities": {}, "qualities_checked": (now - timedelta(days=6)).isoformat()},
+              "qualities": {}, "qualities_checked": (now - timedelta(days=6)).isoformat(), "elsewhere_checked": (now - timedelta(days=6)).isoformat()},
         "2": {"checked": (now - timedelta(days=8)).isoformat(), "service": "IV", "title": "https://iview/old"},
         "4": {"checked": (now - timedelta(days=1)).isoformat(), "service": "IV", "title": "https://iview/before", "qualities": {"1": "old URL's"}}}))
     asked = []
@@ -994,12 +994,15 @@ def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monke
     monkeypatch.setattr(web, "probe_series", probe)
     befores = {}
     monkeypatch.setattr(web, "season_qualities", lambda show, serie, found, before: befores.update({serie["id"]: before}) or {})
+    elsewhere = []
+    monkeypatch.setattr(web, "seasons_elsewhere", lambda show, serie, found: elsewhere.append(serie["id"]) or {"2": {"service": "NF"}})
     assert web.refresh_service_lists(now) == 2  # the old one and the moved one; the new one failed
     assert asked == [20, 30, 40]  # due: older than a week, never checked, or for another URL
     assert befores[40] is None  # the old URL's qualities are not kept for a season that fails on the new one
     lists = json.loads(web.SERVICE_LISTS.read_text())
     assert lists["2"]["available"] == {"20": {"service": "S01E01"}} and lists["4"]["title"] == "https://iview/moved"
     assert "3" not in lists  # failed: asked again next hour
+    assert elsewhere == [20, 40] and lists["2"]["elsewhere"] == {"2": {"service": "NF"}}  # the others, with their listing
 
     def limited(show, series_id, title):
         asked.append(series_id)
@@ -1017,6 +1020,52 @@ def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monke
         return {"available": {}, "titles": [], "pages": {"2": {"url": "p", "error": "timed out"}}}
     monkeypatch.setattr(web, "probe_series", partial)
     assert web.refresh_service_lists(now) == 0 and "3" not in json.loads(web.SERVICE_LISTS.read_text())
+
+
+def test_a_season_missing_from_its_service_is_found_on_another_and_kept(tmp_path, monkeypatch):
+    import json
+    import pytest
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync = web.sonarr_sync
+    show = {"service": "BINGE", "title": "https://binge/x", "season_pages": {"4": {"url": "https://stan/s4", "service": "STAN"}}}
+    aired = "2020-01-01T00:00:00Z"
+    eps = [{"id": i, "seasonNumber": s, "episodeNumber": n, "airDateUtc": aired, "hasFile": f}
+           for i, (s, n, f) in enumerate([(1, 1, False), (2, 1, False), (2, 2, False), (3, 1, True), (4, 1, False), (5, 1, False), (5, 2, False)], 1)]
+    eps.append({"id": 99, "seasonNumber": 6, "episodeNumber": 1, "airDateUtc": "2999-01-01T00:00:00Z", "hasFile": False})
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **q: eps)
+    monkeypatch.setattr(sync, "all_services", lambda: [{"tag": "BINGE", "has_search": True}, {"tag": "NOSEARCH"},
+                                                       {"tag": "STAN", "has_search": True}, {"tag": "NF", "has_search": True}])
+    searched = []
+    monkeypatch.setattr(web, "search_series_url", lambda tag, title: searched.append(tag) or f"https://{tag.lower()}/x")
+    listings = {"STAN": [(2, 1), (2, 2), (5, 1)], "NF": [(5, 1), (5, 2), (1, 1)]}
+    monkeypatch.setattr(web, "list_titles", lambda show: [{"type": "episode", "season": s, "number": n} for s, n in listings[show["service"]]])
+    monkeypatch.setattr(web.time, "sleep", lambda s: None)
+    found = {"available": {1: {"service": "S01E01"}}}  # S01 is on BINGE
+    got = web.seasons_elsewhere(show, {"id": 8, "title": "X"}, found)
+    assert searched == ["STAN", "NF"]  # never the series' own service, nor one that cannot search
+    # S02 on STAN; S05 on the first with half its aired episodes; S03 on disk, S04 has a page, S06 not aired
+    assert got == {"2": {"service": "STAN", "url": "https://stan/x", "count": 2}, "5": {"service": "STAN", "url": "https://stan/x", "count": 1}}
+    web.keep_service_list(1, show, {"available": {}, "titles": []}, elsewhere=got)
+    web.keep_service_list(1, show, {"available": {}, "titles": []}, {"1": {"video": "1080p"}})  # the qualities after keep it
+    kept = json.loads(web.SERVICE_LISTS.read_text())["1"]
+    assert kept["elsewhere"] == got and kept["elsewhere_checked"] and kept["qualities"] == {"1": {"video": "1080p"}}
+    web.keep_service_list(1, {**show, "service": "STAN"}, {"available": {}, "titles": []})  # another service: dropped
+    assert "elsewhere" not in json.loads(web.SERVICE_LISTS.read_text())["1"]
+
+    def limited(show):
+        err = web.UnshackleError("too many requests")
+        err.retry_after = 60
+        raise err
+    monkeypatch.setattr(web, "list_titles", limited)
+    with pytest.raises(web.UnshackleError):
+        web.seasons_elsewhere(show, {"id": 8, "title": "X"}, found)
+    searched.clear()
+    eps[:] = [e for e in eps if e["seasonNumber"] in (1, 3)]  # nothing missing elsewhere: no search at all
+    assert web.seasons_elsewhere(show, {"id": 8, "title": "X"}, found) == {} and searched == []
 
 
 def test_a_season_pages_rate_limit_stops_the_listing(monkeypatch):

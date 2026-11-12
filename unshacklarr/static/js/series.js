@@ -235,6 +235,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     epAvail = epTitles = epAvailRaw = null;
     epPagesListed = {};
     epPages = {};
+    epElsewhere = {};
     epSeasons = {}; epSeason = null; epBusy = new Map();  // nothing of the series open before
     picked.clear();
     updateEpBar();
@@ -253,7 +254,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     }).catch(() => {});
     api(`/api/probe/${s.tvdbId}`).then((hit) => {  // the last check of the service, refreshed weekly: no need to ask again
       if (!hit || current !== s || epAvail) return;
-      epAvail = viewAvail(hit.available); epTitles = hit.titles; epPagesListed = hit.pages || {}; epChecked = hit.checked; epQualities = hit.qualities || {}; localTitles(hit.local_titles);
+      epAvail = viewAvail(hit.available); epTitles = hit.titles; epPagesListed = hit.pages || {}; epChecked = hit.checked; epQualities = hit.qualities || {}; epElsewhere = hit.elsewhere || {}; localTitles(hit.local_titles);
       if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${seriesSvcs(S.config.series[s.tvdbId])}`); }
     }).catch(() => {});
   }
@@ -323,6 +324,7 @@ function renderCheck(s, changed = false) {
   $("#ep-odd").before(pick);
 }
 let epUp = null;  // episode ids Upgrades found better on the service; null: Upgrades hasn't checked the series
+let epElsewhere = {};  // Sonarr season -> {service, url, count}: another service has it, as the weekly check found
 let epPages = {};  // Sonarr season -> a show of its own the service has for it, as the last check found (by mj23au)
 let epAvail = null;  // episode id -> what the service calls it, once "What's on <service>?" asked it
 let epPagesListed = {};  // season -> {url, count} for each season page the last check listed (a failed one is absent)
@@ -653,7 +655,21 @@ function renderCatchUp() {
           dirty();
           toast(`Season ${season} will be downloaded from ${p.name}. Click Save, then check ${svc} again.`);
           renderCatchUp();
-        } })))),
+        } }))),
+      // a season its service lacks, found on another one by the weekly check: offered, never set on its own
+      ...Object.entries(epElsewhere).filter(([season, p]) => p.service !== seasonSvc(Number(season)) && !S.config.series[current.tvdbId].season_pages?.[season]
+        && missing.some((e) => e.seasonNumber === Number(season)) && !there.some((e) => e.seasonNumber === Number(season)))
+        .map(([season, p]) => el("small", { className: "renum" },
+          `Season ${season} is on ${p.service} (${p.count} episode${p.count === 1 ? "" : "s"}). `,
+          el("button", { className: "btn small", type: "button", textContent: `Use ${p.service} for season ${season}`, title: p.url, onclick: () => {
+            const conf = S.config.series[current.tvdbId];
+            conf.season_pages = { ...(conf.season_pages || {}), [season]: { url: p.url, service: p.service } };
+            delete epElsewhere[season];
+            fillPages(conf);
+            dirty();
+            toast(`Season ${season} will be downloaded from ${p.service}. Click Save, then check again.`);
+            renderCatchUp();
+          } })))),
     el("div", { className: "catchup-acts" },
       ...(upgrades.length ? [el("button", { className: "btn small", type: "button", textContent: `Select ${upgrades.length} upgrade${upgrades.length > 1 ? "s" : ""}`,
         title: `On disk in a lower resolution than asked of ${svc}, and available on ${svc}`, onclick: () => { upgrades.forEach((e) => picked.add(e.id)); renderSeason(); updateEpBar(); } })] : []),
