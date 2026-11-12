@@ -547,8 +547,8 @@ for (const [kind, leave] of [["mouseover", "mouseout"], ["focusin", "focusout"]]
 document.addEventListener("click", (e) => { if (tipFor?.contains(e.target)) hideTip(); }, true);  // clicked: said what it does
 /* The resolution asked of Unshackle for the series: its --quality, else its service's, else the defaults'
    (the highest listed); 1080 when none is set. What a service can give, unlike Sonarr's cutoff (a Blu-ray). */
-function askedHeight() {
-  const conf = S.config.series[current.tvdbId] || {};
+function askedHeight(season) {
+  const conf = seasonConf(season);
   const q = [conf.options, S.config.service_defaults?.[conf.service]?.options, S.config.defaults].map((o) => o?.["--quality"]).find((v) => v != null && v !== "");
   const heights = String(q ?? "").match(/\d{3,4}/g)?.map(Number) || [];
   return heights.length ? Math.max(...heights) : 1080;
@@ -556,8 +556,8 @@ function askedHeight() {
 // With a quality ladder: a file not on its first step. Without: under --quality (1072 or 1040 lines are 1080p all the same)
 const belowAsked = (e) => {
   if (epUp) return epUp.has(e.id);  // Upgrades asked the service: what it found, not the ladder's guess
-  const lad = ladderOfSeries(S.config.series[current.tvdbId]);
-  return lad ? !!e.file?.track && stepOf(lad, e.file.track) > 0 : e.file?.height && e.file.height < askedHeight() * 0.9;
+  const lad = ladderOfSeries(seasonConf(e.seasonNumber));
+  return lad ? !!e.file?.track && stepOf(lad, e.file.track) > 0 : e.file?.height && e.file.height < askedHeight(e.seasonNumber) * 0.9;
 };
 /* The service a season downloads from: its own page's when that is on another service, else the series'. */
 function seasonTag(season) {
@@ -565,6 +565,8 @@ function seasonTag(season) {
   return conf.season_pages?.[season]?.service || conf.service;
 }
 const seasonSvc = (season) => svcName(seasonTag(season));
+/* The series as its season downloads: its ladder and quality defaults are its service's (sync.season_page). */
+const seasonConf = (season) => ({ ...S.config.series[current.tvdbId], service: seasonTag(season) });
 /* Every service the series downloads from, for what is said of them all: "ABC iview and SBS". */
 function seriesTags(conf) {
   return [...new Set([conf?.service, ...Object.values(conf?.season_pages || {}).map((p) => p.service)].filter(Boolean))];
@@ -578,7 +580,7 @@ function serviceBadge(e) {
 }
 /* On disk under the resolution asked of the service, and on the service: worth downloading again. */
 function upgradeBadge(e) {
-  const svc = seasonSvc(e.seasonNumber), lad = ladderOfSeries(S.config.series[current.tvdbId]);
+  const svc = seasonSvc(e.seasonNumber), lad = ladderOfSeries(seasonConf(e.seasonNumber));
   if (lad) {
     const at = stepOf(lad, e.file.track);
     return hoverTip(el("em", { className: "ep-up", textContent: `upgrade on ${svc}` }), () => [
@@ -587,7 +589,7 @@ function upgradeBadge(e) {
     ]);
   }
   return hoverTip(el("em", { className: "ep-up", textContent: `upgrade on ${svc}` }), () => [
-    el("b", { textContent: `${e.file.height}p here, ${askedHeight()}p asked of ${svc}` }),
+    el("b", { textContent: `${e.file.height}p here, ${askedHeight(e.seasonNumber)}p asked of ${svc}` }),
     el("small", { textContent: `${svc} has this episode. Downloaded again, it replaces the file only if it ranks higher in Sonarr.` }),
   ]);
 }
