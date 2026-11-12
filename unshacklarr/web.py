@@ -3784,6 +3784,8 @@ def probe_series(show: dict, series_id: int, title: str = "", discover: bool = F
         try:
             part = probe_one(sonarr_sync.season_page(show, season), series_id, title, {"only": {season}})
         except (UnshackleError, requests.RequestException, ValueError) as e:
+            if getattr(e, "retry_after", 0):
+                raise  # serve's limit: no other page asked now
             found["pages"][str(season)] = {"url": pages[season]["url"], "error": str(e)[:200]}
             continue
         found["available"].update(part["available"])
@@ -3938,6 +3940,7 @@ def keep_service_list(tvdb: int, show: dict, found: dict) -> None:
     with service_lists_lock:
         lists = read_json(SERVICE_LISTS, {})
         lists[str(tvdb)] = {"checked": datetime.now(timezone.utc).isoformat(), "service": show["service"], "title": str(show["title"]),
+                            "numbering": listing_numbering(show),
                             "available": found["available"], "titles": found["titles"], "local_titles": found.get("local_titles") or {},
                             "v": SERVICE_LIST_FORMAT}
         write_atomic(SERVICE_LISTS, json.dumps(lists))
@@ -3974,9 +3977,16 @@ def release_learned(tvdb: int, at: str, day: int) -> bool:
 sonarr_sync.on_release_learned = release_learned
 
 
+def listing_numbering(show: dict) -> str:
+    """The settings a listing matched Sonarr's episodes by: changed, the listing no longer holds."""
+    picked = {k: show[k] for k in (*sonarr_sync.FALLBACK_NUMBERING, "season_pages") if show.get(k)}
+    return json.dumps(json.loads(json.dumps(picked)), sort_keys=True)  # season numbers as text, as read back from the file
+
+
 def same_listing(hit: dict | None, show: dict) -> bool:
-    """A kept listing that is of the service and URL the series has now."""
-    return bool(hit) and hit.get("service") == show.get("service") and hit.get("title") == str(show.get("title"))
+    """A kept listing that is of the service, URL and numbering the series has now."""
+    return bool(hit) and hit.get("service") == show.get("service") and hit.get("title") == str(show.get("title")) \
+        and hit.get("numbering", "{}") == listing_numbering(show)
 
 
 async def service_list(request):
@@ -3992,16 +4002,23 @@ def refresh_service_lists(now: datetime) -> int:
     series only, as the page's listings hold its episode ids. A failed one is asked again at the next hourly look.
     How many were listed."""
     ready = lambda show: bool(show and show.get("service") and show.get("title"))
-    library, done = sonarr_sync.sonarr_series({k for k, v in read_config()["series"].items() if ready(v)}), 0
-    for tvdb in sorted(library):  # the whole library: its series without a service are passed over
+    series, lists = read_config()["series"], read_json(SERVICE_LISTS, {})
+    due = [tvdb for tvdb in sorted(sonarr_sync.sonarr_series({k for k, v in series.items() if ready(v)}))
+           if ready(show := series.get(tvdb)) and not (same_listing(hit := lists.get(str(tvdb)), show)
+                                                    and now - datetime.fromisoformat(hit["checked"]) < SERVICE_LIST_EVERY)]
+    library, done = sonarr_sync.sonarr_series(set(due)), 0
+    for tvdb in due:  # the whole library was looked at: its series without a service were passed over
         show = read_config()["series"].get(tvdb)  # as it is now: one changed during a long pass is listed as changed
-        hit = read_json(SERVICE_LISTS, {}).get(str(tvdb))
-        if not ready(show) or same_listing(hit, show) and now - datetime.fromisoformat(hit["checked"]) < SERVICE_LIST_EVERY:
+        if not ready(show):
             continue
         serie = library[tvdb]
         try:
-            keep_service_list(tvdb, show, probe_series(show, serie["id"], serie["title"]))
-            done += 1
+            found = probe_series(show, serie["id"], serie["title"])
+            if failed := [p["error"] for p in (found.get("pages") or {}).values() if p.get("error")]:
+                print(f"What's on {show['service']}: {serie['title']}: a season's page failed ({failed[0]}), asked again next hour", flush=True)
+            else:  # a season's page failed: the last whole listing stays
+                keep_service_list(tvdb, show, found)
+                done += 1
         except (UnshackleError, requests.RequestException, ValueError) as e:
             print(f"What's on {show['service']}: {serie['title']}: {e}", flush=True)
             if getattr(e, "retry_after", 0):  # serve's limit, shared with the downloads: the rest next hour
