@@ -240,6 +240,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     box.replaceChildren(loading("Loading episodes from Sonarr…"));
     refreshEpBusy(s);
     epChecked = null;
+    epQualities = {};
     epUp = null;
     // What Upgrades found the service has better, once it checked the series: the page alone only knows the ladder,
     // not the service's tracks (ALL4 has 1080p H.264 only: a step-2 file there is as good as it gets). By mj23au
@@ -251,7 +252,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     }).catch(() => {});
     api(`/api/probe/${s.tvdbId}`).then((hit) => {  // the last check of the service, refreshed weekly: no need to ask again
       if (!hit || current !== s || epAvail) return;
-      epAvail = viewAvail(hit.available); epTitles = hit.titles; epChecked = hit.checked; localTitles(hit.local_titles);
+      epAvail = viewAvail(hit.available); epTitles = hit.titles; epChecked = hit.checked; epQualities = hit.qualities || {}; localTitles(hit.local_titles);
       if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${svcName(S.config.series[s.tvdbId]?.service)}`); }
     }).catch(() => {});
   }
@@ -307,6 +308,7 @@ function renderCheck(s, changed = false) {
   if (current !== s || !$("#ep-list")) return;
   $(".ep-check")?.remove();
   $("#ep-avail")?.remove();
+  if (changed) epQualities = {};  // the old service's or URL's
   if (changed && epAvail) { epAvail = epTitles = epChecked = null; renderSeason(); }
   const conf = S.config.series[s.tvdbId];
   if (!conf?.service || !conf.title) return;  // what the service has, listed (unshackle's --list-titles): nothing downloaded
@@ -324,6 +326,7 @@ let epPages = {};  // Sonarr season -> a show of its own the service has for it,
 let epAvail = null;  // episode id -> what the service calls it, once "What's on <service>?" asked it
 let epTitles = null;  // everything the service lists then: [{key: "S26E11", part, name}]
 let epChecked = null;  // when that was
+let epQualities = {};  // season -> the best video and audio on the service, from the weekly check
 /* TVDB's titles in your language (its website), over Sonarr's where it has none ("TBA"): a French series reads. */
 function localTitles(names) {
   for (const e of Object.values(epSeasons || {}).flat()) {
@@ -704,8 +707,11 @@ function renderSeason() {
     $("#ep-avail").disabled = !onService;
   }
   const named = current.seasonTitles?.[epSeason];  // its name in Sonarr, when it has one
+  const q = epQualities[epSeason];
   $("#ep-title").replaceChildren(el("span", { textContent: epSeason === 0 ? "Specials" : named ? `Season ${epSeason}: ${named}` : `Season ${epSeason}` }),
     el("small", { textContent: `${list.filter((e) => e.hasFile).length} of ${list.length} on disk` }),
+    ...(q && (q.video || q.audio) ? [el("small", {
+      textContent: `${svcName(S.config.series[current.tvdbId]?.service)}: up to ${[q.video, q.audio].filter(Boolean).join(", ")}` })] : []),
     ...(flagged ? [el("small", { className: "odd-legend", textContent: "Orange: different from most of this season (hover for details)" })] : []));
   $("#ep-list").replaceChildren(...(rows.length ? [head, ...rows] : [el("li", { className: "none", textContent: "Every episode of this season is on disk." })]));
   epFit.observe($("#ep-list"));  // on a resize; now, for new rows or columns
