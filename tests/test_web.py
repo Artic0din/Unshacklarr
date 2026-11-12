@@ -932,7 +932,7 @@ def test_a_service_is_named_as_people_know_it():
     assert name("EXAMPLE") == "EXAMPLE"
 
 
-def test_a_service_list_is_kept_12_hours_for_the_series_as_it_is(tmp_path, monkeypatch):
+def test_a_service_list_is_kept_for_the_series_as_it_is(tmp_path, monkeypatch):
     import asyncio
     import json
     from datetime import datetime, timedelta, timezone
@@ -952,10 +952,129 @@ def test_a_service_list_is_kept_12_hours_for_the_series_as_it_is(tmp_path, monke
     show["title"] = "https://rmc/y"  # another URL: another list
     assert kept() is None
     show["title"] = "https://rmc/x"
+    show["episode_offset"] = 2  # another numbering: the listing matched episodes otherwise
+    assert kept() is None
+    del show["episode_offset"]
     lists = json.loads(web.SERVICE_LISTS.read_text())
-    lists["84095"]["checked"] = (datetime.now(timezone.utc) - timedelta(hours=13)).isoformat()
+    lists["84095"]["checked"] = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     web.SERVICE_LISTS.write_text(json.dumps(lists))
-    assert kept() is None  # too old
+    assert kept()["available"] == {"2701": {"service": "S26E11"}}  # old, still shown, with its age
+
+
+def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monkeypatch):
+    import json
+    from datetime import datetime, timedelta, timezone
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    now = datetime(2026, 11, 12, 9, tzinfo=timezone.utc)
+    series = {1: {"service": "IV", "title": "https://iview/fresh"}, 2: {"service": "IV", "title": "https://iview/old"},
+              3: {"service": "IV", "title": "https://iview/new"}, 4: {"service": "IV", "title": "https://iview/moved"},
+              5: {"title": "no service"}, 6: {"service": "IV", "title": "https://iview/not-in-sonarr"}}
+    monkeypatch.setattr(web, "read_config", lambda: {"series": series})
+    library = {t: {"id": t * 10, "title": f"S{t}"} for t in (99, 5, 4, 3, 2, 1)}  # the whole library, 99 in no config
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_series", lambda wanted: library)
+    monkeypatch.setattr(web.time, "sleep", lambda s: None)
+    web.SERVICE_LISTS.write_text(json.dumps({
+        "1": {"checked": (now - timedelta(days=6)).isoformat(), "service": "IV", "title": "https://iview/fresh",
+              "qualities": {}, "qualities_checked": (now - timedelta(days=6)).isoformat()},
+        "2": {"checked": (now - timedelta(days=8)).isoformat(), "service": "IV", "title": "https://iview/old"},
+        "4": {"checked": (now - timedelta(days=1)).isoformat(), "service": "IV", "title": "https://iview/before", "qualities": {"1": "old URL's"}}}))
+    asked = []
+
+    def probe(show, series_id, title):
+        asked.append(series_id)
+        if series_id == 30:
+            raise web.UnshackleError("iview is down")
+        return {"available": {str(series_id): {"service": "S01E01"}}, "titles": []}
+    monkeypatch.setattr(web, "probe_series", probe)
+    befores = {}
+    monkeypatch.setattr(web, "season_qualities", lambda show, serie, found, before: befores.update({serie["id"]: before}) or {})
+    assert web.refresh_service_lists(now) == 2  # the old one and the moved one; the new one failed
+    assert asked == [20, 30, 40]  # due: older than a week, never checked, or for another URL
+    assert befores[40] is None  # the old URL's qualities are not kept for a season that fails on the new one
+    lists = json.loads(web.SERVICE_LISTS.read_text())
+    assert lists["2"]["available"] == {"20": {"service": "S01E01"}} and lists["4"]["title"] == "https://iview/moved"
+    assert "3" not in lists  # failed: asked again next hour
+
+    def limited(show, series_id, title):
+        asked.append(series_id)
+        err = web.UnshackleError("too many requests")
+        err.retry_after = 60
+        raise err
+    monkeypatch.setattr(web, "probe_series", limited)
+    asked.clear()
+    series[7] = {"service": "IV", "title": "https://iview/later"}
+    library[7] = {"id": 70, "title": "S7"}
+    assert web.refresh_service_lists(now) == 0
+    assert asked == [30]  # serve's limit reached: the rest waits for the next hour
+
+    def partial(show, series_id, title):  # a season's own page failed: not kept, asked again next hour
+        return {"available": {}, "titles": [], "pages": {"2": {"url": "p", "error": "timed out"}}}
+    monkeypatch.setattr(web, "probe_series", partial)
+    assert web.refresh_service_lists(now) == 0 and "3" not in json.loads(web.SERVICE_LISTS.read_text())
+
+
+def test_a_season_pages_rate_limit_stops_the_listing(monkeypatch):
+    from unshacklarr import web
+    import pytest
+
+    def one(show, series_id, title, seasons):
+        if show.get("page_of"):
+            err = web.UnshackleError("too many requests")
+            err.retry_after = 60
+            raise err
+        return {"available": {}, "checks": [], "count": 0}
+    monkeypatch.setattr(web, "probe_one", one)
+    with pytest.raises(web.UnshackleError):
+        web.probe_series({"service": "IV", "title": "t", "season_pages": {2: {"url": "p"}}}, 1)
+
+
+def test_a_seasons_best_quality_is_asked_of_one_episode_and_kept_with_the_listing(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync = web.sonarr_sync
+    show = {"service": "IV", "title": "https://iview/x"}
+    eps = [{"id": i, "seasonNumber": s, "episodeNumber": n, "seriesId": 8} for i, (s, n) in enumerate([(0, 1), (1, 1), (1, 2), (2, 1), (3, 1)], 1)]
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **q: eps)
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {}})
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sxxeyy, out: {"wanted": [sxxeyy]})
+    asked = []
+    tracks = {"S01E02": {"video": [{"height": 720, "codec": "AVC", "range": "SDR"}, {"height": 1080, "codec": "AVC", "range": "SDR", "bitrate": 9}],
+                     "audio": [{"codec_display": "AAC", "channels": 2.0}]},
+              "S02E01": {"video": [{"height": 1080, "codec": "HEVC", "range": "HDR10"}],
+                      "audio": [{"codec_display": "AAC", "channels": 2.0}, {"codec_display": "EC3", "channels": "5.1.4", "atmos": True},
+                                {"codec_display": "EC3", "channels": 5.1}]}}
+    ladders = []
+
+    def list_tracks(show, config, request, ladder=None):
+        asked.append(request["wanted"])
+        ladders.append(ladder)
+        if request["wanted"][0] in failing:
+            raise web.UnshackleError("timed out")
+        return [tracks[request["wanted"][0]]]
+    failing = set()
+    monkeypatch.setattr(sync, "list_tracks", list_tracks)
+    monkeypatch.setattr(web.time, "sleep", lambda s: None)
+    found = {"available": {2: {"service": "S01E01"}, 3: {"service": "S01E02"}, 4: {"service": "S02E01"}}}  # as probe_series has them  # S00 and S03: not on it
+    got = web.season_qualities(show, {"id": 8, "tvdbId": 1, "title": "Split"}, found)
+    assert asked == [["S01E02"], ["S02E01"]]
+    assert ladders[0]["steps"] == [{"codec": "", "range": ""}]  # every range asked: a service lists only those asked  # one episode a season, its latest on the service
+    assert got == {"1": {"video": "1080p AVC SDR", "audio": "AAC 2.0"}, "2": {"video": "1080p HEVC HDR10", "audio": "EC3 5.1.4 Atmos"}}
+    web.keep_service_list(1, show, {"available": {}, "titles": []}, got)
+    web.keep_service_list(1, show, {"available": {}, "titles": []})  # a listing asked on the page keeps them
+    kept = json.loads(web.SERVICE_LISTS.read_text())["1"]
+    assert kept["qualities"] == got and kept["qualities_checked"]
+    failing.add("S02E01")  # one season failed: its last answer stays
+    assert web.season_qualities(show, {"id": 8, "tvdbId": 1, "title": "Split"}, found, got) == got
+    failing.add("S01E02")  # all failed: nothing to keep as a new check, asked again next hour
+    assert web.season_qualities(show, {"id": 8, "tvdbId": 1, "title": "Split"}, found, got) is None
 
 
 def test_a_services_episodes_are_found_in_sonarr_by_their_title():
