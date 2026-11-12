@@ -253,8 +253,10 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
       if ($("#ep-list")) renderSeason();
     }).catch(() => {});
     api(`/api/probe/${s.tvdbId}`).then((hit) => {  // the last check of the service, refreshed weekly: no need to ask again
-      if (!hit || current !== s || epAvail) return;
-      epAvail = viewAvail(hit.available); epTitles = hit.titles; epPagesListed = hit.pages || {}; epChecked = hit.checked; epQualities = hit.qualities || {}; epElsewhere = hit.elsewhere || {}; localTitles(hit.local_titles);
+      if (!hit || current !== s) return;
+      epElsewhere = hit.elsewhere || {};  // the weekly search's, kept even when a check asked meanwhile came first
+      if (epAvail) { if ($("#ep-list")) renderCatchUp(); return; }
+      epAvail = viewAvail(hit.available); epTitles = hit.titles; epPagesListed = hit.pages || {}; epChecked = hit.checked; epQualities = hit.qualities || {}; localTitles(hit.local_titles);
       if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${seriesSvcs(S.config.series[s.tvdbId])}`); }
     }).catch(() => {});
   }
