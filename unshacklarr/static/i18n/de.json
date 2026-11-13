@@ -1,4 +1,6 @@
 {
+ "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle.": "Unshackle hat den internen API-Schlüssel abgelehnt. Prüfe den Server-API-Schlüssel unter Einstellungen, Unshackle.",
+ "{0}{1}: {2}. Check this service's login/session in Unshackle.": "{0}{1}: {2}. Prüfe die Anmeldung oder Sitzung dieses Dienstes in Unshackle.",
  "(sign in, then Settings, API). With it, the Schedule shows each series' channel and streaming services. For a series not in English, it also finds episodes by their title: Sonarr only has English titles.": "(melde dich an, dann Einstellungen, API). Damit zeigt der Kalender Sender und Streamingdienste jeder Serie. Bei einer nicht englischsprachigen Serie findet er Episoden auch über ihren Titel: Sonarr hat nur englische Titel.",
  "(changed)": "(geändert)",
  "(on disk already)": "(bereits vorhanden)",

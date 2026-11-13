@@ -309,18 +309,19 @@ class Unshackle:
                 payload = {}
             payload = payload if isinstance(payload, dict) else {}
             message = str(payload.get("message") or r.text)
+            provider_auth_failed = payload.get("error_code") == "AUTH_FAILED"
             if r.status_code == 401:
-                if payload.get("error_code") == "AUTH_FAILED":
+                if provider_auth_failed:
                     details = payload.get("details") or {}
                     service = details.get("service") if isinstance(details, dict) else None
                     reference = f" (ref {payload['ref']})" if payload.get("ref") else ""
                     message = f"{service or 'Service'}{reference}: {message.removesuffix(reference)}. Check this service's login/session in Unshackle."
                 else:
                     message = "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle."
-            if "requested CDM is not permitted" in message:  # --cdm, Unshackle 6: the operator's opt-in
+            if not provider_auth_failed and "requested CDM is not permitted" in message:  # --cdm, Unshackle 6: the operator's opt-in
                 raise UnshackleError("Unshackle refuses to pick the CDM device named in --cdm: allow it in unshackle.yaml "
                                      "with serve: cdm_overrides: true (or a list of devices), then restart Unshackle")
-            if PROXY_REFUSED.search(message):
+            if not provider_auth_failed and PROXY_REFUSED.search(message):
                 self.proxy_refused = datetime.now(timezone.utc).isoformat()
                 raise UnshackleError(PROXY_HINT)
             status = f"HTTP {r.status_code}: " if r.status_code >= 500 else ""  # serve's own words rarely say it

@@ -58,6 +58,19 @@ def test_provider_error_keeps_separate_reference_and_redacts_before_truncating(t
         assert "proxy.example.invalid" in displayed
 
 
+@responses.activate
+@pytest.mark.parametrize("reason", ["Account is in a different region from yours", "requested CDM is not permitted for this account"])
+def test_provider_authentication_reason_is_not_replaced_by_server_configuration_advice(tmp_path, reason):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-value"})
+    responses.post("http://backend:8786/api/list-tracks", status=401,
+                   json={"error_code": "AUTH_FAILED", "message": reason, "details": {"service": "HAYU"}})
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("POST", "/api/list-tracks", json={"service": "HAYU"})
+    assert caught.value.status == 401 and reason in str(caught.value)
+    assert not backend.proxy_refused
+
+
 def test_cookie_files_are_read_saved_and_kept_in_their_folder(tmp_path):
     # formats, expiry, no path outside the folder
     netscape = "# Netscape HTTP Cookie File\n.molotov.tv\tTRUE\t/\tTRUE\t4102444800\ttoken\tabc\n#HttpOnly_.molotov.tv\tTRUE\t/\tTRUE\t0\tsid\tx\n"

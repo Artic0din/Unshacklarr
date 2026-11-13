@@ -1,4 +1,10 @@
 {
+ "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle.": [],
+ "{0}{1}: {2}. Check this service's login/session in Unshackle.": [
+  "service or 'Service'",
+  "reference",
+  "message.removesuffix(reference)"
+ ],
  "\"proxy\" is a proxy provider and a region, such as \"nordvpn:fr\"": [],
  "\"quality\" is a height from 480 to 4320, such as 1080 or 2160": [],
  "\"vcodec\" is \"H.264\" or \"H.265\"": [],

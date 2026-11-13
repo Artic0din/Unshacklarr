@@ -18,6 +18,16 @@ def test_translations_fit_the_page():
             assert set(HOLE.findall(text)) <= set(HOLE.findall(key)), f"{path.name}: {key!r} has a {{n}} of its own"
 
 
+def test_authentication_guidance_translates_without_changing_the_provider_reason():
+    from unshacklarr import i18n
+    message = "unshackle serve: HAYU (ref ef1b9f): Hayu playback failed: Invalid Token. Check this service's login/session in Unshackle."
+    translated = i18n.tr(message, "fr")
+    assert "Vérifiez la connexion ou la session" in translated
+    assert "HAYU (ref ef1b9f)" in translated and "Invalid Token" in translated
+    internal = "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle."
+    assert "clé API interne" in i18n.tr(internal, "fr")
+
+
 def test_the_server_translates_a_notification(tmp_path, monkeypatch):
     from unshacklarr import i18n
     (tmp_path / "fr.json").write_text(json.dumps({"Downloaded: {0}": "Téléchargé: {0}", "Imported by Sonarr.": "Importé par Sonarr.",

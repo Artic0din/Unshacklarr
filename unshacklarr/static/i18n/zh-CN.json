@@ -1,4 +1,6 @@
 {
+ "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle.": "Unshackle 拒绝了内部 API 密钥。请在“设置”的“Unshackle”中检查服务器 API 密钥。",
+ "{0}{1}: {2}. Check this service's login/session in Unshackle.": "{0}{1}：{2}。请在 Unshackle 中检查此服务的登录或会话。",
  "(sign in, then Settings, API). With it, the Schedule shows each series' channel and streaming services. For a series not in English, it also finds episodes by their title: Sonarr only has English titles.": "（登录后进入 Settings › API）。有了它，日程会显示每部剧集的电视台和流媒体服务。对于非英语剧集，它还能按标题查找单集：Sonarr 只有英文标题。",
  "(changed)": "（已更改）",
  "(on disk already)": "（已在磁盘上）",
