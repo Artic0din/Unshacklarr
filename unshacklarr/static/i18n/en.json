@@ -1594,6 +1594,7 @@
  "Open a series under All, pick a service or one of the links found on TMDB, then save.": [],
  "Open its last download: its steps and output": [],
  "Open series": [],
+ "Open the action in Unshacklarr to continue.": [],
  "Open the episodes missing in {0}": [
   "name"
  ],
@@ -3969,7 +3970,7 @@
  "{0}: HTTP {1}: {2}": [
   "owner",
   "r.status_code",
-  "message[:500]"
+  "message"
  ],
  "{0}: a download already waits in {1}": [
   "label",

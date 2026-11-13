@@ -153,9 +153,9 @@ let current = null;
 
 async function responseError(response) {
   const detail = (await response.text()).trim();
-  if (detail && !/^\s*</.test(detail)) return detail;
   const reason = response.statusText ? `: ${response.statusText}` : "";
-  return `Unshacklarr answered HTTP ${response.status}${reason}. Try again.`;
+  const context = tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`);
+  return detail && !/^\s*</.test(detail) ? `${context}\n${tr(detail)}` : context;
 }
 async function api(path, { wait = 30, ...opts } = {}) {
   let r;

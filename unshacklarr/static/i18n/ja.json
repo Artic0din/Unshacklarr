@@ -2078,6 +2078,7 @@
  "Download options for {0}": "{0} のダウンロードオプション",
  "Libraries": "ライブラリ",
  "No quality ladder": "画質ラダーなし",
+ "Open the action in Unshacklarr to continue.": "続行するには、Unshacklarr でアクションを開いてください。",
  "Open the episodes missing in {0}": "{0} で欠けているエピソードを開く",
  "Switched off": "オフ",
  "Name each other Sonarr with a letter, then letters, digits or dashes, like sonarr-2": "他の Sonarr には、英字で始まり英数字かハイフンが続く名前を付けてください（例：sonarr-2）",

@@ -1129,6 +1129,19 @@ def test_the_inbox_keeps_every_notification_and_its_action(tmp_path, monkeypatch
     assert [i["title"] for i in sync.read_inbox()["items"]] == ["Failed"]  # clear keeps what still waits for you
 
 
+def test_action_notifications_keep_the_private_link_in_unshacklarr(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    sent = []
+    monkeypatch.setattr(sync.PUSH, "send", lambda title, message: sent.append(message) or True)
+    url = "https://provider.invalid/link?token=example-sensitive-value"
+    sync.notify({}, "warning", "Service needs you", f"Open {url} and enter 1234",
+                action={"code": "1234", "url": url})
+    item = sync.read_inbox()["items"][0]
+    assert item["action"]["url"] == url
+    assert item["message"] == "Open the action in Unshacklarr to continue."
+    assert sent == ["Open the action in Unshacklarr to continue."]
+
+
 def test_a_question_is_asked_once_kept_in_the_bell_and_done_once_answered(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)

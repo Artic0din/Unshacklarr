@@ -282,6 +282,31 @@ def test_the_page_script_parses(tmp_path):
     assert check.returncode == 0, check.stderr
 
 
+def test_browser_response_errors_keep_context_and_use_translations():
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "core.js").read_text()
+    function = source[source.index("async function responseError"):source.index("async function api")]
+    script = r'''
+const translated = [];
+const tr = (text) => { translated.push(text); return `translated: ${text}`; };
+''' + function + r'''
+const response = (body) => ({ status: 503, statusText: "Service Unavailable", text: async () => body });
+Promise.all([responseError(response("Provider maintenance (ref support-1)")), responseError(response("<html>down</html>"))])
+  .then(([plain, html]) => console.log(JSON.stringify({ plain, html, translated })));
+'''
+    run = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    result = json.loads(run.stdout)
+    context = "Unshacklarr answered HTTP 503: Service Unavailable. Try again."
+    assert result["plain"] == f"translated: {context}\ntranslated: Provider maintenance (ref support-1)"
+    assert result["html"] == f"translated: {context}"
+    assert result["translated"] == [context, "Provider maintenance (ref support-1)", context]
+
+
 # Runs the page's real fetchDays against a /api/calendar that, like the route, answers by air date only.
 CALENDAR_HARNESS = r"""
 const fs = require("fs"), vm = require("vm");

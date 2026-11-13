@@ -501,6 +501,8 @@ def notify_series(show: dict | None, settings: dict, level: str, title: str, mes
 
 def notify(settings: dict, level: str, title: str, message: str, action: dict | None = None, batch: str | None = None,
            details: dict | None = None) -> bool:
+    if action and action.get("url"):
+        message = "Open the action in Unshacklarr to continue."
     title, message = no_credentials(title), no_credentials(message)
     try:
         inbox_add(level, title, message, action, batch)  # the page's bell keeps them all, whatever goes out
