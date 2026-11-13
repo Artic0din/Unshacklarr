@@ -1002,6 +1002,7 @@ def test_a_classified_programme_lookup_failure_is_kept_as_authentication_evidenc
     config["series"][111]["programmes"] = True
     error = sync.UnshackleError("Authentication failed")
     error.error_code = "AUTH_FAILED"
+    monkeypatch.setattr(sync, "backend_for", lambda *args: type("Backend", (), {"name": "vpn"})())
     monkeypatch.setattr(sync, "programme_for", lambda *args: (_ for _ in ()).throw(error))
     monkeypatch.setattr(sync, "notify", lambda *args, **kwargs: None)
 
@@ -1009,6 +1010,7 @@ def test_a_classified_programme_lookup_failure_is_kept_as_authentication_evidenc
 
     [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
     assert set(card["auth_failures"]) == {"RTLP"}
+    assert card["auth_failure_backends"] == {"RTLP": "vpn"}
 
 
 def test_a_download_without_the_first_language_asked_for_is_not_imported(tmp_path, monkeypatch):
@@ -1795,6 +1797,28 @@ def test_a_refused_login_is_tried_again_with_the_fallback_profiles(tmp_path, mon
     assert tried == ["default"]  # not a login: another profile would not help
 
 
+def test_classified_login_failure_survives_later_fallback_transport_failure(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["fallback_profiles"] = "alt"
+
+    def download(payload, run=None):
+        if payload.get("profile") == "alt":
+            raise sync.JobFailed("network failed", cause="network failed")
+        raise sync.JobFailed(
+            "authentication failed",
+            cause="401 Unauthorized",
+            error_code="AUTH_FAILED",
+        )
+
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "notify", lambda *args, **kwargs: None)
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+
+    card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
+    assert set(card["auth_failures"]) == {"RTLP"}
+
+
 def test_an_episode_without_full_subtitles_in_a_required_language_waits(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     config = sync.read_file()
@@ -2533,6 +2557,58 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     assert not sync.same_source({"sceneName": "Show.S01E01.ip.WEB-DL"}, "iP")  # a short tag as Unshackle writes it
 
 
+def test_audio_only_authentication_failure_is_kept_as_evidence(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["season_pages"] = {2: {"url": "https://service/season-two"}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(
+        sync,
+        "sonarr_get",
+        lambda path, **params: {
+            "path": "/tv/Show/Season 02/Show - S02E05.mkv",
+            "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264",
+        },
+    )
+    monkeypatch.setattr(
+        sync,
+        "run_job_retrying",
+        lambda payload, run=None: (_ for _ in ()).throw(
+            sync.JobFailed("authentication failed", error_code="AUTH_FAILED")
+        ),
+    )
+
+    assert sync.add_track(205, "fr") is True
+    card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
+    assert set(card["auth_failures"]) == {"RTLP"}
+
+
+def test_authentication_observations_are_private_and_backend_isolated(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    ep = episode(111, 2, 5)
+
+    failed = sync.EpisodeRun(ep, {"service": "RTLP"}, "manual")
+    failed.card["backend"] = "vpn"
+    failed.finish("failed", auth_failed=True)
+    passed = sync.EpisodeRun(ep, {"service": "RTLP"}, "manual")
+    passed.card["backend"] = ""
+    passed.finish("downloaded")
+
+    observations = sync.read_authentication_observations()
+    assert observations[""]["RTLP"]["state"] == "validated"
+    assert observations["vpn"]["RTLP"]["state"] == "needs_user_action"
+    assert sync.AUTHENTICATION_FILE.stat().st_mode & 0o777 == 0o600
+
+    sync.record_authentication_observation("RTLP", "vpn", "validated", "2000-01-01T00:00:00+00:00")
+    assert sync.read_authentication_observations()["vpn"]["RTLP"]["state"] == "needs_user_action"
+
+
 def test_the_added_audio_is_written_as_a_matroska_file_whatever_the_library_file_is_called(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     config = sync.read_file()
@@ -2773,7 +2849,7 @@ def test_a_failed_audio_add_survives_a_file_that_links_to_itself(tmp_path, monke
     monkeypatch.setattr(sync.subprocess, "run", tools)
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     real_finish = sync.EpisodeRun.finish
-    monkeypatch.setattr(sync.EpisodeRun, "finish", lambda self, outcome, *a: finished.append(outcome) or real_finish(self, outcome, *a))
+    monkeypatch.setattr(sync.EpisodeRun, "finish", lambda self, outcome, *a, **k: finished.append(outcome) or real_finish(self, outcome, *a, **k))
     assert sync.add_track(205, "fr") is True
     assert finished == ["failed"] and not links[0].is_symlink()  # refused, recorded, and the link itself removed
 

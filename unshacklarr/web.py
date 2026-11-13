@@ -2131,9 +2131,9 @@ health: dict = {"unshackle": {"ok": None}, "sonarr": {"ok": None}}
 failures_in_a_row = {"unshackle": 0, "sonarr": 0}
 
 
-def unshackle_health(full: bool = False) -> dict:
-    """Whether Unshackle answers, and what the page shows about it. `full` adds the tools
-    and the queue (a tool check runs a dozen programs: only when Settings is open)."""
+def unshackle_health(full: bool = False, jobs: bool = False) -> dict:
+    """Whether Unshackle answers, and what the page shows about it. `full` adds tools;
+    `full` or `jobs` adds the queue without rerunning tool diagnostics."""
     local = UNSHACKLE.mode == "local"
     state = {"mode": UNSHACKLE.mode, "ok": False,
              "address": sonarr_sync.SETTINGS.get("unshackle_command") or "unshackle" if local else sonarr_sync.SETTINGS.get("unshackle_url")}
@@ -2146,12 +2146,13 @@ def unshackle_health(full: bool = False) -> dict:
             state["since"] = UNSHACKLE.local.started.isoformat()
         if UNSHACKLE.proxy_refused:  # Unshackle 6 refused its proxies to Unshacklarr's key: Settings offers to allow it
             state["proxy_refused"] = UNSHACKLE.proxy_refused
-        if full:
-            jobs = UNSHACKLE.jobs()
-            state["queue"] = {s: sum(j["status"] == s for j in jobs) for s in ("downloading", "queued")}
+        if full or jobs:
+            current_jobs = UNSHACKLE.jobs()
+            state["queue"] = {s: sum(j["status"] == s for j in current_jobs) for s in ("downloading", "queued")}
             state["jobs"] = [{"id": j["job_id"], "service": j.get("service"), "title": j.get("current_title") or j.get("title") or j.get("title_id"),
                               "status": j["status"], "progress": round(float(j.get("progress") or 0))}
-                             for j in jobs if j["status"] in ("queued", "downloading")]
+                             for j in current_jobs if j["status"] in ("queued", "downloading")]
+        if full:
             state["tools"] = UNSHACKLE.tools() + [
                 {"name": f"{name} (for Unshacklarr)", "installed": bool(shutil.which(name)), "required": True}
                 for name in ("mkvmerge", "mkvpropedit")]
@@ -2360,7 +2361,9 @@ async def status(request):
     if full:
         health["unshackle"] = {**await asyncio.to_thread(unshackle_health, True), "checked": datetime.now(timezone.utc).isoformat()}
     result = dict(health)
-    if full:
+    if request.query.get("auth") and not full:
+        result["unshackle"] = await asyncio.to_thread(unshackle_health, jobs=True)
+    if full or request.query.get("auth"):
         try:
             services = await asyncio.to_thread(sonarr_sync.all_services)
         except UnshackleError:
@@ -5000,32 +5003,52 @@ def run_cards() -> list[dict]:
 
 
 def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, dict]:
-    """Read-only login evidence from service metadata and completed local run cards."""
+    """Read-only login evidence from service metadata, durable observations and local run cards."""
     successful = ("downloaded", "kept", "import")
+    service_methods = {service["tag"]: service.get("auth_methods") for service in services}
+    observations = sonarr_sync.read_authentication_observations()
+    identities = {(service["tag"], str(service.get("backend") or "")) for service in services}
+    identities.update(
+        (card["service"], str(card.get("backend") or ""))
+        for card in cards
+        if card.get("service") in service_methods
+    )
+    identities.update(
+        (tag, str(backend))
+        for backend, backend_observations in observations.items()
+        if isinstance(backend_observations, dict)
+        for tag in backend_observations
+    )
     result = {}
-    for service in sorted(services, key=lambda entry: entry["tag"]):
-        tag = service["tag"]
-        methods = service.get("auth_methods")
+    for tag, backend in sorted(identities):
+        methods = service_methods.get(tag)
+        stored = (observations.get(backend) or {}).get(tag) or {}
         status = {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None}
         if methods == []:
             status.update(state="anonymous", needs_user_action=False)
-        elif methods is not None:
+        elif methods is not None or stored:
             successes = [
                 card
                 for card in cards
-                if card.get("service") == tag and card.get("ended") and card.get("outcome") in successful
+                if card.get("service") == tag
+                and str(card.get("backend") or "") == backend
+                and card.get("ended")
+                and card.get("outcome") in successful
             ]
             failures = [
                 sonarr_sync.authentication_failures(card)[tag]
                 for card in cards
-                if card.get("ended")
-                and tag in sonarr_sync.authentication_failures(card)
+                if tag in sonarr_sync.authentication_failures(card)
+                and sonarr_sync.authentication_failure_backends(card).get(tag, "") == backend
             ]
             status["validated_at"] = max(
-                (card["ended"] for card in successes), default=None
+                [card["ended"] for card in successes] + ([stored["validated_at"]] if stored.get("validated_at") else []),
+                default=None,
             )
             observed = [(failure, True) for failure in failures]
             observed.extend((card["ended"], False) for card in successes)
+            if stored.get("observed_at"):
+                observed.append((stored["observed_at"], stored.get("state") == "needs_user_action"))
             if observed:
                 observed_at, needs_user_action = max(observed, key=lambda entry: entry[0])
                 status.update(
@@ -5033,7 +5056,10 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
                     observed_at=observed_at,
                     needs_user_action=needs_user_action,
                 )
-        result[tag] = status
+        key = tag if not backend else f"{tag}@{backend}"
+        if backend:
+            status.update(service=tag, backend=backend)
+        result[key] = status
     return result
 
 

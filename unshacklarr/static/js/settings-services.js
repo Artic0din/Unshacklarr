@@ -109,7 +109,8 @@ function renderUnshackleStatus(st) {
     const label = status.state === "anonymous" ? "No login required"
       : status.state === "needs_user_action" ? "Sign-in needed"
       : status.state === "validated" ? `Confirmed ${ago(status.validated_at)}` : "Not checked yet";
-    return el("div", { className: "st-job" }, el("span", { textContent: svcName(tag) }), el("small", { textContent: label }));
+    const name = svcName(status.service || tag) + (status.backend ? ` · ${status.backend}` : "");
+    return el("div", { className: "st-job" }, el("span", { textContent: name }), el("small", { textContent: label }));
   });
   const extra = st.ok ? [
     ...(authentication.length ? [el("div", { className: "st-sect" }, el("b", { textContent: "Service access" }),

@@ -105,6 +105,8 @@ CONFIG_FILE = DATA / "config.yaml"
 WARNED_FILE = DATA / "warned.json"
 SEEN_FILE = DATA / "availability.json"  # per episode: last try it was not out yet, first try it was
 RUNS_DIR = DATA / "runs"
+AUTHENTICATION_FILE = DATA / "authentication.json"
+authentication_lock = threading.Lock()
 INBOX_FILE = DATA / "inbox.json"  # every notification, for the page's bell: {"read_at": iso, "items": [...]}
 INBOX_KEEP, INBOX_DAYS = 200, 60
 inbox_lock = threading.Lock()
@@ -660,13 +662,65 @@ def authentication_failures(card: dict) -> dict[str, str]:
     return failures
 
 
+def authentication_failure_backends(card: dict) -> dict[str, str]:
+    """The backend that produced each classified authentication failure."""
+    stored = card.get("auth_failure_backends")
+    backends = {service: str(backend or "") for service, backend in stored.items()} if isinstance(stored, dict) else {}
+    for service in authentication_failures(card):
+        backends.setdefault(service, str(card.get("backend") or ""))
+    return backends
+
+
 def carry_authentication_failures(target: dict, source: dict) -> None:
     inherited = authentication_failures(source)
     if not inherited:
         return
     failures = target.setdefault("auth_failures", {})
+    target_backends = target.setdefault("auth_failure_backends", {})
+    source_backends = authentication_failure_backends(source)
     for service, observed in inherited.items():
-        failures[service] = max(failures.get(service, ""), observed)
+        if observed >= failures.get(service, ""):
+            failures[service] = observed
+            target_backends[service] = source_backends.get(service, "")
+
+
+def read_authentication_observations() -> dict[str, dict[str, dict]]:
+    """Latest redacted authentication result by backend and service."""
+    stored = read_json(AUTHENTICATION_FILE, {})
+    if not isinstance(stored, dict):
+        return {}
+    observations = {}
+    for backend, services in stored.items():
+        if not isinstance(services, dict):
+            continue
+        valid = {
+            service: observation
+            for service, observation in services.items()
+            if isinstance(service, str)
+            and isinstance(observation, dict)
+            and observation.get("state") in ("validated", "needs_user_action")
+            and isinstance(observation.get("observed_at"), str)
+            and (observation.get("validated_at") is None or isinstance(observation.get("validated_at"), str))
+        }
+        if valid:
+            observations[str(backend)] = valid
+    return observations
+
+
+def record_authentication_observation(service: str, backend: str, state: str, observed_at: str) -> None:
+    """Keep authentication evidence after Activity history is pruned."""
+    with authentication_lock:
+        observations = read_authentication_observations()
+        backend_observations = observations.setdefault(backend, {})
+        previous = backend_observations.get(service) or {}
+        if previous.get("observed_at", "") > observed_at:
+            return
+        backend_observations[service] = {
+            "state": state,
+            "observed_at": observed_at,
+            "validated_at": observed_at if state == "validated" else previous.get("validated_at"),
+        }
+        write_atomic(AUTHENTICATION_FILE, json.dumps(observations))
 
 
 class EpisodeRun:
@@ -732,23 +786,34 @@ class EpisodeRun:
         ended = datetime.now(timezone.utc).isoformat()
         self.card.update(ended=ended, outcome=outcome)
         failures = authentication_failures(self.card)
+        failure_backends = authentication_failure_backends(self.card)
+        service = self.card.get("service")
+        backend = str(self.card.get("backend") or "")
         if outcome in ("downloaded", "kept", "import"):  # a later try of this attempt got through: nothing left unconfirmed (#10)
             self.card.pop("unconfirmed_job", None)
-            failures.pop(self.card.get("service"), None)
+            failures.pop(service, None)
+            failure_backends.pop(service, None)
         elif auth_failed:
-            failures[self.card["service"]] = ended
+            failures[service] = ended
+            failure_backends[service] = backend
         for key in ("auth_failure", "auth_failure_at", "auth_failure_service"):
             self.card.pop(key, None)
         if failures:
             self.card["auth_failures"] = failures
+            self.card["auth_failure_backends"] = failure_backends
         else:
             self.card.pop("auth_failures", None)
+            self.card.pop("auth_failure_backends", None)
         if outcome in ("downloaded", "import", "kept"):  # a new file: the release watch must not see it missing
             _broadcast_episodes.clear()
         if outcome == "downloaded":  # a new file: Upgrades' find for it is done with (by mj23au)
             drop_upgrade_find(self.card.get("instance", ""), self.card.get("tvdbId"), self.card.get("sxxeyy"))
         self.fold_checks()
         self.save()
+        if outcome in ("downloaded", "kept", "import"):
+            record_authentication_observation(service, backend, "validated", ended)
+        elif auth_failed:
+            record_authentication_observation(service, backend, "needs_user_action", ended)
         # Only once its end is on disk: the page, told a run ended, reads the history at once; read between the two, a
         # card without an end that no run follows was "interrupted", and stayed so on the page (by mj23au, #17)
         EpisodeRun.active.discard(self.id)
@@ -2180,7 +2245,12 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             # audio alone, maybe in a video container: Import would put it in place of the library's video
             if left := unlink_inside(out, got):
                 run.say(f"{label}: could not delete {', '.join(f.name for f in left)}: audio only, delete it rather than import it")
-            run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "")
+            run.finish(
+                "failed",
+                str(e),
+                f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "",
+                auth_failed=getattr(e, "error_code", "") == "AUTH_FAILED",
+            )
             return True  # tried: the next day's check tries again, not a second download now
         finally:
             if not videos_in(out):
@@ -3125,6 +3195,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 if numbering is not None or replace:
                     run.save()
                 if show.get("programmes"):  # each episode its own programme: found by its title, or its pasted URL (#17)
+                    run.card["backend"] = backend_for(show["service"], config).name
+                    run.save()
                     try:
                         match = programme_for(show, ep, config, manual)
                     except Unmatched as e:
@@ -3255,16 +3327,19 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
 
                 # Its login refused and nothing came: the series' fallback profiles, in their order, until one logs in
                 stopped = waits = False
+                authentication_failed = error_code == "AUTH_FAILED"
                 for profile in fallback_profiles(show, config) if error and login_failure(cause or "") and not videos_in(out) else []:
                     run.say(f"{label}: {show['service']} refused the login, trying the profile {profile}")
                     try:
                         ask(service_sxxeyy, profile)
                         error = cause = None
                         error_code = ""
+                        authentication_failed = False
                         run.card["profile"] = profile
                         run.say(f"{label}: logged in with the profile {profile}")
                         break
                     except Missing as e:  # logged in: the episode has none of the languages accepted yet
+                        authentication_failed = False
                         no_language(e)
                         waits = True
                         break
@@ -3273,9 +3348,11 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                             stopped = True
                             break
                         error, cause, error_code = no_credentials(e), no_credentials(e.cause), e.error_code
+                        authentication_failed = authentication_failed or error_code == "AUTH_FAILED"
                     except (UnshackleError, ValueError) as e:
                         error = cause = no_credentials(e)
                         error_code = getattr(e, "error_code", "")
+                        authentication_failed = authentication_failed or error_code == "AUTH_FAILED"
                     if not login_failure(cause or ""):
                         break  # another failure than a login: another profile would not help
                 if waits:
@@ -3303,7 +3380,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     where = seen_by("sonarr_downloads", out)
                     run.say(f"\r\n\x1b[31m{label}: Unshackle FAILED after {parts_in(out)} part(s)\x1b[0m\n{error}".replace("\n", "\r\n"))
                     tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe parts that came are in {where}.", batch=batch, details=episode_details(ep, show)))
-                    run.finish("failed", cause, f"The parts that came are in {where}", auth_failed=error_code == "AUTH_FAILED")
+                    run.finish("failed", cause, f"The parts that came are in {where}", auth_failed=authentication_failed)
                     continue
                 if not videos_in(out):
                     shutil.rmtree(out, ignore_errors=True)
@@ -3314,10 +3391,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         if login_failure(cause):
                             hint = f"{show['service']} refused Unshackle: its cookies may have expired. Update them in Settings, Cookies."
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Login failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
-                            run.finish("failed", cause, hint, auth_failed=error_code == "AUTH_FAILED")
+                            run.finish("failed", cause, hint, auth_failed=authentication_failed)
                         else:
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe history in Activity has Unshackle's full output.", batch=batch, details=episode_details(ep, show)))
-                            run.finish("failed", cause, auth_failed=error_code == "AUTH_FAILED")
+                            run.finish("failed", cause, auth_failed=authentication_failed)
                     else:
                         run.say(f"{label}: not on {show['service']} yet{missing}")
                         run.finish("unavailable", f"Not on {show['service']} yet{missing}")

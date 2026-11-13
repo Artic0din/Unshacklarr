@@ -267,6 +267,61 @@ def test_authentication_status_uses_the_failure_service_before_fallback(tmp_path
     assert status["SECOND"]["state"] == "unknown"
 
 
+def test_authentication_status_keeps_inherited_failure_during_active_retry(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+
+    status = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": None,
+                "ended": None,
+                "auth_failures": {"PAIRED": "2026-11-14T01:00:00+00:00"},
+            }
+        ],
+        [{"tag": "PAIRED", "auth_methods": ["pairing"]}],
+    )
+
+    assert status["PAIRED"]["state"] == "needs_user_action"
+
+
+def test_authentication_status_survives_pruned_cards_and_separates_backends(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.write_atomic(
+        web.sonarr_sync.AUTHENTICATION_FILE,
+        json.dumps(
+            {
+                "": {
+                    "PAIRED": {
+                        "state": "validated",
+                        "observed_at": "2026-11-14T02:00:00+00:00",
+                        "validated_at": "2026-11-14T02:00:00+00:00",
+                    }
+                },
+                "vpn": {
+                    "PAIRED": {
+                        "state": "needs_user_action",
+                        "observed_at": "2026-11-14T03:00:00+00:00",
+                        "validated_at": None,
+                    }
+                },
+            }
+        ),
+    )
+
+    status = web.authentication_status([], [])  # durable evidence still renders while serve is unavailable
+
+    assert status["PAIRED"]["state"] == "validated"
+    assert status["PAIRED@vpn"] == {
+        "state": "needs_user_action",
+        "validated_at": None,
+        "observed_at": "2026-11-14T03:00:00+00:00",
+        "needs_user_action": True,
+        "service": "PAIRED",
+        "backend": "vpn",
+    }
+
+
 def test_state_exposes_authentication_from_local_history_without_extra_service_reads(tmp_path, monkeypatch):
     web = reloaded_web(tmp_path, monkeypatch)
     web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
@@ -322,6 +377,65 @@ def test_full_status_refreshes_authentication_from_current_history(tmp_path, mon
     payload = json.loads(asyncio.run(web.status(SimpleNamespace(query={"full": "1"}))).text)
 
     assert payload["authentication"]["PAIRED"]["state"] == "needs_user_action"
+
+
+def test_authentication_status_refresh_skips_full_diagnostics(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    checked = []
+    monkeypatch.setattr(
+        web,
+        "unshackle_health",
+        lambda full=False, jobs=False: checked.append((full, jobs)) or {"ok": True, "queue": {"downloading": 1}},
+    )
+    monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: [{"tag": "PAIRED", "auth_methods": ["pairing"]}])
+    monkeypatch.setattr(web, "run_cards", lambda: [])
+
+    payload = json.loads(asyncio.run(web.status(SimpleNamespace(query={"auth": "1"}))).text)
+
+    assert "authentication" in payload
+    assert payload["unshackle"]["queue"] == {"downloading": 1}
+    assert checked == [(False, True)]
+
+
+def test_lightweight_authentication_refresh_repaints_visible_status():
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "schedule.js").read_text()
+    render = re.search(r"^function renderHealth\(h\) \{.*?^\}", source, re.M | re.S).group()
+    details = re.search(r"^let unshackleDetails = .*;$", source, re.M).group()
+    harness = f"""
+const vm = require("vm");
+const renders = [];
+const button = {{ querySelector: () => ({{ className: "" }}), title: "", ariaLabel: "" }};
+const box = {{
+  S: {{ authentication: {{}} }}, document: {{ querySelector: () => button }},
+  renderUnshackleStatus: (status) => renders.push(status), renderSonarrState() {{}},
+  renderUnshackleState() {{}}, paintServers() {{}}, paintSonarrs() {{}},
+}};
+vm.createContext(box);
+vm.runInContext({json.dumps(details + chr(10) + render)}, box);
+box.renderHealth({{ unshackle: {{ ok: false, error: "offline" }}, authentication: {{ PAIRED: {{ state: "validated" }} }} }});
+box.renderHealth({{ unshackle: {{ ok: true }}, authentication: {{ PAIRED: {{ state: "needs_user_action" }} }} }});
+console.log(JSON.stringify({{
+  renders: renders.length, last: box.S.authentication.PAIRED.state,
+  recovered: renders.at(-1).ok, staleError: "error" in renders.at(-1),
+}}));
+"""
+
+    done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == {
+        "renders": 2,
+        "last": "needs_user_action",
+        "recovered": True,
+        "staleError": False,
+    }
 
 
 def test_stats_add_up_the_history(tmp_path, monkeypatch):
