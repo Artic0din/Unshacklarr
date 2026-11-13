@@ -32,9 +32,30 @@ def test_authentication_errors_identify_the_server_or_provider(tmp_path, provide
     assert caught.value.status == 401
     if provider_failure:
         assert "HAYU" in message and "Invalid Token" in message and "ef1b9f" in message
+        assert message.count("ef1b9f") == 1
         assert "login/session" in message and "refused the API key" not in message
     else:
         assert "internal API key" in message and "Settings, Unshackle" in message
+
+
+@responses.activate
+@pytest.mark.parametrize("long_url", [False, True])
+def test_provider_error_keeps_separate_reference_and_redacts_before_truncating(tmp_path, long_url):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-value"})
+    message = "Hayu playback failed: Invalid Token"
+    if long_url:
+        message += " https://reader:" + "sensitive" * 80 + "@proxy.example.invalid/failure"
+    responses.post("http://backend:8786/api/list-tracks", status=401,
+                   json={"error_code": "AUTH_FAILED", "message": message, "ref": "ref-only",
+                         "details": {"service": "HAYU"}})
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("POST", "/api/list-tracks", json={"service": "HAYU"})
+    displayed = str(caught.value)
+    assert "ref-only" in displayed
+    assert "reader" not in displayed and "sensitive" not in displayed
+    if long_url:
+        assert "proxy.example.invalid" in displayed
 
 
 def test_cookie_files_are_read_saved_and_kept_in_their_folder(tmp_path):

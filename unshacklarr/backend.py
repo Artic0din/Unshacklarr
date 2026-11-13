@@ -308,12 +308,13 @@ class Unshackle:
             except ValueError:
                 payload = {}
             payload = payload if isinstance(payload, dict) else {}
-            message = payload.get("message") or r.text
+            message = str(payload.get("message") or r.text)
             if r.status_code == 401:
                 if payload.get("error_code") == "AUTH_FAILED":
                     details = payload.get("details") or {}
                     service = details.get("service") if isinstance(details, dict) else None
-                    message = f"{service or 'Service'}: {message}. Check this service's login/session in Unshackle."
+                    reference = f" (ref {payload['ref']})" if payload.get("ref") else ""
+                    message = f"{service or 'Service'}{reference}: {message.removesuffix(reference)}. Check this service's login/session in Unshackle."
                 else:
                     message = "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle."
             if "requested CDM is not permitted" in message:  # --cdm, Unshackle 6: the operator's opt-in
@@ -323,7 +324,8 @@ class Unshackle:
                 self.proxy_refused = datetime.now(timezone.utc).isoformat()
                 raise UnshackleError(PROXY_HINT)
             status = f"HTTP {r.status_code}: " if r.status_code >= 500 else ""  # serve's own words rarely say it
-            err = UnshackleError(no_credentials(f"unshackle serve: {status}{message.strip()[:500]}"))
+            message = no_credentials(message.strip())[:500]
+            err = UnshackleError(f"unshackle serve: {status}{message}")
             err.status = r.status_code
             raise err
         try:
