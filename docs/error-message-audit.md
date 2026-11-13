@@ -15,6 +15,7 @@ Sites with the same verdict and reason share a row only when every function is n
 | `sync.py:inbox_add` | Restructured | Every persisted inbox title and body passes through the credential redactor. |
 | `sync.py:notify_series`, `notify`, `send_held`, `deliver` | Restructured | Every immediate, quiet-hours, local-push, and external notification path receives redacted content before storage or delivery. |
 | `sync.py:trace`, `EpisodeRun.say` | Restructured | Every text line written to Activity output is redacted before display and persistence. |
+| `sync.py:job_cause` | Restructured | A failed worker's Python traceback is reduced to its final provider reason before it reaches Activity, history, or notifications. |
 | `sync.py:EpisodeRun.finish` | Restructured | Attempt-card cause and detail are redacted before history persistence. |
 | `sync.py:tell_failure`, `run_episodes`, `finishing_loop` | Restructured | Expected and unexpected download/import exceptions converge on the audited output, history, and notification sinks. |
 | `push.py:Push.send` | Restructured | Push-service status and safe detail remain visible; HTML and unexpected internals become an actionable message while safe detail stays in the log. |

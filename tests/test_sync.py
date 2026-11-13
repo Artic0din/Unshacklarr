@@ -480,6 +480,16 @@ def test_a_failure_is_notified_by_its_cause_and_paths_as_sonarr_sees_them(tmp_pa
     assert sync.seen_by("sonarr_downloads", sync.episode_folder(records[0])) == "/Syno/0.Temp/unshackle-111-S02E05"
 
 
+def test_a_failure_cause_uses_the_final_traceback_reason(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    cause = sync.job_cause({
+        "error_message": "Traceback (most recent call last):\n  File \"provider.py\", line 10, in login\n"
+                         "ValueError: HAYU Invalid Token (ref ef1b9f)",
+    })
+    assert cause == "Unshackle: HAYU Invalid Token (ref ef1b9f)"
+    assert "Traceback" not in cause and "ValueError" not in cause
+
+
 def test_a_new_run_is_active_before_its_card_is_on_disk(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync.EpisodeRun, "active", set())

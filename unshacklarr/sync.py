@@ -810,9 +810,16 @@ def job_cause(job: dict) -> str:
     else serve's message without its "Worker exited with code 1:" wrapping."""
     stderr = (job.get("worker_stderr") or "")[-20_000:]  # its end: a service may put a whole page in it
     if (m := re.search(r"^Stderr:[ \t]*(.+?)\s*(?:^Worker failed|\Z)", stderr, re.M | re.S)) and m.group(1).strip():
-        return m.group(1).strip()
-    message = job.get("error_message") or job.get("status") or "failed"
-    return re.sub(r"^(?:Worker exited with code \d+:\s*)+", "", message).strip()
+        message = m.group(1).strip()
+    else:
+        message = job.get("error_message") or job.get("status") or "failed"
+    message = re.sub(r"^(?:Worker exited with code \d+:\s*)+", "", message).strip()
+    if "Traceback (most recent call last):" in message:
+        lines = [line.strip() for line in message.splitlines() if line.strip()]
+        reasons = [match[1] for line in lines
+                   if (match := re.match(r"[\w.]*(?:Error|Exception|SystemExit):\s*(.+)", line))]
+        message = f"Unshackle: {reasons[-1] if reasons else lines[-1]}"
+    return no_credentials(message)
 
 
 def ask_for_action(run: EpisodeRun, need: dict | None) -> None:
