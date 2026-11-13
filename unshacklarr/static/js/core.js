@@ -155,7 +155,11 @@ async function responseError(response) {
   const detail = (await response.text()).trim();
   const reason = response.statusText ? `: ${response.statusText}` : "";
   const context = tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`);
-  const safeDetail = detail && !/^\s*</.test(detail) ? detail : "";
+  const safeDetail = detail && !/^\s*</.test(detail) ? detail
+    .replace(/\/\/[^/@\s]+:[^/@\s]+@/g, "//***@")
+    .replace(/([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret)=)[^&#\s]+/gi, "$1***")
+    .replace(/\b(Authorization:\s*(?:Bearer|Basic)\s+|(?:X-Api-Key|X-Secret-Key|Api-Key):\s*)\S+|\b((?:Set-)?Cookie:)\s*[^\r\n]+/gi,
+      (_, authorization, cookie) => `${(authorization || cookie).trimEnd()} ***`) : "";
   const error = new Error(safeDetail ? `${context}\n${tr(safeDetail)}` : context);
   error.detail = safeDetail;
   return error;

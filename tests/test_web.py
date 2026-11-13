@@ -336,6 +336,37 @@ Promise.all([responseError(response("Wrong password: try again")), responseError
     assert result["translated"] == [context, "Wrong password: try again", context]
 
 
+def test_browser_response_errors_redact_sensitive_detail():
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "core.js").read_text()
+    function = source[source.index("async function responseError"):source.index("async function api")]
+    script = r'''
+const tr = (text) => text;
+''' + function + r'''
+const privateValue = "not-for-display-123";
+const body = `Wrong password: retry\nGET /callback?access_token=${privateValue}\nX-Secret-Key: ${privateValue}`;
+const response = { status: 401, statusText: "Unauthorized", text: async () => body };
+responseError(response).then((error) => console.log(JSON.stringify({
+  message: error.message,
+  detail: error.detail,
+  control: errorDetail(error),
+  privateValue,
+})));
+'''
+    run = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    result = json.loads(run.stdout)
+    assert result["privateValue"] not in result["message"]
+    assert result["privateValue"] not in result["detail"]
+    assert "access_token=***" in result["detail"]
+    assert "X-Secret-Key: ***" in result["detail"]
+    assert result["control"].startswith("Wrong password: retry")
+
+
 # Runs the page's real fetchDays against a /api/calendar that, like the route, answers by air date only.
 CALENDAR_HARNESS = r"""
 const fs = require("fs"), vm = require("vm");

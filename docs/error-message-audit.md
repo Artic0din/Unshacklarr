@@ -31,6 +31,14 @@ Sites with the same verdict and reason share a row only when every function is n
 | `web.py:probe_series`, `probe` | Restructured | Availability-probe failures are redacted before page JSON and keep the affected series or season context. |
 | `web.py:leftover_action`, `push_subscribe` | Restructured | Waiting-download and push-subscription errors are redacted while retaining the requested action. |
 | `web.py:setup_restore`, `test_sonarr`, `test_unshackle`, `setup` | Restructured | Setup checks identify Sonarr or Unshackle, keep safe connection detail, and point back to the supplied settings. |
+| `web.py:real_url`, `real_options`, `check_series_sonarrs`, `check_options`, `check_service`, `check_season_pages`, `check_programme_map`, `check_fallback`, `check_ladders`, `check_ladder_name`, `check_backends`, `check_sonarrs`, `check_library`, `check_urls`, `check_quiet`, `check_numbering`, `check_audio_accept`, `check_prefer`, `check_proxy_auth`, `check_offsite`, `check_settings`, `json_object`, `limit_of`, `video_override`, `local_dirs`, `terminal`, `same_origin_only`, `room_for_one_more` | Kept | Each request-boundary validator names the rejected setting, value, path, origin, or capacity rule and states the accepted form without exposing stored values. |
+| `web.py:save_config`, `hide_series`, `set_language`, `change_password`, `reauth`, `password_required` | Kept | Configuration and account failures identify the operation or missing current password while keeping submitted and stored credentials out of the response. |
+| `web.py:setup_found`, `setup_backups`, `login` | Kept | Setup and login failures identify the required authentication or setup state without returning the supplied password. |
+| `web.py:backup_data`, `saved_backup` | Kept | Backup validation identifies a wrong password, passphrase requirement, or missing backup so the browser can focus the correct control without returning private backup content. |
+| `web.py:test_notification`, `sonarr_health`, `other_sonarr_health`, `push_test`, `cdm_refusal`, `cdm_state` | Restructured | Notification, Sonarr, push, and CDM status failures retain safe actionable state while upstream exceptions pass through the audited redaction boundary. |
+| `web.py:unshackle_log`, `unqueue`, `pause_job`, `requeue`, `delete_run`, `clear_runs`, `start_sync`, `download`, `upgrades_action`, `run_diagnostic`, `recent_failures` | Kept | Runtime and job-control failures identify the requested action and current state; shared backend failures are already redacted before these routes expose them. |
+| `web.py:specs_of`, `confirm_audio`, `schedule`, `calendar`, `networks`, `sonarr_named`, `episodes`, `library_browse`, `missing`, `episode_ids_of` | Kept | Schedule, Sonarr, catalogue, library, and episode failures name the requested resource or invalid input and give the corrective action. |
+| `web.py:v1_download`, `v1_status`, `v1_start_download`, `v1_stop` | Kept | Legacy API failures use the same validated download state and safe error fields as the current routes. |
 | `cdm.py:regular`, `describe`, `choose`, `remote_save`, `remote_delete`, `add`, `delete`, `allow_proxies` | Kept | Each validation error names the device, configuration rule, or file and says what must change. |
 | `cookies.py:check_name`, `parse`, `from_json`, `normalise`, `path_for`, `save`, `delete` | Kept | Each validation error names the cookie file or service/profile input and gives the corrective action. |
 | `offsite.py:decrypt`, `webdav_put`, `s3_put`, `send` | Kept | WebDAV, S3, encryption, and configuration errors identify the remote system and required correction without exposing stored credentials. |
@@ -40,7 +48,7 @@ Sites with the same verdict and reason share a row only when every function is n
 
 | Site | Verdict | Reason |
 | --- | --- | --- |
-| `core.js:responseError` | Restructured | The shared formatter preserves safe response detail, suppresses HTML, and otherwise names Unshacklarr with HTTP status and retry action. |
+| `core.js:responseError` | Restructured | The shared formatter masks credentials and HTTP metadata in plain-text detail, suppresses HTML, and otherwise names Unshacklarr with HTTP status and retry action. |
 | `core.js:api` | Restructured | Timeout and connection failures identify Unshacklarr and give the next action; every non-success response uses `responseError`. |
 | `setup.js` startup state request | Restructured | The early request uses `responseError` before its result is displayed after translations load. |
 | `activity.js:downloadDiagnostic` | Restructured | Diagnostic-download failures use `responseError` instead of exposing an empty or HTML body. |
@@ -63,4 +71,4 @@ Sites with the same verdict and reason share a row only when every function is n
 `tools/i18n/extract.py` remains the source of truth for user-visible English text and now avoids catastrophic backtracking on long code literals.
 The regenerated English catalog has no stale keys.
 Every locale contains the changed error templates with the same placeholders.
-Regression tests cover provider/server attribution, HTTP detail preservation, empty and HTML responses, credential redaction, persisted attempt failures, push failures, locale synchronization, and extractor performance.
+Regression tests cover provider/server attribution, safe HTTP detail preservation, server and browser credential redaction, empty and HTML responses, persisted attempt failures, push failures, locale synchronization, and extractor performance.
