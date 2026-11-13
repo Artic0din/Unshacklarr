@@ -861,7 +861,7 @@ async def state(_):
             # a service with none of its own uses the default CDM; a link pasted on a series picks its service
             return service_tags(), None, names, UNSHACKLE.cdm_config(), service_domains()
         except UnshackleError as e:
-            return [], str(e), {}, {}, {}
+            return [], no_credentials(e), {}, {}, {}
     sonarr_side = asyncio.ensure_future(asyncio.to_thread(sonarr_series))  # both at once: the slower one sets the pace
     services, unshackle_error, names, cdm, domains = await asyncio.to_thread(unshackle_side)
     try:
@@ -2475,7 +2475,7 @@ def cdm_details() -> tuple[dict, str | None]:
     except UnshackleError as e:
         if "404" in str(e) or "not found" in str(e).lower():
             return {}, "This Unshackle cannot describe or test its devices: it needs the /api/cdm routes (a newer Unshackle)"
-        return {}, str(e)
+        return {}, no_credentials(e)
     return {(d["kind"], d["name"]): d for d in found}, None
 
 

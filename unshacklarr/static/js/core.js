@@ -155,8 +155,12 @@ async function responseError(response) {
   const detail = (await response.text()).trim();
   const reason = response.statusText ? `: ${response.statusText}` : "";
   const context = tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`);
-  return detail && !/^\s*</.test(detail) ? `${context}\n${tr(detail)}` : context;
+  const safeDetail = detail && !/^\s*</.test(detail) ? detail : "";
+  const error = new Error(safeDetail ? `${context}\n${tr(safeDetail)}` : context);
+  error.detail = safeDetail;
+  return error;
 }
+const errorDetail = (error) => error.detail || error.message;
 async function api(path, { wait = 30, ...opts } = {}) {
   let r;
   try {
@@ -168,7 +172,7 @@ async function api(path, { wait = 30, ...opts } = {}) {
       : "Unshacklarr can't be reached. Check that it is running, then try again.");
   }
   if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw new Error("Log in first"); }
-  if (!r.ok) throw new Error(await responseError(r));
+  if (!r.ok) throw await responseError(r);
   return r.json();
 }
 

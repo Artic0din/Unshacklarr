@@ -31,6 +31,28 @@ def test_unreachable_is_notified_once_after_two_checks_then_back(tmp_path, monke
     assert sent == [("error", "Unshackle is unreachable"), ("success", "Unshackle is back")]
 
 
+def test_state_and_cdm_details_redact_unshackle_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    error = web.UnshackleError("X-Secret-Key: example-sensitive-value")
+    monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: (_ for _ in ()).throw(error))
+    monkeypatch.setattr(web, "sonarr_series", lambda: [])
+    monkeypatch.setattr(web, "sonarrs_of_series", lambda ids: ({}, []))
+    monkeypatch.setattr(web, "read_config", lambda: {})
+    monkeypatch.setattr(web, "public_config", lambda config: {})
+    monkeypatch.setattr(web, "update_info", lambda: None)
+    monkeypatch.setattr(web, "dl_options", lambda: [])
+    monkeypatch.setattr(web, "backups_info", lambda: None)
+    monkeypatch.setattr(web, "instances_of_series", lambda: {})
+    response = asyncio.run(web.state(None))
+    assert json.loads(response.text)["unshackle_error"] == "X-Secret-Key: ***"
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(error))
+    assert web.cdm_details() == ({}, "X-Secret-Key: ***")
+
+
 def test_a_local_unshackle_that_cannot_start_is_down_and_the_other_states_still_refresh(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -295,16 +317,23 @@ const translated = [];
 const tr = (text) => { translated.push(text); return `translated: ${text}`; };
 ''' + function + r'''
 const response = (body) => ({ status: 503, statusText: "Service Unavailable", text: async () => body });
-Promise.all([responseError(response("Provider maintenance (ref support-1)")), responseError(response("<html>down</html>"))])
-  .then(([plain, html]) => console.log(JSON.stringify({ plain, html, translated })));
+Promise.all([responseError(response("Wrong password: try again")), responseError(response("<html>down</html>"))])
+  .then(([plain, html]) => console.log(JSON.stringify({
+    plain: { message: plain.message, detail: plain.detail },
+    html: { message: html.message, detail: html.detail },
+    control: errorDetail(plain),
+    translated,
+  })));
 '''
     run = subprocess.run(["node", "-e", script], capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     result = json.loads(run.stdout)
     context = "Unshacklarr answered HTTP 503: Service Unavailable. Try again."
-    assert result["plain"] == f"translated: {context}\ntranslated: Provider maintenance (ref support-1)"
-    assert result["html"] == f"translated: {context}"
-    assert result["translated"] == [context, "Provider maintenance (ref support-1)", context]
+    assert result["plain"] == {"message": f"translated: {context}\ntranslated: Wrong password: try again",
+                               "detail": "Wrong password: try again"}
+    assert result["html"] == {"message": f"translated: {context}", "detail": ""}
+    assert result["control"] == "Wrong password: try again"
+    assert result["translated"] == [context, "Wrong password: try again", context]
 
 
 # Runs the page's real fetchDays against a /api/calendar that, like the route, answers by air date only.

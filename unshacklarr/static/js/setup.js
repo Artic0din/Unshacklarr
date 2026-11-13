@@ -232,9 +232,9 @@ function showSetup(found) {
       restored(r);
     } catch (e) {
       lastPick = pick;
-      restoreSay.replaceChildren(failed(e.message), ...(/passphrase/i.test(e.message) ? [el("div", { className: "wz-phrase" }, phrase,
+      restoreSay.replaceChildren(failed(e.message), ...(/passphrase/i.test(errorDetail(e)) ? [el("div", { className: "wz-phrase" }, phrase,
         el("button", { type: "button", className: "btn small primary", textContent: "Restore", onclick: () => restoreFrom(lastPick) }))] : []));
-      if (/passphrase/i.test(e.message)) phrase.focus();
+      if (/passphrase/i.test(errorDetail(e))) phrase.focus();
     }
   };
   restoreFile.onchange = async () => { const file = restoreFile.files[0]; restoreFile.value = ""; if (file) restoreFrom({ text: await file.text() }); };
@@ -458,7 +458,7 @@ $("#tz-select").after(settingsZone.input, settingsZone.list);
     .then(async (r) => {
       if (r.ok) return r.json();
       if (r.status === 401) return null;
-      return new Error(await responseError(r));
+      return await responseError(r);
     })
     .catch(() => null);
   await i18nReady;

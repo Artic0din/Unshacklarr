@@ -20,6 +20,8 @@ Sites with the same verdict and reason share a row only when every function is n
 | `push.py:Push.send` | Restructured | Push-service status and safe detail remain visible; HTML and unexpected internals become an actionable message while safe detail stays in the log. |
 | `web.py:service_options`, `series_search`, `suggest` | Restructured | Service discovery and search exceptions are redacted before their HTTP response. |
 | `web.py:unshackle_health`, `server_health` | Restructured | Health-card errors are redacted before JSON serialization and notification reuse. |
+| `web.py:state` | Restructured | The page-state response redacts an unavailable Unshackle server's exception before JSON serialization. |
+| `web.py:cdm_details` | Restructured | CDM detail failures retain the actionable compatibility message or a redacted Unshackle reason. |
 | `web.py:restart_unshackle` | Restructured | Restart failures keep safe server detail and identify Unshackle as the failing party. |
 | `web.py:list_cookies`, `save_cookies`, `delete_cookies` | Restructured | Cookie-file errors are redacted while preserving the file or requested operation. |
 | `web.py:cdm_test`, `cdm_reprovision`, `list_cdm`, `cdm_action` | Restructured | CDM endpoint failures are redacted while retaining the device operation and upstream reason. |
