@@ -8,6 +8,8 @@ import stat
 import tempfile
 from pathlib import Path
 
+import requests
+
 PRIVATE = 0o600  # its owner only: what anything holding a secret gets
 
 
@@ -21,8 +23,40 @@ CREDENTIALS = re.compile(r"//[^/\s]+@")  # http://user:password@host, through th
 
 
 def no_credentials(text) -> str:
-    """A message, any user name and password in its URLs masked: errors are shown, logged and sent."""
-    return CREDENTIALS.sub("//***@", str(text))
+    """Keep error details while masking credentials in URLs, headers and named fields."""
+    text = CREDENTIALS.sub("//***@", str(text))
+    text = re.sub(r"/api/webhooks/[^\s\"'<>]+", "/api/webhooks/***", text)
+    text = re.sub(r"(?im)\b(?:authorization|cookie|set-cookie)\s*:[^\r\n]+", "[credentials hidden]", text)
+    text = re.sub(r"(?i)\bBearer\s+[^\s,;]+", "Bearer ***", text)
+    return re.sub(
+        r'''(?ix)(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|passwd|passphrase|secret|signature)\b["']?\s*[:=]\s*)
+            (?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s&,;}\]\)]+)''',
+        r"\1***", text)
+
+
+def error_message(error: Exception, source: str) -> str:
+    """An external failure names its source without guessing that every HTTP error is offline."""
+    response = getattr(error, "response", None)
+    if response is not None:
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        detail = payload.get("message") or payload.get("error") if isinstance(payload, dict) else None
+        status = f"{source} returned HTTP {response.status_code}."
+        return f"{status} {no_credentials(detail)}" if isinstance(detail, str) and detail.strip() else status
+    if isinstance(error, requests.Timeout):
+        return f"{source} did not answer in time. Check its connection and log."
+    if isinstance(error, requests.ConnectionError):
+        return f"{source} could not be reached. Check its address and whether it is running."
+    if isinstance(error, requests.RequestException):
+        return f"{source} failed. Check its log for details."
+    if isinstance(error, OSError):
+        return f"{source}: {no_credentials(error.strerror or 'File operation failed')}. Check the file path and permissions."
+    if not isinstance(error, (ValueError, RuntimeError)):
+        return f"{source} failed. Check its log for details."
+    detail = no_credentials(error).strip()
+    return f"{source}: {detail}" if detail else f"{source} failed. Check its log for details."
 
 
 def read_json(path: Path, empty):

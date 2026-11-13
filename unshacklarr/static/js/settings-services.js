@@ -331,7 +331,7 @@ async function renderPush() {
       await sub.unsubscribe();
     }),
   ] : [btn("Turn on", "primary", async () => {
-    if (await Notification.requestPermission() !== "granted") throw new Error("Notifications were not allowed");
+    if (await Notification.requestPermission() !== "granted") throw new Error("This browser blocked notifications. Allow notifications for Unshacklarr in the browser settings.");
     const { key } = await api("/api/push/key");
     const made = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64key(key) });
     const label = /iPhone|iPad/.test(navigator.userAgent) ? "iPhone" : /Android/.test(navigator.userAgent) ? "Android" : "Computer";

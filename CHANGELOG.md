@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Error messages identified the failing system, kept useful upstream details, masked credentials in error summaries and notifications, and directed unexpected failures to Unshacklarr's log.
 - Authentication errors distinguished a service's rejected login or playback token from Unshackle's internal API key and preserved the provider's reason and error reference.
 - Availability searches found and displayed seasons on other services even when all aired episodes were already on disk.
 - Refreshing a series' episode availability also searched other services for missing seasons and showed the suggestions immediately.

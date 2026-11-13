@@ -704,7 +704,7 @@ function runActs(c) {
 async function downloadDiagnostic(c) {
   try {
     const r = await fetch(`/api/runs/${encodeURIComponent(c.id)}/diagnostic`);
-    if (!r.ok) throw new Error(await r.text() || r.statusText);
+    if (!r.ok) throw new Error(await responseError(r));
     const a = el("a", { href: URL.createObjectURL(await r.blob()), download: `unshacklarr-diagnostic-${c.id}.md` });
     a.click();
     URL.revokeObjectURL(a.href);

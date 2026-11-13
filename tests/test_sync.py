@@ -2632,7 +2632,7 @@ def test_the_import_catch_all_follows_the_series_notification_setting(tmp_path, 
         sync.sync(config, {}, [episode(111, 2, number)], manual=True, kind="manual")
     cards = {c["sxxeyy"]: c for c in (json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))}
     assert [c["outcome"] for _, c in sorted(cards.items())] == ["failed", "failed"]
-    assert all("ValueError: disk exploded" in c["cause"] for c in cards.values())
+    assert all("Unshacklarr: disk exploded" in c["cause"] for c in cards.values())
     assert sent == [("error", "Not imported: Show S02E06")] and boxed == ["Not imported: Show S02E05"]  # the bell keeps what the series does not send
 
 

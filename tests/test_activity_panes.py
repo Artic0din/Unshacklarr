@@ -48,7 +48,7 @@ const written = [];
 const sockets = [];
 class FakeSocket { constructor() { sockets.push(this); } close() {} }
 const ctx = { term: { write: (t) => written.push(typeof t === "string" ? t : "output") }, termSocket: null, termFor: null, termQuery: "",
-  openTerm: () => true, termFilter: () => (b) => b, WebSocket: FakeSocket, location: { protocol: "http:", host: "x" } };
+  openTerm: () => true, tr: (text) => text, termFilter: () => (b) => b, WebSocket: FakeSocket, location: { protocol: "http:", host: "x" } };
 vm.createContext(ctx);
 vm.runInContext(grab("streamTerm"), ctx);
 ctx.streamTerm("run", "run=1");

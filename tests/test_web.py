@@ -24,11 +24,11 @@ def test_unreachable_is_notified_once_after_two_checks_then_back(tmp_path, monke
     web.check_health()
     assert sent == []  # one failed check could be a blip
     web.check_health()
-    assert sent == [("error", "Unshackle is unreachable")]
+    assert sent == [("error", "Unshackle needs attention")]
     web.check_health()
     web.check_health()
     web.check_health()
-    assert sent == [("error", "Unshackle is unreachable"), ("success", "Unshackle is back")]
+    assert sent == [("error", "Unshackle needs attention"), ("success", "Unshackle is back")]
 
 
 def test_a_local_unshackle_that_cannot_start_is_down_and_the_other_states_still_refresh(tmp_path, monkeypatch):

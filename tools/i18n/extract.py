@@ -35,7 +35,7 @@ def wanted(text: str) -> bool:
         return False
     if re.fullmatch(r"[a-z0-9_:.\-/]+", text):  # an identifier, a CSS class, a key, a path
         return False
-    if re.fullmatch(r"([a-z0-9-]+ ?)+", text) and all(w in CSS_CLASSES or "-" in w for w in text.split()):
+    if re.fullmatch(r"[a-z0-9-]+(?: [a-z0-9-]+)* ?", text) and all(w in CSS_CLASSES or "-" in w for w in text.split()):
         return False  # "btn small primary": classes
     if re.match(r"^[#.\[/&]|^https?:|^\w+://|^--|^[a-z]+\(|^\$|^%|^@media", text):
         return False
@@ -192,7 +192,7 @@ def extract(page: str) -> dict[str, list[str]]:
     return {t: holes.get(t, []) for t in sorted(found)}
 
 
-SERVER = ["sync.py", "web.py", "backend.py", "cdm.py", "cookies.py", "options.py", "push.py", "offsite.py"]
+SERVER = ["sync.py", "web.py", "backend.py", "cdm.py", "cookies.py", "options.py", "push.py", "offsite.py", "files.py"]
 
 
 def said(text: str) -> bool:
@@ -215,6 +215,8 @@ def server_texts(source: str) -> dict[str, list[str]]:
         if isinstance(body, list) and body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
             skip.add(id(body[0].value))  # a docstring
         if isinstance(node, ast.Call) and getattr(node.func, "id", "") in ("print", "getattr"):
+            skip.update(id(n) for a in node.args for n in ast.walk(a))
+        if isinstance(node, ast.Call) and getattr(getattr(node.func, "value", None), "id", "") == "logging":
             skip.update(id(n) for a in node.args for n in ast.walk(a))
         if isinstance(node, ast.Call) and getattr(getattr(node.func, "value", None), "id", "") == "re":  # re.compile(…): a pattern
             skip.update(id(n) for a in node.args for n in ast.walk(a))

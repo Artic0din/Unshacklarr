@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import logging
 import ntpath
 import os
 import posixpath
@@ -23,6 +24,7 @@ import secrets
 import shutil
 import sys
 import threading
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 import time
 import unicodedata
@@ -37,7 +39,7 @@ import yaml
 from aiohttp import web
 
 from unshacklarr import __version__, cdm, cookies, i18n, offsite, options
-from unshacklarr.files import CREDENTIALS, PRIVATE, no_credentials, read_json, write_atomic
+from unshacklarr.files import CREDENTIALS, PRIVATE, error_message, no_credentials, read_json, write_atomic
 from unshacklarr import sync as sonarr_sync  # the schedule shows the very downloads the sync will ask for
 from unshacklarr.backend import UnshackleError
 
@@ -748,7 +750,7 @@ def tmdb_error(e: requests.RequestException) -> str:
         return "TMDB refused the API key: check it in Settings, Sonarr"
     if status:
         return f"TMDB answered {status}"
-    return f"TMDB is unreachable ({type(e).__name__})"
+    return error_message(e, "TMDB")
 
 
 def tmdb_key() -> str:
@@ -867,7 +869,7 @@ async def state(_):
     try:
         series = await sonarr_side
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=error_message(e, "Sonarr"))
     cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
     others, only_there = await asyncio.to_thread(sonarrs_of_series, {s["tvdbId"] for s in series})
     series = sorted(series + only_there, key=lambda s: s["title"].lower())
@@ -2164,7 +2166,7 @@ def sonarr_health() -> dict:
     try:
         return {"ok": True, "version": sonarr_get_version()}
     except (requests.RequestException, ValueError) as e:
-        return {"ok": False, "error": f"Sonarr is unreachable: {no_credentials(e)}"}
+        return {"ok": False, "error": error_message(e, "Sonarr")}
 
 
 def sonarr_get_version() -> str:
@@ -2184,7 +2186,7 @@ def other_sonarr_health(inst: dict) -> dict:
     try:
         return {"ok": True, "version": sonarr_status(inst["url"], inst["api_key"])}
     except (requests.RequestException, ValueError) as e:
-        return {"ok": False, "error": f"Sonarr {inst['name']} is unreachable: {no_credentials(e)}"}
+        return {"ok": False, "error": error_message(e, f"Sonarr {inst['name']}")}
 
 
 def check_health() -> None:
@@ -2205,7 +2207,7 @@ def check_health() -> None:
         if not (settings.get("events") or {}).get("down", True):
             continue
         if failures_in_a_row[name] == 2:
-            sonarr_sync.notify(settings, "error", f"{label} is unreachable", f"{state.get('error')}\nDownloads wait until it is back.")
+            sonarr_sync.notify(settings, "error", f"{label} needs attention", f"{state.get('error')}\nDownloads wait until it is back.")
         elif was_down and state["ok"]:
             sonarr_sync.notify(settings, "success", f"{label} is back", "Downloads carry on.")
 
@@ -2681,7 +2683,7 @@ def send_offsite(name: str, text: str) -> dict:
     try:
         sent = {"ok": True, "name": offsite.send(settings, name, text)}
     except (requests.RequestException, ValueError, KeyError) as e:
-        sent = {"ok": False, "error": no_credentials(e) if isinstance(e, requests.RequestException) else str(e)}
+        sent = {"ok": False, "error": error_message(e, "Remote backup")}
         sonarr_sync.notify(read_config()["notifications"], "error", "Remote backup failed", sent["error"])
     sent["at"] = datetime.now(timezone.utc).isoformat()
     write_atomic(OFFSITE_FILE, json.dumps(sent))
@@ -3099,7 +3101,7 @@ async def schedule(_):
     try:
         missing = await asyncio.to_thread(wanted)
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=error_message(e, "Sonarr"))
     runs = await asyncio.to_thread(latest_runs)
     return web.json_response({
         "nextSync": next_sync(now).isoformat(),
@@ -3132,7 +3134,7 @@ async def calendar(request):
         ) if (ep.get("series") or {}).get("tvdbId") not in own]
         episodes += sonarr_sync.broadcast_episodes(config, start, start + timedelta(days=days), plans)
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=error_message(e, "Sonarr"))
     runs = await asyncio.to_thread(latest_runs)
     return web.json_response(await asyncio.to_thread(lambda: [  # each looks for its folder on the downloads mount
         d for ep in sorted(episodes, key=lambda e: e.get("airDateUtc") or "")
@@ -3426,7 +3428,7 @@ async def episodes(request):
     try:  # each episode with its file in one answer (Sonarr 4 and 5), not the files asked apart
         eps = await asyncio.to_thread(on_sonarr, inst, sonarr_sync.sonarr_get, "episode", seriesId=series_id, includeEpisodeFile="true")
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=error_message(e, "Sonarr"))
     return web.json_response([
         {**{k: e.get(k) for k in ("id", "seasonNumber", "episodeNumber", "title", "airDateUtc", "hasFile", "monitored")},
          "file": file_summary(e["episodeFile"]) if e.get("hasFile") and e.get("episodeFile") else None}
@@ -4179,7 +4181,7 @@ async def probe(request):
     except UnshackleError as e:
         raise web.HTTPBadGateway(text=str(e))
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=error_message(e, "Sonarr"))
 
 
 async def release_seen(request):
@@ -4303,7 +4305,7 @@ def cdm_refusal(ids: list[int]) -> str:
     try:
         episodes = sonarr_sync.chosen_episodes(ids)
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=error_message(e, "Sonarr"))
     pages = [sonarr_sync.season_page(show, ep["seasonNumber"]) for ep in episodes if (show := shows.get(ep["series"]["tvdbId"]))]
     return next((lacking[p["service"]] for p in pages  # a device named for the season's service needs no mapping
                  if p["service"] in lacking and not sonarr_sync.stacked(p, config)[0].get("--cdm")), "")
@@ -4686,7 +4688,7 @@ def library_check(root: str, local: str) -> dict:
             return out
         files = sonarr_sync.sonarr_get("episodefile", seriesId=serie["id"])
     except requests.RequestException as e:
-        out["why"] = f"Sonarr is unreachable: {no_credentials(e)}"
+        out["why"] = error_message(e, "Sonarr")
         return out
     if not files:
         out["why"] = "Sonarr has no episode file to try"
@@ -4805,7 +4807,7 @@ async def missing(request):
     try:
         items = await asyncio.to_thread(on_sonarr, inst, missing_of_managed, int(days) if days else None)
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=error_message(e, "Sonarr"))
     return web.json_response({"items": items})
 
 
@@ -5400,7 +5402,7 @@ async def v1_start_download(request):
         try:
             ids = await asyncio.to_thread(on_sonarr, inst, episode_ids_of, tvdb, names)
         except requests.RequestException as e:
-            raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+            raise web.HTTPBadGateway(text=error_message(e, "Sonarr"))
     if not ids or not isinstance(ids, list) or not all(type(i) is int and i > 0 for i in ids):
         raise web.HTTPBadRequest(text='Give "episodeIds", or "tvdbId" and "episodes" such as ["S01E02"]')
     if len(ids) > 100:
@@ -5570,7 +5572,7 @@ async def setup_restore(request):
         await asyncio.to_thread(sonarr_status, settings["sonarr_url"], settings["sonarr_api_key"])
         checks["sonarr"] = {"ok": True}
     except (requests.RequestException, ValueError) as e:
-        checks["sonarr"] = {"ok": False, "error": f"Sonarr is unreachable: {no_credentials(e)}"}
+        checks["sonarr"] = {"ok": False, "error": error_message(e, "Sonarr")}
     try:
         await asyncio.to_thread(check_unshackle, settings)
         checks["unshackle"] = {"ok": True}
@@ -5632,7 +5634,7 @@ async def test_sonarr(request):
     try:
         version = await asyncio.to_thread(sonarr_status, url, key)
     except (requests.RequestException, ValueError) as e:
-        raise web.HTTPBadGateway(text=f"Could not reach Sonarr: {e}")
+        raise web.HTTPBadGateway(text=error_message(e, "Sonarr"))
     return web.json_response({"version": version})
 
 
@@ -5701,11 +5703,11 @@ async def setup(request):
     try:
         await asyncio.to_thread(check_unshackle, settings)
     except UnshackleError as e:
-        raise web.HTTPBadRequest(text=f"Could not reach Unshackle with these settings: {e}")
+        raise web.HTTPBadRequest(text=no_credentials(e))
     try:
         await asyncio.to_thread(sonarr_status, settings["sonarr_url"], settings["sonarr_api_key"])
     except (requests.RequestException, ValueError) as e:
-        raise web.HTTPBadRequest(text=f"Could not reach Sonarr with these settings: {e}")
+        raise web.HTTPBadRequest(text=error_message(e, "Sonarr"))
     if not settings["sonarr_downloads"]:
         raise web.HTTPBadRequest(text="Enter the downloads folder as Sonarr sees it")
     config["settings"] = settings
@@ -5802,7 +5804,39 @@ def background(loop):
     return context
 
 
-app = web.Application(middlewares=[compress, same_origin_only, password_required])
+@web.middleware
+async def error_responses(request, handler):
+    """Expected failures keep their guidance; unexpected failures direct people to the server log."""
+    try:
+        response = await handler(request)
+    except web.HTTPException as error:
+        if error.status < 400:
+            raise
+        error.text = no_credentials(error.text).strip() or "Unshacklarr could not complete this request. Check Unshacklarr's log for details."
+        raise
+    except Exception as error:
+        logging.error("Unshacklarr request failed: %s", no_credentials(traceback.format_exc()))
+        return web.Response(status=500, text="Unshacklarr could not complete this request. Check Unshacklarr's log for details.")
+    if isinstance(response, web.Response) and response.content_type == "application/json" and response.body:
+        data = json.loads(response.text)
+        cleaned = redact_error_fields(data)
+        if cleaned != data:
+            response.text = json.dumps(cleaned)
+    return response
+
+
+def redact_error_fields(value):
+    """Errors can also arrive inside a successful health, probe, or activity response."""
+    if isinstance(value, dict):
+        return {key: no_credentials(item) if isinstance(item, str) and
+                (key in ("error", "cause", "why", "detail") or key.endswith("_error"))
+                else redact_error_fields(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [redact_error_fields(item) for item in value]
+    return value
+
+
+app = web.Application(middlewares=[compress, error_responses, same_origin_only, password_required])
 app.on_response_prepare.append(security_headers)
 app.cleanup_ctx.append(background(watch_releases))
 app.cleanup_ctx.append(background(run_automatic_syncs))

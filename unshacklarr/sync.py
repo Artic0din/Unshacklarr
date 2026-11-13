@@ -87,7 +87,7 @@ import yaml
 
 from unshacklarr import i18n, options
 from unshacklarr.backend import TERMINAL, Unshackle, UnshackleError
-from unshacklarr.files import no_credentials, read_json, write_atomic
+from unshacklarr.files import error_message, no_credentials, read_json, write_atomic
 from unshacklarr.push import Push
 
 
@@ -446,12 +446,12 @@ def send_to(url: str, level: str, title: str, message: str, details: dict | None
             if sender.notify(title=title, body=message[:4000], notify_type=LEVELS[level]):
                 return None
             lines = [line.strip() for line in said.getvalue().splitlines() if line.strip()]
-        return (lines[-1] if lines else "The service refused it")[:200]
+        return no_credentials(lines[-1] if lines else "The notification service refused the message. Check its address and settings.")[:200]
     except requests.RequestException as e:
         # the error names the URL, or only its path (/api/webhooks/<id>/<token>): its secret either way
         return re.sub(r"/api/webhooks/\S+", "/api/webhooks/…", re.sub(r"https?://\S+", "the webhook", str(e)))[:200]
     except Exception as e:  # never let a notification stop a download
-        return str(e)[:200]
+        return error_message(e, "Notification service")[:200]
 
 
 def note_sent(level: str, title: str, to: list[dict]) -> None:
@@ -471,7 +471,7 @@ def deliver(settings: dict, level: str, title: str, message: str, details: dict 
             to.append({"app": "This device", "ok": True})
     except Exception as e:
         print(f"Push notification not sent: {e}", file=sys.stderr)
-        to.append({"app": "This device", "ok": False, "error": str(e)[:200]})
+        to.append({"app": "This device", "ok": False, "error": error_message(e, "Push notification")[:200]})
     for target in notification_targets(settings):
         if level not in (ALL_LEVELS if target.get("levels") is None else target["levels"]):  # [] is every box unticked: nothing
             continue
@@ -499,6 +499,7 @@ def notify_series(show: dict | None, settings: dict, level: str, title: str, mes
 
 def notify(settings: dict, level: str, title: str, message: str, action: dict | None = None, batch: str | None = None,
            details: dict | None = None) -> bool:
+    title, message = no_credentials(title), no_credentials(message)
     try:
         inbox_add(level, title, message, action, batch)  # the page's bell keeps them all, whatever goes out
     except OSError as e:
@@ -699,7 +700,7 @@ class EpisodeRun:
     def finish(self, outcome: str, cause: str = "", detail: str = "") -> None:
         if getattr(current, "run", None) is self:
             current.run = None
-        self.card.update(cause=cause, detail=detail)
+        self.card.update(cause=no_credentials(cause), detail=no_credentials(detail))
         self.log.close()
         self.card.update(ended=datetime.now(timezone.utc).isoformat(), outcome=outcome)
         if outcome in ("downloaded", "kept", "import"):  # a later try of this attempt got through: nothing left unconfirmed (#10)
@@ -803,9 +804,16 @@ def job_cause(job: dict) -> str:
     else serve's message without its "Worker exited with code 1:" wrapping."""
     stderr = (job.get("worker_stderr") or "")[-20_000:]  # its end: a service may put a whole page in it
     if (m := re.search(r"^Stderr:[ \t]*(.+?)\s*(?:^Worker failed|\Z)", stderr, re.M | re.S)) and m.group(1).strip():
-        return m.group(1).strip()
-    message = job.get("error_message") or job.get("status") or "failed"
-    return re.sub(r"^(?:Worker exited with code \d+:\s*)+", "", message).strip()
+        message = m.group(1).strip()
+    else:
+        message = job.get("error_message") or job.get("status") or "failed"
+    message = re.sub(r"^(?:Worker exited with code \d+:\s*)+", "", message).strip()
+    if "Traceback (most recent call last):" in message:
+        lines = [line.strip() for line in message.splitlines() if line.strip()]
+        # Keep the final exception's reason; the complete stack remains in the attempt's log.
+        reasons = [m[1] for line in lines if (m := re.match(r"[\w.]*(?:Error|Exception|SystemExit):\s*(.+)", line))]
+        message = f"Unshackle: {reasons[-1] if reasons else lines[-1]}"
+    return no_credentials(message)
 
 
 def ask_for_action(run: EpisodeRun, need: dict | None) -> None:
@@ -2766,7 +2774,7 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
             except Exception as e:
                 why = no_credentials(f"{type(e).__name__}: {e}")
                 if instance_failed.get("") != why:  # the same cause at the next sync: told already
-                    notify(settings, "error", "Unshacklarr sync stopped", why)
+                    notify(settings, "error", "Unshacklarr sync stopped", error_message(e, "Unshacklarr sync"))
                 instance_failed[""] = why
                 print(f"Sync stopped: {why}", flush=True)
                 failed = 1
@@ -2776,7 +2784,7 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
         finally:
             sweep_lock.release()
     except Exception as e:
-        notify(settings, "error", "Unshacklarr sync stopped", no_credentials(f"{type(e).__name__}: {e}"))
+        notify(settings, "error", "Unshacklarr sync stopped", error_message(e, "Unshacklarr sync"))
         raise
 
 
@@ -2830,8 +2838,9 @@ def sync_instance(inst: dict, config: dict, settings: dict) -> int:
         except Exception as e:
             why = no_credentials(f"{type(e).__name__}: {e}")
             if instance_failed.get(inst["name"]) != why:  # the same cause at the next sync: told already
-                notify(settings, "error", f"Sonarr {inst['name']}: sync stopped", why)
+                notify(settings, "error", f"Sonarr {inst['name']}: sync stopped", error_message(e, "Unshacklarr sync"))
             instance_failed[inst["name"]] = why
+            print(f"Sync stopped ({inst['name']}): {why}", flush=True)
             return 1
 
 
@@ -2985,8 +2994,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     failures += 1
                 if not run.card.get("ended"):
                     run.say(f"{job[4]}: {type(e).__name__}: {e}")
-                    run.finish("failed", f"{type(e).__name__}: {e}")
-                    notify_series(job[2], settings, "error", f"Not imported: {job[4]}", f"{type(e).__name__}: {e}\nThe files are in {seen_by('sonarr_downloads', job[3])}.", batch=batch)
+                    run.finish("failed", error_message(e, "Unshacklarr"))
+                    notify_series(job[2], settings, "error", f"Not imported: {job[4]}", f"{error_message(e, 'Sonarr import')}\nThe files are in {seen_by('sonarr_downloads', job[3])}.", batch=batch)
             finally:
                 lock.__exit__(None, None, None)
 
@@ -3264,8 +3273,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     failures += 1
                 print(f"{label}: {type(e).__name__}: {e}", flush=True)
                 if run and not run.card.get("ended"):
-                    run.finish("failed", f"{type(e).__name__}: {e}")
-                notify_series(show, settings, "error", f"Failed: {label}", f"{type(e).__name__}: {e}", batch=batch)
+                    run.finish("failed", error_message(e, "Unshacklarr"))
+                notify_series(show, settings, "error", f"Failed: {label}", error_message(e, "Unshacklarr"), batch=batch)
             finally:
                 if not handed:
                     lock.__exit__(None, None, None)

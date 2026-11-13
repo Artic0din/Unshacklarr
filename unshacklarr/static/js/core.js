@@ -157,11 +157,18 @@ async function api(path, { wait = 30, ...opts } = {}) {
     // wait seconds at most (30 unless said): a request lost in a server restart fails visibly instead of spinning forever
     r = await fetch(path, { headers: { "Content-Type": "application/json", "X-Unshackle": "1" }, signal: AbortSignal.timeout(wait * 1000), ...opts });
   } catch (e) {
-    throw new Error(e.name === "TimeoutError" ? `No answer after ${wait} s.` : "The server can't be reached.");
+    throw new Error(e.name === "TimeoutError" ? `No answer from Unshacklarr after ${wait} s. Check its connection and log.` : "Unshacklarr can't be reached. Check its connection and whether it is running.");
   }
   if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw new Error("Log in first"); }
-  if (!r.ok) throw new Error(await r.text() || `${r.status} ${r.statusText}`);
-  return r.json();
+  if (!r.ok) throw new Error(await responseError(r));
+  try { return await r.json(); }
+  catch { throw new Error("Unshacklarr returned an unreadable response. Check its address and log."); }
+}
+
+async function responseError(response) {
+  const detail = await response.text();
+  return response.headers.get("Content-Type")?.includes("text/plain") && detail.trim()
+    ? detail : `Unshacklarr returned HTTP ${response.status}. Check Unshacklarr's log for details.`;
 }
 
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */

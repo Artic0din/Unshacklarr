@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import serialization
 from py_vapid import Vapid01
 from pywebpush import WebPushException, webpush
 
-from unshacklarr.files import PRIVATE, read_json, write_atomic
+from unshacklarr.files import PRIVATE, no_credentials, read_json, write_atomic
 
 # The VAPID subject: Apple refuses an address it cannot take for real (".invalid": 403 BadJwtToken)
 CONTACT = "mailto:" + os.environ.get("PUSH_CONTACT", "unshacklarr@example.com")
@@ -83,10 +83,10 @@ class Push:
                     gone.append(s["endpoint"])  # unsubscribed, or the app uninstalled
                     continue
                 said = f"{e.response.status_code} {e.response.text.strip()[:160]}" if e.response is not None else str(e)[:160]
-                self.last_error = f"{s['endpoint'].split('/')[2]} refused it: {said}"
+                self.last_error = no_credentials(f"{s['endpoint'].split('/')[2]} refused it: {said}")
                 print(f"Push: {self.last_error}", flush=True)
             except Exception as e:  # a push service down must not stop the rest
-                self.last_error = f"{s['endpoint'].split('/')[2]} unreachable: {e}"
+                self.last_error = no_credentials(f"{s['endpoint'].split('/')[2]} could not send the notification: {e}")
                 print(f"Push: {self.last_error}", flush=True)
         for endpoint in gone:
             self.unsubscribe(endpoint)

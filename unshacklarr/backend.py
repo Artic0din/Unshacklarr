@@ -308,23 +308,30 @@ class Unshackle:
             except ValueError:
                 payload = {}
             payload = payload if isinstance(payload, dict) else {}
-            message = str(payload.get("message") or r.text)
+            detail = payload.get("message") or payload.get("error")
+            message = detail.strip() if isinstance(detail, str) else ""
+            if not message and r.headers.get("Content-Type", "").startswith("text/plain"):
+                message = r.text.strip()
+            if not message:
+                message = "Unshackle returned no error detail. Check its log for details."
+            reference = str(payload.get("ref") or "")
+            if reference and reference not in message:
+                message += f" (ref {reference})"
             provider_auth_failed = payload.get("error_code") == "AUTH_FAILED"
-            if r.status_code == 401:
-                if provider_auth_failed:
-                    details = payload.get("details") or {}
-                    service = details.get("service") if isinstance(details, dict) else None
-                    reference = f" (ref {payload['ref']})" if payload.get("ref") else ""
-                    message = f"{service or 'Service'}{reference}: {message.removesuffix(reference)}. Check this service's login/session in Unshackle."
-                else:
-                    message = "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle."
+            if provider_auth_failed:
+                details = payload.get("details") or {}
+                service = details.get("service") if isinstance(details, dict) else None
+                reference = f" (ref {payload['ref']})" if payload.get("ref") else ""
+                message = f"{service or 'Service'}{reference}: {message.removesuffix(reference)}. Check this service's login/session in Unshackle."
+            elif r.status_code == 401:
+                message = "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle."
             if not provider_auth_failed and "requested CDM is not permitted" in message:  # --cdm, Unshackle 6: the operator's opt-in
                 raise UnshackleError("Unshackle refuses to pick the CDM device named in --cdm: allow it in unshackle.yaml "
                                      "with serve: cdm_overrides: true (or a list of devices), then restart Unshackle")
             if not provider_auth_failed and PROXY_REFUSED.search(message):
                 self.proxy_refused = datetime.now(timezone.utc).isoformat()
                 raise UnshackleError(PROXY_HINT)
-            status = f"HTTP {r.status_code}: " if r.status_code >= 500 else ""  # serve's own words rarely say it
+            status = f"HTTP {r.status_code}: "
             message = no_credentials(message.strip())[:500]
             err = UnshackleError(f"unshackle serve: {status}{message}")
             err.status = r.status_code
