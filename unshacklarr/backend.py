@@ -298,25 +298,35 @@ class Unshackle:
             # another route: no address can be told from it, so none is offered as the one to type
             raise UnshackleError(no_credentials(f"{url} redirects to {host + to.path if host else 'another address'}, "
                                                 "which is not unshackle serve's: check its address in Settings, Unshackle"))
-        if r.status_code == 401:
-            raise UnshackleError("unshackle serve refused the API key")
         if r.status_code == 429:  # a limit set on the key (Unshackle 6): waited for, not a lost job
             err = UnshackleError("unshackle serve is busy: its limit of requests for this key is reached")
             err.retry_after = int(r.headers.get("Retry-After") or 60) if str(r.headers.get("Retry-After") or "60").isdigit() else 60
             raise err
         if not r.ok:
             try:
-                message = r.json().get("message") or r.text
+                payload = r.json()
             except ValueError:
-                message = r.text
-            if "requested CDM is not permitted" in message:  # --cdm, Unshackle 6: the operator's opt-in
+                payload = {}
+            payload = payload if isinstance(payload, dict) else {}
+            message = str(payload.get("message") or r.text)
+            provider_auth_failed = payload.get("error_code") == "AUTH_FAILED"
+            if r.status_code == 401:
+                if provider_auth_failed:
+                    details = payload.get("details") or {}
+                    service = details.get("service") if isinstance(details, dict) else None
+                    reference = f" (ref {payload['ref']})" if payload.get("ref") else ""
+                    message = f"{service or 'Service'}{reference}: {message.removesuffix(reference)}. Check this service's login/session in Unshackle."
+                else:
+                    message = "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle."
+            if not provider_auth_failed and "requested CDM is not permitted" in message:  # --cdm, Unshackle 6: the operator's opt-in
                 raise UnshackleError("Unshackle refuses to pick the CDM device named in --cdm: allow it in unshackle.yaml "
                                      "with serve: cdm_overrides: true (or a list of devices), then restart Unshackle")
-            if PROXY_REFUSED.search(message):
+            if not provider_auth_failed and PROXY_REFUSED.search(message):
                 self.proxy_refused = datetime.now(timezone.utc).isoformat()
                 raise UnshackleError(PROXY_HINT)
             status = f"HTTP {r.status_code}: " if r.status_code >= 500 else ""  # serve's own words rarely say it
-            err = UnshackleError(f"unshackle serve: {status}{message.strip()[:500]}")
+            message = no_credentials(message.strip())[:500]
+            err = UnshackleError(f"unshackle serve: {status}{message}")
             err.status = r.status_code
             raise err
         try:

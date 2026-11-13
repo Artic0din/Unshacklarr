@@ -16,6 +16,61 @@ from unshacklarr.cookies import CookieError, list_all, normalise, parse, save
 from unshacklarr.files import PRIVATE, shared_or_private, write_atomic
 
 
+@responses.activate
+@pytest.mark.parametrize("provider_failure", [False, True])
+def test_authentication_errors_identify_the_server_or_provider(tmp_path, provider_failure):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-value"})
+    payload = {"status": 401, "message": "Secret Key is Invalid."}
+    if provider_failure:
+        payload = {"error_code": "AUTH_FAILED", "message": "Authentication failed: Hayu playback failed: Invalid Token (ref ef1b9f)",
+                   "details": {"service": "HAYU", "operation": "list_tracks"}, "ref": "ef1b9f"}
+    responses.post("http://backend:8786/api/list-tracks", status=401, json=payload)
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("POST", "/api/list-tracks", json={"service": "HAYU"})
+    message = str(caught.value)
+    assert caught.value.status == 401
+    if provider_failure:
+        assert "HAYU" in message and "Invalid Token" in message and "ef1b9f" in message
+        assert message.count("ef1b9f") == 1
+        assert "login/session" in message and "refused the API key" not in message
+    else:
+        assert "internal API key" in message and "Settings, Unshackle" in message
+
+
+@responses.activate
+@pytest.mark.parametrize("long_url", [False, True])
+def test_provider_error_keeps_separate_reference_and_redacts_before_truncating(tmp_path, long_url):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-value"})
+    message = "Hayu playback failed: Invalid Token"
+    if long_url:
+        message += " https://reader:" + "sensitive" * 80 + "@proxy.example.invalid/failure"
+    responses.post("http://backend:8786/api/list-tracks", status=401,
+                   json={"error_code": "AUTH_FAILED", "message": message, "ref": "ref-only",
+                         "details": {"service": "HAYU"}})
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("POST", "/api/list-tracks", json={"service": "HAYU"})
+    displayed = str(caught.value)
+    assert "ref-only" in displayed
+    assert "reader" not in displayed and "sensitive" not in displayed
+    if long_url:
+        assert "proxy.example.invalid" in displayed
+
+
+@responses.activate
+@pytest.mark.parametrize("reason", ["Account is in a different region from yours", "requested CDM is not permitted for this account"])
+def test_provider_authentication_reason_is_not_replaced_by_server_configuration_advice(tmp_path, reason):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-value"})
+    responses.post("http://backend:8786/api/list-tracks", status=401,
+                   json={"error_code": "AUTH_FAILED", "message": reason, "details": {"service": "HAYU"}})
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("POST", "/api/list-tracks", json={"service": "HAYU"})
+    assert caught.value.status == 401 and reason in str(caught.value)
+    assert not backend.proxy_refused
+
+
 def test_cookie_files_are_read_saved_and_kept_in_their_folder(tmp_path):
     # formats, expiry, no path outside the folder
     netscape = "# Netscape HTTP Cookie File\n.molotov.tv\tTRUE\t/\tTRUE\t4102444800\ttoken\tabc\n#HttpOnly_.molotov.tv\tTRUE\t/\tTRUE\t0\tsid\tx\n"

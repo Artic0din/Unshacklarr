@@ -1,4 +1,6 @@
 {
+ "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle.": "Unshackleが内部APIキーを拒否しました。「設定」の「Unshackle」でサーバーのAPIキーを確認してください。",
+ "{0}{1}: {2}. Check this service's login/session in Unshackle.": "{0}{1}: {2}。Unshackleでこのサービスのログインまたはセッションを確認してください。",
  "(sign in, then Settings, API). With it, the Schedule shows each series' channel and streaming services. For a series not in English, it also finds episodes by their title: Sonarr only has English titles.": "（ログイン後、設定 › API）。これにより、スケジュールに各シリーズのチャンネルと配信サービスが表示されます。英語以外のシリーズでは、タイトルからもエピソードを探します：Sonarr には英語のタイトルしかありません。",
  "(changed)": "（変更あり）",
  "(on disk already)": "（ディスクにあり）",
