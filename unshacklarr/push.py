@@ -82,11 +82,11 @@ class Push:
                 if e.response is not None and e.response.status_code in (404, 410):
                     gone.append(s["endpoint"])  # unsubscribed, or the app uninstalled
                     continue
-                body = e.response.text.strip() if e.response is not None else str(e)
-                if body.startswith("<"):
-                    body = "The push service refused the message"
+                error_body = e.response.text.strip() if e.response is not None else str(e)
+                if error_body.startswith("<"):
+                    error_body = "The push service refused the message"
                 status = f"HTTP {e.response.status_code}: " if e.response is not None else ""
-                said = no_credentials(f"{status}{body}")[:200]
+                said = no_credentials(f"{status}{error_body}")[:200]
                 self.last_error = f"{s['endpoint'].split('/')[2]} refused it: {said}"
                 print(f"Push: {self.last_error}", flush=True)
             except Exception as e:  # a push service down must not stop the rest
