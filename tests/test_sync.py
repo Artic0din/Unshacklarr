@@ -714,7 +714,7 @@ def test_the_next_download_starts_while_the_one_before_is_imported(tmp_path, mon
             f.unlink()
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
-    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
     monkeypatch.setattr(sync, "finalize", lambda *a, **k: 1)
     monkeypatch.setattr(sync, "check_audio", lambda *a: None)
     monkeypatch.setattr(sync, "import_episode", import_episode)
@@ -751,7 +751,7 @@ def test_a_job_can_lose_a_queued_episode_or_stop(tmp_path, monkeypatch):
         raise sync.UnshackleError("no such title")
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
-    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     sync.sync(sync.read_file(), {}, [episode(111, 2, n) for n in (5, 6, 7, 8)], manual=True, kind="manual")
     assert started == ["S02E05", "S02E07"]  # S02E06 skipped, S02E08 never started
@@ -778,7 +778,7 @@ def test_a_cancelled_episode_queued_again_keeps_its_place_or_goes_last(tmp_path,
         raise sync.UnshackleError("no such title")
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
-    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     sync.sync(sync.read_file(), {}, [episode(111, 2, n) for n in (5, 6, 7, 8)], manual=True, kind="manual")
     assert started == ["S02E05", "S02E06", "S02E08", "S02E07"]
@@ -814,7 +814,7 @@ def test_a_paused_job_ends_its_download_then_waits(tmp_path, monkeypatch):
         raise sync.UnshackleError("no such title")
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
-    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     job = threading.Thread(target=sync.sync, args=(sync.read_file(), {}, [episode(111, 2, 5), episode(111, 2, 6)]), kwargs={"manual": True, "kind": "manual"})
     job.start()
@@ -837,7 +837,7 @@ def test_a_job_paused_during_its_last_episode_ends(tmp_path, monkeypatch):
         raise sync.UnshackleError("no such title")
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
-    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     job = threading.Thread(target=sync.sync, args=(sync.read_file(), {}, [episode(111, 2, 5), episode(111, 2, 6)]),
                            kwargs={"manual": True, "kind": "manual"}, daemon=True)
@@ -1013,6 +1013,26 @@ def test_a_classified_programme_lookup_failure_is_kept_as_authentication_evidenc
     assert card["auth_failure_backends"] == {"RTLP": "vpn"}
 
 
+def test_a_classified_language_preflight_failure_is_kept_as_authentication_evidence(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["audio_accept"] = "fr"
+    error = sync.UnshackleError("Authentication failed")
+    error.error_code = "AUTH_FAILED"
+    monkeypatch.setattr(sync, "list_tracks", lambda *args, **kwargs: (_ for _ in ()).throw(error))
+    monkeypatch.setattr(
+        sync,
+        "run_job_retrying",
+        lambda *args, **kwargs: (_ for _ in ()).throw(sync.JobFailed("No manifest")),
+    )
+    monkeypatch.setattr(sync, "notify", lambda *args, **kwargs: None)
+
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+
+    [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+    assert set(card["auth_failures"]) == {"RTLP"}
+
+
 def test_a_download_without_the_first_language_asked_for_is_not_imported(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     config = {"defaults": {"--a-lang": "fr,orig,en"}}
@@ -1165,7 +1185,7 @@ def test_a_click_on_an_episode_waiting_in_downloads_says_why_nothing_happens(tmp
     (tmp_path / "unshackle-111-S02E05" / "Show.S02E05.mkv").unlink()
     started = []
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: started.append(payload.get("wanted")) or [])
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     sync.sync(config, {}, [ep], manual=True, kind="manual")
     assert started == [["S02E05"]]  # downloaded again, not refused
 
@@ -1592,7 +1612,7 @@ def test_an_episode_its_number_misses_is_found_by_its_title(tmp_path, monkeypatc
         return {"available": {201: {"service": "S01E07", "match": "title", "same": True}}, "listed": {"S01E07"}}  # S02E01 by its title; S02E02 not out yet
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
-    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
     monkeypatch.setattr(sync, "find_by_title", find)
     monkeypatch.setattr(sync, "finalize", lambda *a, **k: 1)
     monkeypatch.setattr(sync, "check_audio", lambda *a: None)
@@ -1622,7 +1642,7 @@ def test_a_bursts_failures_make_one_card_told_once(tmp_path, monkeypatch):
         raise sync.JobFailed(cause, "failed", cause, error_code=error_code)
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
-    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
     monkeypatch.setattr(sync, "notify", lambda settings, level, title, message, **k: told.append(message.split("\n")[0]))
     monkeypatch.setattr(sync, "by_title", lambda *a: None)
     for kind in ("burst", "burst", "auto", "burst"):  # the release burst, the next sync, a burst again
@@ -1700,7 +1720,7 @@ def test_an_episode_in_none_of_the_accepted_languages_waits_undownloaded(tmp_pat
     tracks = {"S02E05": [{"language": "en"}], "S02E06": [{"language": "de"}, {"language": "de-AT"}]}  # what serve lists
     asked = []
     monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, json=None, **_: asked.append(json) or {"episodes": [{"audio": tracks[json["wanted"][0]]}]})
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     downloads, warnings = [], []
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload["wanted"][0]))
     monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: warnings.append((level, title)))
@@ -1797,7 +1817,7 @@ def test_a_refused_login_is_tried_again_with_the_fallback_profiles(tmp_path, mon
             return
         raise sync.UnshackleError("unshackle serve: 401 Unauthorized: your session has expired")
     monkeypatch.setattr(sync, "run_job_retrying", download)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     for name in ("finalize", "check_audio", "import_episode"):
         monkeypatch.setattr(sync, name, lambda *a, **k: None)
@@ -1918,7 +1938,7 @@ def test_an_episode_without_full_subtitles_in_a_required_language_waits(tmp_path
     config["series"][111]["subs_accept"] = "fr"
     subtitles = {"S02E05": [{"language": "fr"}], "S02E06": [{"language": "fr", "forced": True}, {"language": "en"}]}
     monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, json=None, **_: {"episodes": [{"audio": [{"language": "en"}], "subtitles": subtitles[json["wanted"][0]]}]})
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     downloads, warnings = [], []
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload["wanted"][0]))
     monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: warnings.append(title))
@@ -1966,7 +1986,7 @@ def test_a_quality_ladder_takes_its_first_step_the_episode_has_and_nothing_outsi
              "S02E06": [{"height": 2160, "codec": "HEVC", "range": "DV"}, {"height": 480, "codec": "AVC", "range": "SDR"}]}
     asked = []
     monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, json=None, **_: asked.append(json) or {"episodes": [{"video": video[json["wanted"][0]]}]})
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     downloads = []
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload))
     sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
@@ -2013,7 +2033,7 @@ def test_a_download_with_its_own_codec_and_height_takes_them_over_the_ladder_and
     video = [{"height": 2160, "codec": "HEVC", "range": "DV"}, {"height": 1080, "codec": "AVC", "range": "SDR", "bitrate": 5000},
              {"height": 1080, "codec": "HEVC", "range": "SDR", "bitrate": 4000}]
     monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, json=None, **_: {"episodes": [{"video": video}]})
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     downloads, queued = [], []
     def download(payload, run=None):
         downloads.append(payload)
@@ -2069,7 +2089,7 @@ def test_each_service_downloads_with_its_own_unshackle_server(tmp_path, monkeypa
     monkeypatch.setattr(sync.UNSHACKLE, "services", lambda: SERVICES)
     monkeypatch.setattr(vpn, "services", lambda: [{"tag": "CRAVE", "cli_params": []}, {"tag": "NF", "cli_params": []}])
     monkeypatch.setattr(vpn, "dl_config", lambda: {})
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     config = {"service_defaults": {"CRAVE": {"backend": "vpn"}}}
     assert sync.backend_for("CRAVE", config) is vpn and sync.backend_for("RTLP", config) is sync.UNSHACKLE
     assert sync.backend_for("NF", config) is vpn  # only that server has it
@@ -2134,7 +2154,7 @@ def test_a_ladder_takes_widescreen_tracks_by_their_16_9_height_and_its_language_
     tracks = {"video": [{"height": 800, "width": 1920, "codec": "AVC", "range": "SDR"}],
               "audio": [{"language": "en-GB"}, {"language": "de"}], "subtitles": [{"language": "fr", "forced": True}, {"language": "en"}]}
     monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, json=None, **_: {"episodes": [tracks]})
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     downloads = []
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload))
     sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
@@ -2171,7 +2191,7 @@ def test_a_number_its_title_gives_to_another_episode_is_not_downloaded(tmp_path,
     sync = load(tmp_path, monkeypatch)
     listing = {"available": {}, "listed": {"S02E05", "S03E01"}, "titled": {"S02E05"}}  # another episode's title gives S02E05
     monkeypatch.setattr(sync, "find_by_title", lambda show, ep: listing)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     asked = []
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: asked.append(payload["wanted"][0]))
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
@@ -2443,8 +2463,8 @@ def test_a_series_falls_back_on_another_service_when_its_own_has_nothing(tmp_pat
     config.setdefault("service_defaults", {})["RTLP"] = {"backend": "vpn"}
     alt = sync.fallback_show(config["series"][111])
     assert alt["service"] == "MLT" and "season_map" not in alt and alt["episode_offset"] == 1  # its own numbering, not the main one's
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
-    monkeypatch.setattr(sync, "download_request", lambda show, config, wanted, out: {
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "download_request", lambda show, config, wanted, out, backend=None: {
         "service": show["service"], "title_id": show["title"], "wanted": [wanted], "output_dir": str(out),
     })
     asked = []
@@ -2471,8 +2491,8 @@ def test_a_series_falls_back_on_another_service_when_its_own_has_nothing(tmp_pat
 def fallback_run(sync, tmp_path, monkeypatch, own, fallback_delivers=True):
     config = sync.read_file()
     config["series"][111].update(fallback={"service": "MLT", "title": "https://mlt/show"}, fallback_profiles="default, alt")
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
-    monkeypatch.setattr(sync, "download_request", lambda show, config, wanted, out: {
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "download_request", lambda show, config, wanted, out, backend=None: {
         "service": show["service"], "title_id": show["title"], "wanted": [wanted], "output_dir": str(out),
     })
     asked = []
@@ -2588,7 +2608,15 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
     file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
     monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    original_backend_for = sync.backend_for
+    selected_backends = []
+    monkeypatch.setattr(
+        sync,
+        "backend_for",
+        lambda service, current_config=None: selected_backends.append(service)
+        or original_backend_for(service, current_config),
+    )
     asked = []
 
     def download(payload, run=None):
@@ -2620,6 +2648,7 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     monkeypatch.setattr(sync, "import_episode", import_audio)
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     assert sync.add_track(205, "fr") is True
+    assert selected_backends == ["RTLP"]
     assert asked[0]["title_id"] == "https://service/season-two" and asked[0]["wanted"] == ["S01E05"]
     assert asked[0]["audio_only"] is True and asked[0]["a_lang"] == ["fr"] and "lang" not in asked[0]
     merge = calls[-1]
@@ -2767,7 +2796,7 @@ def test_the_added_audio_is_written_as_a_matroska_file_whatever_the_library_file
     monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
     file = {}
     monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (
         Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True), (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"fr")))
     calls, imported = [], []
@@ -2807,7 +2836,7 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
     monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
     file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
     monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
 
     def download(payload, run=None):
         (Path(payload["output_dir"]) / audio).parent.mkdir(parents=True, exist_ok=True)
@@ -2850,7 +2879,7 @@ def test_a_failed_audio_add_never_deletes_through_a_folder_swapped_for_a_link(tm
     monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
     file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
     monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
 
     def download(payload, run=None):
         out = Path(payload["output_dir"])
@@ -2891,7 +2920,7 @@ def test_a_failed_audio_add_never_deletes_through_a_folder_swapped_after_its_che
     monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
     file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
     monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     folder = {}
 
     def download(payload, run=None):
@@ -2977,7 +3006,7 @@ def test_a_failed_audio_add_survives_a_file_that_links_to_itself(tmp_path, monke
     monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
     file = {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"}
     monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: file)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     links = []
 
     def download(payload, run=None):
@@ -3013,7 +3042,7 @@ def test_a_series_can_send_only_its_failures_or_nothing(tmp_path, monkeypatch):
 def test_the_import_catch_all_follows_the_series_notification_setting(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True), (Path(payload["output_dir"]) / "Show.S02E05.mkv").touch()))
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     for name in ("finalize", "check_audio", "check_subs"):
         monkeypatch.setattr(sync, name, lambda *a, **k: None)
     monkeypatch.setattr(sync, "import_episode", lambda *a, **k: (_ for _ in ()).throw(ValueError("disk exploded")))  # not one the finish step expects
@@ -3110,7 +3139,7 @@ def test_subtitles_asked_for_that_the_episode_lacks_do_not_stop_its_download(tmp
     monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, json=None, **_:
                         {"episodes": [{"video": video, "subtitles": subs[json["wanted"][0]]}]} if path == "/api/list-tracks" else {})
     monkeypatch.setattr(sync.UNSHACKLE, "dl_config", lambda: {"s_lang": ["en"]})
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     downloads = []
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload))
     for n in (5, 6, 7):
@@ -3569,7 +3598,7 @@ def test_a_number_the_service_doesnt_list_is_asked_where_its_title_is(tmp_path, 
     sync = load(tmp_path, monkeypatch)
     listing = {"available": {205: {"service": "S04E21", "match": "title", "same": True}}, "listed": {"S04E21", "S04E22"}, "titled": {"S04E21"}}
     monkeypatch.setattr(sync, "find_by_title", lambda show, ep: listing)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     asked = []
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: asked.append(payload["wanted"][0]))
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
@@ -3653,9 +3682,9 @@ def test_a_season_on_a_page_of_its_own_downloads_from_there(tmp_path, monkeypatc
     config = sync.read_file()
     config["series"][111] = {**config["series"][111], **show}
     asked = []
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
     monkeypatch.setattr(sync, "find_by_title", None)
-    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "SBS", "title_id": show["title"], "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "SBS", "title_id": show["title"], "wanted": [sx], "output_dir": str(out)})
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: asked.append((payload["title_id"], payload["wanted"][0])))
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     sync.sync(config, {}, [episode(111, 2, 3), episode(111, 1, 5)], manual=True, kind="manual")
@@ -3809,7 +3838,7 @@ def test_a_series_that_names_its_cdm_is_not_refused_for_want_of_one(tmp_path, mo
     # unshackle.yaml maps no device to the service: refused before Unshackle's first license, unless the series names
     # its own device (--cdm, Unshackle 6), which needs no mapping
     sync = load(tmp_path, monkeypatch)
-    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None: "No CDM for X")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "No CDM for X")
     config = sync.read_file()
     show = {"service": "X", "title": "t"}
     try:

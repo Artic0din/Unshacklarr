@@ -1775,16 +1775,16 @@ def unshackle_command(show: dict, config: dict, service_sxxeyy: str, out: Path) 
             *to_args(dl), show["service"], *to_args(own), str(show["title"])]
 
 
-def service_entry(tag: str, config: dict | None = None) -> dict:
-    return next((s for s in backend_for(tag, config).services() if s["tag"] == tag), {})
+def service_entry(tag: str, config: dict | None = None, backend: Unshackle | None = None) -> dict:
+    return next((s for s in (backend or backend_for(tag, config)).services() if s["tag"] == tag), {})
 
 
-def no_cdm(tag: str, config: dict | None = None) -> str:
+def no_cdm(tag: str, config: dict | None = None, backend: Unshackle | None = None) -> str:
     """Why a service cannot be downloaded for want of a CDM: unshackle.yaml gives it no device and has no
     default one, so Unshackle would fail on its first license. Empty when a device decrypts it, when it is
     set to none (no DRM), or when it can't be told (Unshackle unreachable, no cdm: section read)."""
     try:
-        cdm = backend_for(tag, config).cdm_config()
+        cdm = (backend or backend_for(tag, config)).cdm_config()
     except UnshackleError:
         return ""
     if not cdm or any(str(k).lower() in ("default", tag.lower()) and v for k, v in cdm.items()):
@@ -1947,16 +1947,23 @@ def find_programme(show: dict, ep: dict, config: dict, key: str, sxxeyy: str, pa
     return match
 
 
-def download_request(show: dict, config: dict, service_sxxeyy: str, out: Path) -> dict:
+def download_request(
+    show: dict,
+    config: dict,
+    service_sxxeyy: str,
+    out: Path,
+    backend: Unshackle | None = None,
+) -> dict:
     """The same download, as unshackle serve's /api/download takes it."""
     dl, own = stacked(show, config)
-    if not dl.get("--cdm") and (why := no_cdm(show["service"], config)):  # a device named for the run needs no mapping
+    backend = backend or backend_for(show["service"], config)
+    # A device named for the run needs no service-to-device mapping.
+    if not dl.get("--cdm") and (why := no_cdm(show["service"], config, backend)):
         raise ValueError(why)
-    backend = backend_for(show["service"], config)
     return {
         # unshackle.yaml's dl: section first, as on the command line: serve does not apply it
         **options.from_dl_config(backend.dl_config(), show["service"]),
-        **options.to_params(own, options.service_specs(service_entry(show["service"], config))),
+        **options.to_params(own, options.service_specs(service_entry(show["service"], config, backend))),
         **options.to_params(dl, options.dl_specs()),
         "service": show["service"],
         "title_id": str(show["title"]),
@@ -2277,7 +2284,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             run.say(f"{label}: adding the {want} audio from {show['service']} to the file it has")
             backend = backend_for(show["service"], config)
             run.card["backend"] = backend.name
-            request = download_request(show, config, service_sxxeyy, out)
+            request = download_request(show, config, service_sxxeyy, out, backend)
             for k in ("video_only", "subs_only", "no_audio", "lang", "a_lang", "require_audio", "s_lang", "require_subs"):
                 request.pop(k, None)
             request.update(audio_only=True, a_lang=[want])
@@ -2404,6 +2411,8 @@ def tracks_on_service(show: dict, config: dict, request: dict) -> dict[str, set[
     try:
         episodes = list_tracks(show, config, request)
     except UnshackleError as e:
+        if getattr(e, "error_code", "") == "AUTH_FAILED":
+            raise
         trace(f"tracks before the download: not told ({e})")
         return None
     if not episodes:
@@ -3318,7 +3327,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     backend = backend_for(use["service"], config)
                     run.card["backend"] = backend.name
                     try:
-                        request = download_request(use, config, wanted, out)
+                        request = download_request(use, config, wanted, out, backend)
                         if profile:  # a fallback profile, its login refused with the series' own
                             request["profile"] = profile
                         if any(wanted_langs.values()) and (tracks := tracks_on_service(use, config, request)) is not None:
