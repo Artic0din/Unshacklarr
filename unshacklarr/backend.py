@@ -172,10 +172,22 @@ class Local:
                 raise UnshackleError(f"unshackle serve stopped at start: {self.tail()}")
             try:
                 requests.get(f"{self.url}/api/health", timeout=2).raise_for_status()
-                self.started = datetime.now(timezone.utc)
-                return
             except requests.RequestException:
                 time.sleep(0.5)
+                continue
+            try:
+                requests.get(
+                    f"{self.url}/api/remote/logins",
+                    headers={"X-Secret-Key": self.key},
+                    timeout=2,
+                ).raise_for_status()
+            except requests.RequestException as e:
+                self.stop()
+                raise UnshackleError(
+                    "The configured Unshackle does not support secure device approvals; update it before using this local core"
+                ) from e
+            self.started = datetime.now(timezone.utc)
+            return
         self.stop()
         raise UnshackleError(f"unshackle serve did not answer within 90 s: {self.tail()}")
 

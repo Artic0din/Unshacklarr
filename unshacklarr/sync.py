@@ -875,6 +875,10 @@ def approval_fragments(job: dict, approval: dict | None) -> set[str]:
         message,
         re.IGNORECASE,
     ))
+    for match in re.finditer(r"\bapprove\s*:?\s*([A-Za-z0-9-]{4,32})", message, re.IGNORECASE):
+        candidate = match.group(1)
+        if candidate.isupper() or any(character.isdigit() or character == "-" for character in candidate):
+            fragments.add(candidate)
     action = job.get("action_needed")
     if isinstance(action, dict):
         fragments.update(str(action[key]) for key in ("message", "url", "code") if action.get(key))
@@ -918,26 +922,6 @@ def clean_approval_history() -> dict[str, int]:
     """Remove legacy retained approvals while preserving unrelated history."""
     counts = {"cards": 0, "logs": 0, "inbox": 0, "sent": 0}
     known_values: set[str] = set()
-    for path in RUNS_DIR.glob("*.json") if RUNS_DIR.exists() else []:
-        try:
-            card = json.loads(path.read_text())
-        except (OSError, ValueError):
-            continue
-        notice, action = card.get("notice"), card.get("action")
-        legacy_job = {"action_needed": action} if isinstance(action, dict) else {}
-        legacy_approval = {"message": str(notice)} if notice else approval_from_job(legacy_job)
-        values = approval_fragments(legacy_job, legacy_approval)
-        if not values:
-            continue
-        known_values.update(values)
-        card.pop("notice", None)
-        card.pop("action", None)
-        for key in ("cause", "detail"):
-            if card.get(key):
-                card[key] = without_approval(str(card[key]), values)
-        write_atomic(path, json.dumps(card))
-        counts["cards"] += 1
-
     if INBOX_FILE.exists():
         inbox = read_inbox()
         kept = []
@@ -951,6 +935,32 @@ def clean_approval_history() -> dict[str, int]:
         if counts["inbox"]:
             inbox["items"] = kept
             write_atomic(INBOX_FILE, json.dumps(inbox))
+
+    cards = []
+    for path in RUNS_DIR.glob("*.json") if RUNS_DIR.exists() else []:
+        try:
+            card = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        notice, action = card.get("notice"), card.get("action")
+        legacy_job = {"action_needed": action} if isinstance(action, dict) else {}
+        legacy_approval = {"message": str(notice)} if notice else approval_from_job(legacy_job)
+        values = approval_fragments(legacy_job, legacy_approval)
+        known_values.update(values)
+        cards.append((path, card, values))
+
+    for path, card, own_values in cards:
+        retained = "\n".join(str(card.get(key) or "") for key in ("cause", "detail"))
+        values = own_values | {value for value in known_values if value in retained}
+        if not values:
+            continue
+        card.pop("notice", None)
+        card.pop("action", None)
+        for key in ("cause", "detail"):
+            if card.get(key):
+                card[key] = without_approval(str(card[key]), values)
+        write_atomic(path, json.dumps(card))
+        counts["cards"] += 1
 
     if SENT_FILE.exists():
         sent = read_json(SENT_FILE, [])

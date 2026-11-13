@@ -1216,6 +1216,8 @@ def test_current_and_legacy_approval_payloads_share_the_transient_contract(tmp_p
     }}) == {"message": "Link this device\nOpen: https://example.invalid/link\nCode: LEGACY-CODE"}
     assert sync.approval_from_job({"notice": "Approve NOTICE-CODE"}) == {"message": "Approve NOTICE-CODE"}
     assert sync.approval_from_job({"approval": {"message": "Approve CURRENT-CODE"}}, terminal=True) is None
+    fallback_job = {"action_needed": {"code": "PAIR-CODE"}}
+    assert "this" not in sync.approval_fragments(fallback_job, sync.approval_from_job(fallback_job))
 
 
 def test_terminal_first_job_snapshot_cannot_retain_approval(tmp_path, monkeypatch):
@@ -1234,10 +1236,10 @@ def test_terminal_first_job_snapshot_cannot_retain_approval(tmp_path, monkeypatc
         def job(self, job_id):
             return {
                 "status": "failed",
-                "approval": {"message": "Use code TERMINAL-CODE at https://example.invalid/terminal"},
+                "approval": {"message": "Approve CURRENT-CODE at https://example.invalid/terminal"},
                 "log_count": 1,
-                "log": ["TERMINAL-CODE was not approved"],
-                "worker_stderr": "https://example.invalid/terminal refused TERMINAL-CODE",
+                "log": ["CURRENT-CODE was not approved"],
+                "worker_stderr": "https://example.invalid/terminal refused CURRENT-CODE",
             }
 
     monkeypatch.setattr(sync, "backend_named", lambda name: Serve())
@@ -1246,8 +1248,8 @@ def test_terminal_first_job_snapshot_cannot_retain_approval(tmp_path, monkeypatc
         sync.run_job({}, run, poll=0)
 
     persisted = "".join(path.read_text(errors="replace") for path in tmp_path.rglob("*") if path.is_file())
-    assert "TERMINAL-CODE" not in persisted and "example.invalid/terminal" not in persisted
-    assert "TERMINAL-CODE" not in str(caught.value) and "example.invalid/terminal" not in str(caught.value)
+    assert "CURRENT-CODE" not in persisted and "example.invalid/terminal" not in persisted
+    assert "CURRENT-CODE" not in str(caught.value) and "example.invalid/terminal" not in str(caught.value)
     assert sync.EpisodeRun.approvals() == []
     run.finish("failed")
 
@@ -1278,7 +1280,14 @@ def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, m
         "outcome": "failed",
     }))
     resolved_id = "20261114-130000-000000-112-S01E01"
-    (sync.RUNS_DIR / f"{resolved_id}.json").write_text(json.dumps({"id": resolved_id, "service": "HMAX", "outcome": "failed"}))
+    resolved_path = sync.RUNS_DIR / f"{resolved_id}.json"
+    resolved_path.write_text(json.dumps({
+        "id": resolved_id,
+        "service": "HMAX",
+        "cause": f"https://example.invalid/notice refused {notice_code}",
+        "detail": f"Pairing failed for {notice_code}",
+        "outcome": "failed",
+    }))
     (sync.RUNS_DIR / f"{resolved_id}.log").write_text("before\nHMAX: open https://example.invalid/approve and enter RESOLVED-CODE (within 5 min)\nafter\n")
     sync.write_atomic(sync.INBOX_FILE, json.dumps({"read_at": None, "items": [
         {"id": "approval", "at": sync.datetime.now(sync.timezone.utc).isoformat(), "level": "warning",
@@ -1294,13 +1303,23 @@ def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, m
     sync.UNSHACKLE.local.log_file.write_text(f"Go to: https://example.invalid/link\nEnter code: {code}\nhealthy line\n")
     sync.UNSHACKLE.local.log_file.with_suffix(".log.1").write_text(f"Use code: {code}\nolder healthy line\n")
 
-    assert sync.clean_approval_history() == {"cards": 2, "logs": 4, "inbox": 1, "sent": 2}
+    original_glob = sync.Path.glob
+
+    def resolved_first(path, pattern):
+        found = list(original_glob(path, pattern))
+        return iter(sorted(found, key=lambda item: item != resolved_path)) if path == sync.RUNS_DIR and pattern == "*.json" else iter(found)
+
+    monkeypatch.setattr(sync.Path, "glob", resolved_first)
+    assert sync.clean_approval_history() == {"cards": 3, "logs": 4, "inbox": 1, "sent": 2}
     cleaned = json.loads((sync.RUNS_DIR / f"{run_id}.json").read_text())
     assert "notice" not in cleaned and "action" not in cleaned
     assert code not in cleaned["cause"] and code not in cleaned["detail"]
     assert "example.invalid/link" not in cleaned["cause"]
     notice_cleaned = json.loads((sync.RUNS_DIR / f"{notice_id}.json").read_text())
     assert "notice" not in notice_cleaned and notice_code not in notice_cleaned["detail"]
+    resolved = json.loads((sync.RUNS_DIR / f"{resolved_id}.json").read_text())
+    assert notice_code not in resolved["cause"] and notice_code not in resolved["detail"]
+    assert "example.invalid/notice" not in resolved["cause"]
     assert (sync.RUNS_DIR / f"{run_id}.log").read_text() == "ordinary line\n[approval removed]\nkept line\n"
     assert (sync.RUNS_DIR / f"{resolved_id}.log").read_text() == "before\n[approval removed]\nafter\n"
     assert [item["id"] for item in sync.read_inbox()["items"]] == ["ordinary"]

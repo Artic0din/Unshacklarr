@@ -447,6 +447,7 @@ def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path
         "            'users': config.serve.get('users')}\n"
         "    app = web.Application()\n"
         "    app.router.add_get('/api/health', lambda r: web.json_response(seen))\n"
+        "    app.router.add_get('/api/remote/logins', lambda r: web.json_response({'logins': []}))\n"
         "    web.run_app(app, host='127.0.0.1', port=1, print=None)\n")  # port 1: only the handed socket can serve
     command = tmp_path / ".venv" / "bin" / "unshackle"  # a git clone's: the launcher runs from the clone
     command.parent.mkdir(parents=True)
@@ -464,6 +465,43 @@ def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path
         assert all(mine[k] is True for k in ("server_proxy", "admin", "server_cdm", "server_vault", "server_accounts"))
     finally:
         local.stop()
+
+
+def test_a_local_serve_without_secure_approvals_is_rejected_before_use(tmp_path, monkeypatch):
+    import sys
+    import unshacklarr.backend as backend
+
+    class Process:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            return 0
+
+    class Response:
+        def __init__(self, status):
+            self.status_code = status
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise backend.requests.HTTPError(f"{self.status_code} response")
+
+    monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
+    monkeypatch.setattr(backend.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(
+        backend.requests,
+        "get",
+        lambda url, **kwargs: Response(404 if url.endswith("/api/remote/logins") else 200),
+    )
+    local = backend.Local(tmp_path / "serve.log")
+
+    with pytest.raises(UnshackleError, match="secure device approvals"):
+        local.start("unshackle")
+
+    assert local.process is None
 
 
 def broken_command(tmp_path):
