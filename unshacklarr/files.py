@@ -25,7 +25,7 @@ SENSITIVE_QUERY = re.compile(
     re.IGNORECASE,
 )
 SENSITIVE_HEADER = re.compile(
-    r"\b(Authorization:\s*(?:Bearer|Basic)\s+|(?:X-Api-Key|Api-Key):\s*)\S+|\b((?:Set-)?Cookie:)\s*[^\r\n]+",
+    r"\b(Authorization:\s*(?:Bearer|Basic)\s+|(?:X-Api-Key|X-Secret-Key|Api-Key):\s*)\S+|\b((?:Set-)?Cookie:)\s*[^\r\n]+",
     re.IGNORECASE,
 )
 

@@ -152,6 +152,11 @@ def test_public_errors_redact_sensitive_urls_and_headers():
     assert "language=en" in shown
 
 
+def test_public_errors_redact_unshackle_secret_header():
+    shown = no_credentials("X-Secret-Key: example-sensitive-value")
+    assert shown == "X-Secret-Key: ***"
+
+
 def test_cookie_files_are_read_saved_and_kept_in_their_folder(tmp_path):
     # formats, expiry, no path outside the folder
     netscape = "# Netscape HTTP Cookie File\n.molotov.tv\tTRUE\t/\tTRUE\t4102444800\ttoken\tabc\n#HttpOnly_.molotov.tv\tTRUE\t/\tTRUE\t0\tsid\tx\n"

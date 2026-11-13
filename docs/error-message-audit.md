@@ -22,7 +22,7 @@ The verdicts below describe the shared sink for every message in each file; indi
 | File | Verdict | Reason |
 | --- | --- | --- |
 | `core.js` | Restructured | The shared request path now identifies Unshacklarr, retains HTTP status and reason, suppresses HTML, and tells the person to retry. |
-| `setup.js` | Restructured | Startup HTTP failures are now thrown and displayed through the shared response formatter instead of being returned as an `Error` value. |
+| `setup.js` | Restructured | Startup HTTP failures now use the shared response formatter before the early request result is displayed after translations load. |
 | `activity.js` | Restructured | Diagnostic-download failures now use the shared response formatter. |
 | `attempts.js` | Kept | Server failures use `api()`; local messages name the affected attempt and action. |
 | `bulk.js` | Kept | It has no independent error sink; save failures use the shared save/request path. |
