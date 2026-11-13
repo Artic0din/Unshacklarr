@@ -264,7 +264,7 @@ def test_authentication_status_reads_each_card_evidence_once(tmp_path, monkeypat
     monkeypatch.setattr(
         web.sonarr_sync,
         "authentication_validations",
-        lambda card: validation_calls.append(card) or original_validations(card),
+        lambda card, failures=None: validation_calls.append(card) or original_validations(card, failures),
     )
     monkeypatch.setattr(
         web.sonarr_sync,
@@ -3229,12 +3229,12 @@ def test_an_episode_without_its_preferred_audio_is_got_again_once_it_comes(tmp_p
     later = now + timedelta(days=1)
     requested = []
 
-    def download_request(show, config, wanted, out):
+    def download_request(show, config, wanted, out, backend=None):
         requested.append((show["title"], wanted))
         return {"service": show["service"], "wanted": [wanted]}
 
     monkeypatch.setattr(web.sonarr_sync, "download_request", download_request)
-    monkeypatch.setattr(web.sonarr_sync, "tracks_on_service", lambda show, config, request: {"audio": {"fr"} if request["service"] == "TF1" else {"en"}, "subtitles": set()})
+    monkeypatch.setattr(web.sonarr_sync, "tracks_on_service", lambda show, config, request, backend=None: {"audio": {"fr"} if request["service"] == "TF1" else {"en"}, "subtitles": set()})
     started, told = [], []
     monkeypatch.setattr(web, "run_sync", lambda ids, replace=False, kind="manual": started.append((ids, replace, kind)))
     monkeypatch.setattr(web.sonarr_sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
@@ -3246,6 +3246,72 @@ def test_an_episode_without_its_preferred_audio_is_got_again_once_it_comes(tmp_p
     assert list(json.loads(sync.UPGRADES_FILE.read_text())) == ["2"]
     web.check_upgrades(now + timedelta(days=31))
     assert told == ["Kept without fr audio: Show222 S01E02"] and json.loads(sync.UPGRADES_FILE.read_text()) == {}  # past its days: kept, told once
+
+
+def test_upgrade_auth_failure_is_recorded_without_stopping_later_checks(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = {
+        "series": {
+            111: {"service": "FIRST", "title": "first"},
+            222: {"service": "SECOND", "title": "second"},
+        },
+        "notifications": {},
+    }
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    now = datetime.now(timezone.utc)
+    episodes = {}
+    for episode_id, tvdb in ((1, 111), (2, 222)):
+        episodes[episode_id] = {
+            "id": episode_id,
+            "seasonNumber": 1,
+            "episodeNumber": episode_id,
+            "series": {"tvdbId": tvdb, "title": f"Show{tvdb}"},
+        }
+        sync.note_upgrade(
+            episodes[episode_id],
+            config["series"][tvdb],
+            f"S01E0{episode_id}",
+            "fr",
+        )
+    backends = {tag: type("Backend", (), {"name": tag.lower()})() for tag in ("FIRST", "SECOND")}
+    error = sync.UnshackleError("Authentication failed")
+    error.error_code = "AUTH_FAILED"
+    monkeypatch.setattr(sync, "backend_for", lambda tag, current_config=None: backends[tag])
+    monkeypatch.setattr(
+        sync,
+        "download_request",
+        lambda show, current_config, wanted, out, backend=None: {
+            "service": show["service"],
+            "wanted": [wanted],
+        },
+    )
+
+    reject_first = [True]
+
+    def tracks(show, current_config, request, backend=None):
+        if show["service"] == "FIRST" and reject_first[0]:
+            raise error
+        return {"audio": {"fr"} if show["service"] == "SECOND" else {"en"}, "subtitles": set()}
+
+    monkeypatch.setattr(sync, "tracks_on_service", tracks)
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, replace=False, kind="manual": started.append(ids))
+
+    assert web.check_upgrades(now + timedelta(days=1)) == ["Show222 S01E02"]
+    assert started == [[2]]
+    assert sync.read_authentication_observations()["first"]["FIRST"]["state"] == "needs_user_action"
+    reject_first[0] = False
+    sync.note_upgrade(episodes[2], config["series"][222], "S01E02", "")
+
+    assert web.check_upgrades(now + timedelta(days=2)) == []
+    assert sync.read_authentication_observations()["first"]["FIRST"]["state"] == "validated"
 
 
 def test_a_series_is_found_by_name_on_its_service(tmp_path, monkeypatch):
@@ -4905,7 +4971,7 @@ def test_a_download_keeps_the_services_best_as_its_upgrades_answer(tmp_path, mon
     config = sync.read_file()
     config["quality_ladders"] = [ladder]
     monkeypatch.setattr(sync, "read_file", lambda: config)
-    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None: [{"video": [{"height": 1080, "codec": "AVC", "range": "SDR"}]}])
+    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None, backend=None: [{"video": [{"height": 1080, "codec": "AVC", "range": "SDR"}]}])
     request = {"service": "X", "title_id": "t", "wanted": ["S01E01"]}
     assert sync.apply_ladder(config["series"][1], config, request) == 2  # the service's best now: step 2
     sync.note_download_answer(11, config["series"][1], config)

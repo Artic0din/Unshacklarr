@@ -2032,11 +2032,36 @@ def check_upgrades(now: datetime) -> list[str]:
         if w.get("checked") and now - datetime.fromisoformat(w["checked"]) < UPGRADE_EVERY:
             continue
         checked.append(key)
+        backend = sonarr_sync.backend_for(show["service"], config)
         try:
-            request = sonarr_sync.download_request(show, config, w["serviceEpisode"], sonarr_sync.DOWNLOADS / f"upgrade-{key}")
+            request = sonarr_sync.download_request(
+                show,
+                config,
+                w["serviceEpisode"],
+                sonarr_sync.DOWNLOADS / f"upgrade-{key}",
+                backend,
+            )
         except ValueError:  # no CDM for it now: tried again tomorrow
             continue
-        tracks = sonarr_sync.tracks_on_service(show, config, request)
+        try:
+            tracks = sonarr_sync.tracks_on_service(show, config, request, backend)
+        except UnshackleError as error:
+            if getattr(error, "error_code", "") != "AUTH_FAILED":
+                raise
+            sonarr_sync.record_authentication_observation(
+                show["service"],
+                backend.name,
+                "needs_user_action",
+                now.isoformat(),
+            )
+            continue
+        if tracks is not None:
+            sonarr_sync.record_authentication_observation(
+                show["service"],
+                backend.name,
+                "validated",
+                now.isoformat(),
+            )
         if tracks and sonarr_sync.speaks(tracks["audio"], [w["want"]]):
             # its audio only, added to the file, when chosen and possible; else the whole episode again
             if sonarr_sync.SETTINGS.get("upgrade_mode") == "add_track":
@@ -5011,8 +5036,8 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
     explicit_successes_by_identity = collections.defaultdict(list)
     failures_by_identity = collections.defaultdict(list)
     for card in cards:
-        validations = sonarr_sync.authentication_validations(card)
         failures = sonarr_sync.authentication_failures(card)
+        validations = sonarr_sync.authentication_validations(card, failures)
         if not validations and not failures and card.get("service") in service_methods:
             identities.add((card["service"], str(card.get("backend") or "")))
         for tag, validation in validations.items():

@@ -671,7 +671,10 @@ def authentication_failure_backends(card: dict, failures: dict[str, str] | None 
     return backends
 
 
-def authentication_validations(card: dict) -> dict[str, dict[str, str]]:
+def authentication_validations(
+    card: dict,
+    failures: dict[str, str] | None = None,
+) -> dict[str, dict[str, str]]:
     """Successful provider operations by service, with legacy completed cards as evidence."""
     stored = card.get("auth_validations")
     validations = {
@@ -679,7 +682,13 @@ def authentication_validations(card: dict) -> dict[str, dict[str, str]]:
         for service, result in stored.items()
         if service and isinstance(result, dict) and isinstance(result.get("observed_at"), str)
     } if isinstance(stored, dict) else {}
-    if not validations and card.get("outcome") in ("downloaded", "kept", "import") and card.get("ended") and card.get("service"):
+    if (
+        not validations
+        and not (failures if failures is not None else authentication_failures(card))
+        and card.get("outcome") in ("downloaded", "kept", "import")
+        and card.get("ended")
+        and card.get("service")
+    ):
         validations[card["service"]] = {
             "backend": str(card.get("backend") or ""),
             "observed_at": card["ended"],
@@ -2377,12 +2386,19 @@ def speaks(tags, accepted: list[str]) -> bool:
 NOT_LISTED = re.compile(r"No (available )?episodes found", re.IGNORECASE)  # list-tracks: the episode is not on the service
 
 
-def list_tracks(show: dict, config: dict, request: dict, ladder: dict | None = None) -> list[dict]:
+def list_tracks(
+    show: dict,
+    config: dict,
+    request: dict,
+    ladder: dict | None = None,
+    backend: Unshackle | None = None,
+) -> list[dict]:
     """The episode's tracks on the service, nothing downloaded: one entry per part ([] when the service has no such
     episode). For a quality ladder, the ranges and codecs of its steps are asked for: a service lists only those."""
     _, own = stacked(show, config)
+    backend = backend or backend_for(show["service"], config)
     keep = {"service", "title_id", "profile", "proxy", "no_proxy", "cdm_type",
-            *options.to_params(own, options.service_specs(service_entry(show["service"], config)))}
+            *options.to_params(own, options.service_specs(service_entry(show["service"], config, backend)))}
     asked = {k: v for k, v in request.items() if k in keep}
     if ladder:
         ranges = {step.get("range") or "" for step in ladder["steps"]}
@@ -2394,7 +2410,7 @@ def list_tracks(show: dict, config: dict, request: dict, ladder: dict | None = N
         if "" not in codecs:
             asked["vcodec"] = sorted(codecs)
     try:  # list-tracks as the official serve has it: the same episode, profile, proxy and service options
-        found = backend_for(show["service"], config).call("POST", "/api/list-tracks", json={**asked, "wanted": request["wanted"]})
+        found = backend.call("POST", "/api/list-tracks", json={**asked, "wanted": request["wanted"]})
     except UnshackleError as e:
         if NOT_LISTED.search(str(e)):
             return []
@@ -2402,14 +2418,19 @@ def list_tracks(show: dict, config: dict, request: dict, ladder: dict | None = N
     return found.get("episodes") if "episodes" in found else [found]
 
 
-def tracks_on_service(show: dict, config: dict, request: dict) -> dict[str, set[str]] | None:
+def tracks_on_service(
+    show: dict,
+    config: dict,
+    request: dict,
+    backend: Unshackle | None = None,
+) -> dict[str, set[str]] | None:
     """The audio and subtitle languages the service offers for the episode, nothing downloaded (forced subtitles,
     a few lines only, left out); None when it can't tell (a remote service, an error, no answer): the download then
     goes on, checked once it is in."""
     if request.get("remote"):
         return None
     try:
-        episodes = list_tracks(show, config, request)
+        episodes = list_tracks(show, config, request, backend=backend)
     except UnshackleError as e:
         if getattr(e, "error_code", "") == "AUTH_FAILED":
             raise
@@ -2507,7 +2528,12 @@ def track_label(t: dict) -> str:
     return f"{eq_height(t) or '?'}p {t.get('codec') or '?'} {' + '.join(layers) if len(layers) > 1 else t.get('range') or '?'}"
 
 
-def apply_ladder(show: dict, config: dict, request: dict) -> int | None:
+def apply_ladder(
+    show: dict,
+    config: dict,
+    request: dict,
+    backend: Unshackle | None = None,
+) -> int | None:
     """The series' quality ladder, resolved against the episode's real tracks: the first step that has one sets
     the quality, codec and range asked for. None does: the episode fails, nothing outside the ladder downloaded.
     The step taken, the service's best now."""
@@ -2521,7 +2547,7 @@ def apply_ladder(show: dict, config: dict, request: dict) -> int | None:
             return None
     if request.get("remote"):
         raise ValueError(f"The quality ladder {ladder['name']} needs the episode's track list, which a --remote download does not give")
-    episodes = list_tracks(show, config, request, ladder)
+    episodes = list_tracks(show, config, request, ladder, backend)
     if not episodes:  # ponytail: not on the service (yet): the download finds nothing either, and says so as usual
         return None
     found = climb(ladder, episodes)
@@ -3330,13 +3356,20 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         request = download_request(use, config, wanted, out, backend)
                         if profile:  # a fallback profile, its login refused with the series' own
                             request["profile"] = profile
-                        if any(wanted_langs.values()) and (tracks := tracks_on_service(use, config, request)) is not None:
+                        if any(wanted_langs.values()) and (
+                            tracks := tracks_on_service(use, config, request, backend)
+                        ) is not None:
                             for kind, accepted in wanted_langs.items():
                                 if accepted and not speaks(tracks[kind], accepted):
                                     raise Missing(kind, accepted, tracks[kind])
                         if use.get("asked_video"):
                             run.card["video_override"] = use["asked_video"]
-                        if apply_ladder(use, config, request) and use is show and ep.get("id") and not use.get("asked_video"):
+                        if (
+                            apply_ladder(use, config, request, backend)
+                            and use is show
+                            and ep.get("id")
+                            and not use.get("asked_video")
+                        ):
                             note_download_answer(ep["id"], show, config)  # its best now: Upgrades needn't ask again soon
                         asked = {k: v for k, v in request.items() if k not in ("service", "title_id", "wanted", "output_dir", "debug")}
                         trace(f"asking for {request['service']} {request['title_id']} {wanted}, into {request['output_dir']}")

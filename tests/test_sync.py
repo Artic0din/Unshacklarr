@@ -996,6 +996,20 @@ def test_a_classified_login_failure_is_kept_as_authentication_evidence(tmp_path,
     assert set(card["auth_failures"]) == {"RTLP"}
 
 
+def test_local_finishing_does_not_turn_a_failed_provider_attempt_into_validation(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    card = {
+        "service": "RTLP",
+        "backend": "vpn",
+        "outcome": "downloaded",
+        "ended": "2026-11-14T01:00:00+00:00",
+        "auth_failures": {"RTLP": "2026-11-14T00:59:00+00:00"},
+        "auth_failure_backends": {"RTLP": "vpn"},
+    }
+
+    assert sync.authentication_validations(card) == {}
+
+
 def test_a_classified_programme_lookup_failure_is_kept_as_authentication_evidence(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     config = sync.read_file()
@@ -1031,6 +1045,31 @@ def test_a_classified_language_preflight_failure_is_kept_as_authentication_evide
 
     [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
     assert set(card["auth_failures"]) == {"RTLP"}
+
+
+def test_track_preflight_uses_the_selected_backend(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+
+    class Backend:
+        name = "selected"
+
+        def services(self):
+            return [{"tag": "RTLP", "cli_params": []}]
+
+        def call(self, method, path, json=None):
+            return {"episodes": [{"audio": [{"language": "fr"}]}]}
+
+    backend = Backend()
+    monkeypatch.setattr(sync, "backend_for", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("reselected")))
+
+    episodes = sync.list_tracks(
+        {"service": "RTLP"},
+        {},
+        {"service": "RTLP", "wanted": ["S02E05"]},
+        backend=backend,
+    )
+
+    assert episodes == [{"audio": [{"language": "fr"}]}]
 
 
 def test_a_download_without_the_first_language_asked_for_is_not_imported(tmp_path, monkeypatch):
@@ -1836,7 +1875,7 @@ def test_a_fallback_profile_with_missing_language_clears_the_authentication_fail
     config = sync.read_file()
     config["series"][111].update(fallback_profiles="alt", audio_accept="fr")
 
-    def tracks(show, config, request):
+    def tracks(show, config, request, backend=None):
         return {"audio": {"en"}, "subtitles": set()} if request.get("profile") == "alt" else None
 
     def download(payload, run=None):
@@ -2244,7 +2283,7 @@ def test_another_sonarr_gets_its_own_copy_with_its_own_ladder(tmp_path, monkeypa
     use_tools(monkeypatch, sync, fake_tools([], dl, {}))
     monkeypatch.setattr(sync, "find_by_title", listing)
     monkeypatch.setattr(sync, "import_episode", fake_import)
-    monkeypatch.setattr(sync, "apply_ladder", lambda show, config, request: asked.append((sync.instance() or {}).get("name"), ) or
+    monkeypatch.setattr(sync, "apply_ladder", lambda show, config, request, backend=None: asked.append((sync.instance() or {}).get("name"), ) or
                         asked.append(sync.ladder_of(show, config) and sync.ladder_of(show, config)["name"]))
     assert sync.main() == 0
     assert imported == [(SONARR, str(tmp_path / "unshackle-111-S02E05"), 205),
