@@ -49,5 +49,5 @@ jobs:
             refs/tags/v*) tags="${GITHUB_REF#refs/tags/v}" ;;  # a release: its version only
             *) tags="latest ${GITHUB_SHA::12}" ;;
           esac
-          $docker build --pull $(for t in $tags; do printf -- '-t %s:%s ' "$image" "$t"; done) .  # --pull: the base image's fixes too
+          $docker build --pull --build-arg SOURCE_REVISION="$GITHUB_SHA" $(for t in $tags; do printf -- '-t %s:%s ' "$image" "$t"; done) .  # --pull: the base image's fixes too
           for t in $tags; do $docker push "$image:$t"; done

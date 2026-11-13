@@ -2,6 +2,9 @@
 # serve's job, in its own container (docker/unshackle.Dockerfile) or anywhere else.
 FROM python:3.12-slim-trixie
 
+ARG SOURCE_REVISION=""
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION
+
 # mkvtoolnix: joining an episode's parts and titling the files
 RUN apt-get update && apt-get install -y --no-install-recommends mkvtoolnix tzdata \
     && rm -rf /var/lib/apt/lists/*

@@ -50,6 +50,7 @@
   </span>
   <a class="update-pill" id="update" target="_blank" rel="noopener" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span></span></a>
   <span class="last-sync" id="last-sync"></span>
+  <button class="btn approval-reopen" id="approval-reopen" type="button" hidden>Approval</button>
   <button class="btn" id="bell" aria-label="Notifications"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><b class="count" id="bell-count" hidden></b></button>
   <button class="btn" id="sync" aria-label="Run sync now"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span>Run sync now</span></button>
 </header>
@@ -886,11 +887,9 @@
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <dialog class="modal" id="signin-dlg" aria-labelledby="signin-title">
   <form method="dialog">
-    <h2 id="signin-title">Sign in</h2>
-    <p>A service is waiting for you to sign in before Unshackle can go on. Open this link on any device and enter the code.</p>
-    <a class="signin-url" id="signin-url" target="_blank" rel="noopener"></a>
-    <div class="signin-code" id="signin-code"></div>
-    <div class="modal-actions"><button class="btn" id="signin-copy" type="button">Copy the code</button><button class="btn primary" value="close" autofocus>Close</button></div>
+    <h2 id="signin-title">Service approval</h2>
+    <div class="signin-message" id="signin-message"></div>
+    <div class="modal-actions"><button class="btn" id="signin-copy" type="button">Copy details</button><button class="btn primary" value="close" autofocus>Close</button></div>
   </form>
 </dialog>
 <dialog class="modal wide" id="inbox-dialog" aria-labelledby="inbox-title">

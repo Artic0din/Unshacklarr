@@ -5034,8 +5034,10 @@ async def stats(_):
 
 async def busy(_):
     """How many downloads run and wait now: the menu's Activity says so, whatever page is open."""
+    remote_approvals = await asyncio.to_thread(UNSHACKLE.approvals)
+    approvals = sonarr_sync.EpisodeRun.approvals() + remote_approvals
     return web.json_response({"running": len(sonarr_sync.EpisodeRun.active), "queued": len(sonarr_sync.waiting),
-                              "sign_in": UNSHACKLE.sign_in()})  # a service waiting for a code (local mode only)
+                              "approvals": approvals})
 
 
 async def runs(request):
@@ -5933,6 +5935,10 @@ def main() -> None:
             sys.exit(f"{e}; nothing changed.")
         print("Password changed. Log in again on every device.")
         return
+    cleaned = sonarr_sync.clean_approval_history()
+    if any(cleaned.values()):
+        counts = ", ".join(f"{name}={count}" for name, count in cleaned.items())
+        print(f"Removed retained device-approval data: {counts}", flush=True)
     announce_setup_code()
     print(f"Unshacklarr keeps its settings in {sonarr_sync.DATA}", flush=True)
     web.run_app(app, host=os.environ.get("HOST", "0.0.0.0"), port=int(os.environ.get("PORT", "8788")), print=None)

@@ -658,6 +658,8 @@ class EpisodeRun:
     """
 
     active: set[str] = set()  # ids of the runs going on now; any other without an end was cut off
+    _approvals: dict[str, dict[str, str]] = {}
+    _approval_lock = threading.Lock()
 
     def __init__(self, ep: dict, show: dict, kind: str, service_sxxeyy: str = "", batch: str | None = None):
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -703,7 +705,26 @@ class EpisodeRun:
         self.card["step"] = name
         self.save()
 
+    def set_approval(self, approval: dict | None) -> None:
+        """Publish one approval only in memory for this run, or clear it."""
+        message = approval.get("message") if isinstance(approval, dict) else None
+        with EpisodeRun._approval_lock:
+            if isinstance(message, str) and message:
+                EpisodeRun._approvals[self.id] = {
+                    "run": self.id,
+                    "service": str(self.card.get("service") or ""),
+                    "message": message[:2000],
+                }
+            else:
+                EpisodeRun._approvals.pop(self.id, None)
+
+    @classmethod
+    def approvals(cls) -> list[dict[str, str]]:
+        with cls._approval_lock:
+            return [dict(approval) for approval in cls._approvals.values()]
+
     def finish(self, outcome: str, cause: str = "", detail: str = "") -> None:
+        self.set_approval(None)
         if getattr(current, "run", None) is self:
             current.run = None
         self.card.update(cause=no_credentials(cause), detail=no_credentials(detail))
@@ -826,22 +847,142 @@ def job_cause(job: dict) -> str:
     return no_credentials(message)
 
 
-def ask_for_action(run: EpisodeRun, need: dict | None) -> None:
-    """What the service needs from the person to go on (a TV login: a link and a code), on the
-    run's card for Activity and sent once per code; gone from the card once done."""
-    had = run.card.get("action")
-    if need and need.get("code") and need.get("code") != (had or {}).get("code"):
-        run.card["action"] = {k: need.get(k) for k in ("service", "message", "url", "code", "expires_at")}
-        left = max(1, round((float(need.get("expires_at") or time.time() + 600) - time.time()) / 60))
-        what = f"open {need.get('url')} and enter {need.get('code')}"
-        run.say(f"\r\n\x1b[33m{need.get('service') or run.card['service']}: {need.get('message') or 'action needed'}: {what} (within {left} min)\x1b[0m")
-        notify((read_file().get("notifications") or {}), "warning", f"{need.get('service') or run.card['service']} needs you: {need.get('code')}",
-               f"{need.get('message') or 'Action needed'}: {what} within {left} min, for {run.card['series']} {run.card['sxxeyy']}.",
-               action=run.card["action"])
-    elif not need and had:
-        del run.card["action"]
-        inbox_resolve(had.get("code"))
-        run.say(f"\r\n\x1b[32m{had.get('service') or run.card['service']}: done, going on\x1b[0m")
+def approval_from_job(job: dict, terminal: bool = False) -> dict | None:
+    """The current or legacy core's approval, normalised without logging or retaining it."""
+    if terminal:
+        return None
+    approval = job.get("approval")
+    if isinstance(approval, dict) and isinstance(approval.get("message"), str) and approval["message"]:
+        return {"message": approval["message"]}
+    action = job.get("action_needed")
+    if isinstance(action, dict) and action.get("code"):
+        lines = [str(action.get("message") or "Approve this device")]
+        if action.get("url"):
+            lines.append(f"Open: {action['url']}")
+        lines.append(f"Code: {action['code']}")
+        return {"message": "\n".join(lines)}
+    notice = job.get("notice")
+    return {"message": str(notice)} if notice else None
+
+
+def approval_fragments(job: dict, approval: dict | None) -> set[str]:
+    """Known secret-bearing approval text to exclude from legacy core output."""
+    message = str((approval or {}).get("message") or "")
+    fragments = {line for line in message.splitlines() if line}
+    fragments.update(re.findall(r"https?://[^\s\"<>]+", message))
+    fragments.update(match.group(1) for match in re.finditer(
+        r"\b(?:code(?:\s+is)?|(?:enter|use)(?:\s+the)?(?:\s+code)?)\s*:?\s*([A-Za-z0-9-]{4,32})",
+        message,
+        re.IGNORECASE,
+    ))
+    action = job.get("action_needed")
+    if isinstance(action, dict):
+        fragments.update(str(action[key]) for key in ("message", "url", "code") if action.get(key))
+    return fragments
+
+
+def without_approval(text: str, fragments: set[str]) -> str:
+    for fragment in sorted(fragments, key=len, reverse=True):
+        text = text.replace(fragment, "[approval removed]")
+    return text
+
+
+def _redact_approval_lines(path: Path, values: set[str]) -> bool:
+    """Remove only lines containing a known retained approval value."""
+    try:
+        text = path.read_text(errors="replace")
+    except OSError:
+        return False
+    lines = text.splitlines(keepends=True)
+    cleaned = []
+    changed = False
+    for line in lines:
+        legacy_approval = re.search(
+            r"(?:open\s+https?://\S+\s+and\s+enter\s+[A-Za-z0-9-]{4,32}|"
+            r"(?:enter|use)(?:\s+the)?\s+code\s*:\s*[A-Za-z0-9-]{4,32})",
+            line,
+            re.IGNORECASE,
+        )
+        if legacy_approval or any(value in line for value in values):
+            if not cleaned or cleaned[-1] != "[approval removed]\n":
+                cleaned.append("[approval removed]\n")
+            changed = True
+        else:
+            cleaned.append(line)
+    if changed:
+        write_atomic(path, "".join(cleaned))
+    return changed
+
+
+def clean_approval_history() -> dict[str, int]:
+    """Remove legacy retained approvals while preserving unrelated history."""
+    counts = {"cards": 0, "logs": 0, "inbox": 0, "sent": 0}
+    known_values: set[str] = set()
+    for path in RUNS_DIR.glob("*.json") if RUNS_DIR.exists() else []:
+        try:
+            card = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        notice, action = card.get("notice"), card.get("action")
+        legacy_job = {"action_needed": action} if isinstance(action, dict) else {}
+        legacy_approval = {"message": str(notice)} if notice else approval_from_job(legacy_job)
+        values = approval_fragments(legacy_job, legacy_approval)
+        if not values:
+            continue
+        known_values.update(values)
+        card.pop("notice", None)
+        card.pop("action", None)
+        for key in ("cause", "detail"):
+            if card.get(key):
+                card[key] = without_approval(str(card[key]), values)
+        write_atomic(path, json.dumps(card))
+        counts["cards"] += 1
+
+    if INBOX_FILE.exists():
+        inbox = read_inbox()
+        kept = []
+        for item in inbox.get("items") or []:
+            action = item.get("action") if isinstance(item, dict) else None
+            if isinstance(action, dict) and action.get("code") and action.get("url") and not action.get("kind"):
+                known_values.update(str(action[key]) for key in ("code", "url") if action.get(key))
+                counts["inbox"] += 1
+            else:
+                kept.append(item)
+        if counts["inbox"]:
+            inbox["items"] = kept
+            write_atomic(INBOX_FILE, json.dumps(inbox))
+
+    if SENT_FILE.exists():
+        sent = read_json(SENT_FILE, [])
+        def retained_approval(item: dict) -> bool:
+            title = str(item.get("title") or "")
+            legacy_title = re.search(r"\bneeds you:\s*[A-Za-z0-9-]{4,32}\s*$", title, re.IGNORECASE)
+            return bool(legacy_title or any(value in title for value in known_values))
+
+        kept = [item for item in sent if not retained_approval(item)]
+        counts["sent"] = len(sent) - len(kept)
+        if counts["sent"]:
+            write_atomic(SENT_FILE, json.dumps(kept))
+
+    for path in RUNS_DIR.glob("*.log") if RUNS_DIR.exists() else []:
+        if _redact_approval_lines(path, known_values):
+            counts["logs"] += 1
+
+    legacy = re.compile(
+        r"(?:^.*Go to:\s*https?://\S+.*\n)?^.*(?:Enter|Use)(?: the)? code:\s*[A-Za-z0-9-]{4,32}.*(?:\n|$)",
+        re.MULTILINE,
+    )
+    local_log = UNSHACKLE.local.log_file
+    for legacy_log in (local_log, local_log.with_suffix(".log.1")):
+        try:
+            text = legacy_log.read_text(errors="replace")
+        except OSError:
+            continue
+        cleaned, removed = legacy.subn("[approval removed]\n", text)
+        if removed:
+            write_atomic(legacy_log, cleaned)
+            counts["logs"] += 1
+    return counts
 
 
 def ask_for_input(run: EpisodeRun, prompt: str | None) -> None:
@@ -958,7 +1099,11 @@ def run_job(payload: dict, run: EpisodeRun | None = None, poll: float = 0.5, job
     job_id: that job, already on serve, followed again instead of a new download."""
     backend = backend_named(run.card.get("backend") if run else None)
     with download_slot(backend.name or "", run):
-        return follow_job(backend, payload, run, poll, job_id)
+        try:
+            return follow_job(backend, payload, run, poll, job_id)
+        finally:
+            if run:
+                run.set_approval(None)
 
 
 def unconfirmed_still_on(run: EpisodeRun | None) -> str | None:
@@ -1048,6 +1193,7 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
     labels: dict[str, str] = {}  # a track's key (its part and its place, or its label from an older serve): its label
     titles: list[str] = []
     misses, since, hinted, quiet_count = 0, time.monotonic(), False, 0
+    secret_approval_fragments: set[str] = set()
     while True:
         try:
             job = backend.job(job_id)
@@ -1072,6 +1218,9 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             time.sleep(max(poll, 5))
             continue
         status = job.get("status")
+        snapshot_approval = approval_from_job(job)
+        active_approval = None if status in TERMINAL else snapshot_approval
+        secret_approval_fragments.update(approval_fragments(job, snapshot_approval))
         if run and status == "downloading":
             done = job.get("total_tracks") and int(job.get("completed_tracks") or 0) >= int(job.get("total_tracks") or 0)
             if done and "tracks_in" not in run.card:  # every track in: decrypting, then the mux, from now
@@ -1121,15 +1270,8 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
                 run.card.update(proxy=job.get("proxy"), cdm=job.get("cdm"))
             if status == "downloading" and run.card["step"] == "queued":
                 run.card["step"] = "downloading"
-            ask_for_action(run, job.get("action_needed") if status not in TERMINAL else None)
+            run.set_approval(active_approval)
             ask_for_input(run, job.get("input_prompt") if status not in TERMINAL else None)
-            notice = job.get("notice") if status not in TERMINAL else None  # Unshackle 6: an approval waited for, no answer
-            if notice != run.card.get("notice"):
-                if notice:
-                    run.say(f"\r\n\x1b[33m{run.card.get('service') or 'The service'}: {notice}\x1b[0m")
-                    run.card["notice"] = str(notice)[:500]
-                else:
-                    run.card.pop("notice", None)
             if (snapshot := json.dumps(run.card)) != saved:  # unchanged: not written again every half second, which
                 run.save()                                   # would make every reader parse the whole history again
                 saved = snapshot
@@ -1138,11 +1280,14 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             if count - logged > len(lines):
                 run.raw(f"\r\x1b[2K\x1b[90m… {count - logged - len(lines)} lines of Unshackle's log skipped\x1b[0m\r\n".encode())
             for text in lines:
+                text = without_approval(text, secret_approval_fragments)
                 colour = "31" if " ERROR " in text or " CRITICAL " in text else "33" if " WARNING " in text else "90"
                 run.raw(f"\r\x1b[2K\x1b[{colour}m  {text}\x1b[0m\r\n".encode())
             logged, line = count, ""  # the progress line is drawn again under them
         if DEBUG and run and status != last_status:
-            trace("job: " + json.dumps({k: v for k, v in job.items() if k not in ("log", "track_progress", "parameters")})[:1500], debug=True)
+            snapshot = json.dumps({k: v for k, v in job.items()
+                                   if k not in ("log", "track_progress", "parameters", "approval", "action_needed", "notice")})
+            trace("job: " + without_approval(snapshot, secret_approval_fragments)[:1500], debug=True)
         if status != last_status and run:
             run.raw(f"\r\x1b[2K\x1b[36m{status}\x1b[0m {job.get('current_title') or job.get('title') or ''}\r\n".encode())
             last_status = status
@@ -1159,9 +1304,11 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
     if work is not None:
         work_claimed.pop(work, None)
     if status != "completed":
-        detail = job.get("error_details") or ""
-        stderr = "\n".join((job.get("worker_stderr") or "").strip().splitlines()[-15:])
-        raise JobFailed("\n".join(filter(None, [job.get("error_message") or status, detail, stderr])), status, job_cause(job))
+        safe_job = {**job, **{key: without_approval(str(job.get(key) or ""), secret_approval_fragments)
+                              for key in ("error_message", "error_details", "worker_stderr")}}
+        detail = safe_job.get("error_details") or ""
+        stderr = "\n".join((safe_job.get("worker_stderr") or "").strip().splitlines()[-15:])
+        raise JobFailed("\n".join(filter(None, [safe_job.get("error_message") or status, detail, stderr])), status, job_cause(safe_job))
     files = job.get("output_files") or []
     trace(f"Unshackle made {len(files)} file{'s' if len(files) != 1 else ''}: " + ", ".join(Path(f).name for f in files))
     return files

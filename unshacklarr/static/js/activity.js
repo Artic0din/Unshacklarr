@@ -382,8 +382,8 @@ function jobDone(j, st) {
 function listRow(c) {
   const started = new Date(c.started);
   const sub = isLive(c)
-    ? (c.action ? `${c.service} · waiting for you: code ${c.action.code}` : c.prompt ? `${c.service} · waiting for your answer`
-      : c.waiting ? `${c.service} · in the queue` : isQueued(c) ? `${c.service} · waiting for a slot` : `${c.service} · ${afterTracks(c) || speedOf(c) || c.step}`)
+    ? (c.prompt ? `${c.service} · waiting for your answer` : c.waiting ? `${c.service} · in the queue`
+      : isQueued(c) ? `${c.service} · waiting for a slot` : `${c.service} · ${afterTracks(c) || speedOf(c) || c.step}`)
     : c.outcome === "unavailable" && c.checks > 1 ? `${c.service} · checked ${c.checks} times, last ${day(started)} ${time(started)}`
     : `${day(started)} ${time(started)}${c.ended ? ` · ${duration(new Date(c.ended) - started)}` : ""}`;
   const side = isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
@@ -752,10 +752,7 @@ function runBody(c) {
       el("span", { className: "l", textContent: STEPS[i] }),
       el("span", { className: "s", textContent: STEPS_SHORT[i] }))]));
   const parts = [steps];
-  if (live && c.action) parts.push(actionBox(c));
   if (live && c.prompt) parts.push(promptBox(c.prompt));
-  if (live && c.notice) parts.push(el("div", { className: "cd-note warn" },  // Unshackle 6: waits for an approval, nothing to type
-    el("b", { textContent: `${c.service || "The service"} is waiting for you` }), el("span", { textContent: c.notice })));
   if (live) {
     const lv = c.live || {};
     const muxing = String(lv.phase || "").startsWith("mux");
@@ -934,22 +931,6 @@ async function stopRun(c, button) {
   button.disabled = true;
   try { await api(`/api/runs/${encodeURIComponent(c.id)}/stop`, { method: "POST" }); toast(`Stopping ${c.series} ${c.sxxeyy}`); }
   catch (e) { button.disabled = false; toast(e.message, true); }
-}
-/* What the service waits for from you (a TV login): the link to open and the code to enter. */
-function actionBox(c) {
-  const a = c.action, left = a.expires_at ? Math.max(0, Math.round(a.expires_at - Date.now() / 1000)) : null;
-  const code = el("button", { className: "act-code", type: "button", textContent: a.code, title: "Copy the code", onclick: async () => {
-    try { await navigator.clipboard.writeText(a.code); toast("Code copied"); } catch { /* no clipboard: it is on screen */ }
-  } });
-  return el("div", { className: "act-box", role: "status" },
-    el("b", { textContent: `${a.service || c.service}: ${a.message || "action needed"}` }),
-    el("span", { textContent: "Open the link, log in if asked, and enter this code. The download goes on by itself." }),
-    code,
-    el("div", { className: "act-row" },
-      // a link only to a web page: the service's words are data, never a javascript: URL
-      /^https:\/\/[^\s"<>]+$/.test(a.url || "") ? el("a", { className: "btn primary", href: a.url, target: "_blank", rel: "noopener", textContent: `Open ${a.url.replace(/^https:\/\/(www\.)?/, "")}` })
-        : el("span", { textContent: a.url || "" }),
-      left !== null ? el("small", { textContent: left ? `expires in ${Math.ceil(left / 60)} min` : "expired: the next try asks for a new code" }) : ""));
 }
 /* A question the service asks while downloading (an OTP code, a PIN): a field, and the answer sent to it. */
 const promptDrafts = {};  // what was typed, kept across the page's redraws

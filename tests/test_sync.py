@@ -1144,22 +1144,170 @@ def test_a_click_on_an_episode_waiting_in_downloads_says_why_nothing_happens(tmp
     assert (tmp_path / "elsewhere" / "Film.mkv").read_bytes() == b"keep me"
 
 
-def test_a_login_code_is_sent_once_and_leaves_the_card_once_done(tmp_path, monkeypatch):
+def test_approval_details_are_transient_isolated_and_never_saved(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    sent = []
-    monkeypatch.setattr(sync, "notify", lambda settings, level, title, message, action=None: sent.append((level, title, message)))
-    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "DSNP"}, "auto")
-    need = {"service": "DSNP", "message": "Link this device to your Disney+ account", "url": "https://www.disneyplus.com/start",
-            "code": "ABCD1234", "expires_at": sync.time.time() + 600}
-    sync.ask_for_action(run, need)
-    sync.ask_for_action(run, need)  # the next polls: the same code, not sent again
-    assert run.card["action"]["code"] == "ABCD1234" and len(sent) == 1
-    assert sent[0][1] == "DSNP needs you: ABCD1234" and "https://www.disneyplus.com/start" in sent[0][2] and "within 10 min" in sent[0][2]
-    sync.ask_for_action(run, {**need, "code": "EFGH5678"})  # expired, a new one: sent
-    assert len(sent) == 2
-    sync.ask_for_action(run, None)
-    assert "action" not in run.card
+    first = sync.EpisodeRun(episode(111, 2, 5), {"service": "DSNP"}, "auto")
+    second = sync.EpisodeRun(episode(112, 1, 1), {"service": "HMAX"}, "auto")
+    first.set_approval({"message": "Open https://example.invalid/pair and enter PAIR-CODE"})
+    second.set_approval({"message": "Approve SECOND-CODE on the other device"})
+
+    assert sync.EpisodeRun.approvals() == [
+        {"run": first.id, "service": "DSNP", "message": "Open https://example.invalid/pair and enter PAIR-CODE"},
+        {"run": second.id, "service": "HMAX", "message": "Approve SECOND-CODE on the other device"},
+    ]
+    persisted = "".join(path.read_text(errors="replace") for path in tmp_path.rglob("*") if path.is_file())
+    assert "PAIR-CODE" not in persisted and "SECOND-CODE" not in persisted
+
+    first.set_approval(None)
+    first.finish("failed")
+    assert sync.EpisodeRun.approvals() == [
+        {"run": second.id, "service": "HMAX", "message": "Approve SECOND-CODE on the other device"}
+    ]
+    second.finish("cancelled")
+    assert sync.EpisodeRun.approvals() == []
+
+
+def test_job_approval_is_visible_only_while_the_job_waits(tmp_path, monkeypatch):
+    import contextlib
+
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "DEBUG", True)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "DSNP"}, "manual")
+    seen = []
+    polls = iter([
+        {"status": "downloading", "approval": {
+            "message": "Open https://example.invalid/pair and enter TRANSIENT-CODE",
+        }, "log_count": 1, "log": ["INFO Code: TRANSIENT-CODE"]},
+        {"status": "failed", "error_message": "Pairing timed out", "worker_stderr": "TRANSIENT-CODE was refused"},
+    ])
+
+    class Serve:
+        name = ""
+
+        def download(self, payload):
+            return "job"
+
+        def job(self, job_id):
+            return next(polls)
+
+        def cancel(self, job_id):
+            pass
+
+    monkeypatch.setattr(sync, "backend_named", lambda name: Serve())
+    monkeypatch.setattr(sync, "download_slot", lambda name, active_run: contextlib.nullcontext())
+    monkeypatch.setattr(sync.time, "sleep", lambda seconds: seen.extend(sync.EpisodeRun.approvals()))
+
+    with pytest.raises(sync.JobFailed) as caught:
+        sync.run_job({}, run, poll=0)
+    assert seen == [{"run": run.id, "service": "DSNP",
+                     "message": "Open https://example.invalid/pair and enter TRANSIENT-CODE"}]
+    assert sync.EpisodeRun.approvals() == []
+    persisted = "".join(path.read_text(errors="replace") for path in tmp_path.rglob("*") if path.is_file())
+    assert "TRANSIENT-CODE" not in persisted
+    assert "TRANSIENT-CODE" not in str(caught.value)
     run.finish("failed")
+
+
+def test_current_and_legacy_approval_payloads_share_the_transient_contract(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    assert sync.approval_from_job({"approval": {"message": "Approve CURRENT-CODE"}}) == {"message": "Approve CURRENT-CODE"}
+    assert sync.approval_from_job({"action_needed": {
+        "message": "Link this device", "url": "https://example.invalid/link", "code": "LEGACY-CODE",
+    }}) == {"message": "Link this device\nOpen: https://example.invalid/link\nCode: LEGACY-CODE"}
+    assert sync.approval_from_job({"notice": "Approve NOTICE-CODE"}) == {"message": "Approve NOTICE-CODE"}
+    assert sync.approval_from_job({"approval": {"message": "Approve CURRENT-CODE"}}, terminal=True) is None
+
+
+def test_terminal_first_job_snapshot_cannot_retain_approval(tmp_path, monkeypatch):
+    import contextlib
+
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "DEBUG", True)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "HMAX"}, "manual")
+
+    class Serve:
+        name = ""
+
+        def download(self, payload):
+            return "job"
+
+        def job(self, job_id):
+            return {
+                "status": "failed",
+                "approval": {"message": "Use code TERMINAL-CODE at https://example.invalid/terminal"},
+                "log_count": 1,
+                "log": ["TERMINAL-CODE was not approved"],
+                "worker_stderr": "https://example.invalid/terminal refused TERMINAL-CODE",
+            }
+
+    monkeypatch.setattr(sync, "backend_named", lambda name: Serve())
+    monkeypatch.setattr(sync, "download_slot", lambda name, active_run: contextlib.nullcontext())
+    with pytest.raises(sync.JobFailed) as caught:
+        sync.run_job({}, run, poll=0)
+
+    persisted = "".join(path.read_text(errors="replace") for path in tmp_path.rglob("*") if path.is_file())
+    assert "TERMINAL-CODE" not in persisted and "example.invalid/terminal" not in persisted
+    assert "TERMINAL-CODE" not in str(caught.value) and "example.invalid/terminal" not in str(caught.value)
+    assert sync.EpisodeRun.approvals() == []
+    run.finish("failed")
+
+
+def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    run_id = "20261114-120000-000000-111-S02E05"
+    code = "OLD-PAIR-CODE"
+    card = {
+        "id": run_id,
+        "service": "DSNP",
+        "notice": f"Open https://example.invalid/link\nand enter {code}",
+        "action": {"service": "DSNP", "url": "https://example.invalid/link", "code": code},
+        "cause": f"https://example.invalid/link refused {code}",
+        "detail": f"Pairing failed for {code}",
+        "outcome": "failed",
+    }
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    (sync.RUNS_DIR / f"{run_id}.log").write_text(f"ordinary line\nopen https://example.invalid/link and enter {code}\nkept line\n")
+    notice_id = "20261114-123000-000000-113-S01E02"
+    notice_code = "NOTICE-ONLY-CODE"
+    (sync.RUNS_DIR / f"{notice_id}.json").write_text(json.dumps({
+        "id": notice_id,
+        "service": "AMZN",
+        "notice": f"Open https://example.invalid/notice and enter {notice_code}",
+        "detail": f"{notice_code} was refused",
+        "outcome": "failed",
+    }))
+    resolved_id = "20261114-130000-000000-112-S01E01"
+    (sync.RUNS_DIR / f"{resolved_id}.json").write_text(json.dumps({"id": resolved_id, "service": "HMAX", "outcome": "failed"}))
+    (sync.RUNS_DIR / f"{resolved_id}.log").write_text("before\nHMAX: open https://example.invalid/approve and enter RESOLVED-CODE (within 5 min)\nafter\n")
+    sync.write_atomic(sync.INBOX_FILE, json.dumps({"read_at": None, "items": [
+        {"id": "approval", "at": sync.datetime.now(sync.timezone.utc).isoformat(), "level": "warning",
+         "title": f"DSNP needs you: {code}", "message": "Open the action", "action": {"url": "https://example.invalid/link", "code": code}},
+        {"id": "ordinary", "at": sync.datetime.now(sync.timezone.utc).isoformat(), "level": "success",
+         "title": "Download complete", "message": "Show S02E05"},
+    ]}))
+    sync.write_atomic(sync.SENT_FILE, json.dumps([
+        {"at": "now", "level": "warning", "title": f"DSNP needs you: {code}", "to": []},
+        {"at": "earlier", "level": "warning", "title": "SEVEN needs you: STANDALONE-CODE", "to": []},
+        {"at": "now", "level": "success", "title": "Download complete", "to": []},
+    ]))
+    sync.UNSHACKLE.local.log_file.write_text(f"Go to: https://example.invalid/link\nEnter code: {code}\nhealthy line\n")
+    sync.UNSHACKLE.local.log_file.with_suffix(".log.1").write_text(f"Use code: {code}\nolder healthy line\n")
+
+    assert sync.clean_approval_history() == {"cards": 2, "logs": 4, "inbox": 1, "sent": 2}
+    cleaned = json.loads((sync.RUNS_DIR / f"{run_id}.json").read_text())
+    assert "notice" not in cleaned and "action" not in cleaned
+    assert code not in cleaned["cause"] and code not in cleaned["detail"]
+    assert "example.invalid/link" not in cleaned["cause"]
+    notice_cleaned = json.loads((sync.RUNS_DIR / f"{notice_id}.json").read_text())
+    assert "notice" not in notice_cleaned and notice_code not in notice_cleaned["detail"]
+    assert (sync.RUNS_DIR / f"{run_id}.log").read_text() == "ordinary line\n[approval removed]\nkept line\n"
+    assert (sync.RUNS_DIR / f"{resolved_id}.log").read_text() == "before\n[approval removed]\nafter\n"
+    assert [item["id"] for item in sync.read_inbox()["items"]] == ["ordinary"]
+    assert [item["title"] for item in sync.read_json(sync.SENT_FILE, [])] == ["Download complete"]
+    assert sync.UNSHACKLE.local.log_file.read_text() == "[approval removed]\nhealthy line\n"
+    assert sync.UNSHACKLE.local.log_file.with_suffix(".log.1").read_text() == "[approval removed]\nolder healthy line\n"
+    assert sync.clean_approval_history() == {"cards": 0, "logs": 0, "inbox": 0, "sent": 0}
 
 
 def test_the_inbox_keeps_every_notification_and_its_action(tmp_path, monkeypatch):
@@ -3454,6 +3602,7 @@ def test_a_retry_follows_the_job_serve_never_confirmed_stopped_instead_of_downlo
         def save(self): pass
         def say(self, text): pass
         def raw(self, data): pass
+        def set_approval(self, approval): pass
     run = Run()
     files = sync.run_job_retrying({"output_dir": "/downloads/x"}, run, sleep=lambda s: None)
     assert started == ["/downloads/x"] and files == ["/downloads/x/S01E01.mkv"]
