@@ -70,6 +70,25 @@ PROXY_HINT = ("Unshackle 6 doesn't let Unshacklarr use its proxies (a country co
               "allow it in Settings, Unshackle")
 
 
+def response_error(response: requests.Response) -> tuple[dict, str, str | None]:
+    """The useful, safe parts of an Unshackle error response."""
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    payload = payload if isinstance(payload, dict) else {}
+    message = next((value.strip() for key in ("message", "error", "detail")
+                    if isinstance((value := payload.get(key)), str) and value.strip()), response.text.strip())
+    if not message or re.search(r"<\s*(?:!doctype|html|head|body|h\d)\b", message, re.IGNORECASE):
+        message = response.reason or "Request failed"
+    reference = str(payload.get("ref") or "").strip()
+    if reference and reference not in message:
+        message += f" (ref {reference})"
+    details = payload.get("details") or {}
+    service = str(details.get("service") or "").strip() if isinstance(details, dict) else ""
+    return payload, no_credentials(message), service or None
+
+
 def unshackle_python(command: str) -> tuple[str, Path]:
     """The Python that runs the `unshackle` command (its script's shebang, or the venv's own),
     and the folder to run it from: a git clone's, when the command is in its .venv, since a
@@ -303,30 +322,21 @@ class Unshackle:
             err.retry_after = int(r.headers.get("Retry-After") or 60) if str(r.headers.get("Retry-After") or "60").isdigit() else 60
             raise err
         if not r.ok:
-            try:
-                payload = r.json()
-            except ValueError:
-                payload = {}
-            payload = payload if isinstance(payload, dict) else {}
-            message = str(payload.get("message") or r.text)
+            payload, message, service = response_error(r)
             provider_auth_failed = payload.get("error_code") == "AUTH_FAILED"
             if r.status_code == 401:
                 if provider_auth_failed:
-                    details = payload.get("details") or {}
-                    service = details.get("service") if isinstance(details, dict) else None
-                    reference = f" (ref {payload['ref']})" if payload.get("ref") else ""
-                    message = f"{service or 'Service'}{reference}: {message.removesuffix(reference)}. Check this service's login/session in Unshackle."
+                    message = f"{message}. Check this service's login/session in Unshackle."
                 else:
                     message = "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle."
             if not provider_auth_failed and "requested CDM is not permitted" in message:  # --cdm, Unshackle 6: the operator's opt-in
-                raise UnshackleError("Unshackle refuses to pick the CDM device named in --cdm: allow it in unshackle.yaml "
-                                     "with serve: cdm_overrides: true (or a list of devices), then restart Unshackle")
+                message = ("Unshackle refuses to pick the CDM device named in --cdm: allow it in unshackle.yaml "
+                           "with serve: cdm_overrides: true (or a list of devices), then restart Unshackle")
             if not provider_auth_failed and PROXY_REFUSED.search(message):
                 self.proxy_refused = datetime.now(timezone.utc).isoformat()
-                raise UnshackleError(PROXY_HINT)
-            status = f"HTTP {r.status_code}: " if r.status_code >= 500 else ""  # serve's own words rarely say it
-            message = no_credentials(message.strip())[:500]
-            err = UnshackleError(f"unshackle serve: {status}{message}")
+                message = PROXY_HINT
+            owner = f"{service} through Unshackle" if service else "Unshackle"
+            err = UnshackleError(f"{owner}: HTTP {r.status_code}: {message[:500]}")
             err.status = r.status_code
             raise err
         try:

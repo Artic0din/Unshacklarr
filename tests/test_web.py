@@ -730,17 +730,24 @@ def test_push_devices_come_and_go(tmp_path, monkeypatch):
         pass
     p.subscribe({"endpoint": "https://push.example/a", "keys": {"p256dh": "k", "auth": "a"}}, "iPhone")
     p.subscribe({"endpoint": "https://push.example/b", "keys": {"p256dh": "k", "auth": "a"}})
+    p.subscribe({"endpoint": "https://push.example/c", "keys": {"p256dh": "k", "auth": "a"}})
     sent = []
 
     def fake_webpush(subscription_info, **kw):
         if subscription_info["endpoint"].endswith("/b"):
             raise push.WebPushException("gone", response=SimpleNamespace(status_code=410))
+        if subscription_info["endpoint"].endswith("/c"):
+            raise push.WebPushException(
+                "refused",
+                response=SimpleNamespace(status_code=500, text="<html>proxy details</html>?token=private"),
+            )
         sent.append((subscription_info["endpoint"], kw["data"]))
 
     monkeypatch.setattr(push, "webpush", fake_webpush)
     assert p.send("Downloaded: Show S01E01", "From MLT") == 1
     assert '"title": "Downloaded: Show S01E01"' in sent[0][1]
-    assert [s["endpoint"] for s in p.subscriptions()] == ["https://push.example/a"]  # the gone one is dropped
+    assert [s["endpoint"] for s in p.subscriptions()] == ["https://push.example/a", "https://push.example/c"]  # only the gone one is dropped
+    assert p.last_error == "push.example refused it: HTTP 500: The push service refused the message"
 
 
 

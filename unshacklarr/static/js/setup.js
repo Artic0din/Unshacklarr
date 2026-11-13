@@ -455,7 +455,11 @@ $("#tz-select").after(settingsZone.input, settingsZone.list);
   // asked at once, while the translations load: the state only when logged in (else it answers 401, and is dropped)
   const sessionAsked = api("/api/session"), stateAsked = fetch("/api/state", { headers: { "X-Unshackle": "1" } })
     // 401: not logged in yet, asked again below; any other answer is the state's own error, shown, not asked again
-    .then(async (r) => (r.ok ? r.json() : r.status === 401 ? null : new Error(await r.text() || `${r.status} ${r.statusText}`)))
+    .then(async (r) => {
+      if (r.ok) return r.json();
+      if (r.status === 401) return null;
+      return new Error(await responseError(r));
+    })
     .catch(() => null);
   await i18nReady;
   let session;

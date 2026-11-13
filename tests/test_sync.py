@@ -498,6 +498,27 @@ def test_a_run_whose_first_card_cannot_be_saved_is_not_left_active(tmp_path, mon
         sync.EpisodeRun(episode(111, 2, 5), {"service": "RTLP"}, "manual", "S02E05")
     assert sync.EpisodeRun.active == set()  # active, it would be kept from Delete and Clear for good
 
+
+def test_a_run_redacts_credentials_before_saving_a_failure(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RTLP"}, "manual", "S02E05")
+    run.finish(
+        "failed",
+        "GET https://provider.invalid/play?access_token=private&language=en",
+        "Authorization: Bearer also-private",
+    )
+    card = json.loads((tmp_path / "runs" / f"{run.id}.json").read_text())
+    assert card["cause"].endswith("access_token=***&language=en")
+    assert card["detail"] == "Authorization: Bearer ***"
+
+
+def test_http_context_does_not_turn_a_server_permission_failure_into_a_login_failure():
+    from unshacklarr.sync import login_failure
+    assert not login_failure("Unshackle: HTTP 403: Unshackle refuses to pick the requested CDM")
+    assert not login_failure("Unshackle: HTTP 401: Unshackle rejected the internal API key. Check Settings, Unshackle.")
+    assert login_failure("HAYU through Unshackle: HTTP 403: Forbidden")
+    assert login_failure("HAYU through Unshackle: HTTP 401: Authentication failed: Invalid token")
+
 def test_a_run_keeps_every_track_it_saw_and_its_parts(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     ep, show = episode(111, 2, 5), {"service": "RTLP"}

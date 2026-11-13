@@ -35,7 +35,7 @@ def wanted(text: str) -> bool:
         return False
     if re.fullmatch(r"[a-z0-9_:.\-/]+", text):  # an identifier, a CSS class, a key, a path
         return False
-    if re.fullmatch(r"([a-z0-9-]+ ?)+", text) and all(w in CSS_CLASSES or "-" in w for w in text.split()):
+    if re.fullmatch(r"[a-z0-9-]+(?: [a-z0-9-]+)* ?", text) and all(w in CSS_CLASSES or "-" in w for w in text.split()):
         return False  # "btn small primary": classes
     if re.match(r"^[#.\[/&]|^https?:|^\w+://|^--|^[a-z]+\(|^\$|^%|^@media", text):
         return False
@@ -200,7 +200,8 @@ def said(text: str) -> bool:
     return wanted(text) and not re.fullmatch(r"[a-z]+[A-Z]\w*|[A-Z0-9_]+", text) and "\x1b" not in text
 
 
-NOT_TEXT = {"LAUNCHER", "SECURITY_HEADERS", "EXAMPLE_KEYS", "UPDATE_HEADERS", "TMDB_HEADERS", "SITES", "NETWORKS"}  # the server's constants that hold code, not words
+NOT_TEXT = {"LAUNCHER", "SECURITY_HEADERS", "EXAMPLE_KEYS", "UPDATE_HEADERS", "TMDB_HEADERS", "SITES", "NETWORKS",
+            "NUMBER_WORDS"}  # the server's constants that hold code or parsing data, not words
 
 
 def server_texts(source: str) -> dict[str, list[str]]:

@@ -4,6 +4,20 @@ from pathlib import Path
 
 I18N = Path(__file__).resolve().parents[1] / "unshacklarr" / "static" / "i18n"
 HOLE = re.compile(r"\{\d+\}")
+CHANGED_ERROR_TEXTS = {
+    "(ref {0})",
+    "HTTP {0}:",
+    "Request failed",
+    "The push service refused the message",
+    "Unshacklarr answered HTTP {0}{1}. Try again.",
+    "Unshacklarr can't be reached. Check that it is running, then try again.",
+    "Unshacklarr could not send this notification. Check its log.",
+    "Unshacklarr did not answer after {0} s. Try again.",
+    "{0} could not be reached. Check the Unshacklarr log.",
+    "{0} through Unshackle",
+    "{0}. Check this service's login/session in Unshackle.",
+    "{0}: HTTP {1}: {2}",
+}
 
 
 def test_translations_fit_the_page():
@@ -12,10 +26,12 @@ def test_translations_fit_the_page():
     for path in I18N.glob("*.json"):
         if path.name == "en.json":
             continue
-        for key, text in json.loads(path.read_text()).items():
+        translated = json.loads(path.read_text())
+        for key, text in translated.items():
             assert key in english, f"{path.name}: {key!r} is not on the page (run tools/i18n/extract.py?)"
             assert isinstance(text, str) and text.strip(), f"{path.name}: {key!r} is empty"
             assert set(HOLE.findall(text)) <= set(HOLE.findall(key)), f"{path.name}: {key!r} has a {{n}} of its own"
+        assert CHANGED_ERROR_TEXTS <= translated.keys(), f"{path.name}: changed error text is untranslated"
 
 
 def test_authentication_guidance_translates_without_changing_the_provider_reason():
@@ -63,3 +79,12 @@ def test_a_hostile_line_cannot_make_translation_slow(tmp_path, monkeypatch):
     assert time.monotonic() - start < 1  # a regular expression took minutes on this
     assert i18n.tr("Seen it on M6 at 9 for me in Paris by bus.", "fr") == "Vu it sur M6 à 9 pour me dans Paris par bus."
     i18n.catalog.cache_clear()
+
+
+def test_the_extractor_does_not_backtrack_on_a_long_code_literal():
+    import time
+    from tools.i18n.extract import wanted
+    line = "access-token " * 10_000 + "!"
+    start = time.monotonic()
+    assert wanted(line)
+    assert time.monotonic() - start < 1

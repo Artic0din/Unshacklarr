@@ -919,7 +919,7 @@ async def service_options(request):
     try:
         return web.json_response(await asyncio.to_thread(specs_of, request.match_info["tag"]))
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
 
 
 def check_series_sonarrs(value, body: dict, dl_specs: list[dict], where: str) -> dict:
@@ -993,7 +993,7 @@ async def series_search(request):
     except UnshackleError as e:
         if re.search(r"not (supported|implemented)|NotImplemented", str(e), re.IGNORECASE):
             raise web.HTTPBadRequest(text=f"{show['service']} can't be searched: paste the series' URL instead") from None
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
     return web.json_response({"results": [
         {"id": str(r.get("id") or ""), "title": str(r.get("title") or ""), "label": str(r.get("label") or ""),
          "description": str(r.get("description") or "")[:240], "url": str(r.get("url") or "")}
@@ -1678,7 +1678,7 @@ async def suggest(request):
             found = await asyncio.gather(*(asyncio.to_thread(tmdb_links, int(tmdb_id), c, domains) for c in countries))
         except UnshackleError as e:
             if not hit:
-                raise web.HTTPBadGateway(text=str(e))
+                raise web.HTTPBadGateway(text=no_credentials(e))
             found = None
         except requests.RequestException as e:
             if not hit:
@@ -2154,7 +2154,7 @@ def unshackle_health(full: bool = False) -> dict:
                 {"name": f"{name} (for Unshacklarr)", "installed": bool(shutil.which(name)), "required": True}
                 for name in ("mkvmerge", "mkvpropedit")]
     except UnshackleError as e:
-        state["error"] = str(e)
+        state["error"] = no_credentials(e)
     return state
 
 
@@ -2176,7 +2176,7 @@ def server_health(backend) -> dict:
     try:
         return {"ok": True, "version": backend.health().get("version"), "services": len(backend.services())}
     except UnshackleError as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": no_credentials(e)}
 
 
 def other_sonarr_health(inst: dict) -> dict:
@@ -2363,7 +2363,7 @@ async def restart_unshackle(_):
     try:
         await asyncio.to_thread(UNSHACKLE.restart)
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
     health["unshackle"] = {**await asyncio.to_thread(unshackle_health, True), "checked": datetime.now(timezone.utc).isoformat()}
     return web.json_response(health["unshackle"])
 
@@ -2397,7 +2397,7 @@ async def list_cookies(_):
     try:
         return web.json_response(await asyncio.to_thread(cookie_state))
     except (UnshackleError, cdm.CdmError) as e:
-        return web.json_response({"folder": None, "error": str(e), "files": {}, "used": [], "wants": []})
+        return web.json_response({"folder": None, "error": no_credentials(e), "files": {}, "used": [], "wants": []})
 
 
 async def save_cookies(request):
@@ -2406,7 +2406,7 @@ async def save_cookies(request):
         folder = await asyncio.to_thread(cookies_folder)
         saved = await asyncio.to_thread(cookies.save, folder, str(body.get("service") or ""), str(body.get("profile") or ""), str(body.get("text") or ""))
     except (cookies.CookieError, cdm.CdmError, UnshackleError) as e:
-        raise web.HTTPBadRequest(text=str(e))
+        raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:
         raise web.HTTPBadGateway(text=f"Could not write the cookie file: {e}")
     return web.json_response(saved)
@@ -2418,7 +2418,7 @@ async def delete_cookies(request):
         folder = await asyncio.to_thread(cookies_folder)
         await asyncio.to_thread(cookies.delete, folder, str(body.get("service") or ""), str(body.get("profile") or ""))
     except (cookies.CookieError, cdm.CdmError, UnshackleError) as e:
-        raise web.HTTPBadRequest(text=str(e))
+        raise web.HTTPBadRequest(text=no_credentials(e))
     return web.json_response({"deleted": True})
 
 
@@ -2503,7 +2503,7 @@ async def cdm_test(request):
     try:
         result = await asyncio.to_thread(UNSHACKLE.call, "POST", "/api/cdm/devices/test", json={"kind": kind.lower(), "name": name})
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
     result = {k: result.get(k) for k in ("ok", "revoked", "error", "keys")} | {"at": datetime.now(timezone.utc).isoformat()}
     await asyncio.to_thread(note_cdm_test, f"{kind}:{name}", result)
     return web.json_response(result)
@@ -2515,7 +2515,7 @@ async def cdm_reprovision(request):
     try:
         done = await asyncio.to_thread(UNSHACKLE.call, "POST", "/api/cdm/devices/reprovision", json={"name": name})
     except UnshackleError as e:
-        raise web.HTTPBadRequest(text=str(e))
+        raise web.HTTPBadRequest(text=no_credentials(e))
     await asyncio.to_thread(note_cdm_test, f"PlayReady:{name}", None)  # a new certificate: its old test says nothing now
     return web.json_response({"backup": done.get("backup"), "state": await asyncio.to_thread(cdm_state)})
 
@@ -2524,7 +2524,7 @@ async def list_cdm(_):
     try:
         return web.json_response(await asyncio.to_thread(cdm_state))
     except UnshackleError as e:
-        return web.json_response({"folder": None, "error": str(e)})
+        return web.json_response({"folder": None, "error": no_credentials(e)})
 
 
 async def cdm_action(request):
@@ -2549,7 +2549,7 @@ async def cdm_action(request):
             device = body.get("device")
             await asyncio.to_thread(cdm.choose, conf, wvds, prds, str(body.get("service") or ""), str(device) if device else None)
     except (cdm.CdmError, UnshackleError) as e:
-        raise web.HTTPBadRequest(text=str(e))
+        raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:
         raise web.HTTPBadGateway(text=f"Could not write Unshackle's files: {e}")
     UNSHACKLE.configure(UNSHACKLE.settings)  # its cdm: section changed: the next download asks serve, not the copy kept 10 minutes
@@ -2681,7 +2681,7 @@ def send_offsite(name: str, text: str) -> dict:
     try:
         sent = {"ok": True, "name": offsite.send(settings, name, text)}
     except (requests.RequestException, ValueError, KeyError) as e:
-        sent = {"ok": False, "error": no_credentials(e) if isinstance(e, requests.RequestException) else str(e)}
+        sent = {"ok": False, "error": no_credentials(e)}
         sonarr_sync.notify(read_config()["notifications"], "error", "Remote backup failed", sent["error"])
     sent["at"] = datetime.now(timezone.utc).isoformat()
     write_atomic(OFFSITE_FILE, json.dumps(sent))
@@ -2790,13 +2790,13 @@ async def unshackle_yaml(request):
     except yaml.YAMLError:  # the folders are read from the file: a syntax error is what the editor is there to fix
         path = Path(sonarr_sync.SETTINGS["unshackle_config_dir"]) / "unshackle.yaml"
     except (UnshackleError, cdm.CdmError) as e:
-        raise web.HTTPBadRequest(text=str(e))
+        raise web.HTTPBadRequest(text=no_credentials(e))
     if not path.exists():
         raise web.HTTPNotFound(text=f"No unshackle.yaml in {path.parent}")
     try:
         cdm.regular(path)
     except cdm.CdmError as e:
-        raise web.HTTPBadRequest(text=str(e))
+        raise web.HTTPBadRequest(text=no_credentials(e))
     text = await asyncio.to_thread(path.read_text, encoding="utf8")
     if action == "open":
         return web.json_response({"text": text, "base": fingerprint(text), "path": str(path), "versions": config_versions()})
@@ -2829,7 +2829,7 @@ async def allow_proxies(_):
         text = await asyncio.to_thread(path.read_text, encoding="utf8")
         new = cdm.allow_proxies(text, key, sorted(p.stem for p in wvds.glob("*.wvd")), sorted(p.stem for p in prds.glob("*.prd")))
     except (UnshackleError, cdm.CdmError, OSError) as e:
-        raise web.HTTPBadRequest(text=str(e))
+        raise web.HTTPBadRequest(text=no_credentials(e))
     if new != text:
         await asyncio.to_thread(save_unshackle_yaml, path, text, new)
     UNSHACKLE.proxy_refused = ""
@@ -2846,7 +2846,7 @@ async def unshackle_maintenance(request):
     try:
         result = await asyncio.to_thread(UNSHACKLE.call, "POST", f"/api/maintenance/{action}")
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
     if action == "refresh-services":
         UNSHACKLE.configure(sonarr_sync.SETTINGS)  # forget the services it listed before
     return web.json_response(result)
@@ -2859,7 +2859,7 @@ async def cancel_job(request):
     try:
         await asyncio.to_thread(UNSHACKLE.cancel, job_id)
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
     return web.json_response({"cancelling": True})
 
 
@@ -2888,7 +2888,7 @@ async def stop_run(request):
     try:
         await asyncio.to_thread(sonarr_sync.backend_named(card.get("backend")).cancel, job_id)
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
     return web.json_response({"stopping": True})
 
 
@@ -2910,7 +2910,7 @@ async def stop_job(request):
             try:
                 await asyncio.to_thread(sonarr_sync.backend_named(c.get("backend")).cancel, c["job_id"])
             except UnshackleError as e:
-                raise web.HTTPBadGateway(text=str(e))
+                raise web.HTTPBadGateway(text=no_credentials(e))
             cancelled += 1
     return web.json_response({"cancelled": cancelled})
 
@@ -3021,7 +3021,7 @@ async def answer_run(request):
         await asyncio.to_thread(sonarr_sync.backend_named(card.get("backend")).call, "POST", f"/api/download/jobs/{card['job_id']}/input",
                                 json={"response": answer})
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
     return web.json_response({"sent": True})
 
 
@@ -3800,7 +3800,7 @@ def probe_series(show: dict, series_id: int, title: str = "", discover: bool = F
         except (UnshackleError, requests.RequestException, ValueError) as e:
             if getattr(e, "retry_after", 0):
                 raise  # serve's limit: no other page asked now
-            found["pages"][str(season)] = {"url": pages[season]["url"], "error": str(e)[:200]}
+            found["pages"][str(season)] = {"url": pages[season]["url"], "error": no_credentials(e)[:200]}
             continue
         found["available"].update(part["available"])
         found["titles"] += [{**t, "page": season} for t in part["titles"]]  # by the page's own numbering, for the page's preview
@@ -4177,7 +4177,7 @@ async def probe(request):
                 await asyncio.to_thread(keep_service_list, int(body["tvdbId"]), show, found, elsewhere=found["elsewhere"], expected_checked=checked)
         return web.json_response({**found, "checked": datetime.now(timezone.utc).isoformat()})
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
     except requests.RequestException as e:
         raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
 
@@ -4215,7 +4215,7 @@ async def leftover_action(request):
         else:
             await asyncio.to_thread(sonarr_sync.import_leftover, folder)
     except (RuntimeError, requests.RequestException) as e:
-        raise web.HTTPBadRequest(text=str(e))
+        raise web.HTTPBadRequest(text=no_credentials(e))
     return web.json_response({"done": True})
 
 
@@ -4231,7 +4231,7 @@ async def push_subscribe(request):
     try:
         await asyncio.to_thread(sonarr_sync.PUSH.subscribe, body.get("subscription") or {}, str(body.get("label") or ""))
     except ValueError as e:
-        raise web.HTTPBadRequest(text=str(e))
+        raise web.HTTPBadRequest(text=no_credentials(e))
     return web.json_response({"devices": len(sonarr_sync.PUSH.subscriptions())})
 
 
@@ -5575,7 +5575,7 @@ async def setup_restore(request):
         await asyncio.to_thread(check_unshackle, settings)
         checks["unshackle"] = {"ok": True}
     except UnshackleError as e:
-        checks["unshackle"] = {"ok": False, "error": str(e)}
+        checks["unshackle"] = {"ok": False, "error": no_credentials(e)}
     return with_session(request, web.json_response({"logged_in": True, "series": len(data.get("series") or {}), **checks}), auth)
 
 
@@ -5632,7 +5632,7 @@ async def test_sonarr(request):
     try:
         version = await asyncio.to_thread(sonarr_status, url, key)
     except (requests.RequestException, ValueError) as e:
-        raise web.HTTPBadGateway(text=f"Could not reach Sonarr: {e}")
+        raise web.HTTPBadGateway(text=f"Could not reach Sonarr: {no_credentials(e)}")
     return web.json_response({"version": version})
 
 
@@ -5665,7 +5665,7 @@ async def test_unshackle(request):
     try:
         count = await asyncio.to_thread(check_unshackle, settings)
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=str(e))
+        raise web.HTTPBadGateway(text=no_credentials(e))
     if not count:
         raise web.HTTPBadGateway(text="unshackle answers, but has no services: add yours to its services folder")
     return web.json_response({"services": count})
@@ -5701,11 +5701,11 @@ async def setup(request):
     try:
         await asyncio.to_thread(check_unshackle, settings)
     except UnshackleError as e:
-        raise web.HTTPBadRequest(text=f"Could not reach Unshackle with these settings: {e}")
+        raise web.HTTPBadRequest(text=f"Could not reach Unshackle with these settings: {no_credentials(e)}")
     try:
         await asyncio.to_thread(sonarr_status, settings["sonarr_url"], settings["sonarr_api_key"])
     except (requests.RequestException, ValueError) as e:
-        raise web.HTTPBadRequest(text=f"Could not reach Sonarr with these settings: {e}")
+        raise web.HTTPBadRequest(text=f"Could not reach Sonarr with these settings: {no_credentials(e)}")
     if not settings["sonarr_downloads"]:
         raise web.HTTPBadRequest(text="Enter the downloads folder as Sonarr sees it")
     config["settings"] = settings

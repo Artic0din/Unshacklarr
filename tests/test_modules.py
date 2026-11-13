@@ -13,7 +13,7 @@ import yaml
 from unshacklarr.backend import Unshackle, UnshackleError
 from unshacklarr.cdm import CdmError, NO_CDM, add, choose, delete, folders, read, remote_delete, remote_save, state
 from unshacklarr.cookies import CookieError, list_all, normalise, parse, save
-from unshacklarr.files import PRIVATE, shared_or_private, write_atomic
+from unshacklarr.files import PRIVATE, no_credentials, shared_or_private, write_atomic
 
 
 @responses.activate
@@ -32,6 +32,7 @@ def test_authentication_errors_identify_the_server_or_provider(tmp_path, provide
     assert caught.value.status == 401
     if provider_failure:
         assert "HAYU" in message and "Invalid Token" in message and "ef1b9f" in message
+        assert "HTTP 401" in message
         assert message.count("ef1b9f") == 1
         assert "login/session" in message and "refused the API key" not in message
     else:
@@ -69,6 +70,57 @@ def test_provider_authentication_reason_is_not_replaced_by_server_configuration_
         backend.call("POST", "/api/list-tracks", json={"service": "HAYU"})
     assert caught.value.status == 401 and reason in str(caught.value)
     assert not backend.proxy_refused
+
+
+@responses.activate
+def test_provider_error_keeps_service_status_reason_and_reference(tmp_path):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-key"})
+    responses.post(
+        "http://backend:8786/api/list-tracks",
+        status=403,
+        json={
+            "error_code": "GEOFENCE",
+            "message": "This account is not available in Australia (ref region-1)",
+            "details": {"service": "HAYU"},
+            "ref": "region-1",
+        },
+    )
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("POST", "/api/list-tracks", json={"service": "HAYU"})
+    assert str(caught.value) == "HAYU through Unshackle: HTTP 403: This account is not available in Australia (ref region-1)"
+    assert caught.value.status == 403
+
+
+@responses.activate
+@pytest.mark.parametrize("body", ["", "<html><h1>Bad gateway</h1></html>"])
+def test_unshackle_error_does_not_show_an_empty_or_html_message(tmp_path, body):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-key"})
+    responses.get("http://backend:8786/api/services", status=502, body=body)
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("GET", "/api/services")
+    assert str(caught.value) == "Unshackle: HTTP 502: Bad Gateway"
+
+
+@responses.activate
+def test_unshackle_error_keeps_safe_plain_text_detail(tmp_path):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-key"})
+    responses.get("http://backend:8786/api/services", status=503, body="Maintenance in progress; retry in 10 minutes")
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("GET", "/api/services")
+    assert str(caught.value) == "Unshackle: HTTP 503: Maintenance in progress; retry in 10 minutes"
+
+
+def test_public_errors_redact_sensitive_urls_and_headers():
+    message = (
+        "GET https://example.invalid/path?api_key=one&language=en&access_token=two "
+        "Authorization: Bearer three X-Api-Key: four Cookie: session=five"
+    )
+    shown = no_credentials(message)
+    assert "one" not in shown and "two" not in shown and "three" not in shown and "four" not in shown and "five" not in shown
+    assert "language=en" in shown
 
 
 def test_cookie_files_are_read_saved_and_kept_in_their_folder(tmp_path):
