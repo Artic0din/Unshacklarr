@@ -386,6 +386,7 @@ def change_inbox(change) -> dict:
 
 
 def inbox_add(level: str, title: str, message: str, action: dict | None = None, batch: str | None = None) -> None:
+    title, message = no_credentials(title), no_credentials(message)
     item = {"id": uuid.uuid4().hex[:12], "at": datetime.now(timezone.utc).isoformat(), "level": level, "title": title, "message": message[:4000]}
     if action:
         item["action"] = action
@@ -500,6 +501,7 @@ def notify_series(show: dict | None, settings: dict, level: str, title: str, mes
 
 def notify(settings: dict, level: str, title: str, message: str, action: dict | None = None, batch: str | None = None,
            details: dict | None = None) -> bool:
+    title, message = no_credentials(title), no_credentials(message)
     try:
         inbox_add(level, title, message, action, batch)  # the page's bell keeps them all, whatever goes out
     except OSError as e:
@@ -636,6 +638,7 @@ def trace(text: str, debug: bool = False) -> None:
     """A line in the current attempt's output (in Activity), in grey; debug ones only in debug mode."""
     run = getattr(current, "run", None)
     if run and (DEBUG or not debug):
+        text = no_credentials(text)
         run.raw(f"\r\x1b[2K\x1b[90m{'debug · ' if debug else '· '}{text}\x1b[0m\r\n".replace("\n", "\r\n").replace("\r\r", "\r").encode())
 
 
@@ -686,6 +689,7 @@ class EpisodeRun:
         current.run = self
 
     def say(self, text: str) -> None:
+        text = no_credentials(text)
         print(text, flush=True)
         self.raw(f"{text}\r\n".encode())
 

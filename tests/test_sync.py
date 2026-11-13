@@ -502,12 +502,20 @@ def test_a_run_whose_first_card_cannot_be_saved_is_not_left_active(tmp_path, mon
 def test_a_run_redacts_credentials_before_saving_a_failure(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RTLP"}, "manual", "S02E05")
+    run.say("X-Secret-Key: example-sensitive-value")
+    sync.trace("X-Secret-Key: example-sensitive-value")
     run.finish(
         "failed",
         "GET https://provider.invalid/play?access_token=private&language=en",
         "Authorization: Bearer also-private",
     )
+    sent = []
+    monkeypatch.setattr(sync, "deliver", lambda settings, level, title, message, details=None: sent.append(message) or True)
+    sync.notify({}, "error", "Failed", "X-Secret-Key: example-sensitive-value")
     card = json.loads((tmp_path / "runs" / f"{run.id}.json").read_text())
+    assert "example-sensitive-value" not in (tmp_path / "runs" / f"{run.id}.log").read_text()
+    assert sync.read_inbox()["items"][0]["message"] == "X-Secret-Key: ***"
+    assert sent == ["X-Secret-Key: ***"]
     assert card["cause"].endswith("access_token=***&language=en")
     assert card["detail"] == "Authorization: Bearer ***"
 
