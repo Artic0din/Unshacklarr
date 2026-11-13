@@ -504,6 +504,44 @@ def test_a_local_serve_without_secure_approvals_is_rejected_before_use(tmp_path,
     assert local.process is None
 
 
+def test_a_local_serve_retries_a_transient_secure_approval_check(tmp_path, monkeypatch):
+    import sys
+    import unshacklarr.backend as backend
+
+    class Process:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            return 0
+
+    class Response:
+        def __init__(self, status):
+            self.status_code = status
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise backend.requests.HTTPError(f"{self.status_code} response")
+
+    approval_statuses = iter((503, 200))
+    monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
+    monkeypatch.setattr(backend.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(backend.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        backend.requests,
+        "get",
+        lambda url, **kwargs: Response(next(approval_statuses) if url.endswith("/api/remote/logins") else 200),
+    )
+    local = backend.Local(tmp_path / "serve.log")
+
+    local.start("unshackle")
+
+    assert local.process is not None
+
+
 def broken_command(tmp_path):
     """An unshackle command whose Python (its shebang) is gone, as after the venv was removed or moved."""
     command = tmp_path / ".venv" / "bin" / "unshackle"

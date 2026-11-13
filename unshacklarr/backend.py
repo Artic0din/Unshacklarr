@@ -176,16 +176,22 @@ class Local:
                 time.sleep(0.5)
                 continue
             try:
-                requests.get(
+                response = requests.get(
                     f"{self.url}/api/remote/logins",
                     headers={"X-Secret-Key": self.key},
                     timeout=2,
-                ).raise_for_status()
-            except requests.RequestException as e:
-                self.stop()
-                raise UnshackleError(
-                    "The configured Unshackle does not support secure device approvals; update it before using this local core"
-                ) from e
+                )
+                if response.status_code in (404, 405):
+                    self.stop()
+                    raise UnshackleError(
+                        "The configured Unshackle does not support secure device approvals; update it before using this local core"
+                    )
+                response.raise_for_status()
+            except UnshackleError:
+                raise
+            except requests.RequestException:
+                time.sleep(0.5)
+                continue
             self.started = datetime.now(timezone.utc)
             return
         self.stop()

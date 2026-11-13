@@ -1292,6 +1292,8 @@ def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, m
     sync.write_atomic(sync.INBOX_FILE, json.dumps({"read_at": None, "items": [
         {"id": "approval", "at": sync.datetime.now(sync.timezone.utc).isoformat(), "level": "warning",
          "title": f"DSNP needs you: {code}", "message": "Open the action", "action": {"url": "https://example.invalid/link", "code": code}},
+        {"id": "failure", "at": sync.datetime.now(sync.timezone.utc).isoformat(), "level": "error",
+         "title": f"Pairing failed for {code}", "message": f"https://example.invalid/link refused {code}"},
         {"id": "ordinary", "at": sync.datetime.now(sync.timezone.utc).isoformat(), "level": "success",
          "title": "Download complete", "message": "Show S02E05"},
     ]}))
@@ -1322,11 +1324,39 @@ def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, m
     assert "example.invalid/notice" not in resolved["cause"]
     assert (sync.RUNS_DIR / f"{run_id}.log").read_text() == "ordinary line\n[approval removed]\nkept line\n"
     assert (sync.RUNS_DIR / f"{resolved_id}.log").read_text() == "before\n[approval removed]\nafter\n"
-    assert [item["id"] for item in sync.read_inbox()["items"]] == ["ordinary"]
+    cleaned_inbox = sync.read_inbox()["items"]
+    assert [item["id"] for item in cleaned_inbox] == ["failure", "ordinary"]
+    assert code not in cleaned_inbox[0]["title"] and code not in cleaned_inbox[0]["message"]
+    assert "example.invalid/link" not in cleaned_inbox[0]["message"]
     assert [item["title"] for item in sync.read_json(sync.SENT_FILE, [])] == ["Download complete"]
     assert sync.UNSHACKLE.local.log_file.read_text() == "[approval removed]\nhealthy line\n"
     assert sync.UNSHACKLE.local.log_file.with_suffix(".log.1").read_text() == "[approval removed]\nolder healthy line\n"
     assert sync.clean_approval_history() == {"cards": 0, "logs": 0, "inbox": 0, "sent": 0}
+
+
+def test_approval_cleanup_keeps_its_source_if_a_dependent_write_fails(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    code = "RETRY-CODE"
+    sync.write_atomic(sync.INBOX_FILE, json.dumps({"read_at": None, "items": [{
+        "id": "approval", "title": f"DSNP needs you: {code}", "message": "Open the action",
+        "action": {"url": "https://example.invalid/retry", "code": code},
+    }]}))
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    card = sync.RUNS_DIR / "retained.json"
+    card.write_text(json.dumps({"notice": f"Enter code: {code}", "detail": f"Pairing failed for {code}"}))
+    original_write = sync.write_atomic
+
+    def fail_card_write(path, data):
+        if path == card:
+            raise OSError("disk full")
+        return original_write(path, data)
+
+    monkeypatch.setattr(sync, "write_atomic", fail_card_write)
+
+    with pytest.raises(OSError, match="disk full"):
+        sync.clean_approval_history()
+
+    assert sync.read_inbox()["items"][0]["action"]["code"] == code
 
 
 def test_the_inbox_keeps_every_notification_and_its_action(tmp_path, monkeypatch):

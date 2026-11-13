@@ -922,19 +922,18 @@ def clean_approval_history() -> dict[str, int]:
     """Remove legacy retained approvals while preserving unrelated history."""
     counts = {"cards": 0, "logs": 0, "inbox": 0, "sent": 0}
     known_values: set[str] = set()
+    inbox = None
+    kept_inbox = []
+    inbox_changed = False
     if INBOX_FILE.exists():
         inbox = read_inbox()
-        kept = []
         for item in inbox.get("items") or []:
             action = item.get("action") if isinstance(item, dict) else None
             if isinstance(action, dict) and action.get("code") and action.get("url") and not action.get("kind"):
                 known_values.update(str(action[key]) for key in ("code", "url") if action.get(key))
                 counts["inbox"] += 1
             else:
-                kept.append(item)
-        if counts["inbox"]:
-            inbox["items"] = kept
-            write_atomic(INBOX_FILE, json.dumps(inbox))
+                kept_inbox.append(item)
 
     cards = []
     for path in RUNS_DIR.glob("*.json") if RUNS_DIR.exists() else []:
@@ -948,6 +947,15 @@ def clean_approval_history() -> dict[str, int]:
         values = approval_fragments(legacy_job, legacy_approval)
         known_values.update(values)
         cards.append((path, card, values))
+
+    for item in kept_inbox:
+        if not isinstance(item, dict):
+            continue
+        for key in ("title", "message"):
+            if item.get(key):
+                cleaned = without_approval(str(item[key]), known_values)
+                inbox_changed |= cleaned != item[key]
+                item[key] = cleaned
 
     for path, card, own_values in cards:
         retained = "\n".join(str(card.get(key) or "") for key in ("cause", "detail"))
@@ -992,6 +1000,9 @@ def clean_approval_history() -> dict[str, int]:
         if removed:
             write_atomic(legacy_log, cleaned)
             counts["logs"] += 1
+    if inbox is not None and (counts["inbox"] or inbox_changed):
+        inbox["items"] = kept_inbox
+        write_atomic(INBOX_FILE, json.dumps(inbox))
     return counts
 
 
