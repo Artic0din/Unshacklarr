@@ -440,6 +440,47 @@ console.log(JSON.stringify({{
     }
 
 
+def test_saved_authentication_status_remains_visible_while_unshackle_is_offline():
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "settings-services.js").read_text()
+    render = re.search(r"^function renderUnshackleStatus\(st\) \{.*?^\}", source, re.M | re.S).group()
+    harness = f"""
+const vm = require("vm");
+const nodes = {{
+  "#ux-run": {{ replaceChildren(...children) {{ this.children = children; }} }},
+  "#u-status": {{ replaceChildren(...children) {{ this.children = children; }} }},
+}};
+const box = {{
+  S: {{ authentication: {{ PAIRED: {{ state: "needs_user_action", service: "PAIRED" }} }}, config: {{ settings: {{}} }} }},
+  $: (selector) => nodes[selector],
+  el: (tag, props = {{}}, ...children) => ({{ tag, ...props, children }}),
+  svcName: (name) => name,
+  ago: () => "now",
+}};
+vm.createContext(box);
+vm.runInContext({json.dumps(render)}, box);
+box.renderUnshackleStatus({{ ok: false, mode: "remote", error: "offline" }});
+const texts = [];
+const visit = (node) => {{
+  if (!node || typeof node !== "object") return;
+  if (node.textContent) texts.push(node.textContent);
+  (node.children || []).forEach(visit);
+}};
+nodes["#u-status"].children.forEach(visit);
+console.log(JSON.stringify(texts));
+"""
+
+    done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+
+    assert done.returncode == 0, done.stderr
+    assert "Service access" in json.loads(done.stdout)
+
+
 def test_stats_add_up_the_history(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))

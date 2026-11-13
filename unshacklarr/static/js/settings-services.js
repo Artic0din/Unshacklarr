@@ -112,9 +112,10 @@ function renderUnshackleStatus(st) {
     const name = svcName(status.service || tag) + (status.backend ? ` · ${status.backend}` : "");
     return el("div", { className: "st-job" }, el("span", { textContent: name }), el("small", { textContent: label }));
   });
-  const extra = st.ok ? [
+  const extra = [
     ...(authentication.length ? [el("div", { className: "st-sect" }, el("b", { textContent: "Service access" }),
       el("div", { className: "st-jobs" }, ...authentication))] : []),
+    ...(st.ok ? [
     el("div", { className: "st-sect" }, el("b", { textContent: st.queue && (st.queue.downloading || st.queue.queued)
       ? `Queue · ${st.queue.downloading} downloading${st.queue.queued ? `, ${st.queue.queued} waiting` : ""}` : "Queue" }),
       ...(st.jobs?.length ? [el("div", { className: "st-jobs" }, ...st.jobs.map((j) => el("div", { className: "st-job" },
@@ -133,7 +134,8 @@ function renderUnshackleStatus(st) {
     // the commands name the bundled compose's container: shown only for its address (http://unshackle:8786)
     ...(local || !/^https?:\/\/unshackle(:\d+)?\/?$/.test(S.config.settings.unshackle_url || "") ? [] : [el("div", { className: "st-sect" }, el("b", { textContent: "Restart it or read its log where it runs" }),
       el("div", { className: "st-cmds" }, copyCmd("docker compose restart unshackle"), copyCmd("docker logs -f --tail 200 unshackle")))]),
-  ] : [];
+    ] : []),
+  ];
   // Unshackle 6 serves its proxies (a country code, a provider) only to a key allowed to: said, and allowed in one click
   const restartCmd = /^https?:\/\/unshackle(:\d+)?\/?$/.test(S.config.settings.unshackle_url || "") ? "docker compose restart unshackle" : "";
   const proxies = st.proxy_refused ? [el("div", { className: "st-sect warn" },
