@@ -350,6 +350,7 @@ document.querySelectorAll("[data-view]").forEach((b) => b.onclick = () => {
 
 /* Health: the header's lights, from the server's background check; details in Settings. */
 let healthTimer = null;
+let unshackleDetails = null;
 /* Downloads going on: counted on the menu's Activity, every 5 s while the page is in sight. */
 let busyStarted = false;
 /* Back in sight: the lights, the bell and the sync state at once, not at their next round. */
@@ -401,11 +402,13 @@ async function refreshBusy() {
 }
 async function refreshHealth(full = false) {
   if (document.hidden && !full) { clearTimeout(healthTimer); healthTimer = setTimeout(refreshHealth, 60000); return; }  // out of sight
-  try { renderHealth(await api(`/api/status${full ? "?full=1" : ""}`)); } catch { /* the lights keep their last state */ }
+  const authentication = !full && currentTab === "settings" && settingsSec === "unshackle";
+  try { renderHealth(await api(`/api/status${full ? "?full=1" : authentication ? "?auth=1" : ""}`)); } catch { /* the lights keep their last state */ }
   clearTimeout(healthTimer);  // after the await: calls that overlapped leave one loop, not one each
   healthTimer = setTimeout(refreshHealth, 60000);
 }
 function renderHealth(h) {
+  if (h.authentication) S.authentication = h.authentication;
   for (const [name, label] of [["unshackle", "Unshackle"], ["sonarr", "Sonarr"]]) {
     const st = h[name] || {}, b = document.querySelector(`[data-health=${name}]`);
     b.querySelector(".dot").className = "dot " + (st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "");
@@ -413,7 +416,15 @@ function renderHealth(h) {
       : st.ok === false ? st.error || `${label} is unreachable` : `Checking ${label}…`;
     b.ariaLabel = b.title;
   }
-  if (h.unshackle && ("tools" in h.unshackle || h.unshackle.ok === false)) renderUnshackleStatus(h.unshackle);  // down: its actions and why
+  const detailed = h.unshackle && ("tools" in h.unshackle || h.unshackle.ok === false);
+  if (detailed) unshackleDetails = {
+    ...h.unshackle,
+    ...(!("tools" in h.unshackle) && unshackleDetails?.tools ? { tools: unshackleDetails.tools } : {}),
+  };
+  else if (h.unshackle && unshackleDetails) unshackleDetails = {
+    ...h.unshackle, ...(unshackleDetails.tools ? { tools: unshackleDetails.tools } : {}),
+  };
+  if (detailed || h.authentication && unshackleDetails) renderUnshackleStatus(unshackleDetails);  // down: its actions and why
   renderSonarrState(h.sonarr);
   renderUnshackleState(h.unshackle);
   paintServers(h.servers);

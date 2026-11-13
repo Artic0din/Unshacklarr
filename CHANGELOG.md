@@ -10,6 +10,7 @@ Every change worth knowing, newest first. The format follows
 
 - Device approval links and codes are now delivered only through a transient, job-owned API and cleared on every terminal path instead of being retained in download history, logs, notifications, or diagnostics.
 - The bundled Unshackle image now builds from the reviewed authentication-contract commit and both container images publish their exact source revision.
+- Settings now keeps and shows each backend's last confirmed authenticated download or classified sign-in failure without reading private session files or contacting the provider.
 - Authentication errors distinguished a service's rejected login or playback token from Unshackle's internal API key and preserved the provider's reason and error reference.
 - Availability searches found and displayed seasons on other services even when all aired episodes were already on disk.
 - Refreshing a series' episode availability also searched other services for missing seasons and showed the suggestions immediately.

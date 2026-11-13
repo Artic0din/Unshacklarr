@@ -106,6 +106,8 @@ CONFIG_FILE = DATA / "config.yaml"
 WARNED_FILE = DATA / "warned.json"
 SEEN_FILE = DATA / "availability.json"  # per episode: last try it was not out yet, first try it was
 RUNS_DIR = DATA / "runs"
+AUTHENTICATION_FILE = DATA / "authentication.json"
+authentication_lock = threading.Lock()
 INBOX_FILE = DATA / "inbox.json"  # every notification, for the page's bell: {"read_at": iso, "items": [...]}
 INBOX_KEEP, INBOX_DAYS = 200, 60
 inbox_lock = threading.Lock()
@@ -649,6 +651,119 @@ FINALES = {"season": "season finale", "series": "series finale", "midseason": "m
 AUTOMATIC = ("auto", "burst")  # tries nobody asked for by hand
 
 
+def authentication_failures(card: dict) -> dict[str, str]:
+    """Classified login failures by service, including cards written by the first Phase 1 schema."""
+    stored = card.get("auth_failures")
+    failures = {service: observed for service, observed in stored.items() if service and observed} if isinstance(stored, dict) else {}
+    if card.get("auth_failure"):
+        service = card.get("auth_failure_service") or card.get("service")
+        observed = card.get("auth_failure_at") or card.get("ended")
+        if service and observed:
+            failures.setdefault(service, observed)
+    return failures
+
+
+def authentication_failure_backends(card: dict, failures: dict[str, str] | None = None) -> dict[str, str]:
+    """The backend that produced each classified authentication failure."""
+    stored = card.get("auth_failure_backends")
+    backends = {service: str(backend or "") for service, backend in stored.items()} if isinstance(stored, dict) else {}
+    for service in failures if failures is not None else authentication_failures(card):
+        backends.setdefault(service, str(card.get("backend") or ""))
+    return backends
+
+
+def authentication_validations(
+    card: dict,
+    failures: dict[str, str] | None = None,
+) -> dict[str, dict[str, str]]:
+    """Successful provider operations by service, with legacy completed cards as evidence."""
+    stored = card.get("auth_validations")
+    validations = {
+        service: {"backend": str(result.get("backend") or ""), "observed_at": result["observed_at"]}
+        for service, result in stored.items()
+        if service and isinstance(result, dict) and isinstance(result.get("observed_at"), str)
+    } if isinstance(stored, dict) else {}
+    if (
+        not validations
+        and not (failures if failures is not None else authentication_failures(card))
+        and card.get("outcome") in ("downloaded", "kept", "import")
+        and card.get("ended")
+        and card.get("service")
+    ):
+        validations[card["service"]] = {
+            "backend": str(card.get("backend") or ""),
+            "observed_at": card["ended"],
+        }
+    return validations
+
+
+def carry_authentication_failures(target: dict, source: dict) -> None:
+    inherited = authentication_failures(source)
+    if not inherited:
+        return
+    failures = target.setdefault("auth_failures", {})
+    target_backends = target.setdefault("auth_failure_backends", {})
+    source_backends = authentication_failure_backends(source)
+    for service, observed in inherited.items():
+        if observed >= failures.get(service, ""):
+            failures[service] = observed
+            target_backends[service] = source_backends.get(service, "")
+
+
+def read_authentication_observations() -> dict[str, dict[str, dict]]:
+    """Latest redacted authentication result by backend and service."""
+    stored = read_json(AUTHENTICATION_FILE, {})
+    if not isinstance(stored, dict):
+        return {}
+    observations = {}
+    for backend, services in stored.items():
+        if not isinstance(services, dict):
+            continue
+        valid = {
+            service: observation
+            for service, observation in services.items()
+            if isinstance(service, str)
+            and isinstance(observation, dict)
+            and observation.get("state") in ("validated", "needs_user_action")
+            and isinstance(observation.get("observed_at"), str)
+            and (observation.get("validated_at") is None or isinstance(observation.get("validated_at"), str))
+        }
+        if valid:
+            observations[str(backend)] = valid
+    return observations
+
+
+def record_authentication_observations(observations_to_record: list[tuple[str, str, str, str]]) -> None:
+    """Keep a batch of authentication evidence after Activity history is pruned."""
+    if not observations_to_record:
+        return
+    with authentication_lock:
+        observations = read_authentication_observations()
+        changed = False
+        for service, backend, state, observed_at in observations_to_record:
+            backend_observations = observations.setdefault(backend, {})
+            previous = backend_observations.get(service) or {}
+            previous_validation = previous.get("validated_at")
+            if previous.get("observed_at", "") > observed_at:
+                if state == "validated" and (previous_validation is None or observed_at > previous_validation):
+                    previous["validated_at"] = observed_at
+                    changed = True
+                continue
+            backend_observations[service] = {
+                "state": state,
+                "observed_at": observed_at,
+                "validated_at": observed_at if state == "validated" else previous_validation,
+            }
+            changed = True
+        if changed:
+            write_atomic(AUTHENTICATION_FILE, json.dumps(observations))
+
+
+def record_authentication_observation(service: str, backend: str, state: str, observed_at: str) -> None:
+    """Keep one authentication result outside a batch operation."""
+    record_authentication_observations([(service, backend, state, observed_at)])
+
+
 class EpisodeRun:
     """One download attempt's log and card, for the web page's terminal and its history.
 
@@ -724,21 +839,98 @@ class EpisodeRun:
         with cls._approval_lock:
             return [dict(approval) for approval in cls._approvals.values()]
 
-    def finish(self, outcome: str, cause: str = "", detail: str = "") -> None:
+    def observe_authentication(self, service: str, backend: str, state: str) -> None:
+        """Persist a classified provider result when that provider attempt completes."""
+        observed_at = datetime.now(timezone.utc).isoformat()
+        failures = authentication_failures(self.card)
+        failure_backends = authentication_failure_backends(self.card)
+        attempt_failures = self.card.setdefault("auth_attempt_failures", {})
+        if state == "validated":
+            validations = self.card.setdefault("auth_validations", {})
+            previous = validations.get(service) if isinstance(validations.get(service), dict) else {}
+            if observed_at >= previous.get("observed_at", ""):
+                validations[service] = {"backend": backend, "observed_at": observed_at}
+            if failure_backends.get(service, "") == backend and failures.get(service, "") <= observed_at:
+                failures.pop(service, None)
+                failure_backends.pop(service, None)
+                attempt_failures.pop(service, None)
+        else:
+            failures[service] = observed_at
+            failure_backends[service] = backend
+            attempt_failures[service] = {"backend": backend, "observed_at": observed_at}
+        if failures:
+            self.card["auth_failures"] = failures
+            self.card["auth_failure_backends"] = failure_backends
+        else:
+            self.card.pop("auth_failures", None)
+            self.card.pop("auth_failure_backends", None)
+        self.save()
+        try:
+            record_authentication_observation(service, backend, state, observed_at)
+        except OSError as error:
+            print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
+
+    def finish(self, outcome: str, cause: str = "", detail: str = "", *, auth_failed: bool = False) -> None:
         self.set_approval(None)
         if getattr(current, "run", None) is self:
             current.run = None
         self.card.update(cause=no_credentials(cause), detail=no_credentials(detail))
         self.log.close()
-        self.card.update(ended=datetime.now(timezone.utc).isoformat(), outcome=outcome)
+        ended = datetime.now(timezone.utc).isoformat()
+        self.card.update(ended=ended, outcome=outcome)
+        failures = authentication_failures(self.card)
+        failure_backends = authentication_failure_backends(self.card)
+        validations = authentication_validations(self.card)
+        stored_attempt_failures = self.card.get("auth_attempt_failures")
+        attempt_failures = {
+            failed_service: {
+                "backend": str(result.get("backend") or ""),
+                "observed_at": result["observed_at"],
+            }
+            for failed_service, result in stored_attempt_failures.items()
+            if failed_service and isinstance(result, dict) and isinstance(result.get("observed_at"), str)
+        } if isinstance(stored_attempt_failures, dict) else {}
+        service = self.card.get("service")
+        backend = str(self.card.get("backend") or "")
         if outcome in ("downloaded", "kept", "import"):  # a later try of this attempt got through: nothing left unconfirmed (#10)
             self.card.pop("unconfirmed_job", None)
+            for validated_service, result in validations.items():
+                if failure_backends.get(validated_service, "") == result["backend"] and failures.get(
+                    validated_service, ""
+                ) <= result["observed_at"]:
+                    failures.pop(validated_service, None)
+                    failure_backends.pop(validated_service, None)
+            self.card["auth_validations"] = validations
+        elif auth_failed and not attempt_failures:
+            failures[service] = ended
+            failure_backends[service] = backend
+            attempt_failures[service] = {"backend": backend, "observed_at": ended}
+        for key in ("auth_failure", "auth_failure_at", "auth_failure_service"):
+            self.card.pop(key, None)
+        if failures:
+            self.card["auth_failures"] = failures
+            self.card["auth_failure_backends"] = failure_backends
+        else:
+            self.card.pop("auth_failures", None)
+            self.card.pop("auth_failure_backends", None)
+        self.card.pop("auth_attempt_failures", None)
         if outcome in ("downloaded", "import", "kept"):  # a new file: the release watch must not see it missing
             _broadcast_episodes.clear()
         if outcome == "downloaded":  # a new file: Upgrades' find for it is done with (by mj23au)
             drop_upgrade_find(self.card.get("instance", ""), self.card.get("tvdbId"), self.card.get("sxxeyy"))
         self.fold_checks()
         self.save()
+        try:
+            for validated_service, result in validations.items():
+                record_authentication_observation(
+                    validated_service, result["backend"], "validated", result["observed_at"]
+                )
+            for failed_service, result in attempt_failures.items():
+                record_authentication_observation(
+                    failed_service, result["backend"], "needs_user_action", result["observed_at"]
+                )
+        except OSError as error:
+            print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
         # Only once its end is on disk: the page, told a run ended, reads the history at once; read between the two, a
         # card without an end that no run follows was "interrupted", and stayed so on the page (by mj23au, #17)
         EpisodeRun.active.discard(self.id)
@@ -766,6 +958,7 @@ class EpisodeRun:
                 continue
             if c.get("told"):
                 self.card["told"] = c["told"]
+            carry_authentication_failures(self.card, c)
             log = RUNS_DIR / f"{c['id']}.log"
             if log.exists():
                 with (RUNS_DIR / f"{self.id}.log").open("ab") as mine:
@@ -792,6 +985,8 @@ class EpisodeRun:
         mine = log.read_bytes() if log.exists() else b""
         before = b"".join((RUNS_DIR / f"{c['id']}.log").read_bytes() for c in earlier if (RUNS_DIR / f"{c['id']}.log").exists())
         write_atomic(log, before + mine)
+        for c in earlier:
+            carry_authentication_failures(self.card, c)
         self.card["checks"] = sum(c.get("checks", 1) for c in earlier) + 1
         self.card["first_check"] = earlier[0].get("first_check") or earlier[0]["started"]
         for c in earlier:
@@ -821,10 +1016,11 @@ class JobFailed(Exception):
     """unshackle ran the download and it failed (or was stopped). The message is all it
     said, for the terminal; `cause` the one line that matters, for notifications."""
 
-    def __init__(self, message: str, status: str = "failed", cause: str = ""):
+    def __init__(self, message: str, status: str = "failed", cause: str = "", error_code: str = ""):
         super().__init__(message)
         self.status = status
         self.cause = cause or message
+        self.error_code = error_code
 
 
 def job_cause(job: dict) -> str:
@@ -1390,7 +1586,12 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
                               for key in ("error_message", "error_details", "worker_stderr")}}
         detail = safe_job.get("error_details") or ""
         stderr = "\n".join((safe_job.get("worker_stderr") or "").strip().splitlines()[-15:])
-        raise JobFailed("\n".join(filter(None, [safe_job.get("error_message") or status, detail, stderr])), status, job_cause(safe_job))
+        raise JobFailed(
+            "\n".join(filter(None, [safe_job.get("error_message") or status, detail, stderr])),
+            status,
+            job_cause(safe_job),
+            str(job.get("error_code") or ""),
+        )
     files = job.get("output_files") or []
     trace(f"Unshackle made {len(files)} file{'s' if len(files) != 1 else ''}: " + ", ".join(Path(f).name for f in files))
     return files
@@ -1827,16 +2028,16 @@ def unshackle_command(show: dict, config: dict, service_sxxeyy: str, out: Path) 
             *to_args(dl), show["service"], *to_args(own), str(show["title"])]
 
 
-def service_entry(tag: str, config: dict | None = None) -> dict:
-    return next((s for s in backend_for(tag, config).services() if s["tag"] == tag), {})
+def service_entry(tag: str, config: dict | None = None, backend: Unshackle | None = None) -> dict:
+    return next((s for s in (backend or backend_for(tag, config)).services() if s["tag"] == tag), {})
 
 
-def no_cdm(tag: str, config: dict | None = None) -> str:
+def no_cdm(tag: str, config: dict | None = None, backend: Unshackle | None = None) -> str:
     """Why a service cannot be downloaded for want of a CDM: unshackle.yaml gives it no device and has no
     default one, so Unshackle would fail on its first license. Empty when a device decrypts it, when it is
     set to none (no DRM), or when it can't be told (Unshackle unreachable, no cdm: section read)."""
     try:
-        cdm = backend_for(tag, config).cdm_config()
+        cdm = (backend or backend_for(tag, config)).cdm_config()
     except UnshackleError:
         return ""
     if not cdm or any(str(k).lower() in ("default", tag.lower()) and v for k, v in cdm.items()):
@@ -1999,16 +2200,23 @@ def find_programme(show: dict, ep: dict, config: dict, key: str, sxxeyy: str, pa
     return match
 
 
-def download_request(show: dict, config: dict, service_sxxeyy: str, out: Path) -> dict:
+def download_request(
+    show: dict,
+    config: dict,
+    service_sxxeyy: str,
+    out: Path,
+    backend: Unshackle | None = None,
+) -> dict:
     """The same download, as unshackle serve's /api/download takes it."""
     dl, own = stacked(show, config)
-    if not dl.get("--cdm") and (why := no_cdm(show["service"], config)):  # a device named for the run needs no mapping
+    backend = backend or backend_for(show["service"], config)
+    # A device named for the run needs no service-to-device mapping.
+    if not dl.get("--cdm") and (why := no_cdm(show["service"], config, backend)):
         raise ValueError(why)
-    backend = backend_for(show["service"], config)
     return {
         # unshackle.yaml's dl: section first, as on the command line: serve does not apply it
         **options.from_dl_config(backend.dl_config(), show["service"]),
-        **options.to_params(own, options.service_specs(service_entry(show["service"], config))),
+        **options.to_params(own, options.service_specs(service_entry(show["service"], config, backend))),
         **options.to_params(dl, options.dl_specs()),
         "service": show["service"],
         "title_id": str(show["title"]),
@@ -2327,11 +2535,14 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
         got: list[Path] = []
         try:
             run.say(f"{label}: adding the {want} audio from {show['service']} to the file it has")
-            request = download_request(show, config, service_sxxeyy, out)
+            backend = backend_for(show["service"], config)
+            run.card["backend"] = backend.name
+            request = download_request(show, config, service_sxxeyy, out, backend)
             for k in ("video_only", "subs_only", "no_audio", "lang", "a_lang", "require_audio", "s_lang", "require_subs"):
                 request.pop(k, None)
             request.update(audio_only=True, a_lang=[want])
             run_job_retrying(request, run)
+            run.observe_authentication(show["service"], backend.name, "validated")
             got[:] = videos_in(out) + [f for f in out.rglob("*.mka")]
             if not got:
                 raise RuntimeError(f"No {want} audio came from {show['service']}")
@@ -2365,10 +2576,17 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             return True
         except (RuntimeError, JobFailed, UnshackleError, ValueError, subprocess.CalledProcessError, requests.RequestException) as e:
             run.say(f"{label}: {e}")
+            if getattr(e, "error_code", "") == "AUTH_FAILED":
+                run.observe_authentication(show["service"], str(run.card.get("backend") or ""), "needs_user_action")
             # audio alone, maybe in a video container: Import would put it in place of the library's video
             if left := unlink_inside(out, got):
                 run.say(f"{label}: could not delete {', '.join(f.name for f in left)}: audio only, delete it rather than import it")
-            run.finish("failed", str(e), f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "")
+            run.finish(
+                "failed",
+                str(e),
+                f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "",
+                auth_failed=getattr(e, "error_code", "") == "AUTH_FAILED",
+            )
             return True  # tried: the next day's check tries again, not a second download now
         finally:
             if not videos_in(out):
@@ -2412,12 +2630,19 @@ def speaks(tags, accepted: list[str]) -> bool:
 NOT_LISTED = re.compile(r"No (available )?episodes found", re.IGNORECASE)  # list-tracks: the episode is not on the service
 
 
-def list_tracks(show: dict, config: dict, request: dict, ladder: dict | None = None) -> list[dict]:
+def list_tracks(
+    show: dict,
+    config: dict,
+    request: dict,
+    ladder: dict | None = None,
+    backend: Unshackle | None = None,
+) -> list[dict]:
     """The episode's tracks on the service, nothing downloaded: one entry per part ([] when the service has no such
     episode). For a quality ladder, the ranges and codecs of its steps are asked for: a service lists only those."""
     _, own = stacked(show, config)
+    backend = backend or backend_for(show["service"], config)
     keep = {"service", "title_id", "profile", "proxy", "no_proxy", "cdm_type",
-            *options.to_params(own, options.service_specs(service_entry(show["service"], config)))}
+            *options.to_params(own, options.service_specs(service_entry(show["service"], config, backend)))}
     asked = {k: v for k, v in request.items() if k in keep}
     if ladder:
         ranges = {step.get("range") or "" for step in ladder["steps"]}
@@ -2429,7 +2654,7 @@ def list_tracks(show: dict, config: dict, request: dict, ladder: dict | None = N
         if "" not in codecs:
             asked["vcodec"] = sorted(codecs)
     try:  # list-tracks as the official serve has it: the same episode, profile, proxy and service options
-        found = backend_for(show["service"], config).call("POST", "/api/list-tracks", json={**asked, "wanted": request["wanted"]})
+        found = backend.call("POST", "/api/list-tracks", json={**asked, "wanted": request["wanted"]})
     except UnshackleError as e:
         if NOT_LISTED.search(str(e)):
             return []
@@ -2437,15 +2662,22 @@ def list_tracks(show: dict, config: dict, request: dict, ladder: dict | None = N
     return found.get("episodes") if "episodes" in found else [found]
 
 
-def tracks_on_service(show: dict, config: dict, request: dict) -> dict[str, set[str]] | None:
+def tracks_on_service(
+    show: dict,
+    config: dict,
+    request: dict,
+    backend: Unshackle | None = None,
+) -> dict[str, set[str]] | None:
     """The audio and subtitle languages the service offers for the episode, nothing downloaded (forced subtitles,
     a few lines only, left out); None when it can't tell (a remote service, an error, no answer): the download then
     goes on, checked once it is in."""
     if request.get("remote"):
         return None
     try:
-        episodes = list_tracks(show, config, request)
+        episodes = list_tracks(show, config, request, backend=backend)
     except UnshackleError as e:
+        if getattr(e, "error_code", "") == "AUTH_FAILED":
+            raise
         trace(f"tracks before the download: not told ({e})")
         return None
     if not episodes:
@@ -2540,7 +2772,12 @@ def track_label(t: dict) -> str:
     return f"{eq_height(t) or '?'}p {t.get('codec') or '?'} {' + '.join(layers) if len(layers) > 1 else t.get('range') or '?'}"
 
 
-def apply_ladder(show: dict, config: dict, request: dict) -> int | None:
+def apply_ladder(
+    show: dict,
+    config: dict,
+    request: dict,
+    backend: Unshackle | None = None,
+) -> int | None:
     """The series' quality ladder, resolved against the episode's real tracks: the first step that has one sets
     the quality, codec and range asked for. None does: the episode fails, nothing outside the ladder downloaded.
     The step taken, the service's best now."""
@@ -2554,7 +2791,7 @@ def apply_ladder(show: dict, config: dict, request: dict) -> int | None:
             return None
     if request.get("remote"):
         raise ValueError(f"The quality ladder {ladder['name']} needs the episode's track list, which a --remote download does not give")
-    episodes = list_tracks(show, config, request, ladder)
+    episodes = list_tracks(show, config, request, ladder, backend)
     if not episodes:  # ponytail: not on the service (yet): the download finds nothing either, and says so as usual
         return None
     found = climb(ladder, episodes)
@@ -3313,6 +3550,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 if numbering is not None or replace:
                     run.save()
                 if show.get("programmes"):  # each episode its own programme: found by its title, or its pasted URL (#17)
+                    run.card["backend"] = backend_for(show["service"], config).name
+                    run.save()
                     try:
                         match = programme_for(show, ep, config, manual)
                     except Unmatched as e:
@@ -3325,7 +3564,11 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         continue
                     except (UnshackleError, requests.RequestException) as e:
                         run.say(f"{label}: looking for its programme on {show['service']}: {e}")
-                        run.finish("failed", f"Looking for its programme on {show['service']}: {e}")
+                        run.finish(
+                            "failed",
+                            f"Looking for its programme on {show['service']}: {e}",
+                            auth_failed=getattr(e, "error_code", "") == "AUTH_FAILED",
+                        )
                         continue
                     show = {**show, "title": match["title"]}  # this episode's own programme, for this download only
                     service_sxxeyy = match["code"]
@@ -3351,28 +3594,45 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
 
                 def ask(wanted: str, profile: str = "", use: dict | None = None) -> None:
                     use = use or show  # the series as it downloads: its own service, or its fallback
-                    request = download_request(use, config, wanted, out)
-                    if profile:  # a fallback profile, its login refused with the series' own
-                        request["profile"] = profile
-                    if any(wanted_langs.values()) and (tracks := tracks_on_service(use, config, request)) is not None:
-                        for kind, accepted in wanted_langs.items():
-                            if accepted and not speaks(tracks[kind], accepted):
-                                raise Missing(kind, accepted, tracks[kind])
-                    if use.get("asked_video"):
-                        run.card["video_override"] = use["asked_video"]
-                    if apply_ladder(use, config, request) and use is show and ep.get("id") and not use.get("asked_video"):
-                        note_download_answer(ep["id"], show, config)  # its best now: Upgrades needn't ask again soon
-                    asked = {k: v for k, v in request.items() if k not in ("service", "title_id", "wanted", "output_dir", "debug")}
-                    trace(f"asking for {request['service']} {request['title_id']} {wanted}, into {request['output_dir']}")
-                    trace("options: " + (", ".join(f"{k}={options.HIDDEN.sub('//***@', str(v))}" for k, v in asked.items()) or "none"))  # no proxy password in the log
                     backend = backend_for(use["service"], config)
-                    run.card["setup"] = setup_of(request, backend)
-                    run.card["backend"] = backend.name  # the serve run_job hands it to, and Activity's Stop cancels it on
-                    run.save()
-                    run_job_retrying(request, run)
+                    run.card["backend"] = backend.name
+                    try:
+                        request = download_request(use, config, wanted, out, backend)
+                        if profile:  # a fallback profile, its login refused with the series' own
+                            request["profile"] = profile
+                        if any(wanted_langs.values()) and (
+                            tracks := tracks_on_service(use, config, request, backend)
+                        ) is not None:
+                            for kind, accepted in wanted_langs.items():
+                                if accepted and not speaks(tracks[kind], accepted):
+                                    raise Missing(kind, accepted, tracks[kind])
+                        if use.get("asked_video"):
+                            run.card["video_override"] = use["asked_video"]
+                        if (
+                            apply_ladder(use, config, request, backend)
+                            and use is show
+                            and ep.get("id")
+                            and not use.get("asked_video")
+                        ):
+                            note_download_answer(ep["id"], show, config)  # its best now: Upgrades needn't ask again soon
+                        asked = {k: v for k, v in request.items() if k not in ("service", "title_id", "wanted", "output_dir", "debug")}
+                        trace(f"asking for {request['service']} {request['title_id']} {wanted}, into {request['output_dir']}")
+                        trace("options: " + (", ".join(f"{k}={options.HIDDEN.sub('//***@', str(v))}" for k, v in asked.items()) or "none"))  # no proxy password in the log
+                        run.card["setup"] = setup_of(request, backend)
+                        run.save()  # serve's run_job hands this to Activity, whose Stop action cancels it
+                        run_job_retrying(request, run)
+                    except Missing:
+                        run.observe_authentication(use["service"], backend.name, "validated")
+                        raise
+                    except (JobFailed, UnshackleError, ValueError) as error:
+                        if getattr(error, "error_code", "") == "AUTH_FAILED":
+                            run.observe_authentication(use["service"], backend.name, "needs_user_action")
+                        raise
+                    run.observe_authentication(use["service"], backend.name, "validated")
 
                 missed = None  # its own service has it in none of the languages accepted: the fallback's turn
                 error = cause = None  # this episode's own: the login-fallback check below must never see the last one's
+                error_code = ""
                 try:
                   try:
                     # Its number on the service may hold another episode (a same-named series elsewhere, seasons
@@ -3431,21 +3691,26 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         run.say(f"\r\n{label}: stopped")
                         run.finish("stopped")
                         continue
-                    error, cause = no_credentials(e), no_credentials(e.cause)
+                    error, cause, error_code = no_credentials(e), no_credentials(e.cause), e.error_code
                 except (UnshackleError, ValueError) as e:
                     error = cause = no_credentials(e)
+                    error_code = getattr(e, "error_code", "")
 
                 # Its login refused and nothing came: the series' fallback profiles, in their order, until one logs in
                 stopped = waits = False
+                authentication_failed = error_code == "AUTH_FAILED"
                 for profile in fallback_profiles(show, config) if error and login_failure(cause or "") and not videos_in(out) else []:
                     run.say(f"{label}: {show['service']} refused the login, trying the profile {profile}")
                     try:
                         ask(service_sxxeyy, profile)
                         error = cause = None
+                        error_code = ""
+                        authentication_failed = False
                         run.card["profile"] = profile
                         run.say(f"{label}: logged in with the profile {profile}")
                         break
                     except Missing as e:  # logged in: the episode has none of the languages accepted yet
+                        authentication_failed = False
                         no_language(e)
                         waits = True
                         break
@@ -3453,9 +3718,12 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         if e.status == "cancelled":
                             stopped = True
                             break
-                        error, cause = no_credentials(e), no_credentials(e.cause)
+                        error, cause, error_code = no_credentials(e), no_credentials(e.cause), e.error_code
+                        authentication_failed = authentication_failed or error_code == "AUTH_FAILED"
                     except (UnshackleError, ValueError) as e:
                         error = cause = no_credentials(e)
+                        error_code = getattr(e, "error_code", "")
+                        authentication_failed = authentication_failed or error_code == "AUTH_FAILED"
                     if not login_failure(cause or ""):
                         break  # another failure than a login: another profile would not help
                 if waits:
@@ -3483,7 +3751,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     where = seen_by("sonarr_downloads", out)
                     run.say(f"\r\n\x1b[31m{label}: Unshackle FAILED after {parts_in(out)} part(s)\x1b[0m\n{error}".replace("\n", "\r\n"))
                     tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe parts that came are in {where}.", batch=batch, details=episode_details(ep, show)))
-                    run.finish("failed", cause, f"The parts that came are in {where}")
+                    run.finish("failed", cause, f"The parts that came are in {where}", auth_failed=authentication_failed)
                     continue
                 if not videos_in(out):
                     shutil.rmtree(out, ignore_errors=True)
@@ -3494,10 +3762,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         if login_failure(cause):
                             hint = f"{show['service']} refused Unshackle: its cookies may have expired. Update them in Settings, Cookies."
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Login failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
-                            run.finish("failed", cause, hint)
+                            run.finish("failed", cause, hint, auth_failed=authentication_failed)
                         else:
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe history in Activity has Unshackle's full output.", batch=batch, details=episode_details(ep, show)))
-                            run.finish("failed", cause)
+                            run.finish("failed", cause, auth_failed=authentication_failed)
                     else:
                         run.say(f"{label}: not on {show['service']} yet{missing}")
                         run.finish("unavailable", f"Not on {show['service']} yet{missing}")
