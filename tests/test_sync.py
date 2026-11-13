@@ -2611,7 +2611,13 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
     monkeypatch.setattr(sync.subprocess, "run", tools)
-    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append((sorted(f.name for f in out.iterdir()), replace)))
+    def import_audio(e, out, replace=False):
+        imported.append((sorted(f.name for f in out.iterdir()), replace))
+        sync.record_authentication_observation(
+            "RTLP", "", "needs_user_action", datetime.now(timezone.utc).isoformat()
+        )
+
+    monkeypatch.setattr(sync, "import_episode", import_audio)
     monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
     assert sync.add_track(205, "fr") is True
     assert asked[0]["title_id"] == "https://service/season-two" and asked[0]["wanted"] == ["S01E05"]
@@ -2626,6 +2632,7 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     assert imported == [(["Show - S02E05.mkv"], True)]  # the joined file only, in place of the library's
     card = next(json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))
     assert card["kind"] == "upgrade" and card["outcome"] == "downloaded"
+    assert sync.read_authentication_observations()[""]["RTLP"]["state"] == "needs_user_action"
 
     file.update(path="/tv/Show/Gone.mkv", sceneName="Show.S02E05.1080p.RTLP.WEB-DL")
     assert sync.add_track(205, "fr") is False  # out of reach here: downloaded again as before

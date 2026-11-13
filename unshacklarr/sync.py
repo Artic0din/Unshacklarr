@@ -2275,11 +2275,14 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
         got: list[Path] = []
         try:
             run.say(f"{label}: adding the {want} audio from {show['service']} to the file it has")
+            backend = backend_for(show["service"], config)
+            run.card["backend"] = backend.name
             request = download_request(show, config, service_sxxeyy, out)
             for k in ("video_only", "subs_only", "no_audio", "lang", "a_lang", "require_audio", "s_lang", "require_subs"):
                 request.pop(k, None)
             request.update(audio_only=True, a_lang=[want])
             run_job_retrying(request, run)
+            run.observe_authentication(show["service"], backend.name, "validated")
             got[:] = videos_in(out) + [f for f in out.rglob("*.mka")]
             if not got:
                 raise RuntimeError(f"No {want} audio came from {show['service']}")
@@ -2313,6 +2316,8 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             return True
         except (RuntimeError, JobFailed, UnshackleError, ValueError, subprocess.CalledProcessError, requests.RequestException) as e:
             run.say(f"{label}: {e}")
+            if getattr(e, "error_code", "") == "AUTH_FAILED":
+                run.observe_authentication(show["service"], str(run.card.get("backend") or ""), "needs_user_action")
             # audio alone, maybe in a video container: Import would put it in place of the library's video
             if left := unlink_inside(out, got):
                 run.say(f"{label}: could not delete {', '.join(f.name for f in left)}: audio only, delete it rather than import it")
