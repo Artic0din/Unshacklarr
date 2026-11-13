@@ -5007,15 +5007,25 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
     service_methods = {service["tag"]: service.get("auth_methods") for service in services}
     observations = sonarr_sync.read_authentication_observations()
     identities = {(service["tag"], str(service.get("backend") or "")) for service in services}
+    successes_by_identity = collections.defaultdict(list)
+    explicit_successes_by_identity = collections.defaultdict(list)
+    failures_by_identity = collections.defaultdict(list)
     for card in cards:
         validations = sonarr_sync.authentication_validations(card)
         failures = sonarr_sync.authentication_failures(card)
         if not validations and not failures and card.get("service") in service_methods:
             identities.add((card["service"], str(card.get("backend") or "")))
-        identities.update((tag, result["backend"]) for tag, result in validations.items())
-        identities.update(
-            (tag, sonarr_sync.authentication_failure_backends(card).get(tag, "")) for tag in failures
-        )
+        for tag, validation in validations.items():
+            identity = (tag, validation["backend"])
+            identities.add(identity)
+            successes_by_identity[identity].append(validation["observed_at"])
+            if isinstance(card.get("auth_validations"), dict) and tag in card["auth_validations"]:
+                explicit_successes_by_identity[identity].append(validation["observed_at"])
+        failure_backends = sonarr_sync.authentication_failure_backends(card, failures)
+        for tag, observed_at in failures.items():
+            identity = (tag, failure_backends.get(tag, ""))
+            identities.add(identity)
+            failures_by_identity[identity].append(observed_at)
     identities.update(
         (tag, str(backend))
         for backend, backend_observations in observations.items()
@@ -5027,18 +5037,10 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
         methods = service_methods.get(tag)
         stored = (observations.get(backend) or {}).get(tag) or {}
         status = {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None}
-        successes = [
-            result["observed_at"]
-            for card in cards
-            for validated_service, result in sonarr_sync.authentication_validations(card).items()
-            if validated_service == tag and result["backend"] == backend
-        ]
-        failures = [
-            sonarr_sync.authentication_failures(card)[tag]
-            for card in cards
-            if tag in sonarr_sync.authentication_failures(card)
-            and sonarr_sync.authentication_failure_backends(card).get(tag, "") == backend
-        ]
+        successes = successes_by_identity[tag, backend]
+        failures = failures_by_identity[tag, backend]
+        if methods is None and not stored and not failures:
+            successes = explicit_successes_by_identity[tag, backend]
         if methods == []:
             status.update(state="anonymous", needs_user_action=False)
         elif methods is not None or stored or successes or failures:

@@ -662,11 +662,11 @@ def authentication_failures(card: dict) -> dict[str, str]:
     return failures
 
 
-def authentication_failure_backends(card: dict) -> dict[str, str]:
+def authentication_failure_backends(card: dict, failures: dict[str, str] | None = None) -> dict[str, str]:
     """The backend that produced each classified authentication failure."""
     stored = card.get("auth_failure_backends")
     backends = {service: str(backend or "") for service, backend in stored.items()} if isinstance(stored, dict) else {}
-    for service in authentication_failures(card):
+    for service in failures if failures is not None else authentication_failures(card):
         backends.setdefault(service, str(card.get("backend") or ""))
     return backends
 

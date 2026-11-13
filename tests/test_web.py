@@ -235,6 +235,52 @@ def test_authentication_status_uses_run_evidence_without_live_service_metadata(t
     }
 
 
+def test_authentication_status_does_not_treat_legacy_offline_success_as_login(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+
+    status = web.authentication_status(
+        [{"service": "OPEN", "outcome": "downloaded", "ended": "2026-11-14T01:00:00+00:00"}],
+        [],
+    )
+
+    assert status["OPEN"] == {
+        "state": "unknown",
+        "validated_at": None,
+        "observed_at": None,
+        "needs_user_action": None,
+    }
+
+
+def test_authentication_status_reads_each_card_evidence_once(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards = [
+        {"service": "FIRST", "outcome": "downloaded", "ended": "2026-11-14T01:00:00+00:00"},
+        {"service": "SECOND", "outcome": "downloaded", "ended": "2026-11-14T02:00:00+00:00"},
+    ]
+    validation_calls = []
+    failure_calls = []
+    original_validations = web.sonarr_sync.authentication_validations
+    original_failures = web.sonarr_sync.authentication_failures
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "authentication_validations",
+        lambda card: validation_calls.append(card) or original_validations(card),
+    )
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "authentication_failures",
+        lambda card: failure_calls.append(card) or original_failures(card),
+    )
+
+    web.authentication_status(
+        cards,
+        [{"tag": "FIRST", "auth_methods": ["pairing"]}, {"tag": "SECOND", "auth_methods": []}],
+    )
+
+    assert validation_calls == cards
+    assert failure_calls == cards
+
+
 @pytest.mark.parametrize("outcome", ["downloaded", "kept", "import"])
 def test_every_completed_download_validates_authentication(tmp_path, monkeypatch, outcome):
     web = reloaded_web(tmp_path, monkeypatch)
