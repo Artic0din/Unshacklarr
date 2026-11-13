@@ -891,22 +891,55 @@ def without_approval(text: str, fragments: set[str]) -> str:
     return text
 
 
-def _redact_approval_lines(path: Path, values: set[str]) -> bool:
-    """Remove only lines containing a known retained approval value."""
+LEGACY_OPEN_APPROVAL = re.compile(
+    r"\bopen\s+(https?://[^\s\"<>]+)\s+and\s+enter\s+([A-Za-z0-9-]{4,32})",
+    re.IGNORECASE,
+)
+LEGACY_GOTO_APPROVAL = re.compile(
+    r"\bgo to:\s*(https?://[^\s\"<>]+)[^\n]*\n[^\n]*(?:enter|use)(?:\s+the)?\s+code\s*:\s*([A-Za-z0-9-]{4,32})",
+    re.IGNORECASE,
+)
+LEGACY_CODE_APPROVAL = re.compile(
+    r"\b(?:enter|use)(?:\s+the)?\s+code\s*:\s*([A-Za-z0-9-]{4,32})",
+    re.IGNORECASE,
+)
+def legacy_approval_fragments(text: str) -> set[str]:
+    """Codes and URLs from recognizable legacy approval instructions."""
+    fragments = set()
+    for match in LEGACY_OPEN_APPROVAL.finditer(text):
+        fragments.update(match.groups())
+    for match in LEGACY_GOTO_APPROVAL.finditer(text):
+        fragments.update(match.groups())
+    fragments.update(match.group(1) for match in LEGACY_CODE_APPROVAL.finditer(text))
+    return fragments
+
+
+def legacy_approval_source_lines(text: str) -> set[int]:
+    """Line indexes that make up recognizable approval instructions."""
+    lines = set()
+    for pattern in (LEGACY_OPEN_APPROVAL, LEGACY_GOTO_APPROVAL, LEGACY_CODE_APPROVAL):
+        for match in pattern.finditer(text):
+            first = text.count("\n", 0, match.start())
+            last = text.count("\n", 0, match.end())
+            lines.update(range(first, last + 1))
+    return lines
+
+
+def _redact_approval_lines(path: Path, values: set[str], preserve_sources: bool = False) -> bool:
+    """Remove approval lines, optionally keeping recognizable source instructions for a second pass."""
     try:
         text = path.read_text(errors="replace")
     except OSError:
         return False
     lines = text.splitlines(keepends=True)
+    source_lines = legacy_approval_source_lines(text) if preserve_sources else set()
     cleaned = []
     changed = False
-    for line in lines:
-        legacy_approval = re.search(
-            r"(?:open\s+https?://\S+\s+and\s+enter\s+[A-Za-z0-9-]{4,32}|"
-            r"(?:enter|use)(?:\s+the)?\s+code\s*:\s*[A-Za-z0-9-]{4,32})",
-            line,
-            re.IGNORECASE,
-        )
+    for index, line in enumerate(lines):
+        legacy_approval = any(pattern.search(line) for pattern in (LEGACY_OPEN_APPROVAL, LEGACY_CODE_APPROVAL))
+        if index in source_lines:
+            cleaned.append(line)
+            continue
         if legacy_approval or any(value in line for value in values):
             if not cleaned or cleaned[-1] != "[approval removed]\n":
                 cleaned.append("[approval removed]\n")
@@ -934,6 +967,16 @@ def clean_approval_history() -> dict[str, int]:
                 counts["inbox"] += 1
             else:
                 kept_inbox.append(item)
+
+    local_log = UNSHACKLE.local.log_file
+    log_paths = list(RUNS_DIR.glob("*.log")) if RUNS_DIR.exists() else []
+    log_paths.extend((local_log, local_log.with_suffix(".log.1")))
+    log_paths = list(dict.fromkeys(log_paths))
+    for path in log_paths:
+        try:
+            known_values.update(legacy_approval_fragments(path.read_text(errors="replace")))
+        except OSError:
+            continue
 
     cards = []
     for path in RUNS_DIR.glob("*.json") if RUNS_DIR.exists() else []:
@@ -985,24 +1028,17 @@ def clean_approval_history() -> dict[str, int]:
         if counts["sent"]:
             write_atomic(SENT_FILE, json.dumps(kept))
 
-    for path in RUNS_DIR.glob("*.log") if RUNS_DIR.exists() else []:
-        if _redact_approval_lines(path, known_values):
-            counts["logs"] += 1
+    if inbox is not None and inbox_changed:
+        write_atomic(INBOX_FILE, json.dumps(inbox))
 
-    legacy = re.compile(
-        r"(?:^.*Go to:\s*https?://\S+.*\n)?^.*(?:Enter|Use)(?: the)? code:\s*[A-Za-z0-9-]{4,32}.*(?:\n|$)",
-        re.MULTILINE,
-    )
-    local_log = UNSHACKLE.local.log_file
-    for legacy_log in (local_log, local_log.with_suffix(".log.1")):
-        try:
-            text = legacy_log.read_text(errors="replace")
-        except OSError:
-            continue
-        cleaned, removed = legacy.subn("[approval removed]\n", text)
-        if removed:
-            write_atomic(legacy_log, cleaned)
-            counts["logs"] += 1
+    changed_logs = set()
+    for path in log_paths:
+        if _redact_approval_lines(path, known_values, preserve_sources=True):
+            changed_logs.add(path)
+    for path in log_paths:
+        if _redact_approval_lines(path, known_values):
+            changed_logs.add(path)
+    counts["logs"] = len(changed_logs)
     for path, card, own_values in cards:
         if not own_values or not ("notice" in card or "action" in card):
             continue
@@ -1010,7 +1046,7 @@ def clean_approval_history() -> dict[str, int]:
         card.pop("action", None)
         write_atomic(path, json.dumps(card))
         changed_cards.add(path)
-    if inbox is not None and (counts["inbox"] or inbox_changed):
+    if inbox is not None and counts["inbox"]:
         inbox["items"] = kept_inbox
         write_atomic(INBOX_FILE, json.dumps(inbox))
     counts["cards"] = len(changed_cards)

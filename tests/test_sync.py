@@ -1256,6 +1256,8 @@ def test_terminal_first_job_snapshot_cannot_retain_approval(tmp_path, monkeypatc
 
 def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
+    assert sync.legacy_approval_fragments("Use the code : SPACED-CODE") == {"SPACED-CODE"}
+    assert sync.legacy_approval_fragments("Go to: https://example.invalid/help") == set()
     run_id = "20261114-120000-000000-111-S02E05"
     code = "OLD-PAIR-CODE"
     card = {
@@ -1303,7 +1305,7 @@ def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, m
         {"at": "now", "level": "success", "title": "Download complete", "to": []},
     ]))
     sync.UNSHACKLE.local.log_file.write_text(f"Go to: https://example.invalid/link\nEnter code: {code}\nhealthy line\n")
-    sync.UNSHACKLE.local.log_file.with_suffix(".log.1").write_text(f"Use code: {code}\nolder healthy line\n")
+    sync.UNSHACKLE.local.log_file.with_suffix(".log.1").write_text(f"Use the code : {code}\nolder healthy line\n")
 
     original_glob = sync.Path.glob
 
@@ -1391,6 +1393,67 @@ def test_approval_cleanup_keeps_a_card_source_if_a_later_card_write_fails(tmp_pa
     retained_source = json.loads(source.read_text())
     assert retained_source["action"]["code"] == code
     assert code in retained_source["notice"]
+
+
+def test_approval_cleanup_uses_a_legacy_log_source_before_removing_it(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    code = "LOG-ONLY-CODE"
+    url = "https://example.invalid/log-only"
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    card = sync.RUNS_DIR / "terminal.json"
+    card.write_text(json.dumps({"detail": f"Pairing failed for {code}"}))
+    log = sync.RUNS_DIR / "terminal.log"
+    log.write_text(f"ordinary line\nopen {url} and enter {code}\n")
+    sync.write_atomic(sync.INBOX_FILE, json.dumps({"read_at": None, "items": [{
+        "id": "failure", "title": f"Pairing failed for {code}", "message": f"{url} refused {code}",
+    }]}))
+    original_write = sync.write_atomic
+
+    def fail_inbox_write(path, data):
+        if path == sync.INBOX_FILE:
+            raise OSError("disk full")
+        return original_write(path, data)
+
+    monkeypatch.setattr(sync, "write_atomic", fail_inbox_write)
+
+    with pytest.raises(OSError, match="disk full"):
+        sync.clean_approval_history()
+    assert code in log.read_text() and url in log.read_text()
+
+    monkeypatch.setattr(sync, "write_atomic", original_write)
+    assert sync.clean_approval_history() == {"cards": 0, "logs": 1, "inbox": 0, "sent": 0}
+    assert code not in card.read_text()
+    assert code not in sync.INBOX_FILE.read_text() and url not in sync.INBOX_FILE.read_text()
+    assert log.read_text() == "ordinary line\n[approval removed]\n"
+
+
+def test_approval_cleanup_keeps_log_sources_until_dependent_logs_are_sanitized(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    code = "SHARED-LOG-CODE"
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    source = sync.RUNS_DIR / "a-source.log"
+    source.write_text(f"open https://example.invalid/shared\nand enter {code}\n")
+    dependent = sync.RUNS_DIR / "z-dependent.log"
+    dependent.write_text(f"Pairing failed for {code}\n")
+    original_write = sync.write_atomic
+    original_glob = sync.Path.glob
+
+    def source_first(path, pattern):
+        found = list(original_glob(path, pattern))
+        return iter(sorted(found)) if path == sync.RUNS_DIR and pattern == "*.log" else iter(found)
+
+    def fail_dependent_write(path, data):
+        if path == dependent:
+            raise OSError("disk full")
+        return original_write(path, data)
+
+    monkeypatch.setattr(sync.Path, "glob", source_first)
+    monkeypatch.setattr(sync, "write_atomic", fail_dependent_write)
+
+    with pytest.raises(OSError, match="disk full"):
+        sync.clean_approval_history()
+
+    assert code in source.read_text()
 
 
 def test_the_inbox_keeps_every_notification_and_its_action(tmp_path, monkeypatch):
