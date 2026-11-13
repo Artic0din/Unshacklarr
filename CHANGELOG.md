@@ -25,6 +25,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Failed downloads now show the provider's final reason instead of a Python traceback in Activity and notifications.
 - Error messages now identify the failing service or server, retain safe upstream details, redact credentials, and give a useful next action.
 - Hayu suggestions now replace an episode-only link with the show's page found by title, so later seasons are included instead of only that episode's season.
 - Change and download's preview no longer shows a season listed as a separate show as missing or as the wrong episode: it numbers the season as its own page does and matches it against that page's titles, as the download already did.

@@ -806,13 +806,24 @@ class JobFailed(Exception):
 
 
 def job_cause(job: dict) -> str:
-    """Why a job failed, in a line: Unshackle's own error (what it printed on stderr),
+    """Why a job failed, concisely: Unshackle's own error (what it printed on stderr),
     else serve's message without its "Worker exited with code 1:" wrapping."""
     stderr = (job.get("worker_stderr") or "")[-20_000:]  # its end: a service may put a whole page in it
     if (m := re.search(r"^Stderr:[ \t]*(.+?)\s*(?:^Worker failed|\Z)", stderr, re.M | re.S)) and m.group(1).strip():
-        return m.group(1).strip()
-    message = job.get("error_message") or job.get("status") or "failed"
-    return re.sub(r"^(?:Worker exited with code \d+:\s*)+", "", message).strip()
+        message = m.group(1).strip()
+    else:
+        message = job.get("error_message") or job.get("status") or "failed"
+    message = re.sub(r"^(?:Worker exited with code \d+:\s*)+", "", message).strip()
+    if "Traceback (most recent call last):" in message:
+        final_traceback = message.rsplit("Traceback (most recent call last):", 1)[-1]
+        final_traceback = re.split(r"^Worker failed with error:", final_traceback, maxsplit=1, flags=re.M)[0]
+        match = re.search(r"^[\w.]+:[ \t]*(.*)$", final_traceback, re.M)
+        if match:
+            reason = "\n".join(filter(None, [match[1].strip(), final_traceback[match.end():].strip()]))
+        else:
+            reason = next((line.strip() for line in reversed(final_traceback.splitlines()) if line.strip()), "failed")
+        message = reason or "failed"
+    return no_credentials(message)
 
 
 def ask_for_action(run: EpisodeRun, need: dict | None) -> None:

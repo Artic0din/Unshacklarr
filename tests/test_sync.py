@@ -480,6 +480,53 @@ def test_a_failure_is_notified_by_its_cause_and_paths_as_sonarr_sees_them(tmp_pa
     assert sync.seen_by("sonarr_downloads", sync.episode_folder(records[0])) == "/Syno/0.Temp/unshackle-111-S02E05"
 
 
+def test_a_failure_cause_uses_the_final_traceback_reason(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    cause = sync.job_cause({
+        "error_message": "Traceback (most recent call last):\n  File \"provider.py\", line 10, in login\n"
+                         "ValueError: HAYU Invalid Token (ref ef1b9f)",
+    })
+    assert cause == "HAYU Invalid Token (ref ef1b9f)"
+    assert "Traceback" not in cause and "ValueError" not in cause
+
+
+def test_a_failure_cause_uses_the_last_chained_exception(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    cause = sync.job_cause({
+        "error_message": "Traceback (most recent call last):\nValueError: login rejected\n\n"
+                         "The above exception was the direct cause of the following exception:\n\n"
+                         "Traceback (most recent call last):\nDownloadFailed: catalogue unavailable",
+    })
+    assert cause == "catalogue unavailable"
+
+
+def test_a_failure_cause_keeps_multiline_provider_guidance(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    cause = sync.job_cause({
+        "error_message": "Traceback (most recent call last):\nDownloadFailed: pairing required\n"
+                         "Open the service and approve this device.",
+    })
+    assert cause == "pairing required\nOpen the service and approve this device."
+
+
+def test_a_failure_cause_stops_before_worker_output(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    cause = sync.job_cause({
+        "error_message": "Traceback (most recent call last):\nDownloadFailed: pairing required\n"
+                         "Open the service and approve this device.\n"
+                         "Worker failed with error: pairing required",
+    })
+    assert cause == "pairing required\nOpen the service and approve this device."
+
+
+def test_a_failure_cause_never_returns_an_empty_traceback_reason(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    cause = sync.job_cause({
+        "error_message": "Traceback (most recent call last):\nDownloadFailed:   ",
+    })
+    assert cause == "failed"
+
+
 def test_a_new_run_is_active_before_its_card_is_on_disk(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync.EpisodeRun, "active", set())
