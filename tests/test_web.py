@@ -963,6 +963,47 @@ def test_a_service_list_is_kept_for_the_series_as_it_is(tmp_path, monkeypatch):
     assert kept()["available"] == {"2701": {"service": "S26E11"}}  # old, still shown, with its age
 
 
+@pytest.mark.parametrize("other_sonarr", [False, True])
+@pytest.mark.parametrize("limited", [False, True])
+def test_manual_refresh_searches_other_services_and_returns_suggestions(tmp_path, monkeypatch, other_sonarr, limited):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    show = {"service": "IV", "title": "https://iview/show"}
+    found = {"available": {}, "titles": []}
+    suggestion = {"2": {"service": "SBS", "url": "https://sbs/show", "count": 8}}
+    inst = {"name": "other"} if other_sonarr else None
+    monkeypatch.setattr(web, "sonarr_named", lambda name: inst)
+    calls = []
+    monkeypatch.setattr(web, "on_sonarr", lambda target, fn, *args: calls.append((target, fn)) or fn(*args))
+    monkeypatch.setattr(web, "probe_series", lambda *args: dict(found))
+    def search(conf, serie, listing):
+        assert (conf, serie, listing) == ({**show, "season_map": {}}, {"id": 10, "title": "Show"}, found)
+        if limited:
+            err = web.UnshackleError("Too many requests")
+            err.retry_after = 60
+            raise err
+        return suggestion
+    monkeypatch.setattr(web, "seasons_elsewhere", search)
+    web.keep_service_list(1, show, found, elsewhere=suggestion)
+    before = json.loads(web.SERVICE_LISTS.read_text())["1"]["elsewhere_checked"]
+
+    class Request:
+        async def json(self):
+            return {"show": show, "seriesId": 10, "tvdbId": 1, "title": "Show", "sonarr": "other" if other_sonarr else ""}
+
+    result = json.loads(asyncio.run(web.probe(Request())).text)
+    assert result["elsewhere"] == suggestion
+    assert result["available"] == found["available"]
+    assert result.get("elsewhere_error") == ("Too many requests" if limited else None)
+    assert (inst, web.seasons_elsewhere) in calls
+    assert json.loads(web.SERVICE_LISTS.read_text())["1"]["elsewhere"] == suggestion
+    if limited:
+        assert json.loads(web.SERVICE_LISTS.read_text())["1"]["elsewhere_checked"] == before
+
+
 def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monkeypatch):
     import json
     from datetime import datetime, timedelta, timezone

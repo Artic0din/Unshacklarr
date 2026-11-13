@@ -4163,6 +4163,14 @@ async def probe(request):
         found = await asyncio.to_thread(on_sonarr, inst, probe_series, show, int(body.get("seriesId") or 0), str(body.get("title") or ""), True)
         if body.get("tvdbId"):
             await asyncio.to_thread(keep_service_list, int(body["tvdbId"]), show, found)
+            try:
+                found["elsewhere"] = await asyncio.to_thread(on_sonarr, inst, seasons_elsewhere, show,
+                                                           {"id": int(body.get("seriesId") or 0), "title": str(body.get("title") or "")}, found)
+            except (UnshackleError, requests.RequestException) as err:
+                found["elsewhere_error"] = no_credentials(err)
+                found["elsewhere"] = read_json(SERVICE_LISTS, {}).get(str(body["tvdbId"]), {}).get("elsewhere", {})
+            else:
+                await asyncio.to_thread(keep_service_list, int(body["tvdbId"]), show, found, elsewhere=found["elsewhere"])
         return web.json_response({**found, "checked": datetime.now(timezone.utc).isoformat()})
     except UnshackleError as e:
         raise web.HTTPBadGateway(text=str(e))

@@ -254,7 +254,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     }).catch(() => {});
     api(`/api/probe/${s.tvdbId}`).then((hit) => {  // the last check of the service, refreshed weekly: no need to ask again
       if (!hit || current !== s) return;
-      epElsewhere = hit.elsewhere || {};  // the weekly search's, kept even when a check asked meanwhile came first
+      if (!epChecked || hit.checked >= epChecked) epElsewhere = hit.elsewhere || {};  // a slower saved result cannot replace a new search
       if (epAvail) { if ($("#ep-list")) renderCatchUp(); return; }
       epAvail = viewAvail(hit.available); epTitles = hit.titles; epPagesListed = hit.pages || {}; epChecked = hit.checked; epQualities = hit.qualities || {}; localTitles(hit.local_titles);
       if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${seriesSvcs(S.config.series[s.tvdbId])}`); }
@@ -685,9 +685,11 @@ async function askService(s) {
   let r = null;
   const slow = slowHint(svc);
   try {
-    r = await api("/api/probe", { method: "POST", wait: 120, body: JSON.stringify({ show: conf, seriesId: s.id ?? S.sonarrsOf?.[s.tvdbId]?.[0]?.id, tvdbId: s.tvdbId, title: s.title,
+    // A search and listing per service: two 65 s backend timeouts plus the 2 s pause, after the main listing.
+    r = await api("/api/probe", { method: "POST", wait: 120 + 132 * S.services.length, body: JSON.stringify({ show: conf, seriesId: s.id ?? S.sonarrsOf?.[s.tvdbId]?.[0]?.id, tvdbId: s.tvdbId, title: s.title,
       ...(s.id ? {} : { sonarr: S.sonarrsOf?.[s.tvdbId]?.[0]?.name }) }) });  // in no main Sonarr: its own Sonarr's episodes
-    if (current === s) { epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview(); }
+    if (current === s) { epElsewhere = r.elsewhere || {}; epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview(); }
+    if (current === s && r.elsewhere_error) toast(`Availability refreshed, but the search on other services failed: ${r.elsewhere_error}`, true);
   } catch (e) { toast(e.message, true); }
   clearTimeout(slow);
   if (current === s && $(".ep-check")) { $(".ep-check").disabled = false; checkLabel(epAvail ? `Refresh what's on ${svc}` : `What's on ${svc}?`); }
