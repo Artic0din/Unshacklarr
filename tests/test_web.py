@@ -3441,6 +3441,46 @@ def test_upgrade_scan_flushes_completed_authentication_evidence_on_later_error(t
     }
 
 
+def test_upgrade_scan_keeps_bookkeeping_when_authentication_evidence_write_fails(tmp_path, monkeypatch, capsys):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    show = {"service": "RTLP", "title": "show"}
+    config = {"series": {111: show}, "notifications": {}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    sync.note_upgrade(
+        {
+            "id": 1,
+            "seasonNumber": 1,
+            "episodeNumber": 1,
+            "series": {"tvdbId": 111, "title": "Show"},
+        },
+        show,
+        "S01E01",
+        "fr",
+    )
+    backend = type("Backend", (), {"name": "local"})()
+    monkeypatch.setattr(sync, "backend_for", lambda *args: backend)
+    monkeypatch.setattr(sync, "download_request", lambda *args: {})
+    monkeypatch.setattr(sync, "tracks_on_service", lambda *args: {"audio": {"en"}, "subtitles": set()})
+    monkeypatch.setattr(
+        sync,
+        "record_authentication_observations",
+        lambda observations: (_ for _ in ()).throw(OSError("disk full")),
+    )
+    checked_at = datetime.now(timezone.utc) + timedelta(days=1)
+
+    assert web.check_upgrades(checked_at) == []
+    watched = sync.read_json(sync.UPGRADES_FILE, {})
+    assert watched["1"]["checked"] == checked_at.isoformat()
+    assert "Could not persist authentication observations: disk full" in capsys.readouterr().out
+
+
 def test_a_series_is_found_by_name_on_its_service(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer

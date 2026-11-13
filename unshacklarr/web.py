@@ -2076,7 +2076,10 @@ def check_upgrades(now: datetime) -> list[str]:
                     run_sync([int(key)], replace=True, kind="upgrade")  # its import takes it off the list
                 started.append(w["label"])
     finally:
-        sonarr_sync.record_authentication_observations(authentication_observations)
+        try:
+            sonarr_sync.record_authentication_observations(authentication_observations)
+        except OSError as error:
+            print(f"Could not persist authentication observations: {no_credentials(error)}", flush=True)
     with sonarr_sync.upgrades_lock:  # read again: a download may have added or taken one meanwhile
         watched = read_json(sonarr_sync.UPGRADES_FILE, {})
         for key in dropped:
