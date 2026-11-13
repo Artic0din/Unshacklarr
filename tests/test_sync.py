@@ -1648,6 +1648,20 @@ def test_inherited_authentication_failure_keeps_its_service_identity(tmp_path, m
     assert card["auth_failures"] == {"FIRST": card["auth_failures"]["FIRST"]}
 
 
+def test_a_fresh_preflight_failure_replaces_inherited_authentication_evidence(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    ep = episode(111, 2, 5)
+
+    failed = sync.EpisodeRun(ep, {"service": "FIRST"}, "retry")
+    failed.finish("failed", auth_failed=True)
+    inherited_at = failed.card["auth_failures"]["FIRST"]
+    retry = sync.EpisodeRun(ep, {"service": "FIRST"}, "retry")
+    retry.finish("failed", auth_failed=True)
+
+    [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+    assert card["auth_failures"]["FIRST"] > inherited_at
+
+
 def test_unavailable_checks_keep_inherited_authentication_evidence(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     ep = episode(111, 2, 5)
@@ -1797,6 +1811,31 @@ def test_a_refused_login_is_tried_again_with_the_fallback_profiles(tmp_path, mon
     assert tried == ["default"]  # not a login: another profile would not help
 
 
+def test_a_fallback_profile_with_missing_language_clears_the_authentication_failure(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111].update(fallback_profiles="alt", audio_accept="fr")
+
+    def tracks(show, config, request):
+        return {"audio": {"en"}, "subtitles": set()} if request.get("profile") == "alt" else None
+
+    def download(payload, run=None):
+        raise sync.JobFailed("authentication failed", cause="401 Unauthorized", error_code="AUTH_FAILED")
+
+    monkeypatch.setattr(sync, "tracks_on_service", tracks)
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "no_cdm", lambda *args, **kwargs: "")
+    monkeypatch.setattr(sync, "apply_ladder", lambda *args: False)
+    monkeypatch.setattr(sync, "notify", lambda *args, **kwargs: None)
+
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+
+    card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
+    assert card["outcome"] == "unavailable"
+    assert "auth_failures" not in card
+    assert sync.read_authentication_observations()[""]["RTLP"]["state"] == "validated"
+
+
 def test_classified_login_failure_survives_later_fallback_transport_failure(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     config = sync.read_file()
@@ -1817,6 +1856,60 @@ def test_classified_login_failure_survives_later_fallback_transport_failure(tmp_
 
     card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
     assert set(card["auth_failures"]) == {"RTLP"}
+
+
+@pytest.mark.parametrize("profile_succeeds", [False, True])
+def test_fallback_authentication_keeps_its_identity_across_primary_profile_retries(
+    tmp_path, monkeypatch, profile_succeeds
+):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111].update(
+        fallback={"service": "MLT", "title": "https://mlt/show"},
+        fallback_profiles="alt",
+    )
+    backends = {
+        tag: type(
+            "Backend",
+            (),
+            {"name": name, "mode": "remote", "settings": {}, "dl_config": lambda self: {}, "services": lambda self: []},
+        )()
+        for tag, name in (("RTLP", "primary"), ("MLT", "fallback"))
+    }
+    tried = []
+
+    def download(payload, run=None):
+        service, profile = payload["service"], payload.get("profile") or "default"
+        tried.append((service, profile))
+        if service == "RTLP" and profile == "default":
+            return []
+        if service == "MLT":
+            raise sync.JobFailed("authentication failed", cause="401 Unauthorized", error_code="AUTH_FAILED")
+        if not profile_succeeds:
+            raise sync.JobFailed("network failed", cause="network failed")
+        out = Path(payload["output_dir"])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "Show.S02E05.mkv").touch()
+        return []
+
+    monkeypatch.setattr(sync, "backend_for", lambda tag, config=None: backends[tag])
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "no_cdm", lambda *args, **kwargs: "")
+    monkeypatch.setattr(sync, "apply_ladder", lambda *args: False)
+    monkeypatch.setattr(sync, "by_title", lambda *args: None)
+    monkeypatch.setattr(sync, "notify", lambda *args, **kwargs: None)
+    for name in ("finalize", "check_audio", "check_subs", "import_episode"):
+        monkeypatch.setattr(sync, name, lambda *args, **kwargs: None)
+
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+
+    card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
+    assert tried == [("RTLP", "default"), ("MLT", "default"), ("RTLP", "alt")]
+    assert card["auth_failure_backends"] == {"MLT": "fallback"}
+    observations = sync.read_authentication_observations()
+    assert observations["fallback"]["MLT"]["state"] == "needs_user_action"
+    if profile_succeeds:
+        assert observations["primary"]["RTLP"]["state"] == "validated"
 
 
 def test_an_episode_without_full_subtitles_in_a_required_language_waits(tmp_path, monkeypatch):
@@ -2607,6 +2700,19 @@ def test_authentication_observations_are_private_and_backend_isolated(tmp_path, 
 
     sync.record_authentication_observation("RTLP", "vpn", "validated", "2000-01-01T00:00:00+00:00")
     assert sync.read_authentication_observations()["vpn"]["RTLP"]["state"] == "needs_user_action"
+
+
+def test_late_import_completion_does_not_overwrite_a_newer_authentication_failure(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RTLP"}, "manual")
+    run.card["auth_validations"] = {
+        "RTLP": {"backend": "", "observed_at": "2000-01-01T00:00:00+00:00"}
+    }
+    sync.record_authentication_observation("RTLP", "", "needs_user_action", "2001-01-01T00:00:00+00:00")
+
+    run.finish("downloaded")
+
+    assert sync.read_authentication_observations()[""]["RTLP"]["state"] == "needs_user_action"
 
 
 def test_preflight_authentication_failure_keeps_the_selected_backend(tmp_path, monkeypatch):

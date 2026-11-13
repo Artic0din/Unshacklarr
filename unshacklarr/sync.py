@@ -671,6 +671,22 @@ def authentication_failure_backends(card: dict) -> dict[str, str]:
     return backends
 
 
+def authentication_validations(card: dict) -> dict[str, dict[str, str]]:
+    """Successful provider operations by service, with legacy completed cards as evidence."""
+    stored = card.get("auth_validations")
+    validations = {
+        service: {"backend": str(result.get("backend") or ""), "observed_at": result["observed_at"]}
+        for service, result in stored.items()
+        if service and isinstance(result, dict) and isinstance(result.get("observed_at"), str)
+    } if isinstance(stored, dict) else {}
+    if not validations and card.get("outcome") in ("downloaded", "kept", "import") and card.get("ended") and card.get("service"):
+        validations[card["service"]] = {
+            "backend": str(card.get("backend") or ""),
+            "observed_at": card["ended"],
+        }
+    return validations
+
+
 def carry_authentication_failures(target: dict, source: dict) -> None:
     inherited = authentication_failures(source)
     if not inherited:
@@ -778,6 +794,37 @@ class EpisodeRun:
         self.card["step"] = name
         self.save()
 
+    def observe_authentication(self, service: str, backend: str, state: str) -> None:
+        """Persist a classified provider result when that provider attempt completes."""
+        observed_at = datetime.now(timezone.utc).isoformat()
+        failures = authentication_failures(self.card)
+        failure_backends = authentication_failure_backends(self.card)
+        attempt_failures = self.card.setdefault("auth_attempt_failures", {})
+        if state == "validated":
+            validations = self.card.setdefault("auth_validations", {})
+            previous = validations.get(service) if isinstance(validations.get(service), dict) else {}
+            if observed_at >= previous.get("observed_at", ""):
+                validations[service] = {"backend": backend, "observed_at": observed_at}
+            if failure_backends.get(service, "") == backend and failures.get(service, "") <= observed_at:
+                failures.pop(service, None)
+                failure_backends.pop(service, None)
+                attempt_failures.pop(service, None)
+        else:
+            failures[service] = observed_at
+            failure_backends[service] = backend
+            attempt_failures[service] = {"backend": backend, "observed_at": observed_at}
+        if failures:
+            self.card["auth_failures"] = failures
+            self.card["auth_failure_backends"] = failure_backends
+        else:
+            self.card.pop("auth_failures", None)
+            self.card.pop("auth_failure_backends", None)
+        self.save()
+        try:
+            record_authentication_observation(service, backend, state, observed_at)
+        except OSError as error:
+            print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
+
     def finish(self, outcome: str, cause: str = "", detail: str = "", *, auth_failed: bool = False) -> None:
         if getattr(current, "run", None) is self:
             current.run = None
@@ -787,15 +834,31 @@ class EpisodeRun:
         self.card.update(ended=ended, outcome=outcome)
         failures = authentication_failures(self.card)
         failure_backends = authentication_failure_backends(self.card)
+        validations = authentication_validations(self.card)
+        stored_attempt_failures = self.card.get("auth_attempt_failures")
+        attempt_failures = {
+            failed_service: {
+                "backend": str(result.get("backend") or ""),
+                "observed_at": result["observed_at"],
+            }
+            for failed_service, result in stored_attempt_failures.items()
+            if failed_service and isinstance(result, dict) and isinstance(result.get("observed_at"), str)
+        } if isinstance(stored_attempt_failures, dict) else {}
         service = self.card.get("service")
         backend = str(self.card.get("backend") or "")
         if outcome in ("downloaded", "kept", "import"):  # a later try of this attempt got through: nothing left unconfirmed (#10)
             self.card.pop("unconfirmed_job", None)
-            failures.pop(service, None)
-            failure_backends.pop(service, None)
-        elif auth_failed:
+            for validated_service, result in validations.items():
+                if failure_backends.get(validated_service, "") == result["backend"] and failures.get(
+                    validated_service, ""
+                ) <= result["observed_at"]:
+                    failures.pop(validated_service, None)
+                    failure_backends.pop(validated_service, None)
+            self.card["auth_validations"] = validations
+        elif auth_failed and not attempt_failures:
             failures[service] = ended
             failure_backends[service] = backend
+            attempt_failures[service] = {"backend": backend, "observed_at": ended}
         for key in ("auth_failure", "auth_failure_at", "auth_failure_service"):
             self.card.pop(key, None)
         if failures:
@@ -804,6 +867,7 @@ class EpisodeRun:
         else:
             self.card.pop("auth_failures", None)
             self.card.pop("auth_failure_backends", None)
+        self.card.pop("auth_attempt_failures", None)
         if outcome in ("downloaded", "import", "kept"):  # a new file: the release watch must not see it missing
             _broadcast_episodes.clear()
         if outcome == "downloaded":  # a new file: Upgrades' find for it is done with (by mj23au)
@@ -811,10 +875,14 @@ class EpisodeRun:
         self.fold_checks()
         self.save()
         try:
-            if outcome in ("downloaded", "kept", "import"):
-                record_authentication_observation(service, backend, "validated", ended)
-            elif auth_failed:
-                record_authentication_observation(service, backend, "needs_user_action", ended)
+            for validated_service, result in validations.items():
+                record_authentication_observation(
+                    validated_service, result["backend"], "validated", result["observed_at"]
+                )
+            for failed_service, result in attempt_failures.items():
+                record_authentication_observation(
+                    failed_service, result["backend"], "needs_user_action", result["observed_at"]
+                )
         except OSError as error:
             print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
         # Only once its end is on disk: the page, told a run ended, reads the history at once; read between the two, a
@@ -3244,23 +3312,32 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     use = use or show  # the series as it downloads: its own service, or its fallback
                     backend = backend_for(use["service"], config)
                     run.card["backend"] = backend.name
-                    request = download_request(use, config, wanted, out)
-                    if profile:  # a fallback profile, its login refused with the series' own
-                        request["profile"] = profile
-                    if any(wanted_langs.values()) and (tracks := tracks_on_service(use, config, request)) is not None:
-                        for kind, accepted in wanted_langs.items():
-                            if accepted and not speaks(tracks[kind], accepted):
-                                raise Missing(kind, accepted, tracks[kind])
-                    if use.get("asked_video"):
-                        run.card["video_override"] = use["asked_video"]
-                    if apply_ladder(use, config, request) and use is show and ep.get("id") and not use.get("asked_video"):
-                        note_download_answer(ep["id"], show, config)  # its best now: Upgrades needn't ask again soon
-                    asked = {k: v for k, v in request.items() if k not in ("service", "title_id", "wanted", "output_dir", "debug")}
-                    trace(f"asking for {request['service']} {request['title_id']} {wanted}, into {request['output_dir']}")
-                    trace("options: " + (", ".join(f"{k}={options.HIDDEN.sub('//***@', str(v))}" for k, v in asked.items()) or "none"))  # no proxy password in the log
-                    run.card["setup"] = setup_of(request, backend)
-                    run.save()  # serve's run_job hands this to Activity, whose Stop action cancels it
-                    run_job_retrying(request, run)
+                    try:
+                        request = download_request(use, config, wanted, out)
+                        if profile:  # a fallback profile, its login refused with the series' own
+                            request["profile"] = profile
+                        if any(wanted_langs.values()) and (tracks := tracks_on_service(use, config, request)) is not None:
+                            for kind, accepted in wanted_langs.items():
+                                if accepted and not speaks(tracks[kind], accepted):
+                                    raise Missing(kind, accepted, tracks[kind])
+                        if use.get("asked_video"):
+                            run.card["video_override"] = use["asked_video"]
+                        if apply_ladder(use, config, request) and use is show and ep.get("id") and not use.get("asked_video"):
+                            note_download_answer(ep["id"], show, config)  # its best now: Upgrades needn't ask again soon
+                        asked = {k: v for k, v in request.items() if k not in ("service", "title_id", "wanted", "output_dir", "debug")}
+                        trace(f"asking for {request['service']} {request['title_id']} {wanted}, into {request['output_dir']}")
+                        trace("options: " + (", ".join(f"{k}={options.HIDDEN.sub('//***@', str(v))}" for k, v in asked.items()) or "none"))  # no proxy password in the log
+                        run.card["setup"] = setup_of(request, backend)
+                        run.save()  # serve's run_job hands this to Activity, whose Stop action cancels it
+                        run_job_retrying(request, run)
+                    except Missing:
+                        run.observe_authentication(use["service"], backend.name, "validated")
+                        raise
+                    except (JobFailed, UnshackleError, ValueError) as error:
+                        if getattr(error, "error_code", "") == "AUTH_FAILED":
+                            run.observe_authentication(use["service"], backend.name, "needs_user_action")
+                        raise
+                    run.observe_authentication(use["service"], backend.name, "validated")
 
                 missed = None  # its own service has it in none of the languages accepted: the fallback's turn
                 error = cause = None  # this episode's own: the login-fallback check below must never see the last one's

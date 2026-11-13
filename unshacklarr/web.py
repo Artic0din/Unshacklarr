@@ -5004,15 +5004,18 @@ def run_cards() -> list[dict]:
 
 def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, dict]:
     """Read-only login evidence from service metadata, durable observations and local run cards."""
-    successful = ("downloaded", "kept", "import")
     service_methods = {service["tag"]: service.get("auth_methods") for service in services}
     observations = sonarr_sync.read_authentication_observations()
     identities = {(service["tag"], str(service.get("backend") or "")) for service in services}
-    identities.update(
-        (card["service"], str(card.get("backend") or ""))
-        for card in cards
-        if card.get("service") in service_methods
-    )
+    for card in cards:
+        validations = sonarr_sync.authentication_validations(card)
+        failures = sonarr_sync.authentication_failures(card)
+        if not validations and not failures and card.get("service") in service_methods:
+            identities.add((card["service"], str(card.get("backend") or "")))
+        identities.update((tag, result["backend"]) for tag, result in validations.items())
+        identities.update(
+            (tag, sonarr_sync.authentication_failure_backends(card).get(tag, "")) for tag in failures
+        )
     identities.update(
         (tag, str(backend))
         for backend, backend_observations in observations.items()
@@ -5028,12 +5031,10 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
             status.update(state="anonymous", needs_user_action=False)
         elif methods is not None or stored:
             successes = [
-                card
+                result["observed_at"]
                 for card in cards
-                if card.get("service") == tag
-                and str(card.get("backend") or "") == backend
-                and card.get("ended")
-                and card.get("outcome") in successful
+                for validated_service, result in sonarr_sync.authentication_validations(card).items()
+                if validated_service == tag and result["backend"] == backend
             ]
             failures = [
                 sonarr_sync.authentication_failures(card)[tag]
@@ -5042,11 +5043,11 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
                 and sonarr_sync.authentication_failure_backends(card).get(tag, "") == backend
             ]
             status["validated_at"] = max(
-                [card["ended"] for card in successes] + ([stored["validated_at"]] if stored.get("validated_at") else []),
+                successes + ([stored["validated_at"]] if stored.get("validated_at") else []),
                 default=None,
             )
             observed = [(failure, True) for failure in failures]
-            observed.extend((card["ended"], False) for card in successes)
+            observed.extend((success, False) for success in successes)
             if stored.get("observed_at"):
                 observed.append((stored["observed_at"], stored.get("state") == "needs_user_action"))
             if observed:
