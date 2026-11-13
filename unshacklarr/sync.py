@@ -648,6 +648,27 @@ FINALES = {"season": "season finale", "series": "series finale", "midseason": "m
 AUTOMATIC = ("auto", "burst")  # tries nobody asked for by hand
 
 
+def authentication_failures(card: dict) -> dict[str, str]:
+    """Classified login failures by service, including cards written by the first Phase 1 schema."""
+    stored = card.get("auth_failures")
+    failures = {service: observed for service, observed in stored.items() if service and observed} if isinstance(stored, dict) else {}
+    if card.get("auth_failure"):
+        service = card.get("auth_failure_service") or card.get("service")
+        observed = card.get("auth_failure_at") or card.get("ended")
+        if service and observed:
+            failures.setdefault(service, observed)
+    return failures
+
+
+def carry_authentication_failures(target: dict, source: dict) -> None:
+    inherited = authentication_failures(source)
+    if not inherited:
+        return
+    failures = target.setdefault("auth_failures", {})
+    for service, observed in inherited.items():
+        failures[service] = max(failures.get(service, ""), observed)
+
+
 class EpisodeRun:
     """One download attempt's log and card, for the web page's terminal and its history.
 
@@ -703,14 +724,25 @@ class EpisodeRun:
         self.card["step"] = name
         self.save()
 
-    def finish(self, outcome: str, cause: str = "", detail: str = "") -> None:
+    def finish(self, outcome: str, cause: str = "", detail: str = "", *, auth_failed: bool = False) -> None:
         if getattr(current, "run", None) is self:
             current.run = None
         self.card.update(cause=no_credentials(cause), detail=no_credentials(detail))
         self.log.close()
-        self.card.update(ended=datetime.now(timezone.utc).isoformat(), outcome=outcome)
+        ended = datetime.now(timezone.utc).isoformat()
+        self.card.update(ended=ended, outcome=outcome)
+        failures = authentication_failures(self.card)
         if outcome in ("downloaded", "kept", "import"):  # a later try of this attempt got through: nothing left unconfirmed (#10)
             self.card.pop("unconfirmed_job", None)
+            failures.pop(self.card.get("service"), None)
+        elif auth_failed:
+            failures[self.card["service"]] = ended
+        for key in ("auth_failure", "auth_failure_at", "auth_failure_service"):
+            self.card.pop(key, None)
+        if failures:
+            self.card["auth_failures"] = failures
+        else:
+            self.card.pop("auth_failures", None)
         if outcome in ("downloaded", "import", "kept"):  # a new file: the release watch must not see it missing
             _broadcast_episodes.clear()
         if outcome == "downloaded":  # a new file: Upgrades' find for it is done with (by mj23au)
@@ -744,6 +776,7 @@ class EpisodeRun:
                 continue
             if c.get("told"):
                 self.card["told"] = c["told"]
+            carry_authentication_failures(self.card, c)
             log = RUNS_DIR / f"{c['id']}.log"
             if log.exists():
                 with (RUNS_DIR / f"{self.id}.log").open("ab") as mine:
@@ -770,6 +803,8 @@ class EpisodeRun:
         mine = log.read_bytes() if log.exists() else b""
         before = b"".join((RUNS_DIR / f"{c['id']}.log").read_bytes() for c in earlier if (RUNS_DIR / f"{c['id']}.log").exists())
         write_atomic(log, before + mine)
+        for c in earlier:
+            carry_authentication_failures(self.card, c)
         self.card["checks"] = sum(c.get("checks", 1) for c in earlier) + 1
         self.card["first_check"] = earlier[0].get("first_check") or earlier[0]["started"]
         for c in earlier:
@@ -799,10 +834,11 @@ class JobFailed(Exception):
     """unshackle ran the download and it failed (or was stopped). The message is all it
     said, for the terminal; `cause` the one line that matters, for notifications."""
 
-    def __init__(self, message: str, status: str = "failed", cause: str = ""):
+    def __init__(self, message: str, status: str = "failed", cause: str = "", error_code: str = ""):
         super().__init__(message)
         self.status = status
         self.cause = cause or message
+        self.error_code = error_code
 
 
 def job_cause(job: dict) -> str:
@@ -1161,7 +1197,12 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
     if status != "completed":
         detail = job.get("error_details") or ""
         stderr = "\n".join((job.get("worker_stderr") or "").strip().splitlines()[-15:])
-        raise JobFailed("\n".join(filter(None, [job.get("error_message") or status, detail, stderr])), status, job_cause(job))
+        raise JobFailed(
+            "\n".join(filter(None, [job.get("error_message") or status, detail, stderr])),
+            status,
+            job_cause(job),
+            str(job.get("error_code") or ""),
+        )
     files = job.get("output_files") or []
     trace(f"Unshackle made {len(files)} file{'s' if len(files) != 1 else ''}: " + ", ".join(Path(f).name for f in files))
     return files
@@ -3096,7 +3137,11 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         continue
                     except (UnshackleError, requests.RequestException) as e:
                         run.say(f"{label}: looking for its programme on {show['service']}: {e}")
-                        run.finish("failed", f"Looking for its programme on {show['service']}: {e}")
+                        run.finish(
+                            "failed",
+                            f"Looking for its programme on {show['service']}: {e}",
+                            auth_failed=getattr(e, "error_code", "") == "AUTH_FAILED",
+                        )
                         continue
                     show = {**show, "title": match["title"]}  # this episode's own programme, for this download only
                     service_sxxeyy = match["code"]
@@ -3144,6 +3189,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
 
                 missed = None  # its own service has it in none of the languages accepted: the fallback's turn
                 error = cause = None  # this episode's own: the login-fallback check below must never see the last one's
+                error_code = ""
                 try:
                   try:
                     # Its number on the service may hold another episode (a same-named series elsewhere, seasons
@@ -3202,9 +3248,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         run.say(f"\r\n{label}: stopped")
                         run.finish("stopped")
                         continue
-                    error, cause = no_credentials(e), no_credentials(e.cause)
+                    error, cause, error_code = no_credentials(e), no_credentials(e.cause), e.error_code
                 except (UnshackleError, ValueError) as e:
                     error = cause = no_credentials(e)
+                    error_code = getattr(e, "error_code", "")
 
                 # Its login refused and nothing came: the series' fallback profiles, in their order, until one logs in
                 stopped = waits = False
@@ -3213,6 +3260,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     try:
                         ask(service_sxxeyy, profile)
                         error = cause = None
+                        error_code = ""
                         run.card["profile"] = profile
                         run.say(f"{label}: logged in with the profile {profile}")
                         break
@@ -3224,9 +3272,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         if e.status == "cancelled":
                             stopped = True
                             break
-                        error, cause = no_credentials(e), no_credentials(e.cause)
+                        error, cause, error_code = no_credentials(e), no_credentials(e.cause), e.error_code
                     except (UnshackleError, ValueError) as e:
                         error = cause = no_credentials(e)
+                        error_code = getattr(e, "error_code", "")
                     if not login_failure(cause or ""):
                         break  # another failure than a login: another profile would not help
                 if waits:
@@ -3254,7 +3303,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     where = seen_by("sonarr_downloads", out)
                     run.say(f"\r\n\x1b[31m{label}: Unshackle FAILED after {parts_in(out)} part(s)\x1b[0m\n{error}".replace("\n", "\r\n"))
                     tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe parts that came are in {where}.", batch=batch, details=episode_details(ep, show)))
-                    run.finish("failed", cause, f"The parts that came are in {where}")
+                    run.finish("failed", cause, f"The parts that came are in {where}", auth_failed=error_code == "AUTH_FAILED")
                     continue
                 if not videos_in(out):
                     shutil.rmtree(out, ignore_errors=True)
@@ -3265,10 +3314,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         if login_failure(cause):
                             hint = f"{show['service']} refused Unshackle: its cookies may have expired. Update them in Settings, Cookies."
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Login failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
-                            run.finish("failed", cause, hint)
+                            run.finish("failed", cause, hint, auth_failed=error_code == "AUTH_FAILED")
                         else:
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe history in Activity has Unshackle's full output.", batch=batch, details=episode_details(ep, show)))
-                            run.finish("failed", cause)
+                            run.finish("failed", cause, auth_failed=error_code == "AUTH_FAILED")
                     else:
                         run.say(f"{label}: not on {show['service']} yet{missing}")
                         run.finish("unavailable", f"Not on {show['service']} yet{missing}")

@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Settings now shows each service's last confirmed authenticated download or a classified sign-in failure without reading private session files or contacting the provider.
 - Authentication errors distinguished a service's rejected login or playback token from Unshackle's internal API key and preserved the provider's reason and error reference.
 - Availability searches found and displayed seasons on other services even when all aired episodes were already on disk.
 - Refreshing a series' episode availability also searched other services for missing seasons and showed the suggestions immediately.

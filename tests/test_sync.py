@@ -397,12 +397,15 @@ def test_a_job_is_followed_to_its_end(tmp_path, monkeypatch):
     monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: next(states))
     assert sync.run_job({}, poll=0) == ["/downloads/x.mkv"]
 
-    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "failed", "error_message": "No such title"})
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {
+        "status": "failed", "error_message": "No such title", "error_code": "NOT_FOUND",
+    })
     try:
         sync.run_job({}, poll=0)
         raise AssertionError("expected JobFailed")
     except sync.JobFailed as e:
         assert "No such title" in str(e)
+        assert e.error_code == "NOT_FOUND"
 
 
 @responses.activate
@@ -974,6 +977,38 @@ def test_a_login_failure_points_to_the_cookies(tmp_path, monkeypatch):
     assert sync.main() == 1
     [message] = discord_messages()
     assert "Login failed on RTLP: Show S02E05" in message and "Settings, Cookies" in message
+    [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+    assert "auth_failures" not in card  # free text alone is not retained as classified authentication evidence
+
+
+@responses.activate
+def test_a_classified_login_failure_is_kept_as_authentication_evidence(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.post(re.compile(re.escape(WEBHOOK)))
+
+    def refused(payload, run=None):
+        raise sync.JobFailed("refused", "failed", "Authentication failed", error_code="AUTH_FAILED")
+
+    monkeypatch.setattr(sync, "run_job", refused)
+    assert sync.main() == 1
+    [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+    assert set(card["auth_failures"]) == {"RTLP"}
+
+
+def test_a_classified_programme_lookup_failure_is_kept_as_authentication_evidence(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111]["programmes"] = True
+    error = sync.UnshackleError("Authentication failed")
+    error.error_code = "AUTH_FAILED"
+    monkeypatch.setattr(sync, "programme_for", lambda *args: (_ for _ in ()).throw(error))
+    monkeypatch.setattr(sync, "notify", lambda *args, **kwargs: None)
+
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+
+    [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+    assert set(card["auth_failures"]) == {"RTLP"}
 
 
 def test_a_download_without_the_first_language_asked_for_is_not_imported(tmp_path, monkeypatch):
@@ -1573,11 +1608,16 @@ def test_an_episode_its_number_misses_is_found_by_its_title(tmp_path, monkeypatc
 
 def test_a_bursts_failures_make_one_card_told_once(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    told, causes = [], iter(["key not allowed", "key not allowed", "key not allowed", "no space left"])
+    told, causes = [], iter([
+        ("key not allowed", "AUTH_FAILED"),
+        ("key not allowed", ""),
+        ("key not allowed", ""),
+        ("no space left", ""),
+    ])
 
     def download(payload, run=None):
-        cause = next(causes)
-        raise sync.JobFailed(cause, "failed", cause)
+        cause, error_code = next(causes)
+        raise sync.JobFailed(cause, "failed", cause, error_code=error_code)
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
     monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
@@ -1587,7 +1627,51 @@ def test_a_bursts_failures_make_one_card_told_once(tmp_path, monkeypatch):
         sync.sync(sync.read_file(), {}, [episode(111, 2, 5)], kind=kind)
     cards = [json.loads(f.read_text()) for f in sync.RUNS_DIR.glob("*.json")]
     assert len(cards) == 1 and cards[0]["attempts"] == 4  # one line in Activity, its tries counted
+    assert set(cards[0]["auth_failures"]) == {"RTLP"}
+    assert cards[0]["auth_failures"]["RTLP"] < cards[0]["ended"]  # the later unrelated failure did not move the evidence
     assert told == ["key not allowed", "no space left"]  # each cause told once
+
+
+def test_inherited_authentication_failure_keeps_its_service_identity(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    ep = episode(111, 2, 5)
+
+    failed = sync.EpisodeRun(ep, {"service": "FIRST"}, "retry")
+    failed.finish("failed", auth_failed=True)
+    retry = sync.EpisodeRun(ep, {"service": "FIRST"}, "retry")
+    retry.card["service"] = "SECOND"
+    retry.finish("failed")
+
+    [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+    assert card["auth_failures"] == {"FIRST": card["auth_failures"]["FIRST"]}
+
+
+def test_unavailable_checks_keep_inherited_authentication_evidence(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    ep = episode(111, 2, 5)
+
+    failed = sync.EpisodeRun(ep, {"service": "FIRST"}, "auto")
+    failed.finish("failed", auth_failed=True)
+    for _ in range(2):
+        check = sync.EpisodeRun(ep, {"service": "FIRST"}, "auto")
+        check.finish("unavailable")
+
+    [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+    assert set(card["auth_failures"]) == {"FIRST"}
+
+
+def test_fallback_success_clears_only_that_service_authentication_failure(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    ep = episode(111, 2, 5)
+
+    failed = sync.EpisodeRun(ep, {"service": "FIRST"}, "retry")
+    failed.finish("failed", auth_failed=True)
+    retry = sync.EpisodeRun(ep, {"service": "FIRST"}, "retry")
+    retry.card["service"] = "SECOND"
+    retry.finish("downloaded")
+
+    [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+    assert set(card["auth_failures"]) == {"FIRST"}
 
 
 def test_an_episode_in_none_of_the_accepted_languages_waits_undownloaded(tmp_path, monkeypatch):

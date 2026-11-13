@@ -276,11 +276,11 @@ def service_name(service: dict) -> str:
     return name or service["tag"]
 
 
-def service_domains() -> dict[str, str]:
+def service_domains(services: list[dict] | None = None) -> dict[str, str]:
     """Map each site to the installed service for it: what the services name in their help (e.g. "https://crave.ca")
     first, then the SITES the help leaves out, under the code this Unshackle has for them. A site with no installed
     service for it maps to nothing: a suggestion never names a service Unshackle does not have."""
-    services = sonarr_sync.all_services()
+    services = sonarr_sync.all_services() if services is None else services
     installed = {s["tag"] for s in services}
     domains = {}
     for service in sorted(services, key=lambda s: s["tag"]):
@@ -857,13 +857,14 @@ def series_health(cards: list[dict]) -> dict[int, dict]:
 async def state(_):
     def unshackle_side():
         try:  # the page still opens without Unshackle, to fix its settings
-            names = {s["tag"]: service_name(s) for s in sonarr_sync.all_services()}
+            entries = sonarr_sync.all_services()
+            names = {s["tag"]: service_name(s) for s in entries}
             # a service with none of its own uses the default CDM; a link pasted on a series picks its service
-            return service_tags(), None, names, UNSHACKLE.cdm_config(), service_domains()
+            return sorted(s["tag"] for s in entries), None, names, UNSHACKLE.cdm_config(), service_domains(entries), entries
         except UnshackleError as e:
-            return [], no_credentials(e), {}, {}, {}
+            return [], no_credentials(e), {}, {}, {}, []
     sonarr_side = asyncio.ensure_future(asyncio.to_thread(sonarr_series))  # both at once: the slower one sets the pace
-    services, unshackle_error, names, cdm, domains = await asyncio.to_thread(unshackle_side)
+    services, unshackle_error, names, cdm, domains, service_entries = await asyncio.to_thread(unshackle_side)
     try:
         series = await sonarr_side
     except requests.RequestException as e:
@@ -877,6 +878,7 @@ async def state(_):
         "config": public_config(read_config()),
         "services": services,
         "service_names": names,
+        "authentication": authentication_status(cards, service_entries),
         "unshackle_error": unshackle_error,
         "version": __version__,
         "build": BUILD,
@@ -2354,9 +2356,18 @@ async def watch_alerts():
 
 async def status(request):
     """The header's lights; ?full=1 checks Unshackle afresh, tools and queue included."""
-    if request.query.get("full"):
+    full = request.query.get("full")
+    if full:
         health["unshackle"] = {**await asyncio.to_thread(unshackle_health, True), "checked": datetime.now(timezone.utc).isoformat()}
-    return web.json_response(health)
+    result = dict(health)
+    if full:
+        try:
+            services = await asyncio.to_thread(sonarr_sync.all_services)
+        except UnshackleError:
+            services = []
+        cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
+        result["authentication"] = authentication_status(cards, services)
+    return web.json_response(result)
 
 
 async def restart_unshackle(_):
@@ -4986,6 +4997,44 @@ def run_cards() -> list[dict]:
     cards = [card if card.get("ended") else {**card, "outcome": "running" if card["id"] in sonarr_sync.EpisodeRun.active else "interrupted"}
              for card in cards_on_disk()]
     return list(sonarr_sync.waiting.values()) + cards  # picked with others, waiting their turn
+
+
+def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, dict]:
+    """Read-only login evidence from service metadata and completed local run cards."""
+    successful = ("downloaded", "kept", "import")
+    result = {}
+    for service in sorted(services, key=lambda entry: entry["tag"]):
+        tag = service["tag"]
+        methods = service.get("auth_methods")
+        status = {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None}
+        if methods == []:
+            status.update(state="anonymous", needs_user_action=False)
+        elif methods is not None:
+            successes = [
+                card
+                for card in cards
+                if card.get("service") == tag and card.get("ended") and card.get("outcome") in successful
+            ]
+            failures = [
+                sonarr_sync.authentication_failures(card)[tag]
+                for card in cards
+                if card.get("ended")
+                and tag in sonarr_sync.authentication_failures(card)
+            ]
+            status["validated_at"] = max(
+                (card["ended"] for card in successes), default=None
+            )
+            observed = [(failure, True) for failure in failures]
+            observed.extend((card["ended"], False) for card in successes)
+            if observed:
+                observed_at, needs_user_action = max(observed, key=lambda entry: entry[0])
+                status.update(
+                    state="needs_user_action" if needs_user_action else "validated",
+                    observed_at=observed_at,
+                    needs_user_action=needs_user_action,
+                )
+        result[tag] = status
+    return result
 
 
 def stats_of(cards: list[dict], now: datetime) -> dict:

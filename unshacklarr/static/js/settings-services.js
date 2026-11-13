@@ -105,7 +105,15 @@ function renderUnshackleStatus(st) {
   } });
   const copyCmd = (cmd) => el("div", { className: "st-cmd" }, el("code", { textContent: cmd }), el("button", { className: "btn small", textContent: "Copy",
     onclick: async () => { try { await navigator.clipboard.writeText(cmd); toast("Command copied"); } catch { toast("Could not copy: select it instead", true); } } }));
+  const authentication = Object.entries(S.authentication || {}).map(([tag, status]) => {
+    const label = status.state === "anonymous" ? "No login required"
+      : status.state === "needs_user_action" ? "Sign-in needed"
+      : status.state === "validated" ? `Confirmed ${ago(status.validated_at)}` : "Not checked yet";
+    return el("div", { className: "st-job" }, el("span", { textContent: svcName(tag) }), el("small", { textContent: label }));
+  });
   const extra = st.ok ? [
+    ...(authentication.length ? [el("div", { className: "st-sect" }, el("b", { textContent: "Service access" }),
+      el("div", { className: "st-jobs" }, ...authentication))] : []),
     el("div", { className: "st-sect" }, el("b", { textContent: st.queue && (st.queue.downloading || st.queue.queued)
       ? `Queue · ${st.queue.downloading} downloading${st.queue.queued ? `, ${st.queue.queued} waiting` : ""}` : "Queue" }),
       ...(st.jobs?.length ? [el("div", { className: "st-jobs" }, ...st.jobs.map((j) => el("div", { className: "st-job" },

@@ -177,6 +177,153 @@ def test_maintenance_only_runs_serve_actions_and_jobs_are_checked(tmp_path, monk
     assert calls == [("POST", "/api/maintenance/clear-temp"), ("DELETE", "0f1e2d3c-aaaa-bbbb")]
 
 
+def test_authentication_status_uses_only_classified_run_evidence(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    services = [
+        {"tag": "OPEN", "auth_methods": []},
+        {"tag": "PAIRED", "auth_methods": ["pairing"]},
+        {"tag": "RECOVERED", "auth_methods": ["cookies"]},
+        {"tag": "LEGACY"},
+    ]
+    cards = [
+        {"service": "PAIRED", "outcome": "failed", "ended": "2026-11-14T05:00:00+00:00", "cause": "No licence"},
+        {"service": "RECOVERED", "outcome": "downloaded", "ended": "2026-11-14T04:00:00+00:00"},
+        {"service": "PAIRED", "outcome": "failed", "ended": "2026-11-14T03:00:00+00:00", "auth_failure": True},
+        {"service": "RECOVERED", "outcome": "failed", "ended": "2026-11-14T02:00:00+00:00", "auth_failure": True},
+        {"service": "PAIRED", "outcome": "downloaded", "ended": "2026-11-14T01:00:00+00:00"},
+    ]
+
+    assert web.authentication_status(cards, services) == {
+        "LEGACY": {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None},
+        "OPEN": {"state": "anonymous", "validated_at": None, "observed_at": None, "needs_user_action": False},
+        "PAIRED": {
+            "state": "needs_user_action",
+            "validated_at": "2026-11-14T01:00:00+00:00",
+            "observed_at": "2026-11-14T03:00:00+00:00",
+            "needs_user_action": True,
+        },
+        "RECOVERED": {
+            "state": "validated",
+            "validated_at": "2026-11-14T04:00:00+00:00",
+            "observed_at": "2026-11-14T04:00:00+00:00",
+            "needs_user_action": False,
+        },
+    }
+
+
+@pytest.mark.parametrize("outcome", ["downloaded", "kept", "import"])
+def test_every_completed_download_validates_authentication(tmp_path, monkeypatch, outcome):
+    web = reloaded_web(tmp_path, monkeypatch)
+    ended = "2026-11-14T04:00:00+00:00"
+    [status] = web.authentication_status(
+        [{"service": "PAIRED", "outcome": outcome, "ended": ended}],
+        [{"tag": "PAIRED", "auth_methods": ["pairing"]}],
+    ).values()
+    assert status == {"state": "validated", "validated_at": ended, "observed_at": ended, "needs_user_action": False}
+
+
+def test_authentication_status_orders_evidence_by_observation_time(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    [status] = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T03:00:00+00:00",
+                "auth_failure": True,
+                "auth_failure_at": "2026-11-14T01:00:00+00:00",
+            },
+            {"service": "PAIRED", "outcome": "downloaded", "ended": "2026-11-14T02:00:00+00:00"},
+        ],
+        [{"tag": "PAIRED", "auth_methods": ["pairing"]}],
+    ).values()
+
+    assert status == {
+        "state": "validated",
+        "validated_at": "2026-11-14T02:00:00+00:00",
+        "observed_at": "2026-11-14T02:00:00+00:00",
+        "needs_user_action": False,
+    }
+
+
+def test_authentication_status_uses_the_failure_service_before_fallback(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    status = web.authentication_status(
+        [
+            {
+                "service": "SECOND",
+                "outcome": "failed",
+                "ended": "2026-11-14T03:00:00+00:00",
+                "auth_failures": {"FIRST": "2026-11-14T01:00:00+00:00"},
+            }
+        ],
+        [
+            {"tag": "FIRST", "auth_methods": ["pairing"]},
+            {"tag": "SECOND", "auth_methods": ["pairing"]},
+        ],
+    )
+
+    assert status["FIRST"]["state"] == "needs_user_action"
+    assert status["SECOND"]["state"] == "unknown"
+
+
+def test_state_exposes_authentication_from_local_history_without_extra_service_reads(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    calls = []
+    monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: calls.append("services") or [
+        {"tag": "PAIRED", "auth_methods": ["pairing"]},
+    ])
+    monkeypatch.setattr(web.UNSHACKLE, "cdm_config", lambda: {})
+    monkeypatch.setattr(web, "sonarr_series", lambda: [])
+    monkeypatch.setattr(web, "sonarrs_of_series", lambda ids: ({}, []))
+    monkeypatch.setattr(web, "run_cards", lambda: [
+        {"service": "PAIRED", "outcome": "downloaded", "tvdbId": 1,
+         "started": "2026-11-14T03:59:00+00:00", "ended": "2026-11-14T04:00:00+00:00"},
+    ])
+    monkeypatch.setattr(web, "update_info", lambda: None)
+    monkeypatch.setattr(web, "dl_options", lambda: [])
+    monkeypatch.setattr(web, "backups_info", lambda: {})
+    monkeypatch.setattr(web, "instances_of_series", lambda: {})
+
+    payload = json.loads(asyncio.run(web.state(None)).text)
+
+    assert calls == ["services"]
+    assert payload["authentication"]["PAIRED"] == {
+        "state": "validated",
+        "validated_at": "2026-11-14T04:00:00+00:00",
+        "observed_at": "2026-11-14T04:00:00+00:00",
+        "needs_user_action": False,
+    }
+
+
+def test_full_status_refreshes_authentication_from_current_history(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    monkeypatch.setattr(web, "unshackle_health", lambda full=False: {"ok": True})
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "all_services",
+        lambda: [{"tag": "PAIRED", "auth_methods": ["pairing"]}],
+    )
+    monkeypatch.setattr(
+        web,
+        "run_cards",
+        lambda: [
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T05:00:00+00:00",
+                "auth_failure": True,
+            }
+        ],
+    )
+
+    payload = json.loads(asyncio.run(web.status(SimpleNamespace(query={"full": "1"}))).text)
+
+    assert payload["authentication"]["PAIRED"]["state"] == "needs_user_action"
+
+
 def test_stats_add_up_the_history(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))

@@ -388,11 +388,13 @@ async function refreshBusy() {
 }
 async function refreshHealth(full = false) {
   if (document.hidden && !full) { clearTimeout(healthTimer); healthTimer = setTimeout(refreshHealth, 60000); return; }  // out of sight
-  try { renderHealth(await api(`/api/status${full ? "?full=1" : ""}`)); } catch { /* the lights keep their last state */ }
+  const details = full || currentTab === "settings" && settingsSec === "unshackle";
+  try { renderHealth(await api(`/api/status${details ? "?full=1" : ""}`)); } catch { /* the lights keep their last state */ }
   clearTimeout(healthTimer);  // after the await: calls that overlapped leave one loop, not one each
   healthTimer = setTimeout(refreshHealth, 60000);
 }
 function renderHealth(h) {
+  if (h.authentication) S.authentication = h.authentication;
   for (const [name, label] of [["unshackle", "Unshackle"], ["sonarr", "Sonarr"]]) {
     const st = h[name] || {}, b = document.querySelector(`[data-health=${name}]`);
     b.querySelector(".dot").className = "dot " + (st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "");
