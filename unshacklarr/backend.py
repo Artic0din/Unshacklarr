@@ -81,12 +81,14 @@ def response_error(response: requests.Response) -> tuple[dict, str, str | None]:
                     if isinstance((value := payload.get(key)), str) and value.strip()), response.text.strip())
     if not message or re.search(r"<\s*(?:!doctype|html|head|body|h\d)\b", message, re.IGNORECASE):
         message = response.reason or "Request failed"
-    reference = str(payload.get("ref") or "").strip()
+    message = no_credentials(message)[:500]
+    reference = no_credentials(str(payload.get("ref") or "").strip())[:490]
     if reference and reference not in message:
-        message += f" (ref {reference})"
+        suffix = f" (ref {reference})"
+        message = f"{message[:500 - len(suffix)].rstrip()}{suffix}"
     details = payload.get("details") or {}
     service = str(details.get("service") or "").strip() if isinstance(details, dict) else ""
-    return payload, no_credentials(message), service or None
+    return payload, message, service or None
 
 
 def unshackle_python(command: str) -> tuple[str, Path]:
@@ -336,7 +338,7 @@ class Unshackle:
                 self.proxy_refused = datetime.now(timezone.utc).isoformat()
                 message = PROXY_HINT
             owner = f"{service} through Unshackle" if service else "Unshackle"
-            err = UnshackleError(f"{owner}: HTTP {r.status_code}: {message[:500]}")
+            err = UnshackleError(no_credentials(f"{owner}: HTTP {r.status_code}: {message}"))
             err.status = r.status_code
             raise err
         try:

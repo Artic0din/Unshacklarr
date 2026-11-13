@@ -60,6 +60,35 @@ def test_provider_error_keeps_separate_reference_and_redacts_before_truncating(t
 
 
 @responses.activate
+def test_long_provider_error_keeps_reference(tmp_path):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://unshackle.invalid", "unshackle_api_key": "server-key"})
+    responses.get("http://unshackle.invalid/api/services", status=500,
+                  json={"message": "Failure " + "x" * 600, "ref": "support-ref"})
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("GET", "/api/services")
+    displayed = str(caught.value)
+    assert "support-ref" in displayed
+    assert len(displayed.removeprefix("Unshackle: HTTP 500: ")) <= 500
+
+
+@responses.activate
+def test_provider_service_is_redacted_in_public_error(tmp_path):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://unshackle.invalid", "unshackle_api_key": "server-key"})
+    responses.get(
+        "http://unshackle.invalid/api/services",
+        status=500,
+        json={"message": "Failure", "details": {"service": "https://reader:sensitive@provider.invalid"}},
+    )
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("GET", "/api/services")
+    displayed = str(caught.value)
+    assert "reader" not in displayed
+    assert "sensitive" not in displayed
+
+
+@responses.activate
 @pytest.mark.parametrize("reason", ["Account is in a different region from yours", "requested CDM is not permitted for this account"])
 def test_provider_authentication_reason_is_not_replaced_by_server_configuration_advice(tmp_path, reason):
     backend = Unshackle(tmp_path)
