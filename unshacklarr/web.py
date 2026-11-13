@@ -4170,7 +4170,7 @@ async def probe(request):
             try:
                 found["elsewhere"] = await asyncio.to_thread(on_sonarr, inst, seasons_elsewhere, show,
                                                            {"id": int(body.get("seriesId") or 0), "title": str(body.get("title") or "")}, found)
-            except (UnshackleError, requests.RequestException) as err:
+            except (UnshackleError, requests.RequestException, ValueError) as err:
                 found["elsewhere_error"] = no_credentials(err)
                 found["elsewhere"] = read_json(SERVICE_LISTS, {}).get(str(body["tvdbId"]), {}).get("elsewhere", {})
             else:

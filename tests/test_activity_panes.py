@@ -75,10 +75,11 @@ const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8"), suggestions = JSON.parse(process.argv[2]);
 const s = { tvdbId: 1, id: 10, title: "Show" }, stub = { replaceChildren() {} };
 let rendered;
-const ctx = { S: { services: ["IV", "SBS", "NF"], config: { series: { 1: {} } } }, current: s, epElsewhere: { 3: { service: "NF" } },
+const pages = Object.fromEntries(Array.from({length: 10}, (_, i) => [i + 1, {url: `https://iview/season-${i + 1}`} ]));
+const ctx = { S: { services: ["IV", "SBS", "NF"], config: { series: { 1: {season_pages: pages} } } }, current: s, epElsewhere: { 3: { service: "NF" } }, epElsewhereFresh: false,
   $: () => stub, el: () => ({}), seriesSvcs: () => "IV", slowHint: () => 0, clearTimeout() {},
   api: async (path, opts) => {
-    if (opts.wait < 250) throw Error("No answer before two slow services finish");
+    if (opts.wait < 1100) throw Error("No answer before slow season pages and services finish");
     return { elsewhere: suggestions, available: {}, checked: "2026-11-13T02:00:00Z" };
   },
   viewAvail: (x) => x, localTitles() {}, renderSeason: () => { rendered = ctx.epElsewhere; },
@@ -89,7 +90,7 @@ vm.runInContext(src.match(/async function askService\b[\s\S]*?\n}\n/)[0], ctx);
   await ctx.askService(s);
   const cache = src.match(/api\(`\/api\/probe\/\$\{s.tvdbId\}`\)\.then\((\(hit\) => \{[\s\S]*?)\n    }\)\.catch/)[1] + "\n}";
   ctx.s = s;
-  vm.runInContext(`(${cache})({elsewhere: {4: {service: "STAN"}}, checked: "2026-11-12T02:00:00Z"})`, ctx);
+  vm.runInContext(`(${cache})({elsewhere: {4: {service: "STAN"}}, checked: "2026-11-13T03:00:00Z", elsewhere_checked: "2026-11-12T02:00:00Z"})`, ctx);
   console.log(JSON.stringify({ rendered, kept: ctx.epElsewhere }));
 })();
 """, str(JS / "series.js"), json.dumps(suggestions))

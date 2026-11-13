@@ -964,8 +964,8 @@ def test_a_service_list_is_kept_for_the_series_as_it_is(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("other_sonarr", [False, True])
-@pytest.mark.parametrize("limited", [False, True])
-def test_manual_refresh_searches_other_services_and_returns_suggestions(tmp_path, monkeypatch, other_sonarr, limited):
+@pytest.mark.parametrize("failure", [None, "limited", "invalid"])
+def test_manual_refresh_searches_other_services_and_returns_suggestions(tmp_path, monkeypatch, other_sonarr, failure):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
     import unshacklarr.web
@@ -974,20 +974,22 @@ def test_manual_refresh_searches_other_services_and_returns_suggestions(tmp_path
     show = {"service": "IV", "title": "https://iview/show"}
     found = {"available": {}, "titles": []}
     suggestion = {"2": {"service": "SBS", "url": "https://sbs/show", "count": 8}}
+    old = {"4": {"service": "NF", "url": "https://nf/show", "count": 6}}
     inst = {"name": "other"} if other_sonarr else None
-    monkeypatch.setattr(web, "sonarr_named", lambda name: inst)
+    monkeypatch.setattr(web.sonarr_sync, "SONARRS", {"other": inst} if other_sonarr else {})
     calls = []
     monkeypatch.setattr(web, "on_sonarr", lambda target, fn, *args: calls.append((target, fn)) or fn(*args))
     monkeypatch.setattr(web, "probe_series", lambda *args: dict(found))
     def search(conf, serie, listing):
         assert (conf, serie, listing) == ({**show, "season_map": {}}, {"id": 10, "title": "Show"}, found)
-        if limited:
-            err = web.UnshackleError("Too many requests")
-            err.retry_after = 60
+        if failure:
+            err = ValueError("bad season") if failure == "invalid" else web.UnshackleError("Too many requests")
+            if failure == "limited":
+                err.retry_after = 60
             raise err
         return suggestion
     monkeypatch.setattr(web, "seasons_elsewhere", search)
-    web.keep_service_list(1, show, found, elsewhere=suggestion)
+    web.keep_service_list(1, show, found, elsewhere=old)
     before = json.loads(web.SERVICE_LISTS.read_text())["1"]["elsewhere_checked"]
 
     class Request:
@@ -995,12 +997,12 @@ def test_manual_refresh_searches_other_services_and_returns_suggestions(tmp_path
             return {"show": show, "seriesId": 10, "tvdbId": 1, "title": "Show", "sonarr": "other" if other_sonarr else ""}
 
     result = json.loads(asyncio.run(web.probe(Request())).text)
-    assert result["elsewhere"] == suggestion
+    assert result["elsewhere"] == (old if failure else suggestion)
     assert result["available"] == found["available"]
-    assert result.get("elsewhere_error") == ("Too many requests" if limited else None)
+    assert result.get("elsewhere_error") == {None: None, "limited": "Too many requests", "invalid": "bad season"}[failure]
     assert (inst, web.seasons_elsewhere) in calls
-    assert json.loads(web.SERVICE_LISTS.read_text())["1"]["elsewhere"] == suggestion
-    if limited:
+    assert json.loads(web.SERVICE_LISTS.read_text())["1"]["elsewhere"] == (old if failure else suggestion)
+    if failure:
         assert json.loads(web.SERVICE_LISTS.read_text())["1"]["elsewhere_checked"] == before
 
 

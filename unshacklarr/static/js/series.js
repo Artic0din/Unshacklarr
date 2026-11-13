@@ -236,6 +236,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     epPagesListed = {};
     epPages = {};
     epElsewhere = {};
+    epElsewhereFresh = false;
     epSeasons = {}; epSeason = null; epBusy = new Map();  // nothing of the series open before
     picked.clear();
     updateEpBar();
@@ -254,7 +255,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     }).catch(() => {});
     api(`/api/probe/${s.tvdbId}`).then((hit) => {  // the last check of the service, refreshed weekly: no need to ask again
       if (!hit || current !== s) return;
-      if (!epChecked || hit.checked >= epChecked) epElsewhere = hit.elsewhere || {};  // a slower saved result cannot replace a new search
+      if (!epElsewhereFresh) epElsewhere = hit.elsewhere || {};  // a completed manual search takes precedence over the saved result
       if (epAvail) { if ($("#ep-list")) renderCatchUp(); return; }
       epAvail = viewAvail(hit.available); epTitles = hit.titles; epPagesListed = hit.pages || {}; epChecked = hit.checked; epQualities = hit.qualities || {}; localTitles(hit.local_titles);
       if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${seriesSvcs(S.config.series[s.tvdbId])}`); }
@@ -326,7 +327,7 @@ function renderCheck(s, changed = false) {
   $("#ep-odd").before(pick);
 }
 let epUp = null;  // episode ids Upgrades found better on the service; null: Upgrades hasn't checked the series
-let epElsewhere = {};  // Sonarr season -> {service, url, count}: another service has it, as the weekly check found
+let epElsewhere = {}, epElsewhereFresh = false;  // Sonarr season -> {service, url, count}: another service has it
 let epPages = {};  // Sonarr season -> a show of its own the service has for it, as the last check found (by mj23au)
 let epAvail = null;  // episode id -> what the service calls it, once "What's on <service>?" asked it
 let epPagesListed = {};  // season -> {url, count} for each season page the last check listed (a failed one is absent)
@@ -685,10 +686,10 @@ async function askService(s) {
   let r = null;
   const slow = slowHint(svc);
   try {
-    // A search and listing per service: two 65 s backend timeouts plus the 2 s pause, after the main listing.
-    r = await api("/api/probe", { method: "POST", wait: 120 + 132 * S.services.length, body: JSON.stringify({ show: conf, seriesId: s.id ?? S.sonarrsOf?.[s.tvdbId]?.[0]?.id, tvdbId: s.tvdbId, title: s.title,
+    // Each season page can list for 65 s; each other service can search and list, plus its 2 s pause.
+    r = await api("/api/probe", { method: "POST", wait: 120 + 65 * Object.keys(conf.season_pages || {}).length + 132 * S.services.length, body: JSON.stringify({ show: conf, seriesId: s.id ?? S.sonarrsOf?.[s.tvdbId]?.[0]?.id, tvdbId: s.tvdbId, title: s.title,
       ...(s.id ? {} : { sonarr: S.sonarrsOf?.[s.tvdbId]?.[0]?.name }) }) });  // in no main Sonarr: its own Sonarr's episodes
-    if (current === s) { epElsewhere = r.elsewhere || {}; epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview(); }
+    if (current === s) { epElsewhere = r.elsewhere || {}; epElsewhereFresh = !r.elsewhere_error; epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview(); }
     if (current === s && r.elsewhere_error) toast(`Availability refreshed, but the search on other services failed: ${r.elsewhere_error}`, true);
   } catch (e) { toast(e.message, true); }
   clearTimeout(slow);
