@@ -815,10 +815,13 @@ def job_cause(job: dict) -> str:
         message = job.get("error_message") or job.get("status") or "failed"
     message = re.sub(r"^(?:Worker exited with code \d+:\s*)+", "", message).strip()
     if "Traceback (most recent call last):" in message:
-        lines = [line.strip() for line in message.splitlines() if line.strip()]
-        reasons = [match[1] for line in lines
-                   if (match := re.match(r"[\w.]*(?:Error|Exception|SystemExit):\s*(.+)", line))]
-        message = f"Unshackle: {reasons[-1] if reasons else lines[-1]}"
+        final_traceback = message.rsplit("Traceback (most recent call last):", 1)[-1]
+        match = re.search(r"^[\w.]+:[ \t]*(.*)$", final_traceback, re.M)
+        if match:
+            reason = "\n".join(filter(None, [match[1].strip(), final_traceback[match.end():].strip()]))
+        else:
+            reason = next((line.strip() for line in reversed(final_traceback.splitlines()) if line.strip()), "failed")
+        message = f"Unshackle: {reason}"
     return no_credentials(message)
 
 
