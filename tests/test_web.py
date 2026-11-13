@@ -348,7 +348,7 @@ def test_browser_response_errors_redact_sensitive_detail():
 const tr = (text) => text;
 ''' + function + r'''
 const privateValue = "not-for-display-123";
-const body = `Wrong password: retry\nGET /callback?access_token=${privateValue}\nX-Secret-Key: ${privateValue}`;
+const body = `Wrong password: retry\nGET /callback?access_token=${privateValue}\nX-Secret-Key: ${privateValue}\nhttp://:${privateValue}@example.invalid`;
 const response = { status: 401, statusText: "Unauthorized", text: async () => body };
 responseError(response).then((error) => console.log(JSON.stringify({
   message: error.message,
@@ -364,7 +364,28 @@ responseError(response).then((error) => console.log(JSON.stringify({
     assert result["privateValue"] not in result["detail"]
     assert "access_token=***" in result["detail"]
     assert "X-Secret-Key: ***" in result["detail"]
+    assert "http://***@example.invalid" in result["detail"]
     assert result["control"].startswith("Wrong password: retry")
+
+
+def test_browser_response_error_redaction_is_linear():
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "core.js").read_text()
+    function = source[source.index("async function responseError"):source.index("async function api")]
+    script = r'''
+const tr = (text) => text;
+''' + function + r'''
+const body = "//" + ":".repeat(100000);
+const response = { status: 500, statusText: "Error", text: async () => body };
+responseError(response).then((error) => console.log(error.detail.length));
+'''
+    run = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=1)
+    assert run.returncode == 0, run.stderr
+    assert int(run.stdout) == 100002
 
 
 # Runs the page's real fetchDays against a /api/calendar that, like the route, answers by air date only.
