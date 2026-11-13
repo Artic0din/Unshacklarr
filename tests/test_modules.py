@@ -16,6 +16,27 @@ from unshacklarr.cookies import CookieError, list_all, normalise, parse, save
 from unshacklarr.files import PRIVATE, shared_or_private, write_atomic
 
 
+@responses.activate
+@pytest.mark.parametrize("provider_failure", [False, True])
+def test_authentication_errors_identify_the_server_or_provider(tmp_path, provider_failure):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-value"})
+    payload = {"status": 401, "message": "Secret Key is Invalid."}
+    if provider_failure:
+        payload = {"error_code": "AUTH_FAILED", "message": "Authentication failed: Hayu playback failed: Invalid Token (ref ef1b9f)",
+                   "details": {"service": "HAYU", "operation": "list_tracks"}, "ref": "ef1b9f"}
+    responses.post("http://backend:8786/api/list-tracks", status=401, json=payload)
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("POST", "/api/list-tracks", json={"service": "HAYU"})
+    message = str(caught.value)
+    assert caught.value.status == 401
+    if provider_failure:
+        assert "HAYU" in message and "Invalid Token" in message and "ef1b9f" in message
+        assert "login/session" in message and "refused the API key" not in message
+    else:
+        assert "internal API key" in message and "Settings, Unshackle" in message
+
+
 def test_cookie_files_are_read_saved_and_kept_in_their_folder(tmp_path):
     # formats, expiry, no path outside the folder
     netscape = "# Netscape HTTP Cookie File\n.molotov.tv\tTRUE\t/\tTRUE\t4102444800\ttoken\tabc\n#HttpOnly_.molotov.tv\tTRUE\t/\tTRUE\t0\tsid\tx\n"
