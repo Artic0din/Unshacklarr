@@ -177,6 +177,380 @@ def test_maintenance_only_runs_serve_actions_and_jobs_are_checked(tmp_path, monk
     assert calls == [("POST", "/api/maintenance/clear-temp"), ("DELETE", "0f1e2d3c-aaaa-bbbb")]
 
 
+def test_authentication_status_uses_only_classified_run_evidence(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    services = [
+        {"tag": "OPEN", "auth_methods": []},
+        {"tag": "PAIRED", "auth_methods": ["pairing"]},
+        {"tag": "RECOVERED", "auth_methods": ["cookies"]},
+        {"tag": "LEGACY"},
+    ]
+    cards = [
+        {"service": "PAIRED", "outcome": "failed", "ended": "2026-11-14T05:00:00+00:00", "cause": "No licence"},
+        {"service": "RECOVERED", "outcome": "downloaded", "ended": "2026-11-14T04:00:00+00:00"},
+        {"service": "PAIRED", "outcome": "failed", "ended": "2026-11-14T03:00:00+00:00", "auth_failure": True},
+        {"service": "RECOVERED", "outcome": "failed", "ended": "2026-11-14T02:00:00+00:00", "auth_failure": True},
+        {"service": "PAIRED", "outcome": "downloaded", "ended": "2026-11-14T01:00:00+00:00"},
+    ]
+
+    assert web.authentication_status(cards, services) == {
+        "LEGACY": {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None},
+        "OPEN": {"state": "anonymous", "validated_at": None, "observed_at": None, "needs_user_action": False},
+        "PAIRED": {
+            "state": "needs_user_action",
+            "validated_at": "2026-11-14T01:00:00+00:00",
+            "observed_at": "2026-11-14T03:00:00+00:00",
+            "needs_user_action": True,
+        },
+        "RECOVERED": {
+            "state": "validated",
+            "validated_at": "2026-11-14T04:00:00+00:00",
+            "observed_at": "2026-11-14T04:00:00+00:00",
+            "needs_user_action": False,
+        },
+    }
+
+
+def test_authentication_status_uses_run_evidence_without_live_service_metadata(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+
+    status = web.authentication_status(
+        [
+            {"service": "PAIRED", "outcome": "downloaded", "ended": "2026-11-14T01:00:00+00:00"},
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T02:00:00+00:00",
+                "auth_failure": True,
+            },
+        ],
+        [],
+    )
+
+    assert status["PAIRED"] == {
+        "state": "needs_user_action",
+        "validated_at": "2026-11-14T01:00:00+00:00",
+        "observed_at": "2026-11-14T02:00:00+00:00",
+        "needs_user_action": True,
+    }
+
+
+def test_authentication_status_does_not_treat_legacy_offline_success_as_login(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+
+    status = web.authentication_status(
+        [{"service": "OPEN", "outcome": "downloaded", "ended": "2026-11-14T01:00:00+00:00"}],
+        [],
+    )
+
+    assert status["OPEN"] == {
+        "state": "unknown",
+        "validated_at": None,
+        "observed_at": None,
+        "needs_user_action": None,
+    }
+
+
+def test_authentication_status_reads_each_card_evidence_once(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards = [
+        {"service": "FIRST", "outcome": "downloaded", "ended": "2026-11-14T01:00:00+00:00"},
+        {"service": "SECOND", "outcome": "downloaded", "ended": "2026-11-14T02:00:00+00:00"},
+    ]
+    validation_calls = []
+    failure_calls = []
+    original_validations = web.sonarr_sync.authentication_validations
+    original_failures = web.sonarr_sync.authentication_failures
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "authentication_validations",
+        lambda card, failures=None: validation_calls.append(card) or original_validations(card, failures),
+    )
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "authentication_failures",
+        lambda card: failure_calls.append(card) or original_failures(card),
+    )
+
+    web.authentication_status(
+        cards,
+        [{"tag": "FIRST", "auth_methods": ["pairing"]}, {"tag": "SECOND", "auth_methods": []}],
+    )
+
+    assert validation_calls == cards
+    assert failure_calls == cards
+
+
+@pytest.mark.parametrize("outcome", ["downloaded", "kept", "import"])
+def test_every_completed_download_validates_authentication(tmp_path, monkeypatch, outcome):
+    web = reloaded_web(tmp_path, monkeypatch)
+    ended = "2026-11-14T04:00:00+00:00"
+    [status] = web.authentication_status(
+        [{"service": "PAIRED", "outcome": outcome, "ended": ended}],
+        [{"tag": "PAIRED", "auth_methods": ["pairing"]}],
+    ).values()
+    assert status == {"state": "validated", "validated_at": ended, "observed_at": ended, "needs_user_action": False}
+
+
+def test_authentication_status_orders_evidence_by_observation_time(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    [status] = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T03:00:00+00:00",
+                "auth_failure": True,
+                "auth_failure_at": "2026-11-14T01:00:00+00:00",
+            },
+            {"service": "PAIRED", "outcome": "downloaded", "ended": "2026-11-14T02:00:00+00:00"},
+        ],
+        [{"tag": "PAIRED", "auth_methods": ["pairing"]}],
+    ).values()
+
+    assert status == {
+        "state": "validated",
+        "validated_at": "2026-11-14T02:00:00+00:00",
+        "observed_at": "2026-11-14T02:00:00+00:00",
+        "needs_user_action": False,
+    }
+
+
+def test_authentication_status_uses_the_failure_service_before_fallback(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    status = web.authentication_status(
+        [
+            {
+                "service": "SECOND",
+                "outcome": "failed",
+                "ended": "2026-11-14T03:00:00+00:00",
+                "auth_failures": {"FIRST": "2026-11-14T01:00:00+00:00"},
+            }
+        ],
+        [
+            {"tag": "FIRST", "auth_methods": ["pairing"]},
+            {"tag": "SECOND", "auth_methods": ["pairing"]},
+        ],
+    )
+
+    assert status["FIRST"]["state"] == "needs_user_action"
+    assert status["SECOND"]["state"] == "unknown"
+
+
+def test_authentication_status_keeps_inherited_failure_during_active_retry(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+
+    status = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": None,
+                "ended": None,
+                "auth_failures": {"PAIRED": "2026-11-14T01:00:00+00:00"},
+            }
+        ],
+        [{"tag": "PAIRED", "auth_methods": ["pairing"]}],
+    )
+
+    assert status["PAIRED"]["state"] == "needs_user_action"
+
+
+def test_authentication_status_survives_pruned_cards_and_separates_backends(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.write_atomic(
+        web.sonarr_sync.AUTHENTICATION_FILE,
+        json.dumps(
+            {
+                "": {
+                    "PAIRED": {
+                        "state": "validated",
+                        "observed_at": "2026-11-14T02:00:00+00:00",
+                        "validated_at": "2026-11-14T02:00:00+00:00",
+                    }
+                },
+                "vpn": {
+                    "PAIRED": {
+                        "state": "needs_user_action",
+                        "observed_at": "2026-11-14T03:00:00+00:00",
+                        "validated_at": None,
+                    }
+                },
+            }
+        ),
+    )
+
+    status = web.authentication_status([], [])  # durable evidence still renders while serve is unavailable
+
+    assert status["PAIRED"]["state"] == "validated"
+    assert status["PAIRED@vpn"] == {
+        "state": "needs_user_action",
+        "validated_at": None,
+        "observed_at": "2026-11-14T03:00:00+00:00",
+        "needs_user_action": True,
+        "service": "PAIRED",
+        "backend": "vpn",
+    }
+
+
+def test_state_exposes_authentication_from_local_history_without_extra_service_reads(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    calls = []
+    monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: calls.append("services") or [
+        {"tag": "PAIRED", "auth_methods": ["pairing"]},
+    ])
+    monkeypatch.setattr(web.UNSHACKLE, "cdm_config", lambda: {})
+    monkeypatch.setattr(web, "sonarr_series", lambda: [])
+    monkeypatch.setattr(web, "sonarrs_of_series", lambda ids: ({}, []))
+    monkeypatch.setattr(web, "run_cards", lambda: [
+        {"service": "PAIRED", "outcome": "downloaded", "tvdbId": 1,
+         "started": "2026-11-14T03:59:00+00:00", "ended": "2026-11-14T04:00:00+00:00"},
+    ])
+    monkeypatch.setattr(web, "update_info", lambda: None)
+    monkeypatch.setattr(web, "dl_options", lambda: [])
+    monkeypatch.setattr(web, "backups_info", lambda: {})
+    monkeypatch.setattr(web, "instances_of_series", lambda: {})
+
+    payload = json.loads(asyncio.run(web.state(None)).text)
+
+    assert calls == ["services"]
+    assert payload["authentication"]["PAIRED"] == {
+        "state": "validated",
+        "validated_at": "2026-11-14T04:00:00+00:00",
+        "observed_at": "2026-11-14T04:00:00+00:00",
+        "needs_user_action": False,
+    }
+
+
+def test_full_status_refreshes_authentication_from_current_history(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    monkeypatch.setattr(web, "unshackle_health", lambda full=False: {"ok": True})
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "all_services",
+        lambda: [{"tag": "PAIRED", "auth_methods": ["pairing"]}],
+    )
+    monkeypatch.setattr(
+        web,
+        "run_cards",
+        lambda: [
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T05:00:00+00:00",
+                "auth_failure": True,
+            }
+        ],
+    )
+
+    payload = json.loads(asyncio.run(web.status(SimpleNamespace(query={"full": "1"}))).text)
+
+    assert payload["authentication"]["PAIRED"]["state"] == "needs_user_action"
+
+
+def test_authentication_status_refresh_skips_full_diagnostics(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    checked = []
+    monkeypatch.setattr(
+        web,
+        "unshackle_health",
+        lambda full=False, jobs=False: checked.append((full, jobs)) or {"ok": True, "queue": {"downloading": 1}},
+    )
+    monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: [{"tag": "PAIRED", "auth_methods": ["pairing"]}])
+    monkeypatch.setattr(web, "run_cards", lambda: [])
+
+    payload = json.loads(asyncio.run(web.status(SimpleNamespace(query={"auth": "1"}))).text)
+
+    assert "authentication" in payload
+    assert payload["unshackle"]["queue"] == {"downloading": 1}
+    assert checked == [(False, True)]
+
+
+def test_lightweight_authentication_refresh_repaints_visible_status():
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "schedule.js").read_text()
+    render = re.search(r"^function renderHealth\(h\) \{.*?^\}", source, re.M | re.S).group()
+    details = re.search(r"^let unshackleDetails = .*;$", source, re.M).group()
+    harness = f"""
+const vm = require("vm");
+const renders = [];
+const button = {{ querySelector: () => ({{ className: "" }}), title: "", ariaLabel: "" }};
+const box = {{
+  S: {{ authentication: {{}} }}, document: {{ querySelector: () => button }},
+  renderUnshackleStatus: (status) => renders.push(status), renderSonarrState() {{}},
+  renderUnshackleState() {{}}, paintServers() {{}}, paintSonarrs() {{}},
+}};
+vm.createContext(box);
+vm.runInContext({json.dumps(details + chr(10) + render)}, box);
+box.renderHealth({{ unshackle: {{ ok: true, tools: [{{ name: "ffmpeg" }}] }}, authentication: {{ PAIRED: {{ state: "validated" }} }} }});
+box.renderHealth({{ unshackle: {{ ok: false, error: "offline" }}, authentication: {{ PAIRED: {{ state: "validated" }} }} }});
+box.renderHealth({{ unshackle: {{ ok: true }}, authentication: {{ PAIRED: {{ state: "needs_user_action" }} }} }});
+console.log(JSON.stringify({{
+  renders: renders.length, last: box.S.authentication.PAIRED.state,
+  recovered: renders.at(-1).ok, staleError: "error" in renders.at(-1), tools: renders.at(-1).tools.length,
+}}));
+"""
+
+    done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == {
+        "renders": 3,
+        "last": "needs_user_action",
+        "recovered": True,
+        "staleError": False,
+        "tools": 1,
+    }
+
+
+def test_saved_authentication_status_remains_visible_while_unshackle_is_offline():
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "settings-services.js").read_text()
+    render = re.search(r"^function renderUnshackleStatus\(st\) \{.*?^\}", source, re.M | re.S).group()
+    harness = f"""
+const vm = require("vm");
+const nodes = {{
+  "#ux-run": {{ replaceChildren(...children) {{ this.children = children; }} }},
+  "#u-status": {{ replaceChildren(...children) {{ this.children = children; }} }},
+}};
+const box = {{
+  S: {{ authentication: {{ PAIRED: {{ state: "needs_user_action", service: "PAIRED" }} }}, config: {{ settings: {{}} }} }},
+  $: (selector) => nodes[selector],
+  el: (tag, props = {{}}, ...children) => ({{ tag, ...props, children }}),
+  svcName: (name) => name,
+  ago: () => "now",
+}};
+vm.createContext(box);
+vm.runInContext({json.dumps(render)}, box);
+box.renderUnshackleStatus({{ ok: false, mode: "remote", error: "offline" }});
+const texts = [];
+const visit = (node) => {{
+  if (!node || typeof node !== "object") return;
+  if (node.textContent) texts.push(node.textContent);
+  (node.children || []).forEach(visit);
+}};
+nodes["#u-status"].children.forEach(visit);
+console.log(JSON.stringify(texts));
+"""
+
+    done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+
+    assert done.returncode == 0, done.stderr
+    assert "Service access" in json.loads(done.stdout)
+
+
 def test_stats_add_up_the_history(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
@@ -2855,12 +3229,12 @@ def test_an_episode_without_its_preferred_audio_is_got_again_once_it_comes(tmp_p
     later = now + timedelta(days=1)
     requested = []
 
-    def download_request(show, config, wanted, out):
+    def download_request(show, config, wanted, out, backend=None):
         requested.append((show["title"], wanted))
         return {"service": show["service"], "wanted": [wanted]}
 
     monkeypatch.setattr(web.sonarr_sync, "download_request", download_request)
-    monkeypatch.setattr(web.sonarr_sync, "tracks_on_service", lambda show, config, request: {"audio": {"fr"} if request["service"] == "TF1" else {"en"}, "subtitles": set()})
+    monkeypatch.setattr(web.sonarr_sync, "tracks_on_service", lambda show, config, request, backend=None: {"audio": {"fr"} if request["service"] == "TF1" else {"en"}, "subtitles": set()})
     started, told = [], []
     monkeypatch.setattr(web, "run_sync", lambda ids, replace=False, kind="manual": started.append((ids, replace, kind)))
     monkeypatch.setattr(web.sonarr_sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
@@ -2872,6 +3246,239 @@ def test_an_episode_without_its_preferred_audio_is_got_again_once_it_comes(tmp_p
     assert list(json.loads(sync.UPGRADES_FILE.read_text())) == ["2"]
     web.check_upgrades(now + timedelta(days=31))
     assert told == ["Kept without fr audio: Show222 S01E02"] and json.loads(sync.UPGRADES_FILE.read_text()) == {}  # past its days: kept, told once
+
+
+def test_upgrade_auth_failure_is_recorded_without_stopping_later_checks(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = {
+        "series": {
+            111: {"service": "FIRST", "title": "first"},
+            222: {"service": "SECOND", "title": "second"},
+        },
+        "notifications": {},
+    }
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    now = datetime.now(timezone.utc)
+    episodes = {}
+    for episode_id, tvdb in ((1, 111), (2, 222)):
+        episodes[episode_id] = {
+            "id": episode_id,
+            "seasonNumber": 1,
+            "episodeNumber": episode_id,
+            "series": {"tvdbId": tvdb, "title": f"Show{tvdb}"},
+        }
+        sync.note_upgrade(
+            episodes[episode_id],
+            config["series"][tvdb],
+            f"S01E0{episode_id}",
+            "fr",
+        )
+    backends = {tag: type("Backend", (), {"name": tag.lower()})() for tag in ("FIRST", "SECOND")}
+    error = sync.UnshackleError("Authentication failed")
+    error.error_code = "AUTH_FAILED"
+    provider_results = iter(
+        (
+            now + timedelta(days=1, seconds=1),
+            now + timedelta(days=1, seconds=2),
+            now + timedelta(days=2, seconds=1),
+        )
+    )
+
+    class ProviderClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    ProviderClock.current = now + timedelta(days=1)
+    monkeypatch.setattr(web, "datetime", ProviderClock)
+    monkeypatch.setattr(sync, "backend_for", lambda tag, current_config=None: backends[tag])
+    monkeypatch.setattr(
+        sync,
+        "download_request",
+        lambda show, current_config, wanted, out, backend=None: {
+            "service": show["service"],
+            "wanted": [wanted],
+        },
+    )
+
+    reject_first = [True]
+
+    def tracks(show, current_config, request, backend=None):
+        ProviderClock.current = next(provider_results)
+        if show["service"] == "FIRST" and reject_first[0]:
+            raise error
+        return {"audio": {"fr"} if show["service"] == "SECOND" else {"en"}, "subtitles": set()}
+
+    monkeypatch.setattr(sync, "tracks_on_service", tracks)
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, replace=False, kind="manual": started.append(ids))
+    authentication_writes = []
+    write_atomic = sync.write_atomic
+
+    def count_authentication_writes(path, content):
+        if path == sync.AUTHENTICATION_FILE:
+            authentication_writes.append(content)
+        write_atomic(path, content)
+
+    monkeypatch.setattr(sync, "write_atomic", count_authentication_writes)
+
+    assert web.check_upgrades(now + timedelta(days=1)) == ["Show222 S01E02"]
+    assert started == [[2]]
+    observations = sync.read_authentication_observations()
+    assert len(authentication_writes) == 1
+    assert observations["first"]["FIRST"] == {
+        "state": "needs_user_action",
+        "observed_at": (now + timedelta(days=1, seconds=1)).isoformat(),
+        "validated_at": None,
+    }
+    assert observations["second"]["SECOND"] == {
+        "state": "validated",
+        "observed_at": (now + timedelta(days=1, seconds=2)).isoformat(),
+        "validated_at": (now + timedelta(days=1, seconds=2)).isoformat(),
+    }
+    reject_first[0] = False
+    sync.note_upgrade(episodes[2], config["series"][222], "S01E02", "")
+
+    assert web.check_upgrades(now + timedelta(days=2)) == []
+    assert sync.read_authentication_observations()["first"]["FIRST"]["state"] == "validated"
+
+
+def test_upgrade_scan_flushes_completed_authentication_evidence_on_later_error(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = {
+        "series": {
+            111: {"service": "SHARED", "title": "first"},
+            222: {"service": "SHARED", "title": "second"},
+            333: {"service": "LATER", "title": "later"},
+        },
+        "notifications": {},
+    }
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    scan_started = datetime.now(timezone.utc)
+    for episode_id, tvdb in ((1, 111), (2, 222), (3, 333)):
+        sync.note_upgrade(
+            {
+                "id": episode_id,
+                "seasonNumber": 1,
+                "episodeNumber": episode_id,
+                "series": {"tvdbId": tvdb, "title": f"Show{tvdb}"},
+            },
+            config["series"][tvdb],
+            f"S01E0{episode_id}",
+            "fr",
+        )
+    backend = type("Backend", (), {"name": "shared"})()
+    monkeypatch.setattr(sync, "backend_for", lambda tag, current_config=None: backend)
+    monkeypatch.setattr(
+        sync,
+        "download_request",
+        lambda show, current_config, wanted, out, selected_backend=None: {"service": show["service"]},
+    )
+    results = iter(
+        (
+            scan_started + timedelta(seconds=1),
+            scan_started + timedelta(seconds=2),
+            scan_started + timedelta(seconds=3),
+        )
+    )
+
+    class ProviderClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    ProviderClock.current = scan_started
+    monkeypatch.setattr(web, "datetime", ProviderClock)
+    auth_error = sync.UnshackleError("Authentication failed")
+    auth_error.error_code = "AUTH_FAILED"
+    later_error = sync.UnshackleError("Provider unavailable")
+    track_calls = 0
+
+    def tracks(show, current_config, request, selected_backend=None):
+        nonlocal track_calls
+        track_calls += 1
+        ProviderClock.current = next(results)
+        if track_calls == 2:
+            raise auth_error
+        if track_calls == 3:
+            raise later_error
+        return {"audio": {"en"}, "subtitles": set()}
+
+    monkeypatch.setattr(sync, "tracks_on_service", tracks)
+    authentication_writes = []
+    write_atomic = sync.write_atomic
+
+    def count_authentication_writes(path, content):
+        if path == sync.AUTHENTICATION_FILE:
+            authentication_writes.append(content)
+        write_atomic(path, content)
+
+    monkeypatch.setattr(sync, "write_atomic", count_authentication_writes)
+
+    with pytest.raises(sync.UnshackleError, match="Provider unavailable"):
+        web.check_upgrades(scan_started + timedelta(days=1))
+
+    observation = sync.read_authentication_observations()["shared"]["SHARED"]
+    assert len(authentication_writes) == 1
+    assert observation == {
+        "state": "needs_user_action",
+        "observed_at": (scan_started + timedelta(seconds=2)).isoformat(),
+        "validated_at": (scan_started + timedelta(seconds=1)).isoformat(),
+    }
+
+
+def test_upgrade_scan_keeps_bookkeeping_when_authentication_evidence_write_fails(tmp_path, monkeypatch, capsys):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    show = {"service": "RTLP", "title": "show"}
+    config = {"series": {111: show}, "notifications": {}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    sync.note_upgrade(
+        {
+            "id": 1,
+            "seasonNumber": 1,
+            "episodeNumber": 1,
+            "series": {"tvdbId": 111, "title": "Show"},
+        },
+        show,
+        "S01E01",
+        "fr",
+    )
+    backend = type("Backend", (), {"name": "local"})()
+    monkeypatch.setattr(sync, "backend_for", lambda *args: backend)
+    monkeypatch.setattr(sync, "download_request", lambda *args: {})
+    monkeypatch.setattr(sync, "tracks_on_service", lambda *args: {"audio": {"en"}, "subtitles": set()})
+    monkeypatch.setattr(
+        sync,
+        "record_authentication_observations",
+        lambda observations: (_ for _ in ()).throw(OSError("disk full")),
+    )
+    checked_at = datetime.now(timezone.utc) + timedelta(days=1)
+
+    assert web.check_upgrades(checked_at) == []
+    watched = sync.read_json(sync.UPGRADES_FILE, {})
+    assert watched["1"]["checked"] == checked_at.isoformat()
+    assert "Could not persist authentication observations: disk full" in capsys.readouterr().out
 
 
 def test_a_series_is_found_by_name_on_its_service(tmp_path, monkeypatch):
@@ -4531,7 +5138,7 @@ def test_a_download_keeps_the_services_best_as_its_upgrades_answer(tmp_path, mon
     config = sync.read_file()
     config["quality_ladders"] = [ladder]
     monkeypatch.setattr(sync, "read_file", lambda: config)
-    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None: [{"video": [{"height": 1080, "codec": "AVC", "range": "SDR"}]}])
+    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None, backend=None: [{"video": [{"height": 1080, "codec": "AVC", "range": "SDR"}]}])
     request = {"service": "X", "title_id": "t", "wanted": ["S01E01"]}
     assert sync.apply_ladder(config["series"][1], config, request) == 2  # the service's best now: step 2
     sync.note_download_answer(11, config["series"][1], config)

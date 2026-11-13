@@ -472,7 +472,7 @@ $("#tz-select").after(settingsZone.input, settingsZone.list);
     if (asked instanceof Error) throw asked;
     // as long as the server waits for a busy Sonarr (SONARR_READ_TIMEOUT, 120 s)
     const data = asked || await api("/api/state", { wait: 130 });
-    S = { series: data.series, config: data.config, services: data.services, serviceNames: data.service_names || {}, dlOptions: data.dl_options, health: data.health || {}, cdm: data.cdm || {}, domains: data.service_domains || {}, builtinLadders: data.builtin_ladders || [], networkServices: data.network_services || {}, backups: data.backups || null, news: data.news || {}, update: data.update || null, version: data.version, instances: data.instances || {}, sonarrsOf: data.sonarrs_of || {} };
+    S = { series: data.series, config: data.config, services: data.services, serviceNames: data.service_names || {}, authentication: data.authentication || {}, dlOptions: data.dl_options, health: data.health || {}, cdm: data.cdm || {}, domains: data.service_domains || {}, builtinLadders: data.builtin_ladders || [], networkServices: data.network_services || {}, backups: data.backups || null, news: data.news || {}, update: data.update || null, version: data.version, instances: data.instances || {}, sonarrsOf: data.sonarrs_of || {} };
     savedConfig = configKey(S.config);
     // a test build of a branch shows its branch and commit, not the release it started from
     const [, branch, commit] = (data.build || "").match(/^(.*?)(?:-([0-9a-f]{7,}))?$/);

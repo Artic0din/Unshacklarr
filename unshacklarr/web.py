@@ -276,11 +276,11 @@ def service_name(service: dict) -> str:
     return name or service["tag"]
 
 
-def service_domains() -> dict[str, str]:
+def service_domains(services: list[dict] | None = None) -> dict[str, str]:
     """Map each site to the installed service for it: what the services name in their help (e.g. "https://crave.ca")
     first, then the SITES the help leaves out, under the code this Unshackle has for them. A site with no installed
     service for it maps to nothing: a suggestion never names a service Unshackle does not have."""
-    services = sonarr_sync.all_services()
+    services = sonarr_sync.all_services() if services is None else services
     installed = {s["tag"] for s in services}
     domains = {}
     for service in sorted(services, key=lambda s: s["tag"]):
@@ -857,13 +857,14 @@ def series_health(cards: list[dict]) -> dict[int, dict]:
 async def state(_):
     def unshackle_side():
         try:  # the page still opens without Unshackle, to fix its settings
-            names = {s["tag"]: service_name(s) for s in sonarr_sync.all_services()}
+            entries = sonarr_sync.all_services()
+            names = {s["tag"]: service_name(s) for s in entries}
             # a service with none of its own uses the default CDM; a link pasted on a series picks its service
-            return service_tags(), None, names, UNSHACKLE.cdm_config(), service_domains()
+            return sorted(s["tag"] for s in entries), None, names, UNSHACKLE.cdm_config(), service_domains(entries), entries
         except UnshackleError as e:
-            return [], no_credentials(e), {}, {}, {}
+            return [], no_credentials(e), {}, {}, {}, []
     sonarr_side = asyncio.ensure_future(asyncio.to_thread(sonarr_series))  # both at once: the slower one sets the pace
-    services, unshackle_error, names, cdm, domains = await asyncio.to_thread(unshackle_side)
+    services, unshackle_error, names, cdm, domains, service_entries = await asyncio.to_thread(unshackle_side)
     try:
         series = await sonarr_side
     except requests.RequestException as e:
@@ -877,6 +878,7 @@ async def state(_):
         "config": public_config(read_config()),
         "services": services,
         "service_names": names,
+        "authentication": authentication_status(cards, service_entries),
         "unshackle_error": unshackle_error,
         "version": __version__,
         "build": BUILD,
@@ -2009,39 +2011,75 @@ def check_upgrades(now: datetime) -> list[str]:
     config = read_config()
     days = timedelta(days=float(sonarr_sync.SETTINGS.get("upgrade_days") or 30))
     started, dropped, checked = [], [], []
-    for key, w in read_json(sonarr_sync.UPGRADES_FILE, {}).items():
-        if w.get("asked"):
-            continue  # waiting for the person: add the audio to a file from another source, or not (see add_track)
-        show = config["series"].get(int(w["tvdb"])) or {}
-        season = w.get("season")
-        if type(season) is not int:
-            match = re.search(r"\bS(\d+)E\d+\b", str(w.get("label") or ""))
-            season = int(match.group(1)) if match else 0
-        if season:
-            show = sonarr_sync.season_page(show, season)
-        if show.get("service") != w["service"] or not show.get("title"):
-            dropped.append(key)  # another service, or none now: what was waited for there means nothing
-            continue
-        if now - datetime.fromisoformat(w["since"]) > days:
-            dropped.append(key)
-            sonarr_sync.notify(config["notifications"], "warning", f"Kept without {w['want']} audio: {w['label']}",
-                               f"Still no {w['want']} audio on {w['service']} after {days.days} days: the episode keeps the audio it has.")
-            continue
-        if w.get("checked") and now - datetime.fromisoformat(w["checked"]) < UPGRADE_EVERY:
-            continue
-        checked.append(key)
+    authentication_observations: list[tuple[str, str, str, str]] = []
+    try:
+        for key, w in read_json(sonarr_sync.UPGRADES_FILE, {}).items():
+            if w.get("asked"):
+                continue  # waiting for the person: add the audio to a file from another source, or not (see add_track)
+            show = config["series"].get(int(w["tvdb"])) or {}
+            season = w.get("season")
+            if type(season) is not int:
+                match = re.search(r"\bS(\d+)E\d+\b", str(w.get("label") or ""))
+                season = int(match.group(1)) if match else 0
+            if season:
+                show = sonarr_sync.season_page(show, season)
+            if show.get("service") != w["service"] or not show.get("title"):
+                dropped.append(key)  # another service, or none now: what was waited for there means nothing
+                continue
+            if now - datetime.fromisoformat(w["since"]) > days:
+                dropped.append(key)
+                sonarr_sync.notify(config["notifications"], "warning", f"Kept without {w['want']} audio: {w['label']}",
+                                   f"Still no {w['want']} audio on {w['service']} after {days.days} days: the episode keeps the audio it has.")
+                continue
+            if w.get("checked") and now - datetime.fromisoformat(w["checked"]) < UPGRADE_EVERY:
+                continue
+            checked.append(key)
+            backend = sonarr_sync.backend_for(show["service"], config)
+            try:
+                request = sonarr_sync.download_request(
+                    show,
+                    config,
+                    w["serviceEpisode"],
+                    sonarr_sync.DOWNLOADS / f"upgrade-{key}",
+                    backend,
+                )
+            except ValueError:  # no CDM for it now: tried again tomorrow
+                continue
+            try:
+                tracks = sonarr_sync.tracks_on_service(show, config, request, backend)
+            except UnshackleError as error:
+                if getattr(error, "error_code", "") != "AUTH_FAILED":
+                    raise
+                authentication_observations.append(
+                    (
+                        show["service"],
+                        backend.name,
+                        "needs_user_action",
+                        datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+                continue
+            if tracks is not None:
+                authentication_observations.append(
+                    (
+                        show["service"],
+                        backend.name,
+                        "validated",
+                        datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+            if tracks and sonarr_sync.speaks(tracks["audio"], [w["want"]]):
+                # its audio only, added to the file, when chosen and possible; else the whole episode again
+                if sonarr_sync.SETTINGS.get("upgrade_mode") == "add_track":
+                    threading.Thread(target=add_or_download, args=(int(key), w["want"]), daemon=True).start()
+                else:
+                    run_sync([int(key)], replace=True, kind="upgrade")  # its import takes it off the list
+                started.append(w["label"])
+    finally:
         try:
-            request = sonarr_sync.download_request(show, config, w["serviceEpisode"], sonarr_sync.DOWNLOADS / f"upgrade-{key}")
-        except ValueError:  # no CDM for it now: tried again tomorrow
-            continue
-        tracks = sonarr_sync.tracks_on_service(show, config, request)
-        if tracks and sonarr_sync.speaks(tracks["audio"], [w["want"]]):
-            # its audio only, added to the file, when chosen and possible; else the whole episode again
-            if sonarr_sync.SETTINGS.get("upgrade_mode") == "add_track":
-                threading.Thread(target=add_or_download, args=(int(key), w["want"]), daemon=True).start()
-            else:
-                run_sync([int(key)], replace=True, kind="upgrade")  # its import takes it off the list
-            started.append(w["label"])
+            sonarr_sync.record_authentication_observations(authentication_observations)
+        except OSError as error:
+            print(f"Could not persist authentication observations: {no_credentials(error)}", flush=True)
     with sonarr_sync.upgrades_lock:  # read again: a download may have added or taken one meanwhile
         watched = read_json(sonarr_sync.UPGRADES_FILE, {})
         for key in dropped:
@@ -2129,9 +2167,9 @@ health: dict = {"unshackle": {"ok": None}, "sonarr": {"ok": None}}
 failures_in_a_row = {"unshackle": 0, "sonarr": 0}
 
 
-def unshackle_health(full: bool = False) -> dict:
-    """Whether Unshackle answers, and what the page shows about it. `full` adds the tools
-    and the queue (a tool check runs a dozen programs: only when Settings is open)."""
+def unshackle_health(full: bool = False, jobs: bool = False) -> dict:
+    """Whether Unshackle answers, and what the page shows about it. `full` adds tools;
+    `full` or `jobs` adds the queue without rerunning tool diagnostics."""
     local = UNSHACKLE.mode == "local"
     state = {"mode": UNSHACKLE.mode, "ok": False,
              "address": sonarr_sync.SETTINGS.get("unshackle_command") or "unshackle" if local else sonarr_sync.SETTINGS.get("unshackle_url")}
@@ -2144,12 +2182,13 @@ def unshackle_health(full: bool = False) -> dict:
             state["since"] = UNSHACKLE.local.started.isoformat()
         if UNSHACKLE.proxy_refused:  # Unshackle 6 refused its proxies to Unshacklarr's key: Settings offers to allow it
             state["proxy_refused"] = UNSHACKLE.proxy_refused
-        if full:
-            jobs = UNSHACKLE.jobs()
-            state["queue"] = {s: sum(j["status"] == s for j in jobs) for s in ("downloading", "queued")}
+        if full or jobs:
+            current_jobs = UNSHACKLE.jobs()
+            state["queue"] = {s: sum(j["status"] == s for j in current_jobs) for s in ("downloading", "queued")}
             state["jobs"] = [{"id": j["job_id"], "service": j.get("service"), "title": j.get("current_title") or j.get("title") or j.get("title_id"),
                               "status": j["status"], "progress": round(float(j.get("progress") or 0))}
-                             for j in jobs if j["status"] in ("queued", "downloading")]
+                             for j in current_jobs if j["status"] in ("queued", "downloading")]
+        if full:
             state["tools"] = UNSHACKLE.tools() + [
                 {"name": f"{name} (for Unshacklarr)", "installed": bool(shutil.which(name)), "required": True}
                 for name in ("mkvmerge", "mkvpropedit")]
@@ -2354,9 +2393,20 @@ async def watch_alerts():
 
 async def status(request):
     """The header's lights; ?full=1 checks Unshackle afresh, tools and queue included."""
-    if request.query.get("full"):
+    full = request.query.get("full")
+    if full:
         health["unshackle"] = {**await asyncio.to_thread(unshackle_health, True), "checked": datetime.now(timezone.utc).isoformat()}
-    return web.json_response(health)
+    result = dict(health)
+    if request.query.get("auth") and not full:
+        result["unshackle"] = await asyncio.to_thread(unshackle_health, jobs=True)
+    if full or request.query.get("auth"):
+        try:
+            services = await asyncio.to_thread(sonarr_sync.all_services)
+        except UnshackleError:
+            services = []
+        cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
+        result["authentication"] = authentication_status(cards, services)
+    return web.json_response(result)
 
 
 async def restart_unshackle(_):
@@ -4986,6 +5036,70 @@ def run_cards() -> list[dict]:
     cards = [card if card.get("ended") else {**card, "outcome": "running" if card["id"] in sonarr_sync.EpisodeRun.active else "interrupted"}
              for card in cards_on_disk()]
     return list(sonarr_sync.waiting.values()) + cards  # picked with others, waiting their turn
+
+
+def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, dict]:
+    """Read-only login evidence from service metadata, durable observations and local run cards."""
+    service_methods = {service["tag"]: service.get("auth_methods") for service in services}
+    observations = sonarr_sync.read_authentication_observations()
+    identities = {(service["tag"], str(service.get("backend") or "")) for service in services}
+    successes_by_identity = collections.defaultdict(list)
+    explicit_successes_by_identity = collections.defaultdict(list)
+    failures_by_identity = collections.defaultdict(list)
+    for card in cards:
+        failures = sonarr_sync.authentication_failures(card)
+        validations = sonarr_sync.authentication_validations(card, failures)
+        if not validations and not failures and card.get("service") in service_methods:
+            identities.add((card["service"], str(card.get("backend") or "")))
+        for tag, validation in validations.items():
+            identity = (tag, validation["backend"])
+            identities.add(identity)
+            successes_by_identity[identity].append(validation["observed_at"])
+            if isinstance(card.get("auth_validations"), dict) and tag in card["auth_validations"]:
+                explicit_successes_by_identity[identity].append(validation["observed_at"])
+        failure_backends = sonarr_sync.authentication_failure_backends(card, failures)
+        for tag, observed_at in failures.items():
+            identity = (tag, failure_backends.get(tag, ""))
+            identities.add(identity)
+            failures_by_identity[identity].append(observed_at)
+    identities.update(
+        (tag, str(backend))
+        for backend, backend_observations in observations.items()
+        if isinstance(backend_observations, dict)
+        for tag in backend_observations
+    )
+    result = {}
+    for tag, backend in sorted(identities):
+        methods = service_methods.get(tag)
+        stored = (observations.get(backend) or {}).get(tag) or {}
+        status = {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None}
+        successes = successes_by_identity[tag, backend]
+        failures = failures_by_identity[tag, backend]
+        if methods is None and not stored and not failures:
+            successes = explicit_successes_by_identity[tag, backend]
+        if methods == []:
+            status.update(state="anonymous", needs_user_action=False)
+        elif methods is not None or stored or successes or failures:
+            status["validated_at"] = max(
+                successes + ([stored["validated_at"]] if stored.get("validated_at") else []),
+                default=None,
+            )
+            observed = [(failure, True) for failure in failures]
+            observed.extend((success, False) for success in successes)
+            if stored.get("observed_at"):
+                observed.append((stored["observed_at"], stored.get("state") == "needs_user_action"))
+            if observed:
+                observed_at, needs_user_action = max(observed, key=lambda entry: entry[0])
+                status.update(
+                    state="needs_user_action" if needs_user_action else "validated",
+                    observed_at=observed_at,
+                    needs_user_action=needs_user_action,
+                )
+        key = tag if not backend else f"{tag}@{backend}"
+        if backend:
+            status.update(service=tag, backend=backend)
+        result[key] = status
+    return result
 
 
 def stats_of(cards: list[dict], now: datetime) -> dict:

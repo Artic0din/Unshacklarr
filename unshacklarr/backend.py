@@ -62,6 +62,7 @@ class UnshackleError(Exception):
     """unshackle cannot be reached or refused a request; the message says why."""
     retry_after = 0  # serve's own limit on requests reached (Unshackle 6): seconds before it answers again
     status = 0  # the HTTP status serve answered with, when it answered one
+    error_code = ""  # fixed API classification, when serve supplied one
 
 
 # Unshackle 6 serves its proxies (a country code, a provider) only to a key allowed to (server_proxy)
@@ -340,6 +341,7 @@ class Unshackle:
             owner = f"{service} through Unshackle" if service else "Unshackle"
             err = UnshackleError(no_credentials(f"{owner}: HTTP {r.status_code}: {message}"))
             err.status = r.status_code
+            err.error_code = "AUTH_FAILED" if provider_auth_failed else ""
             raise err
         try:
             return r.json()
