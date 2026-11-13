@@ -3283,6 +3283,21 @@ def test_upgrade_auth_failure_is_recorded_without_stopping_later_checks(tmp_path
     backends = {tag: type("Backend", (), {"name": tag.lower()})() for tag in ("FIRST", "SECOND")}
     error = sync.UnshackleError("Authentication failed")
     error.error_code = "AUTH_FAILED"
+    provider_results = iter(
+        (
+            now + timedelta(days=1, seconds=1),
+            now + timedelta(days=1, seconds=2),
+            now + timedelta(days=2, seconds=1),
+        )
+    )
+
+    class ProviderClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    ProviderClock.current = now + timedelta(days=1)
+    monkeypatch.setattr(web, "datetime", ProviderClock)
     monkeypatch.setattr(sync, "backend_for", lambda tag, current_config=None: backends[tag])
     monkeypatch.setattr(
         sync,
@@ -3296,6 +3311,7 @@ def test_upgrade_auth_failure_is_recorded_without_stopping_later_checks(tmp_path
     reject_first = [True]
 
     def tracks(show, current_config, request, backend=None):
+        ProviderClock.current = next(provider_results)
         if show["service"] == "FIRST" and reject_first[0]:
             raise error
         return {"audio": {"fr"} if show["service"] == "SECOND" else {"en"}, "subtitles": set()}
@@ -3303,15 +3319,126 @@ def test_upgrade_auth_failure_is_recorded_without_stopping_later_checks(tmp_path
     monkeypatch.setattr(sync, "tracks_on_service", tracks)
     started = []
     monkeypatch.setattr(web, "run_sync", lambda ids, replace=False, kind="manual": started.append(ids))
+    authentication_writes = []
+    write_atomic = sync.write_atomic
+
+    def count_authentication_writes(path, content):
+        if path == sync.AUTHENTICATION_FILE:
+            authentication_writes.append(content)
+        write_atomic(path, content)
+
+    monkeypatch.setattr(sync, "write_atomic", count_authentication_writes)
 
     assert web.check_upgrades(now + timedelta(days=1)) == ["Show222 S01E02"]
     assert started == [[2]]
-    assert sync.read_authentication_observations()["first"]["FIRST"]["state"] == "needs_user_action"
+    observations = sync.read_authentication_observations()
+    assert len(authentication_writes) == 1
+    assert observations["first"]["FIRST"] == {
+        "state": "needs_user_action",
+        "observed_at": (now + timedelta(days=1, seconds=1)).isoformat(),
+        "validated_at": None,
+    }
+    assert observations["second"]["SECOND"] == {
+        "state": "validated",
+        "observed_at": (now + timedelta(days=1, seconds=2)).isoformat(),
+        "validated_at": (now + timedelta(days=1, seconds=2)).isoformat(),
+    }
     reject_first[0] = False
     sync.note_upgrade(episodes[2], config["series"][222], "S01E02", "")
 
     assert web.check_upgrades(now + timedelta(days=2)) == []
     assert sync.read_authentication_observations()["first"]["FIRST"]["state"] == "validated"
+
+
+def test_upgrade_scan_flushes_completed_authentication_evidence_on_later_error(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = {
+        "series": {
+            111: {"service": "SHARED", "title": "first"},
+            222: {"service": "SHARED", "title": "second"},
+            333: {"service": "LATER", "title": "later"},
+        },
+        "notifications": {},
+    }
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    scan_started = datetime.now(timezone.utc)
+    for episode_id, tvdb in ((1, 111), (2, 222), (3, 333)):
+        sync.note_upgrade(
+            {
+                "id": episode_id,
+                "seasonNumber": 1,
+                "episodeNumber": episode_id,
+                "series": {"tvdbId": tvdb, "title": f"Show{tvdb}"},
+            },
+            config["series"][tvdb],
+            f"S01E0{episode_id}",
+            "fr",
+        )
+    backend = type("Backend", (), {"name": "shared"})()
+    monkeypatch.setattr(sync, "backend_for", lambda tag, current_config=None: backend)
+    monkeypatch.setattr(
+        sync,
+        "download_request",
+        lambda show, current_config, wanted, out, selected_backend=None: {"service": show["service"]},
+    )
+    results = iter(
+        (
+            scan_started + timedelta(seconds=1),
+            scan_started + timedelta(seconds=2),
+            scan_started + timedelta(seconds=3),
+        )
+    )
+
+    class ProviderClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    ProviderClock.current = scan_started
+    monkeypatch.setattr(web, "datetime", ProviderClock)
+    auth_error = sync.UnshackleError("Authentication failed")
+    auth_error.error_code = "AUTH_FAILED"
+    later_error = sync.UnshackleError("Provider unavailable")
+    track_calls = 0
+
+    def tracks(show, current_config, request, selected_backend=None):
+        nonlocal track_calls
+        track_calls += 1
+        ProviderClock.current = next(results)
+        if track_calls == 2:
+            raise auth_error
+        if track_calls == 3:
+            raise later_error
+        return {"audio": {"en"}, "subtitles": set()}
+
+    monkeypatch.setattr(sync, "tracks_on_service", tracks)
+    authentication_writes = []
+    write_atomic = sync.write_atomic
+
+    def count_authentication_writes(path, content):
+        if path == sync.AUTHENTICATION_FILE:
+            authentication_writes.append(content)
+        write_atomic(path, content)
+
+    monkeypatch.setattr(sync, "write_atomic", count_authentication_writes)
+
+    with pytest.raises(sync.UnshackleError, match="Provider unavailable"):
+        web.check_upgrades(scan_started + timedelta(days=1))
+
+    observation = sync.read_authentication_observations()["shared"]["SHARED"]
+    assert len(authentication_writes) == 1
+    assert observation == {
+        "state": "needs_user_action",
+        "observed_at": (scan_started + timedelta(seconds=2)).isoformat(),
+        "validated_at": (scan_started + timedelta(seconds=1)).isoformat(),
+    }
 
 
 def test_a_series_is_found_by_name_on_its_service(tmp_path, monkeypatch):

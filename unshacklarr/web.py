@@ -2011,64 +2011,72 @@ def check_upgrades(now: datetime) -> list[str]:
     config = read_config()
     days = timedelta(days=float(sonarr_sync.SETTINGS.get("upgrade_days") or 30))
     started, dropped, checked = [], [], []
-    for key, w in read_json(sonarr_sync.UPGRADES_FILE, {}).items():
-        if w.get("asked"):
-            continue  # waiting for the person: add the audio to a file from another source, or not (see add_track)
-        show = config["series"].get(int(w["tvdb"])) or {}
-        season = w.get("season")
-        if type(season) is not int:
-            match = re.search(r"\bS(\d+)E\d+\b", str(w.get("label") or ""))
-            season = int(match.group(1)) if match else 0
-        if season:
-            show = sonarr_sync.season_page(show, season)
-        if show.get("service") != w["service"] or not show.get("title"):
-            dropped.append(key)  # another service, or none now: what was waited for there means nothing
-            continue
-        if now - datetime.fromisoformat(w["since"]) > days:
-            dropped.append(key)
-            sonarr_sync.notify(config["notifications"], "warning", f"Kept without {w['want']} audio: {w['label']}",
-                               f"Still no {w['want']} audio on {w['service']} after {days.days} days: the episode keeps the audio it has.")
-            continue
-        if w.get("checked") and now - datetime.fromisoformat(w["checked"]) < UPGRADE_EVERY:
-            continue
-        checked.append(key)
-        backend = sonarr_sync.backend_for(show["service"], config)
-        try:
-            request = sonarr_sync.download_request(
-                show,
-                config,
-                w["serviceEpisode"],
-                sonarr_sync.DOWNLOADS / f"upgrade-{key}",
-                backend,
-            )
-        except ValueError:  # no CDM for it now: tried again tomorrow
-            continue
-        try:
-            tracks = sonarr_sync.tracks_on_service(show, config, request, backend)
-        except UnshackleError as error:
-            if getattr(error, "error_code", "") != "AUTH_FAILED":
-                raise
-            sonarr_sync.record_authentication_observation(
-                show["service"],
-                backend.name,
-                "needs_user_action",
-                now.isoformat(),
-            )
-            continue
-        if tracks is not None:
-            sonarr_sync.record_authentication_observation(
-                show["service"],
-                backend.name,
-                "validated",
-                now.isoformat(),
-            )
-        if tracks and sonarr_sync.speaks(tracks["audio"], [w["want"]]):
-            # its audio only, added to the file, when chosen and possible; else the whole episode again
-            if sonarr_sync.SETTINGS.get("upgrade_mode") == "add_track":
-                threading.Thread(target=add_or_download, args=(int(key), w["want"]), daemon=True).start()
-            else:
-                run_sync([int(key)], replace=True, kind="upgrade")  # its import takes it off the list
-            started.append(w["label"])
+    authentication_observations: list[tuple[str, str, str, str]] = []
+    try:
+        for key, w in read_json(sonarr_sync.UPGRADES_FILE, {}).items():
+            if w.get("asked"):
+                continue  # waiting for the person: add the audio to a file from another source, or not (see add_track)
+            show = config["series"].get(int(w["tvdb"])) or {}
+            season = w.get("season")
+            if type(season) is not int:
+                match = re.search(r"\bS(\d+)E\d+\b", str(w.get("label") or ""))
+                season = int(match.group(1)) if match else 0
+            if season:
+                show = sonarr_sync.season_page(show, season)
+            if show.get("service") != w["service"] or not show.get("title"):
+                dropped.append(key)  # another service, or none now: what was waited for there means nothing
+                continue
+            if now - datetime.fromisoformat(w["since"]) > days:
+                dropped.append(key)
+                sonarr_sync.notify(config["notifications"], "warning", f"Kept without {w['want']} audio: {w['label']}",
+                                   f"Still no {w['want']} audio on {w['service']} after {days.days} days: the episode keeps the audio it has.")
+                continue
+            if w.get("checked") and now - datetime.fromisoformat(w["checked"]) < UPGRADE_EVERY:
+                continue
+            checked.append(key)
+            backend = sonarr_sync.backend_for(show["service"], config)
+            try:
+                request = sonarr_sync.download_request(
+                    show,
+                    config,
+                    w["serviceEpisode"],
+                    sonarr_sync.DOWNLOADS / f"upgrade-{key}",
+                    backend,
+                )
+            except ValueError:  # no CDM for it now: tried again tomorrow
+                continue
+            try:
+                tracks = sonarr_sync.tracks_on_service(show, config, request, backend)
+            except UnshackleError as error:
+                if getattr(error, "error_code", "") != "AUTH_FAILED":
+                    raise
+                authentication_observations.append(
+                    (
+                        show["service"],
+                        backend.name,
+                        "needs_user_action",
+                        datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+                continue
+            if tracks is not None:
+                authentication_observations.append(
+                    (
+                        show["service"],
+                        backend.name,
+                        "validated",
+                        datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+            if tracks and sonarr_sync.speaks(tracks["audio"], [w["want"]]):
+                # its audio only, added to the file, when chosen and possible; else the whole episode again
+                if sonarr_sync.SETTINGS.get("upgrade_mode") == "add_track":
+                    threading.Thread(target=add_or_download, args=(int(key), w["want"]), daemon=True).start()
+                else:
+                    run_sync([int(key)], replace=True, kind="upgrade")  # its import takes it off the list
+                started.append(w["label"])
+    finally:
+        sonarr_sync.record_authentication_observations(authentication_observations)
     with sonarr_sync.upgrades_lock:  # read again: a download may have added or taken one meanwhile
         watched = read_json(sonarr_sync.UPGRADES_FILE, {})
         for key in dropped:

@@ -2774,7 +2774,9 @@ def test_authentication_observations_are_private_and_backend_isolated(tmp_path, 
     assert sync.AUTHENTICATION_FILE.stat().st_mode & 0o777 == 0o600
 
     sync.record_authentication_observation("RTLP", "vpn", "validated", "2000-01-01T00:00:00+00:00")
-    assert sync.read_authentication_observations()["vpn"]["RTLP"]["state"] == "needs_user_action"
+    vpn_observation = sync.read_authentication_observations()["vpn"]["RTLP"]
+    assert vpn_observation["state"] == "needs_user_action"
+    assert vpn_observation["validated_at"] == "2000-01-01T00:00:00+00:00"
 
 
 def test_late_import_completion_does_not_overwrite_a_newer_authentication_failure(tmp_path, monkeypatch):

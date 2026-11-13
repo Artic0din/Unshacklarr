@@ -732,20 +732,35 @@ def read_authentication_observations() -> dict[str, dict[str, dict]]:
     return observations
 
 
-def record_authentication_observation(service: str, backend: str, state: str, observed_at: str) -> None:
-    """Keep authentication evidence after Activity history is pruned."""
+def record_authentication_observations(observations_to_record: list[tuple[str, str, str, str]]) -> None:
+    """Keep a batch of authentication evidence after Activity history is pruned."""
+    if not observations_to_record:
+        return
     with authentication_lock:
         observations = read_authentication_observations()
-        backend_observations = observations.setdefault(backend, {})
-        previous = backend_observations.get(service) or {}
-        if previous.get("observed_at", "") > observed_at:
-            return
-        backend_observations[service] = {
-            "state": state,
-            "observed_at": observed_at,
-            "validated_at": observed_at if state == "validated" else previous.get("validated_at"),
-        }
-        write_atomic(AUTHENTICATION_FILE, json.dumps(observations))
+        changed = False
+        for service, backend, state, observed_at in observations_to_record:
+            backend_observations = observations.setdefault(backend, {})
+            previous = backend_observations.get(service) or {}
+            previous_validation = previous.get("validated_at")
+            if previous.get("observed_at", "") > observed_at:
+                if state == "validated" and (previous_validation is None or observed_at > previous_validation):
+                    previous["validated_at"] = observed_at
+                    changed = True
+                continue
+            backend_observations[service] = {
+                "state": state,
+                "observed_at": observed_at,
+                "validated_at": observed_at if state == "validated" else previous_validation,
+            }
+            changed = True
+        if changed:
+            write_atomic(AUTHENTICATION_FILE, json.dumps(observations))
+
+
+def record_authentication_observation(service: str, backend: str, state: str, observed_at: str) -> None:
+    """Keep one authentication result outside a batch operation."""
+    record_authentication_observations([(service, backend, state, observed_at)])
 
 
 class EpisodeRun:
