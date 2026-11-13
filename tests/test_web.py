@@ -419,11 +419,12 @@ const box = {{
 }};
 vm.createContext(box);
 vm.runInContext({json.dumps(details + chr(10) + render)}, box);
+box.renderHealth({{ unshackle: {{ ok: true, tools: [{{ name: "ffmpeg" }}] }}, authentication: {{ PAIRED: {{ state: "validated" }} }} }});
 box.renderHealth({{ unshackle: {{ ok: false, error: "offline" }}, authentication: {{ PAIRED: {{ state: "validated" }} }} }});
 box.renderHealth({{ unshackle: {{ ok: true }}, authentication: {{ PAIRED: {{ state: "needs_user_action" }} }} }});
 console.log(JSON.stringify({{
   renders: renders.length, last: box.S.authentication.PAIRED.state,
-  recovered: renders.at(-1).ok, staleError: "error" in renders.at(-1),
+  recovered: renders.at(-1).ok, staleError: "error" in renders.at(-1), tools: renders.at(-1).tools.length,
 }}));
 """
 
@@ -431,10 +432,11 @@ console.log(JSON.stringify({{
 
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout) == {
-        "renders": 2,
+        "renders": 3,
         "last": "needs_user_action",
         "recovered": True,
         "staleError": False,
+        "tools": 1,
     }
 
 

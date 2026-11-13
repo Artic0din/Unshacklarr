@@ -810,10 +810,13 @@ class EpisodeRun:
             drop_upgrade_find(self.card.get("instance", ""), self.card.get("tvdbId"), self.card.get("sxxeyy"))
         self.fold_checks()
         self.save()
-        if outcome in ("downloaded", "kept", "import"):
-            record_authentication_observation(service, backend, "validated", ended)
-        elif auth_failed:
-            record_authentication_observation(service, backend, "needs_user_action", ended)
+        try:
+            if outcome in ("downloaded", "kept", "import"):
+                record_authentication_observation(service, backend, "validated", ended)
+            elif auth_failed:
+                record_authentication_observation(service, backend, "needs_user_action", ended)
+        except OSError as error:
+            print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
         # Only once its end is on disk: the page, told a run ended, reads the history at once; read between the two, a
         # card without an end that no run follows was "interrupted", and stayed so on the page (by mj23au, #17)
         EpisodeRun.active.discard(self.id)
@@ -3239,6 +3242,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
 
                 def ask(wanted: str, profile: str = "", use: dict | None = None) -> None:
                     use = use or show  # the series as it downloads: its own service, or its fallback
+                    backend = backend_for(use["service"], config)
+                    run.card["backend"] = backend.name
                     request = download_request(use, config, wanted, out)
                     if profile:  # a fallback profile, its login refused with the series' own
                         request["profile"] = profile
@@ -3253,10 +3258,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     asked = {k: v for k, v in request.items() if k not in ("service", "title_id", "wanted", "output_dir", "debug")}
                     trace(f"asking for {request['service']} {request['title_id']} {wanted}, into {request['output_dir']}")
                     trace("options: " + (", ".join(f"{k}={options.HIDDEN.sub('//***@', str(v))}" for k, v in asked.items()) or "none"))  # no proxy password in the log
-                    backend = backend_for(use["service"], config)
                     run.card["setup"] = setup_of(request, backend)
-                    run.card["backend"] = backend.name  # the serve run_job hands it to, and Activity's Stop cancels it on
-                    run.save()
+                    run.save()  # serve's run_job hands this to Activity, whose Stop action cancels it
                     run_job_retrying(request, run)
 
                 missed = None  # its own service has it in none of the languages accepted: the fallback's turn

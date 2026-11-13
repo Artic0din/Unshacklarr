@@ -404,7 +404,10 @@ function renderHealth(h) {
     b.ariaLabel = b.title;
   }
   const detailed = h.unshackle && ("tools" in h.unshackle || h.unshackle.ok === false);
-  if (detailed) unshackleDetails = h.unshackle;
+  if (detailed) unshackleDetails = {
+    ...h.unshackle,
+    ...(!("tools" in h.unshackle) && unshackleDetails?.tools ? { tools: unshackleDetails.tools } : {}),
+  };
   else if (h.unshackle && unshackleDetails) unshackleDetails = {
     ...h.unshackle, ...(unshackleDetails.tools ? { tools: unshackleDetails.tools } : {}),
   };

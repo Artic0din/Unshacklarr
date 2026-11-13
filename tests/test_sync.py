@@ -2609,6 +2609,39 @@ def test_authentication_observations_are_private_and_backend_isolated(tmp_path, 
     assert sync.read_authentication_observations()["vpn"]["RTLP"]["state"] == "needs_user_action"
 
 
+def test_preflight_authentication_failure_keeps_the_selected_backend(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    error = sync.UnshackleError("authentication failed")
+    error.error_code = "AUTH_FAILED"
+    backend = type(
+        "Backend", (), {"name": "vpn", "settings": {}, "dl_config": lambda self: {}, "services": lambda self: []}
+    )()
+    monkeypatch.setattr(sync, "backend_for", lambda *args: backend)
+    monkeypatch.setattr(sync, "no_cdm", lambda *args, **kwargs: "")
+    monkeypatch.setattr(sync, "apply_ladder", lambda *args: (_ for _ in ()).throw(error))
+    monkeypatch.setattr(sync, "notify", lambda *args, **kwargs: None)
+
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+
+    card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
+    assert card["auth_failure_backends"] == {"RTLP": "vpn"}
+
+
+def test_authentication_observation_write_failure_still_finishes_the_run(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RTLP"}, "manual")
+    pruned = []
+    monkeypatch.setattr(sync, "record_authentication_observation", lambda *args: (_ for _ in ()).throw(OSError("disk full")))
+    monkeypatch.setattr(sync, "prune_runs", lambda: pruned.append(True))
+
+    run.finish("downloaded")
+
+    assert run.id not in sync.EpisodeRun.active
+    assert pruned == [True]
+    assert json.loads((sync.RUNS_DIR / f"{run.id}.json").read_text())["outcome"] == "downloaded"
+
+
 def test_the_added_audio_is_written_as_a_matroska_file_whatever_the_library_file_is_called(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     config = sync.read_file()
