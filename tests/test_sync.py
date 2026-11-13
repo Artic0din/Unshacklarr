@@ -519,6 +519,14 @@ def test_a_failure_cause_stops_before_worker_output(tmp_path, monkeypatch):
     assert cause == "pairing required\nOpen the service and approve this device."
 
 
+def test_a_failure_cause_never_returns_an_empty_traceback_reason(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    cause = sync.job_cause({
+        "error_message": "Traceback (most recent call last):\nDownloadFailed:   ",
+    })
+    assert cause == "failed"
+
+
 def test_a_new_run_is_active_before_its_card_is_on_disk(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync.EpisodeRun, "active", set())

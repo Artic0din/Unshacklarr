@@ -822,7 +822,7 @@ def job_cause(job: dict) -> str:
             reason = "\n".join(filter(None, [match[1].strip(), final_traceback[match.end():].strip()]))
         else:
             reason = next((line.strip() for line in reversed(final_traceback.splitlines()) if line.strip()), "failed")
-        message = reason
+        message = reason or "failed"
     return no_credentials(message)
 
 
