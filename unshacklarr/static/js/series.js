@@ -630,7 +630,7 @@ function renderCatchUp() {
   const there = epAvail ? missing.filter((e) => epAvail[e.id]) : [];
   const upgrades = Object.values(epSeasons).flat().filter((e) => belowAsked(e) && epAvail?.[e.id] && !epBusy.has(e.id));
   const elsewhere = Object.entries(epElsewhere).filter(([season, p]) => p.service !== seasonSvc(Number(season)) && !S.config.series[current.tvdbId].season_pages?.[season]
-    && epSeasons[season]?.length && !epSeasons[season].some((e) => epAvail?.[e.id]));
+    && epSeasons[season]?.length && !epSeasons[season].some((e) => Date.parse(e.sonarrAir) <= Date.now() && epAvail?.[e.id]));
   document.querySelectorAll(".seasons button").forEach((b) => {
     const n = there.filter((e) => e.seasonNumber === Number(b.dataset.season)).length;
     b.querySelector(".avail")?.remove();
