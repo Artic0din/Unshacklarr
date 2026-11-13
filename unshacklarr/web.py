@@ -4112,7 +4112,7 @@ def refresh_service_lists(now: datetime) -> int:
 
 def seasons_elsewhere(show: dict, serie: dict, found: dict) -> dict:
     """The seasons missing from the series' service found on another one, offered on its page: {season: {"service",
-    "url", "count"}}. Only aired seasons with an episode not on disk, none of them on the service and no page of
+    "url", "count"}}. Only aired seasons with none of their episodes on the service and no page of
     their own; asked of each other service that searches, by the one result of the series' title whose listing holds
     at least half of the season's aired episodes under that season's number."""
     now = datetime.now(timezone.utc).isoformat()
@@ -4122,7 +4122,7 @@ def seasons_elsewhere(show: dict, serie: dict, found: dict) -> dict:
         if e["seasonNumber"] > 0 and e.get("airDateUtc") and e["airDateUtc"] <= now:
             seasons.setdefault(e["seasonNumber"], []).append(e)
     wanted = {s: {e["episodeNumber"] for e in eps} for s, eps in seasons.items() if s not in pages
-              and any(not e.get("hasFile") for e in eps) and not any(str(e["id"]) in available for e in eps)}
+              and not any(str(e["id"]) in available for e in eps)}
     out: dict[str, dict] = {}
     for service in sonarr_sync.all_services() if wanted else []:
         if service["tag"] == show["service"] or not service.get("has_search"):

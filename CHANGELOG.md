@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Availability searches found and displayed seasons on other services even when all aired episodes were already on disk.
 - Refreshing a series' episode availability also searched other services for missing seasons and showed the suggestions immediately.
 - A series' page now always shows which episodes are on its service, with when that was checked, instead of only for 12 hours after "What's on <service>?". Every series' listing is refreshed in the background once a week.
 - The weekly check also asks the service for one episode of each season, and the season's title shows the best quality there, for example "ABC iview: up to 1080p AVC SDR, AAC 2.0".

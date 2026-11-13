@@ -629,20 +629,22 @@ function renderCatchUp() {
   const svc = seriesSvcs(S.config.series[current.tvdbId]), missing = Object.values(epSeasons).flat().filter((e) => state(e) === "miss");
   const there = epAvail ? missing.filter((e) => epAvail[e.id]) : [];
   const upgrades = Object.values(epSeasons).flat().filter((e) => belowAsked(e) && epAvail?.[e.id] && !epBusy.has(e.id));
+  const elsewhere = Object.entries(epElsewhere).filter(([season, p]) => p.service !== seasonSvc(Number(season)) && !S.config.series[current.tvdbId].season_pages?.[season]
+    && epSeasons[season]?.length && !epSeasons[season].some((e) => epAvail?.[e.id]));
   document.querySelectorAll(".seasons button").forEach((b) => {
     const n = there.filter((e) => e.seasonNumber === Number(b.dataset.season)).length;
     b.querySelector(".avail")?.remove();
     b.classList.toggle("has-avail", n > 0);
     if (epAvail && missing.some((e) => e.seasonNumber === Number(b.dataset.season))) b.append(el("small", { className: "avail" + (n ? "" : " none"), textContent: n ? `${n} on ${seasonSvc(Number(b.dataset.season))}` : `none on ${seasonSvc(Number(b.dataset.season))}` }));
   });
-  box.hidden = !epAvail || !(missing.length || upgrades.length);
+  box.hidden = !epAvail || !(missing.length || upgrades.length || elsewhere.length);
   if (box.hidden) return;
   const bySeason = Object.entries(Object.groupBy(there, (e) => e.seasonNumber)).sort((a, b) => b[0] - a[0]);
   const free = there.filter((e) => !epBusy.has(e.id));
   const renumbered = there.filter((e) => epAvail[e.id].service !== `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`).length;
   box.classList.toggle("none", !there.length && !upgrades.length);
   box.replaceChildren(
-    el("div", {}, el("b", { textContent: !missing.length ? `${upgrades.length} episode${upgrades.length > 1 ? "s" : ""} may be better on ${svc}`
+    el("div", {}, el("b", { textContent: !missing.length && !upgrades.length ? "Available on other services" : !missing.length ? `${upgrades.length} episode${upgrades.length > 1 ? "s" : ""} may be better on ${svc}`
       : there.length ? `${svc} has ${there.length} of your ${missing.length} missing episode${missing.length > 1 ? "s" : ""}` : `${svc} has none of your ${missing.length} missing episode${missing.length > 1 ? "s" : ""}` }),
       ...(bySeason.length ? [el("small", { textContent: bySeason.map(([n, list]) => `${Number(n) === 0 ? "Specials" : `S${pad2(n)}`} (${list.length})`).join(" · ") })] : []),
       ...(upgrades.length && missing.length ? [el("small", { className: "renum", textContent: epUp ? `${upgrades.length} on disk ${svc} has in better quality (Activity, Upgrades)` : `${upgrades.length} on disk in a lower resolution than asked: ${svc} may have better` })] : []),
@@ -660,9 +662,7 @@ function renderCatchUp() {
           renderCatchUp();
         } }))),
       // a season its service lacks, found on another one by the weekly check: offered, never set on its own
-      ...Object.entries(epElsewhere).filter(([season, p]) => p.service !== seasonSvc(Number(season)) && !S.config.series[current.tvdbId].season_pages?.[season]
-        && missing.some((e) => e.seasonNumber === Number(season)) && !there.some((e) => e.seasonNumber === Number(season)))
-        .map(([season, p]) => el("small", { className: "renum" },
+      ...elsewhere.map(([season, p]) => el("small", { className: "renum" },
           `Season ${season} is on ${p.service} (${p.count} episode${p.count === 1 ? "" : "s"}). `,
           el("button", { className: "btn small", type: "button", textContent: `Use ${p.service} for season ${season}`, title: p.url, onclick: () => {
             const conf = S.config.series[current.tvdbId];
