@@ -5027,21 +5027,21 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
         methods = service_methods.get(tag)
         stored = (observations.get(backend) or {}).get(tag) or {}
         status = {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None}
+        successes = [
+            result["observed_at"]
+            for card in cards
+            for validated_service, result in sonarr_sync.authentication_validations(card).items()
+            if validated_service == tag and result["backend"] == backend
+        ]
+        failures = [
+            sonarr_sync.authentication_failures(card)[tag]
+            for card in cards
+            if tag in sonarr_sync.authentication_failures(card)
+            and sonarr_sync.authentication_failure_backends(card).get(tag, "") == backend
+        ]
         if methods == []:
             status.update(state="anonymous", needs_user_action=False)
-        elif methods is not None or stored:
-            successes = [
-                result["observed_at"]
-                for card in cards
-                for validated_service, result in sonarr_sync.authentication_validations(card).items()
-                if validated_service == tag and result["backend"] == backend
-            ]
-            failures = [
-                sonarr_sync.authentication_failures(card)[tag]
-                for card in cards
-                if tag in sonarr_sync.authentication_failures(card)
-                and sonarr_sync.authentication_failure_backends(card).get(tag, "") == backend
-            ]
+        elif methods is not None or stored or successes or failures:
             status["validated_at"] = max(
                 successes + ([stored["validated_at"]] if stored.get("validated_at") else []),
                 default=None,

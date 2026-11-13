@@ -211,6 +211,30 @@ def test_authentication_status_uses_only_classified_run_evidence(tmp_path, monke
     }
 
 
+def test_authentication_status_uses_run_evidence_without_live_service_metadata(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+
+    status = web.authentication_status(
+        [
+            {"service": "PAIRED", "outcome": "downloaded", "ended": "2026-11-14T01:00:00+00:00"},
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T02:00:00+00:00",
+                "auth_failure": True,
+            },
+        ],
+        [],
+    )
+
+    assert status["PAIRED"] == {
+        "state": "needs_user_action",
+        "validated_at": "2026-11-14T01:00:00+00:00",
+        "observed_at": "2026-11-14T02:00:00+00:00",
+        "needs_user_action": True,
+    }
+
+
 @pytest.mark.parametrize("outcome", ["downloaded", "kept", "import"])
 def test_every_completed_download_validates_authentication(tmp_path, monkeypatch, outcome):
     web = reloaded_web(tmp_path, monkeypatch)
