@@ -61,6 +61,7 @@ Sonarr's show name and numbering. The import names the series and episode by id,
 it works whatever the service calls the show.
 """
 
+import bisect
 import contextlib
 import copy
 import errno
@@ -899,10 +900,6 @@ LEGACY_GOTO_APPROVAL = re.compile(
     r"\bgo to:\s*(https?://[^\s\"<>]+)[^\n]*\n[^\n]*(?:enter|use)(?:\s+the)?\s+code\s*:\s*([A-Za-z0-9-]{4,32})",
     re.IGNORECASE,
 )
-LEGACY_CODE_APPROVAL = re.compile(
-    r"\b(?:enter|use)(?:\s+the)?\s+code\s*:\s*([A-Za-z0-9-]{4,32})",
-    re.IGNORECASE,
-)
 def legacy_approval_fragments(text: str) -> set[str]:
     """Codes and URLs from recognizable legacy approval instructions."""
     fragments = set()
@@ -910,18 +907,20 @@ def legacy_approval_fragments(text: str) -> set[str]:
         fragments.update(match.groups())
     for match in LEGACY_GOTO_APPROVAL.finditer(text):
         fragments.update(match.groups())
-    fragments.update(match.group(1) for match in LEGACY_CODE_APPROVAL.finditer(text))
     return fragments
 
 
-def legacy_approval_source_lines(text: str) -> set[int]:
-    """Line indexes that make up recognizable approval instructions."""
-    lines = set()
-    for pattern in (LEGACY_OPEN_APPROVAL, LEGACY_GOTO_APPROVAL, LEGACY_CODE_APPROVAL):
+def legacy_approval_source_lines(text: str) -> dict[int, set[str]]:
+    """Approval values owned by each line of a recognizable instruction."""
+    lines: dict[int, set[str]] = {}
+    newlines = [index for index, character in enumerate(text) if character == "\n"]
+    for pattern in (LEGACY_OPEN_APPROVAL, LEGACY_GOTO_APPROVAL):
         for match in pattern.finditer(text):
-            first = text.count("\n", 0, match.start())
-            last = text.count("\n", 0, match.end())
-            lines.update(range(first, last + 1))
+            first = bisect.bisect_left(newlines, match.start())
+            last = bisect.bisect_left(newlines, match.end())
+            owned = set(match.groups())
+            for line in range(first, last + 1):
+                lines.setdefault(line, set()).update(owned)
     return lines
 
 
@@ -932,13 +931,23 @@ def _redact_approval_lines(path: Path, values: set[str], preserve_sources: bool 
     except OSError:
         return False
     lines = text.splitlines(keepends=True)
-    source_lines = legacy_approval_source_lines(text) if preserve_sources else set()
+    source_lines = legacy_approval_source_lines(text) if preserve_sources else {}
     cleaned = []
     changed = False
     for index, line in enumerate(lines):
-        legacy_approval = any(pattern.search(line) for pattern in (LEGACY_OPEN_APPROVAL, LEGACY_CODE_APPROVAL))
-        if index in source_lines:
-            cleaned.append(line)
+        legacy_approval = LEGACY_OPEN_APPROVAL.search(line)
+        if owned := source_lines.get(index):
+            source_line = line
+            placeholders = {}
+            for position, fragment in enumerate(sorted(owned, key=len, reverse=True)):
+                placeholder = f"\0approval-source-{position}\0"
+                source_line = source_line.replace(fragment, placeholder)
+                placeholders[placeholder] = fragment
+            source_line = without_approval(source_line, values)
+            for placeholder, fragment in placeholders.items():
+                source_line = source_line.replace(placeholder, fragment)
+            changed |= source_line != line
+            cleaned.append(source_line)
             continue
         if legacy_approval or any(value in line for value in values):
             if not cleaned or cleaned[-1] != "[approval removed]\n":
@@ -1002,12 +1011,12 @@ def clean_approval_history() -> dict[str, int]:
 
     changed_cards = set()
     for path, card, own_values in cards:
-        retained = "\n".join(str(card.get(key) or "") for key in ("cause", "detail"))
+        retained = "\n".join(str(card.get(key) or "") for key in ("cause", "detail", "told"))
         values = own_values | {value for value in known_values if value in retained}
         if not values:
             continue
         changed = False
-        for key in ("cause", "detail"):
+        for key in ("cause", "detail", "told"):
             if card.get(key):
                 cleaned = without_approval(str(card[key]), values)
                 changed |= cleaned != card[key]

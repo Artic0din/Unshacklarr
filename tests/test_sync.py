@@ -1256,7 +1256,10 @@ def test_terminal_first_job_snapshot_cannot_retain_approval(tmp_path, monkeypatc
 
 def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    assert sync.legacy_approval_fragments("Use the code : SPACED-CODE") == {"SPACED-CODE"}
+    assert sync.legacy_approval_fragments(
+        "Go to: https://example.invalid/spaced\nUse the code : SPACED-CODE"
+    ) == {"https://example.invalid/spaced", "SPACED-CODE"}
+    assert sync.legacy_approval_fragments("Use code: SAVE20") == set()
     assert sync.legacy_approval_fragments("Go to: https://example.invalid/help") == set()
     run_id = "20261114-120000-000000-111-S02E05"
     code = "OLD-PAIR-CODE"
@@ -1267,6 +1270,7 @@ def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, m
         "action": {"service": "DSNP", "url": "https://example.invalid/link", "code": code},
         "cause": f"https://example.invalid/link refused {code}",
         "detail": f"Pairing failed for {code}",
+        "told": f"Already reported {code}",
         "outcome": "failed",
     }
     sync.RUNS_DIR.mkdir(exist_ok=True)
@@ -1317,7 +1321,7 @@ def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, m
     assert sync.clean_approval_history() == {"cards": 3, "logs": 4, "inbox": 1, "sent": 2}
     cleaned = json.loads((sync.RUNS_DIR / f"{run_id}.json").read_text())
     assert "notice" not in cleaned and "action" not in cleaned
-    assert code not in cleaned["cause"] and code not in cleaned["detail"]
+    assert code not in cleaned["cause"] and code not in cleaned["detail"] and code not in cleaned["told"]
     assert "example.invalid/link" not in cleaned["cause"]
     notice_cleaned = json.loads((sync.RUNS_DIR / f"{notice_id}.json").read_text())
     assert "notice" not in notice_cleaned and notice_code not in notice_cleaned["detail"]
@@ -1454,6 +1458,39 @@ def test_approval_cleanup_keeps_log_sources_until_dependent_logs_are_sanitized(t
         sync.clean_approval_history()
 
     assert code in source.read_text()
+
+
+def test_approval_cleanup_removes_cross_source_values_before_deleting_log_sources(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    first_code, second_code = "FIRST-SOURCE", "SECOND-SOURCE"
+    first_url = "https://example.invalid/shared"
+    second_url = f"{first_url}?device=second"
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    first = sync.RUNS_DIR / "a-first.log"
+    first.write_text(f"open {first_url} and enter {first_code}\n")
+    second = sync.RUNS_DIR / "z-second.log"
+    second.write_text(
+        f"Pairing failed for {first_code}; open {second_url} and enter {second_code}\n"
+    )
+    original_write = sync.write_atomic
+    writes = 0
+
+    def fail_second_source_removal(path, data):
+        nonlocal writes
+        if path == second:
+            writes += 1
+            if writes == 2:
+                raise OSError("disk full")
+        return original_write(path, data)
+
+    monkeypatch.setattr(sync, "write_atomic", fail_second_source_removal)
+
+    with pytest.raises(OSError, match="disk full"):
+        sync.clean_approval_history()
+
+    assert first_code not in second.read_text()
+    assert second_code in second.read_text()
+    assert second_url in second.read_text()
 
 
 def test_the_inbox_keeps_every_notification_and_its_action(tmp_path, monkeypatch):
