@@ -1359,6 +1359,40 @@ def test_approval_cleanup_keeps_its_source_if_a_dependent_write_fails(tmp_path, 
     assert sync.read_inbox()["items"][0]["action"]["code"] == code
 
 
+def test_approval_cleanup_keeps_a_card_source_if_a_later_card_write_fails(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    code = "CARD-ONLY-CODE"
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    source = sync.RUNS_DIR / "a-source.json"
+    source.write_text(json.dumps({
+        "notice": f"Enter code: {code}",
+        "action": {"url": "https://example.invalid/card", "code": code},
+    }))
+    dependent = sync.RUNS_DIR / "z-dependent.json"
+    dependent.write_text(json.dumps({"detail": f"Pairing failed for {code}"}))
+    original_write = sync.write_atomic
+    original_glob = sync.Path.glob
+
+    def source_first(path, pattern):
+        found = list(original_glob(path, pattern))
+        return iter(sorted(found)) if path == sync.RUNS_DIR and pattern == "*.json" else iter(found)
+
+    def fail_dependent_write(path, data):
+        if path == dependent:
+            raise OSError("disk full")
+        return original_write(path, data)
+
+    monkeypatch.setattr(sync.Path, "glob", source_first)
+    monkeypatch.setattr(sync, "write_atomic", fail_dependent_write)
+
+    with pytest.raises(OSError, match="disk full"):
+        sync.clean_approval_history()
+
+    retained_source = json.loads(source.read_text())
+    assert retained_source["action"]["code"] == code
+    assert code in retained_source["notice"]
+
+
 def test_the_inbox_keeps_every_notification_and_its_action(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)

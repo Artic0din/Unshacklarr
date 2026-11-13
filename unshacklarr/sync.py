@@ -957,18 +957,21 @@ def clean_approval_history() -> dict[str, int]:
                 inbox_changed |= cleaned != item[key]
                 item[key] = cleaned
 
+    changed_cards = set()
     for path, card, own_values in cards:
         retained = "\n".join(str(card.get(key) or "") for key in ("cause", "detail"))
         values = own_values | {value for value in known_values if value in retained}
         if not values:
             continue
-        card.pop("notice", None)
-        card.pop("action", None)
+        changed = False
         for key in ("cause", "detail"):
             if card.get(key):
-                card[key] = without_approval(str(card[key]), values)
-        write_atomic(path, json.dumps(card))
-        counts["cards"] += 1
+                cleaned = without_approval(str(card[key]), values)
+                changed |= cleaned != card[key]
+                card[key] = cleaned
+        if changed:
+            write_atomic(path, json.dumps(card))
+            changed_cards.add(path)
 
     if SENT_FILE.exists():
         sent = read_json(SENT_FILE, [])
@@ -1000,9 +1003,17 @@ def clean_approval_history() -> dict[str, int]:
         if removed:
             write_atomic(legacy_log, cleaned)
             counts["logs"] += 1
+    for path, card, own_values in cards:
+        if not own_values or not ("notice" in card or "action" in card):
+            continue
+        card.pop("notice", None)
+        card.pop("action", None)
+        write_atomic(path, json.dumps(card))
+        changed_cards.add(path)
     if inbox is not None and (counts["inbox"] or inbox_changed):
         inbox["items"] = kept_inbox
         write_atomic(INBOX_FILE, json.dumps(inbox))
+    counts["cards"] = len(changed_cards)
     return counts
 
 
