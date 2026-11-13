@@ -486,7 +486,7 @@ def test_a_failure_cause_uses_the_final_traceback_reason(tmp_path, monkeypatch):
         "error_message": "Traceback (most recent call last):\n  File \"provider.py\", line 10, in login\n"
                          "ValueError: HAYU Invalid Token (ref ef1b9f)",
     })
-    assert cause == "Unshackle: HAYU Invalid Token (ref ef1b9f)"
+    assert cause == "HAYU Invalid Token (ref ef1b9f)"
     assert "Traceback" not in cause and "ValueError" not in cause
 
 
@@ -497,7 +497,7 @@ def test_a_failure_cause_uses_the_last_chained_exception(tmp_path, monkeypatch):
                          "The above exception was the direct cause of the following exception:\n\n"
                          "Traceback (most recent call last):\nDownloadFailed: catalogue unavailable",
     })
-    assert cause == "Unshackle: catalogue unavailable"
+    assert cause == "catalogue unavailable"
 
 
 def test_a_failure_cause_keeps_multiline_provider_guidance(tmp_path, monkeypatch):
@@ -506,7 +506,17 @@ def test_a_failure_cause_keeps_multiline_provider_guidance(tmp_path, monkeypatch
         "error_message": "Traceback (most recent call last):\nDownloadFailed: pairing required\n"
                          "Open the service and approve this device.",
     })
-    assert cause == "Unshackle: pairing required\nOpen the service and approve this device."
+    assert cause == "pairing required\nOpen the service and approve this device."
+
+
+def test_a_failure_cause_stops_before_worker_output(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    cause = sync.job_cause({
+        "error_message": "Traceback (most recent call last):\nDownloadFailed: pairing required\n"
+                         "Open the service and approve this device.\n"
+                         "Worker failed with error: pairing required",
+    })
+    assert cause == "pairing required\nOpen the service and approve this device."
 
 
 def test_a_new_run_is_active_before_its_card_is_on_disk(tmp_path, monkeypatch):
