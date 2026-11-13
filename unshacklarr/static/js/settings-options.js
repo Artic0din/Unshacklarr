@@ -230,7 +230,7 @@ $("#pw-change").onclick = async () => {
     setTimeout(() => { b.textContent = "Change the password"; }, 2500);
     loadAccount();
   } catch (e) {
-    if (/current password/i.test(e.message)) {
+    if (/current password/i.test(errorDetail(e))) {
       $("#pw-current").classList.add("bad"); $("#pw-current-say").className = "pw-match bad"; $("#pw-current-say").textContent = e.message; $("#pw-current").focus();
     } else toast(e.message, true);
     b.disabled = false;
@@ -271,7 +271,7 @@ $("#ak-new").onclick = async () => {
     const r = await api("/api/api-key/new", { method: "POST", body: JSON.stringify({ password: $("#ak-pass").value }) });
     akShow({ set: true, created: r.created }, r.key);
   } catch (e) {
-    if (/password/i.test(e.message)) { akPassSay(e.message); $("#ak-pass").select(); } else toast(e.message, true);
+    if (/password/i.test(errorDetail(e))) { akPassSay(e.message); $("#ak-pass").select(); } else toast(e.message, true);
   }
 };
 $("#ak-pass").oninput = () => akPassSay();
@@ -387,7 +387,7 @@ $("#bo-send").onclick = async (e) => {
     boKind = null;
     renderOffsite();
     toast(!r.sent.at ? "Saved" : r.sent.ok ? `Backup sent: ${r.sent.name}` : r.sent.error, r.sent.at && !r.sent.ok);
-  } catch (err) { if (/^Wrong password/.test(err.message)) boWrong("#bo-pw", err.message); else toast(err.message, true); }
+  } catch (err) { if (/^Wrong password/.test(errorDetail(err))) boWrong("#bo-pw", err.message); else toast(err.message, true); }
   finally { e.target.disabled = false; }
 };
 async function backupFile(name) {
@@ -398,7 +398,7 @@ async function backupFile(name) {
     a.click();
     URL.revokeObjectURL(a.href);
     bkSay(`✓ ${r.name} downloaded`, false);
-  } catch (e) { if (/password/i.test(e.message)) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
+  } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
 }
 const bkSay = (text = "", bad = true) => { $("#bk-say").textContent = text || "Asked again: the file holds secrets."; $("#bk-say").className = `pw-match${text ? (bad ? " bad" : " good") : ""}`; };
 const bkPassword = () => { if ($("#bk-pass").value) return true; bkSay("Type your password first"); $("#bk-pass").focus(); return false; };
@@ -411,7 +411,7 @@ $("#bk-save").onclick = async () => {
     a.click();
     URL.revokeObjectURL(a.href);
     bkSay(`✓ ${r.name} downloaded`, false);
-  } catch (e) { if (/password/i.test(e.message)) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
+  } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
 };
 $("#bk-load").onclick = () => { if (bkPassword()) $("#bk-file").click(); };
 $("#bk-file").onchange = async (e) => {
@@ -425,8 +425,8 @@ $("#bk-file").onchange = async (e) => {
     toast(`Settings restored: ${r.series} series`);
     setTimeout(() => location.reload(), 900);  // everything on the page comes from the settings
   } catch (err) {
-    if (/passphrase/i.test(err.message)) { $("#bk-phrase-row").hidden = false; $("#bk-phrase").focus(); bkSay(err.message); }
-    else if (/password/i.test(err.message)) { bkSay(err.message); $("#bk-pass").select(); } else bkSay(err.message);
+    if (/passphrase/i.test(errorDetail(err))) { $("#bk-phrase-row").hidden = false; $("#bk-phrase").focus(); bkSay(err.message); }
+    else if (/password/i.test(errorDetail(err))) { bkSay(err.message); $("#bk-pass").select(); } else bkSay(err.message);
   }
 };
 let bkFile = "";  // an encrypted backup picked: Enter in its passphrase restores it

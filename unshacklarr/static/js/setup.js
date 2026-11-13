@@ -232,9 +232,9 @@ function showSetup(found) {
       restored(r);
     } catch (e) {
       lastPick = pick;
-      restoreSay.replaceChildren(failed(e.message), ...(/passphrase/i.test(e.message) ? [el("div", { className: "wz-phrase" }, phrase,
+      restoreSay.replaceChildren(failed(e.message), ...(/passphrase/i.test(errorDetail(e)) ? [el("div", { className: "wz-phrase" }, phrase,
         el("button", { type: "button", className: "btn small primary", textContent: "Restore", onclick: () => restoreFrom(lastPick) }))] : []));
-      if (/passphrase/i.test(e.message)) phrase.focus();
+      if (/passphrase/i.test(errorDetail(e))) phrase.focus();
     }
   };
   restoreFile.onchange = async () => { const file = restoreFile.files[0]; restoreFile.value = ""; if (file) restoreFrom({ text: await file.text() }); };
@@ -455,7 +455,11 @@ $("#tz-select").after(settingsZone.input, settingsZone.list);
   // asked at once, while the translations load: the state only when logged in (else it answers 401, and is dropped)
   const sessionAsked = api("/api/session"), stateAsked = fetch("/api/state", { headers: { "X-Unshackle": "1" } })
     // 401: not logged in yet, asked again below; any other answer is the state's own error, shown, not asked again
-    .then(async (r) => (r.ok ? r.json() : r.status === 401 ? null : new Error(await r.text() || `${r.status} ${r.statusText}`)))
+    .then(async (r) => {
+      if (r.ok) return r.json();
+      if (r.status === 401) return null;
+      return await responseError(r);
+    })
     .catch(() => null);
   await i18nReady;
   let session;

@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import serialization
 from py_vapid import Vapid01
 from pywebpush import WebPushException, webpush
 
-from unshacklarr.files import PRIVATE, read_json, write_atomic
+from unshacklarr.files import PRIVATE, no_credentials, read_json, write_atomic
 
 # The VAPID subject: Apple refuses an address it cannot take for real (".invalid": 403 BadJwtToken)
 CONTACT = "mailto:" + os.environ.get("PUSH_CONTACT", "unshacklarr@example.com")
@@ -82,12 +82,17 @@ class Push:
                 if e.response is not None and e.response.status_code in (404, 410):
                     gone.append(s["endpoint"])  # unsubscribed, or the app uninstalled
                     continue
-                said = f"{e.response.status_code} {e.response.text.strip()[:160]}" if e.response is not None else str(e)[:160]
+                error_body = e.response.text.strip() if e.response is not None else str(e)
+                if error_body.startswith("<"):
+                    error_body = "The push service refused the message"
+                status = f"HTTP {e.response.status_code}: " if e.response is not None else ""
+                said = no_credentials(f"{status}{error_body}")[:200]
                 self.last_error = f"{s['endpoint'].split('/')[2]} refused it: {said}"
                 print(f"Push: {self.last_error}", flush=True)
             except Exception as e:  # a push service down must not stop the rest
-                self.last_error = f"{s['endpoint'].split('/')[2]} unreachable: {e}"
-                print(f"Push: {self.last_error}", flush=True)
+                host = s["endpoint"].split("/")[2]
+                self.last_error = f"{host} could not be reached. Check the Unshacklarr log."
+                print(f"Push: {host}: {no_credentials(e)}", flush=True)
         for endpoint in gone:
             self.unsubscribe(endpoint)
         return sent

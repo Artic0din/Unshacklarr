@@ -386,6 +386,7 @@ def change_inbox(change) -> dict:
 
 
 def inbox_add(level: str, title: str, message: str, action: dict | None = None, batch: str | None = None) -> None:
+    title, message = no_credentials(title), no_credentials(message)
     item = {"id": uuid.uuid4().hex[:12], "at": datetime.now(timezone.utc).isoformat(), "level": level, "title": title, "message": message[:4000]}
     if action:
         item["action"] = action
@@ -451,7 +452,8 @@ def send_to(url: str, level: str, title: str, message: str, details: dict | None
         # the error names the URL, or only its path (/api/webhooks/<id>/<token>): its secret either way
         return re.sub(r"/api/webhooks/\S+", "/api/webhooks/…", re.sub(r"https?://\S+", "the webhook", str(e)))[:200]
     except Exception as e:  # never let a notification stop a download
-        return str(e)[:200]
+        print(f"Notification delivery failed: {type(e).__name__}: {no_credentials(e)}", file=sys.stderr)
+        return "Unshacklarr could not send this notification. Check its log."
 
 
 def note_sent(level: str, title: str, to: list[dict]) -> None:
@@ -471,7 +473,7 @@ def deliver(settings: dict, level: str, title: str, message: str, details: dict 
             to.append({"app": "This device", "ok": True})
     except Exception as e:
         print(f"Push notification not sent: {e}", file=sys.stderr)
-        to.append({"app": "This device", "ok": False, "error": str(e)[:200]})
+        to.append({"app": "This device", "ok": False, "error": no_credentials(e)[:200]})
     for target in notification_targets(settings):
         if level not in (ALL_LEVELS if target.get("levels") is None else target["levels"]):  # [] is every box unticked: nothing
             continue
@@ -499,6 +501,9 @@ def notify_series(show: dict | None, settings: dict, level: str, title: str, mes
 
 def notify(settings: dict, level: str, title: str, message: str, action: dict | None = None, batch: str | None = None,
            details: dict | None = None) -> bool:
+    if action and action.get("url"):
+        message = "Open the action in Unshacklarr to continue."
+    title, message = no_credentials(title), no_credentials(message)
     try:
         inbox_add(level, title, message, action, batch)  # the page's bell keeps them all, whatever goes out
     except OSError as e:
@@ -635,6 +640,7 @@ def trace(text: str, debug: bool = False) -> None:
     """A line in the current attempt's output (in Activity), in grey; debug ones only in debug mode."""
     run = getattr(current, "run", None)
     if run and (DEBUG or not debug):
+        text = no_credentials(text)
         run.raw(f"\r\x1b[2K\x1b[90m{'debug · ' if debug else '· '}{text}\x1b[0m\r\n".replace("\n", "\r\n").replace("\r\r", "\r").encode())
 
 
@@ -685,6 +691,7 @@ class EpisodeRun:
         current.run = self
 
     def say(self, text: str) -> None:
+        text = no_credentials(text)
         print(text, flush=True)
         self.raw(f"{text}\r\n".encode())
 
@@ -699,7 +706,7 @@ class EpisodeRun:
     def finish(self, outcome: str, cause: str = "", detail: str = "") -> None:
         if getattr(current, "run", None) is self:
             current.run = None
-        self.card.update(cause=cause, detail=detail)
+        self.card.update(cause=no_credentials(cause), detail=no_credentials(detail))
         self.log.close()
         self.card.update(ended=datetime.now(timezone.utc).isoformat(), outcome=outcome)
         if outcome in ("downloaded", "kept", "import"):  # a later try of this attempt got through: nothing left unconfirmed (#10)
@@ -1160,6 +1167,12 @@ POLL_MISSES = 12  # job statuses missed in a row (5 s apart at least) before the
 # The service turned Unshackle away: cookies or credentials out of date, most of the time.
 LOGIN = re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|not logged|log ?in|sign ?in|cookie|expired|session|"
                    r"invalid token|access token|credential|authenticat", re.IGNORECASE)
+
+
+def login_failure(cause: str) -> bool:
+    """A service-login failure, ignoring HTTP context added to an otherwise specific server reason."""
+    reason = re.sub(r"^[^:\n]+: HTTP 40[13]:\s*", "", cause, flags=re.IGNORECASE)
+    return bool(LOGIN.search(reason))
 
 
 # Subtitles asked for (--s-lang) that the episode lacks: Unshackle stops ("fr not found in tracks", "… in subtitle
@@ -3178,13 +3191,13 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         run.say(f"\r\n{label}: stopped")
                         run.finish("stopped")
                         continue
-                    error, cause = str(e), e.cause
+                    error, cause = no_credentials(e), no_credentials(e.cause)
                 except (UnshackleError, ValueError) as e:
-                    error = cause = str(e)
+                    error = cause = no_credentials(e)
 
                 # Its login refused and nothing came: the series' fallback profiles, in their order, until one logs in
                 stopped = waits = False
-                for profile in fallback_profiles(show, config) if error and LOGIN.search(cause or "") and not videos_in(out) else []:
+                for profile in fallback_profiles(show, config) if error and login_failure(cause or "") and not videos_in(out) else []:
                     run.say(f"{label}: {show['service']} refused the login, trying the profile {profile}")
                     try:
                         ask(service_sxxeyy, profile)
@@ -3200,10 +3213,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         if e.status == "cancelled":
                             stopped = True
                             break
-                        error, cause = str(e), e.cause
+                        error, cause = no_credentials(e), no_credentials(e.cause)
                     except (UnshackleError, ValueError) as e:
-                        error = cause = str(e)
-                    if not LOGIN.search(cause or ""):
+                        error = cause = no_credentials(e)
+                    if not login_failure(cause or ""):
                         break  # another failure than a login: another profile would not help
                 if waits:
                     continue
@@ -3238,7 +3251,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         with counted:
                             failures += 1
                         run.say(f"\r\n\x1b[31m{label}: Unshackle FAILED\x1b[0m\n{error}".replace("\n", "\r\n"))
-                        if LOGIN.search(cause):
+                        if login_failure(cause):
                             hint = f"{show['service']} refused Unshackle: its cookies may have expired. Update them in Settings, Cookies."
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Login failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
                             run.finish("failed", cause, hint)

@@ -151,16 +151,32 @@ let S = { series: [], config: { defaults: {}, series: {}, notifications: {} }, s
 const serviceOptions = {};
 let current = null;
 
+async function responseError(response) {
+  const detail = (await response.text()).trim();
+  const reason = response.statusText ? `: ${response.statusText}` : "";
+  const context = tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`);
+  const safeDetail = detail && !/^\s*</.test(detail) ? detail
+    .replace(/\/\/[^:/@\s]*:[^/@\s]+@/g, "//***@")
+    .replace(/([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret)=)[^&#\s]+/gi, "$1***")
+    .replace(/\b(Authorization:\s*(?:Bearer|Basic)\s+|(?:X-Api-Key|X-Secret-Key|Api-Key):\s*)\S+|\b((?:Set-)?Cookie:)\s*[^\r\n]+/gi,
+      (_, authorization, cookie) => `${(authorization || cookie).trimEnd()} ***`) : "";
+  const error = new Error(safeDetail ? `${context}\n${tr(safeDetail)}` : context);
+  error.detail = safeDetail;
+  return error;
+}
+const errorDetail = (error) => error.detail || error.message;
 async function api(path, { wait = 30, ...opts } = {}) {
   let r;
   try {
     // wait seconds at most (30 unless said): a request lost in a server restart fails visibly instead of spinning forever
     r = await fetch(path, { headers: { "Content-Type": "application/json", "X-Unshackle": "1" }, signal: AbortSignal.timeout(wait * 1000), ...opts });
   } catch (e) {
-    throw new Error(e.name === "TimeoutError" ? `No answer after ${wait} s.` : "The server can't be reached.");
+    throw new Error(e.name === "TimeoutError"
+      ? `Unshacklarr did not answer after ${wait} s. Try again.`
+      : "Unshacklarr can't be reached. Check that it is running, then try again.");
   }
   if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw new Error("Log in first"); }
-  if (!r.ok) throw new Error(await r.text() || `${r.status} ${r.statusText}`);
+  if (!r.ok) throw await responseError(r);
   return r.json();
 }
 

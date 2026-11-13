@@ -20,9 +20,21 @@ def shared_or_private(folder: Path) -> int:
 CREDENTIALS = re.compile(r"//[^/\s]+@")  # http://user:password@host, through the last @ before a path: a password may hold @, ? or #
 
 
+SENSITIVE_QUERY = re.compile(
+    r"([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret)=)[^&#\s]+",
+    re.IGNORECASE,
+)
+SENSITIVE_HEADER = re.compile(
+    r"\b(Authorization:\s*(?:Bearer|Basic)\s+|(?:X-Api-Key|X-Secret-Key|Api-Key):\s*)\S+|\b((?:Set-)?Cookie:)\s*[^\r\n]+",
+    re.IGNORECASE,
+)
+
+
 def no_credentials(text) -> str:
-    """A message, any user name and password in its URLs masked: errors are shown, logged and sent."""
-    return CREDENTIALS.sub("//***@", str(text))
+    """A public message with credentials in URLs and HTTP metadata masked."""
+    masked = CREDENTIALS.sub("//***@", str(text))
+    masked = SENSITIVE_QUERY.sub(r"\1***", masked)
+    return SENSITIVE_HEADER.sub(lambda match: f"{(match.group(1) or match.group(2)).rstrip()} ***", masked)
 
 
 def read_json(path: Path, empty):

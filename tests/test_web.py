@@ -31,6 +31,28 @@ def test_unreachable_is_notified_once_after_two_checks_then_back(tmp_path, monke
     assert sent == [("error", "Unshackle is unreachable"), ("success", "Unshackle is back")]
 
 
+def test_state_and_cdm_details_redact_unshackle_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    error = web.UnshackleError("X-Secret-Key: example-sensitive-value")
+    monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: (_ for _ in ()).throw(error))
+    monkeypatch.setattr(web, "sonarr_series", lambda: [])
+    monkeypatch.setattr(web, "sonarrs_of_series", lambda ids: ({}, []))
+    monkeypatch.setattr(web, "read_config", lambda: {})
+    monkeypatch.setattr(web, "public_config", lambda config: {})
+    monkeypatch.setattr(web, "update_info", lambda: None)
+    monkeypatch.setattr(web, "dl_options", lambda: [])
+    monkeypatch.setattr(web, "backups_info", lambda: None)
+    monkeypatch.setattr(web, "instances_of_series", lambda: {})
+    response = asyncio.run(web.state(None))
+    assert json.loads(response.text)["unshackle_error"] == "X-Secret-Key: ***"
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(error))
+    assert web.cdm_details() == ({}, "X-Secret-Key: ***")
+
+
 def test_a_local_unshackle_that_cannot_start_is_down_and_the_other_states_still_refresh(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -280,6 +302,90 @@ def test_the_page_script_parses(tmp_path):
     whole.write_text("".join((static / "js" / name).read_text() for name in scripts))
     check = subprocess.run(["node", "--check", str(whole)], capture_output=True, text=True)
     assert check.returncode == 0, check.stderr
+
+
+def test_browser_response_errors_keep_context_and_use_translations():
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "core.js").read_text()
+    function = source[source.index("async function responseError"):source.index("async function api")]
+    script = r'''
+const translated = [];
+const tr = (text) => { translated.push(text); return `translated: ${text}`; };
+''' + function + r'''
+const response = (body) => ({ status: 503, statusText: "Service Unavailable", text: async () => body });
+Promise.all([responseError(response("Wrong password: try again")), responseError(response("<html>down</html>"))])
+  .then(([plain, html]) => console.log(JSON.stringify({
+    plain: { message: plain.message, detail: plain.detail },
+    html: { message: html.message, detail: html.detail },
+    control: errorDetail(plain),
+    translated,
+  })));
+'''
+    run = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    result = json.loads(run.stdout)
+    context = "Unshacklarr answered HTTP 503: Service Unavailable. Try again."
+    assert result["plain"] == {"message": f"translated: {context}\ntranslated: Wrong password: try again",
+                               "detail": "Wrong password: try again"}
+    assert result["html"] == {"message": f"translated: {context}", "detail": ""}
+    assert result["control"] == "Wrong password: try again"
+    assert result["translated"] == [context, "Wrong password: try again", context]
+
+
+def test_browser_response_errors_redact_sensitive_detail():
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "core.js").read_text()
+    function = source[source.index("async function responseError"):source.index("async function api")]
+    script = r'''
+const tr = (text) => text;
+''' + function + r'''
+const privateValue = "not-for-display-123";
+const body = `Wrong password: retry\nGET /callback?access_token=${privateValue}\nX-Secret-Key: ${privateValue}\nhttp://:${privateValue}@example.invalid`;
+const response = { status: 401, statusText: "Unauthorized", text: async () => body };
+responseError(response).then((error) => console.log(JSON.stringify({
+  message: error.message,
+  detail: error.detail,
+  control: errorDetail(error),
+  privateValue,
+})));
+'''
+    run = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    result = json.loads(run.stdout)
+    assert result["privateValue"] not in result["message"]
+    assert result["privateValue"] not in result["detail"]
+    assert "access_token=***" in result["detail"]
+    assert "X-Secret-Key: ***" in result["detail"]
+    assert "http://***@example.invalid" in result["detail"]
+    assert result["control"].startswith("Wrong password: retry")
+
+
+def test_browser_response_error_redaction_is_linear():
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "core.js").read_text()
+    function = source[source.index("async function responseError"):source.index("async function api")]
+    script = r'''
+const tr = (text) => text;
+''' + function + r'''
+const body = "//" + ":".repeat(100000);
+const response = { status: 500, statusText: "Error", text: async () => body };
+responseError(response).then((error) => console.log(error.detail.length));
+'''
+    run = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=1)
+    assert run.returncode == 0, run.stderr
+    assert int(run.stdout) == 100002
 
 
 # Runs the page's real fetchDays against a /api/calendar that, like the route, answers by air date only.
@@ -728,6 +834,7 @@ def test_push_devices_come_and_go(tmp_path, monkeypatch):
         raise AssertionError("expected ValueError")
     except ValueError:
         pass
+    p.subscribe({"endpoint": "https://push.example/c", "keys": {"p256dh": "k", "auth": "a"}})
     p.subscribe({"endpoint": "https://push.example/a", "keys": {"p256dh": "k", "auth": "a"}}, "iPhone")
     p.subscribe({"endpoint": "https://push.example/b", "keys": {"p256dh": "k", "auth": "a"}})
     sent = []
@@ -735,12 +842,19 @@ def test_push_devices_come_and_go(tmp_path, monkeypatch):
     def fake_webpush(subscription_info, **kw):
         if subscription_info["endpoint"].endswith("/b"):
             raise push.WebPushException("gone", response=SimpleNamespace(status_code=410))
+        if subscription_info["endpoint"].endswith("/c"):
+            raise push.WebPushException(
+                "refused",
+                response=SimpleNamespace(status_code=500, text="<html>proxy details</html>?token=private"),
+            )
         sent.append((subscription_info["endpoint"], kw["data"]))
 
     monkeypatch.setattr(push, "webpush", fake_webpush)
     assert p.send("Downloaded: Show S01E01", "From MLT") == 1
     assert '"title": "Downloaded: Show S01E01"' in sent[0][1]
-    assert [s["endpoint"] for s in p.subscriptions()] == ["https://push.example/a"]  # the gone one is dropped
+    assert '"body": "From MLT"' in sent[0][1]  # an earlier device failure did not replace the message
+    assert [s["endpoint"] for s in p.subscriptions()] == ["https://push.example/c", "https://push.example/a"]  # only the gone one is dropped
+    assert p.last_error == "push.example refused it: HTTP 500: The push service refused the message"
 
 
 
