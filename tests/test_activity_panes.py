@@ -100,6 +100,26 @@ vm.runInContext(src.match(/async function askService\b[\s\S]*?\n}\n/)[0], ctx);
                      "errors": ["Availability refreshed, but the search on other services failed: Search failed"] if failure else []}
 
 
+@pytest.mark.parametrize("on_service", ["none", "future", "aired"])
+def test_other_service_suggestions_are_visible_when_every_aired_episode_is_on_disk(on_service):
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm"), src = fs.readFileSync(process.argv[1], "utf8");
+const box = { hidden: true, classList: {toggle() {}}, replaceChildren(...kids) { this.kids = kids; } };
+const onService = process.argv[2];
+const ctx = { $: () => box, current: {tvdbId: 1}, S: {config: {series: {1: {service: "BINGE"}}}},
+  epSeasons: {7: [{id: 1, seasonNumber: 7, hasFile: true, sonarrAir: "2000-01-01T00:00:00Z"}, {id: 2, seasonNumber: 7, hasFile: false, sonarrAir: "2999-01-01T00:00:00Z"}]},
+  epAvail: onService === "none" ? {} : {[onService === "aired" ? 1 : 2]: {service: "S07E01"}}, epBusy: new Map(), epPages: {}, epElsewhere: {7: {service: "NINE", count: 5, url: "https://9now/paramedics"}},
+  state: (e) => e.hasFile ? "disk" : "soon", belowAsked: () => false, seriesSvcs: () => "BINGE", seasonSvc: () => "BINGE",
+  document: {querySelectorAll: () => []}, el: (tag, props = {}, ...kids) => ({tag, ...props, kids}) };
+vm.createContext(ctx);
+vm.runInContext(src.match(/function renderCatchUp\b[\s\S]*?\n}\n/)[0], ctx);
+ctx.renderCatchUp();
+console.log(JSON.stringify({hidden: box.hidden, content: JSON.stringify(box.kids || [])}));
+""", str(JS / "series.js"), on_service)
+    assert shown["hidden"] is (on_service == "aired")
+    assert ("Season 7 is on NINE (5 episodes)" in shown["content"]) is (on_service != "aired")
+
+
 @pytest.mark.parametrize("first,second,heading", [("stats", "left", "Waiting in downloads"), ("left", "stats", "Stats")])
 def test_a_late_answer_does_not_fill_the_pane_of_the_one_picked_since(first, second, heading):
     shown = node(PANES, str(JS / "activity.js"), json.dumps([first, second]))

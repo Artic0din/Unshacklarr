@@ -1109,15 +1109,16 @@ def test_a_season_missing_from_its_service_is_found_on_another_and_kept(tmp_path
                                                        {"tag": "STAN", "has_search": True}, {"tag": "NF", "has_search": True}])
     searched, search = [], web.search_series_url
     monkeypatch.setattr(web, "search_series_url", lambda tag, title, limited_raises: searched.append(tag) or f"https://{tag.lower()}/x")
-    listings = {"STAN": [(2, 1), (2, 2), (5, 1), (5, 1), (5, 9)], "NF": [(5, 1), (5, 2), (1, 1)]}  # S05E01 in two parts, E09 never aired
+    listings = {"STAN": [(2, 1), (2, 2), (5, 1), (5, 1), (5, 9)], "NF": [(5, 1), (5, 2), (1, 1), (3, 1)]}  # S05E01 in two parts, E09 never aired
     monkeypatch.setattr(web, "list_titles", lambda show: [{"type": "episode", "season": s, "number": n} for s, n in listings[show["service"]]])
     monkeypatch.setattr(web.time, "sleep", lambda s: None)
     found = {"available": {1: {"service": "S01E01"}}}  # S01 is on BINGE
     got = web.seasons_elsewhere(show, {"id": 8, "title": "X"}, found)
     assert searched == ["STAN", "NF"]  # never the series' own service, nor one that cannot search
-    # S02 on STAN; S05 on the first with half its aired episodes; S03 on disk, S04 has a page, S06 not aired
+    # S03 is also found even though it is on disk; S04 has a page and S06 has not aired.
     assert got == {"2": {"service": "STAN", "url": "https://stan/x", "count": 2, "season": 2},
-                   "5": {"service": "STAN", "url": "https://stan/x", "count": 1, "season": 5}}
+                   "5": {"service": "STAN", "url": "https://stan/x", "count": 1, "season": 5},
+                   "3": {"service": "NF", "url": "https://nf/x", "count": 1, "season": 3}}
     # accepted as the page saves it: the season is asked of that service under its own number
     accepted = {**show, "season_pages": {"2": {k: got["2"][k] for k in ("url", "service", "season")}}}
     assert sync.season_page(accepted, 2)["season_map"] == {2: 2} and sync.season_page(accepted, 2)["service"] == "STAN"
@@ -1146,7 +1147,7 @@ def test_a_season_missing_from_its_service_is_found_on_another_and_kept(tmp_path
     assert web.search_series_url("STAN", "X") is None  # elsewhere (a page's suggestions): no result, as before
     monkeypatch.setattr(web, "search_series_url", lambda tag, title, limited_raises: searched.append(tag) or f"https://{tag.lower()}/x")
     searched.clear()
-    eps[:] = [e for e in eps if e["seasonNumber"] in (1, 3)]  # nothing missing elsewhere: no search at all
+    eps[:] = [e for e in eps if e["seasonNumber"] in (1, 6)]  # available or not aired: no search at all
     assert web.seasons_elsewhere(show, {"id": 8, "title": "X"}, found) == {} and searched == []
 
 
