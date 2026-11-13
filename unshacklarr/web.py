@@ -3951,25 +3951,29 @@ SERVICE_LIST_FORMAT = 2  # 2: title matches say whether they are the episode's v
 service_lists_lock = threading.Lock()  # the sync's threads and the page's checks write it at once
 
 
-def keep_service_list(tvdb: int, show: dict, found: dict, qualities: dict | None = None, elsewhere: dict | None = None) -> None:
+def keep_service_list(tvdb: int, show: dict, found: dict, qualities: dict | None = None, elsewhere: dict | None = None,
+                      expected_checked: str | None = None) -> str | None:
     """The listing, each season's best quality there (season_qualities) and the seasons found on other services
     (seasons_elsewhere): a listing without them keeps the last ones for the same service and URL."""
     with service_lists_lock:
         lists = read_json(SERVICE_LISTS, {})
         now = datetime.now(timezone.utc).isoformat()
         was = lists.get(str(tvdb))
+        if expected_checked is not None and (not same_listing(was, show) or was.get("checked") != expected_checked):
+            return None  # a newer refresh owns the listing now
         kept = {k: was[k] for k in ("qualities", "qualities_checked", "elsewhere", "elsewhere_checked")
                 if k in was} if same_listing(was, show) else {}
         if qualities is not None:
             kept.update(qualities=qualities, qualities_checked=now)
         if elsewhere is not None:
             kept.update(elsewhere=elsewhere, elsewhere_checked=now)
-        lists[str(tvdb)] = {"checked": now, "service": show["service"], "title": str(show["title"]),
+        lists[str(tvdb)] = {"checked": expected_checked or now, "service": show["service"], "title": str(show["title"]),
                             "numbering": listing_numbering(show),
                             "pages": {k: {"url": v["url"], "count": v["count"]} for k, v in (found.get("pages") or {}).items() if "count" in v},  # listed, even empty
                             "available": found["available"], "titles": found["titles"], "local_titles": found.get("local_titles") or {},
                             "v": SERVICE_LIST_FORMAT, **kept}
         write_atomic(SERVICE_LISTS, json.dumps(lists))
+        return lists[str(tvdb)]["checked"]
 
 
 def title_matches(show: dict, ep: dict) -> dict:
@@ -4162,7 +4166,7 @@ async def probe(request):
         inst = sonarr_named(str(body.get("sonarr") or ""))  # a series in another Sonarr only: its episodes there
         found = await asyncio.to_thread(on_sonarr, inst, probe_series, show, int(body.get("seriesId") or 0), str(body.get("title") or ""), True)
         if body.get("tvdbId"):
-            await asyncio.to_thread(keep_service_list, int(body["tvdbId"]), show, found)
+            checked = await asyncio.to_thread(keep_service_list, int(body["tvdbId"]), show, found)
             try:
                 found["elsewhere"] = await asyncio.to_thread(on_sonarr, inst, seasons_elsewhere, show,
                                                            {"id": int(body.get("seriesId") or 0), "title": str(body.get("title") or "")}, found)
@@ -4170,7 +4174,7 @@ async def probe(request):
                 found["elsewhere_error"] = no_credentials(err)
                 found["elsewhere"] = read_json(SERVICE_LISTS, {}).get(str(body["tvdbId"]), {}).get("elsewhere", {})
             else:
-                await asyncio.to_thread(keep_service_list, int(body["tvdbId"]), show, found, elsewhere=found["elsewhere"])
+                await asyncio.to_thread(keep_service_list, int(body["tvdbId"]), show, found, elsewhere=found["elsewhere"], expected_checked=checked)
         return web.json_response({**found, "checked": datetime.now(timezone.utc).isoformat()})
     except UnshackleError as e:
         raise web.HTTPBadGateway(text=str(e))

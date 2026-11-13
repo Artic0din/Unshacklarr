@@ -1004,6 +1004,31 @@ def test_manual_refresh_searches_other_services_and_returns_suggestions(tmp_path
         assert json.loads(web.SERVICE_LISTS.read_text())["1"]["elsewhere_checked"] == before
 
 
+def test_a_manual_search_does_not_overwrite_a_listing_refreshed_while_it_ran(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    show = {"service": "IV", "title": "https://iview/show"}
+    monkeypatch.setattr(web, "probe_series", lambda *args: {"available": {}, "titles": []})
+    newer = {"available": {"77": {"service": "S02E01"}}, "titles": []}
+    saved = []
+
+    def search(*args):
+        web.keep_service_list(1, show, newer, elsewhere={})
+        saved.append(json.loads(web.SERVICE_LISTS.read_text())["1"])
+        return {"2": {"service": "SBS", "url": "https://sbs/show", "count": 8}}
+    monkeypatch.setattr(web, "seasons_elsewhere", search)
+
+    class Request:
+        async def json(self):
+            return {"show": show, "seriesId": 10, "tvdbId": 1, "title": "Show"}
+
+    asyncio.run(web.probe(Request()))
+    assert json.loads(web.SERVICE_LISTS.read_text())["1"] == saved[0]
+
+
 def test_service_lists_are_refreshed_weekly_one_series_at_a_time(tmp_path, monkeypatch):
     import json
     from datetime import datetime, timedelta, timezone
