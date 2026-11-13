@@ -1259,6 +1259,7 @@ def test_legacy_approval_history_cleanup_preserves_unrelated_history(tmp_path, m
     assert sync.legacy_approval_fragments(
         "Go to: https://example.invalid/spaced\nUse the code : SPACED-CODE"
     ) == {"https://example.invalid/spaced", "SPACED-CODE"}
+    assert sync.legacy_approval_fragments("Use the code : LOG-ONLY-CODE") == {"LOG-ONLY-CODE"}
     assert sync.legacy_approval_fragments("Use code: SAVE20") == set()
     assert sync.legacy_approval_fragments("Go to: https://example.invalid/help") == set()
     run_id = "20261114-120000-000000-111-S02E05"

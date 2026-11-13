@@ -900,6 +900,10 @@ LEGACY_GOTO_APPROVAL = re.compile(
     r"\bgo to:\s*(https?://[^\s\"<>]+)[^\n]*\n[^\n]*(?:enter|use)(?:\s+the)?\s+code\s*:\s*([A-Za-z0-9-]{4,32})",
     re.IGNORECASE,
 )
+LEGACY_CODE_ONLY_APPROVAL = re.compile(
+    r"^\s*(?:enter|use)\s+the\s+code\s+:\s*([A-Za-z0-9-]{4,32})\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 def legacy_approval_fragments(text: str) -> set[str]:
     """Codes and URLs from recognizable legacy approval instructions."""
     fragments = set()
@@ -907,6 +911,7 @@ def legacy_approval_fragments(text: str) -> set[str]:
         fragments.update(match.groups())
     for match in LEGACY_GOTO_APPROVAL.finditer(text):
         fragments.update(match.groups())
+    fragments.update(match.group(1) for match in LEGACY_CODE_ONLY_APPROVAL.finditer(text))
     return fragments
 
 
@@ -914,7 +919,7 @@ def legacy_approval_source_lines(text: str) -> dict[int, set[str]]:
     """Approval values owned by each line of a recognizable instruction."""
     lines: dict[int, set[str]] = {}
     newlines = [index for index, character in enumerate(text) if character == "\n"]
-    for pattern in (LEGACY_OPEN_APPROVAL, LEGACY_GOTO_APPROVAL):
+    for pattern in (LEGACY_OPEN_APPROVAL, LEGACY_GOTO_APPROVAL, LEGACY_CODE_ONLY_APPROVAL):
         for match in pattern.finditer(text):
             first = bisect.bisect_left(newlines, match.start())
             last = bisect.bisect_left(newlines, match.end())
