@@ -357,23 +357,36 @@ let busyStarted = false;
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && busyStarted) { refreshHealth(); refreshInbox(); refreshLog(); }
 });
-/* A service waiting for a code to sign in (MAX's device linking), read from Unshackle's log in local mode: shown once
-   per code, closed once signed in. */
-let signInShown = "";
-function showSignIn(s) {
+/* A service's device approval is visible only while its owning job or login waits. */
+let approvalShown = "";
+let currentApprovals = [];
+function showApprovals(approvals, force = false) {
   const dlg = $("#signin-dlg");
-  if (!s) {
-    if (dlg.open && signInShown) { dlg.close(); toast("Signed in"); }
-    signInShown = "";
+  const reopen = $("#approval-reopen");
+  currentApprovals = approvals;
+  reopen.hidden = !approvals.length;
+  reopen.textContent = approvals.length > 1 ? `Approvals · ${approvals.length}` : "Approval";
+  if (!approvals.length) {
+    if (dlg.open && approvalShown) dlg.close();
+    $("#signin-title").textContent = "Service approval";
+    $("#signin-message").textContent = "";
+    $("#signin-copy").onclick = null;
+    approvalShown = "";
     return;
   }
-  if (s.code === signInShown) return;
-  signInShown = s.code;
-  $("#signin-url").href = $("#signin-url").textContent = s.url;
-  $("#signin-code").textContent = s.code;
-  $("#signin-copy").onclick = () => copyCode(s.code);
+  const details = approvals.map((approval) => [approval.service, approval.message].filter(Boolean).join("\n")).join("\n\n");
+  const signature = details;
+  if (!force && signature === approvalShown) return;
+  approvalShown = signature;
+  $("#signin-title").textContent = approvals.length > 1 ? `${approvals.length} services need approval`
+    : approvals[0].service ? `${approvals[0].service} needs approval` : "Service approval";
+  $("#signin-message").textContent = details;
+  $("#signin-copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(details); toast("Details copied"); } catch { /* the details stay on screen */ }
+  };
   if (!dlg.open) dlg.showModal();
 }
+$("#approval-reopen").onclick = () => showApprovals(currentApprovals, true);
 async function refreshBusy() {
   if (!document.hidden) {
     try {
@@ -382,7 +395,7 @@ async function refreshBusy() {
       badge.textContent = b.running || b.queued;
       badge.classList.toggle("queued", !b.running);
       badge.title = [b.running && `${b.running} downloading`, b.queued && `${b.queued} queued`].filter(Boolean).join(", ");
-      showSignIn(b.sign_in);
+      showApprovals(b.approvals || []);
     } catch { /* offline a moment: the next round */ }
   }
   setTimeout(refreshBusy, 5000);

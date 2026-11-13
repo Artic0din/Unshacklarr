@@ -227,7 +227,7 @@ keeps the disks from being saturated.
 - **A fork**: build Unshackle's image from it, then start as above.
 
   ```bash
-  docker compose build --build-arg UNSHACKLE_REPO=<its git URL> --build-arg UNSHACKLE_REF=<branch> unshackle
+  docker compose build --build-arg UNSHACKLE_REPO=<its git URL> --build-arg UNSHACKLE_COMMIT=<commit SHA> unshackle
   docker compose up -d
   ```
 

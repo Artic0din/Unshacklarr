@@ -16,6 +16,25 @@ from unshacklarr.cookies import CookieError, list_all, normalise, parse, save
 from unshacklarr.files import PRIVATE, no_credentials, shared_or_private, write_atomic
 
 
+def test_container_sources_are_immutable_and_identifiable():
+    root = Path(__file__).parents[1]
+    core_commit = "f147c23b667c8a61c3aeb579ca1c22b00560641e"
+    core = (root / "docker" / "unshackle.Dockerfile").read_text()
+    app = (root / "Dockerfile").read_text()
+    github = (root / ".github" / "workflows" / "ci.yml").read_text()
+    forgejo = (root / ".forgejo" / "workflows" / "ci.yml").read_text()
+    compose = (root / "docker-compose.example.yml").read_text()
+
+    assert f"ARG UNSHACKLE_COMMIT={core_commit}" in core
+    assert 'git -C /app fetch --depth 1 origin "$UNSHACKLE_COMMIT"' in core
+    assert 'test "$(git -C /app rev-parse HEAD)" = "$UNSHACKLE_COMMIT"' in core
+    assert "LABEL org.opencontainers.image.revision=$UNSHACKLE_COMMIT" in core
+    assert f"UNSHACKLE_COMMIT: {core_commit}" in compose
+    assert "LABEL org.opencontainers.image.revision=$SOURCE_REVISION" in app
+    assert "SOURCE_REVISION=${{ github.sha }}" in github
+    assert 'SOURCE_REVISION="$GITHUB_SHA"' in forgejo
+
+
 @responses.activate
 @pytest.mark.parametrize("provider_failure", [False, True])
 def test_authentication_errors_identify_the_server_or_provider(tmp_path, provider_failure):
@@ -430,6 +449,7 @@ def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path
         "            'users': config.serve.get('users')}\n"
         "    app = web.Application()\n"
         "    app.router.add_get('/api/health', lambda r: web.json_response(seen))\n"
+        "    app.router.add_get('/api/remote/logins', lambda r: web.json_response({'logins': []}))\n"
         "    web.run_app(app, host='127.0.0.1', port=1, print=None)\n")  # port 1: only the handed socket can serve
     command = tmp_path / ".venv" / "bin" / "unshackle"  # a git clone's: the launcher runs from the clone
     command.parent.mkdir(parents=True)
@@ -447,6 +467,81 @@ def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path
         assert all(mine[k] is True for k in ("server_proxy", "admin", "server_cdm", "server_vault", "server_accounts"))
     finally:
         local.stop()
+
+
+def test_a_local_serve_without_secure_approvals_is_rejected_before_use(tmp_path, monkeypatch):
+    import sys
+    import unshacklarr.backend as backend
+
+    class Process:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            return 0
+
+    class Response:
+        def __init__(self, status):
+            self.status_code = status
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise backend.requests.HTTPError(f"{self.status_code} response")
+
+    monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
+    monkeypatch.setattr(backend.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(
+        backend.requests,
+        "get",
+        lambda url, **kwargs: Response(404 if url.endswith("/api/remote/logins") else 200),
+    )
+    local = backend.Local(tmp_path / "serve.log")
+
+    with pytest.raises(UnshackleError, match="secure device approvals"):
+        local.start("unshackle")
+
+    assert local.process is None
+
+
+def test_a_local_serve_retries_a_transient_secure_approval_check(tmp_path, monkeypatch):
+    import sys
+    import unshacklarr.backend as backend
+
+    class Process:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            return 0
+
+    class Response:
+        def __init__(self, status):
+            self.status_code = status
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise backend.requests.HTTPError(f"{self.status_code} response")
+
+    approval_statuses = iter((503, 200))
+    monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
+    monkeypatch.setattr(backend.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(backend.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        backend.requests,
+        "get",
+        lambda url, **kwargs: Response(next(approval_statuses) if url.endswith("/api/remote/logins") else 200),
+    )
+    local = backend.Local(tmp_path / "serve.log")
+
+    local.start("unshackle")
+
+    assert local.process is not None
 
 
 def broken_command(tmp_path):

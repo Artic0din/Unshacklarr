@@ -61,6 +61,7 @@ Sonarr's show name and numbering. The import names the series and episode by id,
 it works whatever the service calls the show.
 """
 
+import bisect
 import contextlib
 import copy
 import errno
@@ -773,6 +774,8 @@ class EpisodeRun:
     """
 
     active: set[str] = set()  # ids of the runs going on now; any other without an end was cut off
+    _approvals: dict[str, dict[str, str]] = {}
+    _approval_lock = threading.Lock()
 
     def __init__(self, ep: dict, show: dict, kind: str, service_sxxeyy: str = "", batch: str | None = None):
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -818,6 +821,24 @@ class EpisodeRun:
         self.card["step"] = name
         self.save()
 
+    def set_approval(self, approval: dict | None) -> None:
+        """Publish one approval only in memory for this run, or clear it."""
+        message = approval.get("message") if isinstance(approval, dict) else None
+        with EpisodeRun._approval_lock:
+            if isinstance(message, str) and message:
+                EpisodeRun._approvals[self.id] = {
+                    "run": self.id,
+                    "service": str(self.card.get("service") or ""),
+                    "message": message[:2000],
+                }
+            else:
+                EpisodeRun._approvals.pop(self.id, None)
+
+    @classmethod
+    def approvals(cls) -> list[dict[str, str]]:
+        with cls._approval_lock:
+            return [dict(approval) for approval in cls._approvals.values()]
+
     def observe_authentication(self, service: str, backend: str, state: str) -> None:
         """Persist a classified provider result when that provider attempt completes."""
         observed_at = datetime.now(timezone.utc).isoformat()
@@ -850,6 +871,7 @@ class EpisodeRun:
             print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
 
     def finish(self, outcome: str, cause: str = "", detail: str = "", *, auth_failed: bool = False) -> None:
+        self.set_approval(None)
         if getattr(current, "run", None) is self:
             current.run = None
         self.card.update(cause=no_credentials(cause), detail=no_credentials(detail))
@@ -1022,22 +1044,223 @@ def job_cause(job: dict) -> str:
     return no_credentials(message)
 
 
-def ask_for_action(run: EpisodeRun, need: dict | None) -> None:
-    """What the service needs from the person to go on (a TV login: a link and a code), on the
-    run's card for Activity and sent once per code; gone from the card once done."""
-    had = run.card.get("action")
-    if need and need.get("code") and need.get("code") != (had or {}).get("code"):
-        run.card["action"] = {k: need.get(k) for k in ("service", "message", "url", "code", "expires_at")}
-        left = max(1, round((float(need.get("expires_at") or time.time() + 600) - time.time()) / 60))
-        what = f"open {need.get('url')} and enter {need.get('code')}"
-        run.say(f"\r\n\x1b[33m{need.get('service') or run.card['service']}: {need.get('message') or 'action needed'}: {what} (within {left} min)\x1b[0m")
-        notify((read_file().get("notifications") or {}), "warning", f"{need.get('service') or run.card['service']} needs you: {need.get('code')}",
-               f"{need.get('message') or 'Action needed'}: {what} within {left} min, for {run.card['series']} {run.card['sxxeyy']}.",
-               action=run.card["action"])
-    elif not need and had:
-        del run.card["action"]
-        inbox_resolve(had.get("code"))
-        run.say(f"\r\n\x1b[32m{had.get('service') or run.card['service']}: done, going on\x1b[0m")
+def approval_from_job(job: dict, terminal: bool = False) -> dict | None:
+    """The current or legacy core's approval, normalised without logging or retaining it."""
+    if terminal:
+        return None
+    approval = job.get("approval")
+    if isinstance(approval, dict) and isinstance(approval.get("message"), str) and approval["message"]:
+        return {"message": approval["message"]}
+    action = job.get("action_needed")
+    if isinstance(action, dict) and action.get("code"):
+        lines = [str(action.get("message") or "Approve this device")]
+        if action.get("url"):
+            lines.append(f"Open: {action['url']}")
+        lines.append(f"Code: {action['code']}")
+        return {"message": "\n".join(lines)}
+    notice = job.get("notice")
+    return {"message": str(notice)} if notice else None
+
+
+def approval_fragments(job: dict, approval: dict | None) -> set[str]:
+    """Known secret-bearing approval text to exclude from legacy core output."""
+    message = str((approval or {}).get("message") or "")
+    fragments = {line for line in message.splitlines() if line}
+    fragments.update(re.findall(r"https?://[^\s\"<>]+", message))
+    fragments.update(match.group(1) for match in re.finditer(
+        r"\b(?:code(?:\s+is)?|(?:enter|use)(?:\s+the)?(?:\s+code)?)\s*:?\s*([A-Za-z0-9-]{4,32})",
+        message,
+        re.IGNORECASE,
+    ))
+    for match in re.finditer(r"\bapprove\s*:?\s*([A-Za-z0-9-]{4,32})", message, re.IGNORECASE):
+        candidate = match.group(1)
+        if candidate.isupper() or any(character.isdigit() or character == "-" for character in candidate):
+            fragments.add(candidate)
+    action = job.get("action_needed")
+    if isinstance(action, dict):
+        fragments.update(str(action[key]) for key in ("message", "url", "code") if action.get(key))
+    return fragments
+
+
+def without_approval(text: str, fragments: set[str]) -> str:
+    for fragment in sorted(fragments, key=len, reverse=True):
+        text = text.replace(fragment, "[approval removed]")
+    return text
+
+
+LEGACY_OPEN_APPROVAL = re.compile(
+    r"\bopen\s+(https?://[^\s\"<>]+)\s+and\s+enter\s+([A-Za-z0-9-]{4,32})",
+    re.IGNORECASE,
+)
+LEGACY_GOTO_APPROVAL = re.compile(
+    r"\bgo to:\s*(https?://[^\s\"<>]+)[^\n]*\n[^\n]*(?:enter|use)(?:\s+the)?\s+code\s*:\s*([A-Za-z0-9-]{4,32})",
+    re.IGNORECASE,
+)
+LEGACY_CODE_ONLY_APPROVAL = re.compile(
+    r"^\s*(?:enter|use)\s+the\s+code\s+:\s*([A-Za-z0-9-]{4,32})\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+def legacy_approval_fragments(text: str) -> set[str]:
+    """Codes and URLs from recognizable legacy approval instructions."""
+    fragments = set()
+    for match in LEGACY_OPEN_APPROVAL.finditer(text):
+        fragments.update(match.groups())
+    for match in LEGACY_GOTO_APPROVAL.finditer(text):
+        fragments.update(match.groups())
+    fragments.update(match.group(1) for match in LEGACY_CODE_ONLY_APPROVAL.finditer(text))
+    return fragments
+
+
+def legacy_approval_source_lines(text: str) -> dict[int, set[str]]:
+    """Approval values owned by each line of a recognizable instruction."""
+    lines: dict[int, set[str]] = {}
+    newlines = [index for index, character in enumerate(text) if character == "\n"]
+    for pattern in (LEGACY_OPEN_APPROVAL, LEGACY_GOTO_APPROVAL, LEGACY_CODE_ONLY_APPROVAL):
+        for match in pattern.finditer(text):
+            first = bisect.bisect_left(newlines, match.start())
+            last = bisect.bisect_left(newlines, match.end())
+            owned = set(match.groups())
+            for line in range(first, last + 1):
+                lines.setdefault(line, set()).update(owned)
+    return lines
+
+
+def _redact_approval_lines(path: Path, values: set[str], preserve_sources: bool = False) -> bool:
+    """Remove approval lines, optionally keeping recognizable source instructions for a second pass."""
+    try:
+        text = path.read_text(errors="replace")
+    except OSError:
+        return False
+    lines = text.splitlines(keepends=True)
+    source_lines = legacy_approval_source_lines(text) if preserve_sources else {}
+    cleaned = []
+    changed = False
+    for index, line in enumerate(lines):
+        legacy_approval = LEGACY_OPEN_APPROVAL.search(line)
+        if owned := source_lines.get(index):
+            source_line = line
+            placeholders = {}
+            for position, fragment in enumerate(sorted(owned, key=len, reverse=True)):
+                placeholder = f"\0approval-source-{position}\0"
+                source_line = source_line.replace(fragment, placeholder)
+                placeholders[placeholder] = fragment
+            source_line = without_approval(source_line, values)
+            for placeholder, fragment in placeholders.items():
+                source_line = source_line.replace(placeholder, fragment)
+            changed |= source_line != line
+            cleaned.append(source_line)
+            continue
+        if legacy_approval or any(value in line for value in values):
+            if not cleaned or cleaned[-1] != "[approval removed]\n":
+                cleaned.append("[approval removed]\n")
+            changed = True
+        else:
+            cleaned.append(line)
+    if changed:
+        write_atomic(path, "".join(cleaned))
+    return changed
+
+
+def clean_approval_history() -> dict[str, int]:
+    """Remove legacy retained approvals while preserving unrelated history."""
+    counts = {"cards": 0, "logs": 0, "inbox": 0, "sent": 0}
+    known_values: set[str] = set()
+    inbox = None
+    kept_inbox = []
+    inbox_changed = False
+    if INBOX_FILE.exists():
+        inbox = read_inbox()
+        for item in inbox.get("items") or []:
+            action = item.get("action") if isinstance(item, dict) else None
+            if isinstance(action, dict) and action.get("code") and action.get("url") and not action.get("kind"):
+                known_values.update(str(action[key]) for key in ("code", "url") if action.get(key))
+                counts["inbox"] += 1
+            else:
+                kept_inbox.append(item)
+
+    local_log = UNSHACKLE.local.log_file
+    log_paths = list(RUNS_DIR.glob("*.log")) if RUNS_DIR.exists() else []
+    log_paths.extend((local_log, local_log.with_suffix(".log.1")))
+    log_paths = list(dict.fromkeys(log_paths))
+    for path in log_paths:
+        try:
+            known_values.update(legacy_approval_fragments(path.read_text(errors="replace")))
+        except OSError:
+            continue
+
+    cards = []
+    for path in RUNS_DIR.glob("*.json") if RUNS_DIR.exists() else []:
+        try:
+            card = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        notice, action = card.get("notice"), card.get("action")
+        legacy_job = {"action_needed": action} if isinstance(action, dict) else {}
+        legacy_approval = {"message": str(notice)} if notice else approval_from_job(legacy_job)
+        values = approval_fragments(legacy_job, legacy_approval)
+        known_values.update(values)
+        cards.append((path, card, values))
+
+    for item in kept_inbox:
+        if not isinstance(item, dict):
+            continue
+        for key in ("title", "message"):
+            if item.get(key):
+                cleaned = without_approval(str(item[key]), known_values)
+                inbox_changed |= cleaned != item[key]
+                item[key] = cleaned
+
+    changed_cards = set()
+    for path, card, own_values in cards:
+        retained = "\n".join(str(card.get(key) or "") for key in ("cause", "detail", "told"))
+        values = own_values | {value for value in known_values if value in retained}
+        if not values:
+            continue
+        changed = False
+        for key in ("cause", "detail", "told"):
+            if card.get(key):
+                cleaned = without_approval(str(card[key]), values)
+                changed |= cleaned != card[key]
+                card[key] = cleaned
+        if changed:
+            write_atomic(path, json.dumps(card))
+            changed_cards.add(path)
+
+    if SENT_FILE.exists():
+        sent = read_json(SENT_FILE, [])
+        def retained_approval(item: dict) -> bool:
+            title = str(item.get("title") or "")
+            legacy_title = re.search(r"\bneeds you:\s*[A-Za-z0-9-]{4,32}\s*$", title, re.IGNORECASE)
+            return bool(legacy_title or any(value in title for value in known_values))
+
+        kept = [item for item in sent if not retained_approval(item)]
+        counts["sent"] = len(sent) - len(kept)
+        if counts["sent"]:
+            write_atomic(SENT_FILE, json.dumps(kept))
+
+    if inbox is not None and inbox_changed:
+        write_atomic(INBOX_FILE, json.dumps(inbox))
+
+    changed_logs = set()
+    for path in log_paths:
+        if _redact_approval_lines(path, known_values, preserve_sources=True):
+            changed_logs.add(path)
+    for path in log_paths:
+        if _redact_approval_lines(path, known_values):
+            changed_logs.add(path)
+    counts["logs"] = len(changed_logs)
+    for path, card, own_values in cards:
+        if not own_values or not ("notice" in card or "action" in card):
+            continue
+        card.pop("notice", None)
+        card.pop("action", None)
+        write_atomic(path, json.dumps(card))
+        changed_cards.add(path)
+    if inbox is not None and counts["inbox"]:
+        inbox["items"] = kept_inbox
+        write_atomic(INBOX_FILE, json.dumps(inbox))
+    counts["cards"] = len(changed_cards)
+    return counts
 
 
 def ask_for_input(run: EpisodeRun, prompt: str | None) -> None:
@@ -1154,7 +1377,11 @@ def run_job(payload: dict, run: EpisodeRun | None = None, poll: float = 0.5, job
     job_id: that job, already on serve, followed again instead of a new download."""
     backend = backend_named(run.card.get("backend") if run else None)
     with download_slot(backend.name or "", run):
-        return follow_job(backend, payload, run, poll, job_id)
+        try:
+            return follow_job(backend, payload, run, poll, job_id)
+        finally:
+            if run:
+                run.set_approval(None)
 
 
 def unconfirmed_still_on(run: EpisodeRun | None) -> str | None:
@@ -1244,6 +1471,7 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
     labels: dict[str, str] = {}  # a track's key (its part and its place, or its label from an older serve): its label
     titles: list[str] = []
     misses, since, hinted, quiet_count = 0, time.monotonic(), False, 0
+    secret_approval_fragments: set[str] = set()
     while True:
         try:
             job = backend.job(job_id)
@@ -1268,6 +1496,9 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             time.sleep(max(poll, 5))
             continue
         status = job.get("status")
+        snapshot_approval = approval_from_job(job)
+        active_approval = None if status in TERMINAL else snapshot_approval
+        secret_approval_fragments.update(approval_fragments(job, snapshot_approval))
         if run and status == "downloading":
             done = job.get("total_tracks") and int(job.get("completed_tracks") or 0) >= int(job.get("total_tracks") or 0)
             if done and "tracks_in" not in run.card:  # every track in: decrypting, then the mux, from now
@@ -1317,15 +1548,8 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
                 run.card.update(proxy=job.get("proxy"), cdm=job.get("cdm"))
             if status == "downloading" and run.card["step"] == "queued":
                 run.card["step"] = "downloading"
-            ask_for_action(run, job.get("action_needed") if status not in TERMINAL else None)
+            run.set_approval(active_approval)
             ask_for_input(run, job.get("input_prompt") if status not in TERMINAL else None)
-            notice = job.get("notice") if status not in TERMINAL else None  # Unshackle 6: an approval waited for, no answer
-            if notice != run.card.get("notice"):
-                if notice:
-                    run.say(f"\r\n\x1b[33m{run.card.get('service') or 'The service'}: {notice}\x1b[0m")
-                    run.card["notice"] = str(notice)[:500]
-                else:
-                    run.card.pop("notice", None)
             if (snapshot := json.dumps(run.card)) != saved:  # unchanged: not written again every half second, which
                 run.save()                                   # would make every reader parse the whole history again
                 saved = snapshot
@@ -1334,11 +1558,14 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             if count - logged > len(lines):
                 run.raw(f"\r\x1b[2K\x1b[90m… {count - logged - len(lines)} lines of Unshackle's log skipped\x1b[0m\r\n".encode())
             for text in lines:
+                text = without_approval(text, secret_approval_fragments)
                 colour = "31" if " ERROR " in text or " CRITICAL " in text else "33" if " WARNING " in text else "90"
                 run.raw(f"\r\x1b[2K\x1b[{colour}m  {text}\x1b[0m\r\n".encode())
             logged, line = count, ""  # the progress line is drawn again under them
         if DEBUG and run and status != last_status:
-            trace("job: " + json.dumps({k: v for k, v in job.items() if k not in ("log", "track_progress", "parameters")})[:1500], debug=True)
+            snapshot = json.dumps({k: v for k, v in job.items()
+                                   if k not in ("log", "track_progress", "parameters", "approval", "action_needed", "notice")})
+            trace("job: " + without_approval(snapshot, secret_approval_fragments)[:1500], debug=True)
         if status != last_status and run:
             run.raw(f"\r\x1b[2K\x1b[36m{status}\x1b[0m {job.get('current_title') or job.get('title') or ''}\r\n".encode())
             last_status = status
@@ -1355,12 +1582,14 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
     if work is not None:
         work_claimed.pop(work, None)
     if status != "completed":
-        detail = job.get("error_details") or ""
-        stderr = "\n".join((job.get("worker_stderr") or "").strip().splitlines()[-15:])
+        safe_job = {**job, **{key: without_approval(str(job.get(key) or ""), secret_approval_fragments)
+                              for key in ("error_message", "error_details", "worker_stderr")}}
+        detail = safe_job.get("error_details") or ""
+        stderr = "\n".join((safe_job.get("worker_stderr") or "").strip().splitlines()[-15:])
         raise JobFailed(
-            "\n".join(filter(None, [job.get("error_message") or status, detail, stderr])),
+            "\n".join(filter(None, [safe_job.get("error_message") or status, detail, stderr])),
             status,
-            job_cause(job),
+            job_cause(safe_job),
             str(job.get("error_code") or ""),
         )
     files = job.get("output_files") or []

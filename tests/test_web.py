@@ -1824,9 +1824,18 @@ def test_the_menu_counts_the_downloads_going_on(tmp_path, monkeypatch):
     importlib.reload(unshacklarr.sync)
     web = importlib.reload(unshacklarr.web)
     monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"a", "b"})
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "approvals", lambda: [
+        {"run": "a", "service": "DSNP", "message": "Approve FIRST-CODE"}
+    ])
     monkeypatch.setattr(web.sonarr_sync, "waiting", {7: {}})
+    monkeypatch.setattr(web.UNSHACKLE, "approvals", lambda: [
+        {"service": "HMAX", "message": "Approve SECOND-CODE"}
+    ])
     r = asyncio.run(web.busy(None))
-    assert json.loads(r.body) == {"running": 2, "queued": 1, "sign_in": None}
+    assert json.loads(r.body) == {"running": 2, "queued": 1, "approvals": [
+        {"run": "a", "service": "DSNP", "message": "Approve FIRST-CODE"},
+        {"service": "HMAX", "message": "Approve SECOND-CODE"},
+    ]}
 
 
 def test_a_calendar_day_click_cycle_reaches_the_usual_number_of_episodes(tmp_path):
@@ -4444,24 +4453,30 @@ def test_a_job_serve_never_confirmed_stopped_is_asked_about_first(monkeypatch):
     assert web.still_on_serve([6]) is None  # nothing left unconfirmed
 
 
-def test_a_sign_in_code_is_read_from_our_own_serve_log(tmp_path):
-    # MAX's device linking only writes its link and code to the log: local mode reads them while they wait
-    from unshacklarr.backend import Local
-    local = Local(tmp_path / "serve.log")
+def test_remote_login_approvals_come_from_the_caller_owned_core_route(monkeypatch, tmp_path):
+    from unshacklarr.backend import Unshackle, UnshackleError
 
-    class Alive:
-        def poll(self): return None
-    local.process = Alive()
-    box = " ║  Go to: https://www.hbomax.com/signin  ║\n ║  Enter code: 798933  ║\n + Waiting for device to be linked...\n"
-    local.log_file.write_text("+ Bootstrapping API endpoints...\n" + box + "GET /api/health 200\n")
-    assert local.sign_in() == {"url": "https://www.hbomax.com/signin", "code": "798933"}
-    local.log_file.write_text(box + " + Device linked successfully!\n")
-    assert local.sign_in() is None  # signed in: nothing waits
-    local.log_file.write_text(box)
-    local.codes_seen["798933"] -= 601
-    assert local.sign_in() is None  # MAX stops waiting after 10 minutes
-    local.process = None
-    assert local.sign_in() is None  # no serve of our own
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_mode": "remote", "unshackle_url": "http://core.invalid"})
+    called = []
+
+    def call(method, path, **kwargs):
+        called.append((method, path, kwargs))
+        return {"logins": [
+            {"id": "one", "service": "HMAX", "approval": {"message": "Open the provider page and enter PAIR-CODE"}},
+            {"id": "two", "service": "DSNP", "approval": None},
+            {"id": "three", "service": "AMZN", "approval": {"message": "Approve SECOND-CODE"}},
+        ]}
+
+    monkeypatch.setattr(backend, "call", call)
+    assert backend.approvals() == [
+        {"service": "HMAX", "message": "Open the provider page and enter PAIR-CODE"},
+        {"service": "AMZN", "message": "Approve SECOND-CODE"},
+    ]
+    assert called == [("GET", "/api/remote/logins", {"timeout": (2, 4)})]
+
+    monkeypatch.setattr(backend, "call", lambda method, path, **kwargs: (_ for _ in ()).throw(UnshackleError("older core")))
+    assert backend.approvals() == []
 
 
 def test_replace_anyway_holds_for_a_retry_and_an_episode_queued_again(monkeypatch, tmp_path):
