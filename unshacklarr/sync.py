@@ -1241,6 +1241,18 @@ def _pending_authentication_cleanup(session: dict) -> dict:
     }
 
 
+def _record_terminal_authentication_setup(session: dict) -> None:
+    terminal = session["terminal"]
+    record_authentication_observation(
+        session["service"],
+        session["backend"],
+        "validated" if terminal["state"] == "authenticated" else "needs_user_action",
+        session["terminal_at"],
+        authentication=terminal,
+        fallback=session.get("fallback"),
+    )
+
+
 def _finish_authentication_setup(key: str, session: dict) -> dict:
     try:
         backend = _authentication_setup_owner(key, session)
@@ -1255,16 +1267,8 @@ def _finish_authentication_setup(key: str, session: dict) -> dict:
             failed = {**session, "error": True}
             _checkpoint_authentication_setup(key, failed)
             return _authentication_setup_error(session, error)
-    terminal = session["terminal"]
     try:
-        record_authentication_observation(
-            session["service"],
-            session["backend"],
-            "validated" if terminal["state"] == "authenticated" else "needs_user_action",
-            session["terminal_at"],
-            authentication=terminal,
-            fallback=session.get("fallback"),
-        )
+        _record_terminal_authentication_setup(session)
         _remove_authentication_setup(key, session["session_id"])
     except OSError:
         failed = {**session, "error": True}
@@ -1317,7 +1321,13 @@ def start_authentication_setup(service: str, backend: str = "") -> dict:
                 result = _finish_authentication_setup(key, session)
                 if result["state"] != "error" or not _authentication_setup_session(key):
                     return result
+                try:
+                    _record_terminal_authentication_setup(session)
+                except OSError:
+                    return result
                 _orphan_authentication_setup(key, session)
+                if session["terminal"]["state"] == "authenticated":
+                    return _terminal_authentication_setup(session)
                 session = None
         if session and not session.get("error"):
             return {"service": service, "backend": backend, "state": "authenticating"}

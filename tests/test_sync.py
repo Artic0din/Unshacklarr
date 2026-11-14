@@ -2465,6 +2465,56 @@ def test_terminal_authentication_setup_with_an_unresolved_owner_can_be_retried(
     assert cleanup["session_id"] == "old-session"
 
 
+def test_authenticated_terminal_setup_is_recorded_before_failed_cleanup_is_detached(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "serve_params", lambda *args: {})
+    calls = []
+
+    class Backend:
+        settings = {"unshackle_mode": "remote", "unshackle_url": "https://core.invalid"}
+
+        def call(self, method, path, **kwargs):
+            calls.append((method, path))
+            if path == "/api/session/create":
+                return {"session_id": "old-session"}
+            unavailable = sync.UnshackleError("temporarily unavailable")
+            unavailable.status = 503
+            raise unavailable
+
+    key = "RTLP@living-room"
+    sync.BACKENDS["living-room"] = Backend()
+    sync.start_authentication_setup("RTLP", "living-room")
+    session = sync._read_authentication_setups()[key]
+    sync._checkpoint_authentication_setup(
+        key,
+        {
+            **session,
+            "terminal": {"state": "authenticated", "method": "pairing"},
+            "terminal_at": "2026-11-15T05:00:00+00:00",
+        },
+    )
+
+    assert sync.start_authentication_setup("RTLP", "living-room") == {
+        "service": "RTLP",
+        "backend": "living-room",
+        "state": "authenticated",
+        "method": "pairing",
+    }
+    assert calls == [
+        ("POST", "/api/session/create"),
+        ("DELETE", "/api/session/old-session"),
+    ]
+    assert sync._read_authentication_setups() == {}
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "old-session"
+    assert sync.read_authentication_observations()["living-room"]["RTLP"]["authentication"] == {
+        "state": "authenticated",
+        "method": "pairing",
+    }
+
+
 def test_authentication_setup_only_serializes_network_calls_for_the_same_identity(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     main_started = threading.Event()
