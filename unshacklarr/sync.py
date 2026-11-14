@@ -1314,7 +1314,11 @@ def start_authentication_setup(service: str, backend: str = "") -> dict:
                 _orphan_authentication_setup(key, session)
                 session = None
             else:
-                return _finish_authentication_setup(key, session)
+                result = _finish_authentication_setup(key, session)
+                if result["state"] != "error" or not _authentication_setup_session(key):
+                    return result
+                _orphan_authentication_setup(key, session)
+                session = None
         if session and not session.get("error"):
             return {"service": service, "backend": backend, "state": "authenticating"}
         if session:

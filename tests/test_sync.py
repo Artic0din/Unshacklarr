@@ -2421,6 +2421,50 @@ def test_authentication_setup_with_an_unresolved_owner_can_be_retried(
     )
 
 
+def test_terminal_authentication_setup_with_an_unresolved_owner_can_be_retried(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "serve_params", lambda *args: {})
+
+    class Backend:
+        def __init__(self, url, session_id):
+            self.settings = {"unshackle_mode": "remote", "unshackle_url": url}
+            self.session_id = session_id
+
+        def call(self, method, path, **kwargs):
+            if path == "/api/session/create":
+                return {"session_id": self.session_id}
+            if path != f"/api/session/{self.session_id}/prompt":
+                missing = sync.UnshackleError("session is not on this server")
+                missing.status = 404
+                raise missing
+            return {}
+
+    key = "RTLP@living-room"
+    sync.BACKENDS["living-room"] = Backend("https://old.invalid", "old-session")
+    sync.start_authentication_setup("RTLP", "living-room")
+    session = sync._read_authentication_setups()[key]
+    sync._checkpoint_authentication_setup(
+        key,
+        {
+            **session,
+            "terminal": {"state": "timed_out", "method": "pairing"},
+            "terminal_at": "2026-11-15T05:00:00+00:00",
+        },
+    )
+    sync.BACKENDS["living-room"] = Backend("https://new.invalid", "new-session")
+
+    assert sync.start_authentication_setup("RTLP", "living-room") == {
+        "service": "RTLP",
+        "backend": "living-room",
+        "state": "authenticating",
+    }
+    assert sync._read_authentication_setups()[key]["session_id"] == "new-session"
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "old-session"
+
+
 def test_authentication_setup_only_serializes_network_calls_for_the_same_identity(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     main_started = threading.Event()
