@@ -125,6 +125,10 @@ AUTHENTICATION_SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
 AUTHENTICATION_BACKEND_IDENTITY_RE = re.compile(r"[0-9a-f]{64}")
 AUTHENTICATION_CLEANUP_ID_RE = re.compile(r"[0-9a-f]{32}")
 AUTHENTICATION_CLEANUPS_KEY = ".cleanup"
+AUTHENTICATION_CLEANUP_RETRY_SECONDS = 30
+authentication_cleanup_retry_at = 0.0
+authentication_cleanup_retry_index = 0
+authentication_cleanup_retry_owners: tuple[str, ...] = ()
 INBOX_FILE = DATA / "inbox.json"  # every notification, for the page's bell: {"read_at": iso, "items": [...]}
 INBOX_KEEP, INBOX_DAYS = 200, 60
 inbox_lock = threading.Lock()
@@ -864,6 +868,23 @@ def _authentication_backend_identity(backend: Unshackle) -> str:
     return hashlib.sha256(material.encode()).hexdigest()
 
 
+def _legacy_authentication_backend_identity(backend: Unshackle, session_id: str) -> str:
+    settings = getattr(backend, "settings", {})
+    url = str(settings.get("unshackle_url") or "").rstrip("/")
+    mode = str(settings.get("unshackle_mode") or ("remote" if url else "local"))
+    material = json.dumps(
+        [
+            session_id,
+            mode,
+            url,
+            str(settings.get("unshackle_api_key") or ""),
+            str(settings.get("unshackle_command") or ""),
+        ],
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(material.encode()).hexdigest()
+
+
 def _valid_authentication_session_id(value) -> bool:
     return isinstance(value, str) and AUTHENTICATION_SESSION_ID_RE.fullmatch(value) is not None
 
@@ -1034,22 +1055,58 @@ def _authentication_setup_backend(session: dict) -> Unshackle:
         requested = _authentication_backend(session["backend"])
     except ValueError:
         requested = None
-    candidates = [candidate for candidate in [requested, UNSHACKLE, *BACKENDS.values()] if candidate is not None]
+    candidates = [
+        candidate
+        for candidate in [requested, UNSHACKLE, *BACKENDS.values()]
+        if candidate is not None
+    ]
     for backend in candidates:
-        if _authentication_backend_identity(backend) == backend_identity:
+        current_identity = _authentication_backend_identity(backend)
+        if current_identity == backend_identity:
+            return backend
+        if (
+            _legacy_authentication_backend_identity(backend, session["session_id"])
+            == backend_identity
+        ):
+            session["backend_identity"] = current_identity
             return backend
     raise ValueError("Authentication backend is no longer configured")
 
 
 def _authentication_setup_prompt(key: str, session: dict) -> tuple[Unshackle, dict]:
-    backend = (
-        _authentication_setup_backend(session)
-        if session.get("backend_identity")
-        else _authentication_backend(session["backend"])
-    )
+    previous_identity = session.get("backend_identity")
+    try:
+        backend = (
+            _authentication_setup_backend(session)
+            if previous_identity
+            else _authentication_backend(session["backend"])
+        )
+    except ValueError:
+        backend = _authentication_backend(session["backend"])
+        try:
+            payload = backend.call(
+                "GET", f"/api/session/{session['session_id']}/prompt", timeout=(2, 4)
+            )
+        except UnshackleError as error:
+            if error.status == 404:
+                raise ValueError(
+                    "Authentication session is not on the configured backend"
+                ) from error
+            raise
+        bound = {
+            **session,
+            "backend_identity": _authentication_backend_identity(backend),
+        }
+        if not _checkpoint_authentication_setup(key, bound):
+            raise ValueError("Authentication session is no longer available") from None
+        session.update(bound)
+        return backend, payload if isinstance(payload, dict) else {}
+    if previous_identity and session["backend_identity"] != previous_identity:
+        if not _checkpoint_authentication_setup(key, session):
+            raise ValueError("Authentication session is no longer available")
     payload = backend.call("GET", f"/api/session/{session['session_id']}/prompt", timeout=(2, 4))
     payload = payload if isinstance(payload, dict) else {}
-    if session.get("backend_identity"):
+    if previous_identity:
         return backend, payload
 
     bound = {
@@ -1064,16 +1121,45 @@ def _authentication_setup_prompt(key: str, session: dict) -> tuple[Unshackle, di
 
 def _authentication_setup_owner(key: str, session: dict) -> Unshackle:
     if session.get("backend_identity"):
-        return _authentication_setup_backend(session)
+        previous_identity = session["backend_identity"]
+        try:
+            backend = _authentication_setup_backend(session)
+        except ValueError:
+            backend, _ = _authentication_setup_prompt(key, session)
+            return backend
+        if session[
+            "backend_identity"
+        ] != previous_identity and not _checkpoint_authentication_setup(key, session):
+            raise ValueError("Authentication session is no longer available")
+        return backend
     backend, _ = _authentication_setup_prompt(key, session)
     return backend
 
 
 def _authentication_cleanup_owner(cleanup_id: str, cleanup: dict) -> Unshackle:
     if cleanup.get("backend_identity"):
-        return _authentication_setup_backend(cleanup)
+        previous_identity = cleanup["backend_identity"]
+        try:
+            backend = _authentication_setup_backend(cleanup)
+        except ValueError:
+            pass
+        else:
+            if cleanup[
+                "backend_identity"
+            ] != previous_identity and not _checkpoint_authentication_cleanup(
+                cleanup_id, cleanup
+            ):
+                raise ValueError("Authentication cleanup is no longer available")
+            return backend
     backend = _authentication_backend(cleanup["backend"])
-    backend.call("GET", f"/api/session/{cleanup['session_id']}/prompt", timeout=(2, 4))
+    try:
+        backend.call("GET", f"/api/session/{cleanup['session_id']}/prompt", timeout=(2, 4))
+    except UnshackleError as error:
+        if error.status == 404:
+            raise ValueError(
+                "Authentication session is not on the configured backend"
+            ) from error
+        raise
     bound = {**cleanup, "backend_identity": _authentication_backend_identity(backend)}
     if not _checkpoint_authentication_cleanup(cleanup_id, bound):
         raise ValueError("Authentication cleanup is no longer available")
@@ -1082,25 +1168,52 @@ def _authentication_cleanup_owner(cleanup_id: str, cleanup: dict) -> Unshackle:
 
 
 def _retry_authentication_cleanups() -> None:
+    global authentication_cleanup_retry_at
+    global authentication_cleanup_retry_index
+    global authentication_cleanup_retry_owners
+    now = time.monotonic()
+    owners = tuple(
+        sorted(
+            {
+                _authentication_backend_identity(backend)
+                for backend in [UNSHACKLE, *BACKENDS.values()]
+            }
+        )
+    )
     with authentication_sessions_lock:
         cleanup_ids = list(_read_authentication_cleanups())
-    for cleanup_id in cleanup_ids:
-        with _authentication_setup_lock(f"{AUTHENTICATION_CLEANUPS_KEY}:{cleanup_id}"):
-            cleanup = _read_authentication_cleanups().get(cleanup_id)
-            if not cleanup:
-                continue
-            try:
-                owner = _authentication_cleanup_owner(cleanup_id, cleanup)
-                owner.call("DELETE", f"/api/session/{cleanup['session_id']}", timeout=(2, 4))
-            except (OSError, ValueError):
-                continue
-            except UnshackleError as error:
-                if error.status != 404 or not cleanup.get("backend_identity"):
-                    continue
-            try:
-                _remove_authentication_cleanup(cleanup_id, cleanup["session_id"])
-            except OSError:
-                pass
+        if not cleanup_ids:
+            authentication_cleanup_retry_at = 0.0
+            authentication_cleanup_retry_index = 0
+            authentication_cleanup_retry_owners = ()
+            return
+        if (
+            owners == authentication_cleanup_retry_owners
+            and now < authentication_cleanup_retry_at
+        ):
+            return
+        cleanup_id = cleanup_ids[authentication_cleanup_retry_index % len(cleanup_ids)]
+        authentication_cleanup_retry_index += 1
+        authentication_cleanup_retry_at = now + AUTHENTICATION_CLEANUP_RETRY_SECONDS
+        authentication_cleanup_retry_owners = owners
+    with _authentication_setup_lock(f"{AUTHENTICATION_CLEANUPS_KEY}:{cleanup_id}"):
+        cleanup = _read_authentication_cleanups().get(cleanup_id)
+        if not cleanup:
+            return
+        try:
+            owner = _authentication_cleanup_owner(cleanup_id, cleanup)
+            owner.call(
+                "DELETE", f"/api/session/{cleanup['session_id']}", timeout=(2, 4)
+            )
+        except (OSError, ValueError):
+            return
+        except UnshackleError as error:
+            if error.status != 404 or not cleanup.get("backend_identity"):
+                return
+        try:
+            _remove_authentication_cleanup(cleanup_id, cleanup["session_id"])
+        except OSError:
+            pass
 
 
 def _authentication_setup_error(session: dict, error: UnshackleError | None = None) -> dict:
@@ -1284,6 +1397,7 @@ def authentication_setups() -> list[dict]:
             try:
                 _, payload = _authentication_setup_prompt(key, session)
             except ValueError:
+                _retain_authentication_setup_error(key, session)
                 results.append(_authentication_setup_error(session))
                 continue
             except UnshackleError as error:
