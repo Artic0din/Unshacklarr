@@ -87,7 +87,13 @@ import requests
 import yaml
 
 from unshacklarr import i18n, options
-from unshacklarr.backend import TERMINAL, Unshackle, UnshackleError
+from unshacklarr.backend import (
+    TERMINAL,
+    TERMINAL_AUTHENTICATION_STATES,
+    Unshackle,
+    UnshackleError,
+    authentication_observation,
+)
 from unshacklarr.files import no_credentials, read_json, write_atomic
 from unshacklarr.push import Push
 
@@ -107,7 +113,9 @@ WARNED_FILE = DATA / "warned.json"
 SEEN_FILE = DATA / "availability.json"  # per episode: last try it was not out yet, first try it was
 RUNS_DIR = DATA / "runs"
 AUTHENTICATION_FILE = DATA / "authentication.json"
+AUTHENTICATION_SESSIONS_FILE = DATA / "authentication-sessions.json"
 authentication_lock = threading.Lock()
+authentication_sessions_lock = threading.Lock()
 INBOX_FILE = DATA / "inbox.json"  # every notification, for the page's bell: {"read_at": iso, "items": [...]}
 INBOX_KEEP, INBOX_DAYS = 200, 60
 inbox_lock = threading.Lock()
@@ -719,15 +727,28 @@ def read_authentication_observations() -> dict[str, dict[str, dict]]:
     for backend, services in stored.items():
         if not isinstance(services, dict):
             continue
-        valid = {
-            service: observation
-            for service, observation in services.items()
-            if isinstance(service, str)
-            and isinstance(observation, dict)
-            and observation.get("state") in ("validated", "needs_user_action")
-            and isinstance(observation.get("observed_at"), str)
-            and (observation.get("validated_at") is None or isinstance(observation.get("validated_at"), str))
-        }
+        valid = {}
+        for service, observation in services.items():
+            if not (
+                isinstance(service, str)
+                and isinstance(observation, dict)
+                and observation.get("state") in ("validated", "needs_user_action")
+                and isinstance(observation.get("observed_at"), str)
+                and (observation.get("validated_at") is None or isinstance(observation.get("validated_at"), str))
+            ):
+                continue
+            safe = {
+                "state": observation["state"],
+                "observed_at": observation["observed_at"],
+                "validated_at": observation.get("validated_at"),
+            }
+            lifecycle = authentication_observation(observation.get("authentication"))
+            fallback = authentication_observation(observation.get("fallback"))
+            if lifecycle and lifecycle["state"] in TERMINAL_AUTHENTICATION_STATES:
+                safe["authentication"] = lifecycle
+            if fallback and fallback["state"] == "fallback":
+                safe["fallback"] = fallback
+            valid[service] = safe
         if valid:
             observations[str(backend)] = valid
     return observations
@@ -759,9 +780,261 @@ def record_authentication_observations(observations_to_record: list[tuple[str, s
             write_atomic(AUTHENTICATION_FILE, json.dumps(observations))
 
 
-def record_authentication_observation(service: str, backend: str, state: str, observed_at: str) -> None:
+def record_authentication_observation(
+    service: str,
+    backend: str,
+    state: str,
+    observed_at: str,
+    *,
+    authentication: dict | None = None,
+    fallback: dict | None = None,
+) -> None:
     """Keep one authentication result outside a batch operation."""
     record_authentication_observations([(service, backend, state, observed_at)])
+    lifecycle = authentication_observation(authentication)
+    fallback = authentication_observation(fallback)
+    if not (
+        lifecycle
+        and lifecycle["state"] in TERMINAL_AUTHENTICATION_STATES
+        or fallback
+        and fallback["state"] == "fallback"
+    ):
+        return
+    with authentication_lock:
+        observations = read_authentication_observations()
+        current = (observations.get(backend) or {}).get(service)
+        if not current or current.get("observed_at") != observed_at:
+            return
+        if lifecycle and lifecycle["state"] in TERMINAL_AUTHENTICATION_STATES:
+            current["authentication"] = lifecycle
+        if fallback and fallback["state"] == "fallback":
+            current["fallback"] = fallback
+        write_atomic(AUTHENTICATION_FILE, json.dumps(observations))
+
+
+def _authentication_setup_key(service: str, backend: str) -> str:
+    return f"{service}@{backend}" if backend else service
+
+
+def _read_authentication_setups() -> dict[str, dict[str, str | dict]]:
+    stored = read_json(AUTHENTICATION_SESSIONS_FILE, {})
+    if not isinstance(stored, dict):
+        return {}
+    sessions = {}
+    for key, session in stored.items():
+        if not isinstance(key, str) or not isinstance(session, dict):
+            continue
+        service = session.get("service")
+        backend = session.get("backend")
+        session_id = session.get("session_id")
+        if not all(isinstance(value, str) for value in (service, backend, session_id)):
+            continue
+        if not (
+            re.fullmatch(r"[A-Za-z0-9_-]{1,64}", service)
+            and re.fullmatch(r"[A-Za-z0-9_-]{0,64}", backend)
+            and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session_id)
+            and key == _authentication_setup_key(service, backend)
+        ):
+            continue
+        safe = {
+            "service": service,
+            "backend": backend,
+            "session_id": session_id,
+        }
+        fallback = authentication_observation(session.get("fallback"))
+        if fallback and fallback["state"] == "fallback":
+            safe["fallback"] = fallback
+        sessions[key] = safe
+    return sessions
+
+
+def _write_authentication_setups(sessions: dict[str, dict]) -> None:
+    write_atomic(AUTHENTICATION_SESSIONS_FILE, json.dumps(sessions), mode=0o600)
+
+
+def _authentication_setup_title(service: str) -> str:
+    series = read_file().get("series") or {}
+    for show in series.values() if isinstance(series, dict) else []:
+        if not isinstance(show, dict):
+            continue
+        candidates = [show, show.get("fallback")]
+        pages = show.get("season_pages")
+        if isinstance(pages, dict):
+            candidates.extend(pages.values())
+        for candidate in candidates:
+            if not isinstance(candidate, dict) or candidate.get("service", show.get("service")) != service:
+                continue
+            title = candidate.get("title") or candidate.get("url")
+            if isinstance(title, str) and title.strip():
+                return title.strip()
+    raise ValueError(f"Configure a {service} series before signing in")
+
+
+def start_authentication_setup(service: str, backend: str = "") -> dict:
+    """Start or reuse one provider authentication session for a configured control title."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", service) or not re.fullmatch(r"[A-Za-z0-9_-]{0,64}", backend):
+        raise ValueError("Invalid service or backend")
+    if backend and backend not in BACKENDS:
+        raise ValueError("Unknown backend")
+    key = _authentication_setup_key(service, backend)
+    with authentication_sessions_lock:
+        sessions = _read_authentication_setups()
+        if key in sessions:
+            return {"service": service, "backend": backend, "state": "authenticating"}
+        title_id = _authentication_setup_title(service)
+        response = backend_named(backend).call(
+            "POST",
+            "/api/session/create",
+            json={"service": service, "title_id": title_id},
+        )
+        session_id = response.get("session_id") if isinstance(response, dict) else None
+        if not isinstance(session_id, str) or not session_id:
+            raise UnshackleError("Unshackle did not create an authentication session")
+        sessions[key] = {
+            "service": service,
+            "backend": backend,
+            "session_id": session_id,
+        }
+        try:
+            _write_authentication_setups(sessions)
+        except BaseException:
+            try:
+                backend_named(backend).call("DELETE", f"/api/session/{session_id}", timeout=(2, 4))
+            except UnshackleError:
+                pass
+            raise
+    return {"service": service, "backend": backend, "state": "authenticating"}
+
+
+def _transient_authentication_setup(session: dict, payload: dict) -> tuple[dict, dict | None]:
+    observation = authentication_observation(payload.get("authentication"))
+    result = {"service": session["service"], "backend": session["backend"]}
+    if observation:
+        result.update(observation)
+    else:
+        result["state"] = "authenticating"
+    approval = payload.get("approval")
+    message = approval.get("message") if isinstance(approval, dict) else None
+    if isinstance(message, str) and message:
+        result["approval"] = {"message": message[:2000]}
+    prompt = payload.get("prompt")
+    if isinstance(prompt, str) and prompt:
+        result["prompt"] = prompt[:500]
+    return result, observation
+
+
+def authentication_setups() -> list[dict]:
+    """Poll setup sessions while keeping approvals and prompts transient."""
+    results = []
+    with authentication_sessions_lock:
+        sessions = _read_authentication_setups()
+        changed = False
+        for key, session in list(sessions.items()):
+            try:
+                payload = backend_named(session["backend"]).call(
+                    "GET", f"/api/session/{session['session_id']}/prompt", timeout=(2, 4)
+                )
+            except UnshackleError as error:
+                result = {
+                    "service": session["service"],
+                    "backend": session["backend"],
+                    "state": "error",
+                    "failure": "network" if not error.status else "application",
+                }
+                if error.status == 404:
+                    stored = (read_authentication_observations().get(session["backend"]) or {}).get(
+                        session["service"]
+                    ) or {}
+                    if stored.get("authentication"):
+                        result = {
+                            "service": session["service"],
+                            "backend": session["backend"],
+                            **stored["authentication"],
+                            **({"fallback": stored["fallback"]} if stored.get("fallback") else {}),
+                        }
+                    else:
+                        observed_at = datetime.now(timezone.utc).isoformat()
+                        record_authentication_observation(
+                            session["service"],
+                            session["backend"],
+                            "needs_user_action",
+                            observed_at,
+                            authentication={"state": "error", "failure": "application"},
+                            fallback=session.get("fallback"),
+                        )
+                    sessions.pop(key, None)
+                    changed = True
+                results.append(result)
+                continue
+            payload = payload if isinstance(payload, dict) else {}
+            result, observation = _transient_authentication_setup(session, payload)
+            if observation and observation["state"] == "fallback":
+                session["fallback"] = observation
+                changed = True
+            fallback = session.get("fallback")
+            if observation and observation["state"] in TERMINAL_AUTHENTICATION_STATES:
+                if fallback:
+                    result["fallback"] = fallback
+                try:
+                    backend_named(session["backend"]).call(
+                        "DELETE", f"/api/session/{session['session_id']}", timeout=(2, 4)
+                    )
+                except UnshackleError as error:
+                    if error.status != 404:
+                        results.append(
+                            {
+                                "service": session["service"],
+                                "backend": session["backend"],
+                                "state": "error",
+                                "failure": "network" if not error.status else "application",
+                            }
+                        )
+                        continue
+                observed_at = datetime.now(timezone.utc).isoformat()
+                record_authentication_observation(
+                    session["service"],
+                    session["backend"],
+                    "validated" if observation["state"] == "authenticated" else "needs_user_action",
+                    observed_at,
+                    authentication=observation,
+                    fallback=fallback,
+                )
+                sessions.pop(key, None)
+                changed = True
+            results.append(result)
+        if changed:
+            _write_authentication_setups(sessions)
+    return results
+
+
+def answer_authentication_setup(service: str, response: str, backend: str = "") -> dict:
+    """Send one transient prompt answer to the owning core session."""
+    if not isinstance(response, str) or not response.strip() or len(response) > 512:
+        raise ValueError("Enter the requested response")
+    key = _authentication_setup_key(service, backend)
+    with authentication_sessions_lock:
+        session = _read_authentication_setups().get(key)
+        if not session:
+            raise ValueError("No authentication session is waiting")
+        backend_named(backend).call(
+            "POST",
+            f"/api/session/{session['session_id']}/prompt",
+            json={"response": response},
+        )
+    return {"status": "accepted"}
+
+
+def cancel_authentication_setup(service: str, backend: str = "") -> dict:
+    """Cancel one setup session and remove only its local continuation record."""
+    key = _authentication_setup_key(service, backend)
+    with authentication_sessions_lock:
+        sessions = _read_authentication_setups()
+        session = sessions.get(key)
+        if session:
+            backend_named(backend).call("DELETE", f"/api/session/{session['session_id']}")
+            sessions.pop(key, None)
+            _write_authentication_setups(sessions)
+    return {"service": service, "backend": backend, "state": "cancelled"}
 
 
 class EpisodeRun:
@@ -776,6 +1049,8 @@ class EpisodeRun:
     active: set[str] = set()  # ids of the runs going on now; any other without an end was cut off
     _approvals: dict[str, dict[str, str]] = {}
     _approval_lock = threading.Lock()
+    _authentications: dict[str, dict] = {}
+    _authentication_lock = threading.Lock()
 
     def __init__(self, ep: dict, show: dict, kind: str, service_sxxeyy: str = "", batch: str | None = None):
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -839,6 +1114,31 @@ class EpisodeRun:
         with cls._approval_lock:
             return [dict(approval) for approval in cls._approvals.values()]
 
+    def set_authentication(self, value: dict | None) -> None:
+        """Publish one redacted lifecycle state for this run; keep only terminal states on disk."""
+        observation = authentication_observation(value)
+        with EpisodeRun._authentication_lock:
+            if observation and observation["state"] not in TERMINAL_AUTHENTICATION_STATES:
+                EpisodeRun._authentications[self.id] = {
+                    "run": self.id,
+                    "service": str(self.card.get("service") or ""),
+                    "observation": observation,
+                    **({"backend": self.card["backend"]} if self.card.get("backend") else {}),
+                }
+                return
+            EpisodeRun._authentications.pop(self.id, None)
+        if observation and observation["state"] in TERMINAL_AUTHENTICATION_STATES:
+            self.card["authentication"] = observation
+            self.save()
+
+    @classmethod
+    def authentications(cls) -> list[dict]:
+        with cls._authentication_lock:
+            return [
+                {**item, "observation": dict(item["observation"])}
+                for item in cls._authentications.values()
+            ]
+
     def observe_authentication(self, service: str, backend: str, state: str) -> None:
         """Persist a classified provider result when that provider attempt completes."""
         observed_at = datetime.now(timezone.utc).isoformat()
@@ -872,6 +1172,7 @@ class EpisodeRun:
 
     def finish(self, outcome: str, cause: str = "", detail: str = "", *, auth_failed: bool = False) -> None:
         self.set_approval(None)
+        self.set_authentication(None)
         if getattr(current, "run", None) is self:
             current.run = None
         self.card.update(cause=no_credentials(cause), detail=no_credentials(detail))
@@ -1382,6 +1683,7 @@ def run_job(payload: dict, run: EpisodeRun | None = None, poll: float = 0.5, job
         finally:
             if run:
                 run.set_approval(None)
+                run.set_authentication(None)
 
 
 def unconfirmed_still_on(run: EpisodeRun | None) -> str | None:
@@ -1496,6 +1798,8 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             time.sleep(max(poll, 5))
             continue
         status = job.get("status")
+        if run and "authentication" in job:
+            run.set_authentication(job.get("authentication"))
         snapshot_approval = approval_from_job(job)
         active_approval = None if status in TERMINAL else snapshot_approval
         secret_approval_fragments.update(approval_fragments(job, snapshot_approval))

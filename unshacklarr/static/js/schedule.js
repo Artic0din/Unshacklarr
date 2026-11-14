@@ -396,6 +396,9 @@ async function refreshBusy() {
       badge.classList.toggle("queued", !b.running);
       badge.title = [b.running && `${b.running} downloading`, b.queued && `${b.queued} queued`].filter(Boolean).join(", ");
       showApprovals(b.approvals || []);
+      S.authenticationLive = b.authentication || [];
+      S.authenticationSetups = b.authentication_setups || [];
+      if (currentTab === "settings" && settingsSec === "unshackle" && unshackleDetails) renderUnshackleStatus(unshackleDetails);
     } catch { /* offline a moment: the next round */ }
   }
   setTimeout(refreshBusy, 5000);
@@ -409,6 +412,8 @@ async function refreshHealth(full = false) {
 }
 function renderHealth(h) {
   if (h.authentication) S.authentication = h.authentication;
+  if (h.authentication_methods) S.authenticationMethods = h.authentication_methods;
+  if (h.authentication_setups) S.authenticationSetups = h.authentication_setups;
   for (const [name, label] of [["unshackle", "Unshackle"], ["sonarr", "Sonarr"]]) {
     const st = h[name] || {}, b = document.querySelector(`[data-health=${name}]`);
     b.querySelector(".dot").className = "dot " + (st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "");

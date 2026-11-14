@@ -147,7 +147,7 @@ const i18nReady = (async () => {  // awaited before the first screen; English if
 const tmdbHint = () => ["Optional and free: ", el("a", { href: "https://www.themoviedb.org/settings/api", target: "_blank", rel: "noopener", textContent: "create one on TMDB" }),
   " (sign in, then Settings, API).\nWith it, the Schedule shows each series' channel and streaming services.\n"
   + "For a series not in English, it also finds episodes by their title: Sonarr only has English titles."];
-let S = { series: [], config: { defaults: {}, series: {}, notifications: {} }, services: [], serviceNames: {}, authentication: {}, dlOptions: [], health: {} };
+let S = { series: [], config: { defaults: {}, series: {}, notifications: {} }, services: [], serviceNames: {}, authentication: {}, authenticationMethods: {}, authenticationSetups: [], authenticationLive: [], dlOptions: [], health: {} };
 const serviceOptions = {};
 let current = null;
 

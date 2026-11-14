@@ -177,6 +177,60 @@ def test_maintenance_only_runs_serve_actions_and_jobs_are_checked(tmp_path, monk
     assert calls == [("POST", "/api/maintenance/clear-temp"), ("DELETE", "0f1e2d3c-aaaa-bbbb")]
 
 
+def test_authentication_setup_routes_start_answer_and_cancel(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+
+    web = reloaded_web(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "start_authentication_setup",
+        lambda service, backend="": calls.append(("start", service, backend))
+        or {"service": service, "backend": backend, "state": "authenticating"},
+    )
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "answer_authentication_setup",
+        lambda service, response, backend="": calls.append(("answer", service, backend, response))
+        or {"status": "accepted"},
+    )
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "cancel_authentication_setup",
+        lambda service, backend="": calls.append(("cancel", service, backend))
+        or {"service": service, "backend": backend, "state": "cancelled"},
+    )
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            headers = {"X-Unshackle": "1"}
+            started = await client.post(
+                "/api/unshackle/authentication/RTLP",
+                headers=headers,
+                json={"backend": "vpn"},
+            )
+            answered = await client.post(
+                "/api/unshackle/authentication/RTLP/input",
+                headers=headers,
+                json={"backend": "vpn", "response": "123456"},
+            )
+            cancelled = await client.delete(
+                "/api/unshackle/authentication/RTLP",
+                headers=headers,
+                json={"backend": "vpn"},
+            )
+            return started.status, answered.status, cancelled.status
+
+    assert asyncio.run(go()) == (200, 200, 200)
+    assert calls == [
+        ("start", "RTLP", "vpn"),
+        ("answer", "RTLP", "vpn", "123456"),
+        ("cancel", "RTLP", "vpn"),
+    ]
+
+
 def test_authentication_status_uses_only_classified_run_evidence(tmp_path, monkeypatch):
     web = reloaded_web(tmp_path, monkeypatch)
     services = [
@@ -460,10 +514,19 @@ def test_authentication_status_refresh_skips_full_diagnostics(tmp_path, monkeypa
     )
     monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: [{"tag": "PAIRED", "auth_methods": ["pairing"]}])
     monkeypatch.setattr(web, "run_cards", lambda: [])
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "authentication_setups",
+        lambda: [{"service": "PAIRED", "backend": "", "state": "waiting", "method": "pairing"}],
+    )
 
     payload = json.loads(asyncio.run(web.status(SimpleNamespace(query={"auth": "1"}))).text)
 
     assert "authentication" in payload
+    assert payload["authentication_methods"] == {"PAIRED": ["pairing"]}
+    assert payload["authentication_setups"] == [
+        {"service": "PAIRED", "backend": "", "state": "waiting", "method": "pairing"}
+    ]
     assert payload["unshackle"]["queue"] == {"downloading": 1}
     assert checked == [(False, True)]
 
@@ -595,6 +658,11 @@ const { fn, args } = JSON.parse(process.argv[2]);
 const code = {
   serviceEpisode: () => [pick(js("series.js"), /^const pad2 = .*$/m), pick(js("series.js"), /^function serviceEpisode\(.*?^\}/ms)],
   nextSyncAt: () => [pick(js("settings-services.js"), /^function nextSyncAt\(.*?^\}/ms)],
+  authenticationLabel: () => [
+    pick(js("settings-services.js"), /^const AUTH_METHOD_LABELS = .*?;$/m),
+    pick(js("settings-services.js"), /^const AUTH_FAILURE_LABELS = .*?;$/m),
+    pick(js("settings-services.js"), /^function authenticationLabel\(.*?^\}/ms),
+  ],
 }[fn]().join("\n");
 const box = { Intl, Date, Number, String };
 vm.createContext(box);
@@ -656,6 +724,32 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
         assert given_local == server, zone  # given in the app's zone: the same instant
         page = run_page_function("nextSyncAt", now.isoformat(), every, zone)
         assert datetime.fromisoformat(page.replace("Z", "+00:00")) == server, zone
+
+
+@pytest.mark.parametrize(
+    ("observation", "label"),
+    [
+        ({"state": "ready", "available_methods": ["pairing", "cookies"]}, "Ready · pairing, cookies"),
+        ({"state": "session_expired", "method": "pairing"}, "Pairing session expired"),
+        ({"state": "renewing", "method": "pairing"}, "Renewing pairing session"),
+        (
+            {
+                "state": "fallback",
+                "method": "pairing",
+                "next_method": "cookies",
+                "failure": "authentication_rejected",
+            },
+            "Pairing rejected · trying cookies",
+        ),
+        ({"state": "waiting", "method": "pairing"}, "Waiting for pairing approval"),
+        ({"state": "authenticated", "method": "cookies"}, "Signed in with cookies"),
+        ({"state": "timed_out", "method": "pairing"}, "Pairing timed out"),
+        ({"state": "cancelled", "method": "pairing"}, "Sign-in cancelled"),
+        ({"state": "error", "method": "pairing", "failure": "network"}, "Sign-in failed · network"),
+    ],
+)
+def test_authentication_lifecycle_labels_are_fixed_and_redacted(observation, label):
+    assert run_page_function("authenticationLabel", observation) == label
 
 
 def test_the_page_script_parses(tmp_path):
@@ -1827,15 +1921,26 @@ def test_the_menu_counts_the_downloads_going_on(tmp_path, monkeypatch):
     monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "approvals", lambda: [
         {"run": "a", "service": "DSNP", "message": "Approve FIRST-CODE"}
     ])
-    monkeypatch.setattr(web.sonarr_sync, "waiting", {7: {}})
-    monkeypatch.setattr(web.UNSHACKLE, "approvals", lambda: [
-        {"service": "HMAX", "message": "Approve SECOND-CODE"}
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "authentications", lambda: [
+        {"run": "a", "service": "DSNP", "observation": {"state": "waiting", "method": "pairing"}}
     ])
+    monkeypatch.setattr(web.sonarr_sync, "waiting", {7: {}})
+    monkeypatch.setattr(web.UNSHACKLE, "logins", lambda: [
+        {
+            "service": "HMAX",
+            "approval": {"message": "Approve SECOND-CODE"},
+            "authentication": {"state": "waiting", "method": "pairing"},
+        }
+    ])
+    monkeypatch.setattr(web.sonarr_sync, "authentication_setups", lambda: [])
     r = asyncio.run(web.busy(None))
     assert json.loads(r.body) == {"running": 2, "queued": 1, "approvals": [
         {"run": "a", "service": "DSNP", "message": "Approve FIRST-CODE"},
         {"service": "HMAX", "message": "Approve SECOND-CODE"},
-    ]}
+    ], "authentication": [
+        {"run": "a", "service": "DSNP", "observation": {"state": "waiting", "method": "pairing"}},
+        {"service": "HMAX", "observation": {"state": "waiting", "method": "pairing"}},
+    ], "authentication_setups": []}
 
 
 def test_a_calendar_day_click_cycle_reaches_the_usual_number_of_episodes(tmp_path):
@@ -4477,6 +4582,67 @@ def test_remote_login_approvals_come_from_the_caller_owned_core_route(monkeypatc
 
     monkeypatch.setattr(backend, "call", lambda method, path, **kwargs: (_ for _ in ()).throw(UnshackleError("older core")))
     assert backend.approvals() == []
+
+
+def test_remote_login_authentication_is_redacted_and_strictly_allowlisted(monkeypatch, tmp_path):
+    from unshacklarr.backend import Unshackle
+
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_mode": "remote", "unshackle_url": "http://core.invalid"})
+    monkeypatch.setattr(
+        backend,
+        "call",
+        lambda method, path, **kwargs: {
+            "logins": [
+                {
+                    "id": "one",
+                    "service": "HMAX",
+                    "authentication": {
+                        "state": "fallback",
+                        "method": "pairing",
+                        "next_method": "cookies",
+                        "failure": "authentication_rejected",
+                    },
+                },
+                {
+                    "id": "two",
+                    "service": "AMZN",
+                    "authentication": {"state": "waiting", "method": "pairing", "provider_text": "do not retain"},
+                },
+            ]
+        },
+    )
+
+    assert backend.logins() == [
+        {
+            "id": "one",
+            "service": "HMAX",
+            "authentication": {
+                "state": "fallback",
+                "method": "pairing",
+                "next_method": "cookies",
+                "failure": "authentication_rejected",
+            },
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"state": "waiting", "method": "token"},
+        {"state": "provider_message", "method": "pairing"},
+        {"state": "error", "method": "pairing", "failure": "provider_text"},
+        {"state": "ready", "available_methods": ["pairing", "pairing"]},
+        {"state": "waiting", "method": "pairing", "message": "provider supplied"},
+        {"state": ["waiting"], "method": "pairing"},
+        {"state": "ready", "available_methods": [["pairing"]]},
+    ],
+)
+def test_authentication_observation_rejects_unknown_or_free_text_fields(value):
+    from unshacklarr.backend import authentication_observation
+
+    assert authentication_observation(value) is None
 
 
 def test_replace_anyway_holds_for_a_retry_and_an_episode_queued_again(monkeypatch, tmp_path):
