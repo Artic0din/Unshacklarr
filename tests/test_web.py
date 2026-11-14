@@ -370,6 +370,50 @@ def test_authentication_status_orders_evidence_by_observation_time(tmp_path, mon
     }
 
 
+def test_authentication_status_omits_lifecycle_older_than_run_evidence(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.write_atomic(
+        web.sonarr_sync.AUTHENTICATION_FILE,
+        json.dumps(
+            {
+                "": {
+                    "PAIRED": {
+                        "state": "validated",
+                        "observed_at": "2026-11-14T01:00:00+00:00",
+                        "validated_at": "2026-11-14T01:00:00+00:00",
+                        "authentication": {"state": "authenticated", "method": "pairing"},
+                        "fallback": {
+                            "state": "fallback",
+                            "method": "pairing",
+                            "next_method": "cookies",
+                            "failure": "authentication_rejected",
+                        },
+                    }
+                }
+            }
+        ),
+    )
+
+    [status] = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T02:00:00+00:00",
+                "auth_failure": True,
+            }
+        ],
+        [{"tag": "PAIRED", "auth_methods": ["pairing", "cookies"]}],
+    ).values()
+
+    assert status == {
+        "state": "needs_user_action",
+        "validated_at": "2026-11-14T01:00:00+00:00",
+        "observed_at": "2026-11-14T02:00:00+00:00",
+        "needs_user_action": True,
+    }
+
+
 def test_authentication_status_uses_the_failure_service_before_fallback(tmp_path, monkeypatch):
     web = reloaded_web(tmp_path, monkeypatch)
     status = web.authentication_status(
@@ -507,6 +551,16 @@ def test_authentication_status_refresh_skips_full_diagnostics(tmp_path, monkeypa
     web = reloaded_web(tmp_path, monkeypatch)
     web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
     checked = []
+    monkeypatch.setitem(
+        web.sonarr_sync.BACKENDS,
+        "vpn",
+        SimpleNamespace(name="vpn", services=lambda: [{"tag": "PAIRED", "auth_methods": ["pairing"]}]),
+    )
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
     monkeypatch.setattr(
         web,
         "unshackle_health",
@@ -523,12 +577,113 @@ def test_authentication_status_refresh_skips_full_diagnostics(tmp_path, monkeypa
     payload = json.loads(asyncio.run(web.status(SimpleNamespace(query={"auth": "1"}))).text)
 
     assert "authentication" in payload
-    assert payload["authentication_methods"] == {"PAIRED": ["pairing"]}
+    assert payload["authentication_methods"] == {"PAIRED@vpn": ["pairing"]}
+    assert payload["authentication"]["PAIRED@vpn"]["backend"] == "vpn"
     assert payload["authentication_setups"] == [
         {"service": "PAIRED", "backend": "", "state": "waiting", "method": "pairing"}
     ]
     assert payload["unshackle"]["queue"] == {"downloading": 1}
     assert checked == [(False, True)]
+
+
+def test_authentication_services_uses_the_selected_backends_own_authentication_contract(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "url": "https://main.invalid", "auth_methods": ["pairing"]}
+    vpn = {"tag": "PAIRED", "url": "https://vpn.invalid", "auth_methods": ["cookies"]}
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=lambda: [vpn]))
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+
+    services = web.authentication_services([main])
+
+    assert services == [{**vpn, "backend": "vpn"}]
+    assert web.authentication_methods(services) == {"PAIRED@vpn": ["cookies"]}
+
+
+def test_authentication_services_preserves_selected_backend_when_its_inventory_is_unavailable(
+    tmp_path, monkeypatch
+):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "url": "https://main.invalid", "auth_methods": ["pairing"]}
+    unavailable = web.UnshackleError("temporarily unavailable")
+    monkeypatch.setitem(
+        web.sonarr_sync.BACKENDS,
+        "vpn",
+        SimpleNamespace(services=lambda: (_ for _ in ()).throw(unavailable)),
+    )
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+
+    services = web.authentication_services([main])
+
+    assert services == [{"tag": "PAIRED", "backend": "vpn"}]
+    assert web.authentication_methods(services) == {"PAIRED@vpn": []}
+
+
+def test_authentication_services_keeps_selected_backend_unknown_when_inventory_omits_the_service(
+    tmp_path, monkeypatch
+):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "url": "https://main.invalid", "auth_methods": ["pairing"]}
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=lambda: []))
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+
+    assert web.authentication_services([main]) == [{"tag": "PAIRED", "backend": "vpn"}]
+
+
+def test_authentication_state_and_status_resolve_selected_backend_inventory_off_the_event_loop(
+    tmp_path, monkeypatch
+):
+    import threading
+
+    web = reloaded_web(tmp_path, monkeypatch)
+    main_thread = threading.get_ident()
+    inventory_threads = []
+    main = {"tag": "PAIRED", "url": "https://main.invalid", "auth_methods": ["pairing"]}
+    vpn = {"tag": "PAIRED", "url": "https://vpn.invalid", "auth_methods": ["cookies"]}
+
+    def selected_services():
+        inventory_threads.append(threading.get_ident())
+        return [vpn]
+
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=selected_services))
+    monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: [main])
+    monkeypatch.setattr(web.sonarr_sync, "authentication_setups", lambda: [])
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {
+            "series": {},
+            "settings": {},
+            "service_defaults": {"PAIRED": {"backend": "vpn"}},
+        },
+    )
+    monkeypatch.setattr(web.UNSHACKLE, "cdm_config", lambda: {})
+    monkeypatch.setattr(web, "sonarr_series", lambda: [])
+    monkeypatch.setattr(web, "sonarrs_of_series", lambda ids: ({}, []))
+    monkeypatch.setattr(web, "update_info", lambda: None)
+    monkeypatch.setattr(web, "dl_options", lambda: [])
+    monkeypatch.setattr(web, "backups_info", lambda: {})
+    monkeypatch.setattr(web, "instances_of_series", lambda: {})
+    monkeypatch.setattr(web, "public_config", lambda config: {})
+    monkeypatch.setattr(web, "unshackle_health", lambda full=False, jobs=False: {"ok": True})
+
+    state = json.loads(asyncio.run(web.state(None)).text)
+    status = json.loads(asyncio.run(web.status(SimpleNamespace(query={"auth": "1"}))).text)
+
+    assert inventory_threads and all(thread != main_thread for thread in inventory_threads)
+    assert state["authentication_methods"] == {"PAIRED@vpn": ["cookies"]}
+    assert status["authentication_methods"] == {"PAIRED@vpn": ["cookies"]}
 
 
 def test_lightweight_authentication_refresh_repaints_visible_status():
@@ -590,6 +745,7 @@ const nodes = {{
 }};
 const box = {{
   S: {{ authentication: {{ PAIRED: {{ state: "needs_user_action", service: "PAIRED" }} }}, config: {{ settings: {{}} }} }},
+  document: {{ activeElement: null }},
   $: (selector) => nodes[selector],
   el: (tag, props = {{}}, ...children) => ({{ tag, ...props, children }}),
   svcName: (name) => name,
@@ -612,6 +768,271 @@ console.log(JSON.stringify(texts));
 
     assert done.returncode == 0, done.stderr
     assert "Service access" in json.loads(done.stdout)
+
+
+AUTHENTICATION_UI_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const root = process.argv[1], scenario = JSON.parse(process.argv[2]);
+const read = (name) => fs.readFileSync(root + "/js/" + name, "utf8");
+const pick = (source, pattern) => {
+  const match = source.match(pattern);
+  if (!match) throw new Error("Missing page function: " + pattern);
+  return match[0];
+};
+const settings = read("settings-services.js"), schedule = read("schedule.js");
+const source = [
+  pick(settings, /^const AUTH_METHOD_LABELS = .*?;$/m),
+  pick(settings, /^const AUTH_FAILURE_LABELS = .*?;$/m),
+  pick(settings, /^function authenticationLabel\(.*?^\}/ms),
+  pick(settings, /^async function startServiceAuthentication\(.*?^\}/ms),
+  pick(settings, /^async function cancelServiceAuthentication\(.*?^\}/ms),
+  pick(settings, /^function renderUnshackleStatus\(.*?^\}/ms),
+  pick(schedule, /^async function refreshBusy\(.*?^\}/ms),
+  pick(schedule, /^async function refreshHealth\(.*?^\}/ms),
+  pick(schedule, /^function renderHealth\(.*?^\}/ms),
+].join("\n");
+
+const document = { hidden: false, activeElement: null };
+const contains = (rootNode, wanted) => rootNode === wanted || (rootNode.children || []).some((child) => contains(child, wanted));
+class FakeNode {
+  constructor(tag = "div", props = {}, children = []) {
+    this.tag = tag;
+    this.children = children;
+    this.dataset = {};
+    this.hidden = false;
+    this.value = "";
+    this.classList = { toggle() {} };
+    Object.assign(this, props);
+  }
+  replaceChildren(...children) {
+    if (document.activeElement && contains(this, document.activeElement)) document.activeElement = null;
+    this.children = children;
+  }
+  focus() { document.activeElement = this; }
+}
+const nodes = {
+  "#ux-run": new FakeNode(),
+  "#u-status": new FakeNode(),
+  "#nav-busy": new FakeNode(),
+};
+const healthButtons = Object.fromEntries(["unshackle", "sonarr"].map((name) => {
+  const dot = new FakeNode();
+  return [name, { querySelector: () => dot, title: "", ariaLabel: "" }];
+}));
+document.querySelector = (selector) => healthButtons[selector.match(/^\[data-health=(.+)\]$/)?.[1]];
+const find = (rootNode, predicate) => {
+  if (predicate(rootNode)) return rootNode;
+  for (const child of rootNode.children || []) {
+    const match = find(child, predicate);
+    if (match) return match;
+  }
+  return null;
+};
+const findAll = (rootNode, predicate, matches = []) => {
+  if (predicate(rootNode)) matches.push(rootNode);
+  for (const child of rootNode.children || []) findAll(child, predicate, matches);
+  return matches;
+};
+const setup = { service: "PAIRED", backend: "", state: "waiting", method: "pairing", prompt: "Approval response" };
+const box = {
+  S: {
+    authentication: { PAIRED: { service: "PAIRED", state: "needs_user_action" } },
+    authenticationMethods: { PAIRED: ["pairing"] },
+    authenticationLive: [],
+    authenticationSetups: [setup],
+    config: { settings: {} },
+  },
+  document,
+  $: (selector) => nodes[selector],
+  el: (tag, props = {}, ...children) => new FakeNode(tag, props, children),
+  svcName: (name) => name,
+  ago: () => "now",
+  currentTab: "settings",
+  settingsSec: "unshackle",
+  unshackleDetails: { ok: false, mode: "remote" },
+  showApprovals() {},
+  setTimeout() {},
+  clearTimeout() {},
+  healthTimer: null,
+  toast() {},
+  renderSonarrState() {},
+  renderUnshackleState() {},
+  paintServers() {},
+  paintSonarrs() {},
+  api: async () => ({ running: 0, queued: 0, authentication: [], authentication_setups: [setup] }),
+};
+vm.createContext(box);
+vm.runInContext(source, box);
+
+const focusPrompt = () => {
+  box.renderUnshackleStatus(box.unshackleDetails);
+  const input = find(nodes["#u-status"], (node) => node.tag === "input");
+  input.value = "partly typed";
+  input.focus();
+  return input;
+};
+const promptState = (input) => {
+  const current = find(nodes["#u-status"], (node) => node.tag === "input");
+  return { sameNode: current === input, value: current?.value, focused: document.activeElement === input };
+};
+
+(async () => {
+  if (scenario === "unchanged_prompt_refresh") {
+    const input = focusPrompt();
+    await box.refreshBusy();
+    console.log(JSON.stringify(promptState(input)));
+  }
+  if (scenario === "unrelated_service_refresh") {
+    const input = focusPrompt();
+    box.api = async () => ({
+      running: 0,
+      queued: 0,
+      authentication: [{ service: "OTHER", backend: "", observation: { state: "waiting", method: "pairing" } }],
+      authentication_setups: [setup],
+    });
+    await box.refreshBusy();
+    console.log(JSON.stringify(promptState(input)));
+  }
+  if (scenario === "health_refresh") {
+    const input = focusPrompt();
+    box.api = async () => ({
+      authentication: {
+        PAIRED: { service: "PAIRED", state: "needs_user_action" },
+        OTHER: { service: "OTHER", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+      },
+      authentication_methods: { PAIRED: ["pairing"], OTHER: ["cookies"] },
+      authentication_setups: [setup],
+      unshackle: { ok: false },
+      sonarr: {},
+      servers: [],
+      sonarrs: [],
+    });
+    await box.refreshHealth();
+    console.log(JSON.stringify(promptState(input)));
+  }
+  if (scenario === "changed_and_terminal_prompt") {
+    const input = focusPrompt();
+    const responses = [
+      { ...setup, prompt: "Different question" },
+      { service: "PAIRED", backend: "", state: "cancelled", method: "pairing" },
+    ];
+    box.api = async () => ({ running: 0, queued: 0, authentication: [], authentication_setups: [responses.shift()] });
+    await box.refreshBusy();
+    const changed = find(nodes["#u-status"], (node) => node.tag === "input");
+    const changedState = { sameNode: changed === input, value: changed?.value, focused: document.activeElement === changed };
+    await box.refreshBusy();
+    console.log(JSON.stringify({ changed: changedState, terminalHasInput: !!find(nodes["#u-status"], (node) => node.tag === "input") }));
+  }
+  if (scenario === "classified_status") {
+    box.S.authenticationSetups = [];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const firstRow = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const needsAction = find(firstRow, (node) => node.tag === "small").textContent;
+    box.S.authentication.PAIRED = { service: "PAIRED", state: "validated", validated_at: "2026-11-15T00:00:00Z" };
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const secondRow = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const validated = find(secondRow, (node) => node.tag === "small").textContent;
+    console.log(JSON.stringify({ needsAction, validated }));
+  }
+  if (scenario === "cancelled_then_refreshed") {
+    box.api = async (path, options = {}) => {
+      if (options.method === "DELETE") return { service: "PAIRED", backend: "", state: "cancelled", method: "pairing" };
+      if (path === "/api/busy") return { running: 0, queued: 0, authentication: [], authentication_setups: [] };
+      throw new Error("Unexpected request: " + path);
+    };
+    await box.cancelServiceAuthentication("PAIRED", "");
+    let row = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const cancelled = find(row, (node) => node.tag === "small").textContent;
+    await box.refreshBusy();
+    row = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const refreshed = find(row, (node) => node.tag === "small").textContent;
+    console.log(JSON.stringify({ cancelled, refreshed }));
+  }
+  if (scenario === "retry_retained_error") {
+    box.S.authenticationSetups = [{ service: "PAIRED", backend: "", state: "error", failure: "network" }];
+    const requests = [];
+    box.api = async (_path, options = {}) => {
+      requests.push(options.method);
+      if (options.method === "POST") return { service: "PAIRED", backend: "", state: "authenticating" };
+      throw new Error("Unexpected request");
+    };
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const row = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const buttons = findAll(row, (node) => node.tag === "button");
+    await buttons.find((button) => button.textContent === "Retry").onclick();
+    console.log(JSON.stringify({ controls: buttons.map((button) => button.textContent), requests }));
+  }
+})().catch((error) => { console.error(error); process.exit(1); });
+"""
+
+
+def run_authentication_ui(scenario):
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    result = subprocess.run(
+        ["node", "-e", AUTHENTICATION_UI_HARNESS, "--", str(static), json.dumps(scenario)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_unchanged_authentication_refresh_preserves_the_active_prompt():
+    assert run_authentication_ui("unchanged_prompt_refresh") == {
+        "sameNode": True,
+        "value": "partly typed",
+        "focused": True,
+    }
+
+
+def test_unrelated_authentication_refresh_preserves_the_active_prompt():
+    assert run_authentication_ui("unrelated_service_refresh") == {
+        "sameNode": True,
+        "value": "partly typed",
+        "focused": True,
+    }
+
+
+def test_health_refresh_preserves_the_active_prompt():
+    assert run_authentication_ui("health_refresh") == {
+        "sameNode": True,
+        "value": "partly typed",
+        "focused": True,
+    }
+
+
+def test_changed_or_terminal_prompt_state_replaces_the_active_input():
+    assert run_authentication_ui("changed_and_terminal_prompt") == {
+        "changed": {"sameNode": False, "value": "", "focused": False},
+        "terminalHasInput": False,
+    }
+
+
+def test_supported_methods_do_not_hide_classified_authentication_status():
+    assert run_authentication_ui("classified_status") == {
+        "needsAction": "Sign-in needed",
+        "validated": "Confirmed now",
+    }
+
+
+def test_cancelled_authentication_is_rendered_until_the_next_refresh():
+    assert run_authentication_ui("cancelled_then_refreshed") == {
+        "cancelled": "Sign-in cancelled",
+        "refreshed": "Sign-in needed",
+    }
+
+
+def test_retained_authentication_error_keeps_cancel_and_posts_retry_directly():
+    assert run_authentication_ui("retry_retained_error") == {
+        "controls": ["Retry", "Cancel"],
+        "requests": ["POST"],
+    }
 
 
 def test_stats_add_up_the_history(tmp_path, monkeypatch):
@@ -740,6 +1161,10 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
                 "failure": "authentication_rejected",
             },
             "Pairing rejected · trying cookies",
+        ),
+        (
+            {"state": "fallback", "method": "pairing", "next_method": "cookies", "failure": "network"},
+            "Pairing failed · network · trying cookies",
         ),
         ({"state": "waiting", "method": "pairing"}, "Waiting for pairing approval"),
         ({"state": "authenticated", "method": "cookies"}, "Signed in with cookies"),

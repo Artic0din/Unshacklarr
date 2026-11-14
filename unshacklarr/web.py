@@ -870,6 +870,7 @@ async def state(_):
     except requests.RequestException as e:
         raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
     cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
+    authentication_entries = await asyncio.to_thread(authentication_services, service_entries)
     others, only_there = await asyncio.to_thread(sonarrs_of_series, {s["tvdbId"] for s in series})
     series = sorted(series + only_there, key=lambda s: s["title"].lower())
     return web.json_response({
@@ -878,8 +879,8 @@ async def state(_):
         "config": public_config(read_config()),
         "services": services,
         "service_names": names,
-        "authentication": authentication_status(cards, service_entries),
-        "authentication_methods": authentication_methods(service_entries),
+        "authentication": authentication_status(cards, authentication_entries),
+        "authentication_methods": authentication_methods(authentication_entries),
         "authentication_setups": await asyncio.to_thread(sonarr_sync.authentication_setups),
         "unshackle_error": unshackle_error,
         "version": __version__,
@@ -2406,6 +2407,7 @@ async def status(request):
             services = await asyncio.to_thread(sonarr_sync.all_services)
         except UnshackleError:
             services = []
+        services = await asyncio.to_thread(authentication_services, services)
         cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
         result["authentication"] = authentication_status(cards, services)
         result["authentication_methods"] = authentication_methods(services)
@@ -5148,12 +5150,36 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
         key = tag if not backend else f"{tag}@{backend}"
         if backend:
             status.update(service=tag, backend=backend)
-        if stored.get("authentication"):
+        stored_is_current = stored.get("observed_at") == status["observed_at"] and (
+            (stored.get("state") == "needs_user_action") == status["needs_user_action"]
+        )
+        if stored_is_current and stored.get("authentication"):
             status["authentication"] = stored["authentication"]
-        if stored.get("fallback"):
+        if stored_is_current and stored.get("fallback"):
             status["fallback"] = stored["fallback"]
         result[key] = status
     return result
+
+
+def authentication_services(services: list[dict]) -> list[dict]:
+    """Use each configured backend's own service contract when it is available."""
+    defaults = read_config().get("service_defaults") or {}
+    inventories = {}
+    entries = []
+    for service in services:
+        selected = (defaults.get(service["tag"]) or {}).get("backend")
+        if selected not in sonarr_sync.BACKENDS:
+            entries.append(service)
+            continue
+        if selected not in inventories:
+            try:
+                inventories[selected] = sonarr_sync.BACKENDS[selected].services()
+            except UnshackleError:
+                inventories[selected] = None
+        inventory = inventories[selected]
+        selected_service = next((entry for entry in inventory or [] if entry.get("tag") == service["tag"]), None)
+        entries.append({**(selected_service or {"tag": service["tag"]}), "backend": selected})
+    return entries
 
 
 def authentication_methods(services: list[dict]) -> dict[str, list[str]]:
