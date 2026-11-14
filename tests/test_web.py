@@ -1207,7 +1207,7 @@ def test_existing_setup_controls_survive_backend_selection_changes():
         ],
         "errored": [
             {"name": "PAIRED", "controls": []},
-            {"name": "PAIRED · old", "controls": ["Retry", "Cancel"]},
+            {"name": "PAIRED · old", "controls": ["Cancel"]},
         ],
     }
 

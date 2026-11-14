@@ -186,7 +186,7 @@ function renderUnshackleStatus(st) {
     const controls = [];
     if (setup) {
       if (["timed_out", "cancelled", "error"].includes(setup.state)) {
-        controls.push(el("button", { className: "btn small", textContent: "Retry", onclick: () => startServiceAuthentication(service, backend) }));
+        if (configured) controls.push(el("button", { className: "btn small", textContent: "Retry", onclick: () => startServiceAuthentication(service, backend) }));
       } else if (setup.prompt) {
         const reusePrompt = activePrompt?.dataset.authenticationService === service
           && activePrompt.dataset.authenticationBackend === backend && activePrompt.placeholder === setup.prompt;
