@@ -123,6 +123,8 @@ AUTHENTICATION_SERVICE_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 AUTHENTICATION_BACKEND_RE = re.compile(r"[\w][\w .-]{0,39}")
 AUTHENTICATION_SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
 AUTHENTICATION_BACKEND_IDENTITY_RE = re.compile(r"[0-9a-f]{64}")
+AUTHENTICATION_CLEANUP_ID_RE = re.compile(r"[0-9a-f]{32}")
+AUTHENTICATION_CLEANUPS_KEY = ".cleanup"
 INBOX_FILE = DATA / "inbox.json"  # every notification, for the page's bell: {"read_at": iso, "items": [...]}
 INBOX_KEEP, INBOX_DAYS = 200, 60
 inbox_lock = threading.Lock()
@@ -852,20 +854,13 @@ def _authentication_backend(name: str) -> Unshackle:
         raise ValueError("Authentication backend is no longer configured") from None
 
 
-def _authentication_backend_identity(backend: Unshackle, session_id: str) -> str:
+def _authentication_backend_identity(backend: Unshackle) -> str:
     settings = getattr(backend, "settings", {})
     url = str(settings.get("unshackle_url") or "").rstrip("/")
     mode = str(settings.get("unshackle_mode") or ("remote" if url else "local"))
-    material = json.dumps(
-        [
-            session_id,
-            mode,
-            url,
-            str(settings.get("unshackle_api_key") or ""),
-            str(settings.get("unshackle_command") or ""),
-        ],
-        separators=(",", ":"),
-    )
+    # A server replaced in place at the same transport location is indistinguishable without a core-issued ID.
+    location = url if mode == "remote" else str(settings.get("unshackle_command") or "")
+    material = json.dumps([mode, location], separators=(",", ":"))
     return hashlib.sha256(material.encode()).hexdigest()
 
 
@@ -873,50 +868,86 @@ def _valid_authentication_session_id(value) -> bool:
     return isinstance(value, str) and AUTHENTICATION_SESSION_ID_RE.fullmatch(value) is not None
 
 
-def _read_authentication_setups() -> dict[str, dict[str, str | dict | bool]]:
+def _safe_authentication_record(session, *, active: bool) -> dict | None:
+    if not isinstance(session, dict):
+        return None
+    service = session.get("service")
+    backend = session.get("backend")
+    session_id = session.get("session_id")
+    if not all(isinstance(value, str) for value in (service, backend, session_id)):
+        return None
+    if not (
+        AUTHENTICATION_SERVICE_RE.fullmatch(service)
+        and (not backend or AUTHENTICATION_BACKEND_RE.fullmatch(backend))
+        and _valid_authentication_session_id(session_id)
+    ):
+        return None
+    safe = {
+        "service": service,
+        "backend": backend,
+        "session_id": session_id,
+    }
+    backend_identity = session.get("backend_identity")
+    if backend_identity is not None:
+        if not isinstance(backend_identity, str) or not AUTHENTICATION_BACKEND_IDENTITY_RE.fullmatch(backend_identity):
+            return None
+        safe["backend_identity"] = backend_identity
+    if not active:
+        return safe
+    fallback = authentication_observation(session.get("fallback"))
+    if fallback and fallback["state"] == "fallback":
+        safe["fallback"] = fallback
+    terminal = authentication_observation(session.get("terminal"))
+    terminal_at = session.get("terminal_at")
+    if terminal and terminal["state"] in TERMINAL_AUTHENTICATION_STATES and isinstance(terminal_at, str):
+        safe["terminal"] = terminal
+        safe["terminal_at"] = terminal_at
+    if session.get("error") is True:
+        safe["error"] = True
+    return safe
+
+
+def _read_authentication_checkpoint() -> tuple[dict[str, dict], dict[str, dict]]:
     stored = read_json(AUTHENTICATION_SESSIONS_FILE, {})
     if not isinstance(stored, dict):
-        return {}
+        return {}, {}
     sessions = {}
     for key, session in stored.items():
-        if not isinstance(key, str) or not isinstance(session, dict):
+        if key == AUTHENTICATION_CLEANUPS_KEY or not isinstance(key, str):
             continue
-        service = session.get("service")
-        backend = session.get("backend")
-        session_id = session.get("session_id")
-        if not all(isinstance(value, str) for value in (service, backend, session_id)):
+        safe = _safe_authentication_record(session, active=True)
+        if safe is None or key != _authentication_setup_key(safe["service"], safe["backend"]):
             continue
-        if not (
-            AUTHENTICATION_SERVICE_RE.fullmatch(service)
-            and (not backend or AUTHENTICATION_BACKEND_RE.fullmatch(backend))
-            and _valid_authentication_session_id(session_id)
-            and key == _authentication_setup_key(service, backend)
-        ):
-            continue
-        safe = {
-            "service": service,
-            "backend": backend,
-            "session_id": session_id,
-        }
-        backend_identity = session.get("backend_identity")
-        if isinstance(backend_identity, str) and AUTHENTICATION_BACKEND_IDENTITY_RE.fullmatch(backend_identity):
-            safe["backend_identity"] = backend_identity
-        fallback = authentication_observation(session.get("fallback"))
-        if fallback and fallback["state"] == "fallback":
-            safe["fallback"] = fallback
-        terminal = authentication_observation(session.get("terminal"))
-        terminal_at = session.get("terminal_at")
-        if terminal and terminal["state"] in TERMINAL_AUTHENTICATION_STATES and isinstance(terminal_at, str):
-            safe["terminal"] = terminal
-            safe["terminal_at"] = terminal_at
-        if session.get("error") is True:
-            safe["error"] = True
         sessions[key] = safe
-    return sessions
+    cleanups = {}
+    stored_cleanups = stored.get(AUTHENTICATION_CLEANUPS_KEY)
+    if isinstance(stored_cleanups, dict):
+        for cleanup_id, cleanup in stored_cleanups.items():
+            if not isinstance(cleanup_id, str) or not AUTHENTICATION_CLEANUP_ID_RE.fullmatch(cleanup_id):
+                continue
+            safe = _safe_authentication_record(cleanup, active=False)
+            if safe is not None:
+                cleanups[cleanup_id] = safe
+    return sessions, cleanups
+
+
+def _read_authentication_setups() -> dict[str, dict[str, str | dict | bool]]:
+    return _read_authentication_checkpoint()[0]
+
+
+def _read_authentication_cleanups() -> dict[str, dict[str, str]]:
+    return _read_authentication_checkpoint()[1]
+
+
+def _write_authentication_checkpoint(sessions: dict[str, dict], cleanups: dict[str, dict]) -> None:
+    stored = {**sessions}
+    if cleanups:
+        stored[AUTHENTICATION_CLEANUPS_KEY] = cleanups
+    write_atomic(AUTHENTICATION_SESSIONS_FILE, json.dumps(stored), mode=0o600)
 
 
 def _write_authentication_setups(sessions: dict[str, dict]) -> None:
-    write_atomic(AUTHENTICATION_SESSIONS_FILE, json.dumps(sessions), mode=0o600)
+    _write_authentication_checkpoint(sessions, _read_authentication_cleanups())
 
 
 def _authentication_setup_session(key: str) -> dict | None:
@@ -926,13 +957,13 @@ def _authentication_setup_session(key: str) -> dict | None:
 
 def _checkpoint_authentication_setup(key: str, session: dict) -> bool:
     with authentication_sessions_lock:
-        sessions = _read_authentication_setups()
+        sessions, cleanups = _read_authentication_checkpoint()
         current = sessions.get(key)
         if not current or current["session_id"] != session["session_id"]:
             return False
         if current != session:
             sessions[key] = session
-            _write_authentication_setups(sessions)
+            _write_authentication_checkpoint(sessions, cleanups)
         return True
 
 
@@ -945,20 +976,67 @@ def _retain_authentication_setup_error(key: str, session: dict) -> None:
 
 def _remove_authentication_setup(key: str, session_id: str) -> None:
     with authentication_sessions_lock:
-        sessions = _read_authentication_setups()
+        sessions, cleanups = _read_authentication_checkpoint()
         current = sessions.get(key)
         if current and current["session_id"] == session_id:
             sessions.pop(key)
-            _write_authentication_setups(sessions)
+            _write_authentication_checkpoint(sessions, cleanups)
+
+
+def _orphan_authentication_setup(key: str, session: dict) -> bool:
+    with authentication_sessions_lock:
+        sessions, cleanups = _read_authentication_checkpoint()
+        current = sessions.get(key)
+        if not current or current["session_id"] != session["session_id"]:
+            return False
+        cleanup_id = uuid.uuid4().hex
+        while cleanup_id in cleanups:
+            cleanup_id = uuid.uuid4().hex
+        cleanup = {
+            "service": current["service"],
+            "backend": current["backend"],
+            "session_id": current["session_id"],
+        }
+        if current.get("backend_identity"):
+            cleanup["backend_identity"] = current["backend_identity"]
+        cleanups[cleanup_id] = cleanup
+        sessions.pop(key)
+        _write_authentication_checkpoint(sessions, cleanups)
+        return True
+
+
+def _checkpoint_authentication_cleanup(cleanup_id: str, cleanup: dict) -> bool:
+    with authentication_sessions_lock:
+        sessions, cleanups = _read_authentication_checkpoint()
+        current = cleanups.get(cleanup_id)
+        if not current or current["session_id"] != cleanup["session_id"]:
+            return False
+        if current != cleanup:
+            cleanups[cleanup_id] = cleanup
+            _write_authentication_checkpoint(sessions, cleanups)
+        return True
+
+
+def _remove_authentication_cleanup(cleanup_id: str, session_id: str) -> None:
+    with authentication_sessions_lock:
+        sessions, cleanups = _read_authentication_checkpoint()
+        current = cleanups.get(cleanup_id)
+        if current and current["session_id"] == session_id:
+            cleanups.pop(cleanup_id)
+            _write_authentication_checkpoint(sessions, cleanups)
 
 
 def _authentication_setup_backend(session: dict) -> Unshackle:
     backend_identity = session.get("backend_identity")
     if not backend_identity:
         raise ValueError("Authentication backend identity is unavailable")
-    candidates = [UNSHACKLE, *BACKENDS.values()]
+    try:
+        requested = _authentication_backend(session["backend"])
+    except ValueError:
+        requested = None
+    candidates = [candidate for candidate in [requested, UNSHACKLE, *BACKENDS.values()] if candidate is not None]
     for backend in candidates:
-        if _authentication_backend_identity(backend, session["session_id"]) == backend_identity:
+        if _authentication_backend_identity(backend) == backend_identity:
             return backend
     raise ValueError("Authentication backend is no longer configured")
 
@@ -976,7 +1054,7 @@ def _authentication_setup_prompt(key: str, session: dict) -> tuple[Unshackle, di
 
     bound = {
         **session,
-        "backend_identity": _authentication_backend_identity(backend, session["session_id"]),
+        "backend_identity": _authentication_backend_identity(backend),
     }
     if not _checkpoint_authentication_setup(key, bound):
         raise ValueError("Authentication session is no longer available")
@@ -989,6 +1067,40 @@ def _authentication_setup_owner(key: str, session: dict) -> Unshackle:
         return _authentication_setup_backend(session)
     backend, _ = _authentication_setup_prompt(key, session)
     return backend
+
+
+def _authentication_cleanup_owner(cleanup_id: str, cleanup: dict) -> Unshackle:
+    if cleanup.get("backend_identity"):
+        return _authentication_setup_backend(cleanup)
+    backend = _authentication_backend(cleanup["backend"])
+    backend.call("GET", f"/api/session/{cleanup['session_id']}/prompt", timeout=(2, 4))
+    bound = {**cleanup, "backend_identity": _authentication_backend_identity(backend)}
+    if not _checkpoint_authentication_cleanup(cleanup_id, bound):
+        raise ValueError("Authentication cleanup is no longer available")
+    cleanup.update(bound)
+    return backend
+
+
+def _retry_authentication_cleanups() -> None:
+    with authentication_sessions_lock:
+        cleanup_ids = list(_read_authentication_cleanups())
+    for cleanup_id in cleanup_ids:
+        with _authentication_setup_lock(f"{AUTHENTICATION_CLEANUPS_KEY}:{cleanup_id}"):
+            cleanup = _read_authentication_cleanups().get(cleanup_id)
+            if not cleanup:
+                continue
+            try:
+                owner = _authentication_cleanup_owner(cleanup_id, cleanup)
+                owner.call("DELETE", f"/api/session/{cleanup['session_id']}", timeout=(2, 4))
+            except (OSError, ValueError):
+                continue
+            except UnshackleError as error:
+                if error.status != 404 or not cleanup.get("backend_identity"):
+                    continue
+            try:
+                _remove_authentication_cleanup(cleanup_id, cleanup["session_id"])
+            except OSError:
+                pass
 
 
 def _authentication_setup_error(session: dict, error: UnshackleError | None = None) -> dict:
@@ -1008,7 +1120,12 @@ def _terminal_authentication_setup(session: dict) -> dict:
 
 
 def _pending_authentication_cleanup(session: dict) -> dict:
-    return {**_terminal_authentication_setup(session), "cleanup_pending": True}
+    return {
+        "service": session["service"],
+        "backend": session["backend"],
+        "state": "cancelled",
+        "cleanup_pending": True,
+    }
 
 
 def _finish_authentication_setup(key: str, session: dict) -> dict:
@@ -1080,19 +1197,27 @@ def start_authentication_setup(service: str, backend: str = "") -> dict:
     with _authentication_setup_lock(key):
         session = _authentication_setup_session(key)
         if session and session.get("terminal"):
-            return _finish_authentication_setup(key, session)
+            if session["terminal"]["state"] == "cancelled":
+                _orphan_authentication_setup(key, session)
+                session = None
+            else:
+                return _finish_authentication_setup(key, session)
         if session and not session.get("error"):
             return {"service": service, "backend": backend, "state": "authenticating"}
         if session:
-            owner = _authentication_setup_owner(key, session)
             try:
-                owner.call("DELETE", f"/api/session/{session['session_id']}", timeout=(2, 4))
+                old_owner = _authentication_setup_owner(key, session)
+                old_owner.call("DELETE", f"/api/session/{session['session_id']}", timeout=(2, 4))
+            except ValueError:
+                _orphan_authentication_setup(key, session)
             except UnshackleError as error:
-                if error.status != 404:
-                    raise
-            _remove_authentication_setup(key, session["session_id"])
-        else:
-            owner = _authentication_backend(backend)
+                if error.status == 404 and session.get("backend_identity"):
+                    _remove_authentication_setup(key, session["session_id"])
+                else:
+                    _orphan_authentication_setup(key, session)
+            else:
+                _remove_authentication_setup(key, session["session_id"])
+        owner = _authentication_backend(backend)
         control, config = _authentication_setup_control(service)
         response = owner.call(
             "POST",
@@ -1106,13 +1231,13 @@ def start_authentication_setup(service: str, backend: str = "") -> dict:
             "service": service,
             "backend": backend,
             "session_id": session_id,
-            "backend_identity": _authentication_backend_identity(owner, session_id),
+            "backend_identity": _authentication_backend_identity(owner),
         }
         try:
             with authentication_sessions_lock:
-                sessions = _read_authentication_setups()
+                sessions, cleanups = _read_authentication_checkpoint()
                 sessions[key] = session
-                _write_authentication_setups(sessions)
+                _write_authentication_checkpoint(sessions, cleanups)
         except BaseException:
             try:
                 owner.call("DELETE", f"/api/session/{session_id}", timeout=(2, 4))
@@ -1140,7 +1265,7 @@ def _transient_authentication_setup(session: dict, payload: dict) -> tuple[dict,
 
 
 def authentication_setups() -> list[dict]:
-    """Poll setup sessions while keeping approvals and prompts transient."""
+    """Poll active setups and retry private orphan cleanup while keeping prompts transient."""
     results = []
     with authentication_sessions_lock:
         keys = list(_read_authentication_setups())
@@ -1150,6 +1275,9 @@ def authentication_setups() -> list[dict]:
             if not session:
                 continue
             if session.get("terminal"):
+                if session["terminal"]["state"] == "cancelled":
+                    _orphan_authentication_setup(key, session)
+                    continue
                 results.append(_finish_authentication_setup(key, session))
                 continue
             established_owner = bool(session.get("backend_identity"))
@@ -1197,6 +1325,7 @@ def authentication_setups() -> list[dict]:
                 continue
             _checkpoint_authentication_setup(key, session)
             results.append(result)
+    _retry_authentication_cleanups()
     return results
 
 
@@ -1218,7 +1347,7 @@ def answer_authentication_setup(service: str, response: str, backend: str = "") 
 
 
 def cancel_authentication_setup(service: str, backend: str = "") -> dict:
-    """Cancel one setup session, retaining its private ID until its owner confirms cleanup."""
+    """Free one setup slot while retaining any unfinished remote cleanup privately."""
     key = _authentication_setup_key(service, backend)
     with _authentication_setup_lock(key):
         session = _authentication_setup_session(key)
@@ -1226,18 +1355,14 @@ def cancel_authentication_setup(service: str, backend: str = "") -> dict:
             try:
                 owner = _authentication_setup_owner(key, session)
             except (UnshackleError, ValueError):
-                terminal = session if session.get("terminal", {}).get("state") == "cancelled" else {
-                    **session,
-                    "terminal": {"state": "cancelled"},
-                    "terminal_at": datetime.now(timezone.utc).isoformat(),
-                }
-                _checkpoint_authentication_setup(key, terminal)
-                return _pending_authentication_cleanup(terminal)
+                _orphan_authentication_setup(key, session)
+                return _pending_authentication_cleanup(session)
             try:
                 owner.call("DELETE", f"/api/session/{session['session_id']}")
             except UnshackleError as error:
                 if error.status != 404:
-                    raise
+                    _orphan_authentication_setup(key, session)
+                    return _pending_authentication_cleanup(session)
             _remove_authentication_setup(key, session["session_id"])
     return {"service": service, "backend": backend, "state": "cancelled"}
 
