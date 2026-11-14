@@ -1332,6 +1332,29 @@ def test_job_authentication_is_run_owned_transient_and_terminal_only_on_disk(tmp
     assert persisted["authentication"] == {"state": "authenticated", "method": "pairing"}
 
 
+def test_identical_terminal_authentication_snapshots_do_not_rewrite_the_run_card(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "HMAX"}, "manual")
+    original_save = run.save
+    saves = []
+    monkeypatch.setattr(
+        run,
+        "save",
+        lambda: saves.append(dict(run.card["authentication"])),
+    )
+
+    for _ in range(20):
+        run.set_authentication({"state": "authenticated", "method": "pairing"})
+    run.set_authentication({"state": "authenticated", "method": "cookies"})
+
+    assert saves == [
+        {"state": "authenticated", "method": "pairing"},
+        {"state": "authenticated", "method": "cookies"},
+    ]
+    run.save = original_save
+    run.finish("downloaded")
+
+
 def test_follow_job_publishes_redacted_authentication_and_clears_it_at_terminal(tmp_path, monkeypatch):
     import contextlib
 

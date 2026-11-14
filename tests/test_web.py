@@ -1034,6 +1034,38 @@ const promptState = (input) => {
     }));
     console.log(JSON.stringify(rows));
   }
+  if (scenario === "setup_without_status") {
+    box.S.authentication = {};
+    box.S.authenticationMethods = { "PAIRED@vpn": [] };
+    box.S.authenticationSetups = [{
+      service: "PAIRED", backend: "vpn", state: "waiting", method: "pairing", prompt: "Approval response",
+    }];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    let rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    const waiting = rows[0] ? {
+      name: find(rows[0], (node) => node.tag === "span").textContent,
+      label: find(rows[0], (node) => node.tag === "small").textContent,
+      prompt: find(rows[0], (node) => node.tag === "input")?.placeholder,
+      controls: findAll(rows[0], (node) => node.tag === "button").map((button) => button.textContent),
+    } : null;
+    const input = rows[0] ? find(rows[0], (node) => node.tag === "input") : null;
+    if (input) input.value = "temporary response";
+    box.S.authentication = { "PAIRED@vpn": { service: "PAIRED", backend: "vpn", state: "needs_user_action" } };
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const matchingStatusRows = findAll(nodes["#u-status"], (node) => node.className === "st-job").length;
+    box.S.authentication = {};
+    box.S.authenticationSetups = [{ service: "PAIRED", backend: "vpn", state: "cancelled", method: "pairing" }];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    const terminal = rows[0] ? {
+      label: find(rows[0], (node) => node.tag === "small").textContent,
+      hasInput: !!find(rows[0], (node) => node.tag === "input"),
+    } : null;
+    box.S.authenticationSetups = [];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const reloadedRows = findAll(nodes["#u-status"], (node) => node.className === "st-job").length;
+    console.log(JSON.stringify({ waiting, matchingStatusRows, terminal, reloadedRows }));
+  }
   if (scenario === "cancelled_then_refreshed") {
     box.api = async (path, options = {}) => {
       if (options.method === "DELETE") return { service: "PAIRED", backend: "", state: "cancelled", method: "pairing" };
@@ -1127,6 +1159,20 @@ def test_only_the_selected_backend_authentication_row_is_actionable():
         {"name": "PAIRED · vpn", "label": "Sign-in needed", "controls": ["Reauthenticate"]},
         {"name": "OPEN", "label": "No login required", "controls": []},
     ]
+
+
+def test_active_named_backend_setup_remains_visible_without_status_history():
+    assert run_authentication_ui("setup_without_status") == {
+        "waiting": {
+            "name": "PAIRED · vpn",
+            "label": "Waiting for pairing approval",
+            "prompt": "Approval response",
+            "controls": ["Submit", "Cancel"],
+        },
+        "matchingStatusRows": 1,
+        "terminal": {"label": "Sign-in cancelled", "hasInput": False},
+        "reloadedRows": 0,
+    }
 
 
 def test_cancelled_authentication_is_rendered_until_the_next_refresh():

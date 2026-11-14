@@ -1254,8 +1254,9 @@ class EpisodeRun:
                 return
             EpisodeRun._authentications.pop(self.id, None)
         if observation and observation["state"] in TERMINAL_AUTHENTICATION_STATES:
-            self.card["authentication"] = observation
-            self.save()
+            if self.card.get("authentication") != observation:
+                self.card["authentication"] = observation
+                self.save()
 
     @classmethod
     def authentications(cls) -> list[dict]:

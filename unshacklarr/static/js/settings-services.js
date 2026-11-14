@@ -163,7 +163,14 @@ function renderUnshackleStatus(st) {
   } });
   const copyCmd = (cmd) => el("div", { className: "st-cmd" }, el("code", { textContent: cmd }), el("button", { className: "btn small", textContent: "Copy",
     onclick: async () => { try { await navigator.clipboard.writeText(cmd); toast("Command copied"); } catch { toast("Could not copy: select it instead", true); } } }));
-  const authentication = Object.entries(S.authentication || {}).map(([tag, status]) => {
+  const authenticationStatuses = Object.entries(S.authentication || {});
+  const authentication = [
+    ...authenticationStatuses,
+    ...(S.authenticationSetups || []).filter((setup) => !authenticationStatuses.some(([tag, status]) =>
+      (status.service || tag.split("@")[0]) === setup.service && (status.backend || "") === (setup.backend || "")))
+      .map((setup) => [`${setup.service}${setup.backend ? `@${setup.backend}` : ""}`,
+        { service: setup.service, backend: setup.backend || "", state: "unknown" }]),
+  ].map(([tag, status]) => {
     const service = status.service || tag.split("@")[0], backend = status.backend || "";
     const setup = (S.authenticationSetups || []).find((item) => item.service === service && item.backend === backend);
     const live = (S.authenticationLive || []).find((item) => item.service === service && (item.backend || "") === backend);
