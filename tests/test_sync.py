@@ -1471,6 +1471,59 @@ def test_authentication_setup_uses_the_control_titles_profile_and_proxy(tmp_path
     ]
 
 
+def test_authentication_setup_uses_the_selected_backends_service_option_types(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["service_defaults"] = {
+        "RTLP": {
+            "backend": "configured",
+            "service_options": {"--count": "7", "--ratio": "1.5"},
+        },
+    }
+    config["series"][111]["service_options"] = {}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    created = []
+
+    class Unavailable:
+        def services(self):
+            raise sync.UnshackleError("configured backend unavailable")
+
+    class Selected:
+        def services(self):
+            return [
+                {
+                    "tag": "RTLP",
+                    "cli_params": [
+                        {"name": "count", "kind": "option", "opts": ["--count"], "type": "integer"},
+                        {"name": "ratio", "kind": "option", "opts": ["--ratio"], "type": "float"},
+                    ],
+                }
+            ]
+
+        def call(self, method, path, **kwargs):
+            created.append((method, path, kwargs))
+            return {"session_id": "selected-session", "status": "authenticating"}
+
+    sync.BACKENDS.update({"configured": Unavailable(), "selected": Selected()})
+
+    sync.start_authentication_setup("RTLP", "selected")
+
+    assert created == [
+        (
+            "POST",
+            "/api/session/create",
+            {
+                "json": {
+                    "service": "RTLP",
+                    "title_id": "https://rtl/show",
+                    "count": 7,
+                    "ratio": 1.5,
+                }
+            },
+        )
+    ]
+
+
 def test_authentication_setup_restores_after_reload_and_keeps_approval_transient(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     created = []
@@ -1656,6 +1709,9 @@ def test_authentication_setup_accepts_configured_backend_names_and_never_routes_
     main_calls = []
 
     class Backend:
+        def services(self):
+            return SERVICES
+
         def call(self, method, path, **kwargs):
             backend_calls.append((method, path, kwargs))
             if method == "POST":

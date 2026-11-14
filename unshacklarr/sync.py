@@ -1028,7 +1028,7 @@ def start_authentication_setup(service: str, backend: str = "") -> dict:
         response = owner.call(
             "POST",
             "/api/session/create",
-            json={"service": service, "title_id": control["title"], **serve_params(control, config)},
+            json={"service": service, "title_id": control["title"], **serve_params(control, config, owner)},
         )
         session_id = response.get("session_id") if isinstance(response, dict) else None
         if not _valid_authentication_session_id(session_id):
@@ -2522,11 +2522,11 @@ def title_key(text: str) -> str:
     return re.sub(r"^the ", "", t)
 
 
-def serve_params(show: dict, config: dict) -> dict:
+def serve_params(show: dict, config: dict, backend: Unshackle | None = None) -> dict:
     """A search's or listing's options: the series' profile, proxy and service options, as a download has them."""
     dl, own = stacked(show, config)
     params = {k: v for k, v in options.to_params(dl, options.dl_specs()).items() if k in ("profile", "proxy", "no_proxy")}
-    params.update(options.to_params(own, options.service_specs(service_entry(show["service"], config))))
+    params.update(options.to_params(own, options.service_specs(service_entry(show["service"], config, backend))))
     return params
 
 
