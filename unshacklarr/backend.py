@@ -57,6 +57,87 @@ main(["serve", "--api-only", "-h", "127.0.0.1", "-p", port])
 
 TERMINAL = {"completed", "failed", "cancelled"}
 
+AUTHENTICATION_STATES = {
+    "ready",
+    "session_present",
+    "session_expired",
+    "session_rejected",
+    "renewing",
+    "repairing",
+    "fallback",
+    "waiting",
+    "authenticated",
+    "timed_out",
+    "cancelled",
+    "error",
+}
+AUTHENTICATION_METHODS = {"cookies", "credentials", "pairing"}
+AUTHENTICATION_FAILURES = {
+    "authentication_rejected",
+    "entitlement",
+    "region",
+    "concurrency",
+    "network",
+    "manifest",
+    "drm",
+    "licence",
+    "application",
+}
+TERMINAL_AUTHENTICATION_STATES = {"authenticated", "timed_out", "cancelled", "error"}
+
+
+def authentication_observation(value) -> dict | None:
+    """Return one strictly allowlisted core lifecycle snapshot."""
+    allowed = {"state", "method", "available_methods", "next_method", "failure"}
+    if not isinstance(value, dict) or set(value) - allowed:
+        return None
+    state = value.get("state")
+    method = value.get("method")
+    next_method = value.get("next_method")
+    failure = value.get("failure")
+    methods = value.get("available_methods", [])
+    if not isinstance(state, str) or state not in AUTHENTICATION_STATES:
+        return None
+    if method is not None and (not isinstance(method, str) or method not in AUTHENTICATION_METHODS):
+        return None
+    if next_method is not None and (
+        not isinstance(next_method, str) or next_method not in AUTHENTICATION_METHODS
+    ):
+        return None
+    if failure is not None and (not isinstance(failure, str) or failure not in AUTHENTICATION_FAILURES):
+        return None
+    if not isinstance(methods, (list, tuple)) or any(
+        not isinstance(item, str) or item not in AUTHENTICATION_METHODS for item in methods
+    ):
+        return None
+    if len(set(methods)) != len(methods):
+        return None
+    if state == "ready":
+        if not methods or method or next_method or failure:
+            return None
+    elif methods:
+        return None
+    if state == "fallback":
+        if not method or not next_method or method == next_method or failure is None:
+            return None
+    elif next_method is not None:
+        return None
+    if state == "error":
+        if failure is None:
+            return None
+    elif state != "fallback" and failure is not None:
+        return None
+    result = {"state": state}
+    if method is not None:
+        result["method"] = method
+    if methods:
+        result["available_methods"] = list(methods)
+    if next_method is not None:
+        result["next_method"] = next_method
+    if failure is not None:
+        result["failure"] = failure
+    return result
+
 
 class UnshackleError(Exception):
     """unshackle cannot be reached or refused a request; the message says why."""
@@ -277,8 +358,8 @@ class Unshackle:
                 self._down = (time.monotonic(), e)
             raise
 
-    def approvals(self) -> list[dict[str, str]]:
-        """Transient approvals for caller-owned remote logins; never read them from durable logs."""
+    def logins(self) -> list[dict]:
+        """Transient caller-owned remote login state, strictly bounded at the core response."""
         if self.mode == "local" and not (self.local.process and self.local.process.poll() is None):
             return []
         try:
@@ -286,13 +367,32 @@ class Unshackle:
         except UnshackleError:
             return []  # an older or temporarily unavailable core: download-job approvals still work
         logins = payload.get("logins") or [] if isinstance(payload, dict) else []
-        approvals = []
+        result = []
         for login in logins if isinstance(logins, list) else []:
+            if not isinstance(login, dict):
+                continue
             approval = login.get("approval") if isinstance(login, dict) else None
             message = approval.get("message") if isinstance(approval, dict) else None
+            observation = authentication_observation(login.get("authentication"))
+            item = {
+                "id": str(login.get("id") or "")[:128],
+                "service": str(login.get("service") or "")[:64],
+            }
             if isinstance(message, str) and message:
-                approvals.append({"service": str(login.get("service") or ""), "message": message[:2000]})
-        return approvals
+                item["approval"] = {"message": message[:2000]}
+            if observation is not None:
+                item["authentication"] = observation
+            if (item.get("approval") or observation is not None) and item["service"]:
+                result.append(item)
+        return result
+
+    def approvals(self) -> list[dict[str, str]]:
+        """Transient approvals for caller-owned remote logins; never read them from durable logs."""
+        return [
+            {"service": login["service"], "message": login["approval"]["message"]}
+            for login in self.logins()
+            if login.get("approval")
+        ]
 
     @property
     def mode(self) -> str:

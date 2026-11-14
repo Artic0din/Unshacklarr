@@ -870,6 +870,7 @@ async def state(_):
     except requests.RequestException as e:
         raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
     cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
+    authentication_entries = await asyncio.to_thread(authentication_services, service_entries)
     others, only_there = await asyncio.to_thread(sonarrs_of_series, {s["tvdbId"] for s in series})
     series = sorted(series + only_there, key=lambda s: s["title"].lower())
     return web.json_response({
@@ -878,7 +879,9 @@ async def state(_):
         "config": public_config(read_config()),
         "services": services,
         "service_names": names,
-        "authentication": authentication_status(cards, service_entries),
+        "authentication": authentication_status(cards, authentication_entries, service_entries),
+        "authentication_methods": authentication_methods(authentication_entries),
+        "authentication_setups": await asyncio.to_thread(sonarr_sync.authentication_setups),
         "unshackle_error": unshackle_error,
         "version": __version__,
         "build": BUILD,
@@ -2401,11 +2404,60 @@ async def status(request):
         result["unshackle"] = await asyncio.to_thread(unshackle_health, jobs=True)
     if full or request.query.get("auth"):
         try:
-            services = await asyncio.to_thread(sonarr_sync.all_services)
+            main_services = await asyncio.to_thread(sonarr_sync.all_services)
         except UnshackleError:
-            services = []
+            main_services = []
+        services = await asyncio.to_thread(authentication_services, main_services)
         cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
-        result["authentication"] = authentication_status(cards, services)
+        result["authentication"] = authentication_status(cards, services, main_services)
+        result["authentication_methods"] = authentication_methods(services)
+        result["authentication_setups"] = await asyncio.to_thread(sonarr_sync.authentication_setups)
+    return web.json_response(result)
+
+
+async def start_authentication_setup(request):
+    body = await json_object(request)
+    backend = str(body.get("backend") or "")
+    try:
+        result = await asyncio.to_thread(
+            sonarr_sync.start_authentication_setup, request.match_info["service"], backend
+        )
+    except ValueError as error:
+        raise web.HTTPBadRequest(text=str(error)) from None
+    except UnshackleError:
+        raise web.HTTPBadGateway(text="Unshackle could not start sign-in") from None
+    return web.json_response(result)
+
+
+async def answer_authentication_setup(request):
+    body = await json_object(request)
+    backend = str(body.get("backend") or "")
+    response = body.get("response")
+    try:
+        result = await asyncio.to_thread(
+            sonarr_sync.answer_authentication_setup,
+            request.match_info["service"],
+            response,
+            backend,
+        )
+    except ValueError as error:
+        raise web.HTTPBadRequest(text=str(error)) from None
+    except UnshackleError:
+        raise web.HTTPBadGateway(text="Unshackle did not accept the response") from None
+    return web.json_response(result)
+
+
+async def cancel_authentication_setup(request):
+    body = await json_object(request)
+    backend = str(body.get("backend") or "")
+    try:
+        result = await asyncio.to_thread(
+            sonarr_sync.cancel_authentication_setup, request.match_info["service"], backend
+        )
+    except ValueError as error:
+        raise web.HTTPBadRequest(text=str(error)) from None
+    except UnshackleError:
+        raise web.HTTPBadGateway(text="Unshackle could not cancel sign-in") from None
     return web.json_response(result)
 
 
@@ -5038,9 +5090,14 @@ def run_cards() -> list[dict]:
     return list(sonarr_sync.waiting.values()) + cards  # picked with others, waiting their turn
 
 
-def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, dict]:
+def authentication_status(
+    cards: list[dict], services: list[dict], main_services: list[dict] | None = None
+) -> dict[str, dict]:
     """Read-only login evidence from service metadata, durable observations and local run cards."""
-    service_methods = {service["tag"]: service.get("auth_methods") for service in services}
+    service_methods = {
+        (service["tag"], str(service.get("backend") or "")): service.get("auth_methods")
+        for service in [*(main_services or []), *services]
+    }
     observations = sonarr_sync.read_authentication_observations()
     identities = {(service["tag"], str(service.get("backend") or "")) for service in services}
     successes_by_identity = collections.defaultdict(list)
@@ -5049,8 +5106,9 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
     for card in cards:
         failures = sonarr_sync.authentication_failures(card)
         validations = sonarr_sync.authentication_validations(card, failures)
-        if not validations and not failures and card.get("service") in service_methods:
-            identities.add((card["service"], str(card.get("backend") or "")))
+        card_identity = (card.get("service"), str(card.get("backend") or ""))
+        if not validations and not failures and card_identity in service_methods:
+            identities.add(card_identity)
         for tag, validation in validations.items():
             identity = (tag, validation["backend"])
             identities.add(identity)
@@ -5070,7 +5128,7 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
     )
     result = {}
     for tag, backend in sorted(identities):
-        methods = service_methods.get(tag)
+        methods = service_methods.get((tag, backend))
         stored = (observations.get(backend) or {}).get(tag) or {}
         status = {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None}
         successes = successes_by_identity[tag, backend]
@@ -5098,8 +5156,49 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
         key = tag if not backend else f"{tag}@{backend}"
         if backend:
             status.update(service=tag, backend=backend)
+        stored_is_current = stored.get("observed_at") == status["observed_at"] and (
+            (stored.get("state") == "needs_user_action") == status["needs_user_action"]
+        )
+        if stored_is_current and stored.get("authentication"):
+            status["authentication"] = stored["authentication"]
+        if stored_is_current and stored.get("fallback"):
+            status["fallback"] = stored["fallback"]
         result[key] = status
     return result
+
+
+def authentication_services(services: list[dict]) -> list[dict]:
+    """Use each configured backend's own service contract when it is available."""
+    defaults = read_config().get("service_defaults") or {}
+    inventories = {}
+    entries = []
+    for service in services:
+        selected = (defaults.get(service["tag"]) or {}).get("backend")
+        if selected not in sonarr_sync.BACKENDS:
+            entries.append(service)
+            continue
+        if selected not in inventories:
+            try:
+                inventories[selected] = sonarr_sync.BACKENDS[selected].services()
+            except UnshackleError:
+                inventories[selected] = None
+        inventory = inventories[selected]
+        selected_service = next((entry for entry in inventory or [] if entry.get("tag") == service["tag"]), None)
+        entries.append({**(selected_service or {"tag": service["tag"]}), "backend": selected})
+    return entries
+
+
+def authentication_methods(services: list[dict]) -> dict[str, list[str]]:
+    """The fixed authentication methods each live service declares, by backend identity."""
+    return {
+        service["tag"] if not service.get("backend") else f"{service['tag']}@{service['backend']}": [
+            method
+            for method in service.get("auth_methods") or []
+            if method in ("pairing", "cookies", "credentials")
+        ]
+        for service in services
+        if isinstance(service, dict) and isinstance(service.get("tag"), str)
+    }
 
 
 def stats_of(cards: list[dict], now: datetime) -> dict:
@@ -5148,10 +5247,29 @@ async def stats(_):
 
 async def busy(_):
     """How many downloads run and wait now: the menu's Activity says so, whatever page is open."""
-    remote_approvals = await asyncio.to_thread(UNSHACKLE.approvals)
-    approvals = sonarr_sync.EpisodeRun.approvals() + remote_approvals
+    remote_logins, setups = await asyncio.gather(
+        asyncio.to_thread(UNSHACKLE.logins),
+        asyncio.to_thread(sonarr_sync.authentication_setups),
+    )
+    remote_approvals = [
+        {"service": login["service"], "message": login["approval"]["message"]}
+        for login in remote_logins
+        if login.get("approval")
+    ]
+    setup_approvals = [
+        {"service": setup["service"], "message": setup["approval"]["message"]}
+        for setup in setups
+        if setup.get("approval")
+    ]
+    approvals = sonarr_sync.EpisodeRun.approvals() + remote_approvals + setup_approvals
+    authentication = sonarr_sync.EpisodeRun.authentications() + [
+        {"service": login["service"], "observation": login["authentication"]}
+        for login in remote_logins
+        if login.get("authentication")
+    ]
     return web.json_response({"running": len(sonarr_sync.EpisodeRun.active), "queued": len(sonarr_sync.waiting),
-                              "approvals": approvals})
+                              "approvals": approvals, "authentication": authentication,
+                              "authentication_setups": setups})
 
 
 async def runs(request):
@@ -5982,6 +6100,9 @@ app.add_routes([
     web.get("/api/unshackle/log", unshackle_log),
     web.post(r"/api/unshackle/maintenance/{action}", unshackle_maintenance),
     web.post("/api/unshackle/allow-proxies", allow_proxies),
+    web.post(r"/api/unshackle/authentication/{service:[A-Za-z0-9_-]+}", start_authentication_setup),
+    web.post(r"/api/unshackle/authentication/{service:[A-Za-z0-9_-]+}/input", answer_authentication_setup),
+    web.delete(r"/api/unshackle/authentication/{service:[A-Za-z0-9_-]+}", cancel_authentication_setup),
     web.post(r"/api/unshackle/jobs/{job_id}/cancel", cancel_job),
     web.get("/api/cookies", list_cookies),
     web.get("/api/profiles/{service}", service_profiles),

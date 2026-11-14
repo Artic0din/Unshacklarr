@@ -88,7 +88,65 @@ document.querySelectorAll("[data-health]").forEach((b) => b.onclick = () => {
   showSettingsSec(b.dataset.health);
 });
 
+const AUTH_METHOD_LABELS = { pairing: "pairing", cookies: "cookies", credentials: "credentials" };
+const AUTH_FAILURE_LABELS = { authentication_rejected: "authentication rejected", entitlement: "entitlement", region: "region", concurrency: "concurrency", network: "network", manifest: "manifest", drm: "DRM", licence: "licence", application: "application" };
+function authenticationLabel(observation) {
+  if (!observation) return "Not checked yet";
+  const method = AUTH_METHOD_LABELS[observation.method] || "sign-in";
+  const next = AUTH_METHOD_LABELS[observation.next_method] || "sign-in";
+  const named = method[0].toUpperCase() + method.slice(1);
+  if (observation.state === "ready") return `Ready · ${(observation.available_methods || []).map((item) => AUTH_METHOD_LABELS[item]).filter(Boolean).join(", ")}`;
+  if (observation.state === "session_present") return `${named} session available`;
+  if (observation.state === "session_expired") return `${named} session expired`;
+  if (observation.state === "session_rejected") return `${named} session rejected`;
+  if (observation.state === "renewing") return `Renewing ${method} session`;
+  if (observation.state === "repairing") return `Repairing ${method} session`;
+  if (observation.state === "fallback") return observation.failure === "authentication_rejected"
+    ? `${named} rejected · trying ${next}`
+    : `${named} failed · ${AUTH_FAILURE_LABELS[observation.failure] || "application"} · trying ${next}`;
+  if (observation.state === "waiting") return `Waiting for ${method} approval`;
+  if (observation.state === "authenticated") return `Signed in with ${method}`;
+  if (observation.state === "timed_out") return `${named} timed out`;
+  if (observation.state === "cancelled") return "Sign-in cancelled";
+  if (observation.state === "error") return `Sign-in failed · ${AUTH_FAILURE_LABELS[observation.failure] || "application"}`;
+  if (observation.state === "authenticating") return "Signing in";
+  return "Not checked yet";
+}
+
+async function startServiceAuthentication(service, backend = "") {
+  try {
+    const setup = await api(`/api/unshackle/authentication/${encodeURIComponent(service)}`, {
+      method: "POST", body: JSON.stringify({ backend }),
+    });
+    S.authenticationSetups = [...(S.authenticationSetups || []).filter((item) => item.service !== service || item.backend !== backend), setup];
+    renderUnshackleStatus(unshackleDetails || {});
+  } catch (error) { toast(error.message, true); }
+}
+
+async function cancelServiceAuthentication(service, backend = "") {
+  try {
+    const setup = await api(`/api/unshackle/authentication/${encodeURIComponent(service)}`, {
+      method: "DELETE", body: JSON.stringify({ backend }),
+    });
+    S.authenticationSetups = [...(S.authenticationSetups || []).filter((item) => item.service !== service || item.backend !== backend), setup];
+    renderUnshackleStatus(unshackleDetails || {});
+  } catch (error) { toast(error.message, true); }
+}
+
+async function answerServiceAuthentication(service, backend, field) {
+  if (!field.value) return;
+  const response = field.value;
+  field.value = "";
+  try {
+    await api(`/api/unshackle/authentication/${encodeURIComponent(service)}/input`, {
+      method: "POST", body: JSON.stringify({ backend, response }),
+    });
+  } catch (error) { toast(error.message, true); }
+}
+
 function renderUnshackleStatus(st) {
+  const activePrompt = document.activeElement?.dataset?.authenticationService ? document.activeElement : null;
+  let activePromptReused = false;
   const local = st.mode === "local";
   $("#ux-run").replaceChildren(...(local ? [
     el("button", { className: "btn small", textContent: st.ok ? "Restart" : "Start", onclick: restartUnshackle }),
@@ -105,12 +163,46 @@ function renderUnshackleStatus(st) {
   } });
   const copyCmd = (cmd) => el("div", { className: "st-cmd" }, el("code", { textContent: cmd }), el("button", { className: "btn small", textContent: "Copy",
     onclick: async () => { try { await navigator.clipboard.writeText(cmd); toast("Command copied"); } catch { toast("Could not copy: select it instead", true); } } }));
-  const authentication = Object.entries(S.authentication || {}).map(([tag, status]) => {
+  const authenticationStatuses = Object.entries(S.authentication || {});
+  const authentication = [
+    ...authenticationStatuses,
+    ...(S.authenticationSetups || []).filter((setup) => !authenticationStatuses.some(([tag, status]) =>
+      (status.service || tag.split("@")[0]) === setup.service && (status.backend || "") === (setup.backend || "")))
+      .map((setup) => [`${setup.service}${setup.backend ? `@${setup.backend}` : ""}`,
+        { service: setup.service, backend: setup.backend || "", state: "unknown" }]),
+  ].map(([tag, status]) => {
+    const service = status.service || tag.split("@")[0], backend = status.backend || "";
+    const setup = (S.authenticationSetups || []).find((item) => item.service === service && item.backend === backend);
+    const live = (S.authenticationLive || []).find((item) => item.service === service && (item.backend || "") === backend);
+    const configured = Object.hasOwn(S.authenticationMethods || {}, tag);
+    const methods = configured ? S.authenticationMethods[tag] : [];
+    const observation = setup || live?.observation || status.authentication || (status.state === "unknown" && methods.length
+      ? { state: "ready", available_methods: methods } : null);
     const label = status.state === "anonymous" ? "No login required"
+      : observation ? authenticationLabel(observation)
       : status.state === "needs_user_action" ? "Sign-in needed"
       : status.state === "validated" ? `Confirmed ${ago(status.validated_at)}` : "Not checked yet";
-    const name = svcName(status.service || tag) + (status.backend ? ` · ${status.backend}` : "");
-    return el("div", { className: "st-job" }, el("span", { textContent: name }), el("small", { textContent: label }));
+    const name = svcName(service) + (backend ? ` · ${backend}` : "");
+    const controls = [];
+    if (setup) {
+      if (["timed_out", "cancelled", "error"].includes(setup.state)) {
+        if (configured) controls.push(el("button", { className: "btn small", textContent: "Retry", onclick: () => startServiceAuthentication(service, backend) }));
+      } else if (setup.prompt) {
+        const reusePrompt = activePrompt?.dataset.authenticationService === service
+          && activePrompt.dataset.authenticationBackend === backend && activePrompt.placeholder === setup.prompt;
+        const input = reusePrompt ? activePrompt : el("input", { type: "text", ariaLabel: setup.prompt, placeholder: setup.prompt,
+          autocomplete: "one-time-code", dataset: { authenticationService: service, authenticationBackend: backend } });
+        activePromptReused ||= reusePrompt;
+        controls.push(input, el("button", { className: "btn small", textContent: "Submit", onclick: () => answerServiceAuthentication(service, backend, input) }));
+      }
+      if (!["authenticated", "timed_out", "cancelled"].includes(setup.state)) {
+        controls.push(el("button", { className: "btn small danger", textContent: "Cancel", onclick: () => cancelServiceAuthentication(service, backend) }));
+      }
+    } else if (configured && status.state !== "anonymous") {
+      controls.push(el("button", { className: "btn small", textContent: status.state === "needs_user_action" ? "Reauthenticate" : "Sign in",
+        onclick: () => startServiceAuthentication(service, backend) }));
+    }
+    return el("div", { className: "st-job" }, el("span", { textContent: name }), el("small", { textContent: label }), ...controls);
   });
   const extra = [
     ...(authentication.length ? [el("div", { className: "st-sect" }, el("b", { textContent: "Service access" }),
@@ -161,6 +253,7 @@ function renderUnshackleStatus(st) {
       el("div", { className: "tools" }, ...st.tools.map((t) => el("span", { className: t.installed ? "" : t.required ? "missing" : "optional-missing",
         title: t.installed ? `${t.name} ${t.version || ""}`.trim() : `${t.name} is missing${t.required ? "" : " (optional)"}`,
         textContent: `${t.installed ? "✓" : "✗"} ${t.name}` }))))] : []));
+  if (activePromptReused) activePrompt.focus();
 }
 async function loadUnshackleStatus() {
   $("#u-status").replaceChildren(loading("Checking Unshackle…"));

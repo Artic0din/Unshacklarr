@@ -4,6 +4,7 @@ import json
 import shutil
 import re
 import subprocess
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -1302,6 +1303,1594 @@ def test_job_approval_is_visible_only_while_the_job_waits(tmp_path, monkeypatch)
     assert "TRANSIENT-CODE" not in persisted
     assert "TRANSIENT-CODE" not in str(caught.value)
     run.finish("failed")
+
+
+def test_job_authentication_is_run_owned_transient_and_terminal_only_on_disk(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    first = sync.EpisodeRun(episode(111, 2, 5), {"service": "HMAX"}, "manual")
+    second = sync.EpisodeRun(episode(112, 1, 1), {"service": "AMZN"}, "manual")
+    first.set_authentication({"state": "waiting", "method": "pairing"})
+    second.set_authentication({"state": "renewing", "method": "pairing"})
+
+    assert sync.EpisodeRun.authentications() == [
+        {"run": first.id, "service": "HMAX", "observation": {"state": "waiting", "method": "pairing"}},
+        {"run": second.id, "service": "AMZN", "observation": {"state": "renewing", "method": "pairing"}},
+    ]
+    cards = [json.loads(path.read_text()) for path in (tmp_path / "runs").glob("*.json")]
+    assert all("authentication" not in card for card in cards)
+
+    first.set_authentication({"state": "authenticated", "method": "pairing"})
+    assert sync.EpisodeRun.authentications() == [
+        {"run": second.id, "service": "AMZN", "observation": {"state": "renewing", "method": "pairing"}}
+    ]
+    assert first.card["authentication"] == {"state": "authenticated", "method": "pairing"}
+
+    first.finish("downloaded")
+    second.finish("failed")
+    assert sync.EpisodeRun.authentications() == []
+    persisted = json.loads((tmp_path / "runs" / f"{first.id}.json").read_text())
+    assert persisted["authentication"] == {"state": "authenticated", "method": "pairing"}
+
+
+def test_identical_terminal_authentication_snapshots_do_not_rewrite_the_run_card(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "HMAX"}, "manual")
+    original_save = run.save
+    saves = []
+    monkeypatch.setattr(
+        run,
+        "save",
+        lambda: saves.append(dict(run.card["authentication"])),
+    )
+
+    for _ in range(20):
+        run.set_authentication({"state": "authenticated", "method": "pairing"})
+    run.set_authentication({"state": "authenticated", "method": "cookies"})
+
+    assert saves == [
+        {"state": "authenticated", "method": "pairing"},
+        {"state": "authenticated", "method": "cookies"},
+    ]
+    run.save = original_save
+    run.finish("downloaded")
+
+
+def test_follow_job_publishes_redacted_authentication_and_clears_it_at_terminal(tmp_path, monkeypatch):
+    import contextlib
+
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "HMAX"}, "manual")
+    seen = []
+    polls = iter(
+        [
+            {
+                "status": "downloading",
+                "authentication": {"state": "fallback", "method": "pairing", "next_method": "cookies", "failure": "authentication_rejected"},
+            },
+            {"status": "completed", "authentication": {"state": "authenticated", "method": "cookies"}},
+        ]
+    )
+
+    class Serve:
+        name = ""
+
+        def download(self, payload):
+            return "job"
+
+        def job(self, job_id):
+            return next(polls)
+
+    monkeypatch.setattr(sync, "backend_named", lambda name: Serve())
+    monkeypatch.setattr(sync, "download_slot", lambda name, active_run: contextlib.nullcontext())
+    monkeypatch.setattr(sync.time, "sleep", lambda seconds: seen.extend(sync.EpisodeRun.authentications()))
+
+    sync.run_job({}, run, poll=0)
+
+    assert seen == [
+        {
+            "run": run.id,
+            "service": "HMAX",
+            "observation": {
+                "state": "fallback",
+                "method": "pairing",
+                "next_method": "cookies",
+                "failure": "authentication_rejected",
+            },
+        }
+    ]
+    assert sync.EpisodeRun.authentications() == []
+    assert run.card["authentication"] == {"state": "authenticated", "method": "cookies"}
+    run.finish("downloaded")
+
+
+def test_follow_job_excludes_raw_authentication_from_debug_logs(tmp_path, monkeypatch):
+    import contextlib
+
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "DEBUG", True)
+    traces = []
+    monkeypatch.setattr(sync, "trace", lambda message, **kwargs: traces.append(message))
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "HMAX"}, "manual")
+
+    class Serve:
+        name = ""
+
+        def download(self, payload):
+            return "job"
+
+        def job(self, job_id):
+            return {
+                "status": "completed",
+                "authentication": {
+                    "state": "authenticated",
+                    "method": "cookies",
+                    "provider_text": "RAW-AUTH-SECRET",
+                },
+            }
+
+    monkeypatch.setattr(sync, "backend_named", lambda name: Serve())
+    monkeypatch.setattr(sync, "download_slot", lambda name, active_run: contextlib.nullcontext())
+
+    sync.run_job({}, run, poll=0)
+
+    assert any('"status": "completed"' in trace for trace in traces)
+    assert all("RAW-AUTH-SECRET" not in trace and '"authentication"' not in trace for trace in traces)
+
+
+def test_authentication_setup_uses_the_control_titles_profile_and_proxy(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["service_defaults"] = {
+        "RTLP": {"options": {"--profile": "viewer", "--proxy": "au"}},
+    }
+    config["series"][111]["service_options"] = {}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    created = []
+
+    def create(method, path, **kwargs):
+        created.append((method, path, kwargs))
+        return {"session_id": "session-one", "status": "authenticating"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", create)
+
+    sync.start_authentication_setup("RTLP")
+
+    assert created == [
+        (
+            "POST",
+            "/api/session/create",
+            {
+                "json": {
+                    "service": "RTLP",
+                    "title_id": "https://rtl/show",
+                    "profile": "viewer",
+                    "proxy": "au",
+                }
+            },
+        )
+    ]
+
+
+def test_authentication_setup_uses_the_selected_backends_service_option_types(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["service_defaults"] = {
+        "RTLP": {
+            "backend": "configured",
+            "service_options": {"--count": "7", "--ratio": "1.5"},
+        },
+    }
+    config["series"][111]["service_options"] = {}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    created = []
+
+    class Unavailable:
+        def services(self):
+            raise sync.UnshackleError("configured backend unavailable")
+
+    class Selected:
+        def services(self):
+            return [
+                {
+                    "tag": "RTLP",
+                    "cli_params": [
+                        {"name": "count", "kind": "option", "opts": ["--count"], "type": "integer"},
+                        {"name": "ratio", "kind": "option", "opts": ["--ratio"], "type": "float"},
+                    ],
+                }
+            ]
+
+        def call(self, method, path, **kwargs):
+            created.append((method, path, kwargs))
+            return {"session_id": "selected-session", "status": "authenticating"}
+
+    sync.BACKENDS.update({"configured": Unavailable(), "selected": Selected()})
+
+    sync.start_authentication_setup("RTLP", "selected")
+
+    assert created == [
+        (
+            "POST",
+            "/api/session/create",
+            {
+                "json": {
+                    "service": "RTLP",
+                    "title_id": "https://rtl/show",
+                    "count": 7,
+                    "ratio": 1.5,
+                }
+            },
+        )
+    ]
+
+
+def test_authentication_setup_restores_after_reload_and_keeps_approval_transient(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    created = []
+
+    def create(method, path, **kwargs):
+        created.append((method, path, kwargs))
+        return {"session_id": "session-one", "status": "authenticating"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", create)
+    assert sync.start_authentication_setup("RTLP") == {
+        "service": "RTLP",
+        "backend": "",
+        "state": "authenticating",
+    }
+    assert created == [
+        (
+            "POST",
+            "/api/session/create",
+            {"json": {"service": "RTLP", "title_id": "https://rtl/show", "movie": True}},
+        )
+    ]
+    assert sync.AUTHENTICATION_SESSIONS_FILE.stat().st_mode & 0o777 == 0o600
+    assert "https://rtl/show" not in sync.AUTHENTICATION_SESSIONS_FILE.read_text()
+
+    sync = load(tmp_path, monkeypatch)
+    fallback = {
+        "state": "fallback",
+        "method": "pairing",
+        "next_method": "cookies",
+        "failure": "authentication_rejected",
+    }
+    polls = iter(
+        [
+            {"status": "authenticating", "authentication": fallback, "approval": {"message": "Approve TRANSIENT-CODE"}},
+            {"status": "authenticated", "authentication": {"state": "authenticated", "method": "cookies"}},
+        ]
+    )
+    calls = []
+
+    def poll(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if method == "GET":
+            return next(polls)
+        assert method == "DELETE"
+        return {"status": "ok"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", poll)
+    [waiting] = sync.authentication_setups()
+    assert waiting == {
+        "service": "RTLP",
+        "backend": "",
+        "state": "fallback",
+        "method": "pairing",
+        "next_method": "cookies",
+        "failure": "authentication_rejected",
+        "approval": {"message": "Approve TRANSIENT-CODE"},
+    }
+    assert "TRANSIENT-CODE" not in sync.AUTHENTICATION_SESSIONS_FILE.read_text()
+
+    [authenticated] = sync.authentication_setups()
+    assert authenticated == {
+        "service": "RTLP",
+        "backend": "",
+        "state": "authenticated",
+        "method": "cookies",
+        "fallback": fallback,
+    }
+    assert json.loads(sync.AUTHENTICATION_SESSIONS_FILE.read_text()) == {}
+    assert calls == [
+        ("GET", "/api/session/session-one/prompt", {"timeout": (2, 4)}),
+        ("GET", "/api/session/session-one/prompt", {"timeout": (2, 4)}),
+        ("DELETE", "/api/session/session-one", {"timeout": (2, 4)}),
+    ]
+    stored = sync.read_authentication_observations()[""]["RTLP"]
+    assert stored["state"] == "validated"
+    assert stored["authentication"] == {"state": "authenticated", "method": "cookies"}
+    assert stored["fallback"] == fallback
+
+
+def test_authentication_setup_uses_a_configured_programme_url_when_the_series_has_no_title(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+    programme_url = "https://example.invalid/programmes/control"
+    monkeypatch.setattr(
+        sync,
+        "read_file",
+        lambda: {
+            "series": {
+                "1": {
+                    "service": "RTLP",
+                    "programmes": True,
+                    "title": "",
+                    "programme_map": {"S01E01": programme_url},
+                }
+            }
+        },
+    )
+    calls = []
+    monkeypatch.setattr(
+        sync.UNSHACKLE,
+        "call",
+        lambda method, path, **kwargs: calls.append((method, path, kwargs))
+        or {"session_id": "session-one"},
+    )
+
+    sync.start_authentication_setup("RTLP")
+
+    assert calls == [
+        (
+            "POST",
+            "/api/session/create",
+            {"json": {"service": "RTLP", "title_id": programme_url}},
+        )
+    ]
+
+
+def test_authentication_setup_reuses_concurrent_start_and_cancels_without_retaining_input(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    calls = []
+
+    def call(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if path == "/api/session/create":
+            return {"session_id": "session-one", "status": "authenticating"}
+        return {"status": "accepted" if method == "POST" else "ok", "provider_text": "must not escape"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", call)
+    first = sync.start_authentication_setup("RTLP")
+    assert sync.start_authentication_setup("RTLP") == first
+    assert sync.answer_authentication_setup("RTLP", "123456") == {"status": "accepted"}
+    assert "123456" not in sync.AUTHENTICATION_SESSIONS_FILE.read_text()
+    assert sync.cancel_authentication_setup("RTLP") == {
+        "service": "RTLP",
+        "backend": "",
+        "state": "cancelled",
+    }
+    assert [item[:2] for item in calls] == [
+        ("POST", "/api/session/create"),
+        ("POST", "/api/session/session-one/prompt"),
+        ("DELETE", "/api/session/session-one"),
+    ]
+    assert calls[1][2] == {"json": {"response": "123456"}}
+    assert json.loads(sync.AUTHENTICATION_SESSIONS_FILE.read_text()) == {}
+
+
+def test_authentication_setup_cancel_treats_a_missing_core_session_as_already_cancelled(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"session_id": "session-one"})
+    sync.start_authentication_setup("RTLP")
+    missing = sync.UnshackleError("gone")
+    missing.status = 404
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(missing))
+
+    assert sync.cancel_authentication_setup("RTLP") == {
+        "service": "RTLP",
+        "backend": "",
+        "state": "cancelled",
+    }
+    assert sync._read_authentication_setups() == {}
+
+
+def test_authentication_setup_cancel_orphans_cleanup_when_core_refuses_it(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"session_id": "session-one"})
+    sync.start_authentication_setup("RTLP")
+    unavailable = sync.UnshackleError("temporarily unavailable")
+    unavailable.status = 503
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(unavailable))
+
+    assert sync.cancel_authentication_setup("RTLP") == {
+        "service": "RTLP",
+        "backend": "",
+        "state": "cancelled",
+        "cleanup_pending": True,
+    }
+    assert sync._read_authentication_setups() == {}
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "session-one"
+
+
+def test_authentication_setup_accepts_configured_backend_names_and_never_routes_removed_ones_to_main(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+    backend_name = "Living Room.vpn-É"
+    main_calls = []
+
+    class Backend:
+        def __init__(self, url, key, session_id="session-one"):
+            self.settings = {
+                "unshackle_mode": "remote",
+                "unshackle_url": url,
+                "unshackle_api_key": key,
+            }
+            self.calls = []
+            self.session_id = session_id
+
+        def services(self):
+            return SERVICES
+
+        def call(self, method, path, **kwargs):
+            self.calls.append((method, path, kwargs))
+            if method == "POST":
+                return {"session_id": self.session_id}
+            if path != f"/api/session/{self.session_id}/prompt":
+                missing = sync.UnshackleError("session is not on this server")
+                missing.status = 404
+                raise missing
+            return {"status": "ok"}
+
+    backend = Backend("https://original.invalid", "k" * 32)
+    sync.BACKENDS[backend_name] = backend
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: main_calls.append((args, kwargs)))
+
+    sync.start_authentication_setup("RTLP", backend_name)
+    checkpoint = sync._read_authentication_setups()[f"RTLP@{backend_name}"]
+    assert checkpoint["backend"] == backend_name
+    assert checkpoint["session_id"] == "session-one"
+    assert len(checkpoint["backend_identity"]) == 64
+    assert "original.invalid" not in sync.AUTHENTICATION_SESSIONS_FILE.read_text()
+    assert "k" * 32 not in sync.AUTHENTICATION_SESSIONS_FILE.read_text()
+
+    sync.BACKENDS.pop(backend_name)
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": backend_name, "state": "error", "failure": "application"}
+    ]
+    assert main_calls == []
+    assert f"RTLP@{backend_name}" in sync._read_authentication_setups()
+
+    with pytest.raises(ValueError, match="no longer configured"):
+        sync.answer_authentication_setup("RTLP", "response", backend_name)
+    assert f"RTLP@{backend_name}" in sync._read_authentication_setups()
+    pending = sync.cancel_authentication_setup("RTLP", backend_name)
+    assert pending == {
+        "service": "RTLP",
+        "backend": backend_name,
+        "state": "cancelled",
+        "cleanup_pending": True,
+    }
+    assert "session_id" not in pending
+    assert f"RTLP@{backend_name}" not in sync._read_authentication_setups()
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "session-one"
+    assert cleanup["backend"] == backend_name
+    assert main_calls == []
+
+    sync = load(tmp_path, monkeypatch)
+    main_calls = []
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: main_calls.append((args, kwargs)))
+    replacement = Backend("https://replacement.invalid", "r" * 32, "replacement-session")
+    sync.BACKENDS[backend_name] = replacement
+    assert sync.authentication_setups() == []
+    assert [call[:2] for call in replacement.calls] == [
+        ("GET", "/api/session/session-one/prompt")
+    ]
+    assert sync.start_authentication_setup("RTLP", backend_name) == {
+        "service": "RTLP",
+        "backend": backend_name,
+        "state": "authenticating",
+    }
+    assert sync._read_authentication_setups()[f"RTLP@{backend_name}"]["session_id"] == "replacement-session"
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "session-one"
+
+    restored = Backend("https://original.invalid", "k" * 32)
+    sync.BACKENDS["Restored owner"] = restored
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": backend_name, "state": "authenticating"}
+    ]
+    assert restored.calls[-1][:2] == ("DELETE", "/api/session/session-one")
+    assert sync._read_authentication_cleanups() == {}
+    assert sync._read_authentication_setups()[f"RTLP@{backend_name}"]["session_id"] == "replacement-session"
+    assert main_calls == []
+
+
+def test_legacy_setup_cancel_proves_its_owner_before_cleanup_and_recovers_when_it_returns(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    backend_name = "living-room"
+    key = f"RTLP@{backend_name}"
+    legacy = {"service": "RTLP", "backend": backend_name, "session_id": "legacy-session"}
+    sync._write_authentication_setups({key: legacy})
+    missing = sync.UnshackleError("session is not on this server")
+    missing.status = 404
+    replacement_calls = []
+    main_calls = []
+
+    class Replacement:
+        settings = {
+            "unshackle_mode": "remote",
+            "unshackle_url": "https://replacement.invalid",
+            "unshackle_api_key": "r" * 32,
+        }
+
+        def call(self, method, path, **kwargs):
+            replacement_calls.append((method, path, kwargs))
+            if method != "GET":
+                pytest.fail(f"replacement received {method}")
+            raise missing
+
+    sync.BACKENDS[backend_name] = Replacement()
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: main_calls.append((args, kwargs)))
+
+    pending = sync.cancel_authentication_setup("RTLP", backend_name)
+    assert pending == {
+        "service": "RTLP",
+        "backend": backend_name,
+        "state": "cancelled",
+        "cleanup_pending": True,
+    }
+    assert key not in sync._read_authentication_setups()
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "legacy-session"
+    assert "backend_identity" not in cleanup
+    assert replacement_calls == [
+        ("GET", "/api/session/legacy-session/prompt", {"timeout": (2, 4)})
+    ]
+    assert sync.authentication_setups() == []
+    assert [call[:2] for call in replacement_calls] == [
+        ("GET", "/api/session/legacy-session/prompt"),
+        ("GET", "/api/session/legacy-session/prompt"),
+    ]
+    assert sync._read_authentication_setups() == {}
+    assert len(sync._read_authentication_cleanups()) == 1
+
+    owner_calls = []
+
+    class RestoredOwner:
+        settings = {
+            "unshackle_mode": "remote",
+            "unshackle_url": "https://original.invalid",
+            "unshackle_api_key": "o" * 32,
+        }
+
+        def call(self, method, path, **kwargs):
+            owner_calls.append((method, path, kwargs))
+            if method == "GET":
+                return {"authentication": {"state": "authenticating", "method": "pairing"}}
+            assert "backend_identity" in next(iter(sync._read_authentication_cleanups().values()))
+            return {"status": "ok"}
+
+    sync.BACKENDS[backend_name] = RestoredOwner()
+    assert sync.authentication_setups() == []
+    assert [call[:2] for call in owner_calls] == [
+        ("GET", "/api/session/legacy-session/prompt"),
+        ("DELETE", "/api/session/legacy-session"),
+    ]
+    assert sync._read_authentication_cleanups() == {}
+    assert main_calls == []
+
+
+def test_legacy_setup_requires_read_proof_before_answer_or_retry(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    backend_name = "living-room"
+    key = f"RTLP@{backend_name}"
+    legacy = {"service": "RTLP", "backend": backend_name, "session_id": "legacy-session"}
+    missing = sync.UnshackleError("session is not on this server")
+    missing.status = 404
+    calls = []
+
+    class Replacement:
+        settings = {
+            "unshackle_mode": "remote",
+            "unshackle_url": "https://replacement.invalid",
+            "unshackle_api_key": "r" * 32,
+        }
+
+        def services(self):
+            return SERVICES
+
+        def call(self, method, path, **kwargs):
+            calls.append((method, path, kwargs))
+            if method == "GET":
+                raise missing
+            assert path == "/api/session/create"
+            return {"session_id": "replacement-session"}
+
+    sync.BACKENDS[backend_name] = Replacement()
+    sync._write_authentication_setups({key: legacy})
+    with pytest.raises(sync.UnshackleError, match="not on this server"):
+        sync.answer_authentication_setup("RTLP", "response", backend_name)
+    assert sync._read_authentication_setups()[key] == legacy
+
+    sync._write_authentication_setups({key: {**legacy, "error": True}})
+    assert sync.start_authentication_setup("RTLP", backend_name) == {
+        "service": "RTLP",
+        "backend": backend_name,
+        "state": "authenticating",
+    }
+    assert sync._read_authentication_setups()[key]["session_id"] == "replacement-session"
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "legacy-session"
+    assert [call[:2] for call in calls] == [
+        ("GET", "/api/session/legacy-session/prompt"),
+        ("GET", "/api/session/legacy-session/prompt"),
+        ("POST", "/api/session/create"),
+    ]
+
+    owner_calls = []
+
+    class RestoredOwner:
+        settings = {
+            "unshackle_mode": "remote",
+            "unshackle_url": "https://original.invalid",
+            "unshackle_api_key": "o" * 32,
+        }
+
+        def call(self, method, path, **kwargs):
+            owner_calls.append((method, path, kwargs))
+            if method == "GET":
+                return {"prompt": "Enter the code"}
+            return {"status": "accepted"}
+
+    sync._write_authentication_checkpoint({key: legacy}, {})
+    sync.BACKENDS[backend_name] = RestoredOwner()
+    assert sync.answer_authentication_setup("RTLP", "response", backend_name) == {"status": "accepted"}
+    assert [call[:2] for call in owner_calls] == [
+        ("GET", "/api/session/legacy-session/prompt"),
+        ("POST", "/api/session/legacy-session/prompt"),
+    ]
+    assert "backend_identity" in sync._read_authentication_setups()[key]
+
+
+def test_authentication_setup_retry_cleans_the_old_owner_then_uses_the_requested_backend(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    backend_name = "living-room"
+
+    class Backend:
+        def __init__(self, url, key, session_id):
+            self.settings = {
+                "unshackle_mode": "remote",
+                "unshackle_url": url,
+                "unshackle_api_key": key,
+            }
+            self.session_id = session_id
+            self.calls = []
+
+        def services(self):
+            return SERVICES
+
+        def call(self, method, path, **kwargs):
+            self.calls.append((method, path, kwargs))
+            return {"session_id": self.session_id} if method == "POST" else {"status": "ok"}
+
+    original = Backend("https://original.invalid", "o" * 32, "original-session")
+    sync.BACKENDS[backend_name] = original
+    sync.start_authentication_setup("RTLP", backend_name)
+    key = f"RTLP@{backend_name}"
+    session = sync._read_authentication_setups()[key]
+    sync._write_authentication_setups({key: {**session, "error": True}})
+
+    replacement = Backend("https://replacement.invalid", "r" * 32, "replacement-session")
+    sync.BACKENDS[backend_name] = replacement
+    sync.BACKENDS["restored-owner"] = original
+
+    assert sync.start_authentication_setup("RTLP", backend_name) == {
+        "service": "RTLP",
+        "backend": backend_name,
+        "state": "authenticating",
+    }
+    assert [call[:2] for call in original.calls] == [
+        ("POST", "/api/session/create"),
+        ("DELETE", "/api/session/original-session"),
+    ]
+    assert [call[:2] for call in replacement.calls] == [("POST", "/api/session/create")]
+    assert sync._read_authentication_setups()[key]["session_id"] == "replacement-session"
+
+
+def test_authentication_setup_stable_owner_identity_survives_api_key_rotation(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    backend_name = "living-room"
+
+    class Backend:
+        def __init__(self, key, session_id="session-one"):
+            self.settings = {
+                "unshackle_mode": "remote",
+                "unshackle_url": "https://unchanged.invalid",
+                "unshackle_api_key": key,
+            }
+            self.session_id = session_id
+            self.calls = []
+
+        def services(self):
+            return SERVICES
+
+        def call(self, method, path, **kwargs):
+            self.calls.append((method, path, kwargs))
+            if method == "POST" and path == "/api/session/create":
+                return {"session_id": self.session_id}
+            if method == "GET":
+                return {"authentication": {"state": "authenticating", "method": "pairing"}}
+            return {"status": "ok"}
+
+    initial = Backend("o" * 32)
+    sync.BACKENDS[backend_name] = initial
+    sync.start_authentication_setup("RTLP", backend_name)
+    rotated = Backend("n" * 32)
+    assert sync._authentication_backend_identity(initial) == sync._authentication_backend_identity(rotated)
+    sync.BACKENDS[backend_name] = rotated
+
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": backend_name, "state": "authenticating"}
+    ]
+    assert sync.answer_authentication_setup("RTLP", "response", backend_name) == {"status": "accepted"}
+    assert sync.cancel_authentication_setup("RTLP", backend_name) == {
+        "service": "RTLP",
+        "backend": backend_name,
+        "state": "cancelled",
+    }
+    assert [call[:2] for call in rotated.calls] == [
+        ("GET", "/api/session/session-one/prompt"),
+        ("POST", "/api/session/session-one/prompt"),
+        ("DELETE", "/api/session/session-one"),
+    ]
+    remote_with_command = Backend("n" * 32)
+    remote_with_command.settings["unshackle_command"] = "unused-command"
+    remote_at_other_url = Backend("n" * 32)
+    remote_at_other_url.settings["unshackle_url"] = "https://other.invalid"
+    assert sync._authentication_backend_identity(rotated) == sync._authentication_backend_identity(remote_with_command)
+    assert sync._authentication_backend_identity(rotated) != sync._authentication_backend_identity(remote_at_other_url)
+
+    local_a = type(
+        "Local",
+        (),
+        {"settings": {"unshackle_mode": "local", "unshackle_command": "serve-a", "unshackle_url": "unused-a"}},
+    )()
+    local_same_command = type(
+        "Local",
+        (),
+        {"settings": {"unshackle_mode": "local", "unshackle_command": "serve-a", "unshackle_url": "unused-b"}},
+    )()
+    local_other_command = type(
+        "Local",
+        (),
+        {"settings": {"unshackle_mode": "local", "unshackle_command": "serve-b", "unshackle_url": "unused-a"}},
+    )()
+    assert sync._authentication_backend_identity(local_a) == sync._authentication_backend_identity(local_same_command)
+    assert sync._authentication_backend_identity(local_a) != sync._authentication_backend_identity(local_other_command)
+
+
+def test_cancel_and_retry_serialize_orphaning_before_replacement_sign_in(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    backend_name = "living-room"
+    delete_started = threading.Event()
+    release_delete = threading.Event()
+    replacement_started = threading.Event()
+    results = []
+    errors = []
+
+    class Original:
+        settings = {
+            "unshackle_mode": "remote",
+            "unshackle_url": "https://original.invalid",
+            "unshackle_api_key": "o" * 32,
+        }
+
+        def services(self):
+            return SERVICES
+
+        def call(self, method, path, **kwargs):
+            if method == "POST":
+                return {"session_id": "original-session"}
+            delete_started.set()
+            assert release_delete.wait(2)
+            unavailable = sync.UnshackleError("temporarily unavailable")
+            unavailable.status = 503
+            raise unavailable
+
+    class Replacement:
+        settings = {
+            "unshackle_mode": "remote",
+            "unshackle_url": "https://replacement.invalid",
+            "unshackle_api_key": "r" * 32,
+        }
+
+        def services(self):
+            return SERVICES
+
+        def call(self, method, path, **kwargs):
+            assert method == "POST"
+            replacement_started.set()
+            return {"session_id": "replacement-session"}
+
+    original = Original()
+    sync.BACKENDS[backend_name] = original
+    sync.start_authentication_setup("RTLP", backend_name)
+    sync.BACKENDS[backend_name] = Replacement()
+    sync.BACKENDS["restored-owner"] = original
+
+    def run(operation):
+        try:
+            results.append(operation())
+        except BaseException as error:
+            errors.append(error)
+
+    cancel = threading.Thread(target=run, args=(lambda: sync.cancel_authentication_setup("RTLP", backend_name),))
+    retry = threading.Thread(target=run, args=(lambda: sync.start_authentication_setup("RTLP", backend_name),))
+    cancel.start()
+    assert delete_started.wait(1)
+    retry.start()
+    assert not replacement_started.wait(0.1)
+    release_delete.set()
+    cancel.join(2)
+    retry.join(2)
+
+    assert errors == []
+    assert replacement_started.is_set()
+    assert {result["state"] for result in results} == {"cancelled", "authenticating"}
+    assert any(result.get("cleanup_pending") is True for result in results)
+    key = f"RTLP@{backend_name}"
+    assert sync._read_authentication_setups()[key]["session_id"] == "replacement-session"
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "original-session"
+
+
+def test_authentication_checkpoint_rejects_malformed_active_and_cleanup_records(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    valid_active = {"service": "RTLP", "backend": "", "session_id": "active-session"}
+    valid_cleanup = {
+        "service": "RTLP",
+        "backend": "living-room",
+        "session_id": "cleanup-session",
+        "backend_identity": "a" * 64,
+    }
+    sync.AUTHENTICATION_SESSIONS_FILE.write_text(
+        json.dumps(
+            {
+                "RTLP": valid_active,
+                "SBS": {**valid_active, "service": "SBS", "backend_identity": "not-a-fingerprint"},
+                sync.AUTHENTICATION_CLEANUPS_KEY: {
+                    "b" * 32: valid_cleanup,
+                    "bad/key": valid_cleanup,
+                    "c" * 32: "not a record",
+                    "d" * 32: {**valid_cleanup, "session_id": "bad/session"},
+                },
+            }
+        )
+    )
+
+    assert sync._read_authentication_setups() == {"RTLP": valid_active}
+    assert sync._read_authentication_cleanups() == {"b" * 32: valid_cleanup}
+
+    sync.AUTHENTICATION_SESSIONS_FILE.write_text(
+        json.dumps({"RTLP": valid_active, sync.AUTHENTICATION_CLEANUPS_KEY: []})
+    )
+    assert sync._read_authentication_setups() == {"RTLP": valid_active}
+    assert sync._read_authentication_cleanups() == {}
+
+
+@pytest.mark.parametrize("session_id", ["bad/session", "bad?session", "неверно"])
+def test_authentication_setup_rejects_session_ids_that_cannot_be_restored(tmp_path, monkeypatch, session_id):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"session_id": session_id})
+
+    with pytest.raises(sync.UnshackleError, match="did not create"):
+        sync.start_authentication_setup("RTLP")
+
+    assert sync._read_authentication_setups() == {}
+
+
+def test_authentication_setup_migrates_the_previous_backend_fingerprint(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+
+    class Backend:
+        settings = {
+            "unshackle_mode": "remote",
+            "unshackle_url": "https://living-room.invalid/",
+            "unshackle_api_key": "old-key",
+            "unshackle_command": "unused",
+        }
+
+        def call(self, method, path, **kwargs):
+            assert (method, path) == ("GET", "/api/session/legacy-session/prompt")
+            return {}
+
+    backend = Backend()
+    sync.BACKENDS["living-room"] = backend
+    legacy_material = sync.json.dumps(
+        [
+            "legacy-session",
+            "remote",
+            "https://living-room.invalid",
+            "old-key",
+            "unused",
+        ],
+        separators=(",", ":"),
+    )
+    legacy_identity = sync.hashlib.sha256(legacy_material.encode()).hexdigest()
+    key = "RTLP@living-room"
+    sync._write_authentication_setups(
+        {
+            key: {
+                "service": "RTLP",
+                "backend": "living-room",
+                "session_id": "legacy-session",
+                "backend_identity": legacy_identity,
+            }
+        }
+    )
+
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": "living-room", "state": "authenticating"}
+    ]
+    assert sync._read_authentication_setups()[key][
+        "backend_identity"
+    ] == sync._authentication_backend_identity(backend)
+
+
+def test_authentication_setup_proves_previous_fingerprint_after_key_rotation(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+    calls = []
+
+    class Backend:
+        settings = {
+            "unshackle_mode": "remote",
+            "unshackle_url": "https://living-room.invalid/",
+            "unshackle_api_key": "new-key",
+            "unshackle_command": "unused",
+        }
+
+        def call(self, method, path, **kwargs):
+            calls.append((method, path))
+            return {}
+
+    backend = Backend()
+    sync.BACKENDS["living-room"] = backend
+    legacy_material = sync.json.dumps(
+        [
+            "legacy-session",
+            "remote",
+            "https://living-room.invalid",
+            "old-key",
+            "unused",
+        ],
+        separators=(",", ":"),
+    )
+    key = "RTLP@living-room"
+    sync._write_authentication_setups(
+        {
+            key: {
+                "service": "RTLP",
+                "backend": "living-room",
+                "session_id": "legacy-session",
+                "backend_identity": sync.hashlib.sha256(
+                    legacy_material.encode()
+                ).hexdigest(),
+            }
+        }
+    )
+
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": "living-room", "state": "authenticating"}
+    ]
+    assert calls == [("GET", "/api/session/legacy-session/prompt")]
+    assert sync._read_authentication_setups()[key][
+        "backend_identity"
+    ] == sync._authentication_backend_identity(backend)
+
+
+def test_authentication_cleanup_proves_previous_fingerprint_after_key_rotation(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+    calls = []
+
+    class Backend:
+        settings = {
+            "unshackle_mode": "remote",
+            "unshackle_url": "https://living-room.invalid/",
+            "unshackle_api_key": "new-key",
+            "unshackle_command": "unused",
+        }
+
+        def call(self, method, path, **kwargs):
+            calls.append((method, path))
+            return {}
+
+    backend = Backend()
+    sync.BACKENDS["living-room"] = backend
+    legacy_material = sync.json.dumps(
+        [
+            "legacy-session",
+            "remote",
+            "https://living-room.invalid",
+            "old-key",
+            "unused",
+        ],
+        separators=(",", ":"),
+    )
+    sync._write_authentication_checkpoint(
+        {},
+        {
+            "a" * 32: {
+                "service": "RTLP",
+                "backend": "living-room",
+                "session_id": "legacy-session",
+                "backend_identity": sync.hashlib.sha256(
+                    legacy_material.encode()
+                ).hexdigest(),
+            }
+        },
+    )
+
+    sync._retry_authentication_cleanups()
+
+    assert calls == [
+        ("GET", "/api/session/legacy-session/prompt"),
+        ("DELETE", "/api/session/legacy-session"),
+    ]
+    assert sync._read_authentication_cleanups() == {}
+
+
+def test_authentication_cleanup_retries_one_session_per_interval(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    calls = []
+    now = [100.0]
+    monkeypatch.setattr(sync.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(
+        sync.UNSHACKLE,
+        "call",
+        lambda method, path, **kwargs: calls.append((method, path)),
+    )
+    identity = sync._authentication_backend_identity(sync.UNSHACKLE)
+    cleanup = {
+        "service": "RTLP",
+        "backend": "",
+        "backend_identity": identity,
+    }
+    sync._write_authentication_checkpoint(
+        {},
+        {
+            "a" * 32: {**cleanup, "session_id": "session-one"},
+            "b" * 32: {**cleanup, "session_id": "session-two"},
+        },
+    )
+
+    sync._retry_authentication_cleanups()
+    assert calls == [("DELETE", "/api/session/session-one")]
+    assert len(sync._read_authentication_cleanups()) == 1
+
+    sync._retry_authentication_cleanups()
+    assert len(calls) == 1
+
+    now[0] += 30
+    sync._retry_authentication_cleanups()
+    assert calls[-1] == ("DELETE", "/api/session/session-two")
+    assert sync._read_authentication_cleanups() == {}
+
+
+def test_authentication_setup_with_an_unresolved_owner_can_be_retried(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "serve_params", lambda *args: {})
+
+    class Backend:
+        def __init__(self, url, session_id):
+            self.settings = {"unshackle_mode": "remote", "unshackle_url": url}
+            self.session_id = session_id
+
+        def call(self, method, path, **kwargs):
+            if path == "/api/session/create":
+                return {"session_id": self.session_id}
+            if path != f"/api/session/{self.session_id}/prompt":
+                missing = sync.UnshackleError("session is not on this server")
+                missing.status = 404
+                raise missing
+            return {}
+
+    sync.BACKENDS["living-room"] = Backend("https://old.invalid", "old-session")
+    sync.start_authentication_setup("RTLP", "living-room")
+    sync.BACKENDS["living-room"] = Backend("https://new.invalid", "new-session")
+
+    assert sync.authentication_setups() == [
+        {
+            "service": "RTLP",
+            "backend": "living-room",
+            "state": "error",
+            "failure": "application",
+        }
+    ]
+    assert sync._read_authentication_setups()["RTLP@living-room"]["error"] is True
+    assert sync.start_authentication_setup("RTLP", "living-room") == {
+        "service": "RTLP",
+        "backend": "living-room",
+        "state": "authenticating",
+    }
+    assert (
+        sync._read_authentication_setups()["RTLP@living-room"]["session_id"]
+        == "new-session"
+    )
+
+
+@pytest.mark.parametrize(
+    "terminal",
+    [
+        {"state": "timed_out", "method": "pairing"},
+        {"state": "authenticated", "method": "pairing"},
+    ],
+)
+def test_terminal_authentication_setup_with_an_unresolved_owner_can_be_retried(
+    tmp_path, monkeypatch, terminal
+):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "serve_params", lambda *args: {})
+
+    class Backend:
+        def __init__(self, url, session_id):
+            self.settings = {"unshackle_mode": "remote", "unshackle_url": url}
+            self.session_id = session_id
+
+        def call(self, method, path, **kwargs):
+            if path == "/api/session/create":
+                return {"session_id": self.session_id}
+            if path != f"/api/session/{self.session_id}/prompt":
+                missing = sync.UnshackleError("session is not on this server")
+                missing.status = 404
+                raise missing
+            return {}
+
+    key = "RTLP@living-room"
+    sync.BACKENDS["living-room"] = Backend("https://old.invalid", "old-session")
+    sync.start_authentication_setup("RTLP", "living-room")
+    session = sync._read_authentication_setups()[key]
+    sync._checkpoint_authentication_setup(
+        key,
+        {
+            **session,
+            "terminal": terminal,
+            "terminal_at": "2026-11-15T05:00:00+00:00",
+        },
+    )
+    sync.BACKENDS["living-room"] = Backend("https://new.invalid", "new-session")
+
+    assert sync.start_authentication_setup("RTLP", "living-room") == {
+        "service": "RTLP",
+        "backend": "living-room",
+        "state": "authenticating",
+    }
+    assert sync._read_authentication_setups()[key]["session_id"] == "new-session"
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "old-session"
+    assert sync.read_authentication_observations().get("living-room", {}).get("RTLP") is None
+
+
+def test_authenticated_terminal_setup_is_recorded_before_failed_cleanup_is_detached(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "serve_params", lambda *args: {})
+    calls = []
+
+    class Backend:
+        settings = {"unshackle_mode": "remote", "unshackle_url": "https://core.invalid"}
+
+        def call(self, method, path, **kwargs):
+            calls.append((method, path))
+            if path == "/api/session/create":
+                return {"session_id": "old-session"}
+            unavailable = sync.UnshackleError("temporarily unavailable")
+            unavailable.status = 503
+            raise unavailable
+
+    key = "RTLP@living-room"
+    sync.BACKENDS["living-room"] = Backend()
+    sync.start_authentication_setup("RTLP", "living-room")
+    session = sync._read_authentication_setups()[key]
+    sync._checkpoint_authentication_setup(
+        key,
+        {
+            **session,
+            "terminal": {"state": "authenticated", "method": "pairing"},
+            "terminal_at": "2026-11-15T05:00:00+00:00",
+        },
+    )
+
+    assert sync.start_authentication_setup("RTLP", "living-room") == {
+        "service": "RTLP",
+        "backend": "living-room",
+        "state": "authenticated",
+        "method": "pairing",
+    }
+    assert calls == [
+        ("POST", "/api/session/create"),
+        ("DELETE", "/api/session/old-session"),
+    ]
+    assert sync._read_authentication_setups() == {}
+    [cleanup] = sync._read_authentication_cleanups().values()
+    assert cleanup["session_id"] == "old-session"
+    assert sync.read_authentication_observations()["living-room"]["RTLP"]["authentication"] == {
+        "state": "authenticated",
+        "method": "pairing",
+    }
+
+
+def test_authentication_setup_only_serializes_network_calls_for_the_same_identity(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    main_started = threading.Event()
+    release_main = threading.Event()
+    vpn_finished = threading.Event()
+    errors = []
+
+    class Main:
+        def services(self):
+            return SERVICES
+
+        def call(self, method, path, **kwargs):
+            main_started.set()
+            assert release_main.wait(2)
+            return {"session_id": "main-session"}
+
+    class Vpn:
+        def services(self):
+            return SERVICES
+
+        def call(self, method, path, **kwargs):
+            return {"session_id": "vpn-session"}
+
+    monkeypatch.setattr(sync, "UNSHACKLE", Main())
+    sync.BACKENDS["vpn"] = Vpn()
+
+    def start_main():
+        try:
+            sync.start_authentication_setup("RTLP")
+        except BaseException as error:
+            errors.append(error)
+
+    def start_vpn():
+        try:
+            sync.start_authentication_setup("RTLP", "vpn")
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            vpn_finished.set()
+
+    main_thread = threading.Thread(target=start_main)
+    vpn_thread = threading.Thread(target=start_vpn)
+    main_thread.start()
+    assert main_started.wait(1)
+    vpn_thread.start()
+    try:
+        assert vpn_finished.wait(1)
+    finally:
+        release_main.set()
+        main_thread.join(2)
+        vpn_thread.join(2)
+
+    assert errors == []
+    assert set(sync._read_authentication_setups()) == {"RTLP", "RTLP@vpn"}
+
+
+def test_authentication_setup_serializes_duplicate_starts_per_identity(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    create_started = threading.Event()
+    release_create = threading.Event()
+    calls = []
+    results = []
+
+    def create(method, path, **kwargs):
+        calls.append((method, path))
+        create_started.set()
+        assert release_create.wait(2)
+        return {"session_id": "session-one"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", create)
+    threads = [threading.Thread(target=lambda: results.append(sync.start_authentication_setup("RTLP"))) for _ in range(2)]
+    threads[0].start()
+    assert create_started.wait(1)
+    threads[1].start()
+    release_create.set()
+    for thread in threads:
+        thread.join(2)
+
+    assert results == [
+        {"service": "RTLP", "backend": "", "state": "authenticating"},
+        {"service": "RTLP", "backend": "", "state": "authenticating"},
+    ]
+    assert calls == [("POST", "/api/session/create")]
+
+
+def test_authentication_setup_locks_do_not_retain_nonexistent_identities(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+
+    for number in range(20):
+        service = f"MISSING_{number}"
+        with pytest.raises(ValueError, match="No authentication session"):
+            sync.answer_authentication_setup(service, "response")
+        sync.cancel_authentication_setup(service)
+
+    assert sync.authentication_session_locks == {}
+
+
+def test_authentication_setup_lock_keeps_concurrent_waiters_serialized_until_the_last_exit(tmp_path, monkeypatch):
+    import time
+
+    sync = load(tmp_path, monkeypatch)
+    first_entered = threading.Event()
+    release_first = threading.Event()
+    second_entered = threading.Event()
+    release_second = threading.Event()
+    third_entered = threading.Event()
+
+    def hold_first():
+        with sync._authentication_setup_lock("shared"):
+            first_entered.set()
+            assert release_first.wait(2)
+
+    def hold_second():
+        with sync._authentication_setup_lock("shared"):
+            second_entered.set()
+            assert release_second.wait(2)
+
+    def enter_third():
+        with sync._authentication_setup_lock("shared"):
+            third_entered.set()
+
+    first = threading.Thread(target=hold_first)
+    second = threading.Thread(target=hold_second)
+    third = threading.Thread(target=enter_third)
+    first.start()
+    assert first_entered.wait(1)
+    second.start()
+    deadline = time.monotonic() + 1
+    users = 0
+    while time.monotonic() < deadline:
+        with sync.authentication_sessions_lock:
+            entry = sync.authentication_session_locks.get("shared")
+            users = entry[1] if isinstance(entry, tuple) else 0
+        if users == 2:
+            break
+        time.sleep(0.001)
+    try:
+        assert users == 2
+        release_first.set()
+        assert second_entered.wait(1)
+        third.start()
+        assert not third_entered.wait(0.1)
+        release_second.set()
+        assert third_entered.wait(1)
+    finally:
+        release_first.set()
+        release_second.set()
+        for thread in (first, second, third):
+            if thread.ident is not None:
+                thread.join(2)
+
+    assert sync.authentication_session_locks == {}
+
+
+def test_authentication_setup_releases_core_session_when_private_checkpoint_fails(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    calls = []
+
+    def call(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        return {"session_id": "session-one"} if method == "POST" else {"status": "ok"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", call)
+    monkeypatch.setattr(
+        sync,
+        "_write_authentication_checkpoint",
+        lambda sessions, cleanups: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    with pytest.raises(OSError, match="disk full"):
+        sync.start_authentication_setup("RTLP")
+
+    assert calls[-1] == ("DELETE", "/api/session/session-one", {"timeout": (2, 4)})
+
+
+def test_authentication_setup_retries_terminal_cleanup_before_recording_success(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        sync.UNSHACKLE,
+        "call",
+        lambda method, path, **kwargs: {"session_id": "session-one"},
+    )
+    sync.start_authentication_setup("RTLP")
+    cleanup_error = sync.UnshackleError("temporarily unavailable")
+    cleanup_error.status = 503
+
+    def blocked_cleanup(method, path, **kwargs):
+        if method == "DELETE":
+            raise cleanup_error
+        return {"status": "authenticated", "authentication": {"state": "authenticated", "method": "pairing"}}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", blocked_cleanup)
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": "", "state": "error", "failure": "application"}
+    ]
+    assert json.loads(sync.AUTHENTICATION_SESSIONS_FILE.read_text())["RTLP"]["session_id"] == "session-one"
+    assert sync.read_authentication_observations() == {}
+
+    monkeypatch.setattr(
+        sync.UNSHACKLE,
+        "call",
+        lambda method, path, **kwargs: {"status": "authenticated", "authentication": {"state": "authenticated", "method": "pairing"}},
+    )
+    assert sync.authentication_setups()[0]["state"] == "authenticated"
+    assert json.loads(sync.AUTHENTICATION_SESSIONS_FILE.read_text()) == {}
+    assert sync.read_authentication_observations()[""]["RTLP"]["state"] == "validated"
+
+    sync.record_authentication_observation(
+        "RTLP",
+        "",
+        "validated",
+        "2026-11-14T01:00:00+00:00",
+        authentication={"state": "authenticated", "method": "pairing"},
+    )
+    sync._write_authentication_setups({"RTLP": {"service": "RTLP", "backend": "", "session_id": "session-two"}})
+    missing = sync.UnshackleError("gone")
+    missing.status = 404
+    monkeypatch.setattr(
+        sync.UNSHACKLE,
+        "call",
+        lambda method, path, **kwargs: (_ for _ in ()).throw(missing),
+    )
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": "", "state": "error", "failure": "application"}
+    ]
+    assert sync._read_authentication_setups()["RTLP"] == {
+        "service": "RTLP",
+        "backend": "",
+        "session_id": "session-two",
+        "error": True,
+    }
+
+
+def test_authentication_setup_checkpoints_its_terminal_result_before_cleanup(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"session_id": "session-one"})
+    sync.start_authentication_setup("RTLP")
+    calls = []
+
+    def terminal(method, path, **kwargs):
+        calls.append((method, path))
+        if method == "GET":
+            return {"authentication": {"state": "authenticated", "method": "pairing"}}
+        return {"status": "ok"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", terminal)
+    monkeypatch.setattr(
+        sync,
+        "record_authentication_observation",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": "", "state": "error", "failure": "application"}
+    ]
+    checkpoint = sync._read_authentication_setups()["RTLP"]
+    assert checkpoint["terminal"] == {"state": "authenticated", "method": "pairing"}
+    assert calls == [("GET", "/api/session/session-one/prompt"), ("DELETE", "/api/session/session-one")]
+
+    sync = load(tmp_path, monkeypatch)
+    missing = sync.UnshackleError("gone")
+    missing.status = 404
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(missing))
+
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": "", "state": "authenticated", "method": "pairing"}
+    ]
+    assert sync._read_authentication_setups() == {}
+    assert sync.read_authentication_observations()[""]["RTLP"]["authentication"] == {
+        "state": "authenticated",
+        "method": "pairing",
+    }
+
+
+def test_authentication_setup_retry_replaces_a_retained_error_session(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    calls = []
+
+    def create(method, path, **kwargs):
+        calls.append((method, path))
+        return {"session_id": "session-one"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", create)
+    sync.start_authentication_setup("RTLP")
+    unavailable = sync.UnshackleError("temporarily unavailable")
+    unavailable.status = 503
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(unavailable))
+    assert sync.authentication_setups()[0]["state"] == "error"
+    assert sync._read_authentication_setups()["RTLP"]["error"] is True
+
+    def restart(method, path, **kwargs):
+        calls.append((method, path))
+        return {"session_id": "session-two"} if method == "POST" else {"status": "ok"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", restart)
+    sync.start_authentication_setup("RTLP")
+
+    assert calls[-2:] == [("DELETE", "/api/session/session-one"), ("POST", "/api/session/create")]
+    assert sync._read_authentication_setups()["RTLP"]["session_id"] == "session-two"
+
+
+@pytest.mark.parametrize("status", [404, 503])
+def test_authentication_setup_poll_returns_its_redacted_error_when_error_checkpointing_fails(
+    tmp_path, monkeypatch, status
+):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"session_id": "session-one"})
+    sync.start_authentication_setup("RTLP")
+    poll_error = sync.UnshackleError("provider details must not escape")
+    poll_error.status = status
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(poll_error))
+    if status == 404:
+        monkeypatch.setattr(
+            sync,
+            "record_authentication_observation",
+            lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk full")),
+        )
+    monkeypatch.setattr(
+        sync,
+        "_checkpoint_authentication_setup",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": "", "state": "error", "failure": "application"}
+    ]
+
+
+def test_authentication_setup_poll_does_not_hide_unexpected_checkpoint_failures(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"session_id": "session-one"})
+    sync.start_authentication_setup("RTLP")
+    unavailable = sync.UnshackleError("temporarily unavailable")
+    unavailable.status = 503
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(unavailable))
+    monkeypatch.setattr(
+        sync,
+        "_checkpoint_authentication_setup",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("unexpected")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected"):
+        sync.authentication_setups()
+
+
+def test_authentication_setup_does_not_rewrite_an_unchanged_fallback(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"session_id": "session-one"})
+    sync.start_authentication_setup("RTLP")
+    fallback = {
+        "state": "fallback",
+        "method": "pairing",
+        "next_method": "cookies",
+        "failure": "authentication_rejected",
+    }
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"authentication": fallback})
+    sync.authentication_setups()
+    writes = []
+    original_write = sync._write_authentication_setups
+    monkeypatch.setattr(
+        sync,
+        "_write_authentication_setups",
+        lambda sessions: writes.append(json.loads(json.dumps(sessions))) or original_write(sessions),
+    )
+
+    sync.authentication_setups()
+
+    assert writes == []
 
 
 def test_current_and_legacy_approval_payloads_share_the_transient_contract(tmp_path, monkeypatch):
@@ -4163,6 +5752,7 @@ def test_a_retry_follows_the_job_serve_never_confirmed_stopped_instead_of_downlo
         def say(self, text): pass
         def raw(self, data): pass
         def set_approval(self, approval): pass
+        def set_authentication(self, observation): pass
     run = Run()
     files = sync.run_job_retrying({"output_dir": "/downloads/x"}, run, sleep=lambda s: None)
     assert started == ["/downloads/x"] and files == ["/downloads/x/S01E01.mkv"]

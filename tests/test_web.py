@@ -177,6 +177,60 @@ def test_maintenance_only_runs_serve_actions_and_jobs_are_checked(tmp_path, monk
     assert calls == [("POST", "/api/maintenance/clear-temp"), ("DELETE", "0f1e2d3c-aaaa-bbbb")]
 
 
+def test_authentication_setup_routes_start_answer_and_cancel(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+
+    web = reloaded_web(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "start_authentication_setup",
+        lambda service, backend="": calls.append(("start", service, backend))
+        or {"service": service, "backend": backend, "state": "authenticating"},
+    )
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "answer_authentication_setup",
+        lambda service, response, backend="": calls.append(("answer", service, backend, response))
+        or {"status": "accepted"},
+    )
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "cancel_authentication_setup",
+        lambda service, backend="": calls.append(("cancel", service, backend))
+        or {"service": service, "backend": backend, "state": "cancelled"},
+    )
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            headers = {"X-Unshackle": "1"}
+            started = await client.post(
+                "/api/unshackle/authentication/RTLP",
+                headers=headers,
+                json={"backend": "vpn"},
+            )
+            answered = await client.post(
+                "/api/unshackle/authentication/RTLP/input",
+                headers=headers,
+                json={"backend": "vpn", "response": "123456"},
+            )
+            cancelled = await client.delete(
+                "/api/unshackle/authentication/RTLP",
+                headers=headers,
+                json={"backend": "vpn"},
+            )
+            return started.status, answered.status, cancelled.status
+
+    assert asyncio.run(go()) == (200, 200, 200)
+    assert calls == [
+        ("start", "RTLP", "vpn"),
+        ("answer", "RTLP", "vpn", "123456"),
+        ("cancel", "RTLP", "vpn"),
+    ]
+
+
 def test_authentication_status_uses_only_classified_run_evidence(tmp_path, monkeypatch):
     web = reloaded_web(tmp_path, monkeypatch)
     services = [
@@ -313,6 +367,50 @@ def test_authentication_status_orders_evidence_by_observation_time(tmp_path, mon
         "validated_at": "2026-11-14T02:00:00+00:00",
         "observed_at": "2026-11-14T02:00:00+00:00",
         "needs_user_action": False,
+    }
+
+
+def test_authentication_status_omits_lifecycle_older_than_run_evidence(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.sonarr_sync.write_atomic(
+        web.sonarr_sync.AUTHENTICATION_FILE,
+        json.dumps(
+            {
+                "": {
+                    "PAIRED": {
+                        "state": "validated",
+                        "observed_at": "2026-11-14T01:00:00+00:00",
+                        "validated_at": "2026-11-14T01:00:00+00:00",
+                        "authentication": {"state": "authenticated", "method": "pairing"},
+                        "fallback": {
+                            "state": "fallback",
+                            "method": "pairing",
+                            "next_method": "cookies",
+                            "failure": "authentication_rejected",
+                        },
+                    }
+                }
+            }
+        ),
+    )
+
+    [status] = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T02:00:00+00:00",
+                "auth_failure": True,
+            }
+        ],
+        [{"tag": "PAIRED", "auth_methods": ["pairing", "cookies"]}],
+    ).values()
+
+    assert status == {
+        "state": "needs_user_action",
+        "validated_at": "2026-11-14T01:00:00+00:00",
+        "observed_at": "2026-11-14T02:00:00+00:00",
+        "needs_user_action": True,
     }
 
 
@@ -453,6 +551,16 @@ def test_authentication_status_refresh_skips_full_diagnostics(tmp_path, monkeypa
     web = reloaded_web(tmp_path, monkeypatch)
     web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
     checked = []
+    monkeypatch.setitem(
+        web.sonarr_sync.BACKENDS,
+        "vpn",
+        SimpleNamespace(name="vpn", services=lambda: [{"tag": "PAIRED", "auth_methods": ["pairing"]}]),
+    )
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
     monkeypatch.setattr(
         web,
         "unshackle_health",
@@ -460,12 +568,206 @@ def test_authentication_status_refresh_skips_full_diagnostics(tmp_path, monkeypa
     )
     monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: [{"tag": "PAIRED", "auth_methods": ["pairing"]}])
     monkeypatch.setattr(web, "run_cards", lambda: [])
+    monkeypatch.setattr(
+        web.sonarr_sync,
+        "authentication_setups",
+        lambda: [{"service": "PAIRED", "backend": "", "state": "waiting", "method": "pairing"}],
+    )
 
     payload = json.loads(asyncio.run(web.status(SimpleNamespace(query={"auth": "1"}))).text)
 
     assert "authentication" in payload
+    assert payload["authentication_methods"] == {"PAIRED@vpn": ["pairing"]}
+    assert payload["authentication"]["PAIRED@vpn"]["backend"] == "vpn"
+    assert payload["authentication_setups"] == [
+        {"service": "PAIRED", "backend": "", "state": "waiting", "method": "pairing"}
+    ]
     assert payload["unshackle"]["queue"] == {"downloading": 1}
     assert checked == [(False, True)]
+
+
+def test_authentication_services_uses_the_selected_backends_own_authentication_contract(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "url": "https://main.invalid", "auth_methods": ["pairing"]}
+    vpn = {"tag": "PAIRED", "url": "https://vpn.invalid", "auth_methods": ["cookies"]}
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=lambda: [vpn]))
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+
+    services = web.authentication_services([main])
+
+    assert services == [{**vpn, "backend": "vpn"}]
+    assert web.authentication_methods(services) == {"PAIRED@vpn": ["cookies"]}
+
+
+def test_selected_anonymous_backend_does_not_reclassify_main_authentication_failure(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "auth_methods": ["pairing"]}
+    vpn = {"tag": "PAIRED", "auth_methods": []}
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=lambda: [vpn]))
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+    services = web.authentication_services([main])
+
+    status = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T05:00:00+00:00",
+                "auth_failure": True,
+            }
+        ],
+        services,
+    )
+
+    assert web.authentication_methods(services) == {"PAIRED@vpn": []}
+    assert status["PAIRED"] == {
+        "state": "needs_user_action",
+        "validated_at": None,
+        "observed_at": "2026-11-14T05:00:00+00:00",
+        "needs_user_action": True,
+    }
+    assert status["PAIRED@vpn"] == {
+        "state": "anonymous",
+        "validated_at": None,
+        "observed_at": None,
+        "needs_user_action": False,
+        "service": "PAIRED",
+        "backend": "vpn",
+    }
+
+
+def test_selected_backend_keeps_main_success_contract_without_duplicating_method_rows(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "auth_methods": ["pairing"]}
+    vpn = {"tag": "PAIRED", "auth_methods": ["cookies"]}
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=lambda: [vpn]))
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+    selected = web.authentication_services([main])
+
+    status = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": "downloaded",
+                "ended": "2026-11-14T05:00:00+00:00",
+            }
+        ],
+        selected,
+        [main],
+    )
+
+    assert web.authentication_methods(selected) == {"PAIRED@vpn": ["cookies"]}
+    assert status == {
+        "PAIRED": {
+            "state": "validated",
+            "validated_at": "2026-11-14T05:00:00+00:00",
+            "observed_at": "2026-11-14T05:00:00+00:00",
+            "needs_user_action": False,
+        },
+        "PAIRED@vpn": {
+            "state": "unknown",
+            "validated_at": None,
+            "observed_at": None,
+            "needs_user_action": None,
+            "service": "PAIRED",
+            "backend": "vpn",
+        },
+    }
+
+
+def test_authentication_services_preserves_selected_backend_when_its_inventory_is_unavailable(
+    tmp_path, monkeypatch
+):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "url": "https://main.invalid", "auth_methods": ["pairing"]}
+    unavailable = web.UnshackleError("temporarily unavailable")
+    monkeypatch.setitem(
+        web.sonarr_sync.BACKENDS,
+        "vpn",
+        SimpleNamespace(services=lambda: (_ for _ in ()).throw(unavailable)),
+    )
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+
+    services = web.authentication_services([main])
+
+    assert services == [{"tag": "PAIRED", "backend": "vpn"}]
+    assert web.authentication_methods(services) == {"PAIRED@vpn": []}
+
+
+def test_authentication_services_keeps_selected_backend_unknown_when_inventory_omits_the_service(
+    tmp_path, monkeypatch
+):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "url": "https://main.invalid", "auth_methods": ["pairing"]}
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=lambda: []))
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+
+    assert web.authentication_services([main]) == [{"tag": "PAIRED", "backend": "vpn"}]
+
+
+def test_authentication_state_and_status_resolve_selected_backend_inventory_off_the_event_loop(
+    tmp_path, monkeypatch
+):
+    import threading
+
+    web = reloaded_web(tmp_path, monkeypatch)
+    main_thread = threading.get_ident()
+    inventory_threads = []
+    main = {"tag": "PAIRED", "url": "https://main.invalid", "auth_methods": ["pairing"]}
+    vpn = {"tag": "PAIRED", "url": "https://vpn.invalid", "auth_methods": ["cookies"]}
+
+    def selected_services():
+        inventory_threads.append(threading.get_ident())
+        return [vpn]
+
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=selected_services))
+    monkeypatch.setattr(web.sonarr_sync, "all_services", lambda: [main])
+    monkeypatch.setattr(web.sonarr_sync, "authentication_setups", lambda: [])
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {
+            "series": {},
+            "settings": {},
+            "service_defaults": {"PAIRED": {"backend": "vpn"}},
+        },
+    )
+    monkeypatch.setattr(web.UNSHACKLE, "cdm_config", lambda: {})
+    monkeypatch.setattr(web, "sonarr_series", lambda: [])
+    monkeypatch.setattr(web, "sonarrs_of_series", lambda ids: ({}, []))
+    monkeypatch.setattr(web, "update_info", lambda: None)
+    monkeypatch.setattr(web, "dl_options", lambda: [])
+    monkeypatch.setattr(web, "backups_info", lambda: {})
+    monkeypatch.setattr(web, "instances_of_series", lambda: {})
+    monkeypatch.setattr(web, "public_config", lambda config: {})
+    monkeypatch.setattr(web, "unshackle_health", lambda full=False, jobs=False: {"ok": True})
+
+    state = json.loads(asyncio.run(web.state(None)).text)
+    status = json.loads(asyncio.run(web.status(SimpleNamespace(query={"auth": "1"}))).text)
+
+    assert inventory_threads and all(thread != main_thread for thread in inventory_threads)
+    assert state["authentication_methods"] == {"PAIRED@vpn": ["cookies"]}
+    assert status["authentication_methods"] == {"PAIRED@vpn": ["cookies"]}
 
 
 def test_lightweight_authentication_refresh_repaints_visible_status():
@@ -527,6 +829,7 @@ const nodes = {{
 }};
 const box = {{
   S: {{ authentication: {{ PAIRED: {{ state: "needs_user_action", service: "PAIRED" }} }}, config: {{ settings: {{}} }} }},
+  document: {{ activeElement: null }},
   $: (selector) => nodes[selector],
   el: (tag, props = {{}}, ...children) => ({{ tag, ...props, children }}),
   svcName: (name) => name,
@@ -549,6 +852,378 @@ console.log(JSON.stringify(texts));
 
     assert done.returncode == 0, done.stderr
     assert "Service access" in json.loads(done.stdout)
+
+
+AUTHENTICATION_UI_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const root = process.argv[1], scenario = JSON.parse(process.argv[2]);
+const read = (name) => fs.readFileSync(root + "/js/" + name, "utf8");
+const pick = (source, pattern) => {
+  const match = source.match(pattern);
+  if (!match) throw new Error("Missing page function: " + pattern);
+  return match[0];
+};
+const settings = read("settings-services.js"), schedule = read("schedule.js");
+const source = [
+  pick(settings, /^const AUTH_METHOD_LABELS = .*?;$/m),
+  pick(settings, /^const AUTH_FAILURE_LABELS = .*?;$/m),
+  pick(settings, /^function authenticationLabel\(.*?^\}/ms),
+  pick(settings, /^async function startServiceAuthentication\(.*?^\}/ms),
+  pick(settings, /^async function cancelServiceAuthentication\(.*?^\}/ms),
+  pick(settings, /^function renderUnshackleStatus\(.*?^\}/ms),
+  pick(schedule, /^async function refreshBusy\(.*?^\}/ms),
+  pick(schedule, /^async function refreshHealth\(.*?^\}/ms),
+  pick(schedule, /^function renderHealth\(.*?^\}/ms),
+].join("\n");
+
+const document = { hidden: false, activeElement: null };
+const contains = (rootNode, wanted) => rootNode === wanted || (rootNode.children || []).some((child) => contains(child, wanted));
+class FakeNode {
+  constructor(tag = "div", props = {}, children = []) {
+    this.tag = tag;
+    this.children = children;
+    this.dataset = {};
+    this.hidden = false;
+    this.value = "";
+    this.classList = { toggle() {} };
+    Object.assign(this, props);
+  }
+  replaceChildren(...children) {
+    if (document.activeElement && contains(this, document.activeElement)) document.activeElement = null;
+    this.children = children;
+  }
+  focus() { document.activeElement = this; }
+}
+const nodes = {
+  "#ux-run": new FakeNode(),
+  "#u-status": new FakeNode(),
+  "#nav-busy": new FakeNode(),
+};
+const healthButtons = Object.fromEntries(["unshackle", "sonarr"].map((name) => {
+  const dot = new FakeNode();
+  return [name, { querySelector: () => dot, title: "", ariaLabel: "" }];
+}));
+document.querySelector = (selector) => healthButtons[selector.match(/^\[data-health=(.+)\]$/)?.[1]];
+const find = (rootNode, predicate) => {
+  if (predicate(rootNode)) return rootNode;
+  for (const child of rootNode.children || []) {
+    const match = find(child, predicate);
+    if (match) return match;
+  }
+  return null;
+};
+const findAll = (rootNode, predicate, matches = []) => {
+  if (predicate(rootNode)) matches.push(rootNode);
+  for (const child of rootNode.children || []) findAll(child, predicate, matches);
+  return matches;
+};
+const setup = { service: "PAIRED", backend: "", state: "waiting", method: "pairing", prompt: "Approval response" };
+const box = {
+  S: {
+    authentication: { PAIRED: { service: "PAIRED", state: "needs_user_action" } },
+    authenticationMethods: { PAIRED: ["pairing"] },
+    authenticationLive: [],
+    authenticationSetups: [setup],
+    config: { settings: {} },
+  },
+  document,
+  $: (selector) => nodes[selector],
+  el: (tag, props = {}, ...children) => new FakeNode(tag, props, children),
+  svcName: (name) => name,
+  ago: () => "now",
+  currentTab: "settings",
+  settingsSec: "unshackle",
+  unshackleDetails: { ok: false, mode: "remote" },
+  showApprovals() {},
+  setTimeout() {},
+  clearTimeout() {},
+  healthTimer: null,
+  toast() {},
+  renderSonarrState() {},
+  renderUnshackleState() {},
+  paintServers() {},
+  paintSonarrs() {},
+  api: async () => ({ running: 0, queued: 0, authentication: [], authentication_setups: [setup] }),
+};
+vm.createContext(box);
+vm.runInContext(source, box);
+
+const focusPrompt = () => {
+  box.renderUnshackleStatus(box.unshackleDetails);
+  const input = find(nodes["#u-status"], (node) => node.tag === "input");
+  input.value = "partly typed";
+  input.focus();
+  return input;
+};
+const promptState = (input) => {
+  const current = find(nodes["#u-status"], (node) => node.tag === "input");
+  return { sameNode: current === input, value: current?.value, focused: document.activeElement === input };
+};
+
+(async () => {
+  if (scenario === "unchanged_prompt_refresh") {
+    const input = focusPrompt();
+    await box.refreshBusy();
+    console.log(JSON.stringify(promptState(input)));
+  }
+  if (scenario === "unrelated_service_refresh") {
+    const input = focusPrompt();
+    box.api = async () => ({
+      running: 0,
+      queued: 0,
+      authentication: [{ service: "OTHER", backend: "", observation: { state: "waiting", method: "pairing" } }],
+      authentication_setups: [setup],
+    });
+    await box.refreshBusy();
+    console.log(JSON.stringify(promptState(input)));
+  }
+  if (scenario === "health_refresh") {
+    const input = focusPrompt();
+    box.api = async () => ({
+      authentication: {
+        PAIRED: { service: "PAIRED", state: "needs_user_action" },
+        OTHER: { service: "OTHER", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+      },
+      authentication_methods: { PAIRED: ["pairing"], OTHER: ["cookies"] },
+      authentication_setups: [setup],
+      unshackle: { ok: false },
+      sonarr: {},
+      servers: [],
+      sonarrs: [],
+    });
+    await box.refreshHealth();
+    console.log(JSON.stringify(promptState(input)));
+  }
+  if (scenario === "changed_and_terminal_prompt") {
+    const input = focusPrompt();
+    const responses = [
+      { ...setup, prompt: "Different question" },
+      { service: "PAIRED", backend: "", state: "cancelled", method: "pairing" },
+    ];
+    box.api = async () => ({ running: 0, queued: 0, authentication: [], authentication_setups: [responses.shift()] });
+    await box.refreshBusy();
+    const changed = find(nodes["#u-status"], (node) => node.tag === "input");
+    const changedState = { sameNode: changed === input, value: changed?.value, focused: document.activeElement === changed };
+    await box.refreshBusy();
+    console.log(JSON.stringify({ changed: changedState, terminalHasInput: !!find(nodes["#u-status"], (node) => node.tag === "input") }));
+  }
+  if (scenario === "classified_status") {
+    box.S.authenticationSetups = [];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const firstRow = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const needsAction = find(firstRow, (node) => node.tag === "small").textContent;
+    box.S.authentication.PAIRED = { service: "PAIRED", state: "validated", validated_at: "2026-11-15T00:00:00Z" };
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const secondRow = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const validated = find(secondRow, (node) => node.tag === "small").textContent;
+    console.log(JSON.stringify({ needsAction, validated }));
+  }
+  if (scenario === "selected_backend_actions") {
+    box.S.authentication = {
+      PAIRED: { service: "PAIRED", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+      "PAIRED@vpn": { service: "PAIRED", backend: "vpn", state: "needs_user_action" },
+      OPEN: { service: "OPEN", backend: "", state: "anonymous" },
+    };
+    box.S.authenticationMethods = { "PAIRED@vpn": [] };
+    box.S.authenticationSetups = [];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const rows = findAll(nodes["#u-status"], (node) => node.className === "st-job").map((row) => ({
+      name: find(row, (node) => node.tag === "span").textContent,
+      label: find(row, (node) => node.tag === "small").textContent,
+      controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
+    }));
+    console.log(JSON.stringify(rows));
+  }
+  if (scenario === "setup_without_status") {
+    box.S.authentication = {};
+    box.S.authenticationMethods = { "PAIRED@vpn": [] };
+    box.S.authenticationSetups = [{
+      service: "PAIRED", backend: "vpn", state: "waiting", method: "pairing", prompt: "Approval response",
+    }];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    let rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    const waiting = rows[0] ? {
+      name: find(rows[0], (node) => node.tag === "span").textContent,
+      label: find(rows[0], (node) => node.tag === "small").textContent,
+      prompt: find(rows[0], (node) => node.tag === "input")?.placeholder,
+      controls: findAll(rows[0], (node) => node.tag === "button").map((button) => button.textContent),
+    } : null;
+    const input = rows[0] ? find(rows[0], (node) => node.tag === "input") : null;
+    if (input) input.value = "temporary response";
+    box.S.authentication = { "PAIRED@vpn": { service: "PAIRED", backend: "vpn", state: "needs_user_action" } };
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const matchingStatusRows = findAll(nodes["#u-status"], (node) => node.className === "st-job").length;
+    box.S.authentication = {};
+    box.S.authenticationSetups = [{ service: "PAIRED", backend: "vpn", state: "cancelled", method: "pairing" }];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    const terminal = rows[0] ? {
+      label: find(rows[0], (node) => node.tag === "small").textContent,
+      hasInput: !!find(rows[0], (node) => node.tag === "input"),
+    } : null;
+    box.S.authenticationSetups = [];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const reloadedRows = findAll(nodes["#u-status"], (node) => node.className === "st-job").length;
+    console.log(JSON.stringify({ waiting, matchingStatusRows, terminal, reloadedRows }));
+  }
+  if (scenario === "setup_after_backend_change") {
+    box.S.authentication = {
+      PAIRED: { service: "PAIRED", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+    };
+    box.S.authenticationMethods = { "PAIRED@new": [] };
+    box.S.authenticationSetups = [{
+      service: "PAIRED", backend: "old", state: "waiting", method: "pairing", prompt: "Approval response",
+    }];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    let rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    const waiting = rows.map((row) => ({
+      name: find(row, (node) => node.tag === "span").textContent,
+      controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
+    }));
+    box.S.authenticationMethods = {};
+    box.S.authenticationSetups = [{ service: "PAIRED", backend: "old", state: "error", failure: "network" }];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    const errored = rows.map((row) => ({
+      name: find(row, (node) => node.tag === "span").textContent,
+      controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
+    }));
+    console.log(JSON.stringify({ waiting, errored }));
+  }
+  if (scenario === "cancelled_then_refreshed") {
+    box.api = async (path, options = {}) => {
+      if (options.method === "DELETE") return { service: "PAIRED", backend: "", state: "cancelled", method: "pairing" };
+      if (path === "/api/busy") return { running: 0, queued: 0, authentication: [], authentication_setups: [] };
+      throw new Error("Unexpected request: " + path);
+    };
+    await box.cancelServiceAuthentication("PAIRED", "");
+    let row = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const cancelled = find(row, (node) => node.tag === "small").textContent;
+    await box.refreshBusy();
+    row = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const refreshed = find(row, (node) => node.tag === "small").textContent;
+    console.log(JSON.stringify({ cancelled, refreshed }));
+  }
+  if (scenario === "retry_retained_error") {
+    box.S.authenticationSetups = [{ service: "PAIRED", backend: "", state: "error", failure: "network" }];
+    const requests = [];
+    box.api = async (_path, options = {}) => {
+      requests.push(options.method);
+      if (options.method === "POST") return { service: "PAIRED", backend: "", state: "authenticating" };
+      throw new Error("Unexpected request");
+    };
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const row = find(nodes["#u-status"], (node) => node.className === "st-job");
+    const buttons = findAll(row, (node) => node.tag === "button");
+    await buttons.find((button) => button.textContent === "Retry").onclick();
+    console.log(JSON.stringify({ controls: buttons.map((button) => button.textContent), requests }));
+  }
+})().catch((error) => { console.error(error); process.exit(1); });
+"""
+
+
+def run_authentication_ui(scenario):
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    result = subprocess.run(
+        ["node", "-e", AUTHENTICATION_UI_HARNESS, "--", str(static), json.dumps(scenario)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_unchanged_authentication_refresh_preserves_the_active_prompt():
+    assert run_authentication_ui("unchanged_prompt_refresh") == {
+        "sameNode": True,
+        "value": "partly typed",
+        "focused": True,
+    }
+
+
+def test_unrelated_authentication_refresh_preserves_the_active_prompt():
+    assert run_authentication_ui("unrelated_service_refresh") == {
+        "sameNode": True,
+        "value": "partly typed",
+        "focused": True,
+    }
+
+
+def test_health_refresh_preserves_the_active_prompt():
+    assert run_authentication_ui("health_refresh") == {
+        "sameNode": True,
+        "value": "partly typed",
+        "focused": True,
+    }
+
+
+def test_changed_or_terminal_prompt_state_replaces_the_active_input():
+    assert run_authentication_ui("changed_and_terminal_prompt") == {
+        "changed": {"sameNode": False, "value": "", "focused": False},
+        "terminalHasInput": False,
+    }
+
+
+def test_supported_methods_do_not_hide_classified_authentication_status():
+    assert run_authentication_ui("classified_status") == {
+        "needsAction": "Sign-in needed",
+        "validated": "Confirmed now",
+    }
+
+
+def test_only_the_selected_backend_authentication_row_is_actionable():
+    assert run_authentication_ui("selected_backend_actions") == [
+        {"name": "PAIRED", "label": "Confirmed now", "controls": []},
+        {"name": "PAIRED · vpn", "label": "Sign-in needed", "controls": ["Reauthenticate"]},
+        {"name": "OPEN", "label": "No login required", "controls": []},
+    ]
+
+
+def test_active_named_backend_setup_remains_visible_without_status_history():
+    assert run_authentication_ui("setup_without_status") == {
+        "waiting": {
+            "name": "PAIRED · vpn",
+            "label": "Waiting for pairing approval",
+            "prompt": "Approval response",
+            "controls": ["Submit", "Cancel"],
+        },
+        "matchingStatusRows": 1,
+        "terminal": {"label": "Sign-in cancelled", "hasInput": False},
+        "reloadedRows": 0,
+    }
+
+
+def test_existing_setup_controls_survive_backend_selection_changes():
+    assert run_authentication_ui("setup_after_backend_change") == {
+        "waiting": [
+            {"name": "PAIRED", "controls": []},
+            {"name": "PAIRED · old", "controls": ["Submit", "Cancel"]},
+        ],
+        "errored": [
+            {"name": "PAIRED", "controls": []},
+            {"name": "PAIRED · old", "controls": ["Cancel"]},
+        ],
+    }
+
+
+def test_cancelled_authentication_is_rendered_until_the_next_refresh():
+    assert run_authentication_ui("cancelled_then_refreshed") == {
+        "cancelled": "Sign-in cancelled",
+        "refreshed": "Sign-in needed",
+    }
+
+
+def test_retained_authentication_error_keeps_cancel_and_posts_retry_directly():
+    assert run_authentication_ui("retry_retained_error") == {
+        "controls": ["Retry", "Cancel"],
+        "requests": ["POST"],
+    }
 
 
 def test_stats_add_up_the_history(tmp_path, monkeypatch):
@@ -595,6 +1270,11 @@ const { fn, args } = JSON.parse(process.argv[2]);
 const code = {
   serviceEpisode: () => [pick(js("series.js"), /^const pad2 = .*$/m), pick(js("series.js"), /^function serviceEpisode\(.*?^\}/ms)],
   nextSyncAt: () => [pick(js("settings-services.js"), /^function nextSyncAt\(.*?^\}/ms)],
+  authenticationLabel: () => [
+    pick(js("settings-services.js"), /^const AUTH_METHOD_LABELS = .*?;$/m),
+    pick(js("settings-services.js"), /^const AUTH_FAILURE_LABELS = .*?;$/m),
+    pick(js("settings-services.js"), /^function authenticationLabel\(.*?^\}/ms),
+  ],
 }[fn]().join("\n");
 const box = { Intl, Date, Number, String };
 vm.createContext(box);
@@ -656,6 +1336,36 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
         assert given_local == server, zone  # given in the app's zone: the same instant
         page = run_page_function("nextSyncAt", now.isoformat(), every, zone)
         assert datetime.fromisoformat(page.replace("Z", "+00:00")) == server, zone
+
+
+@pytest.mark.parametrize(
+    ("observation", "label"),
+    [
+        ({"state": "ready", "available_methods": ["pairing", "cookies"]}, "Ready · pairing, cookies"),
+        ({"state": "session_expired", "method": "pairing"}, "Pairing session expired"),
+        ({"state": "renewing", "method": "pairing"}, "Renewing pairing session"),
+        (
+            {
+                "state": "fallback",
+                "method": "pairing",
+                "next_method": "cookies",
+                "failure": "authentication_rejected",
+            },
+            "Pairing rejected · trying cookies",
+        ),
+        (
+            {"state": "fallback", "method": "pairing", "next_method": "cookies", "failure": "network"},
+            "Pairing failed · network · trying cookies",
+        ),
+        ({"state": "waiting", "method": "pairing"}, "Waiting for pairing approval"),
+        ({"state": "authenticated", "method": "cookies"}, "Signed in with cookies"),
+        ({"state": "timed_out", "method": "pairing"}, "Pairing timed out"),
+        ({"state": "cancelled", "method": "pairing"}, "Sign-in cancelled"),
+        ({"state": "error", "method": "pairing", "failure": "network"}, "Sign-in failed · network"),
+    ],
+)
+def test_authentication_lifecycle_labels_are_fixed_and_redacted(observation, label):
+    assert run_page_function("authenticationLabel", observation) == label
 
 
 def test_the_page_script_parses(tmp_path):
@@ -1827,15 +2537,26 @@ def test_the_menu_counts_the_downloads_going_on(tmp_path, monkeypatch):
     monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "approvals", lambda: [
         {"run": "a", "service": "DSNP", "message": "Approve FIRST-CODE"}
     ])
-    monkeypatch.setattr(web.sonarr_sync, "waiting", {7: {}})
-    monkeypatch.setattr(web.UNSHACKLE, "approvals", lambda: [
-        {"service": "HMAX", "message": "Approve SECOND-CODE"}
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "authentications", lambda: [
+        {"run": "a", "service": "DSNP", "observation": {"state": "waiting", "method": "pairing"}}
     ])
+    monkeypatch.setattr(web.sonarr_sync, "waiting", {7: {}})
+    monkeypatch.setattr(web.UNSHACKLE, "logins", lambda: [
+        {
+            "service": "HMAX",
+            "approval": {"message": "Approve SECOND-CODE"},
+            "authentication": {"state": "waiting", "method": "pairing"},
+        }
+    ])
+    monkeypatch.setattr(web.sonarr_sync, "authentication_setups", lambda: [])
     r = asyncio.run(web.busy(None))
     assert json.loads(r.body) == {"running": 2, "queued": 1, "approvals": [
         {"run": "a", "service": "DSNP", "message": "Approve FIRST-CODE"},
         {"service": "HMAX", "message": "Approve SECOND-CODE"},
-    ]}
+    ], "authentication": [
+        {"run": "a", "service": "DSNP", "observation": {"state": "waiting", "method": "pairing"}},
+        {"service": "HMAX", "observation": {"state": "waiting", "method": "pairing"}},
+    ], "authentication_setups": []}
 
 
 def test_a_calendar_day_click_cycle_reaches_the_usual_number_of_episodes(tmp_path):
@@ -4477,6 +5198,67 @@ def test_remote_login_approvals_come_from_the_caller_owned_core_route(monkeypatc
 
     monkeypatch.setattr(backend, "call", lambda method, path, **kwargs: (_ for _ in ()).throw(UnshackleError("older core")))
     assert backend.approvals() == []
+
+
+def test_remote_login_authentication_is_redacted_and_strictly_allowlisted(monkeypatch, tmp_path):
+    from unshacklarr.backend import Unshackle
+
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_mode": "remote", "unshackle_url": "http://core.invalid"})
+    monkeypatch.setattr(
+        backend,
+        "call",
+        lambda method, path, **kwargs: {
+            "logins": [
+                {
+                    "id": "one",
+                    "service": "HMAX",
+                    "authentication": {
+                        "state": "fallback",
+                        "method": "pairing",
+                        "next_method": "cookies",
+                        "failure": "authentication_rejected",
+                    },
+                },
+                {
+                    "id": "two",
+                    "service": "AMZN",
+                    "authentication": {"state": "waiting", "method": "pairing", "provider_text": "do not retain"},
+                },
+            ]
+        },
+    )
+
+    assert backend.logins() == [
+        {
+            "id": "one",
+            "service": "HMAX",
+            "authentication": {
+                "state": "fallback",
+                "method": "pairing",
+                "next_method": "cookies",
+                "failure": "authentication_rejected",
+            },
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"state": "waiting", "method": "token"},
+        {"state": "provider_message", "method": "pairing"},
+        {"state": "error", "method": "pairing", "failure": "provider_text"},
+        {"state": "ready", "available_methods": ["pairing", "pairing"]},
+        {"state": "waiting", "method": "pairing", "message": "provider supplied"},
+        {"state": ["waiting"], "method": "pairing"},
+        {"state": "ready", "available_methods": [["pairing"]]},
+    ],
+)
+def test_authentication_observation_rejects_unknown_or_free_text_fields(value):
+    from unshacklarr.backend import authentication_observation
+
+    assert authentication_observation(value) is None
 
 
 def test_replace_anyway_holds_for_a_retry_and_an_episode_queued_again(monkeypatch, tmp_path):
