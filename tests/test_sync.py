@@ -1437,6 +1437,40 @@ def test_follow_job_excludes_raw_authentication_from_debug_logs(tmp_path, monkey
     assert all("RAW-AUTH-SECRET" not in trace and '"authentication"' not in trace for trace in traces)
 
 
+def test_authentication_setup_uses_the_control_titles_profile_and_proxy(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["service_defaults"] = {
+        "RTLP": {"options": {"--profile": "viewer", "--proxy": "au"}},
+    }
+    config["series"][111]["service_options"] = {}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    created = []
+
+    def create(method, path, **kwargs):
+        created.append((method, path, kwargs))
+        return {"session_id": "session-one", "status": "authenticating"}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "call", create)
+
+    sync.start_authentication_setup("RTLP")
+
+    assert created == [
+        (
+            "POST",
+            "/api/session/create",
+            {
+                "json": {
+                    "service": "RTLP",
+                    "title_id": "https://rtl/show",
+                    "profile": "viewer",
+                    "proxy": "au",
+                }
+            },
+        )
+    ]
+
+
 def test_authentication_setup_restores_after_reload_and_keeps_approval_transient(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     created = []
@@ -1455,7 +1489,7 @@ def test_authentication_setup_restores_after_reload_and_keeps_approval_transient
         (
             "POST",
             "/api/session/create",
-            {"json": {"service": "RTLP", "title_id": "https://rtl/show"}},
+            {"json": {"service": "RTLP", "title_id": "https://rtl/show", "movie": True}},
         )
     ]
     assert sync.AUTHENTICATION_SESSIONS_FILE.stat().st_mode & 0o777 == 0o600
@@ -1666,12 +1700,18 @@ def test_authentication_setup_only_serializes_network_calls_for_the_same_identit
     errors = []
 
     class Main:
+        def services(self):
+            return SERVICES
+
         def call(self, method, path, **kwargs):
             main_started.set()
             assert release_main.wait(2)
             return {"session_id": "main-session"}
 
     class Vpn:
+        def services(self):
+            return SERVICES
+
         def call(self, method, path, **kwargs):
             return {"session_id": "vpn-session"}
 

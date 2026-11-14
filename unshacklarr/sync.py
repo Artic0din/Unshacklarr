@@ -976,27 +976,28 @@ def _finish_authentication_setup(key: str, session: dict) -> dict:
     return _terminal_authentication_setup(session)
 
 
-def _authentication_setup_title(service: str) -> str:
-    series = read_file().get("series") or {}
+def _authentication_setup_control(service: str) -> tuple[dict, dict]:
+    config = read_file()
+    series = config.get("series") or {}
     for show in series.values() if isinstance(series, dict) else []:
         if not isinstance(show, dict):
             continue
-        candidates = [show, show.get("fallback")]
+        candidates = [show, fallback_show(show)]
         pages = show.get("season_pages")
         if isinstance(pages, dict):
-            candidates.extend(pages.values())
+            candidates.extend(season_page(show, season) for season in pages)
         for candidate in candidates:
-            if not isinstance(candidate, dict) or candidate.get("service", show.get("service")) != service:
+            if not isinstance(candidate, dict) or candidate.get("service") != service:
                 continue
             title = candidate.get("title") or candidate.get("url")
             if isinstance(title, str) and title.strip():
-                return title.strip()
+                return {**candidate, "title": title.strip()}, config
         if show.get("service") == service and show.get("programmes") is True:
             programme_map = show.get("programme_map") or {}
             if isinstance(programme_map, dict):
                 for title in programme_map.values():
                     if isinstance(title, str) and title.strip():
-                        return title.strip()
+                        return {**show, "title": title.strip()}, config
     raise ValueError(f"Configure a {service} series before signing in")
 
 
@@ -1023,11 +1024,11 @@ def start_authentication_setup(service: str, backend: str = "") -> dict:
                 if error.status != 404:
                     raise
             _remove_authentication_setup(key, session["session_id"])
-        title_id = _authentication_setup_title(service)
+        control, config = _authentication_setup_control(service)
         response = owner.call(
             "POST",
             "/api/session/create",
-            json={"service": service, "title_id": title_id},
+            json={"service": service, "title_id": control["title"], **serve_params(control, config)},
         )
         session_id = response.get("session_id") if isinstance(response, dict) else None
         if not _valid_authentication_session_id(session_id):
