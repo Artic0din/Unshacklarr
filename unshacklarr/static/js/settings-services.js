@@ -184,7 +184,7 @@ function renderUnshackleStatus(st) {
       : status.state === "validated" ? `Confirmed ${ago(status.validated_at)}` : "Not checked yet";
     const name = svcName(service) + (backend ? ` · ${backend}` : "");
     const controls = [];
-    if (setup && configured) {
+    if (setup) {
       if (["timed_out", "cancelled", "error"].includes(setup.state)) {
         controls.push(el("button", { className: "btn small", textContent: "Retry", onclick: () => startServiceAuthentication(service, backend) }));
       } else if (setup.prompt) {

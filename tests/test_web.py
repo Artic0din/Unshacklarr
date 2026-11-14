@@ -1066,6 +1066,30 @@ const promptState = (input) => {
     const reloadedRows = findAll(nodes["#u-status"], (node) => node.className === "st-job").length;
     console.log(JSON.stringify({ waiting, matchingStatusRows, terminal, reloadedRows }));
   }
+  if (scenario === "setup_after_backend_change") {
+    box.S.authentication = {
+      PAIRED: { service: "PAIRED", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+    };
+    box.S.authenticationMethods = { "PAIRED@new": [] };
+    box.S.authenticationSetups = [{
+      service: "PAIRED", backend: "old", state: "waiting", method: "pairing", prompt: "Approval response",
+    }];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    let rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    const waiting = rows.map((row) => ({
+      name: find(row, (node) => node.tag === "span").textContent,
+      controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
+    }));
+    box.S.authenticationMethods = {};
+    box.S.authenticationSetups = [{ service: "PAIRED", backend: "old", state: "error", failure: "network" }];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    const errored = rows.map((row) => ({
+      name: find(row, (node) => node.tag === "span").textContent,
+      controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
+    }));
+    console.log(JSON.stringify({ waiting, errored }));
+  }
   if (scenario === "cancelled_then_refreshed") {
     box.api = async (path, options = {}) => {
       if (options.method === "DELETE") return { service: "PAIRED", backend: "", state: "cancelled", method: "pairing" };
@@ -1172,6 +1196,19 @@ def test_active_named_backend_setup_remains_visible_without_status_history():
         "matchingStatusRows": 1,
         "terminal": {"label": "Sign-in cancelled", "hasInput": False},
         "reloadedRows": 0,
+    }
+
+
+def test_existing_setup_controls_survive_backend_selection_changes():
+    assert run_authentication_ui("setup_after_backend_change") == {
+        "waiting": [
+            {"name": "PAIRED", "controls": []},
+            {"name": "PAIRED · old", "controls": ["Submit", "Cancel"]},
+        ],
+        "errored": [
+            {"name": "PAIRED", "controls": []},
+            {"name": "PAIRED · old", "controls": ["Retry", "Cancel"]},
+        ],
     }
 
 
