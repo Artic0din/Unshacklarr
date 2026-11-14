@@ -991,6 +991,12 @@ def _authentication_setup_title(service: str) -> str:
             title = candidate.get("title") or candidate.get("url")
             if isinstance(title, str) and title.strip():
                 return title.strip()
+        if show.get("service") == service and show.get("programmes") is True:
+            programme_map = show.get("programme_map") or {}
+            if isinstance(programme_map, dict):
+                for title in programme_map.values():
+                    if isinstance(title, str) and title.strip():
+                        return title.strip()
     raise ValueError(f"Configure a {service} series before signing in")
 
 

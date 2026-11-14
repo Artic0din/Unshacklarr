@@ -603,6 +603,47 @@ def test_authentication_services_uses_the_selected_backends_own_authentication_c
     assert web.authentication_methods(services) == {"PAIRED@vpn": ["cookies"]}
 
 
+def test_selected_anonymous_backend_does_not_reclassify_main_authentication_failure(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "auth_methods": ["pairing"]}
+    vpn = {"tag": "PAIRED", "auth_methods": []}
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=lambda: [vpn]))
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+    services = web.authentication_services([main])
+
+    status = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": "failed",
+                "ended": "2026-11-14T05:00:00+00:00",
+                "auth_failure": True,
+            }
+        ],
+        services,
+    )
+
+    assert web.authentication_methods(services) == {"PAIRED@vpn": []}
+    assert status["PAIRED"] == {
+        "state": "needs_user_action",
+        "validated_at": None,
+        "observed_at": "2026-11-14T05:00:00+00:00",
+        "needs_user_action": True,
+    }
+    assert status["PAIRED@vpn"] == {
+        "state": "anonymous",
+        "validated_at": None,
+        "observed_at": None,
+        "needs_user_action": False,
+        "service": "PAIRED",
+        "backend": "vpn",
+    }
+
+
 def test_authentication_services_preserves_selected_backend_when_its_inventory_is_unavailable(
     tmp_path, monkeypatch
 ):

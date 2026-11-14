@@ -5092,7 +5092,10 @@ def run_cards() -> list[dict]:
 
 def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, dict]:
     """Read-only login evidence from service metadata, durable observations and local run cards."""
-    service_methods = {service["tag"]: service.get("auth_methods") for service in services}
+    service_methods = {
+        (service["tag"], str(service.get("backend") or "")): service.get("auth_methods")
+        for service in services
+    }
     observations = sonarr_sync.read_authentication_observations()
     identities = {(service["tag"], str(service.get("backend") or "")) for service in services}
     successes_by_identity = collections.defaultdict(list)
@@ -5101,8 +5104,9 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
     for card in cards:
         failures = sonarr_sync.authentication_failures(card)
         validations = sonarr_sync.authentication_validations(card, failures)
-        if not validations and not failures and card.get("service") in service_methods:
-            identities.add((card["service"], str(card.get("backend") or "")))
+        card_identity = (card.get("service"), str(card.get("backend") or ""))
+        if not validations and not failures and card_identity in service_methods:
+            identities.add(card_identity)
         for tag, validation in validations.items():
             identity = (tag, validation["backend"])
             identities.add(identity)
@@ -5122,7 +5126,7 @@ def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, 
     )
     result = {}
     for tag, backend in sorted(identities):
-        methods = service_methods.get(tag)
+        methods = service_methods.get((tag, backend))
         stored = (observations.get(backend) or {}).get(tag) or {}
         status = {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None}
         successes = successes_by_identity[tag, backend]

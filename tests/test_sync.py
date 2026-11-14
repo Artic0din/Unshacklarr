@@ -1493,6 +1493,44 @@ def test_authentication_setup_restores_after_reload_and_keeps_approval_transient
     assert stored["fallback"] == fallback
 
 
+def test_authentication_setup_uses_a_configured_programme_url_when_the_series_has_no_title(
+    tmp_path, monkeypatch
+):
+    sync = load(tmp_path, monkeypatch)
+    programme_url = "https://example.invalid/programmes/control"
+    monkeypatch.setattr(
+        sync,
+        "read_file",
+        lambda: {
+            "series": {
+                "1": {
+                    "service": "RTLP",
+                    "programmes": True,
+                    "title": "",
+                    "programme_map": {"S01E01": programme_url},
+                }
+            }
+        },
+    )
+    calls = []
+    monkeypatch.setattr(
+        sync.UNSHACKLE,
+        "call",
+        lambda method, path, **kwargs: calls.append((method, path, kwargs))
+        or {"session_id": "session-one"},
+    )
+
+    sync.start_authentication_setup("RTLP")
+
+    assert calls == [
+        (
+            "POST",
+            "/api/session/create",
+            {"json": {"service": "RTLP", "title_id": programme_url}},
+        )
+    ]
+
+
 def test_authentication_setup_reuses_concurrent_start_and_cancels_without_retaining_input(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     calls = []
