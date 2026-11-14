@@ -77,6 +77,7 @@ import threading
 import unicodedata
 import uuid
 import time
+from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -116,7 +117,7 @@ AUTHENTICATION_FILE = DATA / "authentication.json"
 AUTHENTICATION_SESSIONS_FILE = DATA / "authentication-sessions.json"
 authentication_lock = threading.Lock()
 authentication_sessions_lock = threading.Lock()
-authentication_session_locks: dict[str, threading.Lock] = {}
+authentication_session_locks: dict[str, tuple[threading.Lock, int]] = {}
 AUTHENTICATION_SERVICE_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 AUTHENTICATION_BACKEND_RE = re.compile(r"[\w][\w .-]{0,39}")
 AUTHENTICATION_SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
@@ -820,9 +821,24 @@ def _authentication_setup_key(service: str, backend: str) -> str:
     return f"{service}@{backend}" if backend else service
 
 
-def _authentication_setup_lock(key: str) -> threading.Lock:
+@contextlib.contextmanager
+def _authentication_setup_lock(key: str) -> Iterator[None]:
     with authentication_sessions_lock:
-        return authentication_session_locks.setdefault(key, threading.Lock())
+        lock, users = authentication_session_locks.get(key, (threading.Lock(), 0))
+        authentication_session_locks[key] = (lock, users + 1)
+    try:
+        lock.acquire()
+        try:
+            yield
+        finally:
+            lock.release()
+    finally:
+        with authentication_sessions_lock:
+            current_lock, users = authentication_session_locks[key]
+            if users == 1:
+                authentication_session_locks.pop(key)
+            else:
+                authentication_session_locks[key] = (current_lock, users - 1)
 
 
 def _authentication_backend(name: str) -> Unshackle:
@@ -896,6 +912,13 @@ def _checkpoint_authentication_setup(key: str, session: dict) -> bool:
             sessions[key] = session
             _write_authentication_setups(sessions)
         return True
+
+
+def _retain_authentication_setup_error(key: str, session: dict) -> None:
+    try:
+        _checkpoint_authentication_setup(key, {**session, "error": True})
+    except OSError:
+        pass
 
 
 def _remove_authentication_setup(key: str, session_id: str) -> None:
@@ -1074,9 +1097,9 @@ def authentication_setups() -> list[dict]:
                         )
                         _remove_authentication_setup(key, session["session_id"])
                     except OSError:
-                        _checkpoint_authentication_setup(key, {**session, "error": True})
+                        _retain_authentication_setup_error(key, session)
                 else:
-                    _checkpoint_authentication_setup(key, {**session, "error": True})
+                    _retain_authentication_setup_error(key, session)
                 results.append(result)
                 continue
             payload = payload if isinstance(payload, dict) else {}

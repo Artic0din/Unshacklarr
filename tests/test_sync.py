@@ -1676,6 +1676,75 @@ def test_authentication_setup_serializes_duplicate_starts_per_identity(tmp_path,
     assert calls == [("POST", "/api/session/create")]
 
 
+def test_authentication_setup_locks_do_not_retain_nonexistent_identities(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+
+    for number in range(20):
+        service = f"MISSING_{number}"
+        with pytest.raises(ValueError, match="No authentication session"):
+            sync.answer_authentication_setup(service, "response")
+        sync.cancel_authentication_setup(service)
+
+    assert sync.authentication_session_locks == {}
+
+
+def test_authentication_setup_lock_keeps_concurrent_waiters_serialized_until_the_last_exit(tmp_path, monkeypatch):
+    import time
+
+    sync = load(tmp_path, monkeypatch)
+    first_entered = threading.Event()
+    release_first = threading.Event()
+    second_entered = threading.Event()
+    release_second = threading.Event()
+    third_entered = threading.Event()
+
+    def hold_first():
+        with sync._authentication_setup_lock("shared"):
+            first_entered.set()
+            assert release_first.wait(2)
+
+    def hold_second():
+        with sync._authentication_setup_lock("shared"):
+            second_entered.set()
+            assert release_second.wait(2)
+
+    def enter_third():
+        with sync._authentication_setup_lock("shared"):
+            third_entered.set()
+
+    first = threading.Thread(target=hold_first)
+    second = threading.Thread(target=hold_second)
+    third = threading.Thread(target=enter_third)
+    first.start()
+    assert first_entered.wait(1)
+    second.start()
+    deadline = time.monotonic() + 1
+    users = 0
+    while time.monotonic() < deadline:
+        with sync.authentication_sessions_lock:
+            entry = sync.authentication_session_locks.get("shared")
+            users = entry[1] if isinstance(entry, tuple) else 0
+        if users == 2:
+            break
+        time.sleep(0.001)
+    try:
+        assert users == 2
+        release_first.set()
+        assert second_entered.wait(1)
+        third.start()
+        assert not third_entered.wait(0.1)
+        release_second.set()
+        assert third_entered.wait(1)
+    finally:
+        release_first.set()
+        release_second.set()
+        for thread in (first, second, third):
+            if thread.ident is not None:
+                thread.join(2)
+
+    assert sync.authentication_session_locks == {}
+
+
 def test_authentication_setup_releases_core_session_when_private_checkpoint_fails(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     calls = []
@@ -1816,6 +1885,50 @@ def test_authentication_setup_retry_replaces_a_retained_error_session(tmp_path, 
 
     assert calls[-2:] == [("DELETE", "/api/session/session-one"), ("POST", "/api/session/create")]
     assert sync._read_authentication_setups()["RTLP"]["session_id"] == "session-two"
+
+
+@pytest.mark.parametrize("status", [404, 503])
+def test_authentication_setup_poll_returns_its_redacted_error_when_error_checkpointing_fails(
+    tmp_path, monkeypatch, status
+):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"session_id": "session-one"})
+    sync.start_authentication_setup("RTLP")
+    poll_error = sync.UnshackleError("provider details must not escape")
+    poll_error.status = status
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(poll_error))
+    if status == 404:
+        monkeypatch.setattr(
+            sync,
+            "record_authentication_observation",
+            lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk full")),
+        )
+    monkeypatch.setattr(
+        sync,
+        "_checkpoint_authentication_setup",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    assert sync.authentication_setups() == [
+        {"service": "RTLP", "backend": "", "state": "error", "failure": "application"}
+    ]
+
+
+def test_authentication_setup_poll_does_not_hide_unexpected_checkpoint_failures(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"session_id": "session-one"})
+    sync.start_authentication_setup("RTLP")
+    unavailable = sync.UnshackleError("temporarily unavailable")
+    unavailable.status = 503
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: (_ for _ in ()).throw(unavailable))
+    monkeypatch.setattr(
+        sync,
+        "_checkpoint_authentication_setup",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("unexpected")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected"):
+        sync.authentication_setups()
 
 
 def test_authentication_setup_does_not_rewrite_an_unchanged_fallback(tmp_path, monkeypatch):
