@@ -879,7 +879,7 @@ async def state(_):
         "config": public_config(read_config()),
         "services": services,
         "service_names": names,
-        "authentication": authentication_status(cards, authentication_entries),
+        "authentication": authentication_status(cards, authentication_entries, service_entries),
         "authentication_methods": authentication_methods(authentication_entries),
         "authentication_setups": await asyncio.to_thread(sonarr_sync.authentication_setups),
         "unshackle_error": unshackle_error,
@@ -2404,12 +2404,12 @@ async def status(request):
         result["unshackle"] = await asyncio.to_thread(unshackle_health, jobs=True)
     if full or request.query.get("auth"):
         try:
-            services = await asyncio.to_thread(sonarr_sync.all_services)
+            main_services = await asyncio.to_thread(sonarr_sync.all_services)
         except UnshackleError:
-            services = []
-        services = await asyncio.to_thread(authentication_services, services)
+            main_services = []
+        services = await asyncio.to_thread(authentication_services, main_services)
         cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
-        result["authentication"] = authentication_status(cards, services)
+        result["authentication"] = authentication_status(cards, services, main_services)
         result["authentication_methods"] = authentication_methods(services)
         result["authentication_setups"] = await asyncio.to_thread(sonarr_sync.authentication_setups)
     return web.json_response(result)
@@ -5090,11 +5090,13 @@ def run_cards() -> list[dict]:
     return list(sonarr_sync.waiting.values()) + cards  # picked with others, waiting their turn
 
 
-def authentication_status(cards: list[dict], services: list[dict]) -> dict[str, dict]:
+def authentication_status(
+    cards: list[dict], services: list[dict], main_services: list[dict] | None = None
+) -> dict[str, dict]:
     """Read-only login evidence from service metadata, durable observations and local run cards."""
     service_methods = {
         (service["tag"], str(service.get("backend") or "")): service.get("auth_methods")
-        for service in services
+        for service in [*(main_services or []), *services]
     }
     observations = sonarr_sync.read_authentication_observations()
     identities = {(service["tag"], str(service.get("backend") or "")) for service in services}

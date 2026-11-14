@@ -167,7 +167,8 @@ function renderUnshackleStatus(st) {
     const service = status.service || tag.split("@")[0], backend = status.backend || "";
     const setup = (S.authenticationSetups || []).find((item) => item.service === service && item.backend === backend);
     const live = (S.authenticationLive || []).find((item) => item.service === service && (item.backend || "") === backend);
-    const methods = S.authenticationMethods?.[tag] || [];
+    const configured = Object.hasOwn(S.authenticationMethods || {}, tag);
+    const methods = configured ? S.authenticationMethods[tag] : [];
     const observation = setup || live?.observation || status.authentication || (status.state === "unknown" && methods.length
       ? { state: "ready", available_methods: methods } : null);
     const label = status.state === "anonymous" ? "No login required"
@@ -176,7 +177,7 @@ function renderUnshackleStatus(st) {
       : status.state === "validated" ? `Confirmed ${ago(status.validated_at)}` : "Not checked yet";
     const name = svcName(service) + (backend ? ` · ${backend}` : "");
     const controls = [];
-    if (setup) {
+    if (setup && configured) {
       if (["timed_out", "cancelled", "error"].includes(setup.state)) {
         controls.push(el("button", { className: "btn small", textContent: "Retry", onclick: () => startServiceAuthentication(service, backend) }));
       } else if (setup.prompt) {
@@ -190,7 +191,7 @@ function renderUnshackleStatus(st) {
       if (!["authenticated", "timed_out", "cancelled"].includes(setup.state)) {
         controls.push(el("button", { className: "btn small danger", textContent: "Cancel", onclick: () => cancelServiceAuthentication(service, backend) }));
       }
-    } else if (status.state !== "anonymous") {
+    } else if (configured && status.state !== "anonymous") {
       controls.push(el("button", { className: "btn small", textContent: status.state === "needs_user_action" ? "Reauthenticate" : "Sign in",
         onclick: () => startServiceAuthentication(service, backend) }));
     }

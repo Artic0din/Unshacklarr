@@ -644,6 +644,49 @@ def test_selected_anonymous_backend_does_not_reclassify_main_authentication_fail
     }
 
 
+def test_selected_backend_keeps_main_success_contract_without_duplicating_method_rows(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    main = {"tag": "PAIRED", "auth_methods": ["pairing"]}
+    vpn = {"tag": "PAIRED", "auth_methods": ["cookies"]}
+    monkeypatch.setitem(web.sonarr_sync.BACKENDS, "vpn", SimpleNamespace(services=lambda: [vpn]))
+    monkeypatch.setattr(
+        web,
+        "read_config",
+        lambda: {"service_defaults": {"PAIRED": {"backend": "vpn"}}},
+    )
+    selected = web.authentication_services([main])
+
+    status = web.authentication_status(
+        [
+            {
+                "service": "PAIRED",
+                "outcome": "downloaded",
+                "ended": "2026-11-14T05:00:00+00:00",
+            }
+        ],
+        selected,
+        [main],
+    )
+
+    assert web.authentication_methods(selected) == {"PAIRED@vpn": ["cookies"]}
+    assert status == {
+        "PAIRED": {
+            "state": "validated",
+            "validated_at": "2026-11-14T05:00:00+00:00",
+            "observed_at": "2026-11-14T05:00:00+00:00",
+            "needs_user_action": False,
+        },
+        "PAIRED@vpn": {
+            "state": "unknown",
+            "validated_at": None,
+            "observed_at": None,
+            "needs_user_action": None,
+            "service": "PAIRED",
+            "backend": "vpn",
+        },
+    }
+
+
 def test_authentication_services_preserves_selected_backend_when_its_inventory_is_unavailable(
     tmp_path, monkeypatch
 ):
@@ -975,6 +1018,22 @@ const promptState = (input) => {
     const validated = find(secondRow, (node) => node.tag === "small").textContent;
     console.log(JSON.stringify({ needsAction, validated }));
   }
+  if (scenario === "selected_backend_actions") {
+    box.S.authentication = {
+      PAIRED: { service: "PAIRED", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+      "PAIRED@vpn": { service: "PAIRED", backend: "vpn", state: "needs_user_action" },
+      OPEN: { service: "OPEN", backend: "", state: "anonymous" },
+    };
+    box.S.authenticationMethods = { "PAIRED@vpn": [] };
+    box.S.authenticationSetups = [];
+    box.renderUnshackleStatus(box.unshackleDetails);
+    const rows = findAll(nodes["#u-status"], (node) => node.className === "st-job").map((row) => ({
+      name: find(row, (node) => node.tag === "span").textContent,
+      label: find(row, (node) => node.tag === "small").textContent,
+      controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
+    }));
+    console.log(JSON.stringify(rows));
+  }
   if (scenario === "cancelled_then_refreshed") {
     box.api = async (path, options = {}) => {
       if (options.method === "DELETE") return { service: "PAIRED", backend: "", state: "cancelled", method: "pairing" };
@@ -1060,6 +1119,14 @@ def test_supported_methods_do_not_hide_classified_authentication_status():
         "needsAction": "Sign-in needed",
         "validated": "Confirmed now",
     }
+
+
+def test_only_the_selected_backend_authentication_row_is_actionable():
+    assert run_authentication_ui("selected_backend_actions") == [
+        {"name": "PAIRED", "label": "Confirmed now", "controls": []},
+        {"name": "PAIRED · vpn", "label": "Sign-in needed", "controls": ["Reauthenticate"]},
+        {"name": "OPEN", "label": "No login required", "controls": []},
+    ]
 
 
 def test_cancelled_authentication_is_rendered_until_the_next_refresh():
