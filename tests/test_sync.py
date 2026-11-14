@@ -2421,8 +2421,15 @@ def test_authentication_setup_with_an_unresolved_owner_can_be_retried(
     )
 
 
+@pytest.mark.parametrize(
+    "terminal",
+    [
+        {"state": "timed_out", "method": "pairing"},
+        {"state": "authenticated", "method": "pairing"},
+    ],
+)
 def test_terminal_authentication_setup_with_an_unresolved_owner_can_be_retried(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, terminal
 ):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync, "serve_params", lambda *args: {})
@@ -2449,7 +2456,7 @@ def test_terminal_authentication_setup_with_an_unresolved_owner_can_be_retried(
         key,
         {
             **session,
-            "terminal": {"state": "timed_out", "method": "pairing"},
+            "terminal": terminal,
             "terminal_at": "2026-11-15T05:00:00+00:00",
         },
     )
@@ -2463,6 +2470,7 @@ def test_terminal_authentication_setup_with_an_unresolved_owner_can_be_retried(
     assert sync._read_authentication_setups()[key]["session_id"] == "new-session"
     [cleanup] = sync._read_authentication_cleanups().values()
     assert cleanup["session_id"] == "old-session"
+    assert sync.read_authentication_observations().get("living-room", {}).get("RTLP") is None
 
 
 def test_authenticated_terminal_setup_is_recorded_before_failed_cleanup_is_detached(

@@ -1321,12 +1321,18 @@ def start_authentication_setup(service: str, backend: str = "") -> dict:
                 result = _finish_authentication_setup(key, session)
                 if result["state"] != "error" or not _authentication_setup_session(key):
                     return result
-                try:
-                    _record_terminal_authentication_setup(session)
-                except OSError:
+                current_owner = _authentication_backend(backend)
+                same_owner = session.get("backend_identity") == _authentication_backend_identity(
+                    current_owner
+                )
+                if same_owner:
+                    try:
+                        _record_terminal_authentication_setup(session)
+                    except OSError:
+                        return result
+                if not _orphan_authentication_setup(key, session):
                     return result
-                _orphan_authentication_setup(key, session)
-                if session["terminal"]["state"] == "authenticated":
+                if same_owner and session["terminal"]["state"] == "authenticated":
                     return _terminal_authentication_setup(session)
                 session = None
         if session and not session.get("error"):
