@@ -1156,7 +1156,12 @@ def cancel_authentication_setup(service: str, backend: str = "") -> dict:
         session = _authentication_setup_session(key)
         if session:
             try:
-                _authentication_backend(backend).call("DELETE", f"/api/session/{session['session_id']}")
+                owner = _authentication_backend(backend)
+            except ValueError:
+                owner = None
+            try:
+                if owner:
+                    owner.call("DELETE", f"/api/session/{session['session_id']}")
             except UnshackleError as error:
                 if error.status != 404:
                     raise

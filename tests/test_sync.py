@@ -1732,9 +1732,22 @@ def test_authentication_setup_accepts_configured_backend_names_and_never_routes_
     assert main_calls == []
     assert f"RTLP@{backend_name}" in sync._read_authentication_setups()
 
+    with pytest.raises(ValueError, match="no longer configured"):
+        sync.answer_authentication_setup("RTLP", "response", backend_name)
+    assert f"RTLP@{backend_name}" in sync._read_authentication_setups()
+    assert sync.cancel_authentication_setup("RTLP", backend_name) == {
+        "service": "RTLP",
+        "backend": backend_name,
+        "state": "cancelled",
+    }
+    assert f"RTLP@{backend_name}" not in sync._read_authentication_setups()
+    assert main_calls == []
+
     sync.BACKENDS[backend_name] = backend
+    sync.start_authentication_setup("RTLP", backend_name)
     sync.cancel_authentication_setup("RTLP", backend_name)
     assert backend_calls[-1][:2] == ("DELETE", "/api/session/session-one")
+    assert f"RTLP@{backend_name}" not in sync._read_authentication_setups()
 
 
 @pytest.mark.parametrize("session_id", ["bad/session", "bad?session", "неверно"])
