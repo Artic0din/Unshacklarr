@@ -526,13 +526,17 @@ function returnFocus(opener, tvdbId) {
 /* Focus stays inside the open drawer: the toasts after it are outside the inert page but must not take focus from it
    (a modal dialog opened from the drawer, such as "unsaved changes", is its own layer and keeps focus) */
 let drawerLastFocus = null;
-document.addEventListener("focusin", (e) => {
+function drawerFocusGuard(e) {
   const d = $("#drawer");
   if (!d.classList.contains("open") || d.inert) return;
   if (d.contains(e.target)) { drawerLastFocus = e.target; return; }
   if (e.target.closest("dialog[open]")) return;
-  (drawerLastFocus?.isConnected ? drawerLastFocus : d.querySelector("button, a[href], input, select, textarea"))?.focus();
-});/* A series' settings changed since its panel opened, and not saved: closing it asks first. */
+  const usable = (x) => x?.isConnected && d.contains(x) && !x.disabled && x.getClientRects().length;
+  // the last one may have been redrawn away (the episode list refreshes): then the first control in sight
+  const to = usable(drawerLastFocus) ? drawerLastFocus : [...d.querySelectorAll("button, a[href], input, select, textarea")].find(usable);
+  to?.focus();
+}
+document.addEventListener("focusin", drawerFocusGuard);/* A series' settings changed since its panel opened, and not saved: closing it asks first. */
 let drawerSnapshot = null;
 const drawerChanged = () => !!current && drawerSnapshot?.id === current.tvdbId && stableJSON(S.config.series[current.tvdbId]) !== stableJSON(JSON.parse(drawerSnapshot.conf));
 function discardDrawer() {  // the series as it was when its panel opened; the bar goes if nothing else waits

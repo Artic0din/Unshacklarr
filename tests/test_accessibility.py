@@ -86,3 +86,35 @@ console.log(JSON.stringify(out));
         "open": [False, True, True], "closed": [True, False, False],
         "back": "opener", "gone": "poster", "hidden": "poster", "none": "poster", "nothingInSight": "tab",
     }
+
+
+def test_focus_outside_the_open_drawer_goes_back_to_a_control_in_sight():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const focused = [];
+const ctl = (name, over = {}) => ({ name, isConnected: true, disabled: false, getClientRects: () => [{}], focus() { focused.push(name); }, closest: () => null, ...over });
+const back = ctl("back", { getClientRects: () => [] });  // the phone's Back, hidden on a desktop
+const close = ctl("close");
+const inside = new Set([back, close]);
+const drawer = { inert: false, classList: { contains: (c) => c === "open" }, contains: (x) => inside.has(x), querySelectorAll: () => [back, close] };
+const ctx = { $: () => drawer, document: { addEventListener() {} } };
+vm.createContext(ctx);
+vm.runInContext("let drawerLastFocus = null;\n" + src.match(/^function drawerFocusGuard\(.*?^\}/ms)[0], ctx);
+const out = {};
+const checkbox = ctl("checkbox");
+inside.add(checkbox);
+ctx.drawerFocusGuard({ target: checkbox });      // focus moves inside: remembered
+inside.delete(checkbox); checkbox.isConnected = false;  // the episode list redraws it away
+const toast = ctl("dismiss");
+ctx.drawerFocusGuard({ target: toast });
+out.redrawn = focused.splice(0);
+const kept = ctl("kept"); inside.add(kept);
+ctx.drawerFocusGuard({ target: kept });
+ctx.drawerFocusGuard({ target: toast });
+out.remembered = focused.splice(0);
+ctx.drawerFocusGuard({ target: ctl("dialog button", { closest: () => ({}) }) });
+out.dialog = focused.splice(0);
+console.log(JSON.stringify(out));
+""")
+    assert shown == {"redrawn": ["close"], "remembered": ["kept"], "dialog": []}
