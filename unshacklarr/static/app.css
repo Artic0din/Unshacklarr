@@ -1294,7 +1294,10 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .last-sync { display: none; }
   .health span:not(.dot) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   /* a service that is down says so in words on a phone too, not by the dot's colour alone */
-  .health button:has(small:not(:empty)) span:not(.dot) { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+  .health button:has(small:not(:empty)) span:not(.dot) { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
+  /* ...on a row of its own under the title, so the header's buttons stay on screen */
+  header:has(.health small:not(:empty)) { flex-wrap: wrap; }
+  header:has(.health small:not(:empty)) .health { order: 10; flex-basis: 100%; margin-left: 0; }
   .inbox-x { width: 44px; height: 44px; }
   .update-pill span { display: none; } .update-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
   .health button { padding: 12px 8px; }
