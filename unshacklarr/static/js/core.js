@@ -215,18 +215,22 @@ const COUNT = {
   hour: (n) => n === 1 ? "1 hour" : `${n} hours`,
 };
 /* Two clicks for what cannot be undone: the first turns the label into the question, naming the action and what it is done to;
-   the second does it. No timer takes the question back while it is being read: leaving the button, or Escape, does. */
+   the second does it. No timer takes the question back while it is being read: leaving the button, a press anywhere else
+   (Safari does not focus a clicked button, so it never blurs), or Escape does. */
 function confirmClick(button, question, label = button) {
   if (button.dataset.sure === "1") { label.textContent = button.dataset.was; delete button.dataset.sure; return true; }
   button.dataset.sure = "1"; button.dataset.was = label.textContent;
   label.textContent = question;
   const cancel = (e) => {
     if (e.type === "keydown" && e.key !== "Escape") return;
+    if (e.type === "pointerdown" && button.contains(e.target)) return;  // the second click on the button itself
     button.removeEventListener("blur", cancel); button.removeEventListener("keydown", cancel);
+    document.removeEventListener("pointerdown", cancel, true);
     if (button.dataset.sure !== "1") return;
     delete button.dataset.sure; label.textContent = button.dataset.was;
   };
   button.addEventListener("blur", cancel); button.addEventListener("keydown", cancel);
+  document.addEventListener("pointerdown", cancel, true);
   return false;
 }
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */

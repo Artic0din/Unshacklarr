@@ -197,3 +197,28 @@ def test_hover_styles_apply_only_where_a_pointer_hovers():
         if ch == "{" and ":hover" in stack[-1] and not any("hover: hover" in a for a in stack[:-1]):
             sticky.append(stack[-1])
     assert not sticky  # on a touch screen a :hover style sticks after the tap
+
+
+def test_a_two_click_confirmation_is_taken_back_by_a_press_elsewhere():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const target = () => { const l = {}; return { l, addEventListener(t, f) { (l[t] ||= []).push(f); }, removeEventListener(t, f) { l[t] = (l[t] || []).filter((x) => x !== f); },
+  fire(t, e) { [...(l[t] || [])].forEach((f) => f({ type: t, ...e })); } }; };
+const doc = target(), button = { ...target(), dataset: {}, textContent: "Delete", contains: (n) => n === button };
+const ctx = { document: doc };
+vm.createContext(ctx);
+vm.runInContext(src.match(/^function confirmClick\(.*?^\}/ms)[0], ctx);
+const out = {};
+ctx.confirmClick(button, "Delete RMCBFM.txt?");
+out.asked = button.textContent;
+doc.fire("pointerdown", { target: button });  // pressing the button again: still asking
+out.onItself = button.textContent;
+out.confirmed = ctx.confirmClick(button, "Delete RMCBFM.txt?");
+ctx.confirmClick(button, "Delete RMCBFM.txt?");
+doc.fire("pointerdown", { target: {} });  // a press anywhere else, no blur (Safari)
+out.elsewhere = [button.textContent, button.dataset.sure ?? null, ctx.confirmClick(button, "Delete RMCBFM.txt?")];
+console.log(JSON.stringify(out));
+""")
+    assert shown == {"asked": "Delete RMCBFM.txt?", "onItself": "Delete RMCBFM.txt?", "confirmed": True,
+                     "elsewhere": ["Delete", None, False]}  # taken back: the next click only asks again

@@ -213,7 +213,7 @@ function renderCdm() {
   const others = data.services.filter((t) => !shown.some((x) => x.toLowerCase() === t.toLowerCase()) && t !== "EXAMPLE");
   const addSvc = el("button", { type: "button", className: "btn small cdm-pop-btn", dataset: { key: "add" }, textContent: "+ Another service", onclick: (e) => {
     const anchor = e.currentTarget, q = el("input", { type: "search", className: "cdm-pop-search", placeholder: "Search a service" }), list = el("div", { className: "cdm-pop-list" });
-    const draw = () => list.replaceChildren(...others.filter((t) => t.toLowerCase().includes(q.value.trim().toLowerCase()))
+    const draw = () => list.replaceChildren(...others.filter((t) => `${t} ${svcName(t)}`.toLowerCase().includes(q.value.trim().toLowerCase()))
       .map((t) => el("button", { type: "button", className: "cdm-opt", onclick: () => { closeCdmPop(); anchor.dataset.key = `svc:${t}`; cdmPicker(anchor, t, ""); } }, el("b", { textContent: svcName(t) }))));
     q.oninput = draw; draw();
     if (cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: "A device of its own for…" }), q, list)) q.focus();
