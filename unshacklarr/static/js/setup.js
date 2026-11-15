@@ -283,7 +283,6 @@ function showSetup(found) {
   }
   const steps = [
     { name: "Welcome", icon: "key", title: "Welcome to Unshacklarr", sub: "Setup code and password",
-      lead: "Enter the setup code, then choose the password you will sign in with.",
       body: [field("Setup code", f.setup_code, "Shown in Unshacklarr's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set."),
         field("Password", f.password, "At least 8 characters.", meter), field("Confirm password", f.confirm, "", match), restoreBox],
       check: async () => {
@@ -302,7 +301,6 @@ function showSetup(found) {
         if (more.unshackle_api_key_set) f.unshackle_api_key.placeholder = "Found in the environment for the address above. Leave empty to use it";
       } },
     { name: "Unshackle", icon: "unshackle", title: "Connect Unshackle", sub: "What downloads the episodes",
-      lead: "Unshackle downloads the episodes: here, started by Unshacklarr, or elsewhere, as unshackle serve.",
       body: [uPanel], fields: () => f.unshackle_mode.value === "local" ? [f.unshackle_command] : [f.unshackle_url, f.unshackle_api_key],
       check: async () => {
         if (f.unshackle_mode.value === "remote") {
@@ -314,8 +312,7 @@ function showSetup(found) {
         return { ok: `Connected to Unshackle (${services} services)` };
       }, checking: "Testing… (a first start of Unshackle takes a few seconds)" },
     { name: "Sonarr", icon: "sonarr", title: "Connect Sonarr", sub: "Your library",
-      lead: "Unshacklarr finds what Sonarr is missing, then hands it the downloads to import.",
-      body: [field("Sonarr URL", f.sonarr_url, "The address Unshacklarr uses to reach Sonarr, e.g. http://sonarr:8989 on a shared Docker network."),
+      body: [field("Sonarr URL", f.sonarr_url),
         field("API key", f.sonarr_api_key, "In Sonarr: Settings, General."),
         field("Downloads folder, as Sonarr sees it", f.sonarr_downloads, "Its path on Sonarr's side, e.g. inside Sonarr's container."),
         field("TMDB API key", f.tmdb_api_key, tmdbHint())],
@@ -330,9 +327,8 @@ function showSetup(found) {
         return { ok: `Connected to Sonarr ${version}` };
       }, checking: "Testing the connection to Sonarr…" },
     { name: "Region", icon: "region", title: "Your region", sub: "Country and time zone",
-      lead: "Your country picks the streaming services the Schedule shows; the time zone, when episodes are tried.",
-      body: [field("Country", country.input, "The Schedule shows its streaming services.", country.list, f.country),
-        field("Time zone", f.timezone, "For release times and the sync clock.")],
+      body: [field("Country", country.input, "", country.list, f.country),
+        field("Time zone", f.timezone)],
       check: async () => { if (!/^[A-Za-z]{2}$/.test(f.country.value.trim())) return wrong("Pick a country in the list", country.input); } },
   ];
   let at = Math.min(draft.step || 0, steps.length - 1), reached = Math.max(at, Math.min(draft.reached || 0, steps.length - 1));
@@ -357,7 +353,7 @@ function showSetup(found) {
     progress.firstChild.textContent = `Step ${at + 1} of ${steps.length}`;
     progress.querySelector("b").style.width = `${(at + 1) / steps.length * 100}%`;
     panel.replaceChildren(el("div", { className: `wiz-step ${forward ? "fwd" : "bwd"}` },
-      el("div", { className: "wz-head" }, ico(s.icon, "wz-badge"), el("div", {}, el("h2", { textContent: s.title }), el("p", { className: "lead", textContent: s.lead }))),
+      el("div", { className: "wz-head" }, ico(s.icon, "wz-badge"), el("div", {}, el("h2", { textContent: s.title }))),
       ...s.body));
     note.replaceChildren();
     back.hidden = at === 0;
@@ -415,8 +411,8 @@ function showSetup(found) {
   $("#gate").classList.add("wizard");
   gate("", el("div", { className: "wz" },
     el("aside", { className: "wz-side" },
-      el("div", { className: "wz-brand" }, logo, el("div", {}, el("b", { textContent: "Unshacklarr" }), el("small", { textContent: "The episodes Sonarr is missing, downloaded by Unshackle." }))),
-      el("p", { className: "wz-hello", textContent: "Set up Unshacklarr in a few steps." }), rail, progress),
+      el("div", { className: "wz-brand" }, logo, el("div", {}, el("b", { textContent: "Unshacklarr" }))),
+      rail, progress),
     el("section", { className: "wz-main" }, panel, note, el("div", { className: "wiz-nav" }, back, next))));
   $("#gate-form").noValidate = true;  // each step says what is wrong itself, in words, not in a browser bubble
   $("#gate-form").onsubmit = async (e) => {

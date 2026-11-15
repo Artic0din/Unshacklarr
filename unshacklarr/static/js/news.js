@@ -54,15 +54,6 @@ function renderNews() {
     if (has && !badge) b.querySelector(":scope > span").after(el("i", { className: "new-dot", textContent: "New" }));
     if (!has && badge) badge.remove();
   });
-  document.querySelectorAll(".set-sec[data-sec]").forEach((sec) => {
-    const here = unseen.filter((n) => n.sec === sec.dataset.sec);
-    let strip = sec.querySelector(":scope > .new-strip");
-    if (!here.length) return strip?.remove();
-    if (!strip) sec.firstElementChild.after(strip = el("div", { className: "new-strip" }));
-    strip.replaceChildren(el("span", { textContent: here.length === 1 ? "1 new option in this section" : `${here.length} new options in this section` }),
-      el("button", { type: "button", className: "btn small", textContent: "Show me",
-        onclick: () => document.querySelector(here[0].target)?.scrollIntoView({ behavior: SCROLL, block: "center" }) }));
-  });
   const version = $("#version"), count = S.news?.list_read !== S.version ? unseen.length : 0;  // how many, until this version's list is read
   version.classList.toggle("has-new", !!count);
   version.querySelector("b")?.remove();

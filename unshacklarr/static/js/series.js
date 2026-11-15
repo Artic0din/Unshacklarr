@@ -279,14 +279,14 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
   if (!(keep && numbers.includes(epSeason))) epSeason = numbers[0];  // the newest; seasons with gaps stand out in the strip
   box.replaceChildren(
     sonarrSwitch(s),
-    el("div", { className: "seasons", role: "group", ariaLabel: "Seasons" }, ...numbers.map((n) => {
+    ...(numbers.length > 1 ? [el("div", { className: "seasons", role: "group", ariaLabel: "Seasons" }, ...numbers.map((n) => {  // one season: the title row below names it
       const list = epSeasons[n], disk = list.filter((e) => e.hasFile).length, miss = list.filter((e) => state(e) === "miss").length;
       const b = el("button", { onclick: () => { epSeason = n; renderSeason(); }, title: s.seasonTitles?.[n] || "" },
         el("b", { textContent: n === 0 ? "Specials" : `S${String(n).padStart(2, "0")}` }),
         el("small", { className: miss ? "gap" : "", textContent: miss ? `${miss} missing` : `${disk}/${list.length}` }));
       b.dataset.season = n;
       return b;
-    })),
+    }))] : []),
     ...seriesTags(S.config.series[s.tvdbId]).map(cdmNote),
     el("div", { className: "ep-catchup", id: "ep-catchup", hidden: true }),
     /* Two lines: the season and what the service has; then what to select, and how to show the list. */
@@ -322,7 +322,7 @@ function renderCheck(s, changed = false) {
     title: `The missing episodes ${svc} has`, onclick: () => selectSeason((e) => state(e) === "miss" && epAvail?.[e.id]) });
   const check = el("button", { className: "btn ep-check", title: `Ask ${svc} which episodes of this series it has, and mark them in the list`,
     onclick: () => check.ariaDisabled !== "true" && askService(s).then((r) => r && toast(`${svc} has ${Object.keys(r.available).length} of this series' episodes`)) });
-  $(".ep-top").append(check);
+  $(".ep-sel").after(check);
   checkLabel(epAvail ? `Refresh what's on ${svc}` : `What's on ${svc}?`);
   $("#ep-odd").before(pick);
 }
@@ -642,11 +642,12 @@ function renderCatchUp() {
     b.classList.toggle("has-avail", n > 0);
     if (epAvail && missing.some((e) => e.seasonNumber === Number(b.dataset.season))) b.append(el("small", { className: "avail" + (n ? "" : " none"), textContent: n ? `${n} on ${seasonSvc(Number(b.dataset.season))}` : `none on ${seasonSvc(Number(b.dataset.season))}` }));
   });
-  box.hidden = !epAvail || !(missing.length || upgrades.length || elsewhere.length);
+  const renumbered = there.filter((e) => epAvail[e.id].service !== `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`).length;
+  // One season's counts are in the title row and the select row: the box says more only for several, or for what they lack
+  box.hidden = !epAvail || !(new Set(missing.map((e) => e.seasonNumber)).size > 1 || upgrades.length || renumbered || elsewhere.length || Object.keys(epPages).length);
   if (box.hidden) return;
   const bySeason = Object.entries(Object.groupBy(there, (e) => e.seasonNumber)).sort((a, b) => b[0] - a[0]);
   const free = there.filter((e) => !epBusy.has(e.id));
-  const renumbered = there.filter((e) => epAvail[e.id].service !== `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`).length;
   box.classList.toggle("none", !there.length && !upgrades.length);
   box.replaceChildren(
     el("div", {}, el("b", { textContent: !missing.length && !upgrades.length ? "Available on other services" : !missing.length ? `${upgrades.length} episode${upgrades.length > 1 ? "s" : ""} may be better on ${svc}`
@@ -748,9 +749,10 @@ function renderSeason() {
     $("#ep-avail").disabled = !onService;
   }
   const named = current.seasonTitles?.[epSeason];  // its name in Sonarr, when it has one
-  const q = epQualities[epSeason];
+  const q = epQualities[epSeason], missing = list.filter((e) => state(e) === "miss").length;
   $("#ep-title").replaceChildren(el("span", { textContent: epSeason === 0 ? "Specials" : named ? `Season ${epSeason}: ${named}` : `Season ${epSeason}` }),
     el("small", { textContent: `${list.filter((e) => e.hasFile).length} of ${list.length} on disk` }),
+    ...(missing ? [el("small", { textContent: `${missing} missing` })] : []),
     ...(q && (q.video || q.audio) ? [el("small", {
       textContent: `${seasonSvc(epSeason)}: up to ${[q.video, q.audio].filter(Boolean).join(", ")}` })] : []),
     ...(flagged ? [el("small", { className: "odd-legend", textContent: "Orange: different from most of this season (hover for details)" })] : []));
@@ -974,11 +976,7 @@ $(".ds-nav").onclick = (e) => {
   dsLight();
   card.scrollIntoView({ behavior: SCROLL, block: "start" });
 };
-// each shortcut wears its card's icon, and the card in view lights its shortcut
-document.querySelectorAll(".ds-nav a[data-to]").forEach((a) => {
-  const icon = document.querySelector(`#${a.dataset.to} .sx-ico svg`);
-  if (icon) a.prepend(Object.assign(icon.cloneNode(true), { ariaHidden: "true" }));
-});
+// the card in view lights its shortcut
 let dsPicked = null;  // the shortcut clicked: lit until the person scrolls on their own
 function dsLight() {  // the card in view: the last one whose top went under the bar
   if ($("#dt-settings").hidden) return;  // the episodes scrolling, or the drawer closed: nothing to light

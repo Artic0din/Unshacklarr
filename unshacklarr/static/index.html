@@ -74,7 +74,6 @@
       </select>
       <label class="pill"><input type="checkbox" id="f-missing"> Missing episodes <span id="f-missing-n"></span></label>
       <label class="pill"><input type="checkbox" id="f-monitored"> Monitored <span id="f-monitored-n"></span></label>
-      <span class="muted" id="count"></span>
       <button class="btn small" id="bulk-open" title="Services for your series, found on TMDB">Suggest services</button>
       <button class="btn small" id="sel-toggle" type="button" aria-pressed="false">Select</button>
     </div>
@@ -160,7 +159,7 @@
           <div class="ux-more" id="u-status"></div>
         </section>
               <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span><div><h3>How it runs</h3><p>unshackle serve downloads the episodes: started here by Unshacklarr, or running elsewhere.</p></div></div>
+          <div class="sx-head"><div><h3>How it runs</h3></div></div>
           <div class="wz-tiles ux-tiles" role="group" aria-label="Unshackle runs">
             <button type="button" class="wz-tile" data-value="local"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>Local</b><small>Unshacklarr starts it on this machine</small></button>
             <button type="button" class="wz-tile" data-value="remote"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></span><b>Remote</b><small>unshackle serve runs elsewhere</small></button>
@@ -168,15 +167,15 @@
           </div>
           <div class="sx-grid">
             <div class="field only-local"><label for="ux-cmd">Unshackle command</label><input id="ux-cmd" type="text" data-set="unshackle_command" placeholder="unshackle" spellcheck="false"><small>Empty: uses <code>unshackle</code> from the PATH. Otherwise, its full path, e.g. <code>.venv/bin/unshackle</code> in a git clone.</small></div>
-            <div class="field only-remote"><label for="ux-url">Address of <code>unshackle serve</code></label><input id="ux-url" type="url" data-set="unshackle_url" placeholder="http://unshackle:8786"><small>For example http://unshackle:8786 on a shared Docker network.</small></div>
+            <div class="field only-remote"><label for="ux-url">Address of <code>unshackle serve</code></label><input id="ux-url" type="url" data-set="unshackle_url" placeholder="http://unshackle:8786"></div>
             <div class="field only-remote"><label for="ux-key">API key <span class="sx-saved" id="ux-key-saved" hidden>✓ Saved</span></label><input id="ux-key" type="password" data-set="unshackle_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>The <code>serve: api_secret</code> value of its unshackle.yaml. Leave empty to keep the saved key.</small></div>
             <div class="field" id="ux-at-once-field"><label for="ux-at-once">Downloads at once</label><div class="unit-input"><input id="ux-at-once" type="number" data-set="downloads_at_once" data-num min="0" max="10" step="1" inputmode="numeric"><span>per server</span></div><small>How many episodes each Unshackle server downloads together. 1 is gentler on a small NAS. 0: as many as Unshackle allows, 2 by default.</small></div>
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><div><h3>Folders</h3><p>The paths where Unshacklarr itself finds the downloads, the cookies and unshackle.yaml.</p></div></div>
+          <div class="sx-head"><div><h3>Folders</h3></div></div>
           <div class="sx-grid">
-            <div class="field"><label for="downloads-input">Downloads folder</label><input type="text" data-set="downloads" id="downloads-input" spellcheck="false"><small>Where the episodes land before Sonarr imports them.</small></div>
+            <div class="field"><label for="downloads-input">Downloads folder</label><input type="text" data-set="downloads" id="downloads-input" spellcheck="false"></div>
             <div class="field"><label for="ux-free">Room kept free</label><div class="unit-input"><input id="ux-free" type="number" data-set="min_free_gb" data-num min="0" max="100000" step="1" inputmode="numeric"><span>GB</span></div><small>Nothing is downloaded while the downloads folder, or the library folder Sonarr moves a series into, has less free space than this, and you get a notification. 0: not checked.</small></div>
             <div class="field only-remote"><label for="ux-udl">Downloads folder, as Unshackle sees it</label><input id="ux-udl" type="text" data-set="unshackle_downloads" placeholder="Same path" spellcheck="false"><small>Its path on the machine where unshackle serve runs. Empty: the same path as above.</small></div>
             <div class="field"><label for="ux-cookies">Cookies folder</label><input id="ux-cookies" type="text" data-set="cookies_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to manage them in Settings › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
@@ -184,7 +183,7 @@
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01M11 6.5h7M11 17.5h7"/></svg></span><div><h3>Other Unshackle servers</h3><p>More unshackle serve instances, for example one behind a VPN. A service uses the server picked for it in Download options, Per service. The others use this one.</p></div>
+          <div class="sx-head"><div><h3>Other Unshackle servers</h3></div>
             <button class="btn small dx-add" id="ub-add" type="button">Add a server</button></div>
           <div id="ub-list"></div>
         </section>
@@ -197,32 +196,32 @@
           <div class="sx-actions"><button class="btn small" id="sonarr-test">Test the connection</button><a class="btn small" id="sx-open" target="_blank" rel="noopener" hidden>Open Sonarr ↗</a></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 1 1 0 10h-2M8 12h8"/></svg></span><div><h3>Connection</h3><p>How Unshacklarr reaches Sonarr, to find the missing episodes and hand it the downloads.</p></div></div>
+          <div class="sx-head"><div><h3>Connection</h3></div></div>
           <div class="sx-grid">
             <div class="field" id="sx-name-field"><label for="sx-name">Name</label><input id="sx-name" type="text" data-set="sonarr_name" placeholder="Sonarr" spellcheck="false"><small id="sx-name-help">The name shown on each series to tell the libraries apart when you have more than one Sonarr. Leave empty to use “Sonarr”.</small></div>
-            <div class="field"><label for="sx-url">Sonarr URL</label><input id="sx-url" type="url" data-set="sonarr_url" placeholder="http://sonarr:8989"><small>The address Unshacklarr uses to reach Sonarr, e.g. http://sonarr:8989 on a shared Docker network.</small></div>
+            <div class="field"><label for="sx-url">Sonarr URL</label><input id="sx-url" type="url" data-set="sonarr_url" placeholder="http://sonarr:8989"></div>
             <div class="field"><label for="sx-key">API key <span class="sx-saved" id="sx-key-saved" hidden>✓ Saved</span></label><input id="sx-key" type="password" data-set="sonarr_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>In Sonarr: Settings, General. Leave empty to keep the saved key. A new URL needs its key too.</small></div>
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6m-3-3 3 3 3-3"/></svg></span><div><h3>Downloads folder</h3><p>Sonarr imports each episode from this folder. Give its path as Sonarr sees it.</p></div></div>
+          <div class="sx-head"><div><h3>Downloads folder</h3></div></div>
           <div class="sx-grid">
             <div class="field"><label for="sx-dl">Downloads folder, as Sonarr sees it</label><input id="sx-dl" type="text" data-set="sonarr_downloads" placeholder="Same path" spellcheck="false"><small>Its path on Sonarr's side, e.g. inside Sonarr's container. Empty: the same path as for Unshacklarr.</small></div>
           </div>
         </section>
         <section class="sx-card" id="sn-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg></span><div><h3>Other Sonarr instances</h3><p>A second Sonarr, with its own library. The series set up here are also downloaded for it when it has them, with its own quality ladder. Its new episodes are downloaded at their release time and by the automatic sync, as for the Sonarr above.</p></div>
+          <div class="sx-head"><div><h3>Other Sonarr instances</h3></div>
             <button class="btn small dx-add" id="sn-add" type="button">Add a Sonarr</button></div>
           <div id="sn-list"></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></span><div><h3>In your browser</h3><p>Used for the links from a series to its page in Sonarr.</p></div></div>
+          <div class="sx-head"><div><h3>In your browser</h3></div></div>
           <div class="sx-grid">
             <div class="field"><label for="sx-web">Sonarr's address in your browser</label><input id="sx-web" type="url" data-set="sonarr_public_url" placeholder="https://sonarr.example.com"><small>Empty: the URL above, if your browser can open it.</small></div>
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></svg></span><div><h3>TMDB</h3><p>Adds what Sonarr lacks: where each series streams, and episode titles in the series' own language.</p></div></div>
+          <div class="sx-head"><div><h3>TMDB</h3></div></div>
           <div class="sx-grid">
             <div class="field"><label for="sx-tmdb">TMDB API key <span class="sx-saved" id="sx-tmdb-saved" hidden>✓ Saved</span></label><input id="sx-tmdb" type="password" data-set="tmdb_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small><span id="tmdb-hint"></span></small></div>
           </div>
@@ -231,12 +230,12 @@
       <div class="set-sec sx" data-sec="automation" hidden>
         <section class="sx-hero">
           <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-          <div class="sx-id"><h2>Automation</h2><p class="ax-lead">What Unshacklarr does on its own: look for new episodes, try them at their release time, tidy up.</p></div>
+          <div class="sx-id"><h2>Automation</h2></div>
           <div class="sx-state ok" id="ax-state"><span class="dot"></span><span><b>Next sync at …</b><small></small></span></div>
           <div class="sx-actions"><button class="btn small" type="button" id="ax-sync">Run a sync now</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg></span><div><h3>Regular sync</h3><p>Looks for the episodes Sonarr is missing, and downloads the ones their service has.</p></div></div>
+          <div class="sx-head"><div><h3>Regular sync</h3></div></div>
           <div class="rt-sum" id="rs-sum"></div>
           <div class="rt-rows">
             <div class="rt-row"><span class="rt-label" id="rs-every-l">Every</span>
@@ -249,7 +248,7 @@
           <p class="rt-who">After that, Unshacklarr stops trying: download the episode by hand from its series.</p>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span><div><h3>At a release time</h3><p>For a series with a release time, its new episode is tried at that time, then again and again for a while.</p></div></div>
+          <div class="sx-head"><div><h3>At a release time</h3></div></div>
           <div class="rt-sum" id="rt-sum"></div>
           <div class="rt-line" id="rt-line" aria-hidden="true"></div>
           <div class="rt-rows">
@@ -263,17 +262,17 @@
           <p class="rt-who" id="rt-who"></p>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span><div><h3>After the download</h3><p>Either Sonarr imports each episode, or the episode stays in the downloads folder for you to import by hand. A series can choose otherwise.</p></div></div>
+          <div class="sx-head"><div><h3>After the download</h3></div></div>
           <div class="ax-seg" id="ax-import" role="group" aria-label="After the download"><button type="button" data-only="false">Sonarr imports it</button><button type="button" data-only="true">Download only</button></div>
           <p class="rt-who" id="ax-import-say"></p>
         </section>
         <section class="sx-card" id="ax-learn-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M17 3l3 3"/></svg></span><div><h3>Auto release times</h3><p>When 3 episodes of a series come out at the same time, that time becomes its release time. Only for series without one. You get a notification and can change it on the series page.</p></div>
+          <div class="sx-head"><div><h3>Auto release times</h3></div>
             <input type="checkbox" class="switch" id="ax-learn" aria-label="Auto release times"></div>
           <p class="rt-who" id="ax-learn-say"></p>
         </section>
         <section class="sx-card" id="ax-window-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><div><h3>Download window</h3><p>Automatic downloads only run between these times, at night for example. Episodes you start by hand are not affected.</p></div></div>
+          <div class="sx-head"><div><h3>Download window</h3><p>Automatic downloads only run between these times, at night for example. Episodes you start by hand are not affected.</p></div></div>
           <div class="sx-grid ax-grid">
             <div class="field"><label for="ax-from">From</label><input id="ax-from" type="time" data-set="download_from"><small>Leave empty for no limit.</small></div>
             <div class="field"><label for="ax-to">To</label><input id="ax-to" type="time" data-set="download_to"><small>It can span midnight, for example 23:00 to 06:00.</small></div>
@@ -282,7 +281,7 @@
           <p class="rt-who" id="ax-window-say"></p>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></span><div><h3>Downloads left waiting</h3><p>When Sonarr keeps its own file or an import fails, the download stays in the downloads folder. You find it in Activity, Waiting in downloads.</p></div></div>
+          <div class="sx-head"><div><h3>Downloads left waiting</h3></div></div>
           <div class="sx-grid ax-grid">
             <div class="field"><label for="ax-left">Delete them after</label><div class="unit"><input id="ax-left" type="number" data-set="leftovers_days" data-num min="0" max="365"><span>days</span></div><small>0: never delete them. Episodes of a series set to Download only are never deleted automatically.</small></div>
           </div>
@@ -291,33 +290,33 @@
       <div class="set-sec sx" data-sec="interface" hidden>
         <section class="sx-hero">
           <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></span>
-          <div class="sx-id"><h2>Interface</h2><p class="rg-purpose">How the page looks: its language, and episode titles hidden or not.</p></div>
+          <div class="sx-id"><h2>Interface</h2></div>
           <div class="sx-state ok" id="if-state"><span class="dot"></span><span><b></b><small></small></span></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg></span><div><h3>Language</h3><p>For this browser only. The page reloads in the new language.</p></div></div>
+          <div class="sx-head"><div><h3>Language</h3><p>For this browser only. The page reloads in the new language.</p></div></div>
           <div class="rg-langs" id="lang-row" role="group" aria-label="Language" translate="no"></div>
         </section>
         <section class="sx-card" id="rg-spoiler-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h11M4 17h7"/><path d="m15 15 6 6M21 15l-6 6"/></svg></span><div><h3>No spoilers</h3><p>Episode titles are blurred in the Schedule, on series pages and in Catch up. Click or tap a title to show it. A series can change this in its Settings tab.</p></div>
+          <div class="sx-head"><div><h3>No spoilers</h3></div>
             <input type="checkbox" class="switch" id="rg-spoiler" aria-label="No spoilers"></div>
         </section>
       </div>
       <div class="set-sec sx" data-sec="region" hidden>
         <section class="sx-hero">
           <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></span>
-          <div class="sx-id"><h2>Region</h2><p class="rg-purpose">Where you watch, and the time zone that release times and syncs follow.</p></div>
+          <div class="sx-id"><h2>Region</h2></div>
           <div class="sx-state ok" id="rg-state"><span class="dot"></span><span><b></b><small></small></span></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg></span><div><h3>Where you watch</h3><p>Which streaming services the Schedule shows, and where a series' links are looked for.</p></div></div>
+          <div class="sx-head"><div><h3>Where you watch</h3></div></div>
           <div class="sx-grid">
-            <div class="field cp"><label>Country</label><input type="text" data-set="country"><small>The Schedule shows its streaming services.</small></div>
+            <div class="field cp"><label>Country</label><input type="text" data-set="country"></div>
             <div class="field"><label for="countries">Series links from</label><input type="text" id="countries" placeholder="FR, BE, CA, CH" spellcheck="false"><small>Comma-separated countries. Unshacklarr looks in their TMDB pages for a series' links on supported services.</small><div class="rg-chips" id="rg-countries"></div></div>
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><div><h3>Clock</h3><p>Release times and the automatic sync follow this time zone.</p></div></div>
+          <div class="sx-head"><div><h3>Clock</h3></div></div>
           <div class="sx-grid">
             <div class="field cp"><label>Time zone</label><input type="text" data-set="timezone" id="tz-select"><small id="tz-hint"></small></div>
           </div>
@@ -330,17 +329,17 @@
           <ol class="dx-order" aria-label="The order options apply in"><li><b>1</b>Every series</li><li><b>2</b>Its service</li><li><b>3</b>The series itself, on its page</li></ol>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><div><h3>For every series</h3><p>Unless its service or the series itself says otherwise.</p></div></div>
+          <div class="sx-head"><div><h3>For every series</h3></div></div>
           <div class="opts" id="defaults"></div>
           <div class="dx-cmd"><span>Every download starts as</span><code id="dx-cmd" translate="no"></code></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span><div><h3>Per service</h3><p>After the defaults, for every series on that service: <code>--profile alt</code> for one, <code>--proxy ca</code> for another.</p></div>
+          <div class="sx-head"><div><h3>Per service</h3></div>
             <select id="svc-add" class="dx-add" aria-label="Add options for a service"></select></div>
           <div id="svc-defaults"></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></span><div><h3>Languages</h3><p>An episode with none of these languages is not downloaded. It is tried again at each sync.</p></div></div>
+          <div class="sx-head"><div><h3>Languages</h3><p>An episode with none of these languages is not downloaded. It is tried again at each sync.</p></div></div>
           <div class="sx-grid">
             <div class="field"><label for="dx-audio">Accepted audio languages</label><input id="dx-audio" type="text" data-set="audio_accept" placeholder="Example: fr, en" spellcheck="false"><small>The episode must have at least one of them. It is checked before the download, then on the file. Empty: the first language of --a-lang or --lang. A series can set its own.</small></div>
             <div class="field"><label for="dx-prefer">Upgrade the audio to</label><input id="dx-prefer" type="text" data-set="audio_prefer" placeholder="Example: fr" spellcheck="false"><small>One language. An episode downloaded in another accepted language (for example English with French subtitles) is downloaded again when the service has this one. Empty: never.</small></div>
@@ -373,7 +372,7 @@
           <div class="sx-actions"><button class="btn small primary" id="ql-add" type="button">New ladder</button><button class="btn small" id="ql-reset" type="button">Reset to the built-in ladders</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><div><h3>Every series downloads by</h3><p>Unless its service (Download options, Per service) or the series itself picks another. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
+          <div class="sx-head"><div><h3>Every series downloads by</h3><p>Unless its service (Download options, Per service) or the series itself picks another. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
           <div class="ax-seg" id="ql-default" role="group" aria-label="Every series downloads by"></div>
         </section>
         <div id="ql-list" class="ql-list"></div>
@@ -381,11 +380,11 @@
       <div class="set-sec sx" data-sec="upgrades" hidden>
         <section class="sx-hero">
           <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
-          <div class="sx-id"><h2>Upgrades</h2><p class="ax-lead">The Upgrades page in Activity asks each service what it has for the files your quality ladder says could be better. These settings decide which series it asks about, and how long an answer is kept.</p></div>
+          <div class="sx-id"><h2>Upgrades</h2></div>
           <div class="sx-state" id="ug-state"><span class="dot"></span><span><b></b><small></small></span></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><div><h3>How often</h3><p>An answer is reused until it is older than this, unless the file changed.</p></div></div>
+          <div class="sx-head"><div><h3>How often</h3><p>An answer is reused until it is older than this, unless the file changed.</p></div></div>
           <div class="sx-grid">
             <div class="field"><label for="ug-recheck">Ask again after</label><div class="unit"><input id="ug-recheck" type="number" data-set="upgrade_recheck_days" data-num min="0" max="3650"><span>days</span></div><small>0: always ask.</small></div>
             <div class="field"><label for="ug-age">Only episodes from the last</label><div class="unit"><input id="ug-age" type="number" data-set="upgrade_max_age_years" data-num min="0" max="100"><span>years</span></div><small>Older episodes are not checked. 0: all of them.</small></div>
@@ -395,12 +394,12 @@
           <label class="ug-switch" id="ug-new-field"><input type="checkbox" class="switch" id="ug-new"><span><b>Check new series</b><small>A series you set up with episodes already on disk is checked within the hour, without waiting for the next automatic check.</small></span></label>
         </section>
         <section class="sx-card" id="ug-other-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><path d="M7.5 7.5h.01"/></svg></span><div><h3>Release group</h3><p>The group your downloads carry at the end of their file names (-unshackle), which Sonarr reads as the release group. Set it in Download options, Group Tag: Unshacklarr then knows it, and every download carries it.</p></div></div>
+          <div class="sx-head"><div><h3>Release group</h3></div></div>
           <label class="ug-switch"><input type="checkbox" class="switch" id="ug-other"><span><b>Replace files from other release groups</b><small>A file from another group (a torrent, an older tool) is listed when the service has the episode on the same step, not only a better one.</small></span></label>
           <div class="ug-groups" id="ug-groups"></div>
         </section>
         <section class="sx-card" id="ug-series-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><div><h3>Series to check</h3><p>Untick a series to leave it out. Its page has the same switch, under What to get.</p></div></div>
+          <div class="sx-head"><div><h3>Series to check</h3></div></div>
           <div class="ug-tools"><input type="search" id="ug-find" placeholder="Find a series" autocomplete="off"><button type="button" class="btn small" id="ug-all">Select all</button><button type="button" class="btn small" id="ug-none">Select none</button></div>
           <div class="ug-list" id="ug-series"></div>
           <small class="muted" id="ug-say"></small>
@@ -440,14 +439,14 @@
           <div class="sx-actions"><button class="btn small" id="test-notif">Test every address</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg></span><div><h3>Where to send</h3><p>This device and your addresses. Each one gets the kinds of message ticked on its line.</p></div>
+          <div class="sx-head"><div><h3>Where to send</h3></div>
             <button class="btn small primary" id="nt-add" type="button">+ Add an address</button></div>
           <div class="nt-target nt-device"><span class="nt-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></span>
             <span class="nt-who"><b>This device</b><small id="push-state">Checking…</small></span><span class="btns" id="push-line"></span></div>
           <div class="nt-targets" id="nt-targets"></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6h18M6 12h12M10 18h4"/></svg></span><div><h3>What to send, and when</h3><p>A kind of message turned off here goes to no address and not to this device. The bell in the page still shows them all.</p></div></div>
+          <div class="sx-head"><div><h3>What to send, and when</h3><p>A kind of message turned off here goes to no address and not to this device. The bell in the page still shows them all.</p></div></div>
           <div class="nt-levels">
             <label class="nt-level ok"><i></i><span><b>Downloaded</b><small>An episode is downloaded and handed to Sonarr</small></span><input type="checkbox" class="switch" data-level="success"></label>
             <label class="nt-level warn"><i></i><span><b>Needs a look</b><small>An episode is late, a replacement kept the old file, or a code must be entered</small></span><input type="checkbox" class="switch" data-level="warning"></label>
@@ -476,24 +475,24 @@
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div><h3>What a message looks like</h3><p>As shown on Discord, and on a phone (this device, ntfy, Telegram, Pushover…).</p></div></div>
+          <div class="sx-head"><div><h3>What a message looks like</h3></div></div>
           <div class="ax-seg" role="group" aria-label="Which message" id="nt-pv-pick"><button type="button" data-pv="success">Downloaded</button><button type="button" data-pv="warning">Needs a look</button><button type="button" data-pv="error">Failed</button></div>
           <div class="nt-preview" id="nt-preview"></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></span><div><h3>Recently sent</h3><p>The last messages that went out, and whether each address took them.</p></div></div>
+          <div class="sx-head"><div><h3>Recently sent</h3></div></div>
           <div class="nt-sent" id="nt-sent"></div>
         </section>
       </div>
       <div class="set-sec sx" data-sec="history" hidden>
         <section class="sx-hero">
           <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></span>
-          <div class="sx-id"><h2>Activity history</h2><p class="rg-purpose">The Activity tab keeps a card for each download, with its full output.</p></div>
+          <div class="sx-id"><h2>Activity history</h2></div>
           <div class="sx-state" id="hs-state"><span class="dot"></span><span><b>Reading the history…</b><small></small></span></div>
           <div class="sx-actions"><button class="btn small" id="hs-open" type="button">Open Activity</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg></span><div><h3>What is kept</h3><p>Whichever limit is reached first applies. The oldest downloads are removed first.</p></div></div>
+          <div class="sx-head"><div><h3>What is kept</h3><p>Whichever limit is reached first applies. The oldest downloads are removed first.</p></div></div>
           <div class="rt-rows">
             <div class="rt-row"><span class="rt-label" id="hs-keep-l">The last</span>
               <div class="ax-seg rt-seg" data-for="hs-keep" role="group" aria-labelledby="hs-keep-l"><button type="button" data-v="100">100 downloads</button><button type="button" data-v="300">300</button><button type="button" data-v="1000">1000</button>
@@ -505,7 +504,7 @@
           <p class="rt-who" id="hs-say"></p>
         </section>
         <section class="sx-card" id="hs-debug-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1V6a3 3 0 0 1 6 0v1.1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6zM12 20v-9M6.5 9C4.6 8.8 3 7.2 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg></span><div><h3>Debug mode</h3><p>Each download's output shows much more: Unshackle's debug log, every call to Sonarr, and the job as unshackle serve reports it.</p></div>
+          <div class="sx-head"><div><h3>Debug mode</h3><p>Each download's output shows much more: Unshackle's debug log, every call to Sonarr, and the job as unshackle serve reports it.</p></div>
             <input type="checkbox" class="switch" id="debug-mode" aria-label="Debug mode"></div>
           <p class="rt-who" id="hs-debug-say"></p>
         </section>
@@ -513,12 +512,12 @@
       <div class="set-sec sx" data-sec="account" hidden>
         <section class="sx-hero">
           <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
-          <div class="sx-id"><h2>Account</h2><p class="rg-purpose">The password that opens Unshacklarr, on every device.</p></div>
+          <div class="sx-id"><h2>Account</h2></div>
           <div class="sx-state ok" id="ac-state"><span class="dot"></span><span><b>Logged in on this device</b><small></small></span></div>
           <div class="sx-actions"><button class="btn small" id="ac-others" type="button">Log out other devices</button><button class="btn small danger" id="logout" type="button">Log out</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><div><h3>Change the password</h3><p>At least 8 characters.<br>Every other device is logged out and stops getting push notifications. This one stays logged in.</p></div></div>
+          <div class="sx-head"><div><h3>Change the password</h3><p>At least 8 characters.<br>Every other device is logged out and stops getting push notifications. This one stays logged in.</p></div></div>
           <div class="sx-grid">
             <div class="field ac-wide"><label for="pw-current">Current password</label><input type="password" id="pw-current" autocomplete="current-password"><small class="pw-match" id="pw-current-say"></small></div>
             <div class="field"><label for="pw-new">New password</label><input type="password" id="pw-new" autocomplete="new-password" minlength="8" aria-describedby="pw-meter"><div class="pw-meter" id="pw-meter" data-score="0" aria-live="polite"><i></i><i></i><i></i><i></i><span></span></div></div>
@@ -527,18 +526,18 @@
           <div class="ac-go"><button class="btn primary" id="pw-change" type="button" disabled>Change the password</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2M16 7l3 3M19 4l2 2"/></svg></span><div><h3>API key <span class="sx-saved" id="ak-saved" hidden>✓ Saved</span></h3><p>For other programs: a script, Home Assistant, Shortcuts.<br>It only opens the /api/v1 routes: never the password, the cookies or the settings.</p></div></div>
+          <div class="sx-head"><div><h3>API key <span class="sx-saved" id="ak-saved" hidden>✓ Saved</span></h3><p>It only opens the /api/v1 routes: never the password, the cookies or the settings.</p></div></div>
           <div class="cmd ac-cmd" id="ak-show" hidden><code id="ak-cmd" translate="no"></code></div>
           <small class="pw-match" id="ak-say"></small>
           <div class="sx-grid" id="ak-pass-row" hidden><div class="field"><label for="ak-pass">Your password</label><input type="password" id="ak-pass" autocomplete="current-password"><small class="pw-match" id="ak-pass-say">Asked again before a key is made.</small></div></div>
           <div class="ac-go"><button class="btn primary" id="ak-new" type="button">Create a key</button><button class="btn danger" id="ak-delete" type="button" hidden>Delete the key</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg></span><div><h3>Lost the password?</h3><p>It cannot be recovered, only replaced, with this command on the server.<br>Your settings and series stay as they are. Every device must log in again.</p></div></div>
+          <div class="sx-head"><div><h3>Lost the password?</h3><p>It cannot be recovered, only replaced, with this command on the server.<br>Your settings and series stay as they are. Every device must log in again.</p></div></div>
           <div class="cmd ac-cmd"><code id="ac-reset" translate="no">docker exec -it unshacklarr unshacklarr reset-password</code></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span><div><h3>Backups</h3><p>Everything but the password: the series, their options, the notifications, the keys.<br>The file holds your API keys and notification addresses: keep it private.</p></div></div>
+          <div class="sx-head"><div><h3>Backups</h3><p>The file holds your API keys and notification addresses: keep it private.</p></div></div>
           <div class="sx-grid ax-grid">
             <div class="field"><label for="bk-every">Back up automatically every</label><div class="unit"><input id="bk-every" type="number" data-set="backup_every_days" data-num min="0" max="30"><span>days</span></div><small>0 turns it off. Each backup is saved in the data folder's backups folder, without the password.</small></div>
             <div class="field"><label for="bk-keep">Keep the last</label><div class="unit"><input id="bk-keep" type="number" data-set="backup_keep" data-num min="1" max="365"><span>backups</span></div><small>Older ones are deleted. To restore one, download it, then use Restore from a file.</small></div>
@@ -549,12 +548,12 @@
           <div class="bk-saved" id="bk-saved" hidden><b id="bk-saved-head">Saved backups</b><div id="bk-list"></div></div>
         </section>
         <section class="sx-card" id="bo-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M17.5 19H7a5 5 0 1 1 .9-9.9A6 6 0 0 1 19.5 11 4 4 0 0 1 17.5 19z"/><path d="M12 16v-5M9.5 13.5 12 11l2.5 2.5"/></svg></span><div><h3>Remote backup</h3><p>Each automatic backup is also sent, encrypted, to a WebDAV folder or an S3 bucket. If this server's disk fails, your settings are still safe.</p></div></div>
+          <div class="sx-head"><div><h3>Remote backup</h3></div></div>
           <div class="ax-seg" id="bo-kind" role="group" aria-label="Send backups to"></div>
           <div id="bo-fields" hidden>
             <div class="sx-grid">
               <div class="field"><label for="bo-url" id="bo-url-l">Folder URL</label><input id="bo-url" type="url" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-url-help"></small></div>
-              <div class="field bo-s3"><label for="bo-bucket">Bucket</label><input id="bo-bucket" type="text" placeholder="my-bucket/unshacklarr" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small>A folder in it is allowed: my-bucket/unshacklarr.</small></div>
+              <div class="field bo-s3"><label for="bo-bucket">Bucket</label><input id="bo-bucket" type="text" placeholder="my-bucket/unshacklarr" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"></div>
               <div class="field"><label for="bo-user" id="bo-user-l">User name</label><input id="bo-user" type="text" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-user-help"></small></div>
               <div class="field"><label for="bo-secret"><span id="bo-secret-l">Password</span> <span class="sx-saved" id="bo-secret-saved" hidden>✓ Saved</span></label><input id="bo-secret" type="password" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-secret-help"></small></div>
               <div class="field bo-s3"><label for="bo-region">Region</label><input id="bo-region" type="text" placeholder="us-east-1" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small>Leave empty for us-east-1. For Cloudflare R2, enter auto.</small></div>
@@ -566,7 +565,7 @@
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></span><div><h3>Sign in through a reverse proxy</h3><p>For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.<br>Your password is still asked before the most sensitive changes.</p></div></div>
+          <div class="sx-head"><div><h3>Sign in through a reverse proxy</h3><p>For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.<br>Your password is still asked before the most sensitive changes.</p></div></div>
           <div class="sx-grid">
             <div class="field"><label for="ac-proxy-header">Header with the user's name</label><input id="ac-proxy-header" type="text" data-set="proxy_auth_header" placeholder="Remote-User" spellcheck="false" autocomplete="off"><small>The header your proxy sets: Remote-User for Authelia, X-authentik-username for Authentik. Empty: off.</small></div>
             <div class="field"><label for="ac-proxy-from">The proxy's addresses</label><input id="ac-proxy-from" type="text" data-set="proxy_auth_from" placeholder="172.18.0.0/16" spellcheck="false" autocomplete="off"><small>The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header is trusted only from there, since anyone else could send it.</small></div>
@@ -660,7 +659,7 @@
     <div class="sx-state ds-state" id="ds-state"><span class="dot"></span><span><b id="ds-state-text"></b><small id="d-since"></small><span class="ds-fix" id="ds-fix" hidden></span></span></div>
 
     <section class="card sx-card" id="ds-source">
-      <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span><div><h3>Source</h3><p>The service Unshackle downloads this series from, and its page there.</p></div></div>
+      <div class="sx-head"><div><h3>Source</h3></div></div>
       <div class="d-sick" id="d-sick" hidden></div>
       <div class="field ds-tmdb">
         <div class="field-head"><span>Found on TMDB</span><small id="d-checked"></small>
@@ -693,7 +692,7 @@
       </div>
       <div id="d-probe-out" role="status"></div>
       <details class="ds-sub" id="d-fb">
-        <summary><b>Fallback service</b><small>Used when the main service doesn't have the episode yet, or not in an accepted language.</small></summary>
+        <summary><b>Fallback service</b></summary>
         <div class="sx-grid ds-svc">
           <div class="field"><label for="d-fb-service">Service</label><select id="d-fb-service"></select></div>
           <div class="field"><label for="d-fb-url">Series URL on that service</label><input type="text" id="d-fb-url" placeholder="URL or ID of the series" spellcheck="false"><small id="d-fb-say">If this service numbers episodes differently, set its numbering in config.yaml.</small></div>
@@ -703,7 +702,7 @@
     </section>
 
     <section class="card sx-card" id="ds-timing">
-      <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><div><h3>When</h3><p>When the service publishes new episodes, so Unshackle tries at the right time.</p></div></div>
+      <div class="sx-head"><div><h3>When</h3></div></div>
       <div class="sx-grid">
         <div class="field">
           <label for="d-release">Release time</label>
@@ -719,7 +718,7 @@
       <div class="release-next" id="d-release-next" hidden></div>
       <div class="release-seen" id="d-release-seen" hidden></div>
       <details class="ds-sub" id="d-bc" data-nav="broadcast">
-        <summary><b>Broadcast schedule</b><small>For when Sonarr's dates are wrong or missing: set the days the episodes air, used instead of Sonarr's.</small></summary>
+        <summary><b>Broadcast schedule</b></summary>
         <label class="check bc-on"><input type="checkbox" id="d-bc-on"> Use its own schedule <small>(the release time counts from these days)</small></label>
         <div class="bc-form" id="d-bc-form" hidden>
           <div class="bc-grid">
@@ -739,12 +738,12 @@
     </section>
 
     <section class="card sx-card" id="ds-quality">
-      <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></svg></span><div><h3>What to get</h3><p>The quality and languages an episode needs, and what happens after the download. Default follows the service, then Settings. An empty language field uses Settings, Download options.</p></div></div>
+      <div class="sx-head"><div><h3>What to get</h3></div></div>
       <div class="sx-grid">
         <div class="field">
           <label for="d-ladder" id="d-ladder-l">Quality ladder</label>
           <select id="d-ladder"></select>
-          <small>Its steps are tried in order against the tracks the service has for the episode (Settings, Quality).</small>
+          
           <label class="ug-line"><input type="checkbox" id="d-skip-upgrades"> Skip upgrades</label>
         </div>
         <div class="field">
@@ -781,7 +780,7 @@
     </section>
 
     <section class="card sx-card" id="ds-options">
-      <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></svg></span><div><h3>Unshackle options</h3><p>Added to the <code>unshackle dl</code> command for this series, and the profiles to log in with.</p></div></div>
+      <div class="sx-head"><div><h3>Unshackle options</h3></div></div>
       <div class="field" id="d-service-field">
         <span>Options of the service</span>
         <div class="opts inh-list" id="d-service-inherited" hidden></div>
@@ -802,7 +801,7 @@
     </section>
 
     <details class="card sx-card adv" id="d-adv" data-nav="numbering">
-      <summary class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg></span><div><h3>Numbering and file names</h3><p>When the service numbers or names episodes differently from Sonarr.</p></div></summary>
+      <summary class="sx-head"><div><h3>Numbering and file names</h3></div></summary>
       <div class="field ds-programmes" id="d-programmes-field">
         <label class="check"><input type="checkbox" id="d-programmes"> Separate programmes</label>
         <small>For a series like BBC Documentaries, where each episode is its own programme on the service: each one is found by its title, so the series needs no URL.</small>
@@ -1036,7 +1035,7 @@
 <dialog class="modal" id="cols-dialog" aria-labelledby="cols-title">
   <form method="dialog">
     <h2 id="cols-title">Episode columns</h2>
-    <p>Pick what the episode list shows, and in which order.</p>
+    
     <ul class="col-rows" id="col-rows"></ul>
     <div class="modal-actions"><button class="btn" value="reset" id="cols-reset">Reset</button><button class="btn primary" value="close">Done</button></div>
   </form>
