@@ -241,7 +241,7 @@ async function loadAccount() {
   try { s = await api("/api/session"); } catch { return; }
   const until = s.expires ? new Date(s.expires * 1000).toLocaleDateString(LOCALE, { day: "numeric", month: "long" }) : "";
   // Let in by the reverse proxy, with no session of its own here: logging out is done there
-  $("#ac-state b").textContent = s.proxy_user && !s.expires ? `Signed in by your reverse proxy as ${s.proxy_user}` : "Logged in on this device";
+  $("#ac-state b").textContent = s.proxy_user && !s.expires ? `Signed in by your reverse proxy as ${s.proxy_user}` : "Signed in on this device";
   $("#logout").hidden = Boolean(s.proxy_user && !s.expires);
   $("#ac-state small").textContent = [until && `until ${until}`, s.password_changed ? `password changed ${ago(s.password_changed)}` : "password set at the first run"].filter(Boolean).join(" · ");
   akShow(s.api_key);
@@ -333,7 +333,7 @@ function renderOffsite() {
   $("#bo-url").placeholder = s3 ? "https://s3.eu-west-3.amazonaws.com" : "https://cloud.example.com/remote.php/dav/files/me/backups";
   $("#bo-url-help").textContent = s3 ? "Backblaze B2, Cloudflare R2, Wasabi, Scaleway, OVH, AWS or MinIO." : "Nextcloud, Synology, QNAP, kDrive, pCloud… The folder must already exist.";
   $("#bo-user-l").textContent = s3 ? "Access key" : "User name";
-  $("#bo-user-help").textContent = s3 ? "" : "Leave empty if the folder needs no login.";
+  $("#bo-user-help").textContent = s3 ? "" : "Leave empty if the folder needs no sign-in.";
   $("#bo-secret-l").textContent = s3 ? "Secret key" : "Password";
   $("#bo-secret-help").textContent = s3 ? (set.backup_remote_secret_set ? "Leave empty to keep the saved one." : "")
     : set.backup_remote_secret_set ? "An app password is safer than your account's password. Leave empty to keep the saved one."
@@ -491,7 +491,7 @@ const BUILDERS = {
     fields: [["topic", "Topic", "unshacklarr-7f3k"], ["server", "Server, if not ntfy.sh", "ntfy.example.com"]],
     url: (f) => f.server ? `ntfys://${f.server.replace(/^https?:\/\//, "").replace(/\/+$/, "")}/${f.topic}` : `ntfy://${f.topic}`,
     check: (f) => /^[\w-]{1,64}$/.test(f.topic) || ["topic", "A topic: letters, digits, - and _"] },
-  Pushover: { hint: "Your user key is shown on pushover.net once you log in. Create an application there to get the API token.",
+  Pushover: { hint: "Your user key is shown on pushover.net once you sign in. Create an application there to get the API token.",
     fields: [["user", "User key"], ["token", "API token"]], url: (f) => `pover://${f.user}@${f.token}`,
     check: (f) => !/^\w{30}$/.test(f.user) ? ["user", "A user key is 30 letters and digits"] : /^\w{30}$/.test(f.token) || ["token", "An API token is 30 letters and digits"] },
   "E-mail": { hint: "For Gmail, Outlook or iCloud: use an app password, created in your account's security settings (not your usual password).",

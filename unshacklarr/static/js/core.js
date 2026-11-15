@@ -178,7 +178,7 @@ async function api(path, { wait = 30, ...opts } = {}) {
       ? `Unshacklarr did not answer after ${wait} s. Try again.`
       : "Unshacklarr can't be reached. Check that it is running, then try again.");
   }
-  if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw new Error("Log in first"); }
+  if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw new Error("Sign in first"); }
   if (!r.ok) throw await responseError(r);
   return r.json();
 }
@@ -396,7 +396,7 @@ function renderWall() {
     });
   const managed0 = document.querySelector("#tab-series .seg [aria-pressed=true]").dataset.managed === "*" && !counts["*"];
   const empty = managed0
-    ? el("div", { className: "empty" }, el("b", { textContent: "No series is downloaded by Unshackle yet." }),
+    ? el("div", { className: "empty" }, el("b", { textContent: "No series is downloading yet." }),
         "Open a series under All, pick a service or one of the links found on TMDB, then save.")
     : el("div", { className: "empty" }, el("b", { textContent: "No series match these filters." }), "Clear the search or pick another filter.");
   $("#wall").removeAttribute("aria-busy");
@@ -429,7 +429,7 @@ async function openDrawer(s, tab, fromRoute = false) {
   $("#d-poster").src = posterSrc(s.poster, s.title);
   $("#d-title").textContent = s.title;
   renderMeta(s);
-  $("#d-service").replaceChildren(el("option", { value: "", textContent: "Not downloaded by Unshackle" }),
+  $("#d-service").replaceChildren(el("option", { value: "", textContent: "Not downloading" }),
     ...S.services.map((t) => el("option", { value: t, textContent: svcName(t) })));
   $("#d-service").value = conf.service || "";
   $("#d-url").value = conf.title || "";
@@ -482,7 +482,7 @@ function renderSeriesState() {
   const conf = current && S.config.series[current.tvdbId], box = $("#ds-state");
   if (!conf) return;
   const sick = conf.service && S.health[current.tvdbId];
-  const [cls, text] = !conf.service ? ["", "Not downloaded by Unshackle"]
+  const [cls, text] = !conf.service ? ["", "Not downloading"]
     : sick ? ["down", `Its downloads from ${svcName(conf.service)} fail`]
     : !conf.title && !conf.programmes ? ["warn", `On ${svcName(conf.service)}: its series URL is missing`]
     : conf.programmes ? ["ok", `Downloaded from ${svcName(conf.service)}, each episode its own programme`]

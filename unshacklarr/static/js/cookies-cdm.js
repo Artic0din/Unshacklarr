@@ -4,8 +4,8 @@ const ago_days = (ts) => { const d = Math.floor((Date.now() / 1000 - ts) / 86400
 function cookieStatus(f) {
   const left = f.expires ? Math.floor((f.expires * 1000 - Date.now()) / 86400000) : null;
   if (f.expired) return ["bad", "Expired", "The service will refuse them: replace them with fresh ones"];
-  // Session cookies carry no date: how long they log in is the service's secret
-  if (left === null || left < 0) return ["mut", "Session only", "Session cookies have no expiry date: only a failed login shows they are over"];
+  // Session cookies carry no date: how long they sign in is the service's secret
+  if (left === null || left < 0) return ["mut", "Session only", "Session cookies have no expiry date: only a failed sign-in shows they are over"];
   const days = left === 1 ? "1 day" : `${left} days`;
   return left < 7 ? ["warn", `Expires in ${days}`, "Replace them soon"] : ["ok", `Valid · ${days} left`, "Nothing to do"];
 }

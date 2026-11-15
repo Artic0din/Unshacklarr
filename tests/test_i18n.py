@@ -74,7 +74,7 @@ CHANGED_ERROR_TEXTS = {
     "{0} services confirmed",
     "{0} services need attention",
     "{0} through Unshackle",
-    "{0}. Check this service's login/session in Unshackle.",
+    "{0}. Check this service's sign-in/session in Unshackle.",
     "{0}: HTTP {1}: {2}",
 }
 
@@ -95,7 +95,7 @@ def test_translations_fit_the_page():
 
 def test_authentication_guidance_translates_without_changing_the_provider_reason():
     from unshacklarr import i18n
-    message = "unshackle serve: HAYU (ref ef1b9f): Hayu playback failed: Invalid Token. Check this service's login/session in Unshackle."
+    message = "unshackle serve: HAYU (ref ef1b9f): Hayu playback failed: Invalid Token. Check this service's sign-in/session in Unshackle."
     translated = i18n.tr(message, "fr")
     assert "Vérifiez la connexion ou la session" in translated
     assert "HAYU (ref ef1b9f)" in translated and "Invalid Token" in translated

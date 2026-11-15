@@ -90,7 +90,7 @@ document.querySelectorAll("[data-health]").forEach((b) => b.onclick = () => {
   showSettingsSec(b.dataset.health);
 });
 
-const CLEAR_CACHE_WHY = "Deletes Unshackle's cache, logins included: services log in again next time";
+const CLEAR_CACHE_WHY = "Deletes Unshackle's cache, sign-ins included: services sign in again next time";
 let confirmingClear = false;  // the question under Maintenance is open
 function renderUnshackleStatus(st) {
   const local = st.mode === "local";

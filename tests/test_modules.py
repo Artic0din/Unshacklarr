@@ -54,7 +54,7 @@ def test_authentication_errors_identify_the_server_or_provider(tmp_path, provide
         assert "HAYU" in message and "Invalid Token" in message and "ef1b9f" in message
         assert "HTTP 401" in message
         assert message.count("ef1b9f") == 1
-        assert "login/session" in message and "refused the API key" not in message
+        assert "sign-in/session" in message and "refused the API key" not in message
     else:
         assert caught.value.error_code == ""
         assert "internal API key" in message and "Settings, Unshackle" in message

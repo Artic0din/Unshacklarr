@@ -4469,14 +4469,14 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 stopped = waits = False
                 authentication_failed = error_code == "AUTH_FAILED"
                 for profile in fallback_profiles(show, config) if error and login_failure(cause or "") and not videos_in(out) else []:
-                    run.say(f"{label}: {show['service']} refused the login, trying the profile {profile}")
+                    run.say(f"{label}: {show['service']} refused the sign-in, trying the profile {profile}")
                     try:
                         ask(service_sxxeyy, profile)
                         error = cause = None
                         error_code = ""
                         authentication_failed = False
                         run.card["profile"] = profile
-                        run.say(f"{label}: logged in with the profile {profile}")
+                        run.say(f"{label}: signed in with the profile {profile}")
                         break
                     except Missing as e:  # logged in: the episode has none of the languages accepted yet
                         authentication_failed = False
@@ -4530,7 +4530,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         run.say(f"\r\n\x1b[31m{label}: Unshackle FAILED\x1b[0m\n{error}".replace("\n", "\r\n"))
                         if login_failure(cause):
                             hint = f"{show['service']} refused Unshackle: its cookies may have expired. Update them in Settings › Services."
-                            tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Login failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
+                            tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Sign-in failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
                             run.finish("failed", cause, hint, auth_failed=authentication_failed)
                         else:
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe history in Activity has Unshackle's full output.", batch=batch, details=episode_details(ep, show)))

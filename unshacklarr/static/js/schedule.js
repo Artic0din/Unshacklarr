@@ -174,9 +174,9 @@ async function loadWeek() {
   catch (e) { if (current()) $("#week-board").replaceChildren(failed(`Could not load the calendar: ${e.message}`, loadWeek)); return; }
   if (current()) renderWeek();  // not a week left since, whether it loaded or failed
 }
-const countText = (list) => {  // "2 episodes · 1 managed"
-  const mine = list.filter((e) => e.managed).length;
-  return `${list.length} episode${list.length > 1 ? "s" : ""}${!mine ? "" : mine === list.length ? (mine > 1 ? ", all managed" : ", managed") : ` · ${mine} managed`}`;
+const countText = (list) => {  // "2 episodes · 1 downloading"
+  const mine = list.filter((e) => e.managed).length, episodes = list.length === 1 ? "1 episode" : `${list.length} episodes`;
+  return !mine ? episodes : mine === list.length ? `${episodes}, ${mine > 1 ? "all downloading" : "downloading"}` : `${episodes} · ${mine} downloading`;
 };
 function renderWeek() {
   const start = weekStartOf(cal.date), now = new Date(), today = isoDay(now), tomorrow = isoDay(addDays(startOfDay(now), 1));

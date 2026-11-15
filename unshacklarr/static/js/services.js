@@ -107,7 +107,7 @@ function serviceModels() {
     const methods = listed ? S.authenticationMethods[key] : [];
     const observation = setup || live?.observation || status.authentication || (status.state === "unknown" && methods.length
       ? { state: "ready", available_methods: methods } : null);
-    const label = status.state === "anonymous" ? "No login required"
+    const label = status.state === "anonymous" ? "No sign-in required"
       : observation ? authenticationLabel(observation)
       : status.state === "needs_user_action" ? "Sign-in needed"
       : status.state === "validated" ? `Confirmed ${ago(status.validated_at)}` : "Not checked yet";
@@ -203,7 +203,7 @@ function renderServices() {
 
   const methodsCell = (m) => m.methods === null ? [el("span", { className: "muted", textContent: "—" })]
     : m.methods.length ? [el("small", { textContent: "Supports" }), el("div", { className: "sv-chips" }, ...m.methods.map((x) => el("span", { className: "sv-chip", textContent: AUTH_METHOD_NAMES[x] || x })))]
-    : m.anonymous ? [el("span", { textContent: "No login required" })]
+    : m.anonymous ? [el("span", { textContent: "No sign-in required" })]
     : [el("span", { className: "muted", textContent: "—" })];  // listed without methods (its server unreachable): not known
   const usedCell = (m) => [el("span", { className: m.used === null ? "muted" : "", textContent: m.used === null ? "—" : m.used === 0 ? "No series" : m.used === 1 ? "1 series" : `${m.used} series` })];
   const actionCell = (m) => m.used ? [el("button", { className: "btn small", textContent: "Show series", onclick: () => showSeriesOf(m.service) })] : [];

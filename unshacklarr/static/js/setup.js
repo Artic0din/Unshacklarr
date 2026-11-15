@@ -46,8 +46,8 @@ function showLogin() {
   if (!$("#gate").hidden) return;
   const pw = el("input", { type: "password", name: "password", autocomplete: "current-password", required: true, autofocus: true });
   const error = el("div");
-  gate("Log in to continue.", el("div", { className: "card" }, field("Password", pw), error),
-    el("button", { className: "btn primary", type: "submit", textContent: "Log in" }));
+  gate("Sign in to continue.", el("div", { className: "card" }, field("Password", pw), error),
+    el("button", { className: "btn primary", type: "submit", textContent: "Sign in" }));
   $("#gate-form").onsubmit = async (e) => {
     e.preventDefault();
     try { await api("/api/login", { method: "POST", body: JSON.stringify({ password: pw.value }) }); location.reload(); }
