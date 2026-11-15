@@ -701,7 +701,8 @@ def real_config(body: dict, saved: dict) -> None:
     for service, levels in (body.get("service_defaults") or {}).items():
         for level in OPTION_LEVELS:
             levels[level] = real_options(levels.get(level), (saved["service_defaults"].get(service) or {}).get(level))
-    # each Sonarr's saved name: a renamed one is found by its address, as check_sonarrs finds its API key
+    # each Sonarr's saved name, found by its address first: renamed onto the name of one removed in the same edit,
+    # it gets its own proxy passwords back, never the removed one's; by its name when its address changed
     before_sonarrs = {o.get("name"): o for o in saved["settings"].get("sonarrs") or []}
     was = {}
     given = (body.get("settings") or {}).get("sonarrs") if isinstance(body.get("settings"), dict) else None
@@ -709,7 +710,7 @@ def real_config(body: dict, saved: dict) -> None:
         if not isinstance(i, dict):
             continue
         name, url = str(i.get("name") or "").strip(), str(i.get("url") or "").strip().rstrip("/")
-        if old := before_sonarrs.get(name) or next((o for o in before_sonarrs.values() if url and o.get("url") == url), None):
+        if old := next((o for o in before_sonarrs.values() if url and o.get("url") == url), None) or before_sonarrs.get(name):
             was[name] = old.get("name")
     for key, show in (body.get("series") or {}).items():
         before = saved["series"].get(int(key)) if str(key).isdigit() else None
