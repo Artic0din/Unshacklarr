@@ -6722,3 +6722,22 @@ console.log(JSON.stringify([renamed, S.config.series]));
     assert renamed["4"] == {"sonarrs": {"sonarr-9": {"off": True}}}  # passing over a leftover's name never takes it
     assert after["2"] == {"sonarrs": {}}  # removed
     assert after["4"] == {"sonarrs": {}}  # a new Sonarr starts clean
+
+
+def test_a_renamed_sonarr_keeps_the_proxy_passwords_its_series_set_for_it(tmp_path, monkeypatch):
+    # The page moves a series' settings to the new name; its masked proxy password is found by the Sonarr's address,
+    # the way check_sonarrs keeps its API key, not asked for again on every series
+    import copy
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = web.read_config()
+    web.write_config({**config, "settings": {**config["settings"], "sonarrs": [{"name": "sonarr-2", "url": "http://s2:8989"}]},
+                      "series": {1: {"service": "X", "title": "t", "sonarrs": {"sonarr-2": {"options": {"--proxy": "http://u:pw789@p:2"}}}}}})
+    back = copy.deepcopy(web.public_config(web.read_config()))
+    back["settings"]["sonarrs"][0]["name"] = "sonarr-uhd"
+    back["series"][1]["sonarrs"] = {"sonarr-uhd": back["series"][1]["sonarrs"].pop("sonarr-2")}
+    web.real_config(back, web.read_config())
+    assert back["series"][1]["sonarrs"]["sonarr-uhd"]["options"]["--proxy"] == "http://u:pw789@p:2"

@@ -701,6 +701,16 @@ def real_config(body: dict, saved: dict) -> None:
     for service, levels in (body.get("service_defaults") or {}).items():
         for level in OPTION_LEVELS:
             levels[level] = real_options(levels.get(level), (saved["service_defaults"].get(service) or {}).get(level))
+    # each Sonarr's saved name: a renamed one is found by its address, as check_sonarrs finds its API key
+    before_sonarrs = {o.get("name"): o for o in saved["settings"].get("sonarrs") or []}
+    was = {}
+    given = (body.get("settings") or {}).get("sonarrs") if isinstance(body.get("settings"), dict) else None
+    for i in given if isinstance(given, list) else []:  # its shape is checked later, by check_sonarrs
+        if not isinstance(i, dict):
+            continue
+        name, url = str(i.get("name") or "").strip(), str(i.get("url") or "").strip().rstrip("/")
+        if old := before_sonarrs.get(name) or next((o for o in before_sonarrs.values() if url and o.get("url") == url), None):
+            was[name] = old.get("name")
     for key, show in (body.get("series") or {}).items():
         before = saved["series"].get(int(key)) if str(key).isdigit() else None
         for level in OPTION_LEVELS:
@@ -709,7 +719,7 @@ def real_config(body: dict, saved: dict) -> None:
             show["fallback"]["service_options"] = real_options(show["fallback"].get("service_options"), ((before or {}).get("fallback") or {}).get("service_options"))
         for name, per in (show.get("sonarrs") or {}).items() if isinstance(show.get("sonarrs"), dict) else ():
             if isinstance(per, dict) and "options" in per:  # the options this series adds for another Sonarr's copies
-                per["options"] = real_options(per.get("options"), (((before or {}).get("sonarrs") or {}).get(name) or {}).get("options"))
+                per["options"] = real_options(per.get("options"), (((before or {}).get("sonarrs") or {}).get(was.get(name, name)) or {}).get("options"))
     notifications = body.get("notifications") or {}
     urls = [t["url"] for t in sonarr_sync.notification_targets(saved["notifications"])]
     for target in notifications.get("targets") or []:
