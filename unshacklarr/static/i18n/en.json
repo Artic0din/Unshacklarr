@@ -4099,10 +4099,6 @@
   "show['service']",
   "match['how']"
  ],
- "{0}: no Sonarr named {1} in Settings, Sonarr": [
-  "where",
-  "name"
- ],
  "{0}: no accepted language on {1}, trying {2} as {3}": [
   "label",
   "show['service']",
@@ -4163,6 +4159,10 @@
  ],
  "{0}: the default device": [
   "svcName(service)"
+ ],
+ "{0}: the settings for Sonarr {1} must be an object": [
+  "where",
+  "name"
  ],
  "{0}: type the passphrase it was sent with": [
   "e"

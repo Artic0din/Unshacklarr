@@ -4393,11 +4393,7 @@ def test_a_series_switches_another_sonarr_off_or_adds_options_for_it(tmp_path, m
     specs = [{"flag": "--atmos", "is_flag": True, "choices": []}]
     assert web.check_series_sonarrs({"sonarr-4k": {"off": True, "ladder": "1080p", "options": {}}}, body, specs, "1") == {"sonarr-4k": {"off": True}}  # a ladder is that Sonarr's
     assert web.check_series_sonarrs({"sonarr-4k": {}}, body, specs, "1") == {}  # nothing of its own: left out
-    try:
-        web.check_series_sonarrs({"nope": {"off": True}}, body, specs, "1")
-        raise AssertionError("a Sonarr not in Settings was taken")
-    except web.web.HTTPBadRequest:
-        pass
+    assert web.check_series_sonarrs({"nope": {"off": True}}, body, specs, "1") == {}  # a Sonarr taken out of Settings: dropped
 
 def test_the_download_window_keeps_the_automatic_sync_to_its_hours(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)

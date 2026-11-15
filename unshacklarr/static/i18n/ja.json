@@ -1895,7 +1895,7 @@
  "All libraries ({0})": "すべてのライブラリ（{0}）",
  "Filter by Sonarr library": "Sonarr ライブラリで絞り込む",
  "The Sonarr settings of {0} must be an object": "{0} の Sonarr 設定はオブジェクトである必要があります",
- "{0}: no Sonarr named {1} in Settings, Sonarr": "{0}：設定 › Sonarr に {1} という名前の Sonarr がありません",
+ "{0}: the settings for Sonarr {1} must be an object": "{0}：Sonarr {1} の設定はオブジェクトである必要があります",
  "Advanced": "詳細設定",
  "Download options for {0}": "{0} のダウンロードオプション",
  "Libraries": "ライブラリ",

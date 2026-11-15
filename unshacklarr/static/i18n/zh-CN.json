@@ -1900,7 +1900,7 @@
  "All libraries ({0})": "所有媒体库（{0}）",
  "Filter by Sonarr library": "按 Sonarr 媒体库筛选",
  "The Sonarr settings of {0} must be an object": "{0} 的 Sonarr 设置必须是一个对象",
- "{0}: no Sonarr named {1} in Settings, Sonarr": "{0}：设置 › Sonarr 中没有名为 {1} 的 Sonarr",
+ "{0}: the settings for Sonarr {1} must be an object": "{0}：Sonarr {1} 的设置必须是一个对象",
  "Advanced": "高级",
  "Download options for {0}": "{0} 的下载选项",
  "Libraries": "媒体库",

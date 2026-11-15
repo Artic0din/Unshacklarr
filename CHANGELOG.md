@@ -40,6 +40,7 @@ Every change worth knowing, newest first. The format follows
 ### Fixed
 
 - The `--remote` servers' options now show in the first 10 minutes after the machine starts, instead of being missing until then.
+- Renaming or removing a Sonarr in Settings no longer makes every later Save fail with "no Sonarr named …": a rename keeps each series' own settings for it (such as switched off), and a removal drops them.
 - Failed downloads now show the provider's final reason instead of a Python traceback in Activity and notifications.
 - Error messages now identify the failing service or server, retain safe upstream details, redact credentials, and give a useful next action.
 - Hayu suggestions now replace an episode-only link with the show's page found by title, so later seasons are included instead of only that episode's season.

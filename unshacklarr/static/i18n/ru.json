@@ -1893,7 +1893,7 @@
  "All libraries ({0})": "Все библиотеки ({0})",
  "Filter by Sonarr library": "Фильтр по библиотеке Sonarr",
  "The Sonarr settings of {0} must be an object": "Настройки Sonarr для {0} должны быть объектом",
- "{0}: no Sonarr named {1} in Settings, Sonarr": "{0}: в Настройки, Sonarr нет Sonarr с именем {1}",
+ "{0}: the settings for Sonarr {1} must be an object": "{0}: настройки Sonarr {1} должны быть объектом",
  "Advanced": "Дополнительно",
  "Download options for {0}": "Параметры загрузки для {0}",
  "Libraries": "Библиотеки",

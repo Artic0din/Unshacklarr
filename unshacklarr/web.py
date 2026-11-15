@@ -937,8 +937,10 @@ def check_series_sonarrs(value, body: dict, dl_specs: list[dict], where: str) ->
     names = {str(i.get("name") or "") for i in (body.get("settings") or {}).get("sonarrs") or []} | set(sonarr_sync.SONARRS)
     out = {}
     for name, per in value.items():
-        if name not in names or not isinstance(per, dict):
-            raise web.HTTPBadRequest(text=f"{where}: no Sonarr named {name} in Settings, Sonarr")
+        if name not in names:  # a Sonarr taken out of Settings: what the series had for it goes with it
+            continue
+        if not isinstance(per, dict):
+            raise web.HTTPBadRequest(text=f"{where}: the settings for Sonarr {name} must be an object")
         own = {}
         if per.get("off") is True:  # its new episodes are not downloaded for that Sonarr
             own["off"] = True

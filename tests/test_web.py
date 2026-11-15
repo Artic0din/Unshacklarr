@@ -6674,3 +6674,51 @@ def test_two_logouts_at_once_both_stay_logged_out(tmp_path, monkeypatch):
         t.join(5)
     closed = real_read(web.LOGGED_OUT_FILE, {})
     assert {first.rpartition(".")[2], second.rpartition(".")[2]} <= set(closed)
+
+
+def test_a_sonarr_removed_from_settings_drops_its_series_settings_instead_of_refusing_the_save(monkeypatch):
+    # Renamed or removed in Settings, Sonarr: the series' own settings for it went with it, never a Save refused
+    # until config.yaml was edited by hand
+    import pytest
+    from aiohttp import web as aioweb
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "SONARRS", {"sonarr-4k": {}})
+    body = {"settings": {"sonarrs": [{"name": "sonarr-4k"}]}}
+    kept = web.check_series_sonarrs({"sonarr-4k": {"off": True}, "sonarr-2": {"off": True}}, body, [], "Show")
+    assert kept == {"sonarr-4k": {"off": True}}
+    with pytest.raises(aioweb.HTTPBadRequest) as refused:
+        web.check_series_sonarrs({"sonarr-4k": "off"}, body, [], "Show")
+    assert refused.value.text == "Show: the settings for Sonarr sonarr-4k must be an object"
+
+
+def test_renaming_a_sonarr_in_the_page_keeps_each_series_settings_for_it(tmp_path):
+    # The server drops a name no longer in Settings: a rename must carry the series' own settings (off) across first,
+    # or that Sonarr starts downloading the series switched off for it; a removal takes them away
+    import json
+    import re
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    src = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "quality.js").read_text()
+    code = re.search(r"^function moveSonarrRefs\(.*?^\}$", src, re.M | re.S).group(0)
+    harness = code + """
+const S = { config: { series: { 1: { sonarrs: { "sonarr-2": { off: true } } }, 2: { sonarrs: { "sonarr-4k": { off: true } } }, 3: {},
+  4: { sonarrs: { "sonarr-u": { off: true }, "sonarr-9": { off: true } } } } } };  // 4: a removed Sonarr's leftovers
+let name = "sonarr-2";
+for (const typed of ["sonarr-", "sonarr-u", "sonarr-uhd"]) { moveSonarrRefs(name, typed); name = typed; }
+const renamed = JSON.parse(JSON.stringify(S.config.series));
+moveSonarrRefs("sonarr-4k", "");
+moveSonarrRefs("", "sonarr-9");  // added under a leftover's name
+console.log(JSON.stringify([renamed, S.config.series]));
+"""
+    done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    renamed, after = json.loads(done.stdout)
+    assert renamed["1"] == {"sonarrs": {"sonarr-uhd": {"off": True}}}  # each keystroke's name, the last one kept
+    assert renamed["2"] == {"sonarrs": {"sonarr-4k": {"off": True}}} and renamed["3"] == {}
+    assert renamed["4"] == {"sonarrs": {"sonarr-9": {"off": True}}}  # passing over a leftover's name never takes it
+    assert after["2"] == {"sonarrs": {}}  # removed
+    assert after["4"] == {"sonarrs": {}}  # a new Sonarr starts clean

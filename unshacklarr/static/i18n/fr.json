@@ -1883,7 +1883,7 @@
  "All libraries ({0})": "Toutes les bibliothèques ({0})",
  "Filter by Sonarr library": "Filtrer par bibliothèque Sonarr",
  "The Sonarr settings of {0} must be an object": "Les réglages Sonarr de {0} doivent être un objet",
- "{0}: no Sonarr named {1} in Settings, Sonarr": "{0}: aucun Sonarr nommé {1} dans Réglages, Sonarr",
+ "{0}: the settings for Sonarr {1} must be an object": "{0} : les réglages du Sonarr {1} doivent être un objet",
  "Advanced": "Avancé",
  "Download options for {0}": "Options de téléchargement pour {0}",
  "Libraries": "Bibliothèques",
