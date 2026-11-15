@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Error text, placeholders, the Settings group labels and field edges now meet contrast, availability on a service shows in the accent colour instead of the green that means done, "New" labels no longer look like success, and the system's Increase Contrast setting is followed.
 - The translation files match the page again: 13 texts it no longer shows were removed from every language, and the sign-in texts added since are listed for translating.
 - Settings now starts, observes, answers, cancels, retries, and restores service sign-in sessions, with transient approval details and fixed redacted lifecycle and fallback states.
 - Device approval links and codes are now delivered only through a transient, job-owned API and cleared on every terminal path instead of being retained in download history, logs, notifications, or diagnostics.
