@@ -114,13 +114,17 @@ function serviceModels() {
     // Cookie files are Unshackle's own, on the main server: another backend's row has none to show
     const cookieFiles = backend ? null : (files[service] || []).map((f) => ({ ...f, st: cookieStatus(f) }));
     // the backend that downloads it: the one set for it, else the main one, else (only on another server) that one
-    const onMain = identities.has(service);
-    const selected = S.config.service_defaults?.[service]?.backend || (onMain ? "" : [...identities.values()].find((i) => i.service === service)?.backend || "");
+    // from the live service list (as the download's backend is picked), not old sign-in records or cookie files
+    const inventory = Object.keys(S.authenticationMethods || {}), set = S.config.service_defaults?.[service]?.backend || "";
+    const selected = set && inventory.includes(`${service}@${set}`) ? set
+      : inventory.includes(service) ? "" : (inventory.find((k) => k.startsWith(`${service}@`)) || "").split("@")[1] || "";
     const used = backend === selected ? seriesOf(service) : null;
     const cookieless = status.state === "anonymous" || (listed && methods.length > 0 && !methods.includes("cookies"));  // an empty list: not known
     // no cookie file is fine when none is needed, or a confirmed sign-in has another way in (credentials,
     // pairing): a cookie-only service confirmed before its last file went still needs one
-    const signsInWithout = status.state === "anonymous" || (status.state === "validated" && listed && methods.some((m) => m !== "cookies"));
+    const used_method = status.authentication?.method;  // the method that signed in, when recorded
+    const signsInWithout = status.state === "anonymous" || (status.state === "validated"
+      && (used_method ? used_method !== "cookies" : listed && methods.some((m) => m !== "cookies")));
     const missing = Boolean(cookieFiles && !cookieFiles.length && !cookieless && used && servicesCookies?.folder && !signsInWithout);
     const attention = status.state === "needs_user_action" || Boolean(used && (missing || cookieFiles?.some((f) => f.st[0] === "bad")));
     return { key, service, backend, name: svcName(service) + (backend ? ` · ${backend}` : ""), label, state: status.state, setup, listed,
