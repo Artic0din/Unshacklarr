@@ -17,6 +17,11 @@ CHANGED_ERROR_TEXTS = {
     "{0} through Unshackle",
     "{0}. Check this service's login/session in Unshackle.",
     "{0}: HTTP {1}: {2}",
+    "Add an option",
+    "Dismiss",
+    "Failing: {0}",
+    "Main",
+    "Subtitles: {0}",
 }
 
 

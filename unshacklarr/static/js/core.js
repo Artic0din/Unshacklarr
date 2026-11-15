@@ -1,4 +1,7 @@
 const $ = (s) => document.querySelector(s);
+/* Scrolling that glides, unless this person asked their system for less motion. */
+let SCROLL = "smooth";
+if (matchMedia("(prefers-reduced-motion: reduce)").matches) SCROLL = "auto";
 /* A help text, one sentence a line: easier to read than a block. */
 const breakSentences = (text) => text.replace(/([.!?]) (?=\p{Lu})/gu, "$1\n").replace(/([。！？])(?=\S)/gu, "$1\n");
 /* A series' poster, or one made of its initials when Sonarr has none or it doesn't load: never the browser's broken
@@ -183,16 +186,17 @@ async function api(path, { wait = 30, ...opts } = {}) {
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */
 const slowHint = (svc) => setTimeout(() => toast(`${svc} is slow to answer. It may be waiting for you to sign in: look at Unshackle's log.`, false, ["OK", () => {}]), 20000);
 function toast(msg, err = false, action = null) {  // action: [label, onclick], e.g. ["Undo", …]
-  const t = document.createElement("div");
-  t.className = "toast" + (err ? " err" : "") + (action ? " act" : "");
+  const t = document.createElement("div"), stays = err || action;  // an error or a choice waits to be read: no time limit
+  t.className = "toast" + (err ? " err" : "") + (stays ? " act" : "");
   t.setAttribute("role", err ? "alert" : "status");
   t.textContent = msg;
   if (action) t.append(el("button", { textContent: action[0], onclick: () => { t.remove(); action[1](); } }));
+  if (stays) t.append(el("button", { className: "toast-x", textContent: "Dismiss", onclick: () => t.remove() }));
   $("#toasts").append(t);
   onTop($("#toasts"));  // above a window open as a modal too
-  // it stays while the pointer is on it or its text is selected (an error to copy), then goes a moment later
-  const later = () => setTimeout(() => t.matches(":hover") || getSelection().containsNode(t, true) ? later() : t.remove(), err || action ? 6000 : 2500);
-  later();
+  // a plain note goes by itself, but not while the pointer is on it or its text is selected
+  const later = () => setTimeout(() => t.matches(":hover") || getSelection().containsNode(t, true) ? later() : t.remove(), 2500);
+  if (!stays) later();
 }
 
 let unsaved = false;
@@ -274,7 +278,7 @@ function optionsEditor(root, specs, values) {
 
 /* Search box over the options not set yet: matches the flag, its short form and its help. */
 function optionPicker(free, onPick) {
-  const input = el("input", { type: "text", placeholder: "Add an option: type to search, e.g. lang, audio, atmos",
+  const input = el("input", { type: "text", placeholder: "Add an option: type to search, e.g. lang, audio, atmos", ariaLabel: "Add an option",
     role: "combobox", ariaAutoComplete: "list", ariaExpanded: "false", autocomplete: "off", spellcheck: false });
   const list = el("ul", { className: "picker-list", role: "listbox", hidden: true });
   list.id = "pl" + Math.random().toString(36).slice(2);
@@ -373,9 +377,10 @@ function renderWall() {
             el("span", { textContent: n, ...(off(n, main) ? { className: "lib-off", title: "Switched off" } : {}) })])));
       }
       const sick = conf?.service && S.health[s.tvdbId];
-      if (sick) art.append(el("span", { className: "sick", title: `Its last ${sick.failing} downloads failed${sick.cause ? `: ${sick.cause}` : ""}`, textContent: "!" }));
+      if (sick) art.append(el("span", { className: "sick", role: "img", ariaLabel: sick.cause ? `Failing: ${sick.cause}` : "Failing",
+        title: `Its last ${sick.failing} downloads failed${sick.cause ? `: ${sick.cause}` : ""}`, textContent: "!" }));
       if (S.config.hidden_series.includes(s.tvdbId)) {
-        const off = el("span", { className: "off", title: "Hidden from the schedule" });
+        const off = el("span", { className: "off", role: "img", ariaLabel: "Hidden from the schedule", title: "Hidden from the schedule" });
         off.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${EYE_SHUT}</svg>`;
         art.append(off);
       }
@@ -453,9 +458,10 @@ async function openDrawer(s, tab, fromRoute = false) {
     || conf.programmes);
   optionsEditor($("#d-opts"), S.dlOptions, conf.options);
   renderHideToggle();
+  if (!$("#drawer").classList.contains("open")) drawerOpener = document.activeElement === document.body ? null : document.activeElement;
   $("#drawer").classList.add("open");
-  $("#drawer").setAttribute("aria-hidden", "false");
   $("#backdrop").classList.add("open");
+  drawerModal(true);
   if (!document.body.classList.contains("drawer-open")) wallScroll = scrollY;  // a phone scrolls the page itself: back to it on close
   document.body.classList.add("drawer-open");
   showDrawerTab(tab || (conf.service ? "episodes" : "settings"), true);  // a new series needs its service first
@@ -465,7 +471,7 @@ async function openDrawer(s, tab, fromRoute = false) {
   dsPicked = null;
   requestAnimationFrame(dsLight);  // its first card lit in the shortcuts
   scrollTo({ top: 0 });
-  $("#close").focus();
+  ($("#close").getClientRects().length ? $("#close") : $("#d-back")).focus();  // a phone shows Back, not Close
   loadSuggestions(s);
   await renderServiceOptions(conf);
 }
@@ -504,6 +510,17 @@ $("#home").onclick = async (e) => {
   scrollTo({ top: 0 });
 };
 let wallScroll = 0;
+/* The drawer is a modal: with it open the page behind cannot be reached by keyboard or screen reader, and closed, it is out of the tab order. */
+let drawerOpener = null;
+function drawerModal(open) {
+  $("#drawer").inert = !open;
+  for (const behind of document.querySelectorAll("body > header, main")) behind.inert = open;
+}
+/* Closed, focus goes back to what opened it if that is still there and in sight, else to the series' poster. */
+function returnFocus(opener, tvdbId) {
+  const back = opener?.isConnected && opener.getClientRects().length ? opener : document.querySelector(`.poster[data-tvdb="${tvdbId}"]`);
+  back?.focus({ preventScroll: true });
+}
 /* A series' settings changed since its panel opened, and not saved: closing it asks first. */
 let drawerSnapshot = null;
 const drawerChanged = () => !!current && drawerSnapshot?.id === current.tvdbId && stableJSON(S.config.series[current.tvdbId]) !== stableJSON(JSON.parse(drawerSnapshot.conf));
@@ -531,15 +548,16 @@ async function closeDrawer(fromRoute = false) {
   if (!fromRoute && drawerPushed) { history.back(); return true; }  // popstate closes it, and back stays in step
   if (drawerTab === "settings") leaveNews((n) => n.series);  // its settings were open: their news are seen
   $("#drawer").classList.remove("open");
-  $("#drawer").setAttribute("aria-hidden", "true");
   $("#backdrop").classList.remove("open");
+  drawerModal(false);
   document.body.classList.remove("drawer-open");
   const id = current.tvdbId;
   current = null;
   if (!fromRoute) navigate(false);  // opened from a link: no history entry to go back to
-  renderWall();  // rebuilds the cards: focus the new card of the series just closed
+  renderWall();  // rebuilds the cards: a poster that opened it is a new one now
   scrollTo({ top: wallScroll });
-  document.querySelector(`.poster[data-tvdb="${id}"]`)?.focus({ preventScroll: true });
+  returnFocus(drawerOpener, id);
+  drawerOpener = null;
   return true;
 }
 function keepDrawer(fromRoute) {  // it stays open; the back button already left its address: back to it

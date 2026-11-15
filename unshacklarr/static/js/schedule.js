@@ -59,11 +59,9 @@ const EYE_OPEN = '<path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z"/><circl
 function renderHideToggle() {
   if (!current) return;
   const hidden = isHidden(current), b = $("#d-hide");
-  b.setAttribute("aria-pressed", hidden);
+  b.setAttribute("aria-pressed", !hidden);  // its name stays "In schedule": the state is what is pressed
   b.title = hidden ? "Hidden from the schedule: show it again" : "Hide this series from the schedule";
-  b.ariaLabel = b.title;
   b.querySelector("svg").innerHTML = hidden ? EYE_SHUT : EYE_OPEN;
-  b.querySelector(".long").textContent = hidden ? "Hidden in schedule" : "In schedule";
 }
 $("#d-hide").onclick = () => hideSeries({ tvdbId: current.tvdbId, series: current.title }, !isHidden(current));
 
@@ -251,7 +249,7 @@ function renderMonth() {
     const cell = el("button", {
       className: "cal-cell" + (date.getMonth() !== first.getMonth() ? " out" : "") + (key === today ? " today" : "") + (key === cal.pick ? " picked" : ""),
       ariaLabel: `${date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })}: ${list.length} episode${list.length === 1 ? "" : "s"}`,
-      onclick: () => { cal.pick = key; renderMonth(); $("#cal-day").scrollIntoView({ behavior: "smooth", block: "nearest" }); },
+      onclick: () => { cal.pick = key; renderMonth(); $("#cal-day").scrollIntoView({ behavior: SCROLL, block: "nearest" }); },
     },
       el("span", { className: "cal-date", textContent: date.getDate() }),
       el("span", { className: "cal-count" }, ...(mine ? [el("i", { className: "mine", textContent: mine })] : []),
@@ -417,9 +415,9 @@ function renderHealth(h) {
   for (const [name, label] of [["unshackle", "Unshackle"], ["sonarr", "Sonarr"]]) {
     const st = h[name] || {}, b = document.querySelector(`[data-health=${name}]`);
     b.querySelector(".dot").className = "dot " + (st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "");
+    b.querySelector("small").textContent = st.ok === false ? "Unreachable" : "";  // said in words, not by the colour alone
     b.title = st.ok ? `${label} ${st.version || ""} is running${st.latest ? ` (${st.latest} is out)` : ""}`
       : st.ok === false ? st.error || `${label} is unreachable` : `Checking ${label}…`;
-    b.ariaLabel = b.title;
   }
   const detailed = h.unshackle && ("tools" in h.unshackle || h.unshackle.ok === false);
   if (detailed) unshackleDetails = {

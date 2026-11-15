@@ -52,7 +52,7 @@ function ladderSelect(value, inherited, onchange) {
    default; picking it follows that level again, any other is the series' own. */
 function defaultChips(box, choices, own, inherited, pick) {
   const now = own ?? inherited;
-  box.replaceChildren(...choices.map(([v, label]) => el("button", { type: "button", role: "radio", ariaChecked: String(now === v),
+  box.replaceChildren(...choices.map(([v, label]) => el("button", { type: "button", ariaPressed: String(now === v),
     onclick: () => pick(v === inherited ? undefined : v) },
     el("span", { textContent: label }), ...(v === inherited ? [el("small", { className: "chip-default", textContent: "default" })] : []))));
 }
@@ -67,7 +67,7 @@ function renderQuality() {
   box.querySelector("small").textContent = [list.length === 1 ? "1 ladder" : `${list.length} ladders`,
     picked === 1 ? "1 service or series picks its own" : picked ? `${picked} services or series pick their own` : ""].filter(Boolean).join(" · ");
   $("#ql-default").replaceChildren(...[["", "Off"], ...list.map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
-    type: "button", role: "radio", textContent: label, ariaChecked: String((def === "off" ? "" : def) === v),
+    type: "button", textContent: label, ariaPressed: String((def === "off" ? "" : def) === v),
     onclick: () => { set.quality_ladder = v; dirty(); renderQuality(); } })));
   $("#ql-list").replaceChildren(...(list.length ? list.map(ladderCard)
     : [el("section", { className: "sx-card" }, el("p", { className: "dx-empty", textContent: "No ladder yet. Create one with New ladder, or bring back the built-in ones." }))]));
@@ -362,7 +362,7 @@ $("#sn-add").onclick = () => {
 function renderImportMode() {
   if (!S.config?.settings) return;
   const only = S.config.settings.download_only === true;
-  $("#ax-import").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String((b.dataset.only === "true") === only)));
+  $("#ax-import").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.only === "true") === only)));
   const other = Object.values(S.config.series || {}).filter((c) => c.service && typeof c.download_only === "boolean" && c.download_only !== only).length;
   $("#ax-import-say").replaceChildren(el("span", { textContent: only
     ? "Each episode stays in Activity, Waiting in downloads, until you import or delete it. It is never deleted automatically."
@@ -461,8 +461,8 @@ $("#ug-other").onchange = (e) => { S.config.settings.upgrade_other_groups = e.ta
 /* What is sent for this series: every notification, its failures only, or nothing (the bell keeps all). */
 function notifyChips(conf) {
   const opts = [["", "All"], ["failures", "Failures only"], ["none", "None"]];
-  $("#d-notify-seg").replaceChildren(...opts.map(([v, label]) => el("button", { type: "button", role: "radio", textContent: label,
-    ariaChecked: String((conf.notify || "") === v), onclick: () => {
+  $("#d-notify-seg").replaceChildren(...opts.map(([v, label]) => el("button", { type: "button", textContent: label,
+    ariaPressed: String((conf.notify || "") === v), onclick: () => {
       if (v) conf.notify = v; else delete conf.notify;
       notifyChips(conf);
       dirty();
@@ -490,11 +490,11 @@ function importChips() {
 /* Download options, Languages: when the preferred audio comes, the episode again or its audio added to the file. */
 function renderUpgradeMode() {
   const set = S.config.settings, mode = set.upgrade_mode || "redownload";
-  $("#dx-upmode").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === mode)));
+  $("#dx-upmode").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
   $("#dx-library").hidden = mode !== "add_track";
   if (mode === "add_track") renderLibrary();
   const other = set.add_track_other_source || "ask";
-  $("#dx-lib-other").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.other === other)));
+  $("#dx-lib-other").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.other === other)));
   $("#dx-upmode-say").textContent = mode === "add_track"
     ? "Only the new audio track is downloaded and added to the existing file, as its default audio: subtitles in that language then show only their forced lines. Unshacklarr needs access to your library: set its folder below. The file is written again whole: your media server rescans it, and a hard link to it (a torrent still seeding) is broken. The whole episode is downloaded instead when the file can't be found, and for an episode in parts or a series of separate programmes."
     : "The whole episode is downloaded again and replaces the existing file.";

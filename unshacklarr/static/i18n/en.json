@@ -3,7 +3,6 @@
  "\"quality\" is a height from 480 to 4320, such as 1080 or 2160": [],
  "\"vcodec\" is \"H.264\" or \"H.265\"": [],
  "(changed)": [],
- "(display-mode: standalone)": [],
  "(on disk already)": [],
  "(optional)": [],
  "(outside the ladder)": [],
@@ -199,6 +198,7 @@
  "Add a step": [],
  "Add an address": [],
  "Add an address first": [],
+ "Add an option": [],
  "Add an option: type to search, e.g. lang, audio, atmos": [],
  "Add audio track": [],
  "Add cookies": [],
@@ -676,6 +676,7 @@
  "Discard": [],
  "Discord": [],
  "Discord, this device and more": [],
+ "Dismiss": [],
  "Do not download audio tracks.": [],
  "Do not download chapter markers.": [],
  "Do not download or mux attachments (cover art, subtitle fonts, and files the service attaches).": [],
@@ -869,6 +870,9 @@
   "label"
  ],
  "Failing": [],
+ "Failing: {0}": [
+  "sick.cause"
+ ],
  "Failures only": [],
  "Fair": [],
  "Fallback service": [],
@@ -971,7 +975,6 @@
  "Hidden from the calendar only: their episodes are still downloaded.": [],
  "Hidden from the schedule": [],
  "Hidden from the schedule: show it again": [],
- "Hidden in schedule": [],
  "Hidden series": [],
  "Hidden titles are blurred until you click or tap them. Default follows Settings, Interface, No spoilers.": [],
  "Hide": [],
@@ -1209,6 +1212,7 @@
  "Lost the password?": [],
  "Lowest height": [],
  "MPEG-2": [],
+ "Main": [],
  "Maintenance": [],
  "Make room in the downloads folder, or lower the room kept free in Settings": [],
  "Make room in the library, or lower the room kept free in Settings": [],
@@ -1935,7 +1939,6 @@
  "Series finale": [],
  "Series hidden from the Schedule": [],
  "Series links from": [],
- "Series settings": [],
  "Series to check": [],
  "Series whose last 3 downloads failed": [],
  "Series {0}, seasons listed as separate shows: season {1} needs one URL or ID, without spaces.": [
@@ -2192,6 +2195,9 @@
  "Subtitle_": [],
  "Subtitles": [],
  "Subtitles, in this order": [],
+ "Subtitles: {0}": [
+  "f.subtitles.join(\", \")"
+ ],
  "Success": [],
  "Success rate": [],
  "Suggest services": [],

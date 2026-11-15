@@ -13,7 +13,7 @@ function renderAutomation() {
   const select = $("[data-set=sync_every_hours]");
   if (!select) return;
   const every = Number(select.value || S.config.settings?.sync_every_hours || 2);
-  document.querySelectorAll(".ax-seg button[data-hours]").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.hours) === every)));
+  document.querySelectorAll(".ax-seg button[data-hours]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.hours) === every)));
   const zone = S.config.settings?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const next = nextSyncAt(new Date(), every, zone), nextAt = time(next, zone);
   $("#ax-state b").textContent = `Next sync at ${nextAt}`;
@@ -45,8 +45,10 @@ function renderReleaseTries() {
   const dot = (i) => {  // each try: which one, when; the first and the last, what they mean
     const n = ticks > 1 ? Math.round(i * (tries - 1) / (ticks - 1)) : 0, at = new Date(start.getTime() + n * every * 1000);
     const why = n === 0 ? "The release time: the first try" : n === tries - 1 ? "The last try: after it, the regular syncs take over" : "";
-    return hoverTip(el("i", { style: `left:${ticks > 1 ? i / (ticks - 1) * 100 : 0}%` }),
+    const tick = hoverTip(el("i", { style: `left:${ticks > 1 ? i / (ticks - 1) * 100 : 0}%` }),
       () => [el("b", { textContent: `Try ${n + 1} of ${tries} · ${secs(at)}` }), ...(why ? [el("br"), why] : [])]);
+    tick.tabIndex = -1;  // up to 60 of them: the summary above says the same, they are no stops for the keyboard
+    return tick;
   };
   $("#rt-line").replaceChildren(el("span", { className: "rt-at", textContent: time(start) }),
     el("div", { className: "rt-track" }, ...Array.from({ length: ticks }, (_, i) => dot(i))),
@@ -54,7 +56,7 @@ function renderReleaseTries() {
   document.querySelectorAll(".rt-seg").forEach((seg) => {
     const value = Number($(`#${seg.dataset.for}`).value);
     let hit = false;
-    seg.querySelectorAll("button").forEach((b) => { const on = Number(b.dataset.v) === value; hit ||= on; b.setAttribute("aria-checked", String(on)); });
+    seg.querySelectorAll("button").forEach((b) => { const on = Number(b.dataset.v) === value; hit ||= on; b.setAttribute("aria-pressed", String(on)); });
     seg.querySelector(".rt-custom").classList.toggle("on", !hit);  // a value of its own: the free field is the choice
   });
   const timed = S.series.filter((x) => S.config.series?.[x.tvdbId]?.release_time).map((x) => `${x.title} (${S.config.series[x.tvdbId].release_time})`);
@@ -363,10 +365,11 @@ async function showReleaseSeen(s) {
 
 /* Test this series: the service's episodes, the next ones against Sonarr, a season map if needed. */
 $("#d-probe").onclick = async () => {
+  if ($("#d-probe").ariaDisabled === "true") return;  // aria-disabled, not disabled: the button keeps the focus while it asks
   const conf = S.config.series[current.tvdbId];
   const out = $("#d-probe-out"), state = $("#d-probe-state");
   if (!conf?.service || !conf.title) { state.textContent = "Pick a service and its URL first."; return; }
-  $("#d-probe").disabled = true;
+  $("#d-probe").setAttribute("aria-disabled", "true");
   state.replaceChildren(loading("Asking the service… (up to a minute)"));
   out.replaceChildren();
   const slow = slowHint(svcName(conf.service));
@@ -401,7 +404,7 @@ $("#d-probe").onclick = async () => {
       el("div", { className: "head" }, "Found ", el("b", { textContent: r.series || "the series" }), `: ${r.count} episodes${seasons ? ` · ${seasons}` : ""}`),
       ...single, ...apply, ...rows));
   } catch (e) { state.replaceChildren(failed(e.message)); }
-  finally { $("#d-probe").disabled = false; clearTimeout(slow); }
+  finally { $("#d-probe").removeAttribute("aria-disabled"); clearTimeout(slow); }
 };
 
 /* This device's notifications (Web Push): allowed here, sent by the server through the browser's push service. */

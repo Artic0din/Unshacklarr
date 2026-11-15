@@ -159,7 +159,7 @@ $("#sx-name").addEventListener("input", (e) => {
 });
 function showMode() {
   $(".set-sec[data-sec=unshackle]").dataset.mode = $("#mode-select").value;
-  document.querySelectorAll(".ux-tiles .wz-tile").forEach((t) => t.setAttribute("aria-checked", String(t.dataset.value === $("#mode-select").value)));
+  document.querySelectorAll(".ux-tiles .wz-tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.value === $("#mode-select").value)));
 }
 document.querySelectorAll(".ux-tiles .wz-tile").forEach((t) => t.onclick = () => {
   $("#mode-select").value = t.dataset.value;
@@ -324,7 +324,7 @@ function renderOffsite() {
   }
   const s3 = boKind === "s3";
   $("#bo-kind").replaceChildren(...[["", "Off"], ["webdav", "WebDAV"], ["s3", "S3-compatible"]].map(([v, label]) => el("button", {
-    type: "button", role: "radio", textContent: label, ariaChecked: String(boKind === v),
+    type: "button", textContent: label, ariaPressed: String(boKind === v),
     onclick: () => { boKind = v; renderOffsite(); } })));
   $("#bo-fields").hidden = !boKind && !set.backup_remote;
   $("#bo-fields .sx-grid").hidden = !boKind;
@@ -555,7 +555,7 @@ function renderNotify() {
   renderNotifPreview();
 }
 function renderNotifPreview() {
-  const lv = document.querySelector("#nt-pv-pick [aria-checked=true]")?.dataset.pv || "success";
+  const lv = document.querySelector("#nt-pv-pick [aria-pressed=true]")?.dataset.pv || "success";
   const show = S.series.find((x) => x.poster) || { title: "The Series", poster: "" };
   const label = `${show.title} S02E05`;
   const [kind, text, fields] = {
@@ -575,10 +575,10 @@ function renderNotifPreview() {
         el("b", { textContent: `${kind}: ${label}` }), el("small", { textContent: text.split("\n")[0] }))));
 }
 document.querySelectorAll("#nt-pv-pick button").forEach((b) => b.onclick = () => {
-  document.querySelectorAll("#nt-pv-pick button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+  document.querySelectorAll("#nt-pv-pick button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
   renderNotifPreview();
 });
-document.querySelector("#nt-pv-pick button").setAttribute("aria-checked", "true");
+document.querySelector("#nt-pv-pick button").setAttribute("aria-pressed", "true");
 async function loadSent() {
   let data;
   try { data = await api("/api/notifications/sent"); } catch (e) { return $("#nt-sent").replaceChildren(failed(e.message, loadSent)); }
@@ -602,7 +602,7 @@ $("#nt-quiet-on").onchange = (e) => { S.config.notifications.quiet = e.target.ch
 /* Adding an address: the app, two or three fields said plainly, the Apprise address made from them. */
 function ntDraw() {
   const b = BUILDERS[ntApp];
-  $("#nt-apps").replaceChildren(...Object.keys(BUILDERS).map((name) => el("button", { type: "button", role: "radio", className: "nt-app", ariaChecked: String(name === ntApp),
+  $("#nt-apps").replaceChildren(...Object.keys(BUILDERS).map((name) => el("button", { type: "button", className: "nt-app", ariaPressed: String(name === ntApp),
     onclick: () => { ntApp = name; ntDraw(); $("#nt-fields input")?.focus(); } }, el("span", { className: "nt-badge", textContent: badgeOf(name) }), name)));
   $("#nt-d-hint").textContent = b.hint;
   $("#nt-fields").replaceChildren(...b.fields.map(([key, label, ph = "", type = "text"]) => el("label", { className: "field" }, label,
@@ -715,7 +715,7 @@ async function refreshLog() {
   let running, updated;
   try { ({ running, updated } = await api("/api/log")); }
   catch { clearTimeout(logTimer); logTimer = setTimeout(refreshLog, 15000); return; }  // a restart: try again, never stop
-  $("#last-sync").textContent = running ? "Sync running…" : updated ? `Last sync ${ago(updated)}` : "";
+  $("#last-sync").textContent = !running && updated ? `Last sync ${ago(updated)}` : "";
   $("#log-state").textContent = running
     ? "A sync is running."
     : `No sync running. One starts automatically every ${S.config?.settings?.sync_every_hours == 1 ? "hour" : `${S.config?.settings?.sync_every_hours ?? 2} hours`}, or run one now.`;
@@ -724,7 +724,7 @@ async function refreshLog() {
   if (paused.length) $("#log-state").append(el("span", { className: "status-err", textContent:
     ` Paused for ${paused.join(", ")}: choose a quality ladder in Settings, Sonarr.` }));
   $("#sync").disabled = running;
-  $("#sync span").textContent = running ? "Sync running…" : "Run sync now";
+  $("#sync-label").textContent = running ? "Sync running…" : "Run sync now";
   $("#sync").classList.toggle("spin", running);
   clearTimeout(logTimer);
   logTimer = setTimeout(refreshLog, running ? 3000 : 60000);

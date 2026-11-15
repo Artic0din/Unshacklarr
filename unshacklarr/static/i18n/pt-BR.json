@@ -309,7 +309,6 @@
  "Hidden": "Oculta",
  "Hidden from the schedule": "Oculta da agenda",
  "Hidden from the schedule: show it again": "Oculta da agenda: mostrar de novo",
- "Hidden in schedule": "Oculta na agenda",
  "Hidden series": "Séries ocultas",
  "Hide": "Ocultar",
  "Hide on disk": "Ocultar os que estão no disco",
@@ -647,7 +646,6 @@
  "Series URL on the service": "URL da série no serviço",
  "Series hidden from the Schedule": "Séries ocultas da Agenda",
  "Series links from": "Links das séries a partir de",
- "Series settings": "Configurações da série",
  "Series whose last 3 downloads failed": "Séries cujos últimos 3 downloads falharam",
  "Service": "Serviço",
  "Service access": "Acesso aos serviços",
@@ -2246,5 +2244,10 @@
  "{0} could not be reached. Check the Unshacklarr log.": "Não foi possível acessar {0}. Verifique o log do Unshacklarr.",
  "{0} through Unshackle": "{0} pelo Unshackle",
  "{0}. Check this service's login/session in Unshackle.": "{0}. Verifique o login ou a sessão deste serviço no Unshackle.",
- "{0}: HTTP {1}: {2}": "{0}: HTTP {1}: {2}"
+ "{0}: HTTP {1}: {2}": "{0}: HTTP {1}: {2}",
+ "Add an option": "Adicionar uma opção",
+ "Dismiss": "Dispensar",
+ "Failing: {0}": "Falhando: {0}",
+ "Main": "Principal",
+ "Subtitles: {0}": "Legendas: {0}"
 }
