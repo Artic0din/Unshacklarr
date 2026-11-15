@@ -1516,7 +1516,10 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
     ("observation", "label"),
     [
         ({"state": "ready", "available_methods": ["pairing", "cookies"]}, "Ready · pairing, cookies"),
+        ({"state": "session_present", "method": "cookies"}, "Cookies session available"),
         ({"state": "session_expired", "method": "pairing"}, "Pairing session expired"),
+        ({"state": "session_rejected", "method": "pairing"}, "Pairing session rejected"),
+        ({"state": "repairing", "method": "cookies"}, "Repairing cookies session"),
         ({"state": "renewing", "method": "pairing"}, "Renewing pairing session"),
         (
             {
@@ -1536,6 +1539,7 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
         ({"state": "timed_out", "method": "pairing"}, "Pairing timed out"),
         ({"state": "cancelled", "method": "pairing"}, "Sign-in cancelled"),
         ({"state": "error", "method": "pairing", "failure": "network"}, "Sign-in failed · network"),
+        ({"state": "authenticating", "method": "pairing"}, "Signing in"),
     ],
 )
 def test_authentication_lifecycle_labels_are_fixed_and_redacted(observation, label):
