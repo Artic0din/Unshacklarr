@@ -6745,13 +6745,18 @@ def test_a_renamed_sonarr_keeps_the_proxy_passwords_its_series_set_for_it(tmp_pa
     web.real_config(back, web.read_config())
     assert back["series"][1]["sonarrs"]["sonarr-uhd"]["options"]["--proxy"] == "http://u:pw789@p:2"
 
-    # sonarr-a removed and sonarr-b renamed sonarr-a in one edit, both through the same proxy host: b's own password
-    web.write_config({**config, "settings": {**config["settings"], "sonarrs": [{"name": "sonarr-a", "url": "http://a:8989"},
-                                                                               {"name": "sonarr-b", "url": "http://b:8989"}]},
-                      "series": {1: {"service": "X", "title": "t", "sonarrs": {"sonarr-a": {"options": {"--proxy": "http://u:pwA@p:2"}},
-                                                                               "sonarr-b": {"options": {"--proxy": "http://u:pwB@p:2"}}}}}})
-    back = copy.deepcopy(web.public_config(web.read_config()))
-    back["settings"]["sonarrs"] = [{**back["settings"]["sonarrs"][1], "name": "sonarr-a"}]
-    back["series"][1]["sonarrs"] = {"sonarr-a": back["series"][1]["sonarrs"]["sonarr-b"]}
-    web.real_config(back, web.read_config())
-    assert back["series"][1]["sonarrs"]["sonarr-a"]["options"]["--proxy"] == "http://u:pwB@p:2"
+    # sonarr-a removed in the same edit as sonarr-b took its name, or its address: never sonarr-a's password put back
+    import pytest
+    two = {**config, "settings": {**config["settings"], "sonarrs": [{"name": "sonarr-a", "url": "http://a:8989"},
+                                                                    {"name": "sonarr-b", "url": "http://b:8989"}]},
+           "series": {1: {"service": "X", "title": "t", "sonarrs": {"sonarr-a": {"options": {"--proxy": "http://u:pwA@p:2"}},
+                                                                    "sonarr-b": {"options": {"--proxy": "http://u:pwB@p:2"}}}}}}
+    for change in ({"name": "sonarr-a"}, {"url": "http://a:8989"}):
+        web.write_config(two)
+        back = copy.deepcopy(web.public_config(web.read_config()))
+        moved = {**back["settings"]["sonarrs"][1], **change}
+        back["settings"]["sonarrs"] = [moved]
+        back["series"][1]["sonarrs"] = {moved["name"]: back["series"][1]["sonarrs"]["sonarr-b"]}
+        with pytest.raises(web.web.HTTPBadRequest) as asked:  # ambiguous: asked again
+            web.real_config(back, web.read_config())
+        assert asked.value.text.startswith("Type the proxy's credentials"), change
