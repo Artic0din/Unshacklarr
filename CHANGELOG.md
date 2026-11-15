@@ -8,7 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
-- The page takes the Molt look: warm neutrals with one teal for the main action, shared shadows and spacing, and a light theme; Settings › Interface › Appearance picks System, Light or Dark for this browser.
+- The page takes the Molt look: warm neutrals with one teal for the main action, shared shadows and spacing, one badge style whose colour says what it means, and a light theme; Settings › Interface › Appearance picks System, Light or Dark for this browser.
 - Services are named, not coded (RMC BFM Play, not RMCBFM), a series is "Downloading" or "Not downloading" everywhere, every sign-in says "Sign in", two-click confirmations name what they delete and stay until you leave the button, and counts such as "1 episode" and "2 episodes" are whole texts a translation can phrase its own way.
 - Press feedback on buttons, tabs and pills, hover colours only where a pointer can hover, a plain wizard (the normal Next button, a solid panel, no overshoot), tick, chevron and arrow icons drawn as icons instead of text glyphs, language names without flags, and reduced motion keeps short opacity cross-fades.
 - The Schedule is one view with a Week board (seven day columns of episode cards, with Previous, Today and Next) and the Month grid, replacing the separate List and Calendar; an episode's details, command and actions open from its name in a popover, or a dialog on a phone, and rows no longer run across the whole screen.
