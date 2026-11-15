@@ -304,7 +304,6 @@
  "Hidden": "Ausgeblendet",
  "Hidden from the schedule": "Im Kalender ausgeblendet",
  "Hidden from the schedule: show it again": "Im Kalender ausgeblendet: wieder anzeigen",
- "Hidden in schedule": "Im Kalender ausgeblendet",
  "Hidden series": "Ausgeblendete Serien",
  "Hide": "Ausblenden",
  "Hide on disk": "Vorhandene ausblenden",
@@ -639,7 +638,6 @@
  "Series URL on the service": "Serien-URL beim Dienst",
  "Series hidden from the Schedule": "Im Kalender ausgeblendete Serien",
  "Series links from": "Serienlinks aus",
- "Series settings": "Serieneinstellungen",
  "Series whose last 3 downloads failed": "Serien, deren letzte 3 Downloads fehlschlugen",
  "Service": "Dienst",
  "Service access": "Dienstzugang",
@@ -2252,5 +2250,10 @@
  "{0} could not be reached. Check the Unshacklarr log.": "{0} war nicht erreichbar. Prüfe das Unshacklarr-Protokoll.",
  "{0} through Unshackle": "{0} über Unshackle",
  "{0}. Check this service's login/session in Unshackle.": "{0}. Prüfe die Anmeldung oder Sitzung dieses Dienstes in Unshackle.",
- "{0}: HTTP {1}: {2}": "{0}: HTTP {1}: {2}"
+ "{0}: HTTP {1}: {2}": "{0}: HTTP {1}: {2}",
+ "Add an option": "Option hinzufügen",
+ "Dismiss": "Schließen",
+ "Failing: {0}": "Fehlerhaft: {0}",
+ "Main": "Hauptnavigation",
+ "Subtitles: {0}": "Untertitel: {0}"
 }

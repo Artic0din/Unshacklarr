@@ -312,7 +312,6 @@
  "Hidden": "非表示",
  "Hidden from the schedule": "スケジュールで非表示",
  "Hidden from the schedule: show it again": "スケジュールで非表示：再表示する",
- "Hidden in schedule": "スケジュールで非表示",
  "Hidden series": "非表示のシリーズ",
  "Hide": "非表示",
  "Hide on disk": "ディスク上のものを隠す",
@@ -652,7 +651,6 @@
  "Series URL on the service": "サービス上のシリーズ URL",
  "Series hidden from the Schedule": "スケジュールで非表示のシリーズ",
  "Series links from": "シリーズのリンクを探す国",
- "Series settings": "シリーズの設定",
  "Series whose last 3 downloads failed": "直近 3 回のダウンロードが失敗したシリーズ",
  "Service": "サービス",
  "Service access": "サービスへのアクセス",
@@ -2263,5 +2261,10 @@
  "{0} could not be reached. Check the Unshacklarr log.": "{0} に接続できませんでした。Unshacklarr のログを確認してください。",
  "{0} through Unshackle": "Unshackle 経由の {0}",
  "{0}. Check this service's login/session in Unshackle.": "{0}。Unshackle でこのサービスのログインまたはセッションを確認してください。",
- "{0}: HTTP {1}: {2}": "{0}: HTTP {1}: {2}"
+ "{0}: HTTP {1}: {2}": "{0}: HTTP {1}: {2}",
+ "Add an option": "オプションを追加",
+ "Dismiss": "閉じる",
+ "Failing: {0}": "失敗が続いています: {0}",
+ "Main": "メイン",
+ "Subtitles: {0}": "字幕: {0}"
 }

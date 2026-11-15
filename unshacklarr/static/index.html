@@ -34,22 +34,20 @@
   <circle cx="32" cy="32" r="31" fill="#26a69a"/><circle cx="32" cy="32" r="27.6" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.4"/><path d="M25 25.5v-5a7 7 0 0 1 14 0" fill="none" stroke="#fff" stroke-width="4.4" stroke-linecap="round"/><rect x="13" y="25" width="38" height="24" rx="5" fill="#fff"/><path d="M32 29.5v10M27.3 35 32 39.7l4.7-4.7" fill="none" stroke="#1b7a71" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M25 53.5h14" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/>
 </svg><span>Unshacklarr</span></a></h1>
   <button class="version-chip" id="version" type="button" title="What's new in each version" hidden></button>
-  <nav role="tablist">
-    <button role="tab" data-tab="schedule" aria-selected="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Schedule</span></button>
-    <button role="tab" data-tab="series"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h10"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span>Series</span></button>
-    <button role="tab" data-tab="log"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Activity</span><b class="nav-busy" id="nav-busy" hidden></b></button>
-    <button role="tab" data-tab="settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
+  <nav aria-label="Main">
+    <button data-tab="schedule" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Schedule</span></button>
+    <button data-tab="series"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h10"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span>Series</span></button>
+    <button data-tab="log"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Activity</span><b class="nav-busy" id="nav-busy" hidden></b></button>
+    <button data-tab="settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
   </nav>
-  <span class="spacer"></span>
   <span class="health" id="health">
-    <button data-health="unshackle"><i class="dot"></i><span>Unshackle</span></button>
-    <button data-health="sonarr"><i class="dot"></i><span>Sonarr</span></button>
+    <button data-health="unshackle"><i class="dot"></i><span class="hn"><span>Unshackle</span><small></small></span></button>
+    <button data-health="sonarr"><i class="dot"></i><span class="hn"><span>Sonarr</span><small></small></span></button>
   </span>
   <a class="update-pill" id="update" target="_blank" rel="noopener" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span></span></a>
-  <span class="last-sync" id="last-sync"></span>
   <button class="btn approval-reopen" id="approval-reopen" type="button" hidden>Approval</button>
   <button class="btn" id="bell" aria-label="Notifications"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><b class="count" id="bell-count" hidden></b></button>
-  <button class="btn" id="sync" aria-label="Run sync now"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span>Run sync now</span></button>
+  <button class="btn" id="sync" aria-label="Run sync now"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="sync-text"><span id="sync-label">Run sync now</span><small class="last-sync" id="last-sync"></small></span></button>
 </header>
 
 <main>
@@ -163,9 +161,9 @@
         </section>
               <section class="sx-card">
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span><div><h3>How it runs</h3><p>unshackle serve downloads the episodes: started here by Unshacklarr, or running elsewhere.</p></div></div>
-          <div class="wz-tiles ux-tiles" role="radiogroup" aria-label="Unshackle runs">
-            <button type="button" class="wz-tile" role="radio" data-value="local"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>Local</b><small>Unshacklarr starts it on this machine</small></button>
-            <button type="button" class="wz-tile" role="radio" data-value="remote"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></span><b>Remote</b><small>unshackle serve runs elsewhere</small></button>
+          <div class="wz-tiles ux-tiles" role="group" aria-label="Unshackle runs">
+            <button type="button" class="wz-tile" data-value="local"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>Local</b><small>Unshacklarr starts it on this machine</small></button>
+            <button type="button" class="wz-tile" data-value="remote"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></span><b>Remote</b><small>unshackle serve runs elsewhere</small></button>
             <select data-set="unshackle_mode" id="mode-select" hidden><option value="local">Local</option><option value="remote">Remote</option></select>
           </div>
           <div class="sx-grid">
@@ -242,7 +240,7 @@
           <div class="rt-sum" id="rs-sum"></div>
           <div class="rt-rows">
             <div class="rt-row"><span class="rt-label" id="rs-every-l">Every</span>
-              <div class="ax-seg" role="radiogroup" aria-labelledby="rs-every-l"><button type="button" data-hours="1">1 h</button><button type="button" data-hours="2">2 h</button><button type="button" data-hours="3">3 h</button><button type="button" data-hours="4">4 h</button><button type="button" data-hours="6">6 h</button><button type="button" data-hours="8">8 h</button><button type="button" data-hours="12">12 h</button><button type="button" data-hours="24">Once a day</button></div></div>
+              <div class="ax-seg" role="group" aria-labelledby="rs-every-l"><button type="button" data-hours="1">1 h</button><button type="button" data-hours="2">2 h</button><button type="button" data-hours="3">3 h</button><button type="button" data-hours="4">4 h</button><button type="button" data-hours="6">6 h</button><button type="button" data-hours="8">8 h</button><button type="button" data-hours="12">12 h</button><button type="button" data-hours="24">Once a day</button></div></div>
             <div class="rt-row"><span class="rt-label" id="rs-days-l">Give up after</span>
               <div class="ax-seg rt-seg" data-for="ax-days" role="group" aria-labelledby="rs-days-l"><button type="button" data-v="7">7 days</button><button type="button" data-v="14">14 days</button><button type="button" data-v="30">30 days</button><button type="button" data-v="60">60 days</button>
                 <label class="rt-custom" title="Any other, in days"><em>Other</em><input id="ax-days" type="number" data-set="auto_days" data-num min="1" max="90" aria-label="Give up after, in days"><span>days</span></label></div></div>
@@ -266,7 +264,7 @@
         </section>
         <section class="sx-card">
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span><div><h3>After the download</h3><p>Either Sonarr imports each episode, or the episode stays in the downloads folder for you to import by hand. A series can choose otherwise.</p></div></div>
-          <div class="ax-seg" id="ax-import" role="radiogroup" aria-label="After the download"><button type="button" role="radio" data-only="false">Sonarr imports it</button><button type="button" role="radio" data-only="true">Download only</button></div>
+          <div class="ax-seg" id="ax-import" role="group" aria-label="After the download"><button type="button" data-only="false">Sonarr imports it</button><button type="button" data-only="true">Download only</button></div>
           <p class="rt-who" id="ax-import-say"></p>
         </section>
         <section class="sx-card" id="ax-learn-card">
@@ -298,7 +296,7 @@
         </section>
         <section class="sx-card">
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg></span><div><h3>Language</h3><p>For this browser only. The page reloads in the new language.</p></div></div>
-          <div class="rg-langs" id="lang-row" role="radiogroup" aria-label="Language" translate="no"></div>
+          <div class="rg-langs" id="lang-row" role="group" aria-label="Language" translate="no"></div>
         </section>
         <section class="sx-card" id="rg-spoiler-card">
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h11M4 17h7"/><path d="m15 15 6 6M21 15l-6 6"/></svg></span><div><h3>No spoilers</h3><p>Episode titles are blurred in the Schedule, on series pages and in Catch up. Click or tap a title to show it. A series can change this in its Settings tab.</p></div>
@@ -351,7 +349,7 @@
           </div>
           <div class="up-mode">
             <span class="sub">Audio upgrade</span>
-            <div class="ax-seg" id="dx-upmode" role="radiogroup" aria-label="Audio upgrade"><button type="button" role="radio" data-mode="redownload">Download the whole episode again</button><button type="button" role="radio" data-mode="add_track">Add the audio track</button></div>
+            <div class="ax-seg" id="dx-upmode" role="group" aria-label="Audio upgrade"><button type="button" data-mode="redownload">Download the whole episode again</button><button type="button" data-mode="add_track">Add the audio track</button></div>
             <p class="rt-who" id="dx-upmode-say"></p>
             <div id="dx-library">
               <div id="dx-lib-who"></div>
@@ -361,7 +359,7 @@
               </div>
               <p class="lib-check" id="dx-lib-check" aria-live="polite"></p>
               <div class="field"><span>A file from another source</span>
-                <div class="ax-seg" id="dx-lib-other" role="radiogroup" aria-label="A file from another source"><button type="button" role="radio" data-other="ask">Ask me</button><button type="button" role="radio" data-other="add">Add the audio anyway</button></div>
+                <div class="ax-seg" id="dx-lib-other" role="group" aria-label="A file from another source"><button type="button" data-other="ask">Ask me</button><button type="button" data-other="add">Add the audio anyway</button></div>
                 <small>When Sonarr's file doesn't say it comes from the series' service, its source may differ and the added audio may be a few seconds out of step. Another team's release of the same stream is fine. Ask me: the bell asks each time, nothing is downloaded until you answer.</small></div>
             </div>
           </div>
@@ -376,7 +374,7 @@
         </section>
         <section class="sx-card">
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><div><h3>Every series downloads by</h3><p>Unless its service (Download options, Per service) or the series itself picks another. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
-          <div class="ax-seg" id="ql-default" role="radiogroup" aria-label="Every series downloads by"></div>
+          <div class="ax-seg" id="ql-default" role="group" aria-label="Every series downloads by"></div>
         </section>
         <div id="ql-list" class="ql-list"></div>
       </div>
@@ -476,7 +474,7 @@
         </section>
         <section class="sx-card">
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div><h3>What a message looks like</h3><p>As shown on Discord, and on a phone (this device, ntfy, Telegram, Pushover…).</p></div></div>
-          <div class="ax-seg" role="radiogroup" aria-label="Which message" id="nt-pv-pick"><button type="button" data-pv="success">Downloaded</button><button type="button" data-pv="warning">Needs a look</button><button type="button" data-pv="error">Failed</button></div>
+          <div class="ax-seg" role="group" aria-label="Which message" id="nt-pv-pick"><button type="button" data-pv="success">Downloaded</button><button type="button" data-pv="warning">Needs a look</button><button type="button" data-pv="error">Failed</button></div>
           <div class="nt-preview" id="nt-preview"></div>
         </section>
         <section class="sx-card">
@@ -549,7 +547,7 @@
         </section>
         <section class="sx-card" id="bo-card">
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M17.5 19H7a5 5 0 1 1 .9-9.9A6 6 0 0 1 19.5 11 4 4 0 0 1 17.5 19z"/><path d="M12 16v-5M9.5 13.5 12 11l2.5 2.5"/></svg></span><div><h3>Remote backup</h3><p>Each automatic backup is also sent, encrypted, to a WebDAV folder or an S3 bucket. If this server's disk fails, your settings are still safe.</p></div></div>
-          <div class="ax-seg" id="bo-kind" role="radiogroup" aria-label="Send backups to"></div>
+          <div class="ax-seg" id="bo-kind" role="group" aria-label="Send backups to"></div>
           <div id="bo-fields" hidden>
             <div class="sx-grid">
               <div class="field"><label for="bo-url" id="bo-url-l">Folder URL</label><input id="bo-url" type="url" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-url-help"></small></div>
@@ -632,7 +630,7 @@
 </main>
 
 <div class="backdrop" id="backdrop"></div>
-<aside class="drawer" id="drawer" aria-label="Series settings" aria-hidden="true">
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" inert>
   <div class="d-head">
     <button class="icon-btn" id="d-back" aria-label="Back to all series"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
     <img id="d-poster" alt="">
@@ -640,12 +638,12 @@
       <h2 id="d-title"></h2>
       <div class="muted" id="d-meta"></div>
     </div>
-    <button class="btn" id="d-hide" aria-pressed="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"></svg><span class="long"></span></button>
+    <button class="btn" id="d-hide" aria-pressed="false" aria-label="In schedule"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"></svg><span class="long">In schedule</span></button>
     <button class="btn primary" id="d-save" hidden>Save<span class="long"> changes</span></button>
     <button class="btn" id="close">Close</button>
-    <div class="d-tabs" role="tablist">
-      <button role="tab" data-dtab="episodes">Episodes</button>
-      <button role="tab" data-dtab="settings">Settings</button>
+    <div class="d-tabs">
+      <button data-dtab="episodes" aria-pressed="false">Episodes</button>
+      <button data-dtab="settings" aria-pressed="false">Settings</button>
     </div>
   </div>
   <div class="d-body">
@@ -690,7 +688,7 @@
         <div class="url-find-row"><input type="search" id="d-find-q" aria-label="The series' name on the service" spellcheck="false"><button class="btn small primary" id="d-find-go" type="button">Search</button></div>
         <div class="url-find-out" id="d-find-out"></div>
       </div>
-      <div id="d-probe-out"></div>
+      <div id="d-probe-out" role="status"></div>
       <details class="ds-sub" id="d-fb">
         <summary><b>Fallback service</b><small>Used when the main service doesn't have the episode yet, or not in an accepted language.</small></summary>
         <div class="sx-grid ds-svc">
@@ -748,17 +746,17 @@
         </div>
         <div class="field">
           <span id="d-import-l">After the download</span>
-          <div class="ax-seg" id="d-import-seg" role="radiogroup" aria-labelledby="d-import-l"></div>
+          <div class="ax-seg" id="d-import-seg" role="group" aria-labelledby="d-import-l"></div>
           <small>Download only: the file stays in Activity, Waiting in downloads, until you import it.</small>
         </div>
         <div class="field">
           <span id="d-spoiler-l">Episode titles</span>
-          <div class="ax-seg" id="d-spoiler-seg" role="radiogroup" aria-labelledby="d-spoiler-l"></div>
+          <div class="ax-seg" id="d-spoiler-seg" role="group" aria-labelledby="d-spoiler-l"></div>
           <small>Hidden titles are blurred until you click or tap them. Default follows Settings, Interface, No spoilers.</small>
         </div>
         <div class="field">
           <span id="d-notify-l">Notifications</span>
-          <div class="ax-seg" id="d-notify-seg" role="radiogroup" aria-labelledby="d-notify-l"></div>
+          <div class="ax-seg" id="d-notify-seg" role="group" aria-labelledby="d-notify-l"></div>
           <small>What is sent for this series' episodes. The bell in the page always keeps everything.</small>
         </div>
         <div class="field">
@@ -1025,7 +1023,7 @@
 <dialog class="modal nt-dialog" id="nt-dialog" aria-labelledby="nt-d-title">
   <form method="dialog" id="nt-form">
     <h2 id="nt-d-title">Add an address</h2>
-    <div class="nt-apps" id="nt-apps" role="radiogroup" aria-label="Where"></div>
+    <div class="nt-apps" id="nt-apps" role="group" aria-label="Where"></div>
     <p class="nt-hint" id="nt-d-hint"></p>
     <div class="nt-fields" id="nt-fields"></div>
     <div class="nt-d-result" id="nt-d-result" aria-live="polite"></div>

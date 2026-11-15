@@ -448,9 +448,9 @@ let missingDays = 30, missingSonarr = "";
 function sonarrPicker(picked, pick) {
   const others = S.config.settings.sonarrs || [];
   if (!others.length) return null;
-  return el("div", { className: "ax-seg", role: "radiogroup", ariaLabel: "Which Sonarr" },
-    ...["", ...others.map((i) => i.name)].map((n) => el("button", { type: "button", role: "radio", textContent: n || mainSonarr(),
-      ariaChecked: String(picked === n), onclick: () => pick(n) })));
+  return el("div", { className: "ax-seg", role: "group", ariaLabel: "Which Sonarr" },
+    ...["", ...others.map((i) => i.name)].map((n) => el("button", { type: "button", textContent: n || mainSonarr(),
+      ariaPressed: String(picked === n), onclick: () => pick(n) })));
 }
 function unsetNote(name) {
   const inst = (S.config.settings.sonarrs || []).find((i) => i.name === name);
@@ -469,8 +469,8 @@ async function showMissing() {
   const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(missingSonarr ? { sonarr: missingSonarr } : {}) });
   try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`); } catch (e) { return $("#cd-main").replaceChildren(failed(e.message, showMissing)); }
   if (picked_run !== "missing") return;
-  const ages = el("div", { className: "ax-seg", role: "radiogroup", ariaLabel: "Aired within" }, ...[[7, "7 days"], [30, "30 days"], [90, "90 days"], [0, "All"]].map(([d, label]) =>
-    el("button", { type: "button", role: "radio", textContent: label, ariaChecked: String(missingDays === d), onclick: () => { missingDays = d; showMissing(); } })));
+  const ages = el("div", { className: "ax-seg", role: "group", ariaLabel: "Aired within" }, ...[[7, "7 days"], [30, "30 days"], [90, "90 days"], [0, "All"]].map(([d, label]) =>
+    el("button", { type: "button", textContent: label, ariaPressed: String(missingDays === d), onclick: () => { missingDays = d; showMissing(); } })));
   const unset = unsetNote(missingSonarr);
   const go = el("button", { className: "btn primary", textContent: r.items.length === 1 ? "Download it" : `Download the ${r.items.length}`, hidden: !r.items.length || !!unset,
     onclick: async (e) => {

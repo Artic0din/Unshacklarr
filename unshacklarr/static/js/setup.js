@@ -72,26 +72,30 @@ function zonePicker(real) {
     { placeholder: "Search a city or a region", none: "No time zone matches", exact: true });
 }
 /* A searchable list in place of a hidden input: the items are {code, name, flag, small}, the input keeps the code. */
+let pickerIds = 0;
 function listPicker(real, all, { placeholder, none, exact = false }) {
   real.type = "hidden";
-  const input = el("input", { type: "text", className: "cp-input", autocomplete: "off", spellcheck: false, role: "combobox",
+  const id = `cp${++pickerIds}`;  // its label points at the visible input; the list and its options are named for the arrow keys
+  const input = el("input", { id, type: "text", className: "cp-input", autocomplete: "off", spellcheck: false, role: "combobox",
     ariaAutoComplete: "list", ariaExpanded: "false", placeholder, dataset: { bwignore: "", "1pIgnore": "", lpignore: "true" } });
-  const list = el("ul", { className: "cp-list", role: "listbox", hidden: true });
+  const list = el("ul", { id: `${id}-list`, className: "cp-list", role: "listbox", hidden: true });
+  input.setAttribute("aria-controls", list.id);
   let shown = [], active = -1;
   const current = () => all.find((c) => c.code === (exact ? String(real.value || "") : String(real.value || "").toUpperCase()));
   const sync = () => { const c = current(); input.value = c ? (c.flag ? `${c.flag}  ${c.name}` : c.name) : real.value || ""; };
-  const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); };
+  const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); };
   const draw = (query) => {
     const q = plain(query.trim());
     shown = all.filter((c) => !q || plain(c.name).includes(q) || c.code.toLowerCase() === q);
     shown.sort((a, b) => (plain(b.name).startsWith(q) || b.code.toLowerCase() === q) - (plain(a.name).startsWith(q) || a.code.toLowerCase() === q));
     active = shown.length ? Math.max(0, shown.findIndex((c) => c.code === current()?.code)) : -1;
-    list.replaceChildren(...shown.map((c, i) => el("li", { role: "option", className: i === active ? "on" : "", ariaSelected: String(i === active),
+    list.replaceChildren(...shown.map((c, i) => el("li", { id: `${list.id}-${i}`, role: "option", className: i === active ? "on" : "", ariaSelected: String(i === active),
       onmousedown: (e) => { e.preventDefault(); pick(c); } }, ...(c.flag ? [el("span", { className: "flag", textContent: c.flag })] : []), el("span", { textContent: c.name }), el("small", { textContent: c.small }))));
     if (!shown.length) list.append(el("li", { className: "cp-none", textContent: none }));
     list.style.top = `${input.offsetTop + input.offsetHeight + 4}px`;  // right under the input, over its help
     list.hidden = false;
     input.setAttribute("aria-expanded", "true");
+    if (active >= 0) input.setAttribute("aria-activedescendant", `${list.id}-${active}`); else input.removeAttribute("aria-activedescendant");
     list.children[active]?.scrollIntoView({ block: "nearest" });
   };
   const pick = (c) => {
@@ -103,9 +107,11 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
   };
   const move = (by) => {
     if (!shown.length) return;
-    list.children[active]?.classList.remove("on");
+    const mark = (i, on) => { list.children[i].classList.toggle("on", on); list.children[i].setAttribute("aria-selected", String(on)); };
+    mark(active, false);
     active = (active + by + shown.length) % shown.length;
-    list.children[active].classList.add("on");
+    mark(active, true);
+    input.setAttribute("aria-activedescendant", list.children[active].id);
     list.children[active].scrollIntoView({ block: "nearest" });
   };
   input.addEventListener("focus", () => input.select());
@@ -189,10 +195,10 @@ function showSetup(found) {
     x.innerHTML = `<svg viewBox="0 0 24 24">${ICONS[name]}</svg>`;
     return x;
   };
-  const tile = (value, name, sub) => el("button", { type: "button", className: "wz-tile", role: "radio", dataset: { value },
+  const tile = (value, name, sub) => el("button", { type: "button", className: "wz-tile", dataset: { value },
     onclick: () => { f.unshackle_mode.value = value; f.unshackle_mode.dispatchEvent(new Event("change")); keep(); } },
     ico(value, "wz-tile-ico"), el("b", { textContent: name }), el("small", { textContent: sub }));
-  const tiles = el("div", { className: "wz-tiles", role: "radiogroup", ariaLabel: "Unshackle runs" },
+  const tiles = el("div", { className: "wz-tiles", role: "group", ariaLabel: "Unshackle runs" },
     tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "unshackle serve runs elsewhere"));
   const country = countryPicker(f.country);
   const unshackleParams = () => Object.fromEntries(["unshackle_mode", "unshackle_command", "unshackle_url", "unshackle_api_key"].map((k) => [k, f[k].value]));
@@ -206,7 +212,7 @@ function showSetup(found) {
     el("div", { className: "only-remote" }, field("Downloads folder, as Unshackle sees it", f.unshackle_downloads, "Its path on the machine where unshackle serve runs. Empty: the same path as above.")));
   const showMode = () => {
     uPanel.dataset.mode = f.unshackle_mode.value;
-    tiles.querySelectorAll(".wz-tile").forEach((t) => t.setAttribute("aria-checked", String(t.dataset.value === f.unshackle_mode.value)));
+    tiles.querySelectorAll(".wz-tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.value === f.unshackle_mode.value)));
   };
   f.unshackle_mode.onchange = showMode;
   showMode();
@@ -445,12 +451,14 @@ function showSetup(found) {
 }
 let setupDraft = null;  // what setLang keeps for the page to come back to, on the first run
 
-$("#lang-row").append(...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", role: "radio", className: "rg-lang", ariaChecked: String(k === LANG),
+$("#lang-row").append(...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", className: "rg-lang", ariaPressed: String(k === LANG),
   onclick: () => { if (k !== LANG) setLang(k); } }, el("span", { className: "flag", textContent: FLAGS[k] }), el("b", { textContent: name }))));
 settingsCountry = countryPicker($("[data-set=country]"));
-$("[data-set=country]").after(settingsCountry.input, settingsCountry.list);
 settingsZone = zonePicker($("#tz-select"));
-$("#tz-select").after(settingsZone.input, settingsZone.list);
+for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#tz-select"), settingsZone]]) {
+  real.after(picker.input, picker.list);
+  real.closest(".field").querySelector("label").htmlFor = picker.input.id;  // the visible box is what the label names
+}
 (async () => {
   // asked at once, while the translations load: the state only when logged in (else it answers 401, and is dropped)
   const sessionAsked = api("/api/session"), stateAsked = fetch("/api/state", { headers: { "X-Unshackle": "1" } })

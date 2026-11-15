@@ -82,7 +82,7 @@ class Markup(HTMLParser):
 
 CODE_BEFORE = re.compile(r"(className|type|kind|mode|role|inputMode|autocomplete|rel|target|method|key|dataset|href|src|name|value|id)\s*:\s*$"
                          r"|(classList\.\w+|querySelector(All)?|closest|matches|\$|getElementById|setAttribute|getAttribute|removeAttribute"
-                         r"|addEventListener|api|fetch|startsWith|endsWith|split|join|replace(All)?|includes|localStorage\.\w+)\(\s*$|[\w)\]]\[\s*$")  # x["key"], not an array
+                         r"|addEventListener|matchMedia|api|fetch|startsWith|endsWith|split|join|replace(All)?|includes|localStorage\.\w+)\(\s*$|[\w)\]]\[\s*$")  # x["key"], not an array
 
 
 BRANCHES: set[str] = set()  # a ternary's choices, what a textContent or a toast shows: for a person, however short

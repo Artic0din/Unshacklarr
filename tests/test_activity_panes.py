@@ -75,7 +75,7 @@ def test_series_refresh_displays_new_search_before_a_slower_saved_result(suggest
 const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8"), suggestions = JSON.parse(process.argv[2]);
 const failure = JSON.parse(process.argv[3]), errors = [];
-const s = { tvdbId: 1, id: 10, title: "Show" }, stub = { replaceChildren() {} };
+const s = { tvdbId: 1, id: 10, title: "Show" }, stub = { replaceChildren() {}, setAttribute() {}, removeAttribute() {} };
 let rendered;
 const pages = Object.fromEntries(Array.from({length: 10}, (_, i) => [i + 1, {url: `https://iview/season-${i + 1}`} ]));
 const ctx = { S: { services: ["IV", "SBS", "NF"], config: { series: { 1: {season_pages: pages} } } }, current: s, epElsewhere: { 3: { service: "NF" } }, epElsewhereFresh: false,

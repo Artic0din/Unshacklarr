@@ -85,7 +85,9 @@ function showTab(name, fromRoute = false, quiet = false) {
   if (name !== currentTab && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);
   currentTab = name;
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
-  document.querySelectorAll("nav button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === (name === "yaml" ? "settings" : name)));
+  document.querySelectorAll("nav button").forEach((b) => {
+    if (b.dataset.tab === (name === "yaml" ? "settings" : name)) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
   document.querySelectorAll("main > section").forEach((s) => s.hidden = s.id !== "tab-" + name);
   if (!fromRoute) navigate(true);
   if (quiet) return;

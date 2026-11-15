@@ -182,7 +182,7 @@ function showDrawerTab(name, fromRoute = false) {
   if (drawerTab === "settings" && name !== "settings") leaveNews((n) => n.series);  // a series' settings left
   drawerTab = name;
   if (!fromRoute) navigate(false);
-  document.querySelectorAll(".d-tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.dtab === name));
+  document.querySelectorAll(".d-tabs button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.dtab === name));
   $("#dt-episodes").hidden = name !== "episodes";
   $("#dt-settings").hidden = name !== "settings";
   $("#ep-bar").classList.toggle("off", name !== "episodes");
@@ -217,9 +217,9 @@ function sonarrSwitch(s) {
   const shown = (l) => !l || l === "off" ? "" : l === "series" ? (own && own !== "off" ? own : "") : l;  // "series": the series' own
   const opts = [...(s.id ? [{ name: "", label: mainSonarr(), ladder: shown(own), missing: S.series.find((x) => x.tvdbId === s.tvdbId)?.missing }] : []),
     ...others.map((i) => ({ name: i.name, label: i.name, ladder: i.ladder ? shown(i.ladder) : "no ladder chosen", missing: i.missing }))];
-  return el("div", { className: "ep-sonarr", role: "radiogroup", ariaLabel: "Which Sonarr's episodes" },
+  return el("div", { className: "ep-sonarr", role: "group", ariaLabel: "Which Sonarr's episodes" },
     el("span", { className: "ep-sonarr-label", textContent: "Library" }),
-    ...opts.map((o) => el("button", { type: "button", role: "radio", ariaChecked: String(epSonarr === o.name),
+    ...opts.map((o) => el("button", { type: "button", ariaPressed: String(epSonarr === o.name),
       onclick: () => { if (epSonarr !== o.name) { epSonarr = o.name; loadEpisodes(s); } } },
       el("span", { textContent: o.label }),
       ...(o.ladder ? [el("small", { textContent: o.ladder })] : []),
@@ -321,7 +321,7 @@ function renderCheck(s, changed = false) {
   const pick = el("button", { type: "button", id: "ep-avail", className: "svc", hidden: !epAvail,
     title: `The missing episodes ${svc} has`, onclick: () => selectSeason((e) => state(e) === "miss" && epAvail?.[e.id]) });
   const check = el("button", { className: "btn ep-check", title: `Ask ${svc} which episodes of this series it has, and mark them in the list`,
-    onclick: () => askService(s).then((r) => r && toast(`${svc} has ${Object.keys(r.available).length} of this series' episodes`)) });
+    onclick: () => check.ariaDisabled !== "true" && askService(s).then((r) => r && toast(`${svc} has ${Object.keys(r.available).length} of this series' episodes`)) });
   $(".ep-top").append(check);
   checkLabel(epAvail ? `Refresh what's on ${svc}` : `What's on ${svc}?`);
   $("#ep-odd").before(pick);
@@ -428,7 +428,7 @@ const COLUMNS = [
   { id: "audio", label: "Audio", file: true, on: true, cell: (f, odd) => el("span", { className: "spec" },
       [f.audio, layout(f.channels)].filter(Boolean).join(" "), " ", el("small", {}, flagged(f.audioLanguages.join(", "), odd.audio))) },
   { id: "subs", label: "Subtitles", file: true, on: true, cell: (f, odd) => el("span",
-      { className: "spec" + (f.subtitles.length ? "" : " blank") }, flagged(f.subtitles.join(", ") || "none", odd.subs)) },
+      { className: "spec subs" + (f.subtitles.length ? "" : " blank") }, flagged(f.subtitles.join(", ") || "none", odd.subs)) },
   { id: "size", label: "Size", file: true, on: true, cell: (f) => el("span", { className: "spec", textContent: f.size ? size(f.size) : "" }) },
   { id: "quality", label: "Quality", file: true, on: false, cell: (f) => el("span", { className: "spec", textContent: f.quality }) },
   { id: "group", label: "Group", file: true, on: false, cell: (f) => el("span", { className: "spec", textContent: f.releaseGroup }) },
@@ -476,7 +476,8 @@ function fileLine(f, odd) {  // the same, in one line (phones)
 function fileTooltip(e) {
   const f = e.file, title = titleHidden(current.tvdbId, `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`, e.title) ? "" : e.title;
   if (!f) return title || "";
-  return [title, `${f.quality}${f.releaseGroup ? ` · ${f.releaseGroup}` : ""}`, `${f.resolution}${f.runTime ? ` · ${f.runTime}` : ""}`].filter(Boolean).join("\n");
+  return [title, `${f.quality}${f.releaseGroup ? ` · ${f.releaseGroup}` : ""}`, `${f.resolution}${f.runTime ? ` · ${f.runTime}` : ""}`,
+    f.subtitles.length ? `Subtitles: ${f.subtitles.join(", ")}` : ""].filter(Boolean).join("\n");
 }
 const STATE_ICONS = {
   disk: '<circle cx="12" cy="12" r="10" fill="currentColor"/><path d="m7.5 12.5 3 3 6-6.5" fill="none" stroke="#10151d" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -498,7 +499,7 @@ function fitEpList(list) {
 const epFit = new ResizeObserver(([e]) => fitEpList(e.target));
 /* A tooltip over everything (the list clips its cells), fading in on hover or focus. */
 let tipEl = null, tipFor = null;
-const hideTip = () => { tipEl?.remove(); tipEl = tipFor = null; };
+const hideTip = () => { tipFor?.removeAttribute("aria-describedby"); tipEl?.remove(); tipEl = tipFor = null; };
 /* What floats (the tooltip, the toasts) goes to the browser's top layer, above any window or menu opened
    before it: no z-index beats a dialog opened as a modal. Shown again, it comes above the newest. */
 function onTop(node) {
@@ -518,17 +519,21 @@ function onTop(node) {
 function showTip(target, nodes) {
   hideTip();
   tipFor = target;
-  tipEl = el("div", { className: "tip", role: "tooltip" }, ...nodes);
+  tipEl = el("div", { className: "tip", role: "tooltip", id: "tip" }, ...nodes);
   document.body.append(tipEl);
+  target.setAttribute("aria-describedby", "tip");  // read out with the focused badge, not only shown
   onTop(tipEl);
   const r = target.getBoundingClientRect(), t = tipEl.getBoundingClientRect();
   tipEl.style.left = `${Math.min(Math.max(8, r.left + r.width / 2 - t.width / 2), innerWidth - t.width - 8)}px`;
   tipEl.style.top = `${r.top - t.height - 10 < 8 ? r.bottom + 10 : r.top - t.height - 10}px`;
   requestAnimationFrame(() => tipEl?.classList.add("on"));
 }
-function hoverTip(target, build) {
-  target.addEventListener("mouseenter", () => showTip(target, build()));
-  target.addEventListener("mouseleave", hideTip);
+function hoverTip(target, build) {  // on focus too: the keyboard and a tap on a phone reach it as the pointer does
+  target.tabIndex = 0;
+  for (const [open, shut] of [["mouseenter", "mouseleave"], ["focus", "blur"]]) {
+    target.addEventListener(open, () => showTip(target, build()));
+    target.addEventListener(shut, hideTip);
+  }
   return target;
 }
 /* Every button or link with only an icon in sight (no letter) shows what it does in the common tooltip, on hover
@@ -682,7 +687,7 @@ function renderCatchUp() {
 /* What the service lists of the series (unshackle's --list-titles): marked on the episodes, and for a download's preview. */
 async function askService(s) {
   const conf = S.config.series[s.tvdbId], svc = seriesSvcs(conf), check = $(".ep-check");
-  if (check) { check.disabled = true; check.replaceChildren(el("span", { className: "spinner", ariaHidden: "true" }), ` Asking ${svc}…`); }
+  if (check) { check.setAttribute("aria-disabled", "true"); check.replaceChildren(el("span", { className: "spinner", ariaHidden: "true" }), ` Asking ${svc}…`); }
   let r = null;
   const slow = slowHint(svc);
   try {
@@ -693,7 +698,7 @@ async function askService(s) {
     if (current === s && r.elsewhere_error) toast(`Availability refreshed, but the search on other services failed: ${r.elsewhere_error}`, true);
   } catch (e) { toast(e.message, true); }
   clearTimeout(slow);
-  if (current === s && $(".ep-check")) { $(".ep-check").disabled = false; checkLabel(epAvail ? `Refresh what's on ${svc}` : `What's on ${svc}?`); }
+  if (current === s && $(".ep-check")) { $(".ep-check").removeAttribute("aria-disabled"); checkLabel(epAvail ? `Refresh what's on ${svc}` : `What's on ${svc}?`); }
   return r;
 }
 /* The season picked in sight in its strip: the strip scrolls sideways, never the page (a redraw every 20 s
@@ -967,7 +972,7 @@ $(".ds-nav").onclick = (e) => {
   if (card.tagName === "DETAILS") card.open = true;
   dsPicked = a.dataset.to;  // lit at the click, and kept while the page glides there (the last card may not reach the top)
   dsLight();
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  card.scrollIntoView({ behavior: SCROLL, block: "start" });
 };
 // each shortcut wears its card's icon, and the card in view lights its shortcut
 document.querySelectorAll(".ds-nav a[data-to]").forEach((a) => {

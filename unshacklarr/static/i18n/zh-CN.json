@@ -311,7 +311,6 @@
  "Hidden": "已隐藏",
  "Hidden from the schedule": "已从日程中隐藏",
  "Hidden from the schedule: show it again": "已从日程中隐藏：重新显示",
- "Hidden in schedule": "在日程中隐藏",
  "Hidden series": "已隐藏的剧集",
  "Hide": "隐藏",
  "Hide on disk": "隐藏已在磁盘上的",
@@ -652,7 +651,6 @@
  "Series URL on the service": "剧集在服务上的 URL",
  "Series hidden from the Schedule": "从日程中隐藏的剧集",
  "Series links from": "剧集链接来源",
- "Series settings": "剧集设置",
  "Series whose last 3 downloads failed": "最近 3 次下载均失败的剧集",
  "Service": "服务",
  "Service access": "服务访问",
@@ -2268,5 +2266,10 @@
  "{0} could not be reached. Check the Unshacklarr log.": "无法连接到 {0}。请检查 Unshacklarr 日志。",
  "{0} through Unshackle": "通过 Unshackle 的 {0}",
  "{0}. Check this service's login/session in Unshackle.": "{0}。请在 Unshackle 中检查此服务的登录或会话。",
- "{0}: HTTP {1}: {2}": "{0}：HTTP {1}：{2}"
+ "{0}: HTTP {1}: {2}": "{0}：HTTP {1}：{2}",
+ "Add an option": "添加选项",
+ "Dismiss": "忽略",
+ "Failing: {0}": "持续失败: {0}",
+ "Main": "主导航",
+ "Subtitles: {0}": "字幕: {0}"
 }

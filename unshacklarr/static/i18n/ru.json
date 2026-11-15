@@ -311,7 +311,6 @@
  "Hidden": "Скрытые",
  "Hidden from the schedule": "Скрыт из расписания",
  "Hidden from the schedule: show it again": "Скрыт из расписания: показать снова",
- "Hidden in schedule": "Скрыт в расписании",
  "Hidden series": "Скрытые сериалы",
  "Hide": "Скрыть",
  "Hide on disk": "Скрыть скачанные",
@@ -653,7 +652,6 @@
  "Series URL on the service": "URL сериала на сервисе",
  "Series hidden from the Schedule": "Сериалы, скрытые из расписания",
  "Series links from": "Ссылки на сериалы из",
- "Series settings": "Настройки сериала",
  "Series whose last 3 downloads failed": "Сериалы с тремя неудачными загрузками подряд",
  "Service": "Сервис",
  "Service access": "Доступ к сервисам",
@@ -2261,5 +2259,10 @@
  "{0} could not be reached. Check the Unshacklarr log.": "{0} недоступен. Проверьте журнал Unshacklarr.",
  "{0} through Unshackle": "{0} через Unshackle",
  "{0}. Check this service's login/session in Unshackle.": "{0}. Проверьте вход в учётную запись или сеанс этого сервиса в Unshackle.",
- "{0}: HTTP {1}: {2}": "{0}: HTTP {1}: {2}"
+ "{0}: HTTP {1}: {2}": "{0}: HTTP {1}: {2}",
+ "Add an option": "Добавить опцию",
+ "Dismiss": "Скрыть",
+ "Failing: {0}": "Сбоит: {0}",
+ "Main": "Основная",
+ "Subtitles: {0}": "Субтитры: {0}"
 }

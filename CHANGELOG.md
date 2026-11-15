@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- The series page now works without a mouse: it is a proper dialog that keeps the page behind it out of reach and gives focus back when closed, a managed poster's focus no longer looks like its resting ring, a failing Sonarr or Unshackle says so in words, hover-only details (failure marks, badges, subtitles) open on focus too, errors stay until dismissed, long titles and subtitle lists wrap instead of being cut, and the Region pickers, header and button groups name their roles and state to screen readers.
 - Text now follows the browser's text-size setting, the page uses your system font with no request to Google Fonts, headings step down in size (the season heading is smaller than the series title), and corners use three shared sizes.
 - Error text, placeholders, the Settings group labels and field edges now meet contrast, availability on a service shows in the accent colour instead of the green that means done, "New" labels no longer look like success, and the system's Increase Contrast setting is followed.
 - The translation files match the page again: 13 texts it no longer shows were removed from every language, and the sign-in texts added since are listed for translating.

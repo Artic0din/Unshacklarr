@@ -61,7 +61,7 @@ function renderNews() {
     if (!strip) sec.firstElementChild.after(strip = el("div", { className: "new-strip" }));
     strip.replaceChildren(el("span", { textContent: here.length === 1 ? "1 new option in this section" : `${here.length} new options in this section` }),
       el("button", { type: "button", className: "btn small", textContent: "Show me",
-        onclick: () => document.querySelector(here[0].target)?.scrollIntoView({ behavior: "smooth", block: "center" }) }));
+        onclick: () => document.querySelector(here[0].target)?.scrollIntoView({ behavior: SCROLL, block: "center" }) }));
   });
   const version = $("#version"), count = S.news?.list_read !== S.version ? unseen.length : 0;  // how many, until this version's list is read
   version.classList.toggle("has-new", !!count);
@@ -105,11 +105,11 @@ function showOption(n) {
   if (n.series) {
     const s = S.series.find((x) => S.config.series[x.tvdbId]?.service) || S.series[0];
     if (s) openDrawer(s, "settings");
-    setTimeout(() => { const box = document.querySelector(n.target), fold = box?.closest("details"); if (fold) fold.open = true; box?.scrollIntoView({ behavior: "smooth", block: "center" }); }, 400);  // in a folded section: opened
+    setTimeout(() => { const box = document.querySelector(n.target), fold = box?.closest("details"); if (fold) fold.open = true; box?.scrollIntoView({ behavior: SCROLL, block: "center" }); }, 400);  // in a folded section: opened
   } else {
     showTab("settings");
     showSettingsSec(n.sec);
-    setTimeout(() => document.querySelector(n.target)?.scrollIntoView({ behavior: "smooth", block: "center" }), 200);
+    setTimeout(() => document.querySelector(n.target)?.scrollIntoView({ behavior: SCROLL, block: "center" }), 200);
   }
 }
 function releaseRow(r, installed, latest) {
