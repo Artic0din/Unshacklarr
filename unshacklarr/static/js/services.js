@@ -99,7 +99,7 @@ function serviceModels() {
   (S.authenticationSetups || []).forEach((setup) => add(setup.service, setup.backend || "", { state: "unknown" }));
   Object.keys(files).forEach((tag) => add(tag, "", { state: "unknown" }));
   const seriesOf = (service) => Object.values(S.config.series || {})
-    .filter((c) => c.service === service || Object.values(c.season_pages || {}).some((page) => page.service === service)).length;
+    .filter((c) => usesService(c, service)).length;
   return [...identities.values()].map(({ key, service, backend, status }) => {
     const setup = (S.authenticationSetups || []).find((item) => item.service === service && (item.backend || "") === backend) || null;
     const live = (S.authenticationLive || []).find((item) => item.service === service && (item.backend || "") === backend);
@@ -166,7 +166,7 @@ function renderServices() {
         ...(m.missing ? [el("small", { textContent: both ? "Downloads will fail unless you add a cookie file, or set its username and password in unshackle.yaml."
           : "Downloads will fail unless you add a cookie file." })] : []),
         el("div", { className: "sv-ctl" }, el("button", { className: `btn small${m.missing ? " primary" : ""}`, textContent: "Add cookies", ariaLabel: `Add cookies for ${svcName(m.service)}`,
-          onclick: () => openCookieDialog(m.service, "default") }))];
+          onclick: () => openCookieDialog(m.service, "default", true) }))];
     }
     return m.cookieFiles.map((f) => {
       const [cls, word, why] = f.st, file = f.profile ? `${f.profile}.txt` : `${m.service}.txt`, ask = `${m.service}/${f.profile}`;
@@ -188,7 +188,8 @@ function renderServices() {
         el("small", { textContent: [f.count === 1 ? "1 cookie" : `${f.count} cookies`, `updated ${ago_days(f.updated)}`].join(" · ") }),
         ...(servicesAsked === ask ? [sure] : [el("div", { className: "sv-ctl" },
           el("button", { className: `btn small${cls === "bad" || cls === "warn" ? " primary" : ""}`, textContent: "Replace", ariaLabel: `Replace ${file}`, onclick: () => openCookieDialog(m.service, f.profile) }), del)]));
-    });
+    }).concat(el("div", { className: "sv-ctl" }, el("button", { className: "btn small", textContent: "Add cookies", ariaLabel: `Add cookies for ${svcName(m.service)}`,
+      onclick: () => openCookieDialog(m.service, "", true) })));  // another profile (an account of its own)
   };
 
   const methodsCell = (m) => m.methods === null ? [el("span", { className: "muted", textContent: "—" })]

@@ -120,3 +120,16 @@ out.dialog = focused.splice(0);
 console.log(JSON.stringify(out));
 """)
     assert shown == {"redrawn": ["close"], "remembered": ["kept"], "dialog": []}
+
+
+def test_a_series_uses_a_service_through_its_own_or_a_seasons_page():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const ctx = {};
+vm.createContext(ctx);
+vm.runInContext(src.match(/^const usesService = .*$/m)[0] + "; this.usesService = usesService;", ctx);
+const seasonOnly = { service: "BINGE", season_pages: { 2: { url: "u", service: "STAN" } } };
+console.log(JSON.stringify([ctx.usesService(seasonOnly, "BINGE"), ctx.usesService(seasonOnly, "STAN"), ctx.usesService(seasonOnly, "NF"), ctx.usesService(undefined, "NF")]));
+""")
+    assert shown == [True, True, False, False]

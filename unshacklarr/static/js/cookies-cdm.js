@@ -9,12 +9,12 @@ function cookieStatus(f) {
   const days = left === 1 ? "1 day" : `${left} days`;
   return left < 7 ? ["warn", `Expires in ${days}`, "Replace them soon"] : ["ok", `Valid · ${days} left`, "Nothing to do"];
 }
-function openCookieDialog(service = "", profile = "default") {
+function openCookieDialog(service = "", profile = "default", newProfile = false) {
   $("#ck-service").replaceChildren(...S.services.map((t) => el("option", { value: t, textContent: t })));
   $("#ck-service").value = service || S.services[0] || "";
   $("#ck-service").disabled = Boolean(service);
   $("#ck-profile").value = profile;
-  $("#ck-profile").disabled = Boolean(service);
+  $("#ck-profile").disabled = Boolean(service) && !newProfile;  // adding: any profile name; replacing: that one
   $("#ck-title").textContent = service ? `Cookies for ${service}` : "Add cookies";
   $("#ck-text").value = "";
   $("#ck-file").value = "";

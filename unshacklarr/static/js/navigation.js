@@ -108,10 +108,10 @@ document.querySelectorAll("#tab-series .seg button").forEach((b) => b.onclick = 
 
 /* The service filter lists only the services some series actually uses. */
 function renderServiceFilter() {
-  const used = [...new Set(Object.values(S.config.series).map((c) => c.service).filter(Boolean))].sort();
+  const used = [...new Set(Object.values(S.config.series).flatMap((c) => [c.service, ...Object.values(c.season_pages || {}).map((p) => p.service)]).filter(Boolean))].sort();
   const f = $("#f-service"), keep = f.value;
   f.querySelectorAll("option.svc-opt").forEach((o) => o.remove());
-  const n = (t) => S.series.filter((s) => S.config.series[s.tvdbId]?.service === t).length;
+  const n = (t) => S.series.filter((s) => usesService(S.config.series[s.tvdbId], t)).length;
   f.options[0].textContent = `All services (${S.series.length})`;
   f.append(...used.map((t) => el("option", { className: "svc-opt", value: t, textContent: `${t} (${n(t)})` })));
   f.value = [...f.options].some((o) => o.value === keep) ? keep : "";

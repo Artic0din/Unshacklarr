@@ -842,6 +842,7 @@ const box = {{
   $: (selector) => nodes[selector],
   el: (tag, props = {{}}, ...children) => ({{ tag, ...props, children }}),
   svcName: (name) => name,
+  usesService: (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || []).some((page) => page.service === tag),
   ago: () => "now",
 }};
 vm.createContext(box);
@@ -953,6 +954,7 @@ const box = {
   $: (selector) => nodes[selector],
   el: (tag, props = {}, ...children) => new FakeNode(tag, props, children),
   svcName: (name) => name,
+  usesService: (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || []).some((page) => page.service === tag),
   ago: () => "now",
   currentTab: "settings",
   settingsSec: "services",
@@ -1292,13 +1294,13 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     assert rows["HULU"] == {
         "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series"],
         "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
-                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete"],
+                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete", "Add cookies"],
     }
     # another backend's row never gets the main Unshackle's cookie files, nor its series count
     assert rows["HULU · vpn"] == {
         "name": "HULU · vpn", "label": "Confirmed now", "attention": False, "used": ["—"], "cookies": ["—", "Managed on that server"],
     }
-    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete"]
+    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete", "Add cookies"]
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series"]
     assert result["state"] == "sx-state down"
 
