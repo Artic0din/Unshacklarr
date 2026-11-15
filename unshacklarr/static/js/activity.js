@@ -415,7 +415,7 @@ async function showLeftovers() {
   $("#con-left-n").textContent = r.items.length ? `(${r.items.length})` : "";
   if (picked_run !== "left") return;  // another pane was picked while this answer was on its way
   const act = (item, action, label, cls) => el("button", { className: `btn small ${cls}`, textContent: label, onclick: async (e) => {
-    if (action === "delete" && e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure?"; return; }
+    if (action === "delete" && !confirmClick(e.target, `Delete ${item.folder}?`)) return;
     e.target.disabled = true;
     try {
       await api(`/api/leftovers/${action}`, { method: "POST", wait: 360, body: JSON.stringify({ folder: item.folder }) });

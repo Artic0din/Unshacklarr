@@ -278,7 +278,7 @@ $("#ak-pass").oninput = () => akPassSay();
 $("#ak-pass").onkeydown = (e) => { if (e.key === "Enter") $("#ak-new").click(); };
 $("#ak-delete").onclick = async (e) => {
   const b = e.currentTarget;
-  if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Sure? Programs using it will stop working"; return setTimeout(() => { if (b.dataset.sure === "1") { b.dataset.sure = ""; b.textContent = "Delete the key"; } }, 4000); }
+  if (!confirmClick(b, "Delete the key? Programs using it will stop working")) return;
   try { await api("/api/api-key/delete", { method: "POST" }); akShow({ set: false }); }
   catch (err) { toast(err.message, true); }
 };
@@ -290,8 +290,8 @@ $("#ak-cmd").after((() => {
 })());
 $("#ac-others").onclick = async (e) => {
   const b = e.currentTarget;
-  if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Sure? They log in again"; return setTimeout(() => { b.dataset.sure = ""; b.textContent = "Log out other devices"; }, 4000); }
-  try { await api("/api/logout-others", { method: "POST" }); b.dataset.sure = ""; b.textContent = "✓ Others logged out"; loadAccount(); }
+  if (!confirmClick(b, "Sign out other devices? They sign in again")) return;
+  try { await api("/api/logout-others", { method: "POST" }); b.textContent = "✓ Others logged out"; loadAccount(); }
   catch (err) { toast(err.message, true); }
 };
 $("#ac-reset").after((() => {

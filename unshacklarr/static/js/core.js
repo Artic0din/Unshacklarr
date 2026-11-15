@@ -183,6 +183,21 @@ async function api(path, { wait = 30, ...opts } = {}) {
   return r.json();
 }
 
+/* Two clicks for what cannot be undone: the first turns the label into the question, naming the action and what it is done to;
+   the second does it. No timer takes the question back while it is being read: leaving the button, or Escape, does. */
+function confirmClick(button, question, label = button) {
+  if (button.dataset.sure === "1") { label.textContent = button.dataset.was; delete button.dataset.sure; return true; }
+  button.dataset.sure = "1"; button.dataset.was = label.textContent;
+  label.textContent = question;
+  const cancel = (e) => {
+    if (e.type === "keydown" && e.key !== "Escape") return;
+    button.removeEventListener("blur", cancel); button.removeEventListener("keydown", cancel);
+    if (button.dataset.sure !== "1") return;
+    delete button.dataset.sure; label.textContent = button.dataset.was;
+  };
+  button.addEventListener("blur", cancel); button.addEventListener("keydown", cancel);
+  return false;
+}
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */
 const slowHint = (svc) => setTimeout(() => toast(`${svc} is slow to answer. It may be waiting for you to sign in: look at Unshackle's log.`, false, ["OK", () => {}]), 20000);
 function toast(msg, err = false, action = null) {  // action: [label, onclick], e.g. ["Undo", …]

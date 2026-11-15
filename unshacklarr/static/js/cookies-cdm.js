@@ -264,7 +264,7 @@ function renderCdm() {
       { disabled: d.info?.unreadable || d.folder || data.details_error || cdmTesting || cdmRunning.has(d.name), sub: "A license from a test server" });
     const reprov = d.kind === "PlayReady" && d.info?.reprovisionable ? item("Reprovision", async (e) => {
       const b = e.currentTarget;
-      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.querySelector("b").textContent = "Sure? New keys"; return; }
+      if (!confirmClick(b, `Reprovision ${cdmShort(d)}?`, b.querySelector("b"))) return;
       closeCdmPop(); toast(`${cdmShort(d)}: reprovisioning…`);
       try {
         const r = await api("/api/cdm/reprovision", { method: "POST", wait: 90, body: JSON.stringify({ name: d.name }) });
@@ -277,7 +277,7 @@ function renderCdm() {
     }, { sub: "New keys, from its group key" }) : "";
     const del = item("Delete", async (e) => {
       const b = e.currentTarget;
-      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.querySelector("b").textContent = "Sure? Delete the file"; return; }
+      if (!confirmClick(b, `Delete ${cdmShort(d)}?`, b.querySelector("b"))) return;
       closeCdmPop();
       try { cdmData = await api("/api/cdm/delete", { method: "POST", body: JSON.stringify({ name: d.name, kind: d.kind }) }); renderCdm(); }
       catch (err) { toast(err.message, true); }
@@ -336,7 +336,7 @@ function remoteRow(r) {
       el("b", { textContent: text }), ...(extra.sub ? [el("small", { textContent: extra.sub })] : []));
     const del = item("Delete", async (ev) => {
       const b = ev.currentTarget;
-      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.querySelector("b").textContent = "Sure? Remove it from unshackle.yaml"; return; }
+      if (!confirmClick(b, `Remove ${r.name} from unshackle.yaml?`, b.querySelector("b"))) return;
       closeCdmPop();
       try { cdmData = await api("/api/cdm/remote-delete", { method: "POST", body: JSON.stringify({ name: r.name }) }); renderCdm(); }
       catch (err) { toast(err.message, true); }

@@ -90,7 +90,7 @@ function ladderCard(lad) {
       $("#ql-default").querySelectorAll("button").forEach((b, i) => { if (i && list[i - 1] === lad) b.textContent = v; });
     } });
   const del = el("button", { type: "button", className: "btn small danger", textContent: "Delete", onclick: (e) => {
-    if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = use.length ? "Sure? It is in use" : "Sure?"; return; }
+    if (!confirmClick(e.target, use.length ? `Delete ${lad.name}? It is in use` : `Delete ${lad.name}?`)) return;
     list.splice(list.indexOf(lad), 1);
     renameRefs("ladder", lad.name, "");
     dirty(); renderQuality(); renderServiceDefaults();
@@ -177,9 +177,7 @@ $("#ql-add").onclick = () => {
   $("#ql-list .ql-card:last-child .ql-name")?.select();
 };
 $("#ql-reset").onclick = (e) => {
-  if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure? Your own ladders will be deleted"; return; }
-  delete e.target.dataset.sure;
-  e.target.textContent = "Reset to the built-in ladders";
+  if (!confirmClick(e.target, "Delete your own ladders?")) return;
   const keep = new Set(S.builtinLadders.map((l) => l.name));
   for (const l of ladders()) if (!keep.has(l.name)) renameRefs("ladder", l.name, "");
   S.config.quality_ladders = structuredClone(S.builtinLadders);
@@ -231,7 +229,7 @@ function backendBlock(b) {
     state.dataset.tested = "1";  // its test speaks until the page reloads
   } });
   const remove = el("button", { type: "button", className: "btn small danger", textContent: "Remove", onclick: (e) => {
-    if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure?"; return; }
+    if (!confirmClick(e.target, `Remove ${b.name}?`)) return;
     list.splice(list.indexOf(b), 1);
     renameRefs("backend", b.name, "");
     dirty(); renderBackends(); renderServiceDefaults();
@@ -325,7 +323,7 @@ function sonarrBlock(i) {
     state.dataset.tested = "1";
   } });
   const remove = el("button", { type: "button", className: "btn small danger", textContent: "Remove", onclick: (e) => {
-    if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure?"; return; }
+    if (!confirmClick(e.target, `Remove ${i.name}?`)) return;
     list.splice(list.indexOf(i), 1);
     dirty(); renderSonarrs();
   } });
