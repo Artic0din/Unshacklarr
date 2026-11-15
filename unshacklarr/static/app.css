@@ -19,6 +19,7 @@
   --fs-headline: 1.0625rem; --fs-title3: 1.25rem; --fs-title2: 1.375rem; --fs-title1: 1.75rem;
   --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230b2a24' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");  /* a tick on an --accent fill, in --accent-ink */
   --sh-xs: 0 1px 2px 0 #0000004d;
   --sh-sm: 0 1px 2px 0 #00000066, 0 1px 3px 0 #00000066;
   --sh-md: 0 1px 2px 0 #00000066, 0 4px 12px 0 #00000080;
@@ -32,6 +33,7 @@
   --line-strong: #c4bcaf; --scrim: rgb(28 26 23 / .35); --tk-video: #2f5fc4; --tk-audio: #7b3fc4; --code-string: #3d6e1f; --net-chip: #ece7df;
   --dim: grayscale(.85) opacity(.55);
   --field-bg: #ffffff; --field-line: #857e73; --field-line-hover: #6b655c;
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
   --sh-xs: 0 1px 2px 0 #1c1a170d;
   --sh-sm: 0 1px 2px 0 #1c1a170f, 0 1px 3px 0 #1c1a1714;
   --sh-md: 0 1px 2px 0 #1c1a170f, 0 4px 12px 0 #1c1a1714;
@@ -45,6 +47,7 @@
   --line-strong: #c4bcaf; --scrim: rgb(28 26 23 / .35); --tk-video: #2f5fc4; --tk-audio: #7b3fc4; --code-string: #3d6e1f; --net-chip: #ece7df;
   --dim: grayscale(.85) opacity(.55);
   --field-bg: #ffffff; --field-line: #857e73; --field-line-hover: #6b655c;
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
   --sh-xs: 0 1px 2px 0 #1c1a170d;
   --sh-sm: 0 1px 2px 0 #1c1a170f, 0 1px 3px 0 #1c1a1714;
   --sh-md: 0 1px 2px 0 #1c1a170f, 0 4px 12px 0 #1c1a1714;
@@ -1543,8 +1546,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   clip-path: polygon(14% 52%, 0 66%, 38% 100%, 100% 22%, 86% 8%, 38% 72%); border-radius: 0; }
 .wall.selecting .poster .art::after { content: ""; position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
   border: 2px solid #fff; background: rgb(13 18 25 / .55); box-shadow: var(--sh-sm); }
-.wall.selecting .poster.picked .art::after { border-color: var(--accent); background: var(--accent) center / 14px no-repeat
-  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230d2a2e' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); }
+.wall.selecting .poster.picked .art::after { border-color: var(--accent); background: var(--accent) center / 14px no-repeat var(--tick); }
 .wall.selecting .poster .off { display: none; }
 .wall.selecting .poster:not(.picked) { opacity: .55; } .wall.selecting .poster:not(.picked) .art { box-shadow: none; }
 @media (hover: hover) { .wall.selecting .poster:not(.picked):hover { opacity: .85; } }
@@ -1716,8 +1718,7 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .d-lib.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .d-lib-sw { display: grid; gap: 2px; text-align: left; padding: 8px 14px 8px 36px; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; position: relative; }
 .d-lib-sw::before { content: ""; position: absolute; left: 12px; top: 50%; width: 14px; height: 14px; margin-top: -8px; border: 1.5px solid var(--muted); border-radius: var(--r-sm); }
-.d-lib.on .d-lib-sw::before { border-color: var(--accent); background: var(--accent) center / 11px no-repeat
-  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230d2a2e' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); }
+.d-lib.on .d-lib-sw::before { border-color: var(--accent); background: var(--accent) center / 11px no-repeat var(--tick); }
 .d-lib-sw b { font-size: var(--fs-callout); } .d-lib-sw small { color: var(--muted); font-size: var(--fs-footnote); }
 .d-lib:not(.on) .d-lib-sw b { color: var(--muted); }
 .d-lib-miss { border: 0; border-left: 1px solid var(--line); background: none; color: var(--warn); font: inherit; font-size: var(--fs-sub); font-weight: 600; padding: 0 12px; cursor: pointer; }

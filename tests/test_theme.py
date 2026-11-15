@@ -83,3 +83,17 @@ console.log(JSON.stringify(out));
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == ('[["light","light","#f6f3ee","light"],["dark","dark","#171614","dark"],'
                                   '["system",null,"#171614",null],"system"]')
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_a_tick_on_the_accent_fill_stands_out_in_both_looks(theme):
+    text = block(":root {") if theme == "dark" else block(':root[data-theme="light"] {')
+    stroke = "#" + re.search(r"--tick: url\(.*?stroke='%23([0-9a-fA-F]{6})'", text).group(1)
+    accent = (DARK if theme == "dark" else LIGHT)["accent"]
+    assert contrast(stroke, accent) >= 3  # a meaningful graphic: WCAG 1.4.11
+
+
+def test_icons_drawn_in_a_colour_take_it_from_a_token():
+    # a data-URI icon can't read a variable: one with a fixed colour is a mask (black) or a per-look token
+    rules = re.sub(r"--[\w-]+: url\(\"data:image/svg\+xml[^)]*\)\)?;", "", CSS)
+    assert set(re.findall(r"stroke='%23([0-9a-fA-F]{3,6})'", rules)) <= {"000"}
