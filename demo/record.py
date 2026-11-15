@@ -261,7 +261,11 @@ sync.AUTHENTICATION_FILE.write_text(json.dumps({"": {
     "RMCBFM": {"state": "needs_user_action", "observed_at": ago(hours=7), "validated_at": ago(days=40)},
     "TF1": {"state": "needs_user_action", "observed_at": ago(days=2), "validated_at": None},
 }}))
-sync.authentication_setups = lambda: [{"service": "MAX", "backend": "", "state": "waiting", "method": "pairing", "prompt": "Code shown on your TV"}]
+sync.authentication_setups = lambda: [{"service": "MAX", "backend": "", "state": "waiting", "method": "pairing", "prompt": "Code shown on your TV"},
+                                      # how a sign-in can end besides success: timed out, cancelled, refused
+                                      {"service": "AMZN", "backend": "", "state": "timed_out", "method": "pairing"},
+                                      {"service": "ATVP", "backend": "", "state": "cancelled", "method": "pairing"},
+                                      {"service": "DSNP", "backend": "", "state": "error", "method": "credentials", "failure": "authentication_rejected"}]
 
 RUN_LOG = """\x1b[90m── {when} · {kind} ──\x1b[0m\r
 \x1b[36m▸\x1b[0m {series} {sxxeyy} on {service}\r

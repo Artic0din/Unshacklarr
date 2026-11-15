@@ -118,9 +118,9 @@ function serviceModels() {
     const selected = S.config.service_defaults?.[service]?.backend || (onMain ? "" : [...identities.values()].find((i) => i.service === service)?.backend || "");
     const used = backend === selected ? seriesOf(service) : null;
     const cookieless = status.state === "anonymous" || (listed && methods.length > 0 && !methods.includes("cookies"));  // an empty list: not known
-    // no cookie file is fine when none is needed, or a confirmed sign-in did not use cookies (a username and
-    // password): a cookie-only service confirmed before its last file went still needs one
-    const signsInWithout = status.state === "anonymous" || (status.state === "validated" && listed && methods.includes("credentials"));
+    // no cookie file is fine when none is needed, or a confirmed sign-in has another way in (credentials,
+    // pairing): a cookie-only service confirmed before its last file went still needs one
+    const signsInWithout = status.state === "anonymous" || (status.state === "validated" && listed && methods.some((m) => m !== "cookies"));
     const missing = Boolean(cookieFiles && !cookieFiles.length && !cookieless && used && servicesCookies?.folder && !signsInWithout);
     const attention = status.state === "needs_user_action" || Boolean(used && (missing || cookieFiles?.some((f) => f.st[0] === "bad")));
     return { key, service, backend, name: svcName(service) + (backend ? ` · ${backend}` : ""), label, state: status.state, setup, listed,
