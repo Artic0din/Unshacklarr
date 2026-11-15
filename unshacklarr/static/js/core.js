@@ -513,6 +513,10 @@ let wallScroll = 0;
 /* The drawer is a modal: with it open the page behind cannot be reached by keyboard or screen reader, and closed, it is out of the tab order. */
 let drawerOpener = null;
 function drawerModal(open) {
+  // the toasts join the drawer while it is open: their Dismiss and Undo stay in reach and focus never leaves the dialog
+  const toasts = $("#toasts"), shown = toasts.matches?.(":popover-open");
+  if (open) $("#drawer").append(toasts); else document.body.append(toasts);
+  if (shown) onTop(toasts);  // moving it closes the popover it shows in
   $("#drawer").inert = !open;
   for (const behind of document.querySelectorAll("body > header, main")) behind.inert = open;
 }
@@ -530,7 +534,7 @@ function drawerFocusGuard(e) {
   const d = $("#drawer");
   if (!d.classList.contains("open") || d.inert) return;
   if (d.contains(e.target)) { drawerLastFocus = e.target; return; }
-  if (e.target.closest("dialog[open], #toasts")) return;  // a dialog on top, or a toast: its Dismiss or Undo belongs to this layer too
+  if (e.target.closest("dialog[open]")) return;  // a window opened on top of it
   const usable = (x) => x?.isConnected && d.contains(x) && !x.disabled && x.getClientRects().length;
   // the last one may have been redrawn away (the episode list refreshes): then the first control in sight
   const to = usable(drawerLastFocus) ? drawerLastFocus : [...d.querySelectorAll("button, a[href], input, select, textarea")].find(usable);

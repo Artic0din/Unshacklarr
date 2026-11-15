@@ -63,16 +63,18 @@ let posterShown = true;
 const poster = { name: "poster", isConnected: true, getClientRects: () => posterShown ? [{}] : [], focus: () => focused.push("poster") };
 const tab = { focus: () => focused.push("tab") };
 const opener = (over) => ({ name: "opener", isConnected: true, getClientRects: () => [{}], focus: () => focused.push("opener"), ...over });
-const ctx = { $: () => drawer, document: {
+const toasts = { matches: () => false };
+drawer.append = (n) => { toasts.parent = "drawer"; };
+const ctx = { onTop() {}, $: (sel) => sel === "#toasts" ? toasts : drawer, document: { body: { append: () => { toasts.parent = "body"; } },
   querySelectorAll: (s) => s === '[data-tvdb="7"]' ? [poster] : [header, main],
   querySelector: (s) => s === 'nav [aria-current="page"]' ? tab : null } };
 vm.createContext(ctx);
 vm.runInContext(src.match(/^function drawerModal\(.*?^\}/ms)[0] + src.match(/^function returnFocus\(.*?^\}/ms)[0], ctx);
 const out = {};
 ctx.drawerModal(true);
-out.open = [drawer.inert, header.inert, main.inert];
+out.open = [drawer.inert, header.inert, main.inert, toasts.parent];
 ctx.drawerModal(false);
-out.closed = [drawer.inert, header.inert, main.inert];
+out.closed = [drawer.inert, header.inert, main.inert, toasts.parent];
 const where = (o) => { focused.length = 0; ctx.returnFocus(o, 7); return focused[0]; };
 out.back = where(opener());
 out.gone = where(opener({ isConnected: false }));
@@ -83,7 +85,7 @@ out.nothingInSight = where(opener({ isConnected: false }));
 console.log(JSON.stringify(out));
 """)
     assert shown == {
-        "open": [False, True, True], "closed": [True, False, False],
+        "open": [False, True, True, "drawer"], "closed": [True, False, False, "body"],
         "back": "opener", "gone": "poster", "hidden": "poster", "none": "poster", "nothingInSight": "tab",
     }
 
@@ -115,8 +117,6 @@ ctx.drawerFocusGuard({ target: toast });
 out.remembered = focused.splice(0);
 ctx.drawerFocusGuard({ target: ctl("dialog button", { closest: () => ({}) }) });
 out.dialog = focused.splice(0);
-ctx.drawerFocusGuard({ target: ctl("toast button", { closest: (sel) => sel.includes("#toasts") ? ({}) : null }) });
-out.toast = focused.splice(0);
 console.log(JSON.stringify(out));
 """)
-    assert shown == {"redrawn": ["close"], "remembered": ["kept"], "dialog": [], "toast": []}
+    assert shown == {"redrawn": ["close"], "remembered": ["kept"], "dialog": []}
