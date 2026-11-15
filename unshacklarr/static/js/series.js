@@ -499,7 +499,7 @@ function fitEpList(list) {
 const epFit = new ResizeObserver(([e]) => fitEpList(e.target));
 /* A tooltip over everything (the list clips its cells), fading in on hover or focus. */
 let tipEl = null, tipFor = null;
-const hideTip = () => { tipEl?.remove(); tipEl = tipFor = null; };
+const hideTip = () => { tipFor?.removeAttribute("aria-describedby"); tipEl?.remove(); tipEl = tipFor = null; };
 /* What floats (the tooltip, the toasts) goes to the browser's top layer, above any window or menu opened
    before it: no z-index beats a dialog opened as a modal. Shown again, it comes above the newest. */
 function onTop(node) {
@@ -519,8 +519,9 @@ function onTop(node) {
 function showTip(target, nodes) {
   hideTip();
   tipFor = target;
-  tipEl = el("div", { className: "tip", role: "tooltip" }, ...nodes);
+  tipEl = el("div", { className: "tip", role: "tooltip", id: "tip" }, ...nodes);
   document.body.append(tipEl);
+  target.setAttribute("aria-describedby", "tip");  // read out with the focused badge, not only shown
   onTop(tipEl);
   const r = target.getBoundingClientRect(), t = tipEl.getBoundingClientRect();
   tipEl.style.left = `${Math.min(Math.max(8, r.left + r.width / 2 - t.width / 2), innerWidth - t.width - 8)}px`;

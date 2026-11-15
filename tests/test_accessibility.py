@@ -59,9 +59,13 @@ const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8");
 const drawer = { inert: true }, header = { inert: false }, main = { inert: false };
 const focused = [];
-const poster = { name: "poster", focus: () => focused.push("poster") };
+let posterShown = true;
+const poster = { name: "poster", isConnected: true, getClientRects: () => posterShown ? [{}] : [], focus: () => focused.push("poster") };
+const tab = { focus: () => focused.push("tab") };
 const opener = (over) => ({ name: "opener", isConnected: true, getClientRects: () => [{}], focus: () => focused.push("opener"), ...over });
-const ctx = { $: () => drawer, document: { querySelectorAll: () => [header, main], querySelector: (s) => s === '.poster[data-tvdb="7"]' ? poster : null } };
+const ctx = { $: () => drawer, document: {
+  querySelectorAll: (s) => s === '[data-tvdb="7"]' ? [poster] : [header, main],
+  querySelector: (s) => s === 'nav [aria-current="page"]' ? tab : null } };
 vm.createContext(ctx);
 vm.runInContext(src.match(/^function drawerModal\(.*?^\}/ms)[0] + src.match(/^function returnFocus\(.*?^\}/ms)[0], ctx);
 const out = {};
@@ -74,9 +78,11 @@ out.back = where(opener());
 out.gone = where(opener({ isConnected: false }));
 out.hidden = where(opener({ getClientRects: () => [] }));
 out.none = where(null);
+posterShown = false;  // opened from Schedule, its row redrawn, the Series page hidden: the current page's tab
+out.nothingInSight = where(opener({ isConnected: false }));
 console.log(JSON.stringify(out));
 """)
     assert shown == {
         "open": [False, True, True], "closed": [True, False, False],
-        "back": "opener", "gone": "poster", "hidden": "poster", "none": "poster",
+        "back": "opener", "gone": "poster", "hidden": "poster", "none": "poster", "nothingInSight": "tab",
     }
