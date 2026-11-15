@@ -1752,3 +1752,5 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); box-shadow: 0 0 
 /* The system's Increase Contrast: lighter secondary text, edges that show */
 @media (prefers-contrast: more) { :root { --muted: #b4bccb; --line: #4c5a74; --field-line: #8593a6; } }
 #next-sync b { font-variant-numeric: tabular-nums; }
+/* iOS zooms the page on focus of a field under 16px: these monospace boxes set their own size above */
+@media (max-width: 700px) { .ck-fields textarea, #d-progmap { font-size: 16px; } }
