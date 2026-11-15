@@ -7162,6 +7162,13 @@ def test_a_page_saves_only_what_it_changed_and_a_clash_is_refused(tmp_path, monk
                 "changed": ["series:1"], "base": {"series:1": versions["series:1"]}}
         web.merge_page_changes(body, now)
         assert body["series"]["1"] == moved, moved
+    # another tab moved it and set its time; this old tab changed something else: both stay
+    moved = {"settings": loaded["settings"], "defaults": {}, "series": {
+        1: {"service": "A", "title": "x2", "release_time": "21:00", "release_day": -3}, 2: {"service": "B", "title": "y"}}}
+    body = {**loaded, "series": {"1": {"service": "A", "title": "x", "episode_offset": 2}, "2": {"service": "B", "title": "y"}},
+            "changed": ["series:1"], "base": {"series:1": versions["series:1"]}}
+    web.merge_page_changes(body, moved)
+    assert body["series"]["1"] == {"service": "A", "title": "x2", "release_time": "21:00", "release_day": -3, "episode_offset": 2}
     # the same key changed both ways: refused
     body = {**loaded, "series": {"2": {"service": "B", "title": "w"}}, "changed": ["series:2"], "base": {"series:2": versions["series:2"]}}
     with pytest.raises(web.web.HTTPConflict):
