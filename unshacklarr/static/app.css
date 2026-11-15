@@ -1869,13 +1869,13 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); box-shadow: 0 0 
 .sv-table td .btn, .sv-table td:nth-child(5) { white-space: nowrap; }
 
 /* Tags: every badge and chip has one shape (Molt's Badge); its colour says what it means. */
-.poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip, .ep-on, .ep-off, .ep-up, .chip, .ck-pill, .sched-st, .rg-chip, .news-tag, .news-kind, .new-badge, .new-dot, .chip-default, .finale-tag {
+.poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip, .ep-on, .ep-off, .ep-up, .chip, .ck-pill, .sched-st, .rg-chip, .news-tag, .news-kind, .new-badge, .new-dot, .chip-default, .ax-seg button .chip-default, .finale-tag {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); padding: 2px var(--sp-2); border: 0; border-radius: 999px; box-shadow: none;
   font-size: var(--fs-footnote); font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 1.4; white-space: nowrap;
   color: var(--muted); background: var(--well); }
 .sched-card .svc { white-space: normal; overflow-wrap: anywhere; }  /* a long name in a narrow day column */
 .poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip { color: var(--text); }  /* a service: just its name */
-.ep-on, .ep-on.other, .new-badge, .new-dot, .chip-default, .finale-tag, .news-tag.latest, .rg-chip, .ck-pill.ok, .sched-st.ok, .sched-st.try, .chip.disk, .chip.o-downloaded,
+.ep-on, .ep-on.other, .new-badge, .new-dot, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest, .rg-chip, .ck-pill.ok, .sched-st.ok, .sched-st.try, .chip.disk, .chip.o-downloaded,
 .news-list .new .news-kind, .news-list .improved .news-kind { color: var(--accent); background: var(--accent-tint); }
 .ep-up, .ck-pill.warn, .sched-st.wait, .chip.miss, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
 .ck-pill.bad, .sched-st.late, .rg-chip.bad, .chip.o-failed, .news-list .security .news-kind { color: var(--err); background: var(--err-tint); }
