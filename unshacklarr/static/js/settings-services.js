@@ -165,8 +165,8 @@ function renderUnshackleStatus(st) {
     ...(st.tools ? [el("details", { className: "tools-box" },
       el("summary", { className: missing.length ? "bad" : "ok", textContent: missing.length ? `Tools: ${missing.length} missing` : `Tools: all ${st.tools.filter((t) => t.required).length} required ones found` }),
       el("div", { className: "tools" }, ...st.tools.map((t) => el("span", { className: t.installed ? "" : t.required ? "missing" : "optional-missing",
-        title: t.installed ? `${t.name} ${t.version || ""}`.trim() : `${t.name} is missing${t.required ? "" : " (optional)"}`,
-        textContent: `${t.installed ? "✓" : "✗"} ${t.name}` }))))] : []));
+        title: t.installed ? `${t.name} ${t.version || ""}`.trim() : `${t.name} is missing${t.required ? "" : " (optional)"}` },
+        icon(t.installed ? "check" : "cross", "inl"), t.name))))] : []));
 }
 async function loadUnshackleStatus() {
   $("#u-status").replaceChildren(loading("Checking Unshackle…"));
@@ -290,8 +290,8 @@ $("#d-probe").onclick = async () => {
     state.textContent = "";
     const seasons = r.seasons.map((x) => `S${x.season} (${x.episodes})`).join(", ");
     const rows = r.checks.map((c) => el("div", { className: "probe-row" },
-      el("span", { className: c.found ? "y" : "n", textContent: c.found ? "✓" : c.aired ? "✗" : "…",
-        title: c.found ? "On the service" : c.aired ? "Not on the service" : "Not aired yet" }),
+      el("span", { className: c.found ? "y" : "n", title: c.found ? "On the service" : c.aired ? "Not on the service" : "Not aired yet" },
+        c.found ? icon("check", "inl") : c.aired ? icon("cross", "inl") : "…"),
       el("b", { textContent: c.sxxeyy }),
       el("span", { className: "mut", textContent: c.service && c.service !== c.sxxeyy ? `= ${c.service}` : "" }),
       el("span", {}, c.found ? `${c.name || ""} ` : c.aired ? "not on the service" + (c.hasFile ? " (on disk already)" : "") : "not aired yet",

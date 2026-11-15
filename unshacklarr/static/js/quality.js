@@ -224,7 +224,7 @@ function backendBlock(b) {
     state.className = "ub-state"; state.textContent = "Testing…";
     try {
       const { services } = await api("/api/unshackle/test", { method: "POST", body: JSON.stringify({ unshackle_mode: "remote", unshackle_url: b.url, unshackle_api_key: b.api_key || "" }) });
-      state.className = "ub-state ok"; state.textContent = services === 1 ? "✓ Reached: 1 service" : `✓ Reached: ${services} services`;
+      state.className = "ub-state ok"; state.replaceChildren(icon("check", "inl"), `Reached: ${COUNT.service(services)}`);
     } catch (err) { state.className = "ub-state bad"; state.textContent = err.message; }
     state.dataset.tested = "1";  // its test speaks until the page reloads
   } });
@@ -235,7 +235,7 @@ function backendBlock(b) {
     dirty(); renderBackends(); renderServiceDefaults();
   } });
   const withHelp = (label, input, saved) => el("div", { className: "field" },
-    el("label", { htmlFor: input.id ||= `ub-${++fieldIds}` }, ...[label].flat(), ...(saved ? [" ", el("span", { className: "sx-saved", textContent: "✓ Saved" })] : [])),
+    el("label", { htmlFor: input.id ||= `ub-${++fieldIds}` }, ...[label].flat(), ...(saved ? [" ", el("span", { className: "sx-saved" }, icon("check", "inl"), "Saved")] : [])),
     input, el("small", {}, ...(input.dataset.help ? [input.dataset.help] : ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml. Empty keeps the saved one."])));
   return el("div", { className: "svc-block ub-block" },
     el("div", { className: "svc-block-head" }, head, el("span", { className: "ub-acts" }, state, test, remove)),
@@ -318,7 +318,7 @@ function sonarrBlock(i) {
     state.className = "ub-state"; state.textContent = "Testing…";
     try {
       const { version } = await api("/api/sonarr/test", { method: "POST", body: JSON.stringify({ sonarr_url: i.url, sonarr_api_key: i.api_key || "" }) });
-      state.className = "ub-state ok"; state.textContent = `✓ Reached: Sonarr ${version}`;
+      state.className = "ub-state ok"; state.replaceChildren(icon("check", "inl"), `Reached: Sonarr ${version}`);
     } catch (err) { state.className = "ub-state bad"; state.textContent = err.message; }
     state.dataset.tested = "1";
   } });
@@ -328,7 +328,7 @@ function sonarrBlock(i) {
     dirty(); renderSonarrs();
   } });
   const withHelp = (label, input, saved, help) => el("div", { className: "field" },
-    el("label", { htmlFor: input.id ||= `sn-${++fieldIds}` }, label, ...(saved ? [" ", el("span", { className: "sx-saved", textContent: "✓ Saved" })] : [])),
+    el("label", { htmlFor: input.id ||= `sn-${++fieldIds}` }, label, ...(saved ? [" ", el("span", { className: "sx-saved" }, icon("check", "inl"), "Saved")] : [])),
     input, el("small", { textContent: help || input.dataset.help || "In Sonarr: Settings, General. Empty keeps the saved one." }));
   return el("div", { className: "svc-block ub-block" },
     el("div", { className: "svc-block-head" }, head, el("span", { className: "ub-acts" }, state, test, remove)),
@@ -542,7 +542,7 @@ function checkLibrary() {
     try { r = await api(`/api/library/check?${q}`); } catch (e) { say.textContent = e.message; return; }
     if ((libWho || "") !== (q.get("sonarr") || "")) return;  // another Sonarr picked meanwhile
     libRoots = r.roots || []; libCommon = r.common || ""; renderLibraryPicks();
-    if (r.ok === true) { say.className = "lib-check ok"; say.textContent = `✓ Unshacklarr reads ${who}'s library: ${r.local_path}`; }
+    if (r.ok === true) { say.className = "lib-check ok"; say.replaceChildren(icon("check", "inl"), `Unshacklarr reads ${who}'s library: ${r.local_path}`); }
     else if (r.ok === false && r.guess) {  // found elsewhere in the container: both folders, one click
       say.className = "lib-check";
       say.replaceChildren(el("span", { textContent: `Your library was found in another folder: ${r.guess.sonarr_root} in Sonarr is ${r.guess.local_root} in Unshacklarr.` }), " ",
@@ -567,7 +567,7 @@ function openFolders(side, start, use) {
     $("#folder-path").textContent = here;
     $("#folder-use").disabled = !r.path;
     const row = (label, path, icon = true) => el("button", { type: "button", className: "url-hit", onclick: () => load(path) },
-      ...(icon ? [el("i", { innerHTML: FOLDER_ICON })] : [el("i", { textContent: "↑" })]), el("span", { textContent: label }));
+      ...(icon ? [el("i", { innerHTML: FOLDER_ICON })] : [el("i", {}, icon("arrowUp"))]), el("span", { textContent: label }));
     $("#folder-list").replaceChildren(...(r.parent != null ? [row("Up", r.parent, false)] : []),
       ...r.dirs.map((d) => row(d.split(/[\\/]/).filter(Boolean).pop() || d, d)),
       ...(!r.dirs.length ? [el("p", { className: "muted", textContent: "No folder in it." })] : []));

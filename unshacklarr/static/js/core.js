@@ -50,15 +50,14 @@ async function setLang(lang) {
   await api("/api/language", { method: "POST", body: JSON.stringify({ language: lang }) }).catch(() => {});  // the notifications' too; before logging in, nothing to tell
   location.reload();
 }
-const FLAGS = { en: "🇬🇧", fr: "🇫🇷", es: "🇪🇸", de: "🇩🇪", "pt-BR": "🇧🇷", it: "🇮🇹", ru: "🇷🇺", "zh-CN": "🇨🇳", ja: "🇯🇵" };
-/* The language, in a corner of the login and the first run: a flag and its name, the others in a menu. */
+/* The language, in a corner of the login and the first run: its name, the others in a menu. */
 function langCorner() {
   const menu = el("div", { className: "lang-menu", role: "menu", hidden: true },
     ...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", role: "menuitemradio", ariaChecked: String(k === LANG),
-      className: k === LANG ? "on" : "", onclick: () => { if (k !== LANG) setLang(k); } }, el("span", { className: "flag", textContent: FLAGS[k] }), name)));
+      className: k === LANG ? "on" : "", onclick: () => { if (k !== LANG) setLang(k); } }, name)));
   const open = (on) => { menu.hidden = !on; button.setAttribute("aria-expanded", String(on)); };
   const button = el("button", { type: "button", className: "lang-btn", ariaHasPopup: "menu", ariaExpanded: "false", ariaLabel: `Language: ${LANGS[LANG]}`,
-    onclick: () => open(menu.hidden) }, el("span", { className: "flag", textContent: FLAGS[LANG] }), el("span", { textContent: LANGS[LANG] }), el("span", { className: "caret", ariaHidden: "true" }));
+    onclick: () => open(menu.hidden) }, el("span", { textContent: LANGS[LANG] }), el("span", { className: "caret", ariaHidden: "true" }));
   const corner = el("div", { className: "lang-corner", translate: "no" }, button, menu);
   document.addEventListener("click", (e) => { if (!corner.contains(e.target)) open(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") open(false); });
@@ -183,6 +182,19 @@ async function api(path, { wait = 30, ...opts } = {}) {
   return r.json();
 }
 
+/* The inline SVG icons of the page (stroke in currentColor, as .ico): for a tick, a chevron or an arrow, never a text glyph.
+   "inl" sizes one to the line of text it starts. */
+const ICON_PATHS = {
+  check: '<path d="M20 6 9 17l-5-5"/>', cross: '<path d="M6 6l12 12M18 6 6 18"/>', alert: '<path d="M12 6v8M12 18h.01"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>', chevronLeft: '<path d="m15 6-6 6 6 6"/>',
+  arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
+  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
+};
+function icon(name, className = "") {
+  const holder = document.createElement("template");
+  holder.innerHTML = `<svg class="ico ${className}" viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
+  return holder.content.firstChild;
+}
 /* A counted noun, one whole text for one and one for many: a language writes its own plural from either, no suffix glued on. */
 const COUNT = {
   episode: (n) => n === 1 ? "1 episode" : `${n} episodes`,
@@ -292,8 +304,8 @@ function optionsEditor(root, specs, values) {
     root.append(el("div", { className: "opt" },
       el("code", { title: spec.help }, flag),
       input,
-      el("button", { className: "rm", title: "Remove", ariaLabel: `Remove ${flag}`, textContent: "×",
-        onclick: () => { delete values[flag]; dirty(); optionsEditor(root, specs, values); } })));
+      el("button", { className: "rm", title: "Remove", ariaLabel: `Remove ${flag}`,
+        onclick: () => { delete values[flag]; dirty(); optionsEditor(root, specs, values); } }, icon("cross"))));
   }
   const free = specs.filter((s) => !(s.flag in values)).sort((a, b) => a.flag.localeCompare(b.flag));
   if (!specs.length && !Object.keys(values).length) root.append(el("small", { className: "muted", textContent: "None." }));
@@ -411,7 +423,7 @@ function renderWall() {
       }
       const sick = conf?.service && S.health[s.tvdbId];
       if (sick) art.append(el("span", { className: "sick", role: "img", ariaLabel: sick.cause ? `Failing: ${sick.cause}` : "Failing",
-        title: `Its last ${sick.failing} downloads failed${sick.cause ? `: ${sick.cause}` : ""}`, textContent: "!" }));
+        title: `Its last ${sick.failing} downloads failed${sick.cause ? `: ${sick.cause}` : ""}` }, icon("alert")));
       if (S.config.hidden_series.includes(s.tvdbId)) {
         const off = el("span", { className: "off", role: "img", ariaLabel: "Hidden from the schedule", title: "Hidden from the schedule" });
         off.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${EYE_SHUT}</svg>`;

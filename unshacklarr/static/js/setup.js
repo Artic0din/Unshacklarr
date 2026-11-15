@@ -175,7 +175,7 @@ function showSetup(found) {
     f.confirm.classList.toggle("good", !!same);
     f.confirm.classList.toggle("bad", !!again && !same && !typing);
     match.className = `pw-match ${!again || typing ? "" : same ? "good" : "bad"}`;
-    match.textContent = !again || typing ? "" : same ? "✓ Passwords match" : "Passwords do not match";
+    match.replaceChildren(...(!again || typing ? [] : same ? [icon("check", "inl"), "Passwords match"] : ["Passwords do not match"]));
   };
   f.password.oninput = f.confirm.oninput = pwLive;
 
@@ -277,7 +277,7 @@ function showSetup(found) {
     back.hidden = true;
     next.type = "button";
     next.disabled = false;
-    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", textContent: "→", ariaHidden: "true" }));
+    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", ariaHidden: "true" }, icon("arrow")));
     next.onclick = () => location.reload();
     next.focus();
   }
@@ -336,7 +336,7 @@ function showSetup(found) {
   const progress = el("div", { className: "wz-progress" }, el("span"), el("i", {}, el("b")));
   const panel = el("div", { className: "wiz-panel" });
   const note = el("div", { className: "wiz-note", ariaLive: "polite" });
-  const back = el("button", { type: "button", className: "btn wz-back", onclick: () => go(at - 1) }, el("span", { className: "arr", textContent: "←", ariaHidden: "true" }), "Back");
+  const back = el("button", { type: "button", className: "btn wz-back", onclick: () => go(at - 1) }, el("span", { className: "arr", ariaHidden: "true" }, icon("arrowLeft")), "Back");
   const next = el("button", { type: "submit", className: "btn primary wz-next" });
   const oks = {};  // what each step's check found: the end screen sums it up
   const drawRail = (current) => rail.replaceChildren(...steps.map((x, i) => {
@@ -358,7 +358,7 @@ function showSetup(found) {
     note.replaceChildren();
     back.hidden = at === 0;
     const last = at === steps.length - 1;
-    next.replaceChildren(last ? "Finish the setup" : "Next", el("span", { className: "arr", textContent: last ? "✓" : "→", ariaHidden: "true" }));
+    next.replaceChildren(last ? "Finish the setup" : "Next", el("span", { className: "arr", ariaHidden: "true" }, icon(last ? "check" : "arrow")));
     panel.querySelector("input, select")?.focus({ preventScroll: true });
     keep();
   }
@@ -380,7 +380,7 @@ function showSetup(found) {
     back.hidden = true;
     next.type = "button";
     next.disabled = false;
-    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", textContent: "→", ariaHidden: "true" }));
+    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", ariaHidden: "true" }, icon("arrow")));
     next.onclick = () => location.reload();
     next.focus();
   }
@@ -427,7 +427,7 @@ function showSetup(found) {
     if (result?.ok) oks[at] = result.ok;
     if (at < steps.length - 1) {
       go(at + 1);
-      if (result?.ok) note.replaceChildren(el("p", { className: "ok-text", textContent: `✓ ${result.ok}` }));
+      if (result?.ok) note.replaceChildren(el("p", { className: "ok-text" }, icon("check", "inl"), result.ok));
       return;
     }
     const first = await steps[0].check();  // after a language change the password is typed again (it is never kept)
@@ -450,7 +450,7 @@ function showSetup(found) {
 let setupDraft = null;  // what setLang keeps for the page to come back to, on the first run
 
 $("#lang-row").append(...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", className: "rg-lang", ariaPressed: String(k === LANG),
-  onclick: () => { if (k !== LANG) setLang(k); } }, el("span", { className: "flag", textContent: FLAGS[k] }), el("b", { textContent: name }))));
+  onclick: () => { if (k !== LANG) setLang(k); } }, el("b", { textContent: name }))));
 settingsCountry = countryPicker($("[data-set=country]"));
 settingsZone = zonePicker($("#tz-select"));
 for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#tz-select"), settingsZone]]) {

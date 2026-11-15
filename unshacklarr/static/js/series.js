@@ -109,9 +109,9 @@ function renderBroadcast() {
   }
   const move = (step) => { bcMonth = new Date(bcMonth.getFullYear(), bcMonth.getMonth() + step, 1); renderBroadcast(); };
   $("#d-bc-cal").replaceChildren(
-    el("div", { className: "bc-cal-head" }, el("button", { type: "button", ariaLabel: "Previous month", textContent: "‹", onclick: () => move(-1) }),
+    el("div", { className: "bc-cal-head" }, el("button", { type: "button", ariaLabel: "Previous month", onclick: () => move(-1) }, icon("chevronLeft")),
       el("span", { textContent: first.toLocaleDateString(LOCALE, { month: "long", year: "numeric" }) }),
-      el("button", { type: "button", ariaLabel: "Next month", textContent: "›", onclick: () => move(1) })),
+      el("button", { type: "button", ariaLabel: "Next month", onclick: () => move(1) }, icon("chevron"))),
     el("div", { className: "bc-cal-grid" }, ...DAY_NAMES.map((n) => el("small", { textContent: n.slice(0, 2) })), ...cells));
   // what it gives: the episodes around now, dated
   const dates = broadcastDates(plan, eps), dated = eps.filter((e) => dates.has(e.id));
@@ -167,7 +167,7 @@ function renderReleaseNext() {
   const aired = new Date(ep.airDateUtc), slot = releaseSlot(conf, ep);
   const when = (d) => `${day(d)} ${time(d)}`;
   box.replaceChildren(el("span", { textContent: "Next" }), el("b", { textContent: `S${pad2(ep.seasonNumber)}E${pad2(ep.episodeNumber)}` }),
-    el("span", { textContent: `airs ${when(aired)}` }), el("span", { className: "arrow", textContent: "→" }),
+    el("span", { textContent: `airs ${when(aired)}` }), el("span", { className: "arrow", ariaHidden: "true" }, icon("arrow", "inl")),
     el("b", { textContent: slot ? `tried ${when(slot)}` : "tried at the first sync after it airs" }));
 }
 $("#d-filename").oninput = (e) => { advConf().file_name = e.target.value.trim(); advDirty(); };
@@ -460,8 +460,8 @@ function openColumns() {
     const box = el("input", { type: "checkbox", checked: p.on, onchange: () => { p.on = box.checked; saveColPrefs(colsNow); } });
     const move = (d) => { const next = [...colsNow]; [next[i], next[i + d]] = [next[i + d], next[i]]; saveColPrefs(next); draw(); $("#col-rows").children[i + d]?.querySelector(d < 0 ? ".up" : ".down")?.focus(); };
     return el("li", {}, el("label", {}, box, c.label, c.file ? "" : el("small", { textContent: "any episode" })),
-      el("button", { type: "button", className: "mv up", textContent: "↑", ariaLabel: `Move ${c.label} left`, disabled: i === 0, onclick: () => move(-1) }),
-      el("button", { type: "button", className: "mv down", textContent: "↓", ariaLabel: `Move ${c.label} right`, disabled: i === colsNow.length - 1, onclick: () => move(1) }));
+      el("button", { type: "button", className: "mv up", ariaLabel: `Move ${c.label} left`, disabled: i === 0, onclick: () => move(-1) }, icon("arrowUp")),
+      el("button", { type: "button", className: "mv down", ariaLabel: `Move ${c.label} right`, disabled: i === colsNow.length - 1, onclick: () => move(1) }, icon("arrowDown")));
   }));
   $("#cols-reset").onclick = (e) => { e.preventDefault(); try { localStorage.removeItem(COLS_KEY); } catch { /* nothing kept */ } colsNow = colPrefs(); renderSeason(); draw(); };
   draw();
@@ -891,7 +891,7 @@ function renderPreview() {
     if (conf.parts) notes.push([`Waits for ${conf.parts} parts before importing`, ""]);
     const named = e.title && e.title !== "TBA" ? e.title : "";
     return el("li", {}, el("div", { className: "ours" }, el("b", { textContent: sx }), ...(named ? [el("small", { textContent: named, title: named })] : [])),
-      el("span", { className: "arrow", textContent: "→" }), ask,
+      el("span", { className: "arrow", ariaHidden: "true" }, icon("arrow", "inl")), ask,
       el("div", { className: "side" }, el("small", { className: "file", title: "The file it becomes",
         textContent: `${dotted(name)}.${sx}${!dropName && epName ? `.${dotted(epName)}` : ""}….mkv` }),
         ...notes.map(([text, cls]) => el("small", { className: cls, textContent: text }))));
@@ -909,7 +909,7 @@ function agreement(e, theirs, found, svc) {
   const ours = plainTitle(e.title), other = plainTitle(found[0].name), generic = /^(tba|tbd|episode( \d+)?)$/;
   const titled = epAvail?.[e.id]?.match === "title" && epAvail[e.id].service === theirs;
   if (titled || (ours && other && (ours === other || ours.includes(other) || other.includes(ours))))
-    return el("span", { className: "st ok", textContent: "✓ Same title" });
+    return el("span", { className: "st ok" }, icon("check", "inl"), "Same title");
   if (!ours || !other || generic.test(ours) || generic.test(other)) return "";
   return el("span", { className: "st warn", textContent: "Other title", title: `In Sonarr: ${e.title}\nOn ${svc}: ${found[0].name}` });
 }

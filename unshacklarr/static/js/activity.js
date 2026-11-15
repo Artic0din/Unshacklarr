@@ -335,7 +335,7 @@ function renderJob(j) {
         el("div", { className: "mid" }, el("div", { className: "steps mini", ariaHidden: "true" }, ...stepStates(c).filter((x) => x !== "skip").map(() => el("span")))),
         el("span", { className: "jstate", textContent: "Queued" }),
         el("button", { type: "button", className: "jx", title: "Cancel", ariaLabel: `Cancel ${c.sxxeyy}`,
-          onclick: () => unqueue(c) }, "×")));
+          onclick: () => unqueue(c) }, icon("cross"))));
     return el("li", { className: `jcard ${tone}${open ? " open" : ""}${hovering(`card:${c.id}`)}`, dataset: { hk: `card:${c.id}` } },
       el("div", { className: "jrow" }, el("button", { type: "button", className: "jhead", ariaExpanded: String(open), onclick: fold },
         el("b", { className: "ep", textContent: c.sxxeyy }),
@@ -348,7 +348,7 @@ function renderJob(j) {
         el("span", { className: `jstate ${tone}`, textContent: label }),
         ),
         ...(acts.length ? [el("div", { className: "jacts" }, ...acts)] : []),  // unfolded: its actions in its head, not a line of their own
-        el("span", { className: "chev", ariaHidden: "true", textContent: "›", onclick: fold })),  // last, after the actions
+        el("span", { className: "chev", ariaHidden: "true", onclick: fold }, icon("chevron"))),  // last, after the actions
       ...(open ? [el("div", { className: "jbody" + (justOpened === c.id ? " opening" : "") }, ...runBody(c))] : []));
   }));
   keepPromptFocus(() => $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, head, st.live ? overall : jobDone(j, st), cards)));
@@ -774,7 +774,7 @@ function runBody(c) {
       stopped: ["mut", "Stopped"], interrupted: ["mut", "Interrupted: Unshacklarr stopped during it"],
       unavailable: ["mut", c.notOn ? `${outcomeOf(c)}: nothing to download` : "Not out yet: nothing to download"] }[c.outcome] || ["mut", c.outcome];
     if (c.outcome === "downloaded") {  // all went well: one quiet line, not a block
-      parts.push(el("div", { className: "cd-note ok inline" }, el("b", { textContent: "✓ Imported" }),  // imported says downloaded too
+      parts.push(el("div", { className: "cd-note ok inline" }, el("b", {}, icon("check", "inl"), "Imported"),  // imported says downloaded too
         ...[c.ended && duration(new Date(c.ended) - started), c.size && size(c.size), checksNote(c)].filter(Boolean).map((t) => el("span", { textContent: t }))));
     } else parts.push(el("div", { className: `cd-note ${note[0]}` }, el("b", { textContent: note[1] }),
       ...[c.cause, c.detail, c.ended ? `Took ${duration(new Date(c.ended) - started)}` : "",

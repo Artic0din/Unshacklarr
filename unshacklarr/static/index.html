@@ -106,9 +106,9 @@
     </div>
     <p class="muted sched-sub">Unshackle tries its series at their release time, or at the first sync after airing. Add any other series in one tap, or hide the ones you don't follow.</p>
     <div class="cal-nav">
-      <button class="btn small" id="cal-prev" aria-label="Previous week">‹</button>
+      <button class="btn small" id="cal-prev" aria-label="Previous week"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
       <h3 id="cal-range" aria-live="polite"></h3>
-      <button class="btn small" id="cal-next" aria-label="Next week">›</button>
+      <button class="btn small" id="cal-next" aria-label="Next week"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
       <button class="btn small" id="cal-today">Today</button>
     </div>
     <div id="sched-week"><div class="board" id="week-board"></div></div>
@@ -165,7 +165,7 @@
           <div class="sx-grid">
             <div class="field only-local"><label for="ux-cmd">Unshackle command</label><input id="ux-cmd" type="text" data-set="unshackle_command" placeholder="unshackle" spellcheck="false"><small>Empty: uses <code>unshackle</code> from the PATH. Otherwise, its full path, e.g. <code>.venv/bin/unshackle</code> in a git clone.</small></div>
             <div class="field only-remote"><label for="ux-url">Unshackle address</label><input id="ux-url" type="url" data-set="unshackle_url" placeholder="http://unshackle:8786"></div>
-            <div class="field only-remote"><label for="ux-key">API key <span class="sx-saved" id="ux-key-saved" hidden>✓ Saved</span></label><input id="ux-key" type="password" data-set="unshackle_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>Copy <code>serve.api_secret</code> from unshackle.yaml. Leave empty to keep the saved key.</small></div>
+            <div class="field only-remote"><label for="ux-key">API key <span class="sx-saved" id="ux-key-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="ux-key" type="password" data-set="unshackle_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>Copy <code>serve.api_secret</code> from unshackle.yaml. Leave empty to keep the saved key.</small></div>
             <div class="field" id="ux-at-once-field"><label for="ux-at-once">Downloads at once</label><div class="unit-input"><input id="ux-at-once" type="number" data-set="downloads_at_once" data-num min="0" max="10" step="1" inputmode="numeric"><span>per server</span></div><small>How many episodes each Unshackle server downloads together. 1 is gentler on a small NAS. 0: as many as Unshackle allows, 2 by default.</small></div>
           </div>
         </section>
@@ -197,7 +197,7 @@
           <div class="sx-grid">
             <div class="field" id="sx-name-field"><label for="sx-name">Name</label><input id="sx-name" type="text" data-set="sonarr_name" placeholder="Sonarr" spellcheck="false"><small id="sx-name-help">The name shown on each series to tell the libraries apart when you have more than one Sonarr. Leave empty to use “Sonarr”.</small></div>
             <div class="field"><label for="sx-url">Sonarr URL</label><input id="sx-url" type="url" data-set="sonarr_url" placeholder="http://sonarr:8989"></div>
-            <div class="field"><label for="sx-key">API key <span class="sx-saved" id="sx-key-saved" hidden>✓ Saved</span></label><input id="sx-key" type="password" data-set="sonarr_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>In Sonarr: Settings, General. Leave empty to keep the saved key. A new URL needs its key too.</small></div>
+            <div class="field"><label for="sx-key">API key <span class="sx-saved" id="sx-key-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="sx-key" type="password" data-set="sonarr_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>In Sonarr: Settings, General. Leave empty to keep the saved key. A new URL needs its key too.</small></div>
           </div>
         </section>
         <section class="sx-card">
@@ -220,7 +220,7 @@
         <section class="sx-card">
           <div class="sx-head"><div><h3>TMDB</h3></div></div>
           <div class="sx-grid">
-            <div class="field"><label for="sx-tmdb">TMDB API key <span class="sx-saved" id="sx-tmdb-saved" hidden>✓ Saved</span></label><input id="sx-tmdb" type="password" data-set="tmdb_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small><span id="tmdb-hint"></span></small></div>
+            <div class="field"><label for="sx-tmdb">TMDB API key <span class="sx-saved" id="sx-tmdb-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="sx-tmdb" type="password" data-set="tmdb_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small><span id="tmdb-hint"></span></small></div>
           </div>
         </section>
       </div>
@@ -523,7 +523,7 @@
           <div class="ac-go"><button class="btn primary" id="pw-change" type="button" disabled>Change the password</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>API key <span class="sx-saved" id="ak-saved" hidden>✓ Saved</span></h3><p>It only opens the /api/v1 routes: never the password, the cookies or the settings.</p></div></div>
+          <div class="sx-head"><div><h3>API key <span class="sx-saved" id="ak-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></h3><p>It only opens the /api/v1 routes: never the password, the cookies or the settings.</p></div></div>
           <div class="cmd ac-cmd" id="ak-show" hidden><code id="ak-cmd" translate="no"></code></div>
           <small class="pw-match" id="ak-say"></small>
           <div class="sx-grid" id="ak-pass-row" hidden><div class="field"><label for="ak-pass">Your password</label><input type="password" id="ak-pass" autocomplete="current-password"><small class="pw-match" id="ak-pass-say">Asked again before a key is made.</small></div></div>
@@ -552,9 +552,9 @@
               <div class="field"><label for="bo-url" id="bo-url-l">Folder URL</label><input id="bo-url" type="url" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-url-help"></small></div>
               <div class="field bo-s3"><label for="bo-bucket">Bucket</label><input id="bo-bucket" type="text" placeholder="my-bucket/unshacklarr" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"></div>
               <div class="field"><label for="bo-user" id="bo-user-l">User name</label><input id="bo-user" type="text" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-user-help"></small></div>
-              <div class="field"><label for="bo-secret"><span id="bo-secret-l">Password</span> <span class="sx-saved" id="bo-secret-saved" hidden>✓ Saved</span></label><input id="bo-secret" type="password" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-secret-help"></small></div>
+              <div class="field"><label for="bo-secret"><span id="bo-secret-l">Password</span> <span class="sx-saved" id="bo-secret-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="bo-secret" type="password" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-secret-help"></small></div>
               <div class="field bo-s3"><label for="bo-region">Region</label><input id="bo-region" type="text" placeholder="us-east-1" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small>Leave empty for us-east-1. For Cloudflare R2, enter auto.</small></div>
-              <div class="field"><label for="bo-pass">Passphrase <span class="sx-saved" id="bo-pass-saved" hidden>✓ Saved</span></label><input id="bo-pass" type="password" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-pass-help">At least 12 characters. It encrypts the backups, and you need it to restore one: keep it somewhere safe, outside this server.</small></div>
+              <div class="field"><label for="bo-pass">Passphrase <span class="sx-saved" id="bo-pass-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="bo-pass" type="password" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-pass-help">At least 12 characters. It encrypts the backups, and you need it to restore one: keep it somewhere safe, outside this server.</small></div>
             </div>
             <p class="rt-who" id="bo-say"></p>
             <div class="sx-grid"><div class="field"><label for="bo-pw">Your password</label><input type="password" id="bo-pw" autocomplete="current-password"><small class="pw-match" id="bo-pw-say">Asked again: the backups contain every key and password.</small></div></div>
@@ -594,7 +594,7 @@
         <button class="btn small" id="runs-more" hidden>Show more</button>
       </aside>
       <div class="con-detail" id="con-detail">
-        <div class="cd-top"><button class="cd-back" id="cd-back" aria-label="Back to the downloads">‹</button><h3 id="cd-top-title"></h3></div>
+        <div class="cd-top"><button class="cd-back" id="cd-back" aria-label="Back to the downloads"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><h3 id="cd-top-title"></h3></div>
         <div id="cd-main"><div class="con-none"><b>Nothing picked</b>Pick a download on the left to see where it stands.</div></div>
         <details class="cd-raw" id="cd-raw" hidden><summary>
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 4 4-4 4M12 16h7"/></svg><span class="t">Output</span>
