@@ -530,7 +530,7 @@ function drawerFocusGuard(e) {
   const d = $("#drawer");
   if (!d.classList.contains("open") || d.inert) return;
   if (d.contains(e.target)) { drawerLastFocus = e.target; return; }
-  if (e.target.closest("dialog[open]")) return;
+  if (e.target.closest("dialog[open], #toasts")) return;  // a dialog on top, or a toast: its Dismiss or Undo belongs to this layer too
   const usable = (x) => x?.isConnected && d.contains(x) && !x.disabled && x.getClientRects().length;
   // the last one may have been redrawn away (the episode list refreshes): then the first control in sight
   const to = usable(drawerLastFocus) ? drawerLastFocus : [...d.querySelectorAll("button, a[href], input, select, textarea")].find(usable);

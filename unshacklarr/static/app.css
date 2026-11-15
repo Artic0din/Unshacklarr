@@ -1015,6 +1015,7 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .icon-hide:hover { color: var(--text); background: var(--bg); }
 #d-hide { display: inline-flex; align-items: center; gap: 7px; }
 #d-hide .ico { width: 17px; height: 17px; }
+#d-hide[aria-pressed="false"] { color: var(--muted); } #d-hide[aria-pressed="false"] .long { text-decoration: line-through; }  /* hidden: struck through, with the closed eye */
 .cal-nav { display: flex; align-items: center; gap: 8px; margin: 8px 0 10px; }
 .cal-nav h3 { margin: 0 8px; font-size: var(--fs-title3); min-width: 170px; text-align: center; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
@@ -1292,6 +1293,8 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .last-sync { display: none; }
   .health span:not(.dot) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* a service that is down says so in words on a phone too, not by the dot's colour alone */
+  .health button:has(small:not(:empty)) span:not(.dot) { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
   .inbox-x { width: 44px; height: 44px; }
   .update-pill span { display: none; } .update-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
   .health button { padding: 12px 8px; }

@@ -115,6 +115,8 @@ ctx.drawerFocusGuard({ target: toast });
 out.remembered = focused.splice(0);
 ctx.drawerFocusGuard({ target: ctl("dialog button", { closest: () => ({}) }) });
 out.dialog = focused.splice(0);
+ctx.drawerFocusGuard({ target: ctl("toast button", { closest: (sel) => sel.includes("#toasts") ? ({}) : null }) });
+out.toast = focused.splice(0);
 console.log(JSON.stringify(out));
 """)
-    assert shown == {"redrawn": ["close"], "remembered": ["kept"], "dialog": []}
+    assert shown == {"redrawn": ["close"], "remembered": ["kept"], "dialog": [], "toast": []}
