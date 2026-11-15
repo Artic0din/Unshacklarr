@@ -2290,5 +2290,7 @@
  "{0} not checked yet": "Ещё не проверено: {0}",
  "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services.": "{0} отклонил Unshackle: возможно, его cookies истекли. Обновите их в Настройки › Сервисы.",
  "{0} services confirmed": "Подтверждено сервисов: {0}",
- "{0} services need attention": "Сервисов, требующих внимания: {0}"
+ "{0} services need attention": "Сервисов, требующих внимания: {0}",
+ "Replace {0}": "Заменить {0}",
+ "Add cookies for {0}": "Добавить cookie для {0}"
 }

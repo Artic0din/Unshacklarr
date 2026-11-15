@@ -5,6 +5,8 @@ from pathlib import Path
 I18N = Path(__file__).resolve().parents[1] / "unshacklarr" / "static" / "i18n"
 HOLE = re.compile(r"\{\d+\}")
 CHANGED_ERROR_TEXTS = {
+    "Add cookies for {0}",
+    "Replace {0}",
     "(ref {0})",
     "1 cookie",
     "1 day",

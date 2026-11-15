@@ -2292,5 +2292,7 @@
  "{0} not checked yet": "{0} 件は未確認",
  "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services.": "{0} が Unshackle を拒否しました。Cookie の期限が切れている可能性があります。設定 › サービスで更新してください。",
  "{0} services confirmed": "{0} 件のサービスを確認済み",
- "{0} services need attention": "{0} 件のサービスに対応が必要"
+ "{0} services need attention": "{0} 件のサービスに対応が必要",
+ "Replace {0}": "{0} を置き換える",
+ "Add cookies for {0}": "{0} の Cookie を追加"
 }

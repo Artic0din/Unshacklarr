@@ -2297,5 +2297,7 @@
  "{0} not checked yet": "{0} 个尚未检查",
  "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services.": "{0} 拒绝了 Unshackle:其 Cookie 可能已过期。请在 设置 › 服务 中更新。",
  "{0} services confirmed": "{0} 个服务已确认",
- "{0} services need attention": "{0} 个服务需要处理"
+ "{0} services need attention": "{0} 个服务需要处理",
+ "Replace {0}": "替换 {0}",
+ "Add cookies for {0}": "为 {0} 添加 Cookie"
 }

@@ -165,12 +165,12 @@ function renderServices() {
       return [el("span", { className: `ck-pill${m.missing ? " bad" : ""}`, textContent: m.missing ? "Missing" : "No cookie file" }),
         ...(m.missing ? [el("small", { textContent: both ? "Downloads will fail unless you add a cookie file, or set its username and password in unshackle.yaml."
           : "Downloads will fail unless you add a cookie file." })] : []),
-        el("div", { className: "sv-ctl" }, el("button", { className: `btn small${m.missing ? " primary" : ""}`, textContent: "Add cookies",
+        el("div", { className: "sv-ctl" }, el("button", { className: `btn small${m.missing ? " primary" : ""}`, textContent: "Add cookies", ariaLabel: `Add cookies for ${svcName(m.service)}`,
           onclick: () => openCookieDialog(m.service, "default") }))];
     }
     return m.cookieFiles.map((f) => {
       const [cls, word, why] = f.st, file = f.profile ? `${f.profile}.txt` : `${m.service}.txt`, ask = `${m.service}/${f.profile}`;
-      const del = el("button", { className: "btn small danger", textContent: "Delete", dataset: { ask }, onclick: () => {
+      const del = el("button", { className: "btn small danger", textContent: "Delete", ariaLabel: `Delete ${file}`, dataset: { ask }, onclick: () => {
         servicesAsked = ask;
         renderServices();
         document.querySelector(".sv-confirm .btn:not(.danger)")?.focus();
@@ -187,7 +187,7 @@ function renderServices() {
         el("div", { className: "sv-file-top" }, el("b", { textContent: file }), hoverTip(el("span", { className: `ck-pill ${cls}`, textContent: word }), () => [why])),
         el("small", { textContent: [f.count === 1 ? "1 cookie" : `${f.count} cookies`, `updated ${ago_days(f.updated)}`].join(" · ") }),
         ...(servicesAsked === ask ? [sure] : [el("div", { className: "sv-ctl" },
-          el("button", { className: `btn small${cls === "bad" || cls === "warn" ? " primary" : ""}`, textContent: "Replace", onclick: () => openCookieDialog(m.service, f.profile) }), del)]));
+          el("button", { className: `btn small${cls === "bad" || cls === "warn" ? " primary" : ""}`, textContent: "Replace", ariaLabel: `Replace ${file}`, onclick: () => openCookieDialog(m.service, f.profile) }), del)]));
     });
   };
 

@@ -208,6 +208,9 @@
  "Add an option: type to search, e.g. lang, audio, atmos": [],
  "Add audio track": [],
  "Add cookies": [],
+ "Add cookies for {0}": [
+  "svcName(m.service)"
+ ],
  "Add options for a service": [],
  "Add the audio anyway": [],
  "Add the audio track": [],
@@ -1812,6 +1815,9 @@
  ],
  "Replace them before they expire, in Settings › Services.": [],
  "Replace them soon": [],
+ "Replace {0}": [
+  "file"
+ ],
  "Replace {0} {1}": [
   "it.series",
   "it.sxxeyy"

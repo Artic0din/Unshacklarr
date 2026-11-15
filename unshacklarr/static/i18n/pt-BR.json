@@ -2275,5 +2275,7 @@
  "{0} not checked yet": "{0} ainda não verificados",
  "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services.": "{0} recusou o Unshackle: os cookies dele podem ter expirado. Atualize-os em Configurações › Serviços.",
  "{0} services confirmed": "{0} serviços confirmados",
- "{0} services need attention": "{0} serviços precisam de atenção"
+ "{0} services need attention": "{0} serviços precisam de atenção",
+ "Replace {0}": "Substituir {0}",
+ "Add cookies for {0}": "Adicionar cookies para {0}"
 }
