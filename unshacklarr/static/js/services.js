@@ -113,16 +113,18 @@ function serviceModels() {
       : status.state === "validated" ? `Confirmed ${ago(status.validated_at)}` : "Not checked yet";
     // Cookie files are Unshackle's own, on the main server: another backend's row has none to show
     const cookieFiles = backend ? null : (files[service] || []).map((f) => ({ ...f, st: cookieStatus(f) }));
-    const selected = S.config.service_defaults?.[service]?.backend || "";
+    // the backend that downloads it: the one set for it, else the main one, else (only on another server) that one
+    const onMain = identities.has(service);
+    const selected = S.config.service_defaults?.[service]?.backend || (onMain ? "" : [...identities.values()].find((i) => i.service === service)?.backend || "");
     const used = backend === selected ? seriesOf(service) : null;
-    const cookieless = listed && !methods.includes("cookies");
+    const cookieless = status.state === "anonymous" || (listed && methods.length > 0 && !methods.includes("cookies"));  // an empty list: not known
     // no cookie file is fine when none is needed, or a confirmed sign-in did not use cookies (a username and
     // password): a cookie-only service confirmed before its last file went still needs one
     const signsInWithout = status.state === "anonymous" || (status.state === "validated" && listed && methods.includes("credentials"));
     const missing = Boolean(cookieFiles && !cookieFiles.length && !cookieless && used && servicesCookies?.folder && !signsInWithout);
     const attention = status.state === "needs_user_action" || Boolean(used && (missing || cookieFiles?.some((f) => f.st[0] === "bad")));
     return { key, service, backend, name: svcName(service) + (backend ? ` · ${backend}` : ""), label, state: status.state, setup, listed,
-      methods: listed ? methods : null, cookieFiles, cookieless, missing, used, attention };
+      methods: listed ? methods : null, anonymous: status.state === "anonymous", cookieFiles, cookieless, missing, used, attention };
   }).sort((a, b) => b.attention - a.attention || (b.used || 0) - (a.used || 0) || a.name.localeCompare(b.name));
 }
 
@@ -197,7 +199,8 @@ function renderServices() {
 
   const methodsCell = (m) => m.methods === null ? [el("span", { className: "muted", textContent: "—" })]
     : m.methods.length ? [el("small", { textContent: "Supports" }), el("div", { className: "sv-chips" }, ...m.methods.map((x) => el("span", { className: "sv-chip", textContent: AUTH_METHOD_NAMES[x] || x })))]
-    : [el("span", { textContent: "No login required" })];
+    : m.anonymous ? [el("span", { textContent: "No login required" })]
+    : [el("span", { className: "muted", textContent: "—" })];  // listed without methods (its server unreachable): not known
   const usedCell = (m) => [el("span", { className: m.used === null ? "muted" : "", textContent: m.used === null ? "—" : m.used === 0 ? "No series" : m.used === 1 ? "1 series" : `${m.used} series` })];
   const actionCell = (m) => m.used ? [el("button", { className: "btn small", textContent: "Show series", onclick: () => showSeriesOf(m.service) })] : [];
 
@@ -225,7 +228,8 @@ function renderServices() {
 /* Scrolled to and focused, when another page sent you to one service's row. */
 function revealService() {
   const backend = servicesReveal && S.config.service_defaults?.[servicesReveal]?.backend;
-  const row = servicesReveal && ((backend && document.getElementById(`sv-${servicesReveal}@${backend}`)) || document.getElementById(`sv-${servicesReveal}`));
+  const row = servicesReveal && ((backend && document.getElementById(`sv-${servicesReveal}@${backend}`)) || document.getElementById(`sv-${servicesReveal}`)
+    || document.querySelector(`[id^="sv-${CSS.escape(servicesReveal)}@"]`));  // only on another server
   if (!row) return;
   servicesReveal = "";
   row.scrollIntoView({ block: "center", behavior: SCROLL });
