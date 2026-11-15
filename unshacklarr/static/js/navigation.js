@@ -85,6 +85,7 @@ function showTab(name, fromRoute = false, quiet = false) {
   }
   if (name !== currentTab && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);
   currentTab = name;
+  closeDetails(false);  // the Schedule's popover belongs to its card
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   document.querySelectorAll("nav button").forEach((b) => {
     if (b.dataset.tab === (name === "yaml" ? "settings" : name)) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");

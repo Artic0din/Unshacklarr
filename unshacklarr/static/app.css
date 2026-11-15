@@ -803,7 +803,6 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
 .seg.small { margin: 0; padding: 2px; }
 .seg.small button { padding: 5px 12px; }
-.sched-more { padding: 16px 0 8px; min-height: 40px; }
 .chip.o-downloaded { color: var(--ok); } .chip.o-failed { color: var(--err); } .chip.o-kept { color: var(--warn); } .chip.o-interrupted, .chip.o-stopped, .chip.o-unavailable { color: var(--muted); }
 /* Activity: list on the left (what runs, then the history), the picked download on the right. */
 .con { display: grid; grid-template-columns: clamp(320px, 22vw, 440px) minmax(0, 1fr); background: var(--panel); border: 1px solid var(--line);
@@ -1001,16 +1000,13 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .net img { max-height: 22px; max-width: 78px; object-fit: contain; display: block; }
 .net.text { background: var(--bg); color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .badges { display: inline-flex; align-items: center; gap: 6px; }
-.badges.in-when { display: none; }  /* phones put the logos on the time line, where there is room */
 .prov { display: inline-flex; gap: 5px; }
 .prov img, .prov i { width: 34px; height: 34px; border-radius: var(--r-md); object-fit: cover; display: grid; place-items: center;
   background: var(--bg); font-style: normal; font-size: var(--fs-caption); font-weight: 700; color: var(--muted); }
 .chip.nofr { color: var(--warn); font-size: var(--fs-footnote); }
-.row-actions { display: inline-flex; align-items: center; gap: 6px; justify-self: end; }
 .icon-hide { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none;
   color: var(--muted); cursor: pointer; opacity: .8; }
 .icon-hide .ico { width: 17px; height: 17px; }
-.sched-row:hover .icon-hide, .icon-hide:focus-visible { opacity: 1; }
 .icon-hide:hover { color: var(--text); background: var(--bg); }
 #d-hide { display: inline-flex; align-items: center; gap: 7px; }
 #d-hide .ico { width: 17px; height: 17px; }
@@ -1039,55 +1035,70 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .sched-filter { display: flex; gap: 6px; }
 button.pill { font: inherit; } .toolbar .pill span { opacity: .75; font-variant-numeric: tabular-nums; margin-left: -2px; }
 button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); color: var(--text); }
-.sched-row summary, .sched-row .row-main { display: grid; grid-template-columns: 34px 64px 1fr auto; gap: 12px; align-items: center; }
-.sched-row .thumb { width: 34px; aspect-ratio: 2 / 3; border-radius: 3px; object-fit: cover; background: var(--bg); }
-.sched-row.other { opacity: .72; }
-.sched-row.other:hover { opacity: 1; }
-.sched-row .row-main { padding: 8px 14px; }
 .btn.add { color: var(--muted); background: transparent; border: 1px dashed #4a5670; font-weight: 600; border-radius: 999px; }
 .btn.add:hover, .btn.add:focus-visible { color: var(--accent); border-color: var(--accent); border-style: solid; }
-.chip.disk { justify-self: end; }
 .sched-sub { margin: 0 0 10px; font-size: var(--fs-callout); }
 .sched-day { font-size: var(--fs-callout); color: var(--muted); margin: 16px 0 6px; font-weight: 600; }
-/* Schedule, refined: late episodes in one banner, pinned day headers, a status per row of yours */
+/* Schedule, refined: late episodes in one banner, a status on each episode of yours */
 .late-banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin: 4px 0 8px; border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
   background: color-mix(in srgb, var(--warn) 7%, transparent); border-radius: var(--r-md); font-size: var(--fs-callout); }
 .late-banner b { color: var(--warn); white-space: nowrap; } .late-banner span { flex: 1; color: var(--muted); }
 #sched-missing { margin-bottom: 10px; }
-.sched-dayh { position: sticky; top: 0; z-index: 2; display: flex; align-items: baseline; gap: 10px; padding: 12px 2px 6px; background: var(--bg); }
-.sched-dayh b { font-size: var(--fs-body); } .sched-dayh small { color: var(--muted); font-size: var(--fs-sub); }
-.sched-dayh .n { margin-left: auto; font-size: var(--fs-footnote); color: var(--muted); }
-.sched-dayh.today b { color: var(--accent); }
-.sched-row .tm { display: block; font: 700 var(--fs-body) system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); font-variant-numeric: tabular-nums; }
-.sched-row .tm small { display: block; font-size: var(--fs-footnote); font-weight: 600; color: var(--accent); }
-.sched-row .tm small.m { color: var(--muted); font-weight: 500; }
-.sched-row:not(.other) summary { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 40%); }
 .sched-st { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-footnote); font-weight: 600; white-space: nowrap; padding: 3px 9px; border-radius: 999px; }
 .sched-st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .sched-st.try { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); } .sched-st.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
-.sched-st.m-only { display: none; }
 .sched-st.wait { color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); } .sched-st.late { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); }
-.sched-xp { display: grid; gap: 10px; padding: 12px 14px 14px 124px; background: #182030; border-top: 1px solid var(--line); }
-.sched-xp .facts { display: flex; gap: 22px; flex-wrap: wrap; font-size: var(--fs-sub); color: var(--muted); }
-.sched-xp .facts b { color: var(--text); font-weight: 600; }
-.sched-xp .cmd { display: flex; gap: 10px; align-items: flex-start; }
-.sched-xp code { flex: 1; font: var(--fs-footnote)/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; background: #0d1219; border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: 9px 11px; color: #c9d1dc; overflow-wrap: anywhere; }
-.sched-xp .btns { display: flex; gap: 8px; flex-wrap: wrap; }
-.sched-list { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); }
-.sched-row { border-top: 1px solid var(--line); }
-.sched-row:first-child { border-top: 0; }
-.sched-row summary { padding: 8px 14px; cursor: pointer; list-style: none; }
-.sched-row summary::-webkit-details-marker { display: none; }
-.sched-row .when { color: var(--muted); font-variant-numeric: tabular-nums; font-size: var(--fs-sub); }
-.sched-row .what b { display: block; }
-.sched-row .what small { color: var(--muted); }
+/* Week board: seven day columns from 1100px, as many as fit under that, one on a phone. Cards are episodes. */
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 10px; align-items: start; }
+@media (min-width: 1100px) { .board { grid-template-columns: repeat(7, minmax(0, 1fr)); } .board .thumb { display: none; } }
+.day { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.day .sched-st { white-space: normal; }  /* a status wraps inside a narrow day column */
+.day-h { display: flex; align-items: baseline; gap: 6px; margin: 0; padding: 0 2px; font-size: var(--fs-body); }
+.day-h .num { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.day-h .rel { margin-left: auto; padding: 0 8px; border-radius: 999px; font-size: var(--fs-footnote); font-weight: 600; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.day.today .day-h b { color: var(--accent); }
+.day .n { margin-top: -4px; padding: 0 2px; color: var(--muted); font-size: var(--fs-footnote); }
+.day-empty { margin: 0; padding: 10px; border: 1px dashed var(--line); border-radius: var(--r-md); color: var(--muted); font-size: var(--fs-footnote); }
+.sched-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.sched-cards[hidden] { display: none; }
+.sched-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); }
+.sched-card.mine { box-shadow: inset 3px 0 0 var(--accent); }
+.sched-card.other { opacity: .72; }
+.sched-card.other:hover, .sched-card.other:focus-within { opacity: 1; }
+.sc-when .tm { font: 700 var(--fs-body) system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); font-variant-numeric: tabular-nums; }
+.sc-when .tm small { margin-left: 6px; font-size: var(--fs-footnote); font-weight: 600; color: var(--accent); }
+.sc-when .tm small.m { color: var(--muted); font-weight: 500; }
+.sc-main { display: flex; gap: 8px; min-width: 0; }
+.sched-card .thumb { flex: none; width: 30px; aspect-ratio: 2 / 3; border-radius: 3px; object-fit: cover; background: var(--bg); }
+.sched-card .what { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.sched-card .what small { color: var(--muted); overflow-wrap: anywhere; }
+.sched-card .finale-tag { margin: 3px 0 0; }
+.sc-open { padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.sc-open:hover { text-decoration: underline; }
+.sc-open[aria-expanded="true"] { color: var(--accent); }
+.sc-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.sc-foot .icon-hide { width: 28px; height: 28px; margin-left: auto; }
+.sc-foot .net { height: 26px; padding: 3px 7px; }
+.sc-foot .prov img, .sc-foot .prov i { width: 26px; height: 26px; border-radius: var(--r-sm); }
 /* Managed: filled service badge and an accent edge. Not managed: a dashed "add" button. */
-.sched-row .svc { font-size: var(--fs-footnote); font-weight: 700; background: var(--accent); color: var(--accent-ink); padding: 3px 9px; border-radius: 999px; letter-spacing: .02em; }
-.sched-row:not(.other) { box-shadow: inset 3px 0 0 var(--accent); }
-.sched-row pre { margin: 0 14px 12px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-sm);
-  font-size: var(--fs-sub); white-space: pre-wrap; word-break: break-all; }
-.sched-row .open { margin: 0 14px 12px; }
+.sched-card .svc { padding: 3px 9px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: var(--fs-footnote); font-weight: 700; letter-spacing: .02em; overflow-wrap: anywhere; }
+.sched-card:hover .icon-hide, .icon-hide:focus-visible { opacity: 1; }
+/* Details: a popover by its card; the dialog on a phone shares the content */
+.sched-pop { position: fixed; z-index: 60; box-sizing: border-box; width: min(380px, calc(100vw - 16px)); overflow-y: auto; padding: 14px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 16px 48px rgb(0 0 0 / .5); }
+.sched-pop[hidden] { display: none; }
+.sched-pop:focus-visible { outline: none; }  /* the container takes focus for its reader, it is not a control */
+.sd { display: grid; gap: 10px; }
+.sd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sd-head h2 { margin: 0; font-size: var(--fs-headline); overflow-wrap: anywhere; }
+.sd p { margin: 0; }
+.sd .facts { display: grid; gap: 4px; font-size: var(--fs-sub); color: var(--muted); }
+.sd .facts b { color: var(--text); font-weight: 600; }
+.sd .cmd { display: flex; gap: 10px; align-items: flex-start; }
+.sd code { flex: 1; min-width: 0; font: var(--fs-footnote)/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; background: #0d1219; border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 9px 11px; color: #c9d1dc; overflow-wrap: anywhere; }
+.sd .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .last-sync { color: var(--muted); font-size: var(--fs-sub); }
 /* Health lights: Unshackle and Sonarr, a tap away from their settings. */
 .update-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; text-decoration: none;
@@ -1384,15 +1395,6 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   #ep-go-edit .long { display: none; } #ep-go-edit .short { display: inline; }
 
   .sched-head { flex-wrap: wrap; }
-  .sched-row summary, .sched-row .row-main { grid-template-columns: 34px 1fr auto; padding: 10px 12px; column-gap: 10px; row-gap: 2px; }
-  .sched-dayh { top: calc(64px + env(safe-area-inset-top)); }
-  .sched-dayh small { display: none; }
-  .sched-st.m-only { display: inline-flex; margin-top: 5px; } .row-actions .sched-st { display: none; }
-  .sched-xp { padding-left: 14px; }
-  .sched-xp .cmd { flex-direction: column; } .sched-xp .cmd code { width: 100%; }
-  .sched-row .thumb { grid-row: span 2; }
-  .sched-row .when { grid-column: 2 / -1; grid-row: 1; }
-  .sched-row .what { grid-column: 2; }
   .sched-tools { width: 100%; }
   .sched-tools .seg.small { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
   .cal-cell { min-height: 56px; padding: 5px 4px; align-items: center; }
@@ -1401,6 +1403,10 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .cal-count i { font-style: normal; font-size: var(--fs-caption); min-width: 18px; padding: 0 4px; border-radius: var(--r-md); background: var(--bg); color: var(--muted); text-align: center; }
   .cal-count i.mine { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
   .cal-nav h3 { min-width: 0; flex: 1; font-size: var(--fs-headline); }
+  .board, .sched-cards { grid-template-columns: 1fr; }
+  .sched-card .thumb { width: 34px; }
+  .sc-foot .icon-hide { width: 36px; height: 36px; }
+  .sd .cmd { flex-direction: column; } .sd .cmd code { width: 100%; }
   .sched-filter { flex: 1; min-width: 0; overflow-x: auto; margin-left: -16px; padding-left: 16px; }
   .sched-tools { flex-wrap: wrap; }
   .sched-tools .seg { flex-basis: 100%; }
@@ -1433,12 +1439,6 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .cd-tracks .t { grid-template-columns: 1fr auto; } .cd-tracks .t .bar { grid-column: 1 / -1; grid-row: 2; }
   .cd-raw .term { height: 60dvh; min-height: 280px; }
   .icon-hide { opacity: .8; width: 36px; height: 36px; }
-  .row-actions .badges { display: none; }
-  .sched-row .when { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .badges.in-when { display: inline-flex; gap: 4px; }
-  .badges.in-when .net { height: 26px; padding: 3px 7px; }
-  .badges.in-when .net img { max-height: 18px; }
-  .badges.in-when .prov img, .badges.in-when .prov i { width: 28px; height: 28px; border-radius: var(--r-sm); }
 
   .modal { margin: auto auto 0; width: 100%; max-width: none; border-radius: var(--r-lg) var(--r-lg) 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
   #inbox-dialog.menu { inset: 60px 8px auto 8px; width: auto; border-radius: var(--r-lg); padding-bottom: 8px; }

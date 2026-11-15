@@ -1708,6 +1708,209 @@ def test_calendar_moves_an_early_release_to_its_release_day_when_the_earlier_mon
     assert shown["found"] == [["2026-02-11", 1]]
 
 
+# Runs the Schedule's real week, month and details helpers in Europe/Paris: DST ended 2026-10-25 and began 2026-03-29.
+SCHEDULE_HARNESS = r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const line = (name) => src.match(new RegExp(`^const ${name} = .*$`, "m"))[0];
+const grab = (name) => {  // a function, to its closing brace
+  const start = src.search(new RegExp(`^function ${name}\\b`, "m"));
+  let depth = 0, i = src.indexOf("{", src.indexOf(")", start));
+  for (let j = i; j < src.length; j++) { depth += src[j] === "{" ? 1 : src[j] === "}" ? -1 : 0; if (!depth) return src.slice(start, j + 1); }
+};
+const scenario = process.argv[2];
+const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h);
+const mk = (extra = {}) => ({ hidden: true, attrs: {}, isConnected: true, setAttribute(k, v) { this.attrs[k] = String(v); }, replaceChildren() {},
+  focus() { ctx.focused = this; }, ...extra });
+const ctx = { Date, Map, Set, Object, Boolean, Math, innerWidth: 1280, innerHeight: 800, loads: [], phone: false, focused: null,
+  loadWeek() { ctx.loads.push("week"); }, loadMonth() { ctx.loads.push("month"); }, detailsNode: () => ({}), phoneLayout: () => ctx.phone };
+vm.createContext(ctx);
+vm.runInContext(["startOfDay", "addDays", "isoDay", "weekStartOf", "monthStartOf", "inMonth", "dayOfKey", "cal", "det", "shellQuote"].map(line).join("\n") + "\n"
+  + ["moveWeek", "moveMonth", "pickDay", "switchView", "detailsPlan", "popoverPlace", "placeDetails", "openDetails", "closeDetails", "detailsKey"].map(grab).join("\n"), ctx);
+const run = (code) => vm.runInContext(code, ctx);
+const cal = run("cal");
+const week = (start) => run(`Array.from({ length: 7 }, (_, i) => isoDay(addDays(new Date(${start.getTime()}), i)))`);
+const out = {};
+if (scenario === "weeks") {
+  for (const [name, date, step] of [["month", at(2026, 10, 28), 1], ["monthBack", at(2026, 10, 28), -2], ["dstEnd", at(2026, 10, 19, 0), 1], ["dstEndBack", at(2026, 10, 26, 0), -1],
+      ["dstStart", at(2026, 3, 23, 0), 1], ["dstStartBack", at(2026, 4, 6, 0), -1], ["year", at(2026, 12, 31), 1]]) {
+    cal.date = date; run(`moveWeek(${step})`);
+    const start = run("weekStartOf(cal.date)");
+    out[name] = { date: run("isoDay(cal.date)"), start: run(`isoDay(weekStartOf(cal.date))`), days: week(start), weekday: start.getDay() };
+  }
+  out.loads = ctx.loads;
+} else if (scenario === "views") {
+  cal.date = at(2026, 10, 28); cal.month = null;
+  run('switchView("month")'); out.toMonth = run("({ month: isoDay(cal.month), pick: cal.pick })");
+  run('pickDay("2026-11-02")'); out.pickedOut = run("({ month: isoDay(cal.month), date: isoDay(cal.date), pick: cal.pick })");  // a day of the next month, shown in October's grid
+  run('switchView("week")'); out.toWeek = run("({ start: isoDay(weekStartOf(cal.date)), pick: cal.pick })");
+  run('switchView("month")'); out.backToMonth = run("({ month: isoDay(cal.month), pick: cal.pick })");
+  cal.month = at(2026, 1, 1, 0); cal.date = at(2026, 1, 31, 0); run("moveMonth(1)");
+  out.shortMonth = run("({ month: isoDay(cal.month), date: isoDay(cal.date), pick: cal.pick })");
+  run("moveMonth(-1)"); out.back = run("({ month: isoDay(cal.month), date: isoDay(cal.date) })");
+  run("moveMonth(0)"); out.today = run("({ month: isoDay(cal.month), same: cal.pick === isoDay(cal.date) && cal.pick === isoDay(new Date()) })");
+  out.loads = ctx.loads;
+} else if (scenario === "plan") {
+  const cmd = ["unshackle", "dl", "-w", "S01E02", "it's here"];
+  const plan = (d) => run(`detailsPlan(${JSON.stringify(d)})`);
+  out.unmanaged = plan({ managed: false, command: cmd, episodeId: 5 });
+  out.onDisk = plan({ managed: true, hasFile: true, command: cmd, episodeId: 5 });
+  out.skipped = plan({ managed: true, command: null, episodeId: 5 });
+  out.todo = plan({ managed: true, command: cmd, episodeId: 5 });
+  out.noEpisodeId = plan({ managed: true, command: cmd });
+} else if (scenario === "place") {
+  const place = (a, w, h, vw, vh) => run(`popoverPlace(${JSON.stringify(a)}, ${w}, ${h}, ${vw}, ${vh})`);
+  out.right = place({ left: 100, right: 268, top: 300 }, 380, 300, 1280, 800);
+  out.left = place({ left: 1000, right: 1168, top: 700 }, 380, 300, 1280, 800);
+  out.narrow = place({ left: 300, right: 468, top: 100 }, 380, 300, 720, 800);
+  out.tall = place({ left: 100, right: 268, top: 300 }, 380, 2000, 1280, 800);
+} else {
+  const pop = mk({ offsetWidth: 380, scrollHeight: 300, style: {} }), dlg = mk({ open: false, showModal() { this.open = true; }, close() { this.open = false; } });
+  const card = { getBoundingClientRect: () => ({ left: 100, right: 268, top: 300 }) };
+  const trigger = mk({ closest: () => card });
+  ctx.$ = (sel) => sel === "#sched-pop" ? pop : dlg;
+  const escape = () => { const e = { key: "Escape", prevented: false, preventDefault() { this.prevented = true; } }; ctx.detailsKey(e); return e.prevented; };
+  const state = () => ({ expanded: trigger.attrs["aria-expanded"], popHidden: pop.hidden, dialogOpen: dlg.open, focus: ctx.focused === trigger ? "trigger" : ctx.focused === pop ? "popover" : ctx.focused === null ? "none" : "other", open: run("det.trigger !== null") });
+  out.idle = escape();  // nothing open: Escape is not taken
+  ctx.openDetails(trigger, { tvdbId: 1 }, "k"); out.opened = state(); out.placed = { left: pop.style.left, top: pop.style.top, maxHeight: pop.style.maxHeight };
+  ctx.focused = null; out.escaped = escape(); out.afterEscape = state();
+  ctx.focused = null; ctx.phone = true;  // a phone: a dialog, closed by the browser's own Escape, which comes back as "close"
+  ctx.openDetails(trigger, { tvdbId: 1 }, "k"); out.phoneOpened = state(); out.phoneEscapeTaken = escape();
+  dlg.open = false; ctx.closeDetails(); out.phoneClosed = state();
+  ctx.phone = false; ctx.focused = null;
+  ctx.openDetails(trigger, { tvdbId: 1 }, "k"); trigger.isConnected = false; ctx.focused = null; ctx.closeDetails();  // its card was redrawn away
+  out.gone = ctx.focused;
+}
+console.log(JSON.stringify(out));
+"""
+
+
+def schedule_run(scenario: str) -> dict:
+    import os
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "schedule.js"
+    out = subprocess.run(["node", "-e", SCHEDULE_HARNESS, "--", str(script), scenario], capture_output=True, text=True,
+                         env={**os.environ, "TZ": "Europe/Paris"})
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def week_of(first: str, last: str) -> list[str]:
+    from datetime import date, timedelta
+    start = date.fromisoformat(first)
+    assert (date.fromisoformat(last) - start).days == 6
+    return [(start + timedelta(days=i)).isoformat() for i in range(7)]
+
+
+def test_the_week_board_moves_by_whole_weeks_across_month_and_year_boundaries():
+    weeks = schedule_run("weeks")
+    assert weeks["month"]["date"] == "2026-11-04" and weeks["month"]["days"] == week_of("2026-11-02", "2026-11-08")  # Wed 28 Oct, next week
+    assert weeks["monthBack"]["days"] == week_of("2026-10-12", "2026-10-18")
+    assert weeks["year"]["days"] == week_of("2027-01-04", "2027-01-10")
+    assert {w["weekday"] for w in weeks.values() if isinstance(w, dict)} == {1}  # always from a Monday
+    assert weeks["loads"] == ["week"] * 7
+
+
+def test_the_week_board_keeps_seven_distinct_days_across_a_clock_change():
+    weeks = schedule_run("weeks")
+    # Mon 19 Oct, a week on: Sunday 25 Oct has 25 hours, a plain 7 x 24 h would stop on Sunday 23:00
+    assert weeks["dstEnd"]["date"] == "2026-10-26" and weeks["dstEnd"]["days"] == week_of("2026-10-26", "2026-11-01")
+    assert weeks["dstEndBack"]["days"] == week_of("2026-10-19", "2026-10-25")
+    assert weeks["dstStart"]["days"] == week_of("2026-03-30", "2026-04-05")  # Sunday 29 March has 23 hours
+    assert weeks["dstStartBack"]["days"] == week_of("2026-03-30", "2026-04-05")
+
+
+def test_week_and_month_share_the_chosen_date():
+    views = schedule_run("views")
+    assert views["toMonth"] == {"month": "2026-10-01", "pick": "2026-10-28"}  # Week's day is Month's picked day
+    assert views["pickedOut"] == {"month": "2026-10-01", "date": "2026-11-02", "pick": "2026-11-02"}  # the grid stays on October
+    assert views["toWeek"] == {"start": "2026-11-02", "pick": None}  # Week shows the week of the day Month picked
+    assert views["backToMonth"] == {"month": "2026-11-01", "pick": "2026-11-02"}
+    assert views["shortMonth"] == {"month": "2026-02-01", "date": "2026-02-28", "pick": None}  # 31 January, a month on
+    assert views["back"] == {"month": "2026-01-01", "date": "2026-01-28"}
+    assert views["today"] == {"month": views["today"]["month"], "same": True}
+    assert views["loads"] == ["month"] * 3
+
+
+def test_a_week_or_month_left_before_its_load_failed_does_not_replace_the_one_shown():
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const line = (name) => src.match(new RegExp(`^const ${name} = .*$`, "m"))[0];
+const grab = (name) => {
+  const start = src.search(new RegExp(`^async function ${name}\\b`, "m"));
+  let depth = 0; const i = src.indexOf("{", src.indexOf(")", start));
+  for (let j = i; j < src.length; j++) { depth += src[j] === "{" ? 1 : src[j] === "}" ? -1 : 0; if (!depth) return src.slice(start, j + 1); }
+};
+const shown = {}, pending = [];
+const ctx = { Date, Map, Set, view: "week", drawn: [],
+  $: (sel) => ({ replaceChildren: (...c) => { shown[sel] = c.length ? c[0] : "empty"; } }),
+  loading: () => "loading", failed: () => "failed", renderRange() {}, schedView: () => ctx.view,
+  renderWeek() { ctx.drawn.push("week"); }, renderMonth() { ctx.drawn.push("month"); },
+  fetchDays: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) };
+vm.createContext(ctx);
+vm.runInContext(["startOfDay", "addDays", "isoDay", "weekStartOf", "cal"].map(line).join("\n") + "\n" + grab("loadWeek") + "\n" + grab("loadMonth"), ctx);
+(async () => {
+  const cal = vm.runInContext("cal", ctx), tick = () => new Promise((r) => setTimeout(r));
+  cal.date = new Date(2026, 10, 18); const old = ctx.loadWeek();
+  cal.date = new Date(2026, 10, 25); const now = ctx.loadWeek();
+  pending[1].resolve(); await now; pending[0].reject(new Error("timed out")); await old; await tick();
+  const week = { board: shown["#week-board"], drawn: ctx.drawn.slice() };
+  ctx.view = "month"; ctx.drawn = []; shown["#cal-day"] = "a day's cards";
+  cal.month = new Date(2026, 9, 1); const oldMonth = ctx.loadMonth();
+  const cleared = shown["#cal-day"];
+  cal.month = new Date(2026, 10, 1); const nowMonth = ctx.loadMonth();
+  pending[3].resolve(); await nowMonth; pending[2].reject(new Error("timed out")); await oldMonth;
+  console.log(JSON.stringify({ week, month: { grid: shown["#cal-grid"], drawn: ctx.drawn, dayCleared: cleared } }));
+})();
+"""
+    path = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "schedule.js"
+    out = subprocess.run(["node", "-e", script, "--", str(path)], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout) == {"week": {"board": "loading", "drawn": ["week"]},
+                                      "month": {"grid": "loading", "drawn": ["month"], "dayCleared": "empty"}}
+
+
+def test_schedule_details_offer_the_command_for_yours_and_download_only_while_not_on_disk():
+    plan = schedule_run("plan")
+    nothing = {"command": "", "skipped": False, "download": False}
+    assert plan["unmanaged"] == nothing  # another series: nothing to run
+    assert plan["onDisk"]["command"] and plan["onDisk"]["download"] is False  # the command, as the list row showed it
+    assert plan["skipped"] == {"command": "", "skipped": True, "download": False}  # the offset note instead
+    assert plan["todo"] == {"command": "unshackle dl -w S01E02 'it'\\''s here'", "skipped": False, "download": True}
+    assert plan["noEpisodeId"]["command"] and plan["noEpisodeId"]["download"] is False
+
+
+def test_the_details_popover_stays_inside_the_window():
+    place = schedule_run("place")
+    assert place["right"] == {"left": 276, "top": 300, "maxHeight": 784}  # beside its card, on the right
+    assert place["left"] == {"left": 612, "top": 492, "maxHeight": 784}  # no room on the right: the left; lifted to fit
+    assert place["narrow"]["left"] == 8  # neither side fits: against the window's edge
+    assert place["tall"] == {"left": 276, "top": 8, "maxHeight": 784}  # taller than the window: it scrolls inside
+
+
+def test_escape_closes_the_details_and_returns_to_the_cards_name():
+    out = schedule_run("escape")
+    assert out["idle"] is False  # Escape with nothing open is left to the page
+    assert out["opened"] == {"expanded": "true", "popHidden": False, "dialogOpen": False, "focus": "popover", "open": True}
+    assert out["placed"] == {"left": "276px", "top": "300px", "maxHeight": "784px"}
+    assert out["escaped"] is True
+    assert out["afterEscape"] == {"expanded": "false", "popHidden": True, "dialogOpen": False, "focus": "trigger", "open": False}
+    assert out["phoneOpened"] == {"expanded": "true", "popHidden": True, "dialogOpen": True, "focus": "none", "open": True}  # a modal dialog on a phone
+    assert out["phoneEscapeTaken"] is False  # the dialog's own Escape closes it ...
+    assert out["phoneClosed"] == {"expanded": "false", "popHidden": True, "dialogOpen": False, "focus": "trigger", "open": False}  # ... and focus comes back
+    assert out["gone"] is None  # its card was redrawn away: nothing to focus
+
+
 # Runs the page's real liveTick and openActivity with a /api/runs that answers only when the test says so.
 ACTIVITY_HARNESS = r"""
 const fs = require("fs"), vm = require("vm");

@@ -408,7 +408,6 @@
  ],
  "CHANGELOG.md": [],
  "CHROME": [],
- "Calendar": [],
  "Cancel": [],
  "Cancel {0}": [
   "c.sxxeyy"
@@ -1182,11 +1181,10 @@
   "head - line.from + 1",
   "state.doc.toString() !== uy.original ? \" · Unsaved changes\" : \"\""
  ],
- "List": [],
  "Loading episodes from Sonarr…": [],
- "Loading more of the calendar…": [],
  "Loading the month…": [],
  "Loading the schedule…": [],
+ "Loading the week…": [],
  "Local": [],
  "Location": [],
  "Log in": [],
@@ -1245,6 +1243,7 @@
  "Model": [],
  "Mon": [],
  "Monitored": [],
+ "Month": [],
  "Most of this season has audio in {0}": [
   "norm.audio || \"no language tagged\""
  ],
@@ -1303,6 +1302,7 @@
   "nextAt"
  ],
  "Next sync at …": [],
+ "Next week": [],
  "Nextcloud, Synology, QNAP, kDrive, pCloud… The folder must already exist.": [],
  "No CDM": [],
  "No CDM folder": [],
@@ -1517,7 +1517,6 @@
  "Nothing is downloading or waiting.": [],
  "Nothing is downloading right now.": [],
  "Nothing kept yet": [],
- "Nothing matches in the days loaded so far.": [],
  "Nothing missing from the last {0} days.": [
   "missingDays"
  ],
@@ -1695,6 +1694,7 @@
  "PlayReady, remote": [],
  "Português (Brasil)": [],
  "Previous month": [],
+ "Previous week": [],
  "Problems": [],
  "Processing the tracks": [],
  "Product": [],
@@ -2285,7 +2285,6 @@
  "That is the Sonarr above": [],
  "That is too large for unshackle.yaml": [],
  "That version is in the editor: Save to restore it": [],
- "That's a year ahead: the end of the list.": [],
  "The": [],
  "The .wvd and .prd files in the CDM folder. Click one for its details; a test asks the DRM's test server for a license.": [],
  "The API key of unshackle serve is still the example one: put a long random one in UNSHACKLE_API_KEY and in serve: api_secret (openssl rand -hex 32)": [],
@@ -2569,7 +2568,7 @@
  "Tries": [],
  "Tries at the next sync": [],
  "Tries in {0}": [
-  "until(at)"
+  "until(tries)"
  ],
  "TrueHD": [],
  "Try again": [],
@@ -2786,6 +2785,7 @@
  "WebDAV folder": [],
  "Webhook URL": [],
  "Wed": [],
+ "Week": [],
  "Week of {0}: {1} downloaded, {2} kept, {3} failed": [
   "new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: \"numeric\", month: \"short\" })",
   "w.downloaded",
