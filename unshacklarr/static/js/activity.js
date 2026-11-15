@@ -295,8 +295,8 @@ function renderJob(j) {
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(first)),
     el("div", {}, el("h3", { textContent: title }),
-      el("small", { className: "line1", textContent: `${first.service} · ${KIND[first.kind] || first.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
-      el("small", { className: "line2" }, el("b", { textContent: first.service }), `${KIND[first.kind] || first.kind} · ${day(started)} ${time(started)}`)),
+      el("small", { className: "line1", textContent: `${svcName(first.service)} · ${KIND[first.kind] || first.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
+      el("small", { className: "line2" }, el("b", { textContent: svcName(first.service) }), `${KIND[first.kind] || first.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
   const overall = el("div", { className: "job-sum" },
     el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused", textContent: "⏸ Paused: the next episode waits" })] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
@@ -315,7 +315,7 @@ function renderJob(j) {
     const downloading = isDownloading(c);
     const detail = downloading ? el("div", { className: "jmeta" },  // how fast, how long still: in sight, not a grey line
         ...[...(afterTracks(c) ? [[ICON_CLOCK, muxLeft(c) ? `${afterTracks(c)} · ${muxLeft(c)} left` : `${afterTracks(c)} · ${since(c.mux_from || c.tracks_in)}`]] : [[ICON_SPEED, speedOf(c)], [ICON_CLOCK, timeLeft(c) && `${timeLeft(c)} left`]]), [ICON_GLOBE, proxyOf(c), "extra"], [ICON_FILM, videoOf(c), "extra"],
-          [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${c.service}`, "extra"]]
+          [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${svcName(c.service)}`, "extra"]]
           .filter(([, t]) => t).map(([icon, t, extra]) => { const chip = metaChip(icon, t); if (extra) chip.classList.add(extra); return chip; }))
       : el("small", { textContent: !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "" });
     const open = openCards.has(c.id) && !c.waiting;
@@ -382,9 +382,9 @@ function jobDone(j, st) {
 function listRow(c) {
   const started = new Date(c.started);
   const sub = isLive(c)
-    ? (c.prompt ? `${c.service} · waiting for your answer` : c.waiting ? `${c.service} · in the queue`
-      : isQueued(c) ? `${c.service} · waiting for a slot` : `${c.service} · ${afterTracks(c) || speedOf(c) || c.step}`)
-    : c.outcome === "unavailable" && c.checks > 1 ? `${c.service} · checked ${c.checks} times, last ${day(started)} ${time(started)}`
+    ? (c.prompt ? `${svcName(c.service)} · waiting for your answer` : c.waiting ? `${svcName(c.service)} · in the queue`
+      : isQueued(c) ? `${svcName(c.service)} · waiting for a slot` : `${svcName(c.service)} · ${afterTracks(c) || speedOf(c) || c.step}`)
+    : c.outcome === "unavailable" && c.checks > 1 ? `${svcName(c.service)} · checked ${c.checks} times, last ${day(started)} ${time(started)}`
     : `${day(started)} ${time(started)}${c.ended ? ` · ${duration(new Date(c.ended) - started)}` : ""}`;
   const side = isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
     : el("span", { className: `chip o-${c.outcome}`, textContent: outcomeOf(c) });
@@ -605,7 +605,7 @@ async function showStats() {
       el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) })));
   }));
   const table = el("table", { className: "svc-table" }, el("thead", {}, el("tr", {}, ...["Service", "Downloaded", "Failed", "Kept", "Success", "Last success", "Average"].map((t) => el("th", { textContent: t })))),
-    el("tbody", {}, ...st.services.map((v) => el("tr", {}, el("td", {}, el("b", { textContent: v.service })), el("td", { textContent: v.downloaded }),
+    el("tbody", {}, ...st.services.map((v) => el("tr", {}, el("td", {}, el("b", { textContent: svcName(v.service) })), el("td", { textContent: v.downloaded }),
       el("td", { className: v.failed ? "bad" : "", textContent: v.failed }), el("td", { textContent: v.kept }),
       el("td", { className: v.success === null ? "" : v.success < 70 ? "bad" : "fine", textContent: fmt(v.success, "%") }),
       el("td", { textContent: v.last_success ? ago(v.last_success) : "never" }), el("td", { textContent: v.average ? duration(v.average * 1000) : "–" })))));
@@ -656,8 +656,8 @@ function renderDetail(c) {
   const onService = c.serviceEpisode && c.serviceEpisode !== c.sxxeyy ? `, as ${c.serviceEpisode}` : "";
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(c)),
     el("div", {}, el("h3", { textContent: `${c.series} ${c.sxxeyy}` }),
-      el("small", { className: "line1", textContent: `${c.service}${onService} · ${KIND[c.kind] || c.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
-      el("small", { className: "line2" }, el("b", { textContent: `${c.service}${onService}` }), `${KIND[c.kind] || c.kind} · ${day(started)} ${time(started)}`)),
+      el("small", { className: "line1", textContent: `${svcName(c.service)}${onService} · ${KIND[c.kind] || c.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
+      el("small", { className: "line2" }, el("b", { textContent: `${svcName(c.service)}${onService}` }), `${KIND[c.kind] || c.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
   $("#cd-top-title").textContent = `${c.series} ${c.sxxeyy}`;
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
@@ -950,7 +950,7 @@ function promptBox(p) {
     } catch (err) { send.disabled = false; toast(err.message, true); }
   } }, field, send);
   return el("div", { className: "act-box", role: "status" },
-    el("b", { textContent: `${p.service} asks` }), el("span", { className: "q", textContent: p.text }), form);
+    el("b", { textContent: `${svcName(p.service)} asks` }), el("span", { className: "q", textContent: p.text }), form);
 }
 /* A redraw rebuilds the answer field: the one being typed in keeps its focus and caret. */
 function keepPromptFocus(draw) {

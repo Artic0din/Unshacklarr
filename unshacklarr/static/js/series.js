@@ -669,14 +669,14 @@ function renderCatchUp() {
         } }))),
       // a season its service lacks, found on another one by the weekly check: offered, never set on its own
       ...elsewhere.map(([season, p]) => el("small", { className: "renum" },
-          `Season ${season} is on ${p.service} (${p.count} episode${p.count === 1 ? "" : "s"}). `,
-          el("button", { className: "btn small", type: "button", textContent: `Use ${p.service} for season ${season}`, title: p.url, onclick: () => {
+          `Season ${season} is on ${svcName(p.service)} (${p.count} episode${p.count === 1 ? "" : "s"}). `,
+          el("button", { className: "btn small", type: "button", textContent: `Use ${svcName(p.service)} for season ${season}`, title: p.url, onclick: () => {
             const conf = S.config.series[current.tvdbId];
             conf.season_pages = { ...(conf.season_pages || {}), [season]: { url: p.url, service: p.service, ...(p.season ? { season: p.season } : {}) } };
             delete epElsewhere[season];
             fillPages(conf);
             dirty();
-            toast(`Season ${season} will be downloaded from ${p.service}. Click Save, then check again.`);
+            toast(`Season ${season} will be downloaded from ${svcName(p.service)}. Click Save, then check again.`);
             renderCatchUp();
           } })))),
     el("div", { className: "catchup-acts" },

@@ -10,12 +10,12 @@ function cookieStatus(f) {
   return left < 7 ? ["warn", `Expires in ${days}`, "Replace them soon"] : ["ok", `Valid · ${days} left`, "Nothing to do"];
 }
 function openCookieDialog(service = "", profile = "default", newProfile = false) {
-  $("#ck-service").replaceChildren(...S.services.map((t) => el("option", { value: t, textContent: t })));
+  $("#ck-service").replaceChildren(...S.services.map((t) => el("option", { value: t, textContent: svcName(t) })));
   $("#ck-service").value = service || S.services[0] || "";
   $("#ck-service").disabled = Boolean(service);
   $("#ck-profile").value = profile;
   $("#ck-profile").disabled = Boolean(service) && !newProfile;  // adding: any profile name; replacing: that one
-  $("#ck-title").textContent = service ? `Cookies for ${service}` : "Add cookies";
+  $("#ck-title").textContent = service ? `Cookies for ${svcName(service)}` : "Add cookies";
   $("#ck-text").value = "";
   $("#ck-file").value = "";
   $("#ck-error").replaceChildren();
@@ -30,7 +30,7 @@ $("#ck-form").onsubmit = async (e) => {
   try {
     const saved = await api("/api/cookies", { method: "POST", body: JSON.stringify(body) });
     $("#cookie-dialog").close();
-    toast(`${body.service} cookies saved: ${saved.count} cookies`);
+    toast(`${svcName(body.service)} cookies saved: ${saved.count} cookies`);
     loadServices();
   } catch (err) { $("#ck-error").replaceChildren(failed(err.message)); }
 };
@@ -140,7 +140,7 @@ async function cdmChoose(service, device, also = []) {  // also: other services 
     for (const svc of [service, ...also]) cdmData = await api("/api/cdm/choose", { method: "POST", body: JSON.stringify({ service: svc, device }) });
     renderCdm();
     const d = [...cdmData.devices, ...cdmData.remote].find((x) => x.name === device);
-    toast(service === "default" ? `Default device: ${cdmShort(d) || device}` : device ? `${service}: ${cdmShort(d) || device}` : `${service}: the default device`);
+    toast(service === "default" ? `Default device: ${cdmShort(d) || device}` : device ? `${svcName(service)}: ${cdmShort(d) || device}` : `${svcName(service)}: the default device`);
   } catch (e) { toast(e.message, true); loadCdm(); }
 }
 /* Pick a device for a service: searched, grouped by DRM, what uses each in sight. */
@@ -168,7 +168,7 @@ function cdmPicker(anchor, service, current, also = []) {
   };
   q.oninput = draw;
   draw();
-  const who = service === "default" ? "The default device" : `Device for ${[service, ...also].join(", ")}`;
+  const who = service === "default" ? "The default device" : `Device for ${[service, ...also].map(svcName).join(", ")}`;
   if (cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: who }), q, list)) q.focus();
 }
 const cdmCard = (icon, title, text, extra, ...body) => el("div", { className: "sx-card" },
@@ -191,8 +191,8 @@ function renderCdm() {
   const shown = [...new Set([...Object.keys(data.map).filter((k) => k.toLowerCase() !== "default"), ...inSeries])]
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   const current = (svc) => data.map[Object.keys(data.map).find((k) => k.toLowerCase() === svc.toLowerCase())];
-  const chip = (svc, now) => el("button", { type: "button", className: "cdm-chip cdm-pop-btn", dataset: { key: `svc:${svc}` }, textContent: svc,
-    title: `Change the device ${svc} uses`, onclick: (e) => cdmPicker(e.currentTarget, svc, now) });
+  const chip = (svc, now) => el("button", { type: "button", className: "cdm-chip cdm-pop-btn", dataset: { key: `svc:${svc}` }, textContent: svcName(svc),
+    title: `Change the device ${svcName(svc)} uses`, onclick: (e) => cdmPicker(e.currentTarget, svc, now) });
   const deviceCell = (name) => {
     if (name === "none") return el("span", { className: "cdm-to" }, el("b", { textContent: "No CDM" }), el("small", { textContent: "no DRM: no device used" }));
     const d = deviceOf(name);
@@ -214,7 +214,7 @@ function renderCdm() {
   const addSvc = el("button", { type: "button", className: "btn small cdm-pop-btn", dataset: { key: "add" }, textContent: "+ Another service", onclick: (e) => {
     const anchor = e.currentTarget, q = el("input", { type: "search", className: "cdm-pop-search", placeholder: "Search a service" }), list = el("div", { className: "cdm-pop-list" });
     const draw = () => list.replaceChildren(...others.filter((t) => t.toLowerCase().includes(q.value.trim().toLowerCase()))
-      .map((t) => el("button", { type: "button", className: "cdm-opt", onclick: () => { closeCdmPop(); anchor.dataset.key = `svc:${t}`; cdmPicker(anchor, t, ""); } }, el("b", { textContent: t }))));
+      .map((t) => el("button", { type: "button", className: "cdm-opt", onclick: () => { closeCdmPop(); anchor.dataset.key = `svc:${t}`; cdmPicker(anchor, t, ""); } }, el("b", { textContent: svcName(t) }))));
     q.oninput = draw; draw();
     if (cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: "A device of its own for…" }), q, list)) q.focus();
   } });
@@ -224,7 +224,7 @@ function renderCdm() {
       el("div", { className: `cdm-grp${deviceOf(name) || name === "none" ? "" : " bad"}` }, el("span", { className: "cdm-chips" }, ...svcs.map((svc) => chip(svc, name))), deviceCell(name))),
     ...(onDefault.length ? [el("div", { className: "cdm-grp cdm-fold" }, el("span", { className: "cdm-chips" }, ...onDefault.map((svc) => chip(svc, ""))),
       el("span", { className: "cdm-to" }, el("small", { textContent: onDefault.length === 1 ? "uses the default device" : "use the default device" })))] : []),
-    ...rules.map(([svc, v]) => el("div", { className: "cdm-grp" }, el("span", { className: "cdm-chips" }, el("span", { className: "cdm-chip static", textContent: svc })),
+    ...rules.map(([svc, v]) => el("div", { className: "cdm-grp" }, el("span", { className: "cdm-chips" }, el("span", { className: "cdm-chip static", textContent: svcName(svc) })),
       el("span", { className: "cdm-to" }, el("small", { textContent: `Set by a rule by profile, quality or DRM (${v.rule.join(", ")}): edit it in unshackle.yaml` })))),
     ...(others.length ? [el("div", { className: "cdm-add-svc" }, addSvc)] : []));
   // What needs you: a service on a device that is not there, a device in use that failed its test

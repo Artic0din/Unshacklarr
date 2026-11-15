@@ -126,7 +126,7 @@ function renderUnshackleStatus(st) {
       ? `Queue · ${st.queue.downloading} downloading${st.queue.queued ? `, ${st.queue.queued} waiting` : ""}` : "Queue" }),
       ...(st.jobs?.length ? [el("div", { className: "st-jobs" }, ...st.jobs.map((j) => el("div", { className: "st-job" },
         el("span", { textContent: `${j.title}`, title: j.title }),
-        el("small", { textContent: j.status === "queued" ? `${j.service} · waiting` : `${j.service} · ${j.progress}%` }),
+        el("small", { textContent: j.status === "queued" ? `${svcName(j.service)} · waiting` : `${svcName(j.service)} · ${j.progress}%` }),
         el("button", { className: "btn small danger", textContent: "Cancel", onclick: async (e) => {
           e.target.disabled = true;
           try { await api(`/api/unshackle/jobs/${encodeURIComponent(j.id)}/cancel`, { method: "POST" }); toast("Cancelling"); setTimeout(loadUnshackleStatus, 1500); }
@@ -227,7 +227,7 @@ async function openBulk() {
     const opt = (l, i) => el("label", {
       title: l ? l.url : "Leave it without a service",
     }, el("input", { type: "radio", name, value: l ? JSON.stringify([l.service, l.url]) : "",
-      checked: !l, onchange: pickCount }), l ? (l.name ? `${l.service} · ${l.name}` : l.service) : "Skip",
+      checked: !l, onchange: pickCount }), l ? (l.name ? `${svcName(l.service)} · ${l.name}` : svcName(l.service)) : "Skip",
       l ? el("small", { textContent: l.country }) : "");
     li.querySelector(".opts").replaceChildren(...(usable.length ? [...usable.map(opt), opt(null, -1)] : [el("span", { className: "none", textContent: "Nothing found on TMDB" })]));
     $("#bulk-progress").textContent = `Checked ${++done} of ${todo.length}`;

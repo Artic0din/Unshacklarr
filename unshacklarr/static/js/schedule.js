@@ -217,7 +217,7 @@ function schedStatus(d) {
   if (d.hasFile) return ["ok", d.managed ? "Downloaded" : "On disk"];
   if (!d.managed) return null;
   if (d.waitingImport) return ["wait", "Waiting for Sonarr"];
-  if (d.fromLate) return ["late", `Late · not on ${d.service} yet`];
+  if (d.fromLate) return ["late", `Late · not on ${svcName(d.service)} yet`];
   if (d.firstTry && new Date(d.firstTry) > Date.now()) return null;  // the time says it: "try 09:00"
   return new Date(d.airDateUtc) < Date.now() ? ["try", "Tries at the next sync"] : null;
 }
@@ -462,12 +462,12 @@ function showApprovals(approvals, force = false) {
     approvalShown = "";
     return;
   }
-  const details = approvals.map((approval) => [approval.service, approval.message].filter(Boolean).join("\n")).join("\n\n");
+  const details = approvals.map((approval) => [approval.service && svcName(approval.service), approval.message].filter(Boolean).join("\n")).join("\n\n");
   const signature = details;
   if (!force && signature === approvalShown) return;
   approvalShown = signature;
   $("#signin-title").textContent = approvals.length > 1 ? `${approvals.length} services need approval`
-    : approvals[0].service ? `${approvals[0].service} needs approval` : "Service approval";
+    : approvals[0].service ? `${svcName(approvals[0].service)} needs approval` : "Service approval";
   $("#signin-message").textContent = details;
   $("#signin-copy").onclick = async () => {
     try { await navigator.clipboard.writeText(details); toast("Details copied"); } catch { /* the details stay on screen */ }

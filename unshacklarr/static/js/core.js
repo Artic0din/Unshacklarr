@@ -370,7 +370,7 @@ function renderWall() {
       const conf = S.config.series[s.tvdbId];
       const art = el("span", { className: "art" });
       if (s.poster) art.append(el("img", { src: s.poster, alt: "", loading: "lazy", decoding: "async" }));
-      if (conf?.service) art.append(el("span", { className: "svc", textContent: conf.service }));
+      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service) }));
       if (libsOf(s).length) {  // the Sonarr libraries it is in, by their names; one switched off for it dimmed (by mj23au, #10)
         const off = (name, main) => Boolean(conf?.service) && Boolean(main ? conf.main_off : conf.sonarrs?.[name]?.off);
         art.append(el("span", { className: "lib" }, ...[...(s.id ? [[mainSonarr(), true]] : []), ...libsOf(s).map((o) => [o.name, false])]
@@ -430,7 +430,7 @@ async function openDrawer(s, tab, fromRoute = false) {
   $("#d-title").textContent = s.title;
   renderMeta(s);
   $("#d-service").replaceChildren(el("option", { value: "", textContent: "Not downloaded by Unshackle" }),
-    ...S.services.map((t) => el("option", { value: t, textContent: t })));
+    ...S.services.map((t) => el("option", { value: t, textContent: svcName(t) })));
   $("#d-service").value = conf.service || "";
   $("#d-url").value = conf.title || "";
   fillProgrammes(conf);
@@ -607,7 +607,7 @@ function networkButton(s, tag) {
     $("#d-find").hidden = true;
     $("#d-find-q").value = s.title;
     $("#d-find-open").click();
-  } }, el("b", { textContent: tag }), el("span", { textContent: `Find ${s.title} on ${svcName(tag)}` }));
+  } }, el("b", { textContent: svcName(tag) }), el("span", { textContent: `Find ${s.title} on ${svcName(tag)}` }));
 }
 /* No link from TMDB: the channel's service is all there is to offer. */
 function networkPick(s, box, none, lead) {
@@ -636,9 +636,9 @@ async function loadSuggestions(s, refresh = false) {
   if (!links.length && !brands.length) return networkPick(s, box, `TMDB lists no supported service in ${S.config.tmdb_countries.join(", ")}. Enter it below by hand.`,
     "TMDB lists no supported service.");
   box.replaceChildren(...links.map((l) => el("button", {
-    ariaLabel: `Use ${l.service}: ${[l.name, l.url].filter(Boolean).join(", ")}`,
+    ariaLabel: `Use ${svcName(l.service)}: ${[l.name, l.url].filter(Boolean).join(", ")}`,
     onclick: () => applySuggestion(l),
-  }, el("b", { textContent: l.service }), el("span", { textContent: (l.name ? `${l.name} · ` : "")  // a service linking several titles names each
+  }, el("b", { textContent: svcName(l.service) }), el("span", { textContent: (l.name ? `${l.name} · ` : "")  // a service linking several titles names each
     + (l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.found_by === "homepage" ? `TMDB homepage · ${l.url}` : l.url) }),
     el("small", { textContent: l.country }))));
   box.querySelectorAll("button").forEach((b, i) => b.dataset.url = links[i].url);

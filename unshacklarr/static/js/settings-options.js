@@ -28,15 +28,15 @@ async function renderServiceDefaults() {
     backend.value = levels.backend || "";
     const ladder = ladderSelect(levels.ladder, S.config.settings.quality_ladder, (v) => { if (v) levels.ladder = v; else delete levels.ladder; dirty(); });
     blocks.push(el("div", { className: "svc-block" },
-      el("div", { className: "svc-block-head" }, el("b", { textContent: tag }),
+      el("div", { className: "svc-block-head" }, el("b", { textContent: svcName(tag) }),
         el("small", { textContent: count ? `${count} option${count > 1 ? "s" : ""}` : "Nothing set yet" }),
         el("button", { className: "btn small danger", textContent: "Remove", onclick: () => { delete all[tag]; dirty(); renderServiceDefaults(); } })),
       el("div", { className: "sx-grid svc-picks" },
-        ...(servers.length || levels.backend ? [field("Unshackle server", backend, `Where ${tag} downloads.`)] : []),
+        ...(servers.length || levels.backend ? [field("Unshackle server", backend, `Where ${svcName(tag)} downloads.`)] : []),
         field("Quality ladder", ladder, "Default: the one of Settings, Quality.")),
       el("span", { className: "sub", textContent: "Download options" }), dl,
-      ...(specs.length || Object.keys(levels.service_options).length ? [el("span", { className: "sub", textContent: `Options of ${tag}` }), own] : []),
-      el("div", { className: "dx-cmd" }, el("span", { textContent: `A ${tag} download starts as` }),
+      ...(specs.length || Object.keys(levels.service_options).length ? [el("span", { className: "sub", textContent: `Options of ${svcName(tag)}` }), own] : []),
+      el("div", { className: "dx-cmd" }, el("span", { textContent: `A ${svcName(tag)} download starts as` }),
         el("code", { className: "dx-svc-cmd", translate: "no", dataset: { tag } }))));
   }
   $("#svc-defaults").replaceChildren(...(blocks.length ? blocks : [el("p", { className: "dx-empty", textContent: "No service has options of its own yet." })]));
