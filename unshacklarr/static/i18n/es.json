@@ -1868,7 +1868,7 @@
  "All libraries ({0})": "Todas las bibliotecas ({0})",
  "Filter by Sonarr library": "Filtrar por biblioteca de Sonarr",
  "The Sonarr settings of {0} must be an object": "Los ajustes de Sonarr de {0} deben ser un objeto",
- "{0}: no Sonarr named {1} in Settings, Sonarr": "{0}: no hay ningún Sonarr llamado {1} en Ajustes, Sonarr",
+ "{0}: the settings for Sonarr {1} must be an object": "{0}: los ajustes del Sonarr {1} deben ser un objeto",
  "Advanced": "Avanzado",
  "Download options for {0}": "Opciones de descarga para {0}",
  "Libraries": "Bibliotecas",

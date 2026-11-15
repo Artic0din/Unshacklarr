@@ -6674,3 +6674,89 @@ def test_two_logouts_at_once_both_stay_logged_out(tmp_path, monkeypatch):
         t.join(5)
     closed = real_read(web.LOGGED_OUT_FILE, {})
     assert {first.rpartition(".")[2], second.rpartition(".")[2]} <= set(closed)
+
+
+def test_a_sonarr_removed_from_settings_drops_its_series_settings_instead_of_refusing_the_save(monkeypatch):
+    # Renamed or removed in Settings, Sonarr: the series' own settings for it went with it, never a Save refused
+    # until config.yaml was edited by hand
+    import pytest
+    from aiohttp import web as aioweb
+    from unshacklarr import web
+    monkeypatch.setattr(web.sonarr_sync, "SONARRS", {"sonarr-4k": {}})
+    body = {"settings": {"sonarrs": [{"name": "sonarr-4k"}]}}
+    kept = web.check_series_sonarrs({"sonarr-4k": {"off": True}, "sonarr-2": {"off": True}}, body, [], "Show")
+    assert kept == {"sonarr-4k": {"off": True}}
+    with pytest.raises(aioweb.HTTPBadRequest) as refused:
+        web.check_series_sonarrs({"sonarr-4k": "off"}, body, [], "Show")
+    assert refused.value.text == "Show: the settings for Sonarr sonarr-4k must be an object"
+
+
+def test_renaming_a_sonarr_in_the_page_keeps_each_series_settings_for_it(tmp_path):
+    # The server drops a name no longer in Settings: a rename must carry the series' own settings (off) across first,
+    # or that Sonarr starts downloading the series switched off for it; a removal takes them away
+    import json
+    import re
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    src = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "quality.js").read_text()
+    code = re.search(r"^function moveSonarrRefs\(.*?^\}$", src, re.M | re.S).group(0)
+    harness = code + """
+const S = { config: { series: { 1: { sonarrs: { "sonarr-2": { off: true } } }, 2: { sonarrs: { "sonarr-4k": { off: true } } }, 3: {},
+  4: { sonarrs: { "sonarr-u": { off: true }, "sonarr-9": { off: true } } } } },  // 4: a removed Sonarr's leftovers
+  sonarrsOf: { 1: [{ name: "sonarr-2", id: 7 }, { name: "sonarr-4k", id: 8 }], 2: [{ name: "sonarr-4k", id: 9 }] } };
+let name = "sonarr-2";
+for (const typed of ["sonarr-", "sonarr-u", "sonarr-uhd"]) { moveSonarrRefs(name, typed); name = typed; }
+const renamed = JSON.parse(JSON.stringify(S.config.series));
+moveSonarrRefs("sonarr-4k", "");
+moveSonarrRefs("", "sonarr-9");  // added under a leftover's name
+console.log(JSON.stringify([renamed, S.config.series, S.sonarrsOf]));
+"""
+    done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    renamed, after, libraries = json.loads(done.stdout)
+    assert renamed["1"] == {"sonarrs": {"sonarr-uhd": {"off": True}}}  # each keystroke's name, the last one kept
+    assert renamed["2"] == {"sonarrs": {"sonarr-4k": {"off": True}}} and renamed["3"] == {}
+    assert renamed["4"] == {"sonarrs": {"sonarr-9": {"off": True}}}  # passing over a leftover's name never takes it
+    assert after["2"] == {"sonarrs": {}}  # removed
+    assert after["4"] == {"sonarrs": {}}  # a new Sonarr starts clean
+    # the libraries read at load follow too, so the series page finds its switches under the new name
+    assert libraries == {"1": [{"name": "sonarr-uhd", "id": 7}], "2": []}
+
+
+def test_a_renamed_sonarr_keeps_the_proxy_passwords_its_series_set_for_it(tmp_path, monkeypatch):
+    # The page moves a series' settings to the new name; its masked proxy password is found by the Sonarr's address,
+    # the way check_sonarrs keeps its API key, not asked for again on every series
+    import copy
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = web.read_config()
+    web.write_config({**config, "settings": {**config["settings"], "sonarrs": [{"name": "sonarr-2", "url": "http://s2:8989"}]},
+                      "series": {1: {"service": "X", "title": "t", "sonarrs": {"sonarr-2": {"options": {"--proxy": "http://u:pw789@p:2"}}}}}})
+    back = copy.deepcopy(web.public_config(web.read_config()))
+    back["settings"]["sonarrs"][0]["name"] = "sonarr-uhd"
+    back["series"][1]["sonarrs"] = {"sonarr-uhd": back["series"][1]["sonarrs"].pop("sonarr-2")}
+    web.real_config(back, web.read_config())
+    assert back["series"][1]["sonarrs"]["sonarr-uhd"]["options"]["--proxy"] == "http://u:pw789@p:2"
+
+    # sonarr-a removed in the same edit as sonarr-b took its name, or its address: never sonarr-a's password put back
+    import pytest
+    two = {**config, "settings": {**config["settings"], "sonarrs": [{"name": "sonarr-a", "url": "http://a:8989"},
+                                                                    {"name": "sonarr-b", "url": "http://b:8989"}]},
+           "series": {1: {"service": "X", "title": "t", "sonarrs": {"sonarr-a": {"options": {"--proxy": "http://u:pwA@p:2"}},
+                                                                    "sonarr-b": {"options": {"--proxy": "http://u:pwB@p:2"}}}}}}
+    for change in ({"name": "sonarr-a"}, {"url": "http://a:8989"}):
+        web.write_config(two)
+        back = copy.deepcopy(web.public_config(web.read_config()))
+        moved = {**back["settings"]["sonarrs"][1], **change}
+        back["settings"]["sonarrs"] = [moved]
+        back["series"][1]["sonarrs"] = {moved["name"]: back["series"][1]["sonarrs"]["sonarr-b"]}
+        with pytest.raises(web.web.HTTPBadRequest) as asked:  # ambiguous: asked again
+            web.real_config(back, web.read_config())
+        assert asked.value.text.startswith("Type the proxy's credentials"), change

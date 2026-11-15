@@ -31,6 +31,21 @@ function renameRefs(key, from, to) {
   for (const level of [...Object.values(S.config.service_defaults || {}), ...(key === "ladder" ? Object.values(S.config.series || {}) : [])])
     if (level[key] === from) { if (to) level[key] = to; else delete level[key]; }
 }
+/* A series' own settings for another Sonarr follow its rename; a removal (to "") takes them away. The server drops
+   a name no longer in Settings, so without this a renamed Sonarr would download the series switched off for it.
+   The new name starts clean: a removed Sonarr's leftovers under it are never inherited. */
+function moveSonarrRefs(from, to) {
+  if (from === to) return;
+  for (const conf of Object.values(S.config.series || {})) {
+    if (!conf.sonarrs) continue;
+    const moved = from ? conf.sonarrs[from] : undefined;
+    if (from) delete conf.sonarrs[from];
+    if (to) { if (moved) conf.sonarrs[to] = moved; else delete conf.sonarrs[to]; }
+  }
+  // the libraries each series is in, read at load: the series page finds its switches by these names
+  if (from) for (const [tvdb, libs] of Object.entries(S.sonarrsOf || {}))
+    S.sonarrsOf[tvdb] = to ? libs.map((o) => o.name === from ? { ...o, name: to } : o) : libs.filter((o) => o.name !== from);
+}
 function ladderUse(name) {
   const services = Object.entries(S.config.service_defaults || {}).filter(([, l]) => l.ladder === name).map(([t]) => t);
   const series = Object.values(S.config.series || {}).filter((c) => c.service && c.ladder === name).length;
@@ -281,7 +296,7 @@ function sonarrBlock(i) {
   const text = (key, opts, help, validate) => el("input", { type: "text", spellcheck: false, value: i[key] || "", dataset: { help }, ...opts, oninput: (e) => {
     const v = e.target.value.trim(), why = validate ? validate(v) : "";
     check(e.target, why);
-    if (key === "name" && !why) head.textContent = v;
+    if (key === "name" && !why) { moveSonarrRefs(i.name, v); head.textContent = v; }
     if (!why) i[key] = v;
     dirty();
   } });
@@ -325,6 +340,7 @@ function sonarrBlock(i) {
   const remove = el("button", { type: "button", className: "btn small danger", textContent: "Remove", onclick: (e) => {
     if (!confirmClick(e.target, `Remove ${i.name}?`)) return;
     list.splice(list.indexOf(i), 1);
+    moveSonarrRefs(i.name, "");
     dirty(); renderSonarrs();
   } });
   const withHelp = (label, input, saved, help) => el("div", { className: "field" },
@@ -352,6 +368,7 @@ $("#sn-add").onclick = () => {
   let n = list.length + 2;  // the main one is the first
   while (list.some((o) => o.name === `sonarr-${n}`)) n++;
   list.push({ name: `sonarr-${n}`, url: "", downloads: "", quality_ladder: "", download_only: null });  // its ladder: to choose
+  moveSonarrRefs("", `sonarr-${n}`);  // a removed Sonarr's leftovers under this name are not its
   dirty(); renderSonarrs();
   $("#sn-list .ub-block:last-child input[type=url]")?.focus();
 };
