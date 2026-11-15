@@ -215,7 +215,7 @@ each series you want.
 new Unshacklarr and leaves Unshackle running: without `--no-deps`, Compose may recreate Unshackle too
 (Unshacklarr depends on it), which cuts the downloads going on and leaves Unshacklarr saying Unshackle
 is unreachable until it has started again. For a new Unshackle, when nothing is downloading,
-`docker compose build --pull unshackle && docker compose up -d`.
+`docker compose build --pull --no-cache unshackle && docker compose up -d` (`--no-cache` fetches its newest commit).
 
 **On a Synology NAS:** its shutdown marks the containers as stopped, so `restart: unless-stopped` leaves them off
 after a reboot. Use `restart: always` there. On a small NAS, Settings › Unshackle › Downloads at once set to 1
@@ -227,7 +227,7 @@ keeps the disks from being saturated.
 - **A fork**: build Unshackle's image from it, then start as above.
 
   ```bash
-  docker compose build --build-arg UNSHACKLE_REPO=<its git URL> --build-arg UNSHACKLE_COMMIT=<commit SHA> unshackle
+  docker compose build --build-arg UNSHACKLE_REPO=<its git URL> --build-arg UNSHACKLE_REF=<branch or tag> unshackle
   docker compose up -d
   ```
 

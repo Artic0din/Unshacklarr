@@ -16,20 +16,20 @@ from unshacklarr.cookies import CookieError, list_all, normalise, parse, save
 from unshacklarr.files import PRIVATE, no_credentials, shared_or_private, write_atomic
 
 
-def test_container_sources_are_immutable_and_identifiable():
+def test_unshackle_follows_a_branch_and_the_app_image_is_identifiable():
     root = Path(__file__).parents[1]
-    core_commit = "f147c23b667c8a61c3aeb579ca1c22b00560641e"
     core = (root / "docker" / "unshackle.Dockerfile").read_text()
     app = (root / "Dockerfile").read_text()
     github = (root / ".github" / "workflows" / "ci.yml").read_text()
     forgejo = (root / ".forgejo" / "workflows" / "ci.yml").read_text()
     compose = (root / "docker-compose.example.yml").read_text()
 
-    assert f"ARG UNSHACKLE_COMMIT={core_commit}" in core
-    assert 'git -C /app fetch --depth 1 origin "$UNSHACKLE_COMMIT"' in core
-    assert 'test "$(git -C /app rev-parse HEAD)" = "$UNSHACKLE_COMMIT"' in core
-    assert "LABEL org.opencontainers.image.revision=$UNSHACKLE_COMMIT" in core
-    assert f"UNSHACKLE_COMMIT: {core_commit}" in compose
+    # Unshackle is not pinned: each build takes the newest commit of the fork's dev branch
+    assert "ARG UNSHACKLE_REPO=https://github.com/Artic0din/unshackle.git" in core
+    assert "ARG UNSHACKLE_REF=dev" in core
+    assert 'git clone --depth 1 --branch "$UNSHACKLE_REF" "$UNSHACKLE_REPO" /app' in core
+    assert "UNSHACKLE_COMMIT" not in core + compose
+    assert "UNSHACKLE_REF: dev" in compose
     assert "LABEL org.opencontainers.image.revision=$SOURCE_REVISION" in app
     assert "SOURCE_REVISION=${{ github.sha }}" in github
     assert 'SOURCE_REVISION="$GITHUB_SHA"' in forgejo

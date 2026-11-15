@@ -12,7 +12,7 @@
 #
 # Updating Unshacklarr: docker compose pull unshacklarr && docker compose up -d --no-deps unshacklarr
 # (--no-deps leaves Unshackle and its downloads running). Unshackle, when nothing downloads:
-# docker compose build --pull unshackle && docker compose up -d.
+# docker compose build --pull --no-cache unshackle && docker compose up -d (--no-cache fetches its newest commit).
 #
 # The downloads folder is mounted in both containers at the same path, /downloads.
 # SONARR_DOWNLOADS is that same folder as Sonarr sees it.
@@ -26,7 +26,7 @@ services:
       dockerfile: unshackle.Dockerfile
       args:
         UNSHACKLE_REPO: https://github.com/Artic0din/unshackle.git
-        UNSHACKLE_COMMIT: f147c23b667c8a61c3aeb579ca1c22b00560641e
+        UNSHACKLE_REF: dev
     image: unshackle-serve:latest
     container_name: unshackle
     restart: unless-stopped

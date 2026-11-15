@@ -32,15 +32,12 @@ RUN set -eux; cd /tmp; \
     rm shaka dovi.tgz hdr.tgz bento.zip; \
     chmod +x /usr/local/bin/*
 
-# The reviewed fork commit provides the transient approval and redacted authentication contracts.
+# The fork's dev branch, its newest commit at each build: it has the device approval and authentication
+# routes Unshacklarr uses. Another fork, branch or tag: --build-arg UNSHACKLE_REPO=… UNSHACKLE_REF=….
 ARG UNSHACKLE_REPO=https://github.com/Artic0din/unshackle.git
-ARG UNSHACKLE_COMMIT=f147c23b667c8a61c3aeb579ca1c22b00560641e
-RUN git init /app \
-    && git -C /app remote add origin "$UNSHACKLE_REPO" \
-    && git -C /app fetch --depth 1 origin "$UNSHACKLE_COMMIT" \
-    && git -C /app checkout --detach FETCH_HEAD \
-    && test "$(git -C /app rev-parse HEAD)" = "$UNSHACKLE_COMMIT"
-LABEL org.opencontainers.image.revision=$UNSHACKLE_COMMIT
+ARG UNSHACKLE_REF=dev
+RUN git clone --depth 1 --branch "$UNSHACKLE_REF" "$UNSHACKLE_REPO" /app \
+    && git -C /app log -1 --format='Unshackle %H'
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/opt/venv
 RUN uv sync --frozen --no-dev
