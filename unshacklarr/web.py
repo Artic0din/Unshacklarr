@@ -823,6 +823,12 @@ def merge_page_changes(body: dict, current: dict) -> None:
         if base.get(unit) == versions.get(unit):
             taken[unit] = mine.get(unit)
         elif (merged := merge_unit(UNIT_SEEN.get(base.get(unit)), mine.get(unit), now.get(unit))) is not None:
+            own, saved = mine.get(unit), now.get(unit)
+            if unit.startswith("series:") and isinstance(merged, dict) and isinstance(own, dict) and isinstance(saved, dict) \
+                    and (own.get("service"), str(own.get("title"))) != (saved.get("service"), str(saved.get("title"))):
+                for key in ("release_time", "release_day"):  # learnt for the source it had, not the one picked here
+                    if key not in own:
+                        merged.pop(key, None)
             taken[unit] = merged
         else:  # the same key changed both ways, or a series taken out here and changed elsewhere
             clash.append(unit)

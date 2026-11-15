@@ -13,7 +13,7 @@
   <img alt="Version 1.5.0" src="https://img.shields.io/badge/version-1.5.0-26a69a">
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776ab">
-  <img alt="Sonarr v3 and v4" src="https://img.shields.io/badge/sonarr-v3%20%7C%20v4-35c5f4">
+  <img alt="Sonarr v5" src="https://img.shields.io/badge/sonarr-v5-35c5f4">
   <img alt="Unshackle 5.4 to 6" src="https://img.shields.io/badge/unshackle-5.4%20%7C%206-e0559b">
   <img alt="9 languages" src="https://img.shields.io/badge/languages-9-8a63d2">
 </p>
@@ -121,7 +121,7 @@ flowchart LR
 You need:
 
 - ⬇️ **Unshackle** 5.4.0 or later, 6.0 included, set up with its services, cookies and CDMs;
-- 📡 **Sonarr** v4, or v3;
+- 📡 **Sonarr** 5;
 - 🎞️ **MKVToolNix** (`mkvmerge`, `mkvpropedit`), which Unshackle needs too; the Docker image has it.
 
 > [!NOTE]
@@ -527,26 +527,14 @@ Every change, version by version: **[CHANGELOG.md](CHANGELOG.md)**. Settings sho
 running.
 
 > [!TIP]
-> **Coming next, for Sonarr 5:** Sonarr 5 is still in beta, so what Unshacklarr does with it waits in the
-> [`dev-sonarr-v5`](https://github.com/OwnzZzZ/Unshacklarr/tree/dev-sonarr-v5) branch until Sonarr 5 is released.
-> That branch has everything in this version, plus:
+> **Sonarr 5:** what Unshacklarr does with Sonarr 5 is part of this version:
 >
 > - **Languages** (Activity): your files without your audio languages, read from Sonarr 5's own tracks. Watch them
->   for the preferred audio, or download them again.
+>   for the preferred audio, or download them again. It needs Sonarr 5.
 > - **Titles in your language:** a series whose titles Sonarr gives in English offers, on its page, to have them in
 >   yours, so that its episodes match the service's better.
 > - **Episode order:** a series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering. When that
 >   order changes after the numbering was set, new episodes wait until you confirm the numbering.
->
-> It is made for Sonarr 5 and has no ready-made image. To try it, build one and use it in place of
-> `ghcr.io/ownzzzz/unshacklarr` in `docker-compose.yml`:
->
-> ```bash
-> docker build -t unshacklarr:sonarr-v5 https://github.com/OwnzZzZ/Unshacklarr.git#dev-sonarr-v5
-> ```
->
-> Without Docker: `uv tool install git+https://github.com/OwnzZzZ/Unshacklarr.git@dev-sonarr-v5`. Tell us on the
-> [Discord](https://discord.gg/5HmNgaGASy) or in an issue how it goes.
 
 <details>
 <summary><b>🛠️ Development, translations and releases</b></summary>

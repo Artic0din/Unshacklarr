@@ -2068,6 +2068,9 @@ const fresh = () => {
   fresh(); box.S.config.settings.theme = "light"; page.dirty();
   let saving = page.save(); release(); await saving;
   out.plainSaveHides = bars["#savebar"].hidden && bars["#d-save"].hidden;
+  fresh(); box.S.config.settings.theme = "sepia"; page.dirty();  // a change the save before did not send
+  saving = page.save(); release({ versions: { settings: "v2" } }); await saving;  // the server's new fingerprints
+  out.newVersionsStaySaved = bars["#savebar"].hidden && !page.state().unsaved;
 
   fresh(); box.S.config.settings.theme = "light"; page.dirty();
   saving = page.save(); box.S.config.settings.theme = "blue"; page.dirty(); release(); await saving;
@@ -2156,6 +2159,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == {
         "plainSaveHides": True,  # nothing changed meanwhile: the bar goes as before
+        "newVersionsStaySaved": True,  # the fingerprints a save answers with are no edit
         "editDuringSaveKeepsBar": True,  # it was never sent
         "revertToSentHides": True,  # back to what was sent is saved
         "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
@@ -7146,12 +7150,18 @@ def test_a_page_saves_only_what_it_changed_and_a_clash_is_refused(tmp_path, monk
     now = {"settings": {"sonarrs": [], "language": "en"}, "defaults": {},
            "series": {1: {"service": "A", "title": "x", "release_time": "21:00"}, 2: {"service": "B", "title": "z"}}}
     # this old tab changed series 1 only, and sends its old settings with it
-    body = {**loaded, "series": {"1": {"service": "A", "title": "x2"}, "2": {"service": "B", "title": "y"}},
+    body = {**loaded, "series": {"1": {"service": "A", "title": "x", "episode_offset": 2}, "2": {"service": "B", "title": "y"}},
             "changed": ["series:1"], "base": {"series:1": versions["series:1"]}}
     web.merge_page_changes(body, now)
     assert body["settings"]["sonarrs"] == [], "the other tab's settings stay"
     assert body["series"]["2"]["title"] == "z", "the other tab's series stays"
-    assert body["series"]["1"] == {"service": "A", "title": "x2", "release_time": "21:00"}, "merged key by key"
+    assert body["series"]["1"] == {"service": "A", "title": "x", "episode_offset": 2, "release_time": "21:00"}, "merged key by key"
+    # moved to another source on this page: the time learnt for the old one is not its
+    for moved in ({"service": "A", "title": "x2"}, {"service": "C", "title": "x"}):
+        body = {**loaded, "series": {"1": moved, "2": {"service": "B", "title": "y"}},
+                "changed": ["series:1"], "base": {"series:1": versions["series:1"]}}
+        web.merge_page_changes(body, now)
+        assert body["series"]["1"] == moved, moved
     # the same key changed both ways: refused
     body = {**loaded, "series": {"2": {"service": "B", "title": "w"}}, "changed": ["series:2"], "base": {"series:2": versions["series:2"]}}
     with pytest.raises(web.web.HTTPConflict):
@@ -7216,3 +7226,37 @@ def test_files_unshackle_cannot_write_are_listed(tmp_path, monkeypatch):
     if os.access(locked, os.W_OK):  # root writes anything: nothing to see
         return
     assert web.unwritable_files(cookies_dir) == [str(locked)]
+
+
+def test_a_service_whose_options_are_not_listed_still_offers_its_options_editor(tmp_path):
+    # A remote server's service: Unshackle lists none of its options, so the first flag is typed by hand (AMZN's -B)
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    harness = tmp_path / "harness.js"
+    harness.write_text(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[2] + "/js/settings-options.js", "utf8");
+const code = src.match(/^async function renderServiceDefaults\(\) \{.*?^\}/ms)[0];
+const node = (tag, props, ...kids) => ({ tag, ...(props || {}), kids: kids.flat().filter(Boolean) });
+const shown = {};
+const box = {
+  S: { config: { service_defaults: { AMZN: {} }, settings: {} }, dlOptions: [], services: ["AMZN"] },
+  el: node, field: (label, input) => node("field", { textContent: label }, input), svcName: (t) => t,
+  COUNT: { option: (n) => `${n} options` }, loadServiceOptions: async () => [], optionsEditor() {},
+  ladderChips: () => node("chips"), ladderClash() {}, ladderNamed() {}, renderCommands() {}, dirty() {}, api() {}, toast() {},
+  $: (sel) => ({ replaceChildren: (...kids) => { shown[sel] = kids; } }),
+};
+vm.createContext(box);
+vm.runInContext(code + "\nthis.run = renderServiceDefaults;", box);
+const texts = (n) => [n.textContent || "", ...(n.kids || []).flatMap(texts)];
+box.run().then(() => console.log(JSON.stringify(shown["#svc-defaults"].flatMap(texts).filter(Boolean))));
+""")
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert "Options of AMZN" in json.loads(run.stdout)

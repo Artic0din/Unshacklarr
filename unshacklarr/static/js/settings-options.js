@@ -59,7 +59,7 @@ async function renderServiceDefaults() {
         ...(servers.length || levels.backend ? [field("Unshackle server", backend, `Where ${svcName(tag)} downloads.`)] : []),
         field("Quality ladder", ladder, "Default: the one of Settings, Quality.", clash)),
       el("span", { className: "sub", textContent: "Download options" }), dl,
-      ...(specs.length || Object.keys(levels.service_options).length ? [el("span", { className: "sub", textContent: `Options of ${svcName(tag)}` }), own] : []),
+      el("span", { className: "sub", textContent: `Options of ${svcName(tag)}` }), own,  // any flag, even none listed (a remote server's)
       el("small", { className: "help dx-remote-note", hidden: true, dataset: { tag, known: specs.some((s) => s.remote) ? "1" : "" },
         textContent: "The remote server's options are not known with this Unshackle: write them as they are." }),
       el("div", { className: "dx-cmd" }, el("span", { textContent: `A ${svcName(tag)} download starts as` }),

@@ -272,8 +272,8 @@ let savedConfig = "";  // the settings as last loaded or saved: a discard that b
 // what a save sends: a series opened without a service is not part of it
 // keys in order: a field cleared and typed again comes back last, and is still the same settings
 const stableJSON = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
-// hidden_series is left out: hiding saves at once, never through Save
-const configKey = (c) => stableJSON({ ...c, hidden_series: undefined, series: Object.fromEntries(Object.entries(c.series || {}).filter(([, x]) => x.service)) });
+// hidden_series is left out: hiding saves at once, never through Save; versions too: a save's answer, not an edit
+const configKey = (c) => stableJSON({ ...c, hidden_series: undefined, versions: undefined, series: Object.fromEntries(Object.entries(c.series || {}).filter(([, x]) => x.service)) });
 // Each part of the config (a section, a series) as last loaded or saved: a save sends which ones changed since, so
 // the server keeps what another tab changed meanwhile (web.merge_page_changes)
 let savedUnits = {};
