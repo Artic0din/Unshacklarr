@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Text now follows the browser's text-size setting, the page uses your system font with no request to Google Fonts, headings step down in size (the season heading is smaller than the series title), and corners use three shared sizes.
 - Error text, placeholders, the Settings group labels and field edges now meet contrast, availability on a service shows in the accent colour instead of the green that means done, "New" labels no longer look like success, and the system's Increase Contrast setting is followed.
 - The translation files match the page again: 13 texts it no longer shows were removed from every language, and the sign-in texts added since are listed for translating.
 - Settings now starts, observes, answers, cancels, retries, and restores service sign-in sessions, with transient approval details and fixed redacted lifecycle and fallback states.
