@@ -88,7 +88,6 @@ const SERVICE_COLUMNS = ["Service", "Sign-in", "Cookies", "Sign-in methods", "Us
 let servicesCookies = null;  // /api/cookies: the files of Unshackle's own cookies folder, by service
 let servicesDrawn = "";      // what the table was drawn from: a refresh that changes nothing leaves it (and the focus) alone
 let servicesAsked = "";      // the cookie file whose deletion is being confirmed: "SERVICE/profile"
-const CONFIRMED = new Set(["validated", "anonymous"]);  // sign-in states that need nothing more
 let servicesReveal = "";     // a service to scroll to once the table is there
 
 /* One row a service, or a service and its backend: the sign-in status, setups and live logins, and the cookie files, joined. */
@@ -117,8 +116,10 @@ function serviceModels() {
     const selected = S.config.service_defaults?.[service]?.backend || "";
     const used = backend === selected ? seriesOf(service) : null;
     const cookieless = listed && !methods.includes("cookies");
-    // no cookie file is fine once a sign-in is confirmed (a username and password, or none needed)
-    const missing = Boolean(cookieFiles && !cookieFiles.length && !cookieless && used && servicesCookies?.folder && !CONFIRMED.has(status.state));
+    // no cookie file is fine when none is needed, or a confirmed sign-in did not use cookies (a username and
+    // password): a cookie-only service confirmed before its last file went still needs one
+    const signsInWithout = status.state === "anonymous" || (status.state === "validated" && listed && methods.includes("credentials"));
+    const missing = Boolean(cookieFiles && !cookieFiles.length && !cookieless && used && servicesCookies?.folder && !signsInWithout);
     const attention = status.state === "needs_user_action" || Boolean(used && (missing || cookieFiles?.some((f) => f.st[0] === "bad")));
     return { key, service, backend, name: svcName(service) + (backend ? ` · ${backend}` : ""), label, state: status.state, setup, listed,
       methods: listed ? methods : null, cookieFiles, cookieless, missing, used, attention };
