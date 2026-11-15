@@ -2234,5 +2234,7 @@
  "{0} services confirmed": "Подтверждено сервисов: {0}",
  "{0} services need attention": "Сервисов, требующих внимания: {0}",
  "Replace {0}": "Заменить {0}",
- "Add cookies for {0}": "Добавить cookie для {0}"
+ "Add cookies for {0}": "Добавить cookie для {0}",
+ "Used when the main service doesn't have the episode yet, or not in an accepted language.": "Используется, когда на основном сервисе эпизода ещё нет или нет на подходящем языке.",
+ "When 3 episodes of a series come out at the same time, that time becomes its release time. Only for series without one. You get a notification and can change it on the series page.": "Когда 3 эпизода сериала выходят в одно и то же время, это время становится его временем выхода. Только для сериалов, у которых оно не задано. Вы получите уведомление и сможете изменить его на странице сериала."
 }

@@ -2236,5 +2236,7 @@
  "{0} services confirmed": "{0} 件のサービスを確認済み",
  "{0} services need attention": "{0} 件のサービスに対応が必要",
  "Replace {0}": "{0} を置き換える",
- "Add cookies for {0}": "{0} の Cookie を追加"
+ "Add cookies for {0}": "{0} の Cookie を追加",
+ "Used when the main service doesn't have the episode yet, or not in an accepted language.": "メインのサービスにまだエピソードがない場合や、許可された言語で配信されていない場合に使われます。",
+ "When 3 episodes of a series come out at the same time, that time becomes its release time. Only for series without one. You get a notification and can change it on the series page.": "シリーズの3つのエピソードが同じ時刻に公開されると、その時刻がシリーズの公開時刻になります。公開時刻が未設定のシリーズだけが対象です。通知が届き、シリーズのページで変更できます。"
 }

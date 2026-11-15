@@ -2241,5 +2241,7 @@
  "{0} services confirmed": "{0} 个服务已确认",
  "{0} services need attention": "{0} 个服务需要处理",
  "Replace {0}": "替换 {0}",
- "Add cookies for {0}": "为 {0} 添加 Cookie"
+ "Add cookies for {0}": "为 {0} 添加 Cookie",
+ "Used when the main service doesn't have the episode yet, or not in an accepted language.": "在主服务还没有该集，或没有可接受的语言时使用。",
+ "When 3 episodes of a series come out at the same time, that time becomes its release time. Only for series without one. You get a notification and can change it on the series page.": "当某部剧集有 3 集在同一时间发布时，该时间会成为它的发布时间。仅适用于尚未设置发布时间的剧集。你会收到通知，并可在剧集页面上更改。"
 }

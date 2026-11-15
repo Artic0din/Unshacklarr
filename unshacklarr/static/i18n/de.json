@@ -2225,5 +2225,7 @@
  "{0} services confirmed": "{0} Dienste bestätigt",
  "{0} services need attention": "{0} Dienste brauchen Aufmerksamkeit",
  "Replace {0}": "{0} ersetzen",
- "Add cookies for {0}": "Cookies für {0} hinzufügen"
+ "Add cookies for {0}": "Cookies für {0} hinzufügen",
+ "Used when the main service doesn't have the episode yet, or not in an accepted language.": "Wird genutzt, wenn der Hauptdienst die Folge noch nicht hat oder nicht in einer akzeptierten Sprache.",
+ "When 3 episodes of a series come out at the same time, that time becomes its release time. Only for series without one. You get a notification and can change it on the series page.": "Wenn 3 Folgen einer Serie zur selben Uhrzeit erscheinen, wird diese Uhrzeit ihre Erscheinungszeit. Nur für Serien, die noch keine haben. Du bekommst eine Benachrichtigung und kannst sie auf der Seite der Serie ändern."
 }

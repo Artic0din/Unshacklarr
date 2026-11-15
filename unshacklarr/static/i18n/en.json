@@ -2742,6 +2742,7 @@
   "d.used_by.join(\", \")"
  ],
  "Used in the file name and the MKV title. Leave empty to use the name Sonarr gives the series.": [],
+ "Used when the main service doesn't have the episode yet, or not in an accepted language.": [],
  "Useful to spot an episode the service will never have, or a numbering that does not match.": [],
  "User key": [],
  "User name": [],
@@ -2818,6 +2819,7 @@
  ],
  "WhatsApp": [],
  "When": [],
+ "When 3 episodes of a series come out at the same time, that time becomes its release time. Only for series without one. You get a notification and can change it on the series page.": [],
  "When Sonarr's file doesn't say it comes from the series' service, its source may differ and the added audio may be a few seconds out of step. Another team's release of the same stream is fine. Ask me: the bell asks each time, nothing is downloaded until you answer.": [],
  "Where": [],
  "Where Unshacklarr reaches it.": [],
