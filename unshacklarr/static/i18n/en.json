@@ -32,7 +32,6 @@
  "+{0} more": [
   "list.length - 3"
  ],
- ", all managed": [],
  ", all working": [],
  ", and to this device.": [],
  ", as {0}": [
@@ -43,7 +42,6 @@
   "mark.line + 1",
   "mark.column + 1"
  ],
- ", managed": [],
  ", replacing its file": [],
  ", stopped before the end": [],
  ", then every {0} s for {1} min": [
@@ -70,18 +68,28 @@
  "1 change": [],
  "1 cookie": [],
  "1 day": [],
+ "1 device": [],
+ "1 download": [],
+ "1 earlier check": [],
  "1 episode": [],
  "1 episode has another number on {0}: Download takes care of it": [
   "svc"
  ],
  "1 episode queued": [],
  "1 episode queued, replacing its file": [],
+ "1 hour": [],
+ "1 key": [],
  "1 ladder": [],
+ "1 message": [],
  "1 min": [],
+ "1 missing episode": [],
+ "1 more device": [],
  "1 needs sign-in": [],
  "1 of these {0} episodes is already on disk": [
   "picked.size"
  ],
+ "1 option": [],
+ "1 problem": [],
  "1 series": [],
  "1 series has a release time: {0}": [
   "timed[0]"
@@ -91,10 +99,12 @@
  ],
  "1 series is back, with its options.": [],
  "1 series says otherwise, on its page.": [],
+ "1 service": [],
  "1 service confirmed": [],
  "1 service needs attention": [],
  "1 service or series picks its own": [],
  "1 track downloaded": [],
+ "1 upgrade": [],
  "1 year": [],
  "1.4 GB": [],
  "10 min": [],
@@ -104,7 +114,7 @@
  "1pIgnore": [],
  "2 min": [],
  "20 min": [],
- "3 hours before an episode comes out, its series is checked on its service: a refused login, a missing CDM, or a URL with no episodes": [],
+ "3 hours before an episode comes out, its series is checked on its service: a refused sign-in, a missing CDM, or a URL with no episodes": [],
  "3 or 3000": [],
  "30 days": [],
  "30 min": [],
@@ -158,14 +168,14 @@
  "A remote unshackle serve is restarted where it runs": [],
  "A remote unshackle serve keeps its log where it runs": [],
  "A series you set up with episodes already on disk is checked within the hour, without waiting for the next automatic check.": [],
- "A service that logs in with a username and password (set in unshackle.yaml) needs no cookies.": [],
+ "A service that signs in with a username and password (set in unshackle.yaml) needs no cookies.": [],
  "A subtitle track that fails to download is left out instead of failing the download. Taken by unshackle serve, not by the command line.": [],
  "A sync is already running": [],
  "A sync is running.": [],
  "A topic: letters, digits, - and _": [],
  "A user key is 30 letters and digits": [],
  "A {0} download starts as": [
-  "tag"
+  "svcName(tag)"
  ],
  "A {0} remote CDM: change it in unshackle.yaml": [
   "r.type"
@@ -221,8 +231,6 @@
  "Added to each series' own options. An option a series already has is replaced.": [],
  "Added to every": [],
  "Address": [],
- "Address of": [],
- "Address of unshackle serve": [],
  "Advanced": [],
  "After adding or updating a service in its services folder": [],
  "After that, Unshacklarr stops trying: download the episode by hand from its series.": [],
@@ -427,13 +435,14 @@
  "Change and download…": [],
  "Change several series": [],
  "Change the device {0} uses": [
-  "svc"
+  "svcName(svc)"
  ],
  "Change the numbering and file names for this download only": [],
  "Change the password": [],
  "Change {0} series": [
   "SEL.ids.size"
  ],
+ "Changed": [],
  "Change…": [],
  "Chapters": [],
  "Chapters_": [],
@@ -542,8 +551,8 @@
  "Connected to Sonarr {0}": [
   "version"
  ],
- "Connected to Unshackle ({0} services)": [
-  "services"
+ "Connected to Unshackle ({0})": [
+  "COUNT.service(services)"
  ],
  "Connection": [],
  "Connections": [],
@@ -558,7 +567,7 @@
  "Cookies expire": [],
  "Cookies folder": [],
  "Cookies for {0}": [
-  "service"
+  "svcName(service)"
  ],
  "Copy": [],
  "Copy details": [],
@@ -660,28 +669,39 @@
  "Delete": [],
  "Delete partial downloads": [],
  "Delete the key": [],
+ "Delete the key? Programs using it will stop working": [],
  "Delete them after": [],
+ "Delete your own ladders?": [],
  "Delete {0}": [
   "file"
  ],
  "Delete {0} from Unshackle's cookies folder?": [
   "file"
  ],
+ "Delete {0}?": [
+  "cdmShort(d)"
+ ],
+ "Delete {0}? It is in use": [
+  "lad.name"
+ ],
  "Deleted on their own after {0} days (Settings, Automation).": [
   "r.days"
  ],
- "Deletes Unshackle's cache, logins included: services log in again next time": [],
+ "Deletes Unshackle's cache, sign-ins included: services sign in again next time": [],
  "Deletes finished downloads from the history, with their Unshackle output. Downloads in progress stay. Your files and Sonarr are not touched.": [],
  "Deletes the leftovers of interrupted downloads": [],
+ "Delivered": [],
+ "Delivered: look for it, then Add.": [],
  "Details copied": [],
  "Deutsch": [],
  "Device certificate": [],
  "Device for {0}": [
-  "[service, ...also].join(\", \")"
+  "[service, ...also].map(svcName).join(\", \")"
  ],
  "Device name": [],
  "Device type": [],
  "Devices": [],
+ "Devices (CDM)": [],
  "Diagnostic": [],
  "Diagnostic downloaded: check it, then attach it to the issue": [],
  "Disable folder creation for TV Shows.": [],
@@ -747,13 +767,12 @@
  ],
  "Downloading": [],
  "Downloading now": [],
- "Downloading {0} episode{1}{2}: follow it in Activity": [
-  "picked.size",
-  "picked.size > 1 ? \"s\" : \"\"",
-  "epSonarr ? ` for ${epSonarr}` : \"\""
- ],
  "Downloading {0}%": [
   "Math.round(Number(c.live?.progress) || 0)"
+ ],
+ "Downloading {0}{1}: follow it in Activity": [
+  "COUNT.episode(picked.size)",
+  "epSonarr ? ` for ${epSonarr}` : \"\""
  ],
  "Downloads": [],
  "Downloads are using the current command: test another one when they are done": [],
@@ -780,7 +799,7 @@
  "E-mail": [],
  "EXAMPLE": [],
  "Each check asks the service only about episodes whose answer is older than Ask again after, so use fewer days than that. 0: only when you click Check.": [],
- "Each download's output shows much more: Unshackle's debug log, every call to Sonarr, and the job as unshackle serve reports it.": [],
+ "Each download's output shows much more: Unshackle's debug log, every call to Sonarr, and the job as Unshackle reports it.": [],
  "Each episode stays in Activity, Waiting in downloads, until you import or delete it. It is never deleted automatically.": [],
  "Each episode's answer is kept up to this percentage less than Ask again after, a different amount for each episode, so episodes checked on the same day are not all asked about again on the same day. 0: no spreading.": [],
  "Each series' own": [],
@@ -804,8 +823,8 @@
   "name"
  ],
  "Enter the API key to test this Sonarr": [],
+ "Enter the Unshackle address": [],
  "Enter the access key.": [],
- "Enter the address of unshackle serve": [],
  "Enter the address of unshackle serve, like http://unshackle:8786": [],
  "Enter the addresses the reverse proxy connects from. Without them, anyone could send the header": [],
  "Enter the bucket.": [],
@@ -848,7 +867,7 @@
  "Every episode of this season is on disk.": [],
  "Every hour": [],
  "Every missing episode of this season": [],
- "Every other device is logged out and stops getting push notifications. This one stays logged in.": [],
+ "Every other device is signed out and stops getting push notifications. This one stays signed in.": [],
  "Every series": [],
  "Every series downloads by": [],
  "Every series you follow already has a service.": [],
@@ -872,7 +891,7 @@
   "days"
  ],
  "Export its cookies with a browser extension:": [],
- "Export the cookies from your browser while logged in to the service, as cookies.txt (Netscape) or JSON.": [],
+ "Export the cookies from your browser while signed in to the service, as cookies.txt (Netscape) or JSON.": [],
  "FR, BE, CA, CH": [],
  "Failed": [],
  "Failed: {0}": [
@@ -956,9 +975,8 @@
  "Give up after": [],
  "Give up after, in days": [],
  "Good": [],
- "Got a license ({0} key{1}), {2}. A service may still refuse this device.": [
-  "t.keys",
-  "t.keys === 1 ? \"\" : \"s\"",
+ "Got a license ({0}), {1}. A service may still refuse this device.": [
+  "COUNT.key(t.keys)",
   "when"
  ],
  "Gotify": [],
@@ -994,7 +1012,7 @@
  "How many episodes each Unshackle server downloads together. 1 is gentler on a small NAS. 0: as many as Unshackle allows, 2 by default.": [],
  "How often": [],
  "Hybrid (DV + HDR10)": [],
- "If the service refuses the login, the download is tried again with these profiles, in order. Useful for a second account while the first one's cookies are renewed.": [],
+ "If the service refuses the sign-in, the download is tried again with these profiles, in order. Useful for a second account while the first one's cookies are renewed.": [],
  "If this service numbers episodes differently, set its numbering in config.yaml.": [],
  "Import": [],
  "Import anyway": [],
@@ -1006,6 +1024,7 @@
  "Import needed: {0}": [
   "label"
  ],
+ "Imported": [],
  "Imported anyway: it replaced the library's file": [],
  "Imported by Sonarr": [],
  "Imported by Sonarr.": [],
@@ -1069,7 +1088,7 @@
  "Its log, last lines": [],
  "Its path on Sonarr's side, e.g. inside Sonarr's container.": [],
  "Its path on Sonarr's side, e.g. inside Sonarr's container. Empty: the same path as for Unshacklarr.": [],
- "Its path on the machine where unshackle serve runs. Empty: the same path as above.": [],
+ "Its path on the machine where Unshackle runs. Empty: the same path as above.": [],
  "Its secret (API key)": [],
  "Its series entry {0} is not in the format Unshacklarr writes": [
   "key"
@@ -1102,10 +1121,9 @@
  "Keep editing": [],
  "Keep it": [],
  "Keep the last": [],
- "Keeps the last {0} downloads, none older than {1} day{2}.": [
+ "Keeps the last {0} downloads, none older than {1}.": [
   "keep",
-  "days",
-  "days === 1 ? \"\" : \"s\""
+  "COUNT.day(days)"
  ],
  "Kept": [],
  "Kept by Sonarr": [],
@@ -1150,13 +1168,13 @@
  "Late episodes": [],
  "Late episodes, in hours": [],
  "Late · not on {0} yet": [
-  "d.service"
+  "svcName(d.service)"
  ],
  "Latest": [],
  "Leave default unless you use Unshackle's --profile": [],
  "Leave empty for no limit.": [],
  "Leave empty for us-east-1. For Cloudflare R2, enter auto.": [],
- "Leave empty if the folder needs no login.": [],
+ "Leave empty if the folder needs no sign-in.": [],
  "Leave empty to keep the saved one.": [],
  "Leave empty to use {0}, as set for {1}": [
   "main.library_local_root",
@@ -1187,17 +1205,6 @@
  "Loading the week…": [],
  "Local": [],
  "Location": [],
- "Log in": [],
- "Log in first": [],
- "Log in to continue.": [],
- "Log in to the service in your browser.": [],
- "Log out": [],
- "Log out other devices": [],
- "Logged in on this device": [],
- "Login failed on {0}: {1}": [
-  "show['service']",
-  "label"
- ],
  "Look it up on TMDB again": [],
  "Looking for backups…": [],
  "Looking for its programme on {0}: {1}": [
@@ -1217,9 +1224,8 @@
  "Make room in the library, or lower the room kept free in Settings": [],
  "Maker": [],
  "Maker and model": [],
- "Managed by Unshackle": [],
  "Managed on that server": [],
- "Managed where unshackle serve runs": [],
+ "Managed where Unshackle runs": [],
  "ManualImport": [],
  "Matrix": [],
  "Max workers/threads to download with per-track. Default depends on the downloader.": [],
@@ -1345,7 +1351,6 @@
  "No ladder yet. Create one with New ladder, or bring back the built-in ones.": [],
  "No license": [],
  "No limit: downloads run at any time.": [],
- "No login required": [],
  "No option matches.": [],
  "No place to send backups to": [],
  "No programme found yet: {0}": [
@@ -1362,13 +1367,14 @@
  ],
  "No series": [],
  "No series has a release time yet. Set one on a series' page, in its Settings tab.": [],
- "No series is downloaded by Unshackle yet.": [],
+ "No series is downloading yet.": [],
  "No series match these filters.": [],
  "No series matches.": [],
  "No series set up yet.": [],
  "No service has options of its own yet.": [],
  "No service is known yet. Unshackle lists them once it answers.": [],
  "No service known yet": [],
+ "No sign-in required": [],
  "No spoilers": [],
  "No stream in the requested quality. The history in Activity has Unshackle's full output.": [],
  "No streaming in {0}": [
@@ -1463,7 +1469,7 @@
  "Not checked yet": [],
  "Not checked yet.": [],
  "Not delivered": [],
- "Not downloaded by Unshackle": [],
+ "Not downloading": [],
  "Not found here: {0}. Is the library mounted in Unshacklarr's container, in this folder?": [
   "r.local_path"
  ],
@@ -1471,8 +1477,6 @@
  "Not imported: {0}": [
   "job[4]"
  ],
- "Not in Unshackle": [],
- "Not managed": [],
  "Not needed": [],
  "Not on the service": [],
  "Not on {0}": [
@@ -1484,9 +1488,8 @@
  ],
  "Not one of Unshacklarr's folders": [],
  "Not out yet": [],
- "Not out yet at the {0} earlier check{1} {2}. Each check is in the output below.": [
-  "before",
-  "before > 1 ? \"s\" : \"\"",
+ "Not out yet at the {0} {1}. Each check is in the output below.": [
+  "COUNT.earlierCheck(before)",
   "since"
  ],
  "Not out yet: nothing to download": [],
@@ -1543,9 +1546,8 @@
  "Now {0} there.": [
   "at({ hour: \"2-digit\", minute: \"2-digit\" })"
  ],
- "Now: a message when an episode is still missing {0} hour{1} after airing.": [
-  "late",
-  "late === 1 ? \"\" : \"s\""
+ "Now: a message when an episode is still missing {0} after airing.": [
+  "COUNT.hour(late)"
  ],
  "Now: no message for late episodes.": [],
  "Now: {0} of {1}.": [
@@ -1566,6 +1568,7 @@
  "Older ones are deleted. To restore one, download it, then use Restore from a file.": [],
  "On": [],
  "On an iPhone: add Unshacklarr to the home screen first (Share, Add to Home Screen), then open it from there.": [],
+ "On another machine": [],
  "On disk": [],
  "On disk in a lower resolution than asked of {0}, and available on {1}": [
   "svc",
@@ -1641,7 +1644,7 @@
  "Options for every series": [],
  "Options of the service": [],
  "Options of {0}": [
-  "tag"
+  "svcName(tag)"
  ],
  "Orange: different from most of this season (hover for details)": [],
  "Origin": [],
@@ -1651,6 +1654,7 @@
  "Other release groups": [],
  "Other release groups are replaced": [],
  "Other title": [],
+ "Others signed out": [],
  "Outliers ({0})": [
   "outliers"
  ],
@@ -1673,6 +1677,7 @@
  "Password must be at least 8 characters": [],
  "Password, sessions, API key": [],
  "Passwords do not match": [],
+ "Passwords match": [],
  "Paste the whole webhook URL: it starts with https://discord.com/api/webhooks/": [],
  "Pause": [],
  "Paused for {0}: choose a quality ladder in Settings, Sonarr.": [
@@ -1727,6 +1732,12 @@
  "Quiet until": [],
  "RMCP": [],
  "Range": [],
+ "Reached: Sonarr {0}": [
+  "version"
+ ],
+ "Reached: {0}": [
+  "COUNT.service(services)"
+ ],
  "Reading Unshackle's CDMs…": [],
  "Reading the history…": [],
  "Reading the notifications…": [],
@@ -1769,6 +1780,12 @@
  "Remove {0}": [
   "flag"
  ],
+ "Remove {0} from unshackle.yaml?": [
+  "r.name"
+ ],
+ "Remove {0}?": [
+  "i.name"
+ ],
  "Rename": [],
  "Renaming": [],
  "Renewing {0} session": [
@@ -1799,6 +1816,9 @@
   "it.sxxeyy"
  ],
  "Reprovision": [],
+ "Reprovision {0}?": [
+  "cdmShort(d)"
+ ],
  "Reprovisionable": [],
  "Request failed": [],
  "Required subtitle languages": [],
@@ -1840,6 +1860,7 @@
  "SL": [],
  "Same as each series": [],
  "Same path": [],
+ "Same title": [],
  "Sat": [],
  "Save": [],
  "Save and test": [],
@@ -1879,15 +1900,14 @@
  "Season {0}": [
   "epSeason"
  ],
- "Season {0} is on {1} ({2} episode{3}).": [
+ "Season {0} is on {1} ({2}).": [
   "season",
-  "p.service",
-  "p.count",
-  "p.count === 1 ? \"\" : \"s\""
+  "svcName(p.service)",
+  "COUNT.episode(p.count)"
  ],
  "Season {0} will be downloaded from {1}. Click Save, then check again.": [
   "season",
-  "p.service"
+  "svcName(p.service)"
  ],
  "Season {0} will be downloaded from {1}. Click Save, then check {2} again.": [
   "season",
@@ -1920,9 +1940,8 @@
  ],
  "Select none": [],
  "Select the lowest bitrate track within the specified quality. Requires -q/--quality.": [],
- "Select {0} upgrade{1}": [
-  "upgrades.length",
-  "upgrades.length > 1 ? \"s\" : \"\""
+ "Select {0}": [
+  "COUNT.upgrade(upgrades.length)"
  ],
  "Send": [],
  "Send a JSON object": [],
@@ -1966,7 +1985,7 @@
  "Services": [],
  "Services for your series, found on TMDB": [],
  "Services reloaded": [],
- "Session cookies have no expiry date: only a failed login shows they are over": [],
+ "Session cookies have no expiry date: only a failed sign-in shows they are over": [],
  "Session only": [],
  "Set Output Subtitle Format, only converting if necessary. Use 'original' to keep source format.": [],
  "Set Unshackle up first": [],
@@ -1977,6 +1996,7 @@
  "Set by a rule by profile, quality or DRM ({0}): edit it in unshackle.yaml": [
   "v.rule.join(\", \")"
  ],
+ "Set for this service": [],
  "Set it differently for this series only": [],
  "Set the Group Tag to be used, overriding the config tag and any tag rules.": [],
  "Set the address of unshackle serve in Settings, Unshackle": [],
@@ -2006,18 +2026,27 @@
  "Show {0} in the schedule": [
   "name"
  ],
- "Show {0} more device{1}, not in use": [
-  "folded",
-  "folded === 1 ? \"\" : \"s\""
+ "Show {0}, not in use": [
+  "COUNT.moreDevice(folded)"
  ],
  "Shown": [],
  "Shown in Unshacklarr's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set.": [],
  "Shown on its series, and used at the start of its download folder names. Example: sonarr-2.": [],
  "Sign in": [],
+ "Sign in first": [],
  "Sign in through a reverse proxy": [],
+ "Sign in to continue.": [],
+ "Sign in to the service in your browser.": [],
+ "Sign out": [],
+ "Sign out other devices": [],
+ "Sign out other devices? They sign in again": [],
  "Sign-in": [],
  "Sign-in and cookies": [],
  "Sign-in cancelled": [],
+ "Sign-in failed on {0}: {1}": [
+  "show['service']",
+  "label"
+ ],
  "Sign-in failed · {0}": [
   "AUTH_FAILURE_LABELS[observation.failure] || \"application\""
  ],
@@ -2027,6 +2056,7 @@
  "Signed in by your reverse proxy as {0}": [
   "s.proxy_user"
  ],
+ "Signed in on this device": [],
  "Signed in with {0}": [
   "method"
  ],
@@ -2209,14 +2239,6 @@
  "Suggest services": [],
  "Sun": [],
  "Supports": [],
- "Sure?": [],
- "Sure? Delete the file": [],
- "Sure? It is in use": [],
- "Sure? New keys": [],
- "Sure? Programs using it will stop working": [],
- "Sure? Remove it from unshackle.yaml": [],
- "Sure? They log in again": [],
- "Sure? Your own ladders will be deleted": [],
  "Switched off": [],
  "Sync running…": [],
  "Syncs, release times, retries": [],
@@ -2285,7 +2307,6 @@
  "That is the Sonarr above": [],
  "That is too large for unshackle.yaml": [],
  "That version is in the editor: Save to restore it": [],
- "The": [],
  "The .wvd and .prd files in the CDM folder. Click one for its details; a test asks the DRM's test server for a license.": [],
  "The API key of unshackle serve is still the example one: put a long random one in UNSHACKLE_API_KEY and in serve: api_secret (openssl rand -hex 32)": [],
  "The DRM to license with, for a service that takes both: its device of that kind in the cdm: section.": [],
@@ -2460,8 +2481,6 @@
  "The same folder as Unshacklarr sees it. Leave both empty if the paths are the same.": [],
  "The series itself, on its page": [],
  "The series' name on the service": [],
- "The serve: api_secret of its unshackle.yaml.": [],
- "The serve: api_secret of its unshackle.yaml. Empty keeps the saved one.": [],
  "The server's ({0})": [
   "drm"
  ],
@@ -2528,7 +2547,7 @@
  "This episode has already started": [],
  "This episode is": [],
  "This episode is not cancelled any more": [],
- "This file holds every secret Unshackle has (logins, API keys). Enter your Unshacklarr password to open it.": [],
+ "This file holds every secret Unshackle has (sign-ins, API keys). Enter your Unshacklarr password to open it.": [],
  "This is not a valid address": [],
  "This job is over": [],
  "This link may be an episode, not the series.": [],
@@ -2656,6 +2675,10 @@
  "Unshacklarr gives its own Unshackle that right when it starts it": [],
  "Unshacklarr is set up": [],
  "Unshacklarr is set up already": [],
+ "Unshacklarr reads {0}'s library: {1}": [
+  "who",
+  "r.local_path"
+ ],
  "Unshacklarr starts it on this machine": [],
  "Unshacklarr sync stopped": [],
  "Unshacklarr test": [],
@@ -2677,6 +2700,7 @@
  "Unshacklarr, back to the series": [],
  "Unshackle": [],
  "Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): allow it in Settings, Unshackle": [],
+ "Unshackle address": [],
  "Unshackle answers": [],
  "Unshackle command": [],
  "Unshackle config folder": [],
@@ -2729,11 +2753,11 @@
  "Use this folder": [],
  "Use this show": [],
  "Use {0} for season {1}": [
-  "p.service",
+  "svcName(p.service)",
   "season"
  ],
  "Use {0}: {1}": [
-  "l.service",
+  "svcName(l.service)",
   "[l.name, l.url].filter(Boolean).join(\", \")"
  ],
  "Used by": [],
@@ -2828,7 +2852,7 @@
  "Where to send": [],
  "Where you watch": [],
  "Where {0} downloads.": [
-  "tag"
+  "svcName(tag)"
  ],
  "Which Sonarr": [],
  "Which Sonarr's episodes": [],
@@ -2857,8 +2881,8 @@
  "Your password is still asked before the most sensitive changes.": [],
  "Your region": [],
  "Your series that Unshackle does not download yet, with the services TMDB finds for them, airing ones first. Pick a service for the ones you want: new episodes then download on their own, and older ones from each series' Episodes.": [],
- "Your settings and series stay as they are. Every device must log in again.": [],
- "Your user key is shown on pushover.net once you log in. Create an application there to get the API token.": [],
+ "Your settings and series stay as they are. Every device must sign in again.": [],
+ "Your user key is shown on pushover.net once you sign in. Create an application there to get the API token.": [],
  "```json": [],
  "a week before": [],
  "aired {0}": [
@@ -2874,6 +2898,7 @@
  ],
  "alert": [],
  "all": [],
+ "all downloading": [],
  "an evening has 0 to 9 episodes": [],
  "and the other options decide, as without a ladder.": [],
  "and {0} more": [
@@ -2943,6 +2968,7 @@
  "default": [],
  "docker compose restart unshackle": [],
  "downloaded": [],
+ "downloading": [],
  "downloads": [],
  "en-GB": [],
  "episode link · {0}": [
@@ -2966,6 +2992,9 @@
  ],
  "from season": [],
  "from the PATH. Otherwise, its full path, e.g.": [],
+ "from unshackle.yaml.": [],
+ "from unshackle.yaml. Empty keeps the saved one.": [],
+ "from unshackle.yaml. Leave empty to keep the saved key.": [],
  "from {0}": [
   "track['group']"
  ],
@@ -3228,7 +3257,6 @@
   "url",
   "e"
  ],
- "unshackle serve runs elsewhere": [],
  "unshackle serve stopped at start: {0}": [
   "self.tail()"
  ],
@@ -3272,7 +3300,6 @@
  "uses {0}, which is not in the CDM folder": [
   "name"
  ],
- "value of its unshackle.yaml. Leave empty to keep the saved key.": [],
  "was revoked": [],
  "with subtitles in {0}": [
   "', '.join(fixed['s_lang'])"
@@ -3346,13 +3373,19 @@
   "onDisk > 1 ? `These ${onDisk} episodes are` : \"This episode is\""
  ],
  "{0} asks": [
-  "p.service"
+  "svcName(p.service)"
  ],
  "{0} asks you something": [
   "service"
  ],
  "{0} audio added to the file": [
   "want"
+ ],
+ "{0} came out on the service {1}{2}. Suggested release time: {3}": [
+  "COUNT.episode(sg.episodes)",
+  "when",
+  "sg.day ? `, ${releaseDayLabel(sg.day)} airing` : \"\"",
+  "sg.time"
  ],
  "{0} can't be searched: paste the series' URL instead": [
   "show['service']"
@@ -3365,6 +3398,9 @@
  ],
  "{0} changes": [
   "r.changes.length"
+ ],
+ "{0} cleared from the history": [
+  "COUNT.download(deleted)"
  ],
  "{0} contains a symbolic link: nothing was joined or renamed. Check the folder": [
   "out.name"
@@ -3380,7 +3416,7 @@
   "name"
  ],
  "{0} cookies saved: {1} cookies": [
-  "body.service",
+  "svcName(body.service)",
   "saved.count"
  ],
  "{0} could not be reached. Check the Unshacklarr log.": [
@@ -3398,25 +3434,11 @@
  "{0} days before": [
   "-d"
  ],
- "{0} day{1}": [
-  "age",
-  "age > 1 ? \"s\" : \"\""
- ],
  "{0} deleted": [
   "item.folder"
  ],
- "{0} device{1}": [
-  "data.devices.length",
-  "data.devices.length === 1 ? \"\" : \"s\""
- ],
- "{0} device{1} in use not tested yet": [
-  "untested.length",
-  "untested.length === 1 ? \"\" : \"s\""
- ],
- "{0} device{1} tested{2}": [
-  "list.length",
-  "list.length === 1 ? \"\" : \"s\"",
-  "bad ? `, ${bad} not working` : \", all working\""
+ "{0} devices": [
+  "n"
  ],
  "{0} did not answer like unshackle serve (no JSON): is the address right?": [
   "url"
@@ -3432,22 +3454,23 @@
   "n.done"
  ],
  "{0} downloaded": [
-  "done"
+  "r.name"
  ],
  "{0} downloading": [
   "b.running"
+ ],
+ "{0} downloading again": [
+  "COUNT.episode(cards.length)"
+ ],
+ "{0} downloads": [
+  "n"
  ],
  "{0} downloads with the Unshackle server {1}, which is not in Settings, Unshackle": [
   "service",
   "backend"
  ],
- "{0} download{1} cleared from the history": [
-  "deleted",
-  "deleted === 1 ? \"\" : \"s\""
- ],
- "{0} download{1} kept": [
-  "hsCards.length",
-  "hsCards.length === 1 ? \"\" : \"s\""
+ "{0} earlier checks": [
+  "n"
  ],
  "{0} episodes": [
   "eps.length"
@@ -3471,32 +3494,6 @@
  ],
  "{0} episodes queued, replacing their files": [
   "picked.length"
- ],
- "{0} episode{1} came out on the service {2}{3}. Suggested release time: {4}": [
-  "sg.episodes",
-  "sg.episodes > 1 ? \"s\" : \"\"",
-  "when",
-  "sg.day ? `, ${releaseDayLabel(sg.day)} airing` : \"\"",
-  "sg.time"
- ],
- "{0} episode{1} downloading again": [
-  "cards.length",
-  "cards.length > 1 ? \"s\" : \"\""
- ],
- "{0} episode{1} may be better on {2}": [
-  "upgrades.length",
-  "upgrades.length > 1 ? \"s\" : \"\"",
-  "svc"
- ],
- "{0} episode{1} that day{2}: click to change": [
-  "n",
-  "n === 1 ? \"\" : \"s\"",
-  "changed ? \" (changed)\" : \"\""
- ],
- "{0} episode{1}{2}": [
-  "list.length",
-  "list.length > 1 ? \"s\" : \"\"",
-  "!mine ? \"\" : mine === list.length ? (mine > 1 ? \", all managed\" : \", managed\") : ` · ${mine} managed`"
  ],
  "{0} failed": [
   "st.n.failed"
@@ -3525,10 +3522,9 @@
   "sxxeyy",
   "show['service']"
  ],
- "{0} has none of your {1} missing episode{2}": [
+ "{0} has none of your {1}": [
   "svc",
-  "missing.length",
-  "missing.length > 1 ? \"s\" : \"\""
+  "COUNT.missingEpisode(missing.length)"
  ],
  "{0} has the address of another Sonarr here: each instance has its own": [
   "name"
@@ -3540,11 +3536,10 @@
   "svc",
   "Object.keys(r.available).length"
  ],
- "{0} has {1} of your {2} missing episode{3}": [
+ "{0} has {1} of your {2}": [
   "svc",
   "there.length",
-  "missing.length",
-  "missing.length > 1 ? \"s\" : \"\""
+  "COUNT.missingEpisode(missing.length)"
  ],
  "{0} here: outside the ladder {1}": [
   "trackText(e.file.track)",
@@ -3573,6 +3568,9 @@
  ],
  "{0} in use": [
   "used.length"
+ ],
+ "{0} in use not tested yet": [
+  "COUNT.device(untested.length)"
  ],
  "{0} in {1}": [
   "e",
@@ -3632,6 +3630,12 @@
  "{0} kb/s": [
   "Math.round(bps / 1e3)"
  ],
+ "{0} kept": [
+  "COUNT.download(hsCards.length)"
+ ],
+ "{0} keys": [
+  "n"
+ ],
  "{0} ladders": [
   "list.length"
  ],
@@ -3658,12 +3662,15 @@
   "p.name",
   "p.count"
  ],
+ "{0} may be better on {1}": [
+  "COUNT.episode(upgrades.length)",
+  "svc"
+ ],
  "{0} may have it in better quality. Activity, Upgrades checks this and can replace the file.": [
   "svc"
  ],
- "{0} message{1} waiting for the end of the quiet hours": [
-  "data.held",
-  "data.held === 1 ? \"\" : \"s\""
+ "{0} messages": [
+  "n"
  ],
  "{0} min": [
   "+(every / 60).toFixed(1)"
@@ -3677,6 +3684,12 @@
  ],
  "{0} missing": [
   "missing"
+ ],
+ "{0} missing episodes": [
+  "n"
+ ],
+ "{0} more devices": [
+  "n"
  ],
  "{0} must be a full path, from / (or a drive letter), without ..": [
   "folder"
@@ -3700,7 +3713,7 @@
   "value"
  ],
  "{0} needs approval": [
-  "approvals[0].service"
+  "svcName(approvals[0].service)"
  ],
  "{0} new": [
   "fresh"
@@ -3740,7 +3753,7 @@
  ],
  "{0} on {1}": [
   "c.serviceEpisode",
-  "c.service"
+  "svcName(c.service)"
  ],
  "{0} on {1} has {2} titles: which is {3}? Paste its URL on the series": [
   "found.get('title')",
@@ -3770,9 +3783,8 @@
   "sxxeyy",
   "year"
  ],
- "{0} option{1}": [
-  "count",
-  "count > 1 ? \"s\" : \"\""
+ "{0} options": [
+  "n"
  ],
  "{0} parts on {1} and joining is off: it stops there, unless each part is mapped ({2}={3}.1)": [
   "parts",
@@ -3790,9 +3802,8 @@
  "{0} picked": [
   "SEL.ids.size"
  ],
- "{0} problem{1} to fix": [
-  "alerts.length",
-  "alerts.length === 1 ? \"\" : \"s\""
+ "{0} problems": [
+  "n"
  ],
  "{0} programmes on {1} are titled {2}: paste its URL on the series": [
   "several",
@@ -3884,11 +3895,22 @@
  "{0} syncs a day": [
   "hours.length"
  ],
+ "{0} tested{1}": [
+  "COUNT.device(list.length)",
+  "bad ? `, ${bad} not working` : \", all working\""
+ ],
+ "{0} that day{1}: click to change": [
+  "COUNT.episode(n)",
+  "changed ? \" (changed)\" : \"\""
+ ],
  "{0} through Unshackle": [
   "service"
  ],
  "{0} timed out": [
   "named"
+ ],
+ "{0} to fix": [
+  "COUNT.problem(alerts.length)"
  ],
  "{0} tracks downloaded": [
   "tracks.length"
@@ -3897,9 +3919,15 @@
   "tries",
   "minutes"
  ],
+ "{0} upgrades": [
+  "n"
+ ],
  "{0} uses the quality ladder {1}, which is not in Settings, Quality": [
   "where",
   "name"
+ ],
+ "{0} waiting for the end of the quiet hours": [
+  "COUNT.message(data.held)"
  ],
  "{0} will no longer be downloaded once you save": [
   "current.title"
@@ -3930,13 +3958,13 @@
   "c.attempts"
  ],
  "{0} · checked {1} times, last {2} {3}": [
-  "c.service",
+  "svcName(c.service)",
   "c.checks",
   "day(started)",
   "time(started)"
  ],
  "{0} · in the queue": [
-  "c.service"
+  "svcName(c.service)"
  ],
  "{0} · job": [
   "g.kind"
@@ -3949,17 +3977,17 @@
   "src"
  ],
  "{0} · waiting": [
-  "j.service"
+  "svcName(j.service)"
  ],
  "{0} · waiting for a slot": [
-  "c.service"
+  "svcName(c.service)"
  ],
  "{0} · waiting for your answer": [
-  "c.service"
+  "svcName(c.service)"
  ],
  "{0} · waiting {1} · {2}": [
   "it.size >= 2 ** 30 ? `${(it.size / 2 ** 30).toFixed(1)} GB` : `${Math.max(1, Math.round(it.size / 2 ** 20))} MB`",
-  "age < 1 ? \"since today\" : `${age} day${age > 1 ? \"s\" : \"\"}`",
+  "age < 1 ? \"since today\" : COUNT.day(age)",
   "it.sonarr_path"
  ],
  "{0} · {1} KB": [
@@ -3975,7 +4003,7 @@
   "muxLeft(c)"
  ],
  "{0} · {1} · started {2} {3}": [
-  "first.service",
+  "svcName(first.service)",
   "KIND[first.kind] || first.kind",
   "day(started)",
   "started.toLocaleTimeString(LOCALE)"
@@ -3988,7 +4016,7 @@
  "{0}'s unshackle.yaml (dl:)": [
   "backend.name or 'Unshackle'"
  ],
- "{0}. Check this service's login/session in Unshackle.": [
+ "{0}. Check this service's sign-in/session in Unshackle.": [
   "message"
  ],
  "{0}. Make room, or lower the room kept free in Settings, Unshackle, Folders.": [
@@ -4056,10 +4084,6 @@
  "{0}: its settings changed and are not saved yet.": [
   "name"
  ],
- "{0}: logged in with the profile {1}": [
-  "label",
-  "profile"
- ],
  "{0}: looking for its programme on {1}: {2}": [
   "label",
   "show['service']",
@@ -4126,11 +4150,15 @@
  "{0}: saved in unshackle.yaml": [
   "values.name"
  ],
+ "{0}: signed in with the profile {1}": [
+  "label",
+  "profile"
+ ],
  "{0}: stopped": [
   "label"
  ],
  "{0}: the default device": [
-  "service"
+  "svcName(service)"
  ],
  "{0}: type the passphrase it was sent with": [
   "e"
@@ -4143,18 +4171,13 @@
   "label",
   "want"
  ],
- "{0}: {1} episode{2}": [
-  "date.toLocaleDateString(LOCALE, { weekday: \"long\", day: \"numeric\", month: \"long\" })",
-  "list.length",
-  "list.length === 1 ? \"\" : \"s\""
- ],
  "{0}: {1} of {2} parts on {3}, waiting for the rest": [
   "label",
   "found",
   "expected",
   "show['service']"
  ],
- "{0}: {1} refused the login, trying the profile {2}": [
+ "{0}: {1} refused the sign-in, trying the profile {2}": [
   "label",
   "show['service']",
   "profile"
@@ -4181,7 +4204,7 @@
   "svc"
  ],
  "{0}{1} · {2} · started {3} {4}": [
-  "c.service",
+  "svcName(c.service)",
   "onService",
   "KIND[c.kind] || c.kind",
   "day(started)",
@@ -4208,9 +4231,6 @@
  "· {0} left": [
   "muxLeft(c)"
  ],
- "· {0} managed": [
-  "mine"
- ],
  "…and {0} more": [
   "len(held) - 30"
  ],
@@ -4219,27 +4239,5 @@
  "● Connected{0}": [
   "st.version ? ` · Sonarr ${st.version}` : \"\""
  ],
- "⚠ No CDM for this service": [],
- "✓ Changed": [],
- "✓ Delivered": [],
- "✓ Delivered: look for it, then Add.": [],
- "✓ Imported": [],
- "✓ Others logged out": [],
- "✓ Passwords match": [],
- "✓ Reached: 1 service": [],
- "✓ Reached: Sonarr {0}": [
-  "version"
- ],
- "✓ Reached: {0} services": [
-  "services"
- ],
- "✓ Same title": [],
- "✓ Saved": [],
- "✓ Unshacklarr reads {0}'s library: {1}": [
-  "who",
-  "r.local_path"
- ],
- "✓ {0} downloaded": [
-  "r.name"
- ]
+ "⚠ No CDM for this service": []
 }

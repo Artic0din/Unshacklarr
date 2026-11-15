@@ -521,7 +521,7 @@ function renderTargets() {
     return el("div", { className: `nt-target${t.levels.length ? "" : " off"}` },
       el("span", { className: "nt-badge", textContent: badgeOf(appOf(t.url)), ariaHidden: "true" }),
       el("span", { className: "nt-who" }, el("b", { textContent: appOf(t.url) + (targets.filter((x) => appOf(x.url) === appOf(t.url)).length > 1 ? ` ${targets.filter((x, j) => j <= i && appOf(x.url) === appOf(t.url)).length}` : "") }),
-        ...(tested && tested !== "…" ? [el("em", { className: tested.ok ? "ok" : "bad" }, icon(tested.ok ? "check" : "cross", "inl"), tested.ok ? "Delivered" : tested.error)] : [])),
+        ...(tested && tested !== "…" ? [el("em", { className: tested.ok ? "ok" : "bad" }, icon(tested.ok ? "check" : "x", "inl"), tested.ok ? "Delivered" : tested.error)] : [])),
       el("span", { className: "nt-chips", role: "group", ariaLabel: `What ${appOf(t.url)} gets` }, el("small", { textContent: "Sends" }), ...chips),
       el("span", { className: "btns" }, test, remove));
   }) : [el("p", { className: "muted cdm-empty", textContent: "No address yet: add Discord, Telegram, ntfy or another." })]));
@@ -587,7 +587,7 @@ async function loadSent() {
     ...(data.sent.length ? data.sent.map((m) => el("div", { className: `nt-msg ${m.level}` }, el("i"),
       el("span", { className: "nt-who" }, el("b", { textContent: m.title }), el("small", { textContent: ago(m.at) })),
       el("span", { className: "nt-to" }, ...m.to.map((t) => t.ok ? el("span", { className: "rg-chip" }, icon("check", "inl"), t.app)
-        : hoverTip(el("span", { className: "rg-chip bad" }, icon("cross", "inl"), t.app), () => [t.error || "Not delivered"])))))
+        : hoverTip(el("span", { className: "rg-chip bad" }, icon("x", "inl"), t.app), () => [t.error || "Not delivered"])))))
       : [el("p", { className: "muted cdm-empty", textContent: "Nothing sent yet." })]));
 }
 document.querySelectorAll("[data-level]").forEach((c) => c.onchange = () => { S.config.notifications[c.dataset.level] = c.checked; renderNotify(); dirty(); });
@@ -628,7 +628,7 @@ $("#nt-d-test").onclick = async () => {
   $("#nt-d-result").replaceChildren(el("span", { className: "muted", textContent: "Sending…" }));
   try {
     const { results: [r] } = await api("/api/notifications/test", { method: "POST", body: JSON.stringify({ urls: [url] }) });
-    $("#nt-d-result").replaceChildren(el("span", { className: r.ok ? "ok" : "status-err" }, icon(r.ok ? "check" : "cross", "inl"), r.ok ? "Delivered: look for it, then Add." : r.error));
+    $("#nt-d-result").replaceChildren(el("span", { className: r.ok ? "ok" : "status-err" }, icon(r.ok ? "check" : "x", "inl"), r.ok ? "Delivered: look for it, then Add." : r.error));
   } catch (e) { $("#nt-d-result").replaceChildren(el("span", { className: "status-err", textContent: e.message })); }
 };
 $("#nt-form").onsubmit = (e) => {

@@ -175,8 +175,8 @@ async function loadWeek() {
   if (current()) renderWeek();  // not a week left since, whether it loaded or failed
 }
 const countText = (list) => {  // "2 episodes · 1 downloading"
-  const mine = list.filter((e) => e.managed).length, episodes = list.length === 1 ? "1 episode" : `${list.length} episodes`;
-  return !mine ? episodes : mine === list.length ? `${episodes}, ${mine > 1 ? "all downloading" : "downloading"}` : `${episodes} · ${mine} downloading`;
+  const mine = list.filter((e) => e.managed).length, episodes = COUNT.episode(list.length);
+  return !mine ? episodes : `${episodes} · ${mine === list.length ? (mine > 1 ? "all downloading" : "downloading") : `${mine} downloading`}`;
 };
 function renderWeek() {
   const start = weekStartOf(cal.date), now = new Date(), today = isoDay(now), tomorrow = isoDay(addDays(startOfDay(now), 1));

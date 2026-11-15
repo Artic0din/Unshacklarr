@@ -185,7 +185,7 @@ async function api(path, { wait = 30, ...opts } = {}) {
 /* The inline SVG icons of the page (stroke in currentColor, as .ico): for a tick, a chevron or an arrow, never a text glyph.
    "inl" sizes one to the line of text it starts. */
 const ICON_PATHS = {
-  check: '<path d="M20 6 9 17l-5-5"/>', cross: '<path d="M6 6l12 12M18 6 6 18"/>', alert: '<path d="M12 6v8M12 18h.01"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', alert: '<path d="M12 6v8M12 18h.01"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>', chevronLeft: '<path d="m15 6-6 6 6 6"/>',
   arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
   arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
@@ -305,7 +305,7 @@ function optionsEditor(root, specs, values) {
       el("code", { title: spec.help }, flag),
       input,
       el("button", { className: "rm", title: "Remove", ariaLabel: `Remove ${flag}`,
-        onclick: () => { delete values[flag]; dirty(); optionsEditor(root, specs, values); } }, icon("cross"))));
+        onclick: () => { delete values[flag]; dirty(); optionsEditor(root, specs, values); } }, icon("x"))));
   }
   const free = specs.filter((s) => !(s.flag in values)).sort((a, b) => a.flag.localeCompare(b.flag));
   if (!specs.length && !Object.keys(values).length) root.append(el("small", { className: "muted", textContent: "None." }));

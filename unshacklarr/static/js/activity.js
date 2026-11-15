@@ -335,7 +335,7 @@ function renderJob(j) {
         el("div", { className: "mid" }, el("div", { className: "steps mini", ariaHidden: "true" }, ...stepStates(c).filter((x) => x !== "skip").map(() => el("span")))),
         el("span", { className: "jstate", textContent: "Queued" }),
         el("button", { type: "button", className: "jx", title: "Cancel", ariaLabel: `Cancel ${c.sxxeyy}`,
-          onclick: () => unqueue(c) }, icon("cross"))));
+          onclick: () => unqueue(c) }, icon("x"))));
     return el("li", { className: `jcard ${tone}${open ? " open" : ""}${hovering(`card:${c.id}`)}`, dataset: { hk: `card:${c.id}` } },
       el("div", { className: "jrow" }, el("button", { type: "button", className: "jhead", ariaExpanded: String(open), onclick: fold },
         el("b", { className: "ep", textContent: c.sxxeyy }),
