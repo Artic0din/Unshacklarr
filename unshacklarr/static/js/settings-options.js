@@ -586,8 +586,8 @@ async function loadSent() {
     ...(data.held ? [el("p", { className: "nt-held", textContent: `${COUNT.message(data.held)} waiting for the end of the quiet hours` })] : []),
     ...(data.sent.length ? data.sent.map((m) => el("div", { className: `nt-msg ${m.level}` }, el("i"),
       el("span", { className: "nt-who" }, el("b", { textContent: m.title }), el("small", { textContent: ago(m.at) })),
-      el("span", { className: "nt-to" }, ...m.to.map((t) => t.ok ? el("span", { className: "rg-chip" }, icon("check", "inl"), t.app)
-        : hoverTip(el("span", { className: "rg-chip bad" }, icon("x", "inl"), t.app), () => [t.error || "Not delivered"])))))
+      el("span", { className: "nt-to" }, ...m.to.map((t) => t.ok ? el("span", { className: "rg-chip" }, icon("check", "inl", "Delivered"), t.app)
+        : hoverTip(el("span", { className: "rg-chip bad" }, icon("x", "inl", "Not delivered"), t.app), () => [t.error || "Not delivered"])))))
       : [el("p", { className: "muted cdm-empty", textContent: "Nothing sent yet." })]));
 }
 document.querySelectorAll("[data-level]").forEach((c) => c.onchange = () => { S.config.notifications[c.dataset.level] = c.checked; renderNotify(); dirty(); });

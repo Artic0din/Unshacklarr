@@ -151,3 +151,32 @@ ctx.go("HULU"); ctx.go("NF"); ctx.go("STAN");
 console.log(JSON.stringify(focused));
 """)
     assert shown == ["sv-HULU@vpn", "sv-NF", "sv-STAN@nas"]
+
+
+def test_an_icon_that_alone_carries_a_meaning_is_named():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const svg = () => ({ attrs: { "aria-hidden": "true" }, setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; } });
+const ctx = { document: { createElement: () => ({ set innerHTML(_) { this.content = { firstChild: svg() }; } }) } };
+vm.createContext(ctx);
+vm.runInContext(src.match(/^const ICON_PATHS = \{.*?^\};/ms)[0] + src.match(/^function icon\(.*?^\}/ms)[0], ctx);
+console.log(JSON.stringify({ plain: ctx.icon("check", "inl").attrs, named: ctx.icon("check", "inl", "Delivered").attrs }));
+""")
+    assert shown == {"plain": {"aria-hidden": "true"}, "named": {"role": "img", "aria-label": "Delivered"}}
+
+
+def test_no_name_in_the_page_hides_the_icon_helper():
+    import re
+    shadow = re.compile(r"[(,]\s*icon\s*[=,)]|\b(?:const|let|var)\s+icon\b|,\s*icon\s*=")
+    found = [f"{path.name}:{n}" for path in JS.glob("*.js")
+             for n, line in enumerate(path.read_text().splitlines(), 1) if shadow.search(line)]
+    assert not found  # a parameter or variable named icon makes icon() "not a function" in its scope
+
+
+def test_translations_add_no_glyph_their_english_lacks():
+    glyph = ("✓ ", "✗ ")
+    extra = [f"{path.name}: {key}" for path in (JS.parent / "i18n").glob("*.json") if path.name != "en.json"
+             for key, text in json.loads(path.read_text()).items()
+             if isinstance(text, str) and text.startswith(glyph) and not key.startswith(glyph)]
+    assert not extra  # the page draws the tick as an icon: a translated one would show two

@@ -190,10 +190,12 @@ const ICON_PATHS = {
   arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
   arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
 };
-function icon(name, className = "") {
+function icon(name, className = "", label = "") {
   const holder = document.createElement("template");
   holder.innerHTML = `<svg class="ico ${className}" viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
-  return holder.content.firstChild;
+  const svg = holder.content.firstChild;
+  if (label) { svg.removeAttribute("aria-hidden"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", label); }  // the only sign of what it means
+  return svg;
 }
 /* A counted noun, one whole text for one and one for many: a language writes its own plural from either, no suffix glued on. */
 const COUNT = {

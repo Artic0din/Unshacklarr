@@ -271,9 +271,9 @@ function cdmOf(c) {
   const drm = [d.drm, d.level != null ? `${d.drm === "PlayReady" ? "SL" : "L"}${d.level}` : ""].filter(Boolean).join(" ");
   return d.server ? `The server's (${drm})` : [d.name, drm].filter(Boolean).join(" · ");
 }
-function metaChip(icon, text) {
+function metaChip(svg, text) {
   const chip = el("span", { className: "mchip" });
-  chip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>`;
+  chip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${svg}</svg>`;
   chip.append(text);
   return chip;
 }
@@ -316,7 +316,7 @@ function renderJob(j) {
     const detail = downloading ? el("div", { className: "jmeta" },  // how fast, how long still: in sight, not a grey line
         ...[...(afterTracks(c) ? [[ICON_CLOCK, muxLeft(c) ? `${afterTracks(c)} · ${muxLeft(c)} left` : `${afterTracks(c)} · ${since(c.mux_from || c.tracks_in)}`]] : [[ICON_SPEED, speedOf(c)], [ICON_CLOCK, timeLeft(c) && `${timeLeft(c)} left`]]), [ICON_GLOBE, proxyOf(c), "extra"], [ICON_FILM, videoOf(c), "extra"],
           [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${svcName(c.service)}`, "extra"]]
-          .filter(([, t]) => t).map(([icon, t, extra]) => { const chip = metaChip(icon, t); if (extra) chip.classList.add(extra); return chip; }))
+          .filter(([, t]) => t).map(([svg, t, extra]) => { const chip = metaChip(svg, t); if (extra) chip.classList.add(extra); return chip; }))
       : el("small", { textContent: !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "" });
     const open = openCards.has(c.id) && !c.waiting;
     const acts = open ? cardActs(c) : [];

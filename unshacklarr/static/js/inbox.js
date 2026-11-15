@@ -44,9 +44,9 @@ function inboxDay(iso) {
   return days === 0 ? "Today" : days === 1 ? "Yesterday" : d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" });
 }
 function inboxRow(g, n) {
-  const i = g.items[0], icon = el("span", { className: "lv", ariaHidden: "true" });
+  const i = g.items[0], mark = el("span", { className: "lv", ariaHidden: "true" });
   icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${INBOX_ICONS[g.level] || INBOX_ICONS.info}</svg>`;
-  const art = el("span", { className: "inbox-art" }, ...(g.series?.poster ? [el("img", { src: g.series.poster, alt: "", loading: "lazy", onerror: (e) => e.target.remove() })] : []), icon);
+  const art = el("span", { className: "inbox-art" }, ...(g.series?.poster ? [el("img", { src: g.series.poster, alt: "", loading: "lazy", onerror: (e) => e.target.remove() })] : []), mark);
   const when = new Date(i.at);
   const body = el("span", {},
     ...(g.kind ? [el("span", { className: "inbox-kind", textContent: g.batch && g.items.length > 1 ? `${g.kind} · job` : g.kind })] : []),

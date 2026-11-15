@@ -566,8 +566,8 @@ function openFolders(side, start, use) {
     here = r.path || "/";
     $("#folder-path").textContent = here;
     $("#folder-use").disabled = !r.path;
-    const row = (label, path, icon = true) => el("button", { type: "button", className: "url-hit", onclick: () => load(path) },
-      ...(icon ? [el("i", { innerHTML: FOLDER_ICON })] : [el("i", {}, icon("arrowUp"))]), el("span", { textContent: label }));
+    const row = (label, path, folder = true) => el("button", { type: "button", className: "url-hit", onclick: () => load(path) },
+      ...(folder ? [el("i", { innerHTML: FOLDER_ICON })] : [el("i", {}, icon("arrowUp"))]), el("span", { textContent: label }));
     $("#folder-list").replaceChildren(...(r.parent != null ? [row("Up", r.parent, false)] : []),
       ...r.dirs.map((d) => row(d.split(/[\\/]/).filter(Boolean).pop() || d, d)),
       ...(!r.dirs.length ? [el("p", { className: "muted", textContent: "No folder in it." })] : []));

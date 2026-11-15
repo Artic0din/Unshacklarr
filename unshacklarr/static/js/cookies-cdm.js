@@ -171,8 +171,8 @@ function cdmPicker(anchor, service, current, also = []) {
   const who = service === "default" ? "The default device" : `Device for ${[service, ...also].map(svcName).join(", ")}`;
   if (cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: who }), q, list)) q.focus();
 }
-const cdmCard = (icon, title, text, extra, ...body) => el("div", { className: "sx-card" },
-  el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: icon }),
+const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
+  el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: svg }),
     el("div", {}, el("h3", { textContent: title }), el("p", { textContent: text })), ...(extra ? [extra] : [])), ...body);
 function renderCdm() {
   const data = cdmData;
