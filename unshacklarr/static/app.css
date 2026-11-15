@@ -1374,7 +1374,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .seasons { margin-inline: -12px; padding: 12px 12px 8px; scrollbar-width: none; }
   .seasons::-webkit-scrollbar { display: none; }
   .seasons button { padding: 8px 14px; min-height: 48px; }
-  .ep-tools h3 { font-size: var(--fs-headline); }
+  .ep-tools h3 { font-size: var(--fs-body); }
   .ep-row { display: grid; } .ep-sel { overflow-x: auto; scrollbar-width: none; } .ep-sel button { padding: 10px 12px; }
   .ep-view .pill { min-height: 36px; }
   .ep-list .ep { grid-template-columns: auto 40px 1fr auto; padding: 12px; min-height: 52px; }
