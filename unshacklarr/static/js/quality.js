@@ -42,6 +42,9 @@ function moveSonarrRefs(from, to) {
     if (from) delete conf.sonarrs[from];
     if (to) { if (moved) conf.sonarrs[to] = moved; else delete conf.sonarrs[to]; }
   }
+  // the libraries each series is in, read at load: the series page finds its switches by these names
+  if (from) for (const [tvdb, libs] of Object.entries(S.sonarrsOf || {}))
+    S.sonarrsOf[tvdb] = to ? libs.map((o) => o.name === from ? { ...o, name: to } : o) : libs.filter((o) => o.name !== from);
 }
 function ladderUse(name) {
   const services = Object.entries(S.config.service_defaults || {}).filter(([, l]) => l.ladder === name).map(([t]) => t);

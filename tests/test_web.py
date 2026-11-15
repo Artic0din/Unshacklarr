@@ -6706,22 +6706,25 @@ def test_renaming_a_sonarr_in_the_page_keeps_each_series_settings_for_it(tmp_pat
     code = re.search(r"^function moveSonarrRefs\(.*?^\}$", src, re.M | re.S).group(0)
     harness = code + """
 const S = { config: { series: { 1: { sonarrs: { "sonarr-2": { off: true } } }, 2: { sonarrs: { "sonarr-4k": { off: true } } }, 3: {},
-  4: { sonarrs: { "sonarr-u": { off: true }, "sonarr-9": { off: true } } } } } };  // 4: a removed Sonarr's leftovers
+  4: { sonarrs: { "sonarr-u": { off: true }, "sonarr-9": { off: true } } } } },  // 4: a removed Sonarr's leftovers
+  sonarrsOf: { 1: [{ name: "sonarr-2", id: 7 }, { name: "sonarr-4k", id: 8 }], 2: [{ name: "sonarr-4k", id: 9 }] } };
 let name = "sonarr-2";
 for (const typed of ["sonarr-", "sonarr-u", "sonarr-uhd"]) { moveSonarrRefs(name, typed); name = typed; }
 const renamed = JSON.parse(JSON.stringify(S.config.series));
 moveSonarrRefs("sonarr-4k", "");
 moveSonarrRefs("", "sonarr-9");  // added under a leftover's name
-console.log(JSON.stringify([renamed, S.config.series]));
+console.log(JSON.stringify([renamed, S.config.series, S.sonarrsOf]));
 """
     done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
     assert done.returncode == 0, done.stderr
-    renamed, after = json.loads(done.stdout)
+    renamed, after, libraries = json.loads(done.stdout)
     assert renamed["1"] == {"sonarrs": {"sonarr-uhd": {"off": True}}}  # each keystroke's name, the last one kept
     assert renamed["2"] == {"sonarrs": {"sonarr-4k": {"off": True}}} and renamed["3"] == {}
     assert renamed["4"] == {"sonarrs": {"sonarr-9": {"off": True}}}  # passing over a leftover's name never takes it
     assert after["2"] == {"sonarrs": {}}  # removed
     assert after["4"] == {"sonarrs": {}}  # a new Sonarr starts clean
+    # the libraries read at load follow too, so the series page finds its switches under the new name
+    assert libraries == {"1": [{"name": "sonarr-uhd", "id": 7}], "2": []}
 
 
 def test_a_renamed_sonarr_keeps_the_proxy_passwords_its_series_set_for_it(tmp_path, monkeypatch):
