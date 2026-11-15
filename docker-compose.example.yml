@@ -22,11 +22,11 @@ services:
   unshackle:
     # Unshackle has no published image: it is built here, once, from its own source
     build:
-      context: https://github.com/OwnzZzZ/Unshacklarr.git#main:docker
+      context: https://github.com/Artic0din/Unshacklarr.git#main:docker
       dockerfile: unshackle.Dockerfile
       args:
         UNSHACKLE_REPO: https://github.com/Artic0din/unshackle.git
-        UNSHACKLE_COMMIT: f147c23b667c8a61c3aeb579ca1c22b00560641e
+        UNSHACKLE_COMMIT: 58a62dd86248ccdbe94978ed5c3cfc5efff6a8e8
     image: unshackle-serve:latest
     container_name: unshackle
     restart: unless-stopped
@@ -41,7 +41,7 @@ services:
     # no ports: only Unshacklarr talks to it, on the Docker network
 
   unshacklarr:
-    image: ghcr.io/ownzzzz/unshacklarr:latest  # built by the project's CI: nothing to build here
+    image: ghcr.io/artic0din/unshacklarr:latest  # built by the project's CI: nothing to build here
     container_name: unshacklarr
     restart: unless-stopped
     user: "${PUID:-1000}:${PGID:-1000}"

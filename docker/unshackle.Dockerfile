@@ -32,9 +32,9 @@ RUN set -eux; cd /tmp; \
     rm shaka dovi.tgz hdr.tgz bento.zip; \
     chmod +x /usr/local/bin/*
 
-# The reviewed fork commit provides the transient approval and redacted authentication contracts.
+# The reviewed fork commit: official dev merged in, plus the transient approval and redacted authentication contracts.
 ARG UNSHACKLE_REPO=https://github.com/Artic0din/unshackle.git
-ARG UNSHACKLE_COMMIT=f147c23b667c8a61c3aeb579ca1c22b00560641e
+ARG UNSHACKLE_COMMIT=58a62dd86248ccdbe94978ed5c3cfc5efff6a8e8
 RUN git init /app \
     && git -C /app remote add origin "$UNSHACKLE_REPO" \
     && git -C /app fetch --depth 1 origin "$UNSHACKLE_COMMIT" \
