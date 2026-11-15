@@ -1802,7 +1802,6 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); box-shadow: 0 0 
 #news-title:focus { outline: none; }  /* focused on opening for screen readers; not a control */
 .field small.status-err { color: var(--err); }
 #bo-say { margin-bottom: 14px; }
-.set-nav button > .new-dot { font-size: var(--fs-caption); padding: 1px 5px; }  /* the menu's names keep one line */
 /* every choice the same height, its "default" tag inside it on one line */
 .ax-seg button { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding-block: 0; line-height: 1.2; }
 .chip-default { padding: 3px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
@@ -1821,17 +1820,6 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); box-shadow: 0 0 
 .folder-list { max-height: min(50vh, 360px); margin: 0; } .folder-list .url-hit { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
 .folder-list .url-hit span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .folder-form .status-err:empty { display: none; }
 /* The system's Increase Contrast: lighter secondary text, edges that show */
-/* Tags: every badge and chip has one shape (Molt's Badge); its colour says what it means. */
-.poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip, .ep-on, .ep-off, .ep-up, .chip, .ck-pill, .sched-st, .rg-chip, .news-tag, .news-kind, .new-badge {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); padding: 2px var(--sp-2); border: 0; border-radius: 999px; box-shadow: none;
-  font-size: var(--fs-footnote); font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 1.4; white-space: nowrap;
-  color: var(--muted); background: var(--well); }
-.sched-card .svc { white-space: normal; overflow-wrap: anywhere; }  /* a long name in a narrow day column */
-.poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip { color: var(--text); }  /* a service: just its name */
-.ep-on, .ep-on.other, .new-badge, .news-tag.latest, .rg-chip, .ck-pill.ok, .sched-st.ok, .sched-st.try, .chip.disk, .chip.o-downloaded,
-.news-list .new .news-kind, .news-list .improved .news-kind { color: var(--accent); background: var(--accent-tint); }
-.ep-up, .ck-pill.warn, .sched-st.wait, .chip.miss, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
-.ck-pill.bad, .sched-st.late, .rg-chip.bad, .chip.o-failed, .news-list .security .news-kind { color: var(--err); background: var(--err-tint); }
 
 @media (prefers-contrast: more) {
   :root { --muted: #c4bdb1; --line: #4f4a42; --field-line: #9a9286; }
@@ -1879,3 +1867,16 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); box-shadow: 0 0 
   .sv-row[data-attention] { box-shadow: inset 3px 0 0 var(--err); padding-left: 10px; }
 }
 .sv-table td .btn, .sv-table td:nth-child(5) { white-space: nowrap; }
+
+/* Tags: every badge and chip has one shape (Molt's Badge); its colour says what it means. */
+.poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip, .ep-on, .ep-off, .ep-up, .chip, .ck-pill, .sched-st, .rg-chip, .news-tag, .news-kind, .new-badge, .new-dot, .chip-default, .finale-tag {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); padding: 2px var(--sp-2); border: 0; border-radius: 999px; box-shadow: none;
+  font-size: var(--fs-footnote); font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 1.4; white-space: nowrap;
+  color: var(--muted); background: var(--well); }
+.sched-card .svc { white-space: normal; overflow-wrap: anywhere; }  /* a long name in a narrow day column */
+.poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip { color: var(--text); }  /* a service: just its name */
+.ep-on, .ep-on.other, .new-badge, .new-dot, .chip-default, .finale-tag, .news-tag.latest, .rg-chip, .ck-pill.ok, .sched-st.ok, .sched-st.try, .chip.disk, .chip.o-downloaded,
+.news-list .new .news-kind, .news-list .improved .news-kind { color: var(--accent); background: var(--accent-tint); }
+.ep-up, .ck-pill.warn, .sched-st.wait, .chip.miss, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
+.ck-pill.bad, .sched-st.late, .rg-chip.bad, .chip.o-failed, .news-list .security .news-kind { color: var(--err); background: var(--err-tint); }
+.ax-seg button[aria-pressed=true] .chip-default { color: var(--accent-ink); background: var(--accent); }  /* filled, to stand out on the picked button's tint */

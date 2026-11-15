@@ -98,3 +98,13 @@ def test_icons_drawn_in_a_colour_take_it_from_a_token():
     # a data-URI icon can't read a variable: one with a fixed colour is a mask (black) or a per-look token
     rules = re.sub(r"--[\w-]+: url\(\"data:image/svg\+xml[^)]*\)\)?;", "", CSS)
     assert set(re.findall(r"stroke='%23([0-9a-fA-F]{3,6})'", rules)) <= {"000"}
+
+
+def test_no_later_rule_reshapes_a_tag():
+    rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", CSS, flags=re.S))
+    shared = next(i for i, (_, body) in enumerate(rules) if "text-transform: none" in body and "var(--well)" in body)
+    names = [name.strip() for name in rules[shared][0].split(",")]
+    shaping = re.compile(r"(?:^|;)\s*(?:padding|border|border-radius|font-size|text-transform)\s*:")
+    late = [sel.strip() for i, (sel, body) in enumerate(rules) if i > shared and shaping.search(body)
+            and any(name in [s.strip() for s in sel.split(",")] for name in names)]
+    assert not late  # the shared shape is the last word for every tag
