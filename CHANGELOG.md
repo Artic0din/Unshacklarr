@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- The translation files match the page again: 13 texts it no longer shows were removed from every language, and the sign-in texts added since are listed for translating.
 - Settings now starts, observes, answers, cancels, retries, and restores service sign-in sessions, with transient approval details and fixed redacted lifecycle and fallback states.
 - Device approval links and codes are now delivered only through a transient, job-owned API and cleared on every terminal path instead of being retained in download history, logs, notifications, or diagnostics.
 - The bundled Unshackle image now builds from the reviewed authentication-contract commit and both container images publish their exact source revision.
