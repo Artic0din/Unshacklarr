@@ -201,7 +201,7 @@ function renderServices() {
   const cells = [signInCell, cookieCell, methodsCell, usedCell, actionCell];
   const table = el("table", { className: "sv-table" },
     el("thead", {}, el("tr", {}, ...SERVICE_COLUMNS.map((name) => el("th", { scope: "col", textContent: name })))),
-    el("tbody", {}, ...models.map((m) => el("tr", { className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, ...(m.backend ? {} : { id: `sv-${m.service}` }) },
+    el("tbody", {}, ...models.map((m) => el("tr", { className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, id: `sv-${m.service}${m.backend ? `@${m.backend}` : ""}` },
       el("th", { scope: "row" }, el("span", { className: "sv-k", textContent: SERVICE_COLUMNS[0] }), el("b", { className: "sv-name", textContent: m.name })),
       ...cells.map((build, i) => el("td", {}, el("span", { className: "sv-k", textContent: SERVICE_COLUMNS[i + 1] }), ...build(m)))))));
   box.replaceChildren(...(models.length ? [table] : [el("p", { className: "muted", textContent: "No service is known yet. Unshackle lists them once it answers." })]));
@@ -221,7 +221,8 @@ function renderServices() {
 }
 /* Scrolled to and focused, when another page sent you to one service's row. */
 function revealService() {
-  const row = servicesReveal && document.getElementById(`sv-${servicesReveal}`);
+  const backend = servicesReveal && S.config.service_defaults?.[servicesReveal]?.backend;
+  const row = servicesReveal && ((backend && document.getElementById(`sv-${servicesReveal}@${backend}`)) || document.getElementById(`sv-${servicesReveal}`));
   if (!row) return;
   servicesReveal = "";
   row.scrollIntoView({ block: "center", behavior: SCROLL });

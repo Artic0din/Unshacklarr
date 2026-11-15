@@ -133,3 +133,19 @@ const seasonOnly = { service: "BINGE", season_pages: { 2: { url: "u", service: "
 console.log(JSON.stringify([ctx.usesService(seasonOnly, "BINGE"), ctx.usesService(seasonOnly, "STAN"), ctx.usesService(seasonOnly, "NF"), ctx.usesService(undefined, "NF")]));
 """)
     assert shown == [True, True, False, False]
+
+
+def test_a_service_row_link_reaches_the_backend_that_downloads_it():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm"), path = require("path");
+const src = fs.readFileSync(path.join(path.dirname(process.argv[1]), "services.js"), "utf8");
+const focused = [];
+const row = (id) => ({ id, scrollIntoView() {}, focus() { focused.push(id); } });
+const rows = { "sv-HULU": row("sv-HULU"), "sv-HULU@vpn": row("sv-HULU@vpn"), "sv-NF": row("sv-NF") };
+const ctx = { SCROLL: "auto", S: { config: { service_defaults: { HULU: { backend: "vpn" } } } }, document: { getElementById: (id) => rows[id] || null } };
+vm.createContext(ctx);
+vm.runInContext("let servicesReveal = '';\n" + src.match(/^function revealService\(.*?^\}/ms)[0] + "\nthis.go = (s) => { servicesReveal = s; revealService(); };", ctx);
+ctx.go("HULU"); ctx.go("NF");
+console.log(JSON.stringify(focused));
+""")
+    assert shown == ["sv-HULU@vpn", "sv-NF"]
