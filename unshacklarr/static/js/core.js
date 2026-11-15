@@ -514,7 +514,7 @@ let wallScroll = 0;
 let drawerOpener = null;
 function drawerModal(open) {
   // the toasts join the drawer while it is open: their Dismiss and Undo stay in reach and focus never leaves the dialog
-  const toasts = $("#toasts"), shown = toasts.matches?.(":popover-open");
+  const toasts = $("#toasts"), shown = Boolean(toasts.showPopover) && toasts.matches(":popover-open");  // an older browser has no popover: its z-index
   if (open) $("#drawer").append(toasts); else document.body.append(toasts);
   if (shown) onTop(toasts);  // moving it closes the popover it shows in
   $("#drawer").inert = !open;
