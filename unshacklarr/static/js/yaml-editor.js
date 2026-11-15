@@ -67,20 +67,20 @@ async function uyEditor(text) {
   api("/api/cdm").then((d) => { uy.devices = d.devices.map((x) => x.name); }).catch(() => {});
   const colours = CM.HighlightStyle.define([
     { tag: [CM.tags.propertyName, CM.tags.definition(CM.tags.propertyName)], color: "var(--accent)" },
-    { tag: [CM.tags.string, CM.tags.special(CM.tags.string)], color: "#9fd18b" },
+    { tag: [CM.tags.string, CM.tags.special(CM.tags.string)], color: "var(--code-string)" },
     { tag: [CM.tags.content, CM.tags.number, CM.tags.bool, CM.tags.null], color: "var(--text)" },
     { tag: [CM.tags.comment, CM.tags.lineComment], color: "var(--muted)", fontStyle: "italic" },
     { tag: [CM.tags.labelName, CM.tags.typeName, CM.tags.keyword, CM.tags.meta], color: "var(--warn)" },
-    { tag: [CM.tags.punctuation, CM.tags.separator, CM.tags.squareBracket, CM.tags.brace], color: "#8b95a8" },
+    { tag: [CM.tags.punctuation, CM.tags.separator, CM.tags.squareBracket, CM.tags.brace], color: "var(--muted)" },
   ]);
   const theme = CM.EditorView.theme({
     "&": { color: "var(--text)", backgroundColor: "var(--bg)", fontSize: "13px" },
     ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", lineHeight: "1.55" },
     ".cm-content": { caretColor: "var(--accent)" }, ".cm-cursor": { borderLeftColor: "var(--accent)" },
-    ".cm-gutters": { backgroundColor: "var(--panel)", color: "#6b778a", border: "none", borderRight: "1px solid var(--line)" },
-    ".cm-activeLine": { backgroundColor: "#ffffff08" }, ".cm-activeLineGutter": { backgroundColor: "#ffffff0d", color: "var(--text)" },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "#4fb3bf40" },
-    ".cm-selectionMatch": { backgroundColor: "#4fb3bf22" }, ".cm-matchingBracket": { backgroundColor: "#4fb3bf33", outline: "none" },
+    ".cm-gutters": { backgroundColor: "var(--panel)", color: "var(--muted)", border: "none", borderRight: "1px solid var(--line)" },
+    ".cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--text) 3%, transparent)" }, ".cm-activeLineGutter": { backgroundColor: "color-mix(in srgb, var(--text) 5%, transparent)", color: "var(--text)" },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "color-mix(in srgb, var(--accent) 25%, transparent)" },
+    ".cm-selectionMatch": { backgroundColor: "color-mix(in srgb, var(--accent) 13%, transparent)" }, ".cm-matchingBracket": { backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)", outline: "none" },
     ".cm-foldPlaceholder": { backgroundColor: "var(--panel)", border: "1px solid var(--line)", color: "var(--muted)" },
     ".cm-tooltip": { backgroundColor: "var(--panel)", border: "1px solid var(--line)", borderRadius: "8px", color: "var(--text)" },
     ".cm-tooltip-autocomplete > ul": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", maxHeight: "16em" },
@@ -88,11 +88,11 @@ async function uyEditor(text) {
     ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--accent)", color: "var(--accent-ink)" },
     ".cm-completionDetail": { color: "var(--muted)", fontStyle: "normal", marginLeft: "1em" },
     ".cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail": { color: "inherit", opacity: ".7" },
-    ".cm-completionInfo": { maxWidth: "340px", padding: "8px 10px", fontFamily: "Figtree, system-ui, sans-serif", lineHeight: "1.45" },
+    ".cm-completionInfo": { maxWidth: "340px", padding: "8px 10px", fontFamily: "system-ui, -apple-system, sans-serif", lineHeight: "1.45" },
     ".cm-panels": { backgroundColor: "var(--panel)", color: "var(--text)", borderColor: "var(--line)" },
     ".cm-panel input, .cm-panel button": { color: "var(--text)" },
-    ".cm-searchMatch": { backgroundColor: "#e6b94a40" }, ".cm-searchMatch-selected": { backgroundColor: "#e6b94a80" },
-  }, { dark: true });
+    ".cm-searchMatch": { backgroundColor: "color-mix(in srgb, var(--warn) 25%, transparent)" }, ".cm-searchMatch-selected": { backgroundColor: "color-mix(in srgb, var(--warn) 50%, transparent)" },
+  }, { dark: getComputedStyle(document.documentElement).colorScheme === "dark" });  // the theme in use when it opens
   const where = (state) => {
     const head = state.selection.main.head, line = state.doc.lineAt(head);
     $("#uy-where").textContent = `Line ${line.number}, column ${head - line.from + 1}${state.doc.toString() !== uy.original ? " · Unsaved changes" : ""}`;

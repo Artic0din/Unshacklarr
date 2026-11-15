@@ -2222,5 +2222,9 @@
  "{0} that day{1}: click to change": "Ese día: {0}{1}. Haz clic para cambiarlo",
  "{0} to fix": "{0} por resolver",
  "{0} waiting for the end of the quiet hours": "{0} en espera hasta el fin de las horas de silencio",
- "No sign-in required": "No requiere iniciar sesión"
+ "No sign-in required": "No requiere iniciar sesión",
+ "Appearance": "Apariencia",
+ "Dark": "Oscuro",
+ "Light": "Claro",
+ "System": "Sistema"
 }

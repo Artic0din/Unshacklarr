@@ -480,7 +480,7 @@ function fileTooltip(e) {
     f.subtitles.length ? `Subtitles: ${f.subtitles.join(", ")}` : ""].filter(Boolean).join("\n");
 }
 const STATE_ICONS = {
-  disk: '<circle cx="12" cy="12" r="10" fill="currentColor"/><path d="m7.5 12.5 3 3 6-6.5" fill="none" stroke="#10151d" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  disk: '<circle cx="12" cy="12" r="10" fill="currentColor"/><path d="m7.5 12.5 3 3 6-6.5" fill="none" style="stroke: var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
   miss: '<circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v8M8.5 12.5l3.5 3.5 3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   busy: '<circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.8" opacity=".3"/><path d="M12 2.8a9.2 9.2 0 0 1 9.2 9.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   soon: '<circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5.2l3.2 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',

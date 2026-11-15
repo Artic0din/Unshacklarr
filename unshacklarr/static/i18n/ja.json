@@ -2249,5 +2249,9 @@
  "{0} that day{1}: click to change": "この日は {0}{1}。クリックで変更",
  "{0} to fix": "対処が必要：{0}",
  "{0} waiting for the end of the quiet hours": "{0}が休止時間の終了を待っています",
- "No sign-in required": "ログイン不要"
+ "No sign-in required": "ログイン不要",
+ "Appearance": "外観",
+ "Dark": "ダーク",
+ "Light": "ライト",
+ "System": "システム"
 }

@@ -15,9 +15,9 @@ function initialsOf(name) {
 }
 function posterSrc(src, name) {
   if (src) return src;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"><rect width="200" height="300" fill="#1c2430"/>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"><rect width="200" height="300" fill="#2c2925"/>`
     + `<text x="100" y="150" dy=".35em" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" `
-    + `font-size="84" font-weight="700" fill="#8c97a8">${initialsOf(name)}</text></svg>`;
+    + `font-size="84" font-weight="700" fill="#a8a196">${initialsOf(name)}</text></svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 const posterFail = (name) => (e) => { const s = posterSrc("", name); if (e.target.getAttribute("src") !== s) e.target.src = s; };
@@ -44,6 +44,19 @@ const LANG = (() => {
   return "en";
 })();
 document.documentElement.lang = LANG;
+/* Light or dark: the system's unless this browser picked one (the <head> applies it before the first paint). */
+const THEMES = ["system", "light", "dark"];
+function themeChoice() { try { const t = localStorage.getItem("theme"); return THEMES.includes(t) ? t : "system"; } catch { return "system"; } }
+function applyTheme(choice) {
+  if (choice === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = choice;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", getComputedStyle(document.documentElement).getPropertyValue("--bg").trim());
+}
+function setTheme(choice) {
+  try { if (choice === "system") localStorage.removeItem("theme"); else localStorage.setItem("theme", choice); } catch { /* this visit only */ }
+  applyTheme(choice);
+}
+applyTheme(themeChoice());
+matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", () => applyTheme(themeChoice()));
 async function setLang(lang) {
   try { localStorage.setItem("lang", lang); } catch {}
   try { if (setupDraft) sessionStorage.setItem("setup-draft", JSON.stringify(setupDraft())); } catch {}  // the first run goes on where it was

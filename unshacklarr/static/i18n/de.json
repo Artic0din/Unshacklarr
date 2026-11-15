@@ -2238,5 +2238,9 @@
  "{0} that day{1}: click to change": "{0} an dem Tag{1}: klicken zum Ändern",
  "{0} to fix": "{0} zu beheben",
  "{0} waiting for the end of the quiet hours": "{0}, zurückgehalten bis zum Ende der Ruhezeit",
- "No sign-in required": "Keine Anmeldung nötig"
+ "No sign-in required": "Keine Anmeldung nötig",
+ "Appearance": "Erscheinungsbild",
+ "Dark": "Dunkel",
+ "Light": "Hell",
+ "System": "System"
 }
