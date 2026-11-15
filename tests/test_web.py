@@ -1836,11 +1836,11 @@ def test_week_and_month_share_the_chosen_date():
     assert views["loads"] == ["month"] * 3
 
 
-def test_schedule_details_offer_the_command_and_download_only_for_an_episode_still_to_come():
+def test_schedule_details_offer_the_command_for_yours_and_download_only_while_not_on_disk():
     plan = schedule_run("plan")
     nothing = {"command": "", "skipped": False, "download": False}
     assert plan["unmanaged"] == nothing  # another series: nothing to run
-    assert plan["onDisk"] == nothing
+    assert plan["onDisk"]["command"] and plan["onDisk"]["download"] is False  # the command, as the list row showed it
     assert plan["skipped"] == {"command": "", "skipped": True, "download": False}  # the offset note instead
     assert plan["todo"] == {"command": "unshackle dl -w S01E02 'it'\\''s here'", "skipped": False, "download": True}
     assert plan["noEpisodeId"]["command"] and plan["noEpisodeId"]["download"] is False

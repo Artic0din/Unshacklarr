@@ -291,11 +291,11 @@ $("#cal-today").onclick = () => schedView() === "month" ? moveMonth(0) : moveWee
 
 const FINALE = { season: "Season finale", series: "Series finale", midseason: "Mid-season finale" };
 const shellQuote = (a) => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replaceAll("'", "'\\''")}'`;
-/* What an episode's details offer: the command and Download now only for one of yours still to come, not for another
-   series, an episode already on disk, or one the episode offset skips (that says why instead). */
+/* What an episode's details offer: the command for one of yours (as the list row showed it), Download now only while
+   it is not on disk; nothing for another series, and why for one the episode offset skips. */
 function detailsPlan(d) {
-  const command = d.managed && !d.hasFile && d.command ? d.command.map(shellQuote).join(" ") : "";
-  return { command, skipped: !!d.managed && !d.command, download: !!(command && d.episodeId) };
+  const command = d.managed && d.command ? d.command.map(shellQuote).join(" ") : "";
+  return { command, skipped: !!d.managed && !d.command, download: !!(command && d.episodeId && !d.hasFile) };
 }
 /* An episode as a card: when, its name (opening its details), its status and where it comes from. */
 function schedCard(d, when) {
