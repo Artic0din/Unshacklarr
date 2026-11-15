@@ -375,7 +375,7 @@ body.drawer-open .savebar { display: none; }
 .version-chip { flex: none; margin-left: -4px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--field-bg);
   color: var(--muted); font: 600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; }
 .version-chip b { margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 700 11px/1.5 system-ui, sans-serif; }
-.version-chip.has-new { border-color: color-mix(in srgb, var(--ok) 60%, transparent); }
+.version-chip.has-new { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .version-chip.beta { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 10%, var(--field-bg)); }  /* a test build of a branch */
 @media (max-width: 700px) { .version-chip .v-commit { display: none; } }  /* its branch only, beside the logo */
 .version-chip:hover, .version-chip:focus-visible { border-color: var(--accent); color: var(--accent); }
