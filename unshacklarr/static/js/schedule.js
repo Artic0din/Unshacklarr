@@ -167,12 +167,12 @@ async function fetchDays(from, days) {
 
 /* Week view: seven day columns from Monday, the days' episodes as cards. */
 async function loadWeek() {
-  const start = weekStartOf(cal.date);
+  const start = weekStartOf(cal.date), current = () => schedView() === "week" && isoDay(weekStartOf(cal.date)) === isoDay(start);
   renderRange();
   $("#week-board").replaceChildren(loading("Loading the week…"));
   try { await fetchDays(start, 7); }
-  catch (e) { $("#week-board").replaceChildren(failed(`Could not load the calendar: ${e.message}`, loadWeek)); return; }
-  if (schedView() === "week" && isoDay(weekStartOf(cal.date)) === isoDay(start)) renderWeek();  // not a week left since
+  catch (e) { if (current()) $("#week-board").replaceChildren(failed(`Could not load the calendar: ${e.message}`, loadWeek)); return; }
+  if (current()) renderWeek();  // not a week left since, whether it loaded or failed
 }
 const countText = (list) => {  // "2 episodes · 1 managed"
   const mine = list.filter((e) => e.managed).length;
@@ -225,12 +225,13 @@ const statusPill = (d, extra = "") => { const st = schedStatus(d); return st ? e
 
 /* Month view: a grid from Monday, six weeks; phones show counts and a day's list below. */
 async function loadMonth() {
-  const gridStart = weekStartOf(cal.month);
+  const gridStart = weekStartOf(cal.month), current = () => schedView() === "month" && isoDay(weekStartOf(cal.month)) === isoDay(gridStart);
   renderRange();
   $("#cal-grid").replaceChildren(loading("Loading the month…"));
+  $("#cal-day").replaceChildren();  // the day picked in the month before is not in this one
   try { await fetchDays(gridStart, 42); }
-  catch (e) { $("#cal-grid").replaceChildren(failed(`Could not load the calendar: ${e.message}`, loadMonth)); return; }
-  if (schedView() === "month" && isoDay(weekStartOf(cal.month)) === isoDay(gridStart)) renderMonth();
+  catch (e) { if (current()) $("#cal-grid").replaceChildren(failed(`Could not load the calendar: ${e.message}`, loadMonth)); return; }
+  if (current()) renderMonth();
 }
 function renderMonth() {
   const first = cal.month, gridStart = weekStartOf(first);

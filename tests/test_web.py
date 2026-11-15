@@ -1836,6 +1836,50 @@ def test_week_and_month_share_the_chosen_date():
     assert views["loads"] == ["month"] * 3
 
 
+def test_a_week_or_month_left_before_its_load_failed_does_not_replace_the_one_shown():
+    import shutil
+    import subprocess
+    from pathlib import Path
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const line = (name) => src.match(new RegExp(`^const ${name} = .*$`, "m"))[0];
+const grab = (name) => {
+  const start = src.search(new RegExp(`^async function ${name}\\b`, "m"));
+  let depth = 0; const i = src.indexOf("{", src.indexOf(")", start));
+  for (let j = i; j < src.length; j++) { depth += src[j] === "{" ? 1 : src[j] === "}" ? -1 : 0; if (!depth) return src.slice(start, j + 1); }
+};
+const shown = {}, pending = [];
+const ctx = { Date, Map, Set, view: "week", drawn: [],
+  $: (sel) => ({ replaceChildren: (...c) => { shown[sel] = c.length ? c[0] : "empty"; } }),
+  loading: () => "loading", failed: () => "failed", renderRange() {}, schedView: () => ctx.view,
+  renderWeek() { ctx.drawn.push("week"); }, renderMonth() { ctx.drawn.push("month"); },
+  fetchDays: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) };
+vm.createContext(ctx);
+vm.runInContext(["startOfDay", "addDays", "isoDay", "weekStartOf", "cal"].map(line).join("\n") + "\n" + grab("loadWeek") + "\n" + grab("loadMonth"), ctx);
+(async () => {
+  const cal = vm.runInContext("cal", ctx), tick = () => new Promise((r) => setTimeout(r));
+  cal.date = new Date(2026, 10, 18); const old = ctx.loadWeek();
+  cal.date = new Date(2026, 10, 25); const now = ctx.loadWeek();
+  pending[1].resolve(); await now; pending[0].reject(new Error("timed out")); await old; await tick();
+  const week = { board: shown["#week-board"], drawn: ctx.drawn.slice() };
+  ctx.view = "month"; ctx.drawn = []; shown["#cal-day"] = "a day's cards";
+  cal.month = new Date(2026, 9, 1); const oldMonth = ctx.loadMonth();
+  const cleared = shown["#cal-day"];
+  cal.month = new Date(2026, 10, 1); const nowMonth = ctx.loadMonth();
+  pending[3].resolve(); await nowMonth; pending[2].reject(new Error("timed out")); await oldMonth;
+  console.log(JSON.stringify({ week, month: { grid: shown["#cal-grid"], drawn: ctx.drawn, dayCleared: cleared } }));
+})();
+"""
+    path = Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "schedule.js"
+    out = subprocess.run(["node", "-e", script, "--", str(path)], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout) == {"week": {"board": "loading", "drawn": ["week"]},
+                                      "month": {"grid": "loading", "drawn": ["month"], "dayCleared": "empty"}}
+
+
 def test_schedule_details_offer_the_command_for_yours_and_download_only_while_not_on_disk():
     plan = schedule_run("plan")
     nothing = {"command": "", "skipped": False, "download": False}
