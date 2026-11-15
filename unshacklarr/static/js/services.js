@@ -136,7 +136,7 @@ function renderServices() {
   const box = $("#sv-list");
   if (!box) return;
   const models = serviceModels(), cookies = servicesCookies;
-  const signature = JSON.stringify([models, cookies?.folder, cookies?.error, servicesAsked]);
+  const signature = JSON.stringify([models, cookies?.folder, cookies?.error, cookies?.unwritable, servicesAsked]);
   if (signature === servicesDrawn) return revealService();
   servicesDrawn = signature;
   const activePrompt = document.activeElement?.dataset?.authenticationService ? document.activeElement : null;
@@ -214,7 +214,11 @@ function renderServices() {
     el("tbody", {}, ...models.map((m) => el("tr", { className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, id: `sv-${m.service}${m.backend ? `@${m.backend}` : ""}` },
       el("th", { scope: "row" }, el("span", { className: "sv-k", textContent: SERVICE_COLUMNS[0] }), el("b", { className: "sv-name", textContent: m.name })),
       ...cells.map((build, i) => el("td", {}, el("span", { className: "sv-k", textContent: SERVICE_COLUMNS[i + 1] }), ...build(m)))))));
-  box.replaceChildren(...(models.length ? [table] : [el("p", { className: "muted", textContent: "No service is known yet. Unshackle lists them once it answers." })]));
+  // Files Unshackle can't write (owned by root after a docker exec): a service then fails on a cache or token it can't save
+  const locked = cookies?.unwritable?.length ? [el("div", { className: "sv-locked" },
+    el("p", { className: "status-err", textContent: "Unshackle can't write these files. Give them back to the container's user, for example with chown." }),
+    el("ul", { className: "ck-locked" }, ...cookies.unwritable.map((path) => el("li", {}, el("code", { textContent: path })))))] : [];
+  box.replaceChildren(...locked, ...(models.length ? [table] : [el("p", { className: "muted", textContent: "No service is known yet. Unshackle lists them once it answers." })]));
   if (activePromptReused) activePrompt.focus();
 
   // The top of the page: the cookies folder, and what the statuses add up to

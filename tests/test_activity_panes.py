@@ -24,7 +24,7 @@ const ctx = {
   el: (tag, props = {}, ...kids) => ({ tag, ...props, kids }),
   failed: (t) => ({ failed: t }),
   api: (path) => new Promise((resolve) => { pending[path] = resolve; }),
-  day: () => "", ago: () => "", duration: () => "", LOCALE: "en", S: { series: [] }, svcName: (tag) => tag, icon: () => ({}), COUNT: {}, posterSrc: () => "", posterFail: () => null, OUTCOME: {},
+  day: () => "", ago: () => "", duration: () => "", LOCALE: "en", S: { series: [] }, svcName: (tag) => tag, icon: () => ({}), COUNT: {}, posterSrc: () => "", posterFail: () => null, OUTCOME: {}, renderDock: () => {},
 };
 vm.createContext(ctx);
 vm.runInContext(`var picked_run = null;\n${grab("showLeftovers")}\n${grab("showStats")}`, ctx);
@@ -85,7 +85,7 @@ const ctx = { S: { services: ["IV", "SBS", "NF"], config: { series: { 1: {season
     return { elsewhere: suggestions, elsewhere_error: failure ? "Search failed" : undefined, available: {}, checked: "2026-11-13T02:00:00Z" };
   },
   viewAvail: (x) => x, localTitles() {}, renderSeason: () => { rendered = ctx.epElsewhere; },
-  renderPreview() {}, renderCatchUp() {}, checkLabel() {}, toast: (message) => { errors.push(message); } };
+  renderPreview() {}, renderCatchUp() {}, checkLabel() {}, renderSeriesLanguage() {}, toast: (message) => { errors.push(message); } };
 vm.createContext(ctx);
 vm.runInContext(src.match(/async function askService\b[\s\S]*?\n}\n/)[0], ctx);
 (async () => {

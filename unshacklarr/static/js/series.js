@@ -27,6 +27,12 @@ $("#d-epname").onchange = (e) => { advConf().episode_name = e.target.value; advD
 $("#d-parts").onchange = (e) => { advConf().parts = Number(e.target.value) || undefined; advDirty(); };
 $("#d-release").oninput = (e) => { S.config.series[current.tvdbId].release_time = e.target.value; dirty(); renderReleaseNext(); };  // at once: Save shows then, not on leaving the field
 $("#d-audio").oninput = (e) => { S.config.series[current.tvdbId].audio_accept = e.target.value.trim() || undefined; dirty(); };
+$("#d-release-gap").oninput = (e) => {
+  const v = e.target.value === "" ? 0 : Number(e.target.value), bad = !Number.isInteger(v) || v < 0 || v > 600;
+  e.target.setCustomValidity(bad ? "A whole number of minutes, from 0 to 600" : "");
+  e.target.reportValidity();
+  if (!bad) { S.config.series[current.tvdbId].release_gap = v || undefined; dirty(); renderReleaseNext(); }
+};
 $("#d-release-day").onchange = (e) => { S.config.series[current.tvdbId].release_day = Number(e.target.value); dirty(); renderReleaseNext(); };
 /* The day a service publishes, from the day Sonarr says an episode airs: that day, the day after, or up to two weeks
    before (a platform ahead of the channel: sync.EARLY_DAYS_MAX). */
@@ -149,12 +155,16 @@ $("#d-bc-every").onchange = (e) => { S.config.series[current.tvdbId].broadcast.e
 $("#d-bc-per").onchange = (e) => { S.config.series[current.tvdbId].broadcast.per_evening = Number(e.target.value); changedBroadcast(); };
 /* When the series' next episode will be tried, as the settings stand: what they change, in sight. */
 function releaseSlot(conf, ep) {
-  const day = Number(conf.release_day || 0), time = conf.release_time || "";
+  const day = Number(conf.release_day || 0), time = conf.release_time || conf.broadcast?.time || "";  // sync.release_time
   if (!ep.airDateUtc || (!time && day >= 0)) return null;
   const at = new Date(ep.airDateUtc);
   at.setDate(at.getDate() + day);
   const [h, m] = (time || "00:00").split(":").map(Number);
   at.setHours(h, m, 0, 0);
+  const gap = Number(conf.release_gap || 0), evening = new Date(ep.airDateUtc).toDateString(), number = ep.seasonNumber * 1e4 + ep.episodeNumber;
+  const rank = gap ? Object.values(epSeasons || {}).flat().filter((e) => e.seasonNumber > 0 && e.airDateUtc
+    && new Date(e.airDateUtc).toDateString() === evening && e.seasonNumber * 1e4 + e.episodeNumber < number).length : 0;  // sync.evening_rank
+  at.setMinutes(at.getMinutes() + gap * rank);
   return at;
 }
 function renderReleaseNext() {
@@ -242,7 +252,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     updateEpBar();
     box.replaceChildren(loading("Loading episodes from Sonarr…"));
     refreshEpBusy(s);
-    epChecked = null;
+    epChecked = null; epTitlesAgree = null;
     epQualities = {};
     epUp = null;
     // What Upgrades found the service has better, once it checked the series: the page alone only knows the ladder,
@@ -258,6 +268,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
       if (!epElsewhereFresh) epElsewhere = hit.elsewhere || {};  // a manual refresh response takes precedence over the initial saved result
       if (epAvail) { if ($("#ep-list")) renderCatchUp(); return; }
       epAvail = viewAvail(hit.available); epTitles = hit.titles; epPagesListed = hit.pages || {}; epChecked = hit.checked; epQualities = hit.qualities || {}; localTitles(hit.local_titles);
+      epTitlesAgree = hit.titlesAgree ?? null; renderSeriesLanguage();
       if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${seriesSvcs(S.config.series[s.tvdbId])}`); }
     }).catch(() => {});
   }
@@ -288,6 +299,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
       return b;
     }))] : []),
     ...seriesTags(S.config.series[s.tvdbId]).map(cdmNote),
+    el("div", { className: "lang-note", hidden: true }),  // titles in your language: offered here too (renderSeriesLanguage)
     el("div", { className: "ep-catchup", id: "ep-catchup", hidden: true }),
     /* Two lines: the season and what the service has; then what to select, and how to show the list. */
     el("div", { className: "ep-tools" },
@@ -304,6 +316,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
             onchange: (e) => { hideOnDisk = e.target.checked; renderSeason(); } }), "Hide on disk"),
           colsButton()))),
     el("ul", { className: "ep-list", id: "ep-list" }));
+  renderSeriesLanguage();
   renderCheck(s);
   renderSeason();
 }
@@ -334,11 +347,14 @@ let epPagesListed = {};  // season -> {url, count} for each season page the last
 let epTitles = null;  // everything the service lists then: [{key: "S26E11", part, name}]
 let epChecked = null;  // when that was
 let epQualities = {};  // season -> the best video and audio on the service, from the weekly check
-/* TVDB's titles in your language (its website), over Sonarr's where it has none ("TBA"): a French series reads. */
+let epTitlesAgree = null;  // whether the service's titles and Sonarr's agree, once asked; null: not asked yet
+/* TVDB's titles in your language (its website), over Sonarr's where it has none ("TBA"): a French series reads. Kept
+   on each episode too: a service naming it in your language ("Donjon") is Sonarr's English one ("Dungeon"). */
 function localTitles(names) {
   for (const e of Object.values(epSeasons || {}).flat()) {
     const name = names?.[e.id];
-    if (name && (!e.title || e.title === "TBA")) { e.title = name; e.localTitle = true; }
+    if (name) e.localName = name;
+    if (name && (!e.title || /^(tba|tbc)$/i.test(e.title))) { e.title = name; e.localTitle = true; }
   }
 }
 const svcName = (tag) => S.serviceNames?.[tag] || tag;  // "RMC+" for RMCP
@@ -686,6 +702,29 @@ function renderCatchUp() {
         onclick: () => { free.forEach((e) => picked.add(e.id)); renderSeason(); updateEpBar(); } })] : [])));
 }
 /* What the service lists of the series (unshackle's --list-titles): marked on the episodes, and for a download's preview. */
+/* After Sonarr was asked for the series' titles in your language: its refresh takes a few seconds; the episodes are
+   loaded again every 3 s until their titles change, then the service is asked again so its episodes match. */
+async function followTitles(s, want) {
+  const titles = () => Object.values(epSeasons).flat().map((e) => e.title).join("|");
+  if (!Object.keys(epSeasons).length) await loadEpisodes(s);  // its Episodes not open yet: what Sonarr had before
+  const before = titles(), conf = S.config.series[s.tvdbId] || {};
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    if (current !== s) return;
+    await loadEpisodes(s, true);
+    if (titles() === before) continue;
+    if (s.id) {  // its own title changed too ("Famille en Réparation"): in its panel and on the wall
+      try {
+        Object.assign(s, await api(`/api/series/${s.id}`));
+        if (current === s) { $("#d-title").textContent = s.title; renderMeta(s); }
+        renderWall();
+      } catch { /* the next page load shows it */ }
+    }
+    const asked = conf.service && conf.title ? await askService(s) : null;  // its own message when that fails
+    return toast(asked ? `The ${want} titles are in Sonarr, and ${svcName(conf.service)} was checked again.` : `The ${want} titles are in Sonarr.`);
+  }
+  toast(`Sonarr has not updated the titles yet. Reload the page in a few minutes.`, true);
+}
 async function askService(s) {
   const conf = S.config.series[s.tvdbId], svc = seriesSvcs(conf), check = $(".ep-check");
   if (check) { check.setAttribute("aria-disabled", "true"); check.replaceChildren(el("span", { className: "spinner", ariaHidden: "true" }), ` Asking ${svc}…`); }
@@ -695,7 +734,8 @@ async function askService(s) {
     // Each season page can list for 65 s; each other service can search and list, plus its 2 s pause.
     r = await api("/api/probe", { method: "POST", wait: 120 + 65 * Object.keys(conf.season_pages || {}).length + 132 * S.services.length, body: JSON.stringify({ show: conf, seriesId: s.id ?? S.sonarrsOf?.[s.tvdbId]?.[0]?.id, tvdbId: s.tvdbId, title: s.title,
       ...(s.id ? {} : { sonarr: S.sonarrsOf?.[s.tvdbId]?.[0]?.name }) }) });  // in no main Sonarr: its own Sonarr's episodes
-    if (current === s) { epElsewhere = r.elsewhere || {}; epElsewhereFresh = true; epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview(); }
+    if (current === s) { epElsewhere = r.elsewhere || {}; epElsewhereFresh = true; epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview();
+      epTitlesAgree = r.titlesAgree ?? null; renderSeriesLanguage(); }
     if (current === s && r.elsewhere_error) toast(`Availability refreshed, but the search on other services failed: ${r.elsewhere_error}`, true);
   } catch (e) { toast(e.message, true); }
   clearTimeout(slow);
@@ -906,11 +946,13 @@ const elsewhere = (e) => ["title", "absolute"].includes(epAvail?.[e.id]?.match);
 function agreement(e, theirs, found, svc) {
   if (!theirs) return "";
   if (!found.length) return el("span", { className: "st bad", textContent: `Not on ${svc}` });
-  const ours = plainTitle(e.title), other = plainTitle(found[0].name), generic = /^(tba|tbd|episode( \d+)?)$/;
+  const ours = plainTitle(e.title), other = plainTitle(found[0].name), generic = /^(tba|tbd|tbc|episode( \d+)?)$/;
   const titled = epAvail?.[e.id]?.match === "title" && epAvail[e.id].service === theirs;
-  if (titled || (ours && other && (ours === other || ours.includes(other) || other.includes(ours))))
+  const meets = (a) => a && other && (a === other || a.includes(other) || other.includes(a));
+  if (titled || meets(ours) || meets(plainTitle(e.localName)))  // Sonarr's title, or TVDB's in your language
     return el("span", { className: "st ok" }, icon("check", "inl"), "Same title");
   if (!ours || !other || generic.test(ours) || generic.test(other)) return "";
+  if (epTitlesAgree === false) return "";  // Sonarr's titles in another language than the service's: a translation, not another episode
   return el("span", { className: "st warn", textContent: "Other title", title: `In Sonarr: ${e.title}\nOn ${svc}: ${found[0].name}` });
 }
 function closeOneOff() {  // at once, not on the dialog's close event: that comes later, after a quick reopening
