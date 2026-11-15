@@ -465,14 +465,14 @@ class Unshackle:
 
     def remote_services(self) -> list[dict]:
         """The servers of Unshackle's remote_services and the services each offers (for --remote), kept
-        10 minutes; none when this Unshackle cannot tell (no such route, or unreachable)."""
-        fetched, servers = self._remote
-        if not fetched or time.monotonic() - fetched > 600:  # monotonic counts from boot: never fresh before a first ask
+        10 minutes; none when this Unshackle cannot tell (no such route, or unreachable), asked again after a minute."""
+        until, servers = self._remote  # until when the answer holds: 0.0 at first, so asked at once whatever the uptime
+        if time.monotonic() >= until:
             try:
-                servers = self.call("GET", "/api/remote/services").get("servers") or []
-            except UnshackleError:
-                servers = []
-            self._remote = (time.monotonic(), servers)
+                servers, keep = self.call("GET", "/api/remote/services").get("servers") or [], 600
+            except UnshackleError:  # serve still starting after a reboot, say: not kept the full 10 minutes
+                servers, keep = [], 60
+            self._remote = (time.monotonic() + keep, servers)
         return servers
 
     def health(self) -> dict:

@@ -674,3 +674,23 @@ def test_remote_services_are_asked_on_a_host_up_for_less_than_ten_minutes(tmp_pa
     monkeypatch.setattr(backend, "call", lambda method, path, **kw: asked.append(path) or {"servers": [{"name": "nas"}]})
     assert backend.remote_services() == [{"name": "nas"}]
     assert backend.remote_services() == [{"name": "nas"}] and asked == ["/api/remote/services"]  # then kept 10 minutes
+
+
+def test_remote_services_not_answered_are_asked_again_after_a_minute(tmp_path, monkeypatch):
+    # serve still starting after a reboot: its failure is kept a minute, not the 10 minutes of an answer
+    from unshacklarr import backend as backend_module
+    backend = Unshackle(tmp_path)
+    clock, answers = [100.0], [UnshackleError("unshackle serve is unreachable"), {"servers": [{"name": "nas"}]}]
+    monkeypatch.setattr(backend_module.time, "monotonic", lambda: clock[0])
+
+    def call(method, path, **kw):
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+    monkeypatch.setattr(backend, "call", call)
+    assert backend.remote_services() == []
+    clock[0] = 159.0
+    assert backend.remote_services() == [] and len(answers) == 1  # within the minute: not asked again
+    clock[0] = 161.0
+    assert backend.remote_services() == [{"name": "nas"}] and not answers
