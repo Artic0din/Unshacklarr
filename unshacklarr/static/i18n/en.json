@@ -156,7 +156,6 @@
  "A remote unshackle serve keeps its log where it runs": [],
  "A second Sonarr, with its own library. The series set up here are also downloaded for it when it has them, with its own quality ladder. Its new episodes are downloaded at their release time and by the automatic sync, as for the Sonarr above.": [],
  "A series you set up with episodes already on disk is checked within the hour, without waiting for the next automatic check.": [],
- "A service is waiting for you to sign in before Unshackle can go on. Open this link on any device and enter the code.": [],
  "A service that logs in with a username and password (set in unshackle.yaml) needs no cookies.": [],
  "A subtitle track that fails to download is left out instead of failing the download. Taken by unshackle serve, not by the command line.": [],
  "A sync is already running": [],
@@ -183,7 +182,6 @@
  ],
  "Access key": [],
  "Account": [],
- "Action needed": [],
  "Actions": [],
  "Actions for {0}": [
   "r.name"
@@ -294,6 +292,11 @@
  "Apply": [],
  "Apprise": [],
  "Apprise address": [],
+ "Approval": [],
+ "Approvals · {0}": [
+  "approvals.length"
+ ],
+ "Approve this device": [],
  "Architecture": [],
  "Archival": [],
  "ArrowDown": [],
@@ -346,6 +349,11 @@
  "Audio upgrade": [],
  "Audio, in this order": [],
  "Audio_": [],
+ "Authentication backend identity is unavailable": [],
+ "Authentication backend is no longer configured": [],
+ "Authentication cleanup is no longer available": [],
+ "Authentication session is no longer available": [],
+ "Authentication session is not on the configured backend": [],
  "Auto release times": [],
  "Automatic and release-time downloads only run from {0} to {1}.": [
   "from",
@@ -507,13 +515,22 @@
  "Clock": [],
  "Close": [],
  "Code copied": [],
+ "Code: {0}": [
+  "action['code']"
+ ],
  "Codec": [],
  "Columns": [],
  "Comma-separated countries. Unshacklarr looks in their TMDB pages for a series' links on supported services.": [],
  "Command copied": [],
  "Computer": [],
+ "Configure a {0} series before signing in": [
+  "service"
+ ],
  "Confirm new password": [],
  "Confirm password": [],
+ "Confirmed {0}": [
+  "ago(status.validated_at)"
+ ],
  "Connect Sonarr": [],
  "Connect Unshackle": [],
  "Connected": [],
@@ -539,6 +556,7 @@
   "service"
  ],
  "Copy": [],
+ "Copy details": [],
  "Copy it now: it will not be shown again.": [],
  "Copy the code": [],
  "Copy the command": [],
@@ -618,6 +636,7 @@
  "Current password": [],
  "Custom proxy": [],
  "DETAILS": [],
+ "DRM": [],
  "DV": [],
  "Daily": [],
  "Days kept": [],
@@ -641,6 +660,7 @@
  "Deletes Unshackle's cache, logins included: services log in again next time": [],
  "Deletes finished downloads from the history, with their Unshackle output. Downloads in progress stay. Your files and Sonarr are not touched.": [],
  "Deletes the leftovers of interrupted downloads": [],
+ "Details copied": [],
  "Deutsch": [],
  "Device certificate": [],
  "Device for {0}": [
@@ -779,6 +799,7 @@
  "Enter the downloads folder as Sonarr sees it": [],
  "Enter the endpoint URL, starting with https://": [],
  "Enter the folder URL, starting with https://": [],
+ "Enter the requested response": [],
  "Enter the secret key.": [],
  "Enter the setup code": [],
  "Enter the setup code first": [],
@@ -1018,6 +1039,7 @@
   "flag",
   "where"
  ],
+ "Invalid service or backend": [],
  "It can span midnight, for example 23:00 to 06:00.": [],
  "It cannot be recovered, only replaced, with this command on the server.": [],
  "It is first tried at {0}: fix it before then.": [
@@ -1294,6 +1316,7 @@
  ],
  "No address yet": [],
  "No address yet: add Discord, Telegram, ntfy or another.": [],
+ "No authentication session is waiting": [],
  "No backup in the data folder's backups folder. Pick a backup file instead.": [],
  "No backup named {0}": [
   "name"
@@ -1319,6 +1342,7 @@
  "No ladder yet. Create one with New ladder, or bring back the built-in ones.": [],
  "No license": [],
  "No limit: downloads run at any time.": [],
+ "No login required": [],
  "No option matches.": [],
  "No place to send backups to": [],
  "No programme found yet: {0}": [
@@ -1431,6 +1455,7 @@
  "Not better: {0}.": [
   "e"
  ],
+ "Not checked yet": [],
  "Not checked yet.": [],
  "Not delivered": [],
  "Not downloaded by Unshackle": [],
@@ -1598,11 +1623,13 @@
  "Open the episodes missing in {0}": [
   "name"
  ],
- "Open the link, log in if asked, and enter this code. The download goes on by itself.": [],
  "Open the series": [],
  "Open the whole list": [],
  "Open {0}": [
   "g.name"
+ ],
+ "Open: {0}": [
+  "action['url']"
  ],
  "Optional": [],
  "Optional and free:": [],
@@ -1698,6 +1725,10 @@
  "Reading the cookie files…": [],
  "Reading the history…": [],
  "Reading the notifications…": [],
+ "Ready · {0}": [
+  "(observation.available_methods || []).map((item) => AUTH_METHOD_LABELS[item]).filter(Boolean).join(\", \")"
+ ],
+ "Reauthenticate": [],
  "Rebuilding an install?": [],
  "Recently sent": [],
  "Refresh": [],
@@ -1736,8 +1767,14 @@
  ],
  "Rename": [],
  "Renaming": [],
+ "Renewing {0} session": [
+  "method"
+ ],
  "Renumber episodes to a TVDB season order. Services normally use 'official' (aired) order; a series' Streaming Order is 'alternate'. Defaults to the tvdb_order config option.": [],
  "Repackaging": [],
+ "Repairing {0} session": [
+  "method"
+ ],
  "Repeats": [],
  "Replace": [],
  "Replace anyway": [],
@@ -1918,6 +1955,7 @@
  "Server, if not ntfy.sh": [],
  "Service": [],
  "Service access": [],
+ "Service approval": [],
  "Service logins": [],
  "Services for your series, found on TMDB": [],
  "Services reloaded": [],
@@ -1970,11 +2008,19 @@
  "Shown on its series, and used at the start of its download folder names. Example: sonarr-2.": [],
  "Sign in": [],
  "Sign in through a reverse proxy": [],
+ "Sign-in cancelled": [],
+ "Sign-in failed · {0}": [
+  "AUTH_FAILURE_LABELS[observation.failure] || \"application\""
+ ],
+ "Sign-in needed": [],
  "Signal": [],
- "Signed in": [],
  "Signed in by your reverse proxy as {0}": [
   "s.proxy_user"
  ],
+ "Signed in with {0}": [
+  "method"
+ ],
+ "Signing in": [],
  "Since Unshackle 6, an API key may use the proxies set in unshackle.yaml (a country code such as au, or a provider) only once it is allowed. Downloads that ask for one fail until then.": [],
  "Size": [],
  "Skip": [],
@@ -2142,6 +2188,7 @@
  "Stops the current download. The queued episodes don't start": [],
  "Strict": [],
  "Strong": [],
+ "Submit": [],
  "Subtitle_": [],
  "Subtitles": [],
  "Subtitles, in this order": [],
@@ -2271,6 +2318,7 @@
   "what"
  ],
  "The browser refused to copy": [],
+ "The configured Unshackle does not support secure device approvals; update it before using this local core": [],
  "The country must be a two-letter code, like US": [],
  "The current download finishes; the next one waits": [],
  "The current password is wrong": [],
@@ -2416,7 +2464,6 @@
   "drm"
  ],
  "The server's address, with https://": [],
- "The service": [],
  "The service Unshackle downloads this series from, and its page there.": [],
  "The service numbers episodes from the series' start, like Sonarr's absolute number: Download asks it for {0}": [
   "found.service"
@@ -2510,6 +2557,7 @@
   "missing.length"
  ],
  "Topic": [],
+ "Traceback (most recent call last):": [],
  "Tracks": [],
  "Tracks in it": [],
  "Treat the title as daily/date-based content and fill missing air dates from TVDB during --enrich.": [],
@@ -2561,6 +2609,7 @@
   "byTitle.map((e) => `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)} as ${epAvail[e.id].service}`).join(\", \")"
  ],
  "Undo": [],
+ "Unknown backend": [],
  "Unknown download": [],
  "Unknown episode name mode {0}": [
   "name_mode"
@@ -2630,6 +2679,10 @@
  "Unshackle answers": [],
  "Unshackle command": [],
  "Unshackle config folder": [],
+ "Unshackle could not cancel sign-in": [],
+ "Unshackle could not start sign-in": [],
+ "Unshackle did not accept the response": [],
+ "Unshackle did not create an authentication session": [],
  "Unshackle doesn't answer yet: the last try of {0} may still be downloading there": [
   "c['sxxeyy']"
  ],
@@ -2721,6 +2774,9 @@
  "Waiting for Sonarr": [],
  "Waiting for a slot": [],
  "Waiting for you": [],
+ "Waiting for {0} approval": [
+  "method"
+ ],
  "Waiting in downloads": [],
  "Waits for {0} parts before importing": [
   "conf.parts"
@@ -2816,7 +2872,6 @@
  "Your user key is shown on pushover.net once you log in. Create an application there to get the API token.": [],
  "```json": [],
  "a week before": [],
- "action needed": [],
  "aired {0}": [
   "ago(it.aired)"
  ],
@@ -2863,6 +2918,7 @@
   "', '.join(accepted)"
  ],
  "audio: no language asked for, not checked": [],
+ "authentication rejected": [],
  "automatic sync": [],
  "backups": [],
  "better": [],
@@ -2913,10 +2969,6 @@
   "every"
  ],
  "expired": [],
- "expired: the next try asks for a new code": [],
- "expires in {0} min": [
-  "Math.ceil(left / 60)"
- ],
  "failed its test": [],
  "for another.": [],
  "for one,": [],
@@ -3028,10 +3080,6 @@
  "one file, nothing to join": [],
  "oninput": [],
  "only": [],
- "open {0} and enter {1}": [
-  "need.get('url')",
-  "need.get('code')"
- ],
  "or": [],
  "or paste it below": [],
  "part {0}": [
@@ -3464,6 +3512,11 @@
  "{0} failed": [
   "st.n.failed"
  ],
+ "{0} failed · {1} · trying {2}": [
+  "named",
+  "AUTH_FAILURE_LABELS[observation.failure] || \"application\"",
+  "next"
+ ],
  "{0} file{1}": [
   "files.length",
   "files.length === 1 ? \"\" : \"s\""
@@ -3591,9 +3644,6 @@
   "name",
   "', '.join(used)"
  ],
- "{0} is waiting for you": [
-  "c.service || \"The service\""
- ],
  "{0} kb/s": [
   "Math.round(bps / 1e3)"
  ],
@@ -3661,9 +3711,8 @@
   "flag",
   "value"
  ],
- "{0} needs you: {1}": [
-  "need.get('service') or run.card['service']",
-  "need.get('code')"
+ "{0} needs approval": [
+  "approvals[0].service"
  ],
  "{0} new": [
   "fresh"
@@ -3781,6 +3830,10 @@
   "s['endpoint'].split('/')[2]",
   "said"
  ],
+ "{0} rejected · trying {1}": [
+  "named",
+  "next"
+ ],
  "{0} remote": [
   "data.remote.length"
  ],
@@ -3816,6 +3869,9 @@
  "{0} services": [
   "st.services"
  ],
+ "{0} services need approval": [
+  "approvals.length"
+ ],
  "{0} services or series pick their own": [
   "picked"
  ],
@@ -3833,6 +3889,15 @@
   "nFiles",
   "nFiles === 1 ? \"\" : \"s\""
  ],
+ "{0} session available": [
+  "named"
+ ],
+ "{0} session expired": [
+  "named"
+ ],
+ "{0} session rejected": [
+  "named"
+ ],
  "{0} stopped": [
   "st.n.stopped"
  ],
@@ -3841,6 +3906,9 @@
  ],
  "{0} through Unshackle": [
   "service"
+ ],
+ "{0} timed out": [
+  "named"
  ],
  "{0} tracks downloaded": [
   "tracks.length"
@@ -3905,10 +3973,6 @@
  ],
  "{0} · waiting for a slot": [
   "c.service"
- ],
- "{0} · waiting for you: code {1}": [
-  "c.service",
-  "c.action.code"
  ],
  "{0} · waiting for your answer": [
   "c.service"
@@ -4114,13 +4178,6 @@
   "label",
   "show['service']",
   "profile"
- ],
- "{0}: {1} within {2} min, for {3} {4}.": [
-  "need.get('message') or 'Action needed'",
-  "what",
-  "left",
-  "run.card['series']",
-  "run.card['sxxeyy']"
  ],
  "{0}: {1}, not downloaded": [
   "label",
