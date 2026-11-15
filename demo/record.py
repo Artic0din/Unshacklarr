@@ -48,6 +48,8 @@ SERVICES = [
     ("AMZN", "Prime Video", "primevideo.com", ["cookies"]),
     ("TF1", "TF1+", "tf1.fr", ["cookies", "credentials"]),
     ("RMCBFM", "RMC BFM Play", "rmcbfmplay.com", ["cookies"]),
+    ("MAX", "Max", "max.com", ["pairing"]),
+    ("TUBI", "Tubi", "tubitv.com", []),  # no login at all
 ]
 # every service its device, as a real setup has it: Prime Video on PlayReady, the others on Widevine
 CDM_MAP = {"default": "samsung_sm-a536b_l3", "AMZN": "xiaomi_mibox_s_sl2000",
@@ -65,6 +67,8 @@ def serve(method, path, **kwargs):
         return {"services": SERVE_SERVICES}
     if path == "/api/remote/services":
         return {"servers": []}
+    if path == "/api/remote/logins":  # a download that found its session over: Services shows it live
+        return {"logins": [{"id": "demo-login-1", "service": "RMCBFM", "authentication": {"state": "session_expired", "method": "cookies"}}]}
     if path == "/api/health":
         return {"version": "5.5.0", "update_check": {"update_available": False}}
     if path == "/api/env/check":
@@ -250,6 +254,22 @@ config["series"][900004].update(parts=2, release_day=0, release_time="19:30")  #
 config["series"][900003].update(season_offset=1, season_offset_from=2)  # The Simpsons: Disney+'s S03 is Sonarr's S02
 web.write_config(config)
 
+# Sign-in, for Settings, Services: confirmed, in need of a sign-in, nothing checked
+sync.AUTHENTICATION_FILE.write_text(json.dumps({"": {
+    "ATVP": {"state": "validated", "observed_at": ago(days=3), "validated_at": ago(days=3)},
+    "AMZN": {"state": "validated", "observed_at": ago(hours=20), "validated_at": ago(hours=20)},
+    "RMCBFM": {"state": "needs_user_action", "observed_at": ago(hours=7), "validated_at": ago(days=40)},
+    "TF1": {"state": "needs_user_action", "observed_at": ago(days=2), "validated_at": None},
+}}))
+# a sign-in under way or ended on each real service with a login (every lifecycle label is in the tests)
+sync.authentication_setups = lambda: [
+    {"service": "MAX", "backend": "", "state": "waiting", "method": "pairing", "prompt": "Code shown on your TV"},
+    {"service": "AMZN", "backend": "", "state": "timed_out", "method": "pairing"},
+    {"service": "ATVP", "backend": "", "state": "cancelled", "method": "pairing"},
+    {"service": "DSNP", "backend": "", "state": "error", "method": "credentials", "failure": "authentication_rejected"},
+    {"service": "HULU", "backend": "", "state": "fallback", "method": "cookies", "next_method": "credentials", "failure": "network"},
+]
+
 RUN_LOG = """\x1b[90m── {when} · {kind} ──\x1b[0m\r
 \x1b[36m▸\x1b[0m {series} {sxxeyy} on {service}\r
   unshackle serve took it as job demo-{id}\r
@@ -316,7 +336,7 @@ live = run(by_title["The Bear"], airing[0], 2, "running", kind="manual", running
 
 sync.inbox_add("success", "Downloaded: The Simpsons S02E11", "1.4 GB in 5 min, imported by Sonarr.", batch=batch)
 sync.inbox_add("error", "Not downloaded: Wheeler Dealers S01E07", "RMC BFM Play: your session has expired, log in again (cookies or credentials)")
-sync.inbox_add("warning", "HULU cookies expire in 5 days", "Replace them before, in Settings, Cookies.")
+sync.inbox_add("warning", "HULU cookies expire in 5 days", "Replace them before, in Settings › Services.")
 sync.inbox_add("success", "Downloaded: Koh-Lanta S01E09", "Both parts joined into one file, imported by Sonarr.")
 (DATA / "notifications_sent.json").write_text(json.dumps([
     {"at": ago(hours=h), "level": lv, "title": t, "to": [{"app": "Discord", "ok": True}, {"app": "ntfy", "ok": lv != "success"}]}
@@ -349,6 +369,7 @@ async def record() -> dict:
                      "/api/push/key", "/api/changelog"):
             await get(path)
         await get("/api/status?full=1")
+        await get("/api/status?auth=1")
         for days in ("", "?days=7", "?days=30", "?days=90"):  # Activity, Catch up
             await get(f"/api/missing{days}")
         await get("/api/upgrades")  # Activity, Upgrades (nothing checked yet: a check asks the service)

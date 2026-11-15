@@ -364,7 +364,7 @@ then en), used unless the series or its service sets `--a-lang` or `--s-lang`.
 
 ### 🔑 Cookies and CDMs
 
-Settings › Cookies and Settings › CDM manage Unshackle's own files: its cookie files, its Widevine
+Settings › Services (its cookie files, on each service's row beside its sign-in) and Settings › CDM manage Unshackle's own files: its cookie files, its Widevine
 (`.wvd`) and PlayReady (`.prd`) devices, and which device each service uses (the `cdm:` section of
 `unshackle.yaml`, where only that service's line changes). Unshackle reads them anew for every
 download. Unshacklarr must see those files:

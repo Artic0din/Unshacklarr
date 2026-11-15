@@ -1,4 +1,4 @@
-/* Cookies: Unshackle's cookie files per service, with their expiry, replaced from here. */
+/* Cookies: where a cookie file stands and the window that replaces it (its rows are Settings, Services); then the CDM page. */
 const ago_days = (ts) => { const d = Math.floor((Date.now() / 1000 - ts) / 86400); return d < 1 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
 /* Where a cookie file stands: a colour, a word, a sentence for the tooltip. */
 function cookieStatus(f) {
@@ -6,71 +6,21 @@ function cookieStatus(f) {
   if (f.expired) return ["bad", "Expired", "The service will refuse them: replace them with fresh ones"];
   // Session cookies carry no date: how long they log in is the service's secret
   if (left === null || left < 0) return ["mut", "Session only", "Session cookies have no expiry date: only a failed login shows they are over"];
-  const days = `${left} day${left === 1 ? "" : "s"}`;
+  const days = left === 1 ? "1 day" : `${left} days`;
   return left < 7 ? ["warn", `Expires in ${days}`, "Replace them soon"] : ["ok", `Valid · ${days} left`, "Nothing to do"];
 }
-const CK_ICONS = {
-  ok: '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>',
-  warn: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
-  bad: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5h.01"/></svg>',
-  mut: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
-};
-async function loadCookies() {
-  let data;
-  try { data = await api("/api/cookies"); } catch (e) { return $("#ck-list").replaceChildren(failed(e.message, loadCookies)); }
-  $("#ck-folder").textContent = data.folder || "";
-  $("#ck-add").hidden = !data.folder;
-  const state = $("#ck-state");
-  const show = (cls, b, small) => { state.className = `sx-state ${cls}`; state.querySelector("b").textContent = b; state.querySelector("small").textContent = small; };
-  // A remote serve with no folder mounted here: its cookies are kept where it runs, on purpose or not, downloads go on
-  if (!data.folder && S.config.settings.unshackle_mode === "remote") { show("", "Managed where unshackle serve runs", "");
-    return $("#ck-list").replaceChildren(el("p", { className: "muted", textContent: "To manage them here too, mount its Cookies folder and set its path in Settings, Unshackle, Folders." })); }
-  if (!data.folder) { show("down", "No cookie folder", ""); return $("#ck-list").replaceChildren(el("p", { className: "status-err", textContent: data.error })); }
-  const usedBy = (tag) => Object.values(S.config.series).filter((c) => c.service === tag).length;
-  const rank = { bad: 0, warn: 1, mut: 2, ok: 3 };
-  const services = [...new Set([...Object.keys(data.files), ...data.used.filter((t) => data.wants.includes(t))])].map((tag) => {
-    const files = (data.files[tag] || []).map((f) => ({ ...f, st: cookieStatus(f) }));
-    // A service a series downloads from, that wants cookies and has none: as bad as expired ones
-    const worst = files.length ? files.reduce((w, f) => rank[f.st[0]] < rank[w] ? f.st[0] : w, "ok") : "bad";
-    return { tag, files, worst, n: usedBy(tag) };
-  }).sort((x, y) => rank[x.worst] - rank[y.worst] || y.n - x.n || x.tag.localeCompare(y.tag));
-  const bad = services.filter((v) => v.worst === "bad").length, warn = services.filter((v) => v.worst === "warn").length;
-  const nFiles = services.reduce((t, v) => t + v.files.length, 0);
-  const counts = `${services.length} service${services.length === 1 ? "" : "s"} · ${nFiles} file${nFiles === 1 ? "" : "s"}`;
-  if (bad) show("down", `${bad} service${bad === 1 ? "" : "s"} with expired or missing cookies`, counts);
-  else if (warn) show("warn", `${warn} service${warn === 1 ? "" : "s"} to renew soon`, counts);
-  else show("ok", services.length ? "All logins fine" : "No cookie file yet", services.length ? counts : "");
-  $("#ck-list").replaceChildren(...services.map(({ tag, files, worst, n }) => el("div", { className: `sx-card ck-card ${worst}` },
-    el("div", { className: "sx-head" }, el("span", { className: `sx-ico ck-ico ${worst}`, ariaHidden: "true", innerHTML: CK_ICONS[worst] }),
-      el("div", {}, el("h3", { textContent: tag }), el("p", { textContent: [n ? `Used by ${n} series` : "No series uses it", files.length ? `${files.length} file${files.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") })),
-      ...(files.length ? [] : [el("button", { className: "btn small primary", textContent: "Add", onclick: () => openCookieDialog(tag, "default") })])),
-    ...(files.length ? files.map((f) => {
-      const [cls, word, why] = f.st;
-      const del = el("button", { className: "btn small danger", textContent: "Delete", onclick: async () => {
-        if (del.dataset.sure !== "1") { del.dataset.sure = "1"; del.textContent = "Sure?"; return setTimeout(() => { del.dataset.sure = ""; del.textContent = "Delete"; }, 4000); }
-        try { await api("/api/cookies/delete", { method: "POST", body: JSON.stringify({ service: tag, profile: f.profile }) }); loadCookies(); }
-        catch (e) { toast(e.message, true); }
-      } });
-      return el("div", { className: "ck-row" },
-        el("span", { className: "ck-file" }, el("b", { textContent: f.profile ? `${f.profile}.txt` : `${tag}.txt` }), hoverTip(el("span", { className: `ck-pill ${cls}`, textContent: word }), () => [why])),
-        el("small", { textContent: `${f.count} cookie${f.count === 1 ? "" : "s"} · updated ${ago_days(f.updated)}` }),
-        el("span", { className: "btns" }, el("button", { className: `btn small${cls === "bad" || cls === "warn" ? " primary" : ""}`, textContent: "Replace", onclick: () => openCookieDialog(tag, f.profile) }), del));
-    }) : [el("div", { className: "ck-row" }, el("span", { className: "ck-file" }, el("b", { textContent: "No cookie file" }), el("span", { className: "ck-pill bad", textContent: "Missing" })),
-      el("small", { textContent: "Downloads will fail unless it logs in with a username and password." }))]))));
-}
-function openCookieDialog(service = "", profile = "default") {
+function openCookieDialog(service = "", profile = "default", newProfile = false) {
   $("#ck-service").replaceChildren(...S.services.map((t) => el("option", { value: t, textContent: t })));
   $("#ck-service").value = service || S.services[0] || "";
   $("#ck-service").disabled = Boolean(service);
   $("#ck-profile").value = profile;
-  $("#ck-profile").disabled = Boolean(service);
+  $("#ck-profile").disabled = Boolean(service) && !newProfile;  // adding: any profile name; replacing: that one
   $("#ck-title").textContent = service ? `Cookies for ${service}` : "Add cookies";
   $("#ck-text").value = "";
   $("#ck-file").value = "";
   $("#ck-error").replaceChildren();
   $("#cookie-dialog").showModal();
 }
-$("#ck-add").onclick = () => openCookieDialog();
 $("#ck-file").onchange = async (e) => { const f = e.target.files[0]; if (f) $("#ck-text").value = await f.text(); };
 $("#ck-form").onsubmit = async (e) => {
   if (e.submitter?.value !== "save") return;
@@ -81,7 +31,7 @@ $("#ck-form").onsubmit = async (e) => {
     const saved = await api("/api/cookies", { method: "POST", body: JSON.stringify(body) });
     $("#cookie-dialog").close();
     toast(`${body.service} cookies saved: ${saved.count} cookies`);
-    loadCookies();
+    loadServices();
   } catch (err) { $("#ck-error").replaceChildren(failed(err.message)); }
 };
 

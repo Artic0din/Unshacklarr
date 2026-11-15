@@ -782,11 +782,11 @@ def test_lightweight_authentication_refresh_repaints_visible_status():
     details = re.search(r"^let unshackleDetails = .*;$", source, re.M).group()
     harness = f"""
 const vm = require("vm");
-const renders = [];
+const renders = [], services = [];
 const button = {{ querySelector: () => ({{ className: "" }}), title: "", ariaLabel: "" }};
 const box = {{
   S: {{ authentication: {{}} }}, document: {{ querySelector: () => button }},
-  renderUnshackleStatus: (status) => renders.push(status), renderSonarrState() {{}},
+  renderUnshackleStatus: (status) => renders.push(status), renderServices: () => services.push(1), renderSonarrState() {{}},
   renderUnshackleState() {{}}, paintServers() {{}}, paintSonarrs() {{}},
 }};
 vm.createContext(box);
@@ -795,7 +795,7 @@ box.renderHealth({{ unshackle: {{ ok: true, tools: [{{ name: "ffmpeg" }}] }}, au
 box.renderHealth({{ unshackle: {{ ok: false, error: "offline" }}, authentication: {{ PAIRED: {{ state: "validated" }} }} }});
 box.renderHealth({{ unshackle: {{ ok: true }}, authentication: {{ PAIRED: {{ state: "needs_user_action" }} }} }});
 console.log(JSON.stringify({{
-  renders: renders.length, last: box.S.authentication.PAIRED.state,
+  renders: renders.length, services: services.length, last: box.S.authentication.PAIRED.state,
   recovered: renders.at(-1).ok, staleError: "error" in renders.at(-1), tools: renders.at(-1).tools.length,
 }}));
 """
@@ -805,6 +805,7 @@ console.log(JSON.stringify({{
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout) == {
         "renders": 3,
+        "services": 3,
         "last": "needs_user_action",
         "recovered": True,
         "staleError": False,
@@ -819,39 +820,48 @@ def test_saved_authentication_status_remains_visible_while_unshackle_is_offline(
 
     if not shutil.which("node"):
         pytest.skip("node is not installed")
-    source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "settings-services.js").read_text()
-    render = re.search(r"^function renderUnshackleStatus\(st\) \{.*?^\}", source, re.M | re.S).group()
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    source = (static / "js" / "services.js").read_text()
+    render = "\n".join(
+        re.search(pattern, source, re.M | re.S).group()
+        for pattern in (
+            r"^const AUTH_METHOD_LABELS = .*?;$", r"^const AUTH_METHOD_NAMES = .*?;$", r"^const AUTH_FAILURE_LABELS = .*?;$",
+            r"^function authenticationLabel\(.*?^\}", r"^function signInCounts\(.*?^\}", r"^function signInSummary\(.*?^\}",
+            r"^const SERVICE_COLUMNS = .*?;$", r"^let servicesCookies = .*?;", r"^let servicesDrawn = .*?;", r"^let servicesAsked = .*?;",
+            r"^let servicesReveal = .*?;", r"^function serviceModels\(.*?^\}", r"^function renderServices\(.*?^\}", r"^function revealService\(.*?^\}",
+        )
+    )
     harness = f"""
 const vm = require("vm");
-const nodes = {{
-  "#ux-run": {{ replaceChildren(...children) {{ this.children = children; }} }},
-  "#u-status": {{ replaceChildren(...children) {{ this.children = children; }} }},
-}};
+const nodes = {{}};
+for (const name of ["#sv-list", "#sv-state", "#sv-folder", "#sv-note"])
+  nodes[name] = {{ replaceChildren(...children) {{ this.children = children; }}, querySelector: () => ({{}}) }};
 const box = {{
-  S: {{ authentication: {{ PAIRED: {{ state: "needs_user_action", service: "PAIRED" }} }}, config: {{ settings: {{}} }} }},
+  S: {{ authentication: {{ PAIRED: {{ state: "needs_user_action", service: "PAIRED" }} }}, config: {{ settings: {{}}, series: {{}} }} }},
   document: {{ activeElement: null }},
   $: (selector) => nodes[selector],
   el: (tag, props = {{}}, ...children) => ({{ tag, ...props, children }}),
   svcName: (name) => name,
+  usesService: (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || []).some((page) => page.service === tag),
   ago: () => "now",
 }};
 vm.createContext(box);
 vm.runInContext({json.dumps(render)}, box);
-box.renderUnshackleStatus({{ ok: false, mode: "remote", error: "offline" }});
+box.renderServices();
 const texts = [];
 const visit = (node) => {{
   if (!node || typeof node !== "object") return;
   if (node.textContent) texts.push(node.textContent);
   (node.children || []).forEach(visit);
 }};
-nodes["#u-status"].children.forEach(visit);
+nodes["#sv-list"].children.forEach(visit);
 console.log(JSON.stringify(texts));
 """
 
     done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
 
     assert done.returncode == 0, done.stderr
-    assert "Service access" in json.loads(done.stdout)
+    assert "Sign-in needed" in json.loads(done.stdout)
 
 
 AUTHENTICATION_UI_HARNESS = r"""
@@ -863,14 +873,26 @@ const pick = (source, pattern) => {
   if (!match) throw new Error("Missing page function: " + pattern);
   return match[0];
 };
-const settings = read("settings-services.js"), schedule = read("schedule.js");
+const services = read("services.js"), cookies = read("cookies-cdm.js"), schedule = read("schedule.js");
 const source = [
-  pick(settings, /^const AUTH_METHOD_LABELS = .*?;$/m),
-  pick(settings, /^const AUTH_FAILURE_LABELS = .*?;$/m),
-  pick(settings, /^function authenticationLabel\(.*?^\}/ms),
-  pick(settings, /^async function startServiceAuthentication\(.*?^\}/ms),
-  pick(settings, /^async function cancelServiceAuthentication\(.*?^\}/ms),
-  pick(settings, /^function renderUnshackleStatus\(.*?^\}/ms),
+  pick(cookies, /^const ago_days = .*$/m),
+  pick(cookies, /^function cookieStatus\(.*?^\}/ms),
+  pick(services, /^const AUTH_METHOD_LABELS = .*?;$/m),
+  pick(services, /^const AUTH_METHOD_NAMES = .*?;$/m),
+  pick(services, /^const AUTH_FAILURE_LABELS = .*?;$/m),
+  pick(services, /^function authenticationLabel\(.*?^\}/ms),
+  pick(services, /^async function startServiceAuthentication\(.*?^\}/ms),
+  pick(services, /^async function cancelServiceAuthentication\(.*?^\}/ms),
+  pick(services, /^function signInCounts\(.*?^\}/ms),
+  pick(services, /^function signInSummary\(.*?^\}/ms),
+  pick(services, /^const SERVICE_COLUMNS = .*?;$/m),
+  pick(services, /^let servicesCookies = .*?;/m),
+  pick(services, /^let servicesDrawn = .*?;/m),
+  pick(services, /^let servicesAsked = .*?;/m),
+  pick(services, /^let servicesReveal = .*?;/m),
+  pick(services, /^function serviceModels\(.*?^\}/ms),
+  pick(services, /^function renderServices\(.*?^\}/ms),
+  pick(services, /^function revealService\(.*?^\}/ms),
   pick(schedule, /^async function refreshBusy\(.*?^\}/ms),
   pick(schedule, /^async function refreshHealth\(.*?^\}/ms),
   pick(schedule, /^function renderHealth\(.*?^\}/ms),
@@ -895,8 +917,10 @@ class FakeNode {
   focus() { document.activeElement = this; }
 }
 const nodes = {
-  "#ux-run": new FakeNode(),
-  "#u-status": new FakeNode(),
+  "#sv-list": new FakeNode(),
+  "#sv-state": new FakeNode("div", { querySelector: () => new FakeNode() }),
+  "#sv-folder": new FakeNode(),
+  "#sv-note": new FakeNode(),
   "#nav-busy": new FakeNode(),
 };
 const healthButtons = Object.fromEntries(["unshackle", "sonarr"].map((name) => {
@@ -924,16 +948,21 @@ const box = {
     authenticationMethods: { PAIRED: ["pairing"] },
     authenticationLive: [],
     authenticationSetups: [setup],
-    config: { settings: {} },
+    config: { settings: {}, series: {} },
   },
   document,
   $: (selector) => nodes[selector],
   el: (tag, props = {}, ...children) => new FakeNode(tag, props, children),
   svcName: (name) => name,
+  usesService: (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || []).some((page) => page.service === tag),
   ago: () => "now",
   currentTab: "settings",
-  settingsSec: "unshackle",
+  settingsSec: "services",
   unshackleDetails: { ok: false, mode: "remote" },
+  renderUnshackleStatus() {},
+  hoverTip: (node) => node,
+  openCookieDialog() {},
+  SCROLL: "auto",
   showApprovals() {},
   setTimeout() {},
   clearTimeout() {},
@@ -949,14 +978,14 @@ vm.createContext(box);
 vm.runInContext(source, box);
 
 const focusPrompt = () => {
-  box.renderUnshackleStatus(box.unshackleDetails);
-  const input = find(nodes["#u-status"], (node) => node.tag === "input");
+  box.renderServices();
+  const input = find(nodes["#sv-list"], (node) => node.tag === "input");
   input.value = "partly typed";
   input.focus();
   return input;
 };
 const promptState = (input) => {
-  const current = find(nodes["#u-status"], (node) => node.tag === "input");
+  const current = find(nodes["#sv-list"], (node) => node.tag === "input");
   return { sameNode: current === input, value: current?.value, focused: document.activeElement === input };
 };
 
@@ -1002,20 +1031,20 @@ const promptState = (input) => {
     ];
     box.api = async () => ({ running: 0, queued: 0, authentication: [], authentication_setups: [responses.shift()] });
     await box.refreshBusy();
-    const changed = find(nodes["#u-status"], (node) => node.tag === "input");
+    const changed = find(nodes["#sv-list"], (node) => node.tag === "input");
     const changedState = { sameNode: changed === input, value: changed?.value, focused: document.activeElement === changed };
     await box.refreshBusy();
-    console.log(JSON.stringify({ changed: changedState, terminalHasInput: !!find(nodes["#u-status"], (node) => node.tag === "input") }));
+    console.log(JSON.stringify({ changed: changedState, terminalHasInput: !!find(nodes["#sv-list"], (node) => node.tag === "input") }));
   }
   if (scenario === "classified_status") {
     box.S.authenticationSetups = [];
-    box.renderUnshackleStatus(box.unshackleDetails);
-    const firstRow = find(nodes["#u-status"], (node) => node.className === "st-job");
-    const needsAction = find(firstRow, (node) => node.tag === "small").textContent;
+    box.renderServices();
+    const firstRow = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    const needsAction = find(firstRow, (node) => node.className === "sv-label").textContent;
     box.S.authentication.PAIRED = { service: "PAIRED", state: "validated", validated_at: "2026-11-15T00:00:00Z" };
-    box.renderUnshackleStatus(box.unshackleDetails);
-    const secondRow = find(nodes["#u-status"], (node) => node.className === "st-job");
-    const validated = find(secondRow, (node) => node.tag === "small").textContent;
+    box.renderServices();
+    const secondRow = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    const validated = find(secondRow, (node) => node.className === "sv-label").textContent;
     console.log(JSON.stringify({ needsAction, validated }));
   }
   if (scenario === "selected_backend_actions") {
@@ -1026,10 +1055,10 @@ const promptState = (input) => {
     };
     box.S.authenticationMethods = { "PAIRED@vpn": [] };
     box.S.authenticationSetups = [];
-    box.renderUnshackleStatus(box.unshackleDetails);
-    const rows = findAll(nodes["#u-status"], (node) => node.className === "st-job").map((row) => ({
-      name: find(row, (node) => node.tag === "span").textContent,
-      label: find(row, (node) => node.tag === "small").textContent,
+    box.renderServices();
+    const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => ({
+      name: find(row, (node) => node.className === "sv-name").textContent,
+      label: find(row, (node) => node.className === "sv-label").textContent,
       controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
     }));
     console.log(JSON.stringify(rows));
@@ -1040,30 +1069,30 @@ const promptState = (input) => {
     box.S.authenticationSetups = [{
       service: "PAIRED", backend: "vpn", state: "waiting", method: "pairing", prompt: "Approval response",
     }];
-    box.renderUnshackleStatus(box.unshackleDetails);
-    let rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    box.renderServices();
+    let rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row");
     const waiting = rows[0] ? {
-      name: find(rows[0], (node) => node.tag === "span").textContent,
-      label: find(rows[0], (node) => node.tag === "small").textContent,
+      name: find(rows[0], (node) => node.className === "sv-name").textContent,
+      label: find(rows[0], (node) => node.className === "sv-label").textContent,
       prompt: find(rows[0], (node) => node.tag === "input")?.placeholder,
       controls: findAll(rows[0], (node) => node.tag === "button").map((button) => button.textContent),
     } : null;
     const input = rows[0] ? find(rows[0], (node) => node.tag === "input") : null;
     if (input) input.value = "temporary response";
     box.S.authentication = { "PAIRED@vpn": { service: "PAIRED", backend: "vpn", state: "needs_user_action" } };
-    box.renderUnshackleStatus(box.unshackleDetails);
-    const matchingStatusRows = findAll(nodes["#u-status"], (node) => node.className === "st-job").length;
+    box.renderServices();
+    const matchingStatusRows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").length;
     box.S.authentication = {};
     box.S.authenticationSetups = [{ service: "PAIRED", backend: "vpn", state: "cancelled", method: "pairing" }];
-    box.renderUnshackleStatus(box.unshackleDetails);
-    rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    box.renderServices();
+    rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row");
     const terminal = rows[0] ? {
-      label: find(rows[0], (node) => node.tag === "small").textContent,
+      label: find(rows[0], (node) => node.className === "sv-label").textContent,
       hasInput: !!find(rows[0], (node) => node.tag === "input"),
     } : null;
     box.S.authenticationSetups = [];
-    box.renderUnshackleStatus(box.unshackleDetails);
-    const reloadedRows = findAll(nodes["#u-status"], (node) => node.className === "st-job").length;
+    box.renderServices();
+    const reloadedRows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").length;
     console.log(JSON.stringify({ waiting, matchingStatusRows, terminal, reloadedRows }));
   }
   if (scenario === "setup_after_backend_change") {
@@ -1074,18 +1103,18 @@ const promptState = (input) => {
     box.S.authenticationSetups = [{
       service: "PAIRED", backend: "old", state: "waiting", method: "pairing", prompt: "Approval response",
     }];
-    box.renderUnshackleStatus(box.unshackleDetails);
-    let rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    box.renderServices();
+    let rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row");
     const waiting = rows.map((row) => ({
-      name: find(row, (node) => node.tag === "span").textContent,
+      name: find(row, (node) => node.className === "sv-name").textContent,
       controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
     }));
     box.S.authenticationMethods = {};
     box.S.authenticationSetups = [{ service: "PAIRED", backend: "old", state: "error", failure: "network" }];
-    box.renderUnshackleStatus(box.unshackleDetails);
-    rows = findAll(nodes["#u-status"], (node) => node.className === "st-job");
+    box.renderServices();
+    rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row");
     const errored = rows.map((row) => ({
-      name: find(row, (node) => node.tag === "span").textContent,
+      name: find(row, (node) => node.className === "sv-name").textContent,
       controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
     }));
     console.log(JSON.stringify({ waiting, errored }));
@@ -1097,12 +1126,102 @@ const promptState = (input) => {
       throw new Error("Unexpected request: " + path);
     };
     await box.cancelServiceAuthentication("PAIRED", "");
-    let row = find(nodes["#u-status"], (node) => node.className === "st-job");
-    const cancelled = find(row, (node) => node.tag === "small").textContent;
+    let row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    const cancelled = find(row, (node) => node.className === "sv-label").textContent;
     await box.refreshBusy();
-    row = find(nodes["#u-status"], (node) => node.className === "st-job");
-    const refreshed = find(row, (node) => node.tag === "small").textContent;
+    row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    const refreshed = find(row, (node) => node.className === "sv-label").textContent;
     console.log(JSON.stringify({ cancelled, refreshed }));
+  }
+  if (scenario === "cookies_per_service") {
+    box.S.authentication = {
+      HULU: { service: "HULU", backend: "", state: "needs_user_action" },
+      "HULU@vpn": { service: "HULU", backend: "vpn", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+      OPEN: { service: "OPEN", backend: "", state: "anonymous" },
+    };
+    box.S.authenticationMethods = { HULU: ["cookies", "credentials"], "HULU@vpn": ["cookies"], OPEN: [] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" }, 2: { service: "HULU" }, 3: { service: "OPEN" } };
+    const now = Math.floor(Date.now() / 1000);
+    vm.runInContext(`servicesCookies = { folder: "/cookies", files: {
+      HULU: [{ profile: "", count: 1, expired: true, expires: ${now - 86400}, updated: ${now} }, { profile: "kids", count: 3, expires: ${now + 90 * 86400}, updated: ${now} }],
+      EXTRA: [{ profile: "", count: 2, expires: ${now + 90 * 86400}, updated: ${now} }] } }`, box);
+    box.renderServices();
+    const words = (cell) => findAll(cell, (node) => node.textContent && node.className !== "sv-k" && !(node.children || []).some((c) => c.textContent))
+      .map((node) => node.textContent);
+    const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => {
+      const cells = row.children.slice(1);
+      return { name: find(row, (node) => node.className === "sv-name").textContent, label: find(row, (node) => node.className === "sv-label").textContent,
+        cookies: words(cells[1]), used: words(cells[3]), attention: !!row.dataset.attention };
+    });
+    console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className }));
+  }
+  if (scenario === "validated_cookie_only_missing") {
+    box.S.authentication = {
+      HULU: { service: "HULU", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+    };
+    box.S.authenticationMethods = { HULU: ["cookies"] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" } };
+    vm.runInContext('servicesCookies = { folder: "/cookies", files: { HULU: [] } }', box);
+    box.renderServices();
+    const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    console.log(JSON.stringify({
+      attention: !!row.dataset.attention,
+      cookieStatus: find(row, (node) => node.className === "ck-pill bad")?.textContent,
+    }));
+  }
+  if (scenario === "validated_pairing_without_cookies") {
+    box.S.authentication = {
+      HULU: {
+        service: "HULU", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z",
+        authentication: { state: "authenticated", method: "pairing" },
+      },
+    };
+    box.S.authenticationMethods = { HULU: ["pairing", "cookies"] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" } };
+    vm.runInContext('servicesCookies = { folder: "/cookies", files: { HULU: [] } }', box);
+    box.renderServices();
+    const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    console.log(JSON.stringify({
+      attention: !!row.dataset.attention,
+      cookieStatus: find(row, (node) => node.className === "ck-pill")?.textContent,
+    }));
+  }
+  if (scenario === "validated_cookies_with_pairing_support_missing") {
+    box.S.authentication = {
+      HULU: {
+        service: "HULU", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z",
+        authentication: { state: "authenticated", method: "cookies" },
+      },
+    };
+    box.S.authenticationMethods = { HULU: ["pairing", "cookies"] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" } };
+    vm.runInContext('servicesCookies = { folder: "/cookies", files: { HULU: [] } }', box);
+    box.renderServices();
+    const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    console.log(JSON.stringify({
+      attention: !!row.dataset.attention,
+      cookieStatus: find(row, (node) => node.className === "ck-pill bad")?.textContent,
+    }));
+  }
+  if (scenario === "polling_follows_the_section") {
+    const asked = [], painted = [];
+    box.api = async (path) => { asked.push(path); return { running: 0, queued: 0, authentication: [], authentication_setups: [] }; };
+    nodes["#sv-list"].replaceChildren = (...children) => painted.push(children.length);
+    box.S.authenticationSetups = [setup];
+    box.settingsSec = "unshackle";
+    await box.refreshBusy();
+    await box.refreshHealth();
+    box.settingsSec = "services";
+    box.S.authenticationSetups = [];
+    await box.refreshBusy();
+    await box.refreshHealth();
+    box.settingsSec = "automation";
+    await box.refreshHealth();
+    console.log(JSON.stringify({ asked: asked.filter((path) => path.startsWith("/api/status")), repaintedOnUnshackle: painted.length > 1 ? "more" : painted.length }));
   }
   if (scenario === "retry_retained_error") {
     box.S.authenticationSetups = [{ service: "PAIRED", backend: "", state: "error", failure: "network" }];
@@ -1112,8 +1231,8 @@ const promptState = (input) => {
       if (options.method === "POST") return { service: "PAIRED", backend: "", state: "authenticating" };
       throw new Error("Unexpected request");
     };
-    box.renderUnshackleStatus(box.unshackleDetails);
-    const row = find(nodes["#u-status"], (node) => node.className === "st-job");
+    box.renderServices();
+    const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
     const buttons = findAll(row, (node) => node.tag === "button");
     await buttons.find((button) => button.textContent === "Retry").onclick();
     console.log(JSON.stringify({ controls: buttons.map((button) => button.textContent), requests }));
@@ -1179,9 +1298,9 @@ def test_supported_methods_do_not_hide_classified_authentication_status():
 
 def test_only_the_selected_backend_authentication_row_is_actionable():
     assert run_authentication_ui("selected_backend_actions") == [
-        {"name": "PAIRED", "label": "Confirmed now", "controls": []},
         {"name": "PAIRED · vpn", "label": "Sign-in needed", "controls": ["Reauthenticate"]},
         {"name": "OPEN", "label": "No login required", "controls": []},
+        {"name": "PAIRED", "label": "Confirmed now", "controls": []},
     ]
 
 
@@ -1217,6 +1336,60 @@ def test_cancelled_authentication_is_rendered_until_the_next_refresh():
         "cancelled": "Sign-in cancelled",
         "refreshed": "Sign-in needed",
     }
+
+
+def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
+    result = run_authentication_ui("cookies_per_service")
+    rows = {row["name"]: row for row in result["rows"]}
+    assert [row["name"] for row in result["rows"]] == ["HULU", "OPEN", "EXTRA", "HULU · vpn"]
+    assert rows["HULU"] == {
+        "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series"],
+        "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
+                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete", "Add cookies"],
+    }
+    # another backend's row never gets the main Unshackle's cookie files, nor its series count
+    assert rows["HULU · vpn"] == {
+        "name": "HULU · vpn", "label": "Confirmed now", "attention": False, "used": ["—"], "cookies": ["—", "Managed on that server"],
+    }
+    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete", "Add cookies"]
+    assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series"]
+    assert result["state"] == "sx-state down"
+
+
+def test_validated_cookie_only_service_still_reports_a_deleted_cookie_file():
+    assert run_authentication_ui("validated_cookie_only_missing") == {
+        "attention": True,
+        "cookieStatus": "Missing",
+    }
+
+
+def test_validated_pairing_service_does_not_require_a_cookie_file():
+    assert run_authentication_ui("validated_pairing_without_cookies") == {
+        "attention": False,
+        "cookieStatus": "No cookie file",
+    }
+
+
+def test_validated_cookie_session_still_requires_its_file_when_pairing_is_only_supported():
+    assert run_authentication_ui("validated_cookies_with_pairing_support_missing") == {
+        "attention": True,
+        "cookieStatus": "Missing",
+    }
+
+
+@pytest.mark.parametrize("counts, summary", [
+    ({"confirmed": 2, "needs": 0, "unchecked": 12}, "2 services confirmed · 12 not checked yet"),
+    ({"confirmed": 1, "needs": 1, "unchecked": 1}, "1 service confirmed · 1 needs sign-in · 1 not checked yet"),
+    ({"confirmed": 0, "needs": 3, "unchecked": 0}, "3 need sign-in"),
+    ({"confirmed": 0, "needs": 0, "unchecked": 0}, ""),
+])
+def test_sign_in_counts_are_worded_with_their_own_singular_and_plural(counts, summary):
+    assert run_page_function("signInSummary", counts) == summary
+
+
+def test_sign_in_polling_follows_the_services_section():
+    result = run_authentication_ui("polling_follows_the_section")
+    assert result == {"asked": ["/api/status?auth=1", "/api/status?auth=1", "/api/status"], "repaintedOnUnshackle": 1}
 
 
 def test_retained_authentication_error_keeps_cancel_and_posts_retry_directly():
@@ -1271,10 +1444,11 @@ const code = {
   serviceEpisode: () => [pick(js("series.js"), /^const pad2 = .*$/m), pick(js("series.js"), /^function serviceEpisode\(.*?^\}/ms)],
   nextSyncAt: () => [pick(js("settings-services.js"), /^function nextSyncAt\(.*?^\}/ms)],
   authenticationLabel: () => [
-    pick(js("settings-services.js"), /^const AUTH_METHOD_LABELS = .*?;$/m),
-    pick(js("settings-services.js"), /^const AUTH_FAILURE_LABELS = .*?;$/m),
-    pick(js("settings-services.js"), /^function authenticationLabel\(.*?^\}/ms),
+    pick(js("services.js"), /^const AUTH_METHOD_LABELS = .*?;$/m),
+    pick(js("services.js"), /^const AUTH_FAILURE_LABELS = .*?;$/m),
+    pick(js("services.js"), /^function authenticationLabel\(.*?^\}/ms),
   ],
+  signInSummary: () => [pick(js("services.js"), /^function signInSummary\(.*?^\}/ms)],
 }[fn]().join("\n");
 const box = { Intl, Date, Number, String };
 vm.createContext(box);
@@ -1342,7 +1516,10 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
     ("observation", "label"),
     [
         ({"state": "ready", "available_methods": ["pairing", "cookies"]}, "Ready · pairing, cookies"),
+        ({"state": "session_present", "method": "cookies"}, "Cookies session available"),
         ({"state": "session_expired", "method": "pairing"}, "Pairing session expired"),
+        ({"state": "session_rejected", "method": "pairing"}, "Pairing session rejected"),
+        ({"state": "repairing", "method": "cookies"}, "Repairing cookies session"),
         ({"state": "renewing", "method": "pairing"}, "Renewing pairing session"),
         (
             {
@@ -1362,6 +1539,7 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
         ({"state": "timed_out", "method": "pairing"}, "Pairing timed out"),
         ({"state": "cancelled", "method": "pairing"}, "Sign-in cancelled"),
         ({"state": "error", "method": "pairing", "failure": "network"}, "Sign-in failed · network"),
+        ({"state": "authenticating", "method": "pairing"}, "Signing in"),
     ],
 )
 def test_authentication_lifecycle_labels_are_fixed_and_redacted(observation, label):

@@ -2347,10 +2347,10 @@ def check_alerts(now: datetime | None = None) -> None:
                 name = f"{service} {f['profile']}".strip()
                 left = (f["expires"] - now.timestamp()) / 86400 if f.get("expires") else None
                 if f.get("expired"):
-                    problems[f"cookies:{name}"] = ("error", f"{name} cookies have expired", "Its downloads will fail: replace them in Settings, Cookies.")
+                    problems[f"cookies:{name}"] = ("error", f"{name} cookies have expired", "Its downloads will fail: replace them in Settings › Services.")
                 elif left is not None and 0 <= left < 7:
                     problems[f"cookies:{name}"] = ("warning", f"{name} cookies expire in {max(1, round(left))} days",
-                                                    "Replace them before they expire, in Settings, Cookies.")
+                                                    "Replace them before they expire, in Settings › Services.")
     if events.get("cdm", True):
         try:
             state = cdm_state()

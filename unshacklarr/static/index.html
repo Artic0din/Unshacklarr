@@ -137,7 +137,7 @@
         <button data-sec="automation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>Automation</span><small>Syncs, release times, retries</small></button>
         </div>
         <div class="set-group" role="group" aria-label="Service access"><p>Service access</p>
-        <button data-sec="cookies"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5h.01M16 15.5h.01M12 12h.01M11 17h.01M7 14h.01"/></svg><span>Cookies</span><small>Service logins</small></button>
+        <button data-sec="services"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span>Services</span><small>Sign-in and cookies</small></button>
         <button data-sec="cdm"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2"/></svg><span>CDM</span><small>Widevine and PlayReady devices</small></button>
         </div>
         <div class="set-group" role="group" aria-label="General"><p>General</p>
@@ -156,7 +156,7 @@
           <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 21h14"/></svg></span>
           <div class="sx-id"><h2>Unshackle</h2><p id="ux-where"></p></div>
           <div class="sx-state" id="ux-state"><span class="dot"></span><span><b>Checking…</b><small></small></span></div>
-          <div class="sx-actions"><button class="btn small" id="unshackle-test">Test the connection</button><span class="ux-run" id="ux-run"></span><button class="btn small" id="uy-open" type="button">Edit unshackle.yaml</button></div>
+          <div class="sx-actions"><button class="btn small" id="unshackle-test">Test the connection</button><span class="ux-run" id="ux-run"></span><button class="btn small" id="uy-open" type="button">Edit unshackle.yaml</button><a class="btn small" href="#/settings/services">Sign-in and cookies</a></div>
           <div class="ux-more" id="u-status"></div>
         </section>
               <section class="sx-card">
@@ -179,7 +179,7 @@
             <div class="field"><label for="downloads-input">Downloads folder</label><input type="text" data-set="downloads" id="downloads-input" spellcheck="false"><small>Where the episodes land before Sonarr imports them.</small></div>
             <div class="field"><label for="ux-free">Room kept free</label><div class="unit-input"><input id="ux-free" type="number" data-set="min_free_gb" data-num min="0" max="100000" step="1" inputmode="numeric"><span>GB</span></div><small>Nothing is downloaded while the downloads folder, or the library folder Sonarr moves a series into, has less free space than this, and you get a notification. 0: not checked.</small></div>
             <div class="field only-remote"><label for="ux-udl">Downloads folder, as Unshackle sees it</label><input id="ux-udl" type="text" data-set="unshackle_downloads" placeholder="Same path" spellcheck="false"><small>Its path on the machine where unshackle serve runs. Empty: the same path as above.</small></div>
-            <div class="field"><label for="ux-cookies">Cookies folder</label><input id="ux-cookies" type="text" data-set="cookies_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to manage them in Settings, Cookies. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
+            <div class="field"><label for="ux-cookies">Cookies folder</label><input id="ux-cookies" type="text" data-set="cookies_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to manage them in Settings › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
             <div class="field"><label for="ux-cfg">Unshackle config folder</label><input id="ux-cfg" type="text" data-set="unshackle_config_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>The folder with unshackle.yaml and the WVD and PRD files, for Settings, CDM. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
           </div>
         </section>
@@ -406,14 +406,17 @@
           <small class="muted" id="ug-say"></small>
         </section>
       </div>
-      <div class="set-sec sx" data-sec="cookies" hidden>
+      <div class="set-sec sx" data-sec="services" hidden>
         <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5h.01M16 15.5h.01M12 12h.01M11 17h.01M7 14h.01"/></svg></span>
-          <div class="sx-id"><h2>Cookies</h2><p id="ck-folder"></p></div>
-          <div class="sx-state" id="ck-state"><span class="dot"></span><span><b>Reading the cookie files…</b><small></small></span></div>
-          <div class="sx-actions"><button class="btn small primary" id="ck-add">Add cookies</button></div>
+          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></span>
+          <div class="sx-id"><h2>Services</h2><p id="sv-folder"></p></div>
+          <div class="sx-state" id="sv-state"><span class="dot"></span><span><b>Checking the services…</b><small></small></span></div>
+          <div class="sx-actions"><a class="btn small" href="#/settings/cdm">CDM devices</a></div>
         </section>
-        <div id="ck-list" class="sx"></div>
+        <section class="sx-card sv-card">
+          <div id="sv-list"></div>
+          <p class="muted" id="sv-note"></p>
+        </section>
         <div class="sx-card">
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span>
             <div><h3>Getting them</h3><p>Log in to the service in your browser.<br>Export its cookies with a browser extension: <a href="https://addons.mozilla.org/firefox/addon/cookies-txt/" target="_blank" rel="noopener">cookies.txt for Firefox ↗</a> or <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener">Get cookies.txt LOCALLY for Chrome ↗</a>.<br>Then add the file here with Add cookies.<br>A service that logs in with a username and password (set in unshackle.yaml) needs no cookies.</p></div></div>
@@ -654,7 +657,7 @@
     <div class="ds-nav" role="navigation" aria-label="Sections of this series' settings">
       <a href="#ds-source" data-to="ds-source">Source</a><a href="#ds-timing" data-to="ds-timing">When</a><a href="#ds-quality" data-to="ds-quality">What to get</a><a href="#ds-options" data-to="ds-options">Unshackle options</a><a href="#d-adv" data-to="d-adv">Numbering</a>
     </div>
-    <div class="sx-state ds-state" id="ds-state"><span class="dot"></span><span><b id="ds-state-text"></b><small id="d-since"></small></span></div>
+    <div class="sx-state ds-state" id="ds-state"><span class="dot"></span><span><b id="ds-state-text"></b><small id="d-since"></small><span class="ds-fix" id="ds-fix" hidden></span></span></div>
 
     <section class="card sx-card" id="ds-source">
       <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span><div><h3>Source</h3><p>The service Unshackle downloads this series from, and its page there.</p></div></div>
@@ -1064,6 +1067,7 @@
 <script src="/js/attempts.js"></script>
 <script src="/js/schedule.js"></script>
 <script src="/js/settings-services.js"></script>
+<script src="/js/services.js"></script>
 <script src="/js/cookies-cdm.js"></script>
 <script src="/js/navigation.js"></script>
 <script src="/js/setup.js"></script>

@@ -329,6 +329,8 @@ function optionPicker(free, onPick) {
 
 const mainSonarr = () => S.config?.settings?.sonarr_name || "Sonarr";  // the main Sonarr where libraries are named
 const SEL = { on: false, ids: new Set() };  // the series picked to change together (js/bulk.js)
+/* A series uses a service when it downloads from it, or one of its seasons does (a season's own page) */
+const usesService = (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || {}).some((page) => page.service === tag);
 function renderWall() {
   const q = $("#search").value.trim().toLowerCase();
   const svc = $("#f-service").value, lib = $("#f-library").value;
@@ -358,7 +360,7 @@ function renderWall() {
       const on = S.config.series[s.tvdbId]?.service || "";
       return (!q || s.title.toLowerCase().includes(q))
         && (!managed || (managed === "f" ? failing(s) : managed === "h" ? S.config.hidden_series.includes(s.tvdbId) : managed === "*" ? on : !on))
-        && (!svc || on === svc)
+        && (!svc || usesService(S.config.series[s.tvdbId], svc))
         && (!lib || (lib === "-" ? !!s.id : libsOf(s).some((o) => o.name === lib)))
         && (!$("#f-missing").checked || s.missing > 0)
         && (!$("#f-monitored").checked || s.monitored);
@@ -417,7 +419,7 @@ async function openDrawer(s, tab, fromRoute = false) {
   $("#d-sick").hidden = !sick;
   if (sick) $("#d-sick").replaceChildren(el("b", { textContent: `Its last ${sick.failing} downloads failed` }),
     el("span", { textContent: sick.cause || "See the history in Activity for why." }),
-    el("span", { textContent: "Test this series below: a URL the service no longer knows, or cookies to update in Settings, Cookies." }));
+    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }));
   $("#d-probe-state").textContent = "Asks the service which episodes it has. Nothing is downloaded.";
   drawerPushed = !fromRoute;
   if (!fromRoute) { drawerTab = tab || "episodes"; navigate(true); }  // back will close it
@@ -489,6 +491,10 @@ function renderSeriesState() {
   box.classList.remove("ok", "down", "warn");
   if (cls) box.classList.add(cls);
   $("#ds-state-text").textContent = text;
+  // What failed, and where to mend it: the service's row in Settings, Services
+  $("#ds-fix").hidden = !sick;
+  $("#ds-fix").replaceChildren(...(sick ? [el("span", { textContent: sick.cause || "See the history in Activity for why." }),
+    el("button", { type: "button", className: "btn small", textContent: `Check ${svcName(conf.service)} in Settings › Services`, onclick: () => openServiceRow(conf.service) })] : []));
 }
 /* Service options only show for a service that has some; "stop" only for a managed series. */
 async function renderServiceOptions(conf) {

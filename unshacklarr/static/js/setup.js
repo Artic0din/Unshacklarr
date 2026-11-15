@@ -271,7 +271,8 @@ function showSetup(found) {
       el("p", { className: "lead", textContent: r.series === 1 ? "1 series is back, with its options." : `${r.series} series are back, with their options.` }),
       el("ul", { className: "wz-sum" },
         line(r.sonarr.ok, r.sonarr.ok ? "Sonarr answers" : r.sonarr.error),
-        line(r.unshackle.ok, r.unshackle.ok ? "Unshackle answers" : r.unshackle.error))));
+        line(r.unshackle.ok, r.unshackle.ok ? "Unshackle answers" : r.unshackle.error)),
+      signInCheck()));
     note.replaceChildren(r.sonarr.ok && r.unshackle.ok ? "" : el("p", { className: "muted", textContent: "Fix what does not answer in Settings: the restore is done." }));
     back.hidden = true;
     next.type = "button";
@@ -374,10 +375,11 @@ function showSetup(found) {
     const code = f.country.value.toUpperCase();
     const c = /^[A-Z]{2}$/.test(code) ? { flag: flagOf(code), name: new Intl.DisplayNames([LOCALE, "en"], { type: "region" }).of(code) } : null;
     panel.replaceChildren(el("div", { className: "wiz-step wz-done fwd" }, ico("check", "wz-done-ico"),
-      el("h2", { textContent: "You're all set" }),
+      el("h2", { textContent: "Unshacklarr is set up" }),
       el("p", { className: "lead", textContent: "Pick a service for your series in Series: Unshacklarr takes it from there." }),
       el("ul", { className: "wz-sum" }, ...[oks[1], oks[2], `${c ? `${c.flag} ${c.name}` : f.country.value} · ${f.timezone.value.replaceAll("_", " ")}`]
-        .filter(Boolean).map((t) => el("li", {}, ico("check", ""), el("span", { textContent: t }))))));
+        .filter(Boolean).map((t) => el("li", {}, ico("check", ""), el("span", { textContent: t })))),
+      signInCheck()));
     note.replaceChildren();
     back.hidden = true;
     next.type = "button";
@@ -506,11 +508,11 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     refreshInbox();
     if (!busyStarted) { busyStarted = true; refreshBusy(); }  // one loop, however often the page reloads its state
     refreshHealth(currentTab === "settings" && settingsSec === "unshackle");
-    if (currentTab === "settings" && settingsSec === "cookies") loadCookies();
+    if (currentTab === "settings" && settingsSec === "services") loadServices();
     if (currentTab === "settings" && settingsSec === "cdm") loadCdm();
     if (currentTab === "settings" && settingsSec === "notifications") renderPush().catch(() => {});
     applyRoute();
   } catch (e) {
-    $("#wall").replaceChildren(el("p", { textContent: `Could not load series: ${e.message}` }));
+    $("#wall").replaceChildren(failed(`Could not load series: ${e.message}`, () => location.reload()));
   }
 })();
