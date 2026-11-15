@@ -63,7 +63,7 @@ function renderInherited(conf) {
 }
 function inheritedRows(root, from, own, redraw) {
   const last = new Map(from.map((x) => [x[0], x]));
-  root.replaceChildren(...[...last.values()].map(([flag, value, src]) => {
+  root.replaceChildren(el("span", { className: "inh-label", textContent: "Set for this service" }), ...[...last.values()].map(([flag, value, src]) => {
     const over = flag in own;
     return el("div", { className: `opt inh${over ? " over" : ""}` },
       el("code", { textContent: flag }),
