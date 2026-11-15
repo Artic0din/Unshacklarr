@@ -76,7 +76,7 @@ function openTerm() {
     term = new Terminal({
       convertEol: true, disableStdin: true, scrollback: 20000, fontSize: 13, cursorBlink: false,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-      theme: { background: "#0d1219", foreground: "#e7eaf0", cursor: "#0d1219", selectionBackground: "#2c3649" },
+      theme: { background: "#12110f", foreground: "#f1ede6", cursor: "#12110f", selectionBackground: "#33302b" }  // --term-bg: the output stays dark in either theme,
     });
     termFit = new FitAddon.FitAddon();
     term.loadAddon(termFit);

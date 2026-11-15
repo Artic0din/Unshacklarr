@@ -299,6 +299,7 @@
  "Any range": [],
  "App password": [],
  "App token": [],
+ "Appearance": [],
  "Apply": [],
  "Apprise": [],
  "Apprise address": [],
@@ -654,6 +655,7 @@
  "DRM": [],
  "DV": [],
  "Daily": [],
+ "Dark": [],
  "Days kept": [],
  "Days of the week": [],
  "Debug": [],
@@ -1194,6 +1196,7 @@
  "Library folder, as Sonarr sees it": [],
  "Library folder, as Unshacklarr sees it": [],
  "License each track with both Widevine and PlayReady. Needs a CDM for each DRM system.": [],
+ "Light": [],
  "Line {0}, column {1}{2}": [
   "line.number",
   "head - line.from + 1",
@@ -2242,6 +2245,7 @@
  "Switched off": [],
  "Sync running…": [],
  "Syncs, release times, retries": [],
+ "System": [],
  "System ID": [],
  "S{0}E{1} as {2}": [
   "pad2(e.seasonNumber)",

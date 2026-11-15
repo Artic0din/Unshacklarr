@@ -2254,5 +2254,9 @@
  "{0} that day{1}: click to change": "当天 {0}{1}：点击更改",
  "{0} to fix": "{0}待处理",
  "{0} waiting for the end of the quiet hours": "{0}等待免打扰时段结束",
- "No sign-in required": "无需登录"
+ "No sign-in required": "无需登录",
+ "Appearance": "外观",
+ "Dark": "深色",
+ "Light": "浅色",
+ "System": "跟随系统"
 }

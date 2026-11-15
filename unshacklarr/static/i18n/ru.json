@@ -2247,5 +2247,9 @@
  "{0} that day{1}: click to change": "В этот день: {0}{1}. Щёлкните, чтобы изменить",
  "{0} to fix": "Нужно исправить: {0}",
  "{0} waiting for the end of the quiet hours": "В ожидании конца тихих часов: {0}",
- "No sign-in required": "Вход не требуется"
+ "No sign-in required": "Вход не требуется",
+ "Appearance": "Оформление",
+ "Dark": "Тёмное",
+ "Light": "Светлое",
+ "System": "Системное"
 }

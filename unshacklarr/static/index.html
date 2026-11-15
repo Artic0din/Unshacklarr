@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <script>try { if (!/^en\b/.test(localStorage.getItem("lang") || navigator.language || "en")) document.documentElement.classList.add("i18n-wait"); } catch {}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#151b26">
+<script>try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}</script>
+<meta name="theme-color" content="#171614">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -293,6 +294,10 @@
         <section class="sx-card">
           <div class="sx-head"><div><h3>Language</h3><p>For this browser only. The page reloads in the new language.</p></div></div>
           <div class="rg-langs" id="lang-row" role="group" aria-label="Language" translate="no"></div>
+        </section>
+        <section class="sx-card">
+          <div class="sx-head"><div><h3>Appearance</h3></div>
+            <div class="seg small" id="theme-row" role="group" aria-label="Appearance"><button type="button" data-theme-choice="system">System</button><button type="button" data-theme-choice="light">Light</button><button type="button" data-theme-choice="dark">Dark</button></div></div>
         </section>
         <section class="sx-card" id="rg-spoiler-card">
           <div class="sx-head"><div><h3>No spoilers</h3></div>
