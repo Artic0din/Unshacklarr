@@ -46,12 +46,17 @@ const LANG = (() => {
 document.documentElement.lang = LANG;
 /* Light or dark: the system's unless this browser picked one (the <head> applies it before the first paint). */
 const THEMES = ["system", "light", "dark"];
-function themeChoice() { try { const t = localStorage.getItem("theme"); return THEMES.includes(t) ? t : "system"; } catch { return "system"; } }
+let themePicked = null;  // this visit's pick, kept even when the browser can't store it
+function themeChoice() {
+  if (themePicked) return themePicked;
+  try { const t = localStorage.getItem("theme"); return THEMES.includes(t) ? t : "system"; } catch { return "system"; }
+}
 function applyTheme(choice) {
   if (choice === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = choice;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", getComputedStyle(document.documentElement).getPropertyValue("--bg").trim());
 }
 function setTheme(choice) {
+  themePicked = choice;
   try { if (choice === "system") localStorage.removeItem("theme"); else localStorage.setItem("theme", choice); } catch { /* this visit only */ }
   applyTheme(choice);
 }

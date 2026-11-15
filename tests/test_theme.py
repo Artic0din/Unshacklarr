@@ -76,14 +76,18 @@ vm.createContext(ctx);
 vm.runInContext(src.match(/^const THEMES = .*?^}\nfunction setTheme\(.*?^}/ms)[0], ctx);
 const out = [];
 for (const choice of ["light", "dark", "system"]) { ctx.setTheme(choice); out.push([ctx.themeChoice(), root.dataset.theme ?? null, meta.attrs.content, store.theme ?? null]); }
+vm.runInContext("themePicked = null", ctx);
 store.theme = "sepia";
 out.push(ctx.themeChoice());
+ctx.localStorage = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); }, removeItem() { throw new Error("blocked"); } };
+vm.runInContext("localStorage = this.localStorage", ctx);
+ctx.setTheme("light"); out.push([ctx.themeChoice(), root.dataset.theme]);  // storage blocked: the pick still holds this visit
 console.log(JSON.stringify(out));
 """
     out = subprocess.run(["node", "-e", script, "--", str(STATIC / "js" / "core.js")], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == ('[["light","light","#f6f3ee","light"],["dark","dark","#171614","dark"],'
-                                  '["system",null,"#171614",null],"system"]')
+                                  '["system",null,"#171614",null],"system",["light","light"]]')
 
 
 @pytest.mark.parametrize("theme", ["dark", "light"])
