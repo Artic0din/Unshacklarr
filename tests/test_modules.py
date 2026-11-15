@@ -663,3 +663,14 @@ def test_a_restarted_local_serve_is_asked_for_its_config_again(tmp_path, monkeyp
     responses.replace(responses.GET, "http://backend:8786/api/config", json={"config": {"cdm": {"NF": "my_l3"}}})
     backend.restart()
     assert backend.cdm_config() == {"NF": "my_l3"}
+
+
+def test_remote_services_are_asked_on_a_host_up_for_less_than_ten_minutes(tmp_path, monkeypatch):
+    # time.monotonic counts from the host's boot: 100 s after it, the empty list it starts with is not a fresh answer
+    from unshacklarr import backend as backend_module
+    backend = Unshackle(tmp_path)
+    asked = []
+    monkeypatch.setattr(backend_module.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(backend, "call", lambda method, path, **kw: asked.append(path) or {"servers": [{"name": "nas"}]})
+    assert backend.remote_services() == [{"name": "nas"}]
+    assert backend.remote_services() == [{"name": "nas"}] and asked == ["/api/remote/services"]  # then kept 10 minutes

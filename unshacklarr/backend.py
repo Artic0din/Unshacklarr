@@ -467,7 +467,7 @@ class Unshackle:
         """The servers of Unshackle's remote_services and the services each offers (for --remote), kept
         10 minutes; none when this Unshackle cannot tell (no such route, or unreachable)."""
         fetched, servers = self._remote
-        if time.monotonic() - fetched > 600:
+        if not fetched or time.monotonic() - fetched > 600:  # monotonic counts from boot: never fresh before a first ask
             try:
                 servers = self.call("GET", "/api/remote/services").get("servers") or []
             except UnshackleError:
