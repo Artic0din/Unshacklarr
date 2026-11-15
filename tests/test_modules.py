@@ -18,7 +18,7 @@ from unshacklarr.files import PRIVATE, no_credentials, shared_or_private, write_
 
 def test_container_sources_are_immutable_and_identifiable():
     root = Path(__file__).parents[1]
-    core_commit = "f147c23b667c8a61c3aeb579ca1c22b00560641e"
+    core_commit = "58a62dd86248ccdbe94978ed5c3cfc5efff6a8e8"
     core = (root / "docker" / "unshackle.Dockerfile").read_text()
     app = (root / "Dockerfile").read_text()
     github = (root / ".github" / "workflows" / "ci.yml").read_text()
@@ -30,6 +30,8 @@ def test_container_sources_are_immutable_and_identifiable():
     assert 'test "$(git -C /app rev-parse HEAD)" = "$UNSHACKLE_COMMIT"' in core
     assert "LABEL org.opencontainers.image.revision=$UNSHACKLE_COMMIT" in core
     assert f"UNSHACKLE_COMMIT: {core_commit}" in compose
+    # the pin only counts when the build reads this repository's Dockerfile, which knows UNSHACKLE_COMMIT
+    assert "context: https://github.com/Artic0din/Unshacklarr.git#main:docker" in compose
     assert "LABEL org.opencontainers.image.revision=$SOURCE_REVISION" in app
     assert "SOURCE_REVISION=${{ github.sha }}" in github
     assert 'SOURCE_REVISION="$GITHUB_SHA"' in forgejo
