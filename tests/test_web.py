@@ -1156,6 +1156,21 @@ const promptState = (input) => {
     });
     console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className }));
   }
+  if (scenario === "validated_cookie_only_missing") {
+    box.S.authentication = {
+      HULU: { service: "HULU", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+    };
+    box.S.authenticationMethods = { HULU: ["cookies"] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" } };
+    vm.runInContext('servicesCookies = { folder: "/cookies", files: { HULU: [] } }', box);
+    box.renderServices();
+    const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    console.log(JSON.stringify({
+      attention: !!row.dataset.attention,
+      cookieStatus: find(row, (node) => node.className === "ck-pill bad")?.textContent,
+    }));
+  }
   if (scenario === "polling_follows_the_section") {
     const asked = [], painted = [];
     box.api = async (path) => { asked.push(path); return { running: 0, queued: 0, authentication: [], authentication_setups: [] }; };
@@ -1303,6 +1318,13 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete", "Add cookies"]
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series"]
     assert result["state"] == "sx-state down"
+
+
+def test_validated_cookie_only_service_still_reports_a_deleted_cookie_file():
+    assert run_authentication_ui("validated_cookie_only_missing") == {
+        "attention": True,
+        "cookieStatus": "Missing",
+    }
 
 
 @pytest.mark.parametrize("counts, summary", [
