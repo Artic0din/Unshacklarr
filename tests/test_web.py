@@ -1171,6 +1171,42 @@ const promptState = (input) => {
       cookieStatus: find(row, (node) => node.className === "ck-pill bad")?.textContent,
     }));
   }
+  if (scenario === "validated_pairing_without_cookies") {
+    box.S.authentication = {
+      HULU: {
+        service: "HULU", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z",
+        authentication: { state: "authenticated", method: "pairing" },
+      },
+    };
+    box.S.authenticationMethods = { HULU: ["pairing", "cookies"] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" } };
+    vm.runInContext('servicesCookies = { folder: "/cookies", files: { HULU: [] } }', box);
+    box.renderServices();
+    const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    console.log(JSON.stringify({
+      attention: !!row.dataset.attention,
+      cookieStatus: find(row, (node) => node.className === "ck-pill")?.textContent,
+    }));
+  }
+  if (scenario === "validated_cookies_with_pairing_support_missing") {
+    box.S.authentication = {
+      HULU: {
+        service: "HULU", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z",
+        authentication: { state: "authenticated", method: "cookies" },
+      },
+    };
+    box.S.authenticationMethods = { HULU: ["pairing", "cookies"] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" } };
+    vm.runInContext('servicesCookies = { folder: "/cookies", files: { HULU: [] } }', box);
+    box.renderServices();
+    const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    console.log(JSON.stringify({
+      attention: !!row.dataset.attention,
+      cookieStatus: find(row, (node) => node.className === "ck-pill bad")?.textContent,
+    }));
+  }
   if (scenario === "polling_follows_the_section") {
     const asked = [], painted = [];
     box.api = async (path) => { asked.push(path); return { running: 0, queued: 0, authentication: [], authentication_setups: [] }; };
@@ -1322,6 +1358,20 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
 
 def test_validated_cookie_only_service_still_reports_a_deleted_cookie_file():
     assert run_authentication_ui("validated_cookie_only_missing") == {
+        "attention": True,
+        "cookieStatus": "Missing",
+    }
+
+
+def test_validated_pairing_service_does_not_require_a_cookie_file():
+    assert run_authentication_ui("validated_pairing_without_cookies") == {
+        "attention": False,
+        "cookieStatus": "No cookie file",
+    }
+
+
+def test_validated_cookie_session_still_requires_its_file_when_pairing_is_only_supported():
+    assert run_authentication_ui("validated_cookies_with_pairing_support_missing") == {
         "attention": True,
         "cookieStatus": "Missing",
     }

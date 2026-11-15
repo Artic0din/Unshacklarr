@@ -254,18 +254,32 @@ config["series"][900004].update(parts=2, release_day=0, release_time="19:30")  #
 config["series"][900003].update(season_offset=1, season_offset_from=2)  # The Simpsons: Disney+'s S03 is Sonarr's S02
 web.write_config(config)
 
-# Sign-in, for Settings, Services: confirmed, in need of a sign-in, nothing checked (the others), and a sign-in waiting for its code
+# Sign-in, for Settings, Services: confirmed, in need of a sign-in, nothing checked, and every lifecycle label
 sync.AUTHENTICATION_FILE.write_text(json.dumps({"": {
     "ATVP": {"state": "validated", "observed_at": ago(days=3), "validated_at": ago(days=3)},
     "AMZN": {"state": "validated", "observed_at": ago(hours=20), "validated_at": ago(hours=20)},
     "RMCBFM": {"state": "needs_user_action", "observed_at": ago(hours=7), "validated_at": ago(days=40)},
     "TF1": {"state": "needs_user_action", "observed_at": ago(days=2), "validated_at": None},
 }}))
-sync.authentication_setups = lambda: [{"service": "MAX", "backend": "", "state": "waiting", "method": "pairing", "prompt": "Code shown on your TV"},
-                                      # how a sign-in can end besides success: timed out, cancelled, refused
-                                      {"service": "AMZN", "backend": "", "state": "timed_out", "method": "pairing"},
-                                      {"service": "ATVP", "backend": "", "state": "cancelled", "method": "pairing"},
-                                      {"service": "DSNP", "backend": "", "state": "error", "method": "credentials", "failure": "authentication_rejected"}]
+DEMO_AUTHENTICATION_SETUPS = [
+    {"state": "ready", "available_methods": ["pairing"]},
+    {"state": "session_present"},
+    {"state": "session_expired"},
+    {"state": "session_rejected"},
+    {"state": "renewing"},
+    {"state": "repairing"},
+    {"state": "fallback", "next_method": "cookies", "failure": "authentication_rejected"},
+    {"state": "waiting", "prompt": "Code shown on your TV"},
+    {"state": "authenticated"},
+    {"state": "timed_out"},
+    {"state": "cancelled"},
+    {"state": "error", "failure": "network"},
+    {"state": "authenticating"},
+]
+sync.authentication_setups = lambda: [
+    {"service": "MAX", "backend": setup["state"], "method": "pairing", **setup}
+    for setup in DEMO_AUTHENTICATION_SETUPS
+]
 
 RUN_LOG = """\x1b[90m── {when} · {kind} ──\x1b[0m\r
 \x1b[36m▸\x1b[0m {series} {sxxeyy} on {service}\r
