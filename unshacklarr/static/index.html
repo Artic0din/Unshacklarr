@@ -87,14 +87,14 @@
     </div>
     <div id="sched-late" hidden>
       <div class="late-banner"><b id="late-n"></b><span id="late-sum"></span><button class="btn small" id="late-toggle" aria-expanded="false">Show</button></div>
-      <div id="sched-missing" class="sched-list" hidden></div>
+      <div id="sched-missing" class="sched-cards" hidden></div>
     </div>
     <div class="sched-title">
       <h2 class="sched-h">Sonarr's calendar</h2>
       <div class="sched-tools">
         <div class="seg small" role="group" aria-label="View">
-          <button data-view="list" aria-pressed="true">List</button>
-          <button data-view="calendar" aria-pressed="false">Calendar</button>
+          <button data-view="week" aria-pressed="true">Week</button>
+          <button data-view="month" aria-pressed="false">Month</button>
         </div>
         <div class="sched-filter" role="group" aria-label="Which series">
           <button class="pill" data-scope="all" aria-pressed="true">All</button>
@@ -105,17 +105,14 @@
       </div>
     </div>
     <p class="muted sched-sub">Unshackle tries its series at their release time, or at the first sync after airing. Add any other series in one tap, or hide the ones you don't follow.</p>
-    <div id="sched-list">
-      <div id="sched-upcoming"></div>
-      <div id="sched-more" class="sched-more"></div>
+    <div class="cal-nav">
+      <button class="btn small" id="cal-prev" aria-label="Previous week">‹</button>
+      <h3 id="cal-range" aria-live="polite"></h3>
+      <button class="btn small" id="cal-next" aria-label="Next week">›</button>
+      <button class="btn small" id="cal-today">Today</button>
     </div>
+    <div id="sched-week"><div class="board" id="week-board"></div></div>
     <div id="sched-cal" hidden>
-      <div class="cal-nav">
-        <button class="btn small" id="cal-prev" aria-label="Previous month">‹</button>
-        <h3 id="cal-month"></h3>
-        <button class="btn small" id="cal-next" aria-label="Next month">›</button>
-        <button class="btn small" id="cal-today">Today</button>
-      </div>
       <div class="cal-grid" id="cal-grid"></div>
       <div id="cal-day"></div>
     </div>
@@ -1048,6 +1045,9 @@
     <div class="modal-actions"><button class="btn primary" value="close">Done</button></div>
   </form>
 </dialog>
+
+<div class="sched-pop" id="sched-pop" role="dialog" aria-labelledby="sched-det-h" tabindex="-1" hidden></div>
+<dialog class="modal" id="sched-dlg" aria-labelledby="sched-det-h"></dialog>
 
 <div class="savebar" id="savebar" hidden>
   <span>Unsaved changes</span>
