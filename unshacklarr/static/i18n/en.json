@@ -68,6 +68,8 @@
  "0: always ask.": [],
  "0: never delete them. Episodes of a series set to Download only are never deleted automatically.": [],
  "1 change": [],
+ "1 cookie": [],
+ "1 day": [],
  "1 episode": [],
  "1 episode has another number on {0}: Download takes care of it": [
   "svc"
@@ -76,10 +78,12 @@
  "1 episode queued, replacing its file": [],
  "1 ladder": [],
  "1 min": [],
+ "1 needs sign-in": [],
  "1 new option in this section": [],
  "1 of these {0} episodes is already on disk": [
   "picked.size"
  ],
+ "1 series": [],
  "1 series has a release time: {0}": [
   "timed[0]"
  ],
@@ -88,6 +92,8 @@
  ],
  "1 series is back, with its options.": [],
  "1 series says otherwise, on its page.": [],
+ "1 service confirmed": [],
+ "1 service needs attention": [],
  "1 service or series picks its own": [],
  "1 track downloaded": [],
  "1 year": [],
@@ -241,7 +247,6 @@
  "All libraries ({0})": [
   "S.series.length"
  ],
- "All logins fine": [],
  "All releases on GitHub ↗": [],
  "All services": [],
  "All services ({0})": [
@@ -399,6 +404,7 @@
  "Bypass proxy for all downloads. Manifest, license, and auth still use proxy.": [],
  "Bypass title cache for this download.": [],
  "CDM": [],
+ "CDM devices": [],
  "CDM version": [],
  "CDM {0} {1}": [
   "d['name']",
@@ -450,6 +456,9 @@
  "Check now": [],
  "Check now asks each service what it has, one episode at a time.": [],
  "Check this series' Numbering (its episode table), then try again": [],
+ "Check {0} in Settings › Services": [
+  "svcName(conf.service)"
+ ],
  "Checked a moment ago": [],
  "Checked automatically every day": [],
  "Checked automatically every {0} days": [
@@ -470,6 +479,8 @@
   "scan.errors ? ` · ${scan.errors} could not be asked` : \"\""
  ],
  "Checking Unshackle…": [],
+ "Checking the services…": [],
+ "Checking the sign-ins…": [],
  "Checking {0} of {1}{2}{3}…": [
   "scan.done",
   "scan.total",
@@ -498,13 +509,12 @@
  "Clear all ({0})": [
   "done.length"
  ],
- "Clear cache": [],
+ "Clear cache and sign-ins": [],
  "Clear either the failed downloads or all of them": [],
  "Clear failed": [],
  "Clear failed ({0})": [
   "failedN"
  ],
- "Clear temp": [],
  "Clear the history": [],
  "Clear the notifications already seen": [],
  "Clear the search or pick another filter.": [],
@@ -632,6 +642,7 @@
  "Created {0}": [
   "ago(k.created)"
  ],
+ "Credentials": [],
  "Cross-origin terminal refused": [],
  "Current password": [],
  "Custom proxy": [],
@@ -652,8 +663,15 @@
  ],
  "Default: the one of Settings, Quality.": [],
  "Delete": [],
+ "Delete partial downloads": [],
  "Delete the key": [],
  "Delete them after": [],
+ "Delete {0}": [
+  "file"
+ ],
+ "Delete {0} from Unshackle's cookies folder?": [
+  "file"
+ ],
  "Deleted on their own after {0} days (Settings, Automation).": [
   "r.days"
  ],
@@ -755,7 +773,8 @@
  "Downloads per week, the last 8 weeks": [],
  "Downloads them again, in this job": [],
  "Downloads wait until it is back.": [],
- "Downloads will fail unless it logs in with a username and password.": [],
+ "Downloads will fail unless you add a cookie file, or set its username and password in unshackle.yaml.": [],
+ "Downloads will fail unless you add a cookie file.": [],
  "Duplicate": [],
  "Duration": [],
  "During the quiet hours: {0} message{1}": [
@@ -1056,7 +1075,7 @@
  "Its downloads from {0} fail": [
   "svcName(conf.service)"
  ],
- "Its downloads will fail: replace them in Settings, Cookies.": [],
+ "Its downloads will fail: replace them in Settings › Services.": [],
  "Its last {0} downloads failed": [
   "sick.failing"
  ],
@@ -1219,6 +1238,7 @@
  "Maker": [],
  "Maker and model": [],
  "Managed by Unshackle": [],
+ "Managed on that server": [],
  "Managed where unshackle serve runs": [],
  "ManualImport": [],
  "Matrix": [],
@@ -1276,7 +1296,7 @@
  "Name each other Sonarr with a letter, then letters, digits or dashes, like sonarr-2": [],
  "Name of the remote server from remote_services, when several are configured. Only with --remote.": [],
  "Name the Sonarr with a letter, then letters, digits or dashes, like sonarr-1080p": [],
- "Needed to manage them in Settings, Cookies. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
+ "Needed to manage them in Settings › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
  "Needs a look": [],
  "Needs a look is turned off above, so this message will not be sent.": [],
  "Neither a Netscape cookie file nor a JSON export": [],
@@ -1328,8 +1348,6 @@
  "No change to save": [],
  "No change.": [],
  "No cookie file": [],
- "No cookie file yet": [],
- "No cookie folder": [],
  "No cookie found: export them in the Netscape (cookies.txt) or JSON format": [],
  "No country matches": [],
  "No device called {0}": [
@@ -1361,13 +1379,15 @@
  "No remote CDM called {0}": [
   "name"
  ],
+ "No series": [],
  "No series has a release time yet. Set one on a series' page, in its Settings tab.": [],
  "No series is downloaded by Unshackle yet.": [],
  "No series match these filters.": [],
  "No series matches.": [],
  "No series set up yet.": [],
- "No series uses it": [],
  "No service has options of its own yet.": [],
+ "No service is known yet. Unshackle lists them once it answers.": [],
+ "No service known yet": [],
  "No spoilers": [],
  "No stream in the requested quality. The history in Activity has Unshackle's full output.": [],
  "No streaming in {0}": [
@@ -1472,6 +1492,7 @@
  ],
  "Not in Unshackle": [],
  "Not managed": [],
+ "Not needed": [],
  "Not on the service": [],
  "Not on {0}": [
   "c.notOn"
@@ -1658,6 +1679,7 @@
  "PLAYREADY": [],
  "PR": [],
  "PRDs": [],
+ "Pairing": [],
  "Part": [],
  "Part {0}": [
   "n"
@@ -1726,7 +1748,6 @@
  "RMCP": [],
  "Range": [],
  "Reading Unshackle's CDMs…": [],
- "Reading the cookie files…": [],
  "Reading the history…": [],
  "Reading the notifications…": [],
  "Ready · {0}": [
@@ -1789,7 +1810,7 @@
  "Replace the {0} selected": [
   "picked.length"
  ],
- "Replace them before they expire, in Settings, Cookies.": [],
+ "Replace them before they expire, in Settings › Services.": [],
  "Replace them soon": [],
  "Replace {0} {1}": [
   "it.series",
@@ -1821,6 +1842,7 @@
  "Retry {0} failed": [
   "retryable.length"
  ],
+ "Review services": [],
  "Revoked": [],
  "Room kept free": [],
  "Run a sync now": [],
@@ -1959,7 +1981,7 @@
  "Service": [],
  "Service access": [],
  "Service approval": [],
- "Service logins": [],
+ "Services": [],
  "Services for your series, found on TMDB": [],
  "Services reloaded": [],
  "Session cookies have no expiry date: only a failed login shows they are over": [],
@@ -1998,6 +2020,7 @@
  "Show me": [],
  "Show more": [],
  "Show name in file names": [],
+ "Show series": [],
  "Show the title": [],
  "Show {0} in the schedule": [
   "name"
@@ -2011,10 +2034,13 @@
  "Shown on its series, and used at the start of its download folder names. Example: sonarr-2.": [],
  "Sign in": [],
  "Sign in through a reverse proxy": [],
+ "Sign-in": [],
+ "Sign-in and cookies": [],
  "Sign-in cancelled": [],
  "Sign-in failed · {0}": [
   "AUTH_FAILURE_LABELS[observation.failure] || \"application\""
  ],
+ "Sign-in methods": [],
  "Sign-in needed": [],
  "Signal": [],
  "Signed in by your reverse proxy as {0}": [
@@ -2202,6 +2228,7 @@
  "Success rate": [],
  "Suggest services": [],
  "Sun": [],
+ "Supports": [],
  "Sure?": [],
  "Sure? Delete the file": [],
  "Sure? It is in use": [],
@@ -2260,7 +2287,7 @@
   "inUse.length"
  ],
  "Test this series": [],
- "Test this series below: a URL the service no longer knows, or cookies to update in Settings, Cookies.": [],
+ "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services.": [],
  "Test {0} ({1})": [
   "testable.length === data.devices.length ? \"all\" : \"these\"",
   "testable.length"
@@ -2482,6 +2509,8 @@
   "len(parts)"
  ],
  "The service will refuse them: replace them with fresh ones": [],
+ "The sign-in check could not reach Unshackle.": [],
+ "The sign-ins could not be checked.": [],
  "The terminal could not load: reload the page.": [],
  "The two passwords differ; nothing changed.": [],
  "The whole episode is downloaded again and replaces the existing file.": [],
@@ -2660,6 +2689,7 @@
  ],
  "Unshacklarr finds what Sonarr is missing, then hands it the downloads to import.": [],
  "Unshacklarr gives its own Unshackle that right when it starts it": [],
+ "Unshacklarr is set up": [],
  "Unshacklarr is set up already": [],
  "Unshacklarr starts it on this machine": [],
  "Unshacklarr sync stopped": [],
@@ -2710,6 +2740,7 @@
  "Unshackle {0}": [
   "name"
  ],
+ "Unshackle's cache is deleted, sign-ins included: every service signs in again the next time it downloads.": [],
  "Unshackle: {0}": [
   "data.unshackle_error"
  ],
@@ -2742,11 +2773,9 @@
   "l.service",
   "[l.name, l.url].filter(Boolean).join(\", \")"
  ],
+ "Used by": [],
  "Used by {0}": [
   "d.used_by.join(\", \")"
- ],
- "Used by {0} series": [
-  "n"
  ],
  "Used for the links from a series to its page in Sonarr.": [],
  "Used in the file name and the MKV title. Leave empty to use the name Sonarr gives the series.": [],
@@ -2861,7 +2890,6 @@
  "Wrong setup code: Unshacklarr prints it when it starts (docker logs unshacklarr)": [],
  "Wrong setup code: it is in Unshacklarr's log": [],
  "Yesterday": [],
- "You're all set": [],
  "Your address": [],
  "Your answer": [],
  "Your country picks the streaming services the Schedule shows; the time zone, when episodes are tried.": [],
@@ -3279,6 +3307,9 @@
  "until {0}": [
   "until"
  ],
+ "updated {0}": [
+  "ago_days(f.updated)"
+ ],
  "upgrade on {0}": [
   "svc"
  ],
@@ -3387,6 +3418,9 @@
  "{0} contains a symbolic link: nothing was joined or renamed. Check the folder": [
   "out.name"
  ],
+ "{0} cookies": [
+  "f.count"
+ ],
  "{0} cookies expire in {1} days": [
   "name",
   "max(1, round(left))"
@@ -3398,16 +3432,14 @@
   "body.service",
   "saved.count"
  ],
- "{0} cookie{1} · updated {2}": [
-  "f.count",
-  "f.count === 1 ? \"\" : \"s\"",
-  "ago_days(f.updated)"
- ],
  "{0} could not be reached. Check the Unshacklarr log.": [
   "host"
  ],
  "{0} d ago": [
   "Math.round(min / 1440)"
+ ],
+ "{0} days": [
+  "left"
  ],
  "{0} days ago": [
   "d"
@@ -3416,8 +3448,8 @@
   "-d"
  ],
  "{0} day{1}": [
-  "left",
-  "left === 1 ? \"\" : \"s\""
+  "age",
+  "age > 1 ? \"s\" : \"\""
  ],
  "{0} deleted": [
   "item.folder"
@@ -3522,10 +3554,6 @@
   "named",
   "AUTH_FAILURE_LABELS[observation.failure] || \"application\"",
   "next"
- ],
- "{0} file{1}": [
-  "files.length",
-  "files.length === 1 ? \"\" : \"s\""
  ],
  "{0} finished after all: import it from Activity, Waiting in downloads": [
   "c['sxxeyy']"
@@ -3713,6 +3741,9 @@
   "low",
   "high"
  ],
+ "{0} need sign-in": [
+  "counts.needs"
+ ],
  "{0} needs a number, not {1}": [
   "flag",
   "value"
@@ -3725,6 +3756,9 @@
  ],
  "{0} new options in this section": [
   "here.length"
+ ],
+ "{0} not checked yet": [
+  "counts.unchecked"
  ],
  "{0} not out yet": [
   "missing"
@@ -3829,7 +3863,7 @@
   "host",
   "to.path[:-len(path)]"
  ],
- "{0} refused Unshackle: its cookies may have expired. Update them in Settings, Cookies.": [
+ "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services.": [
   "show['service']"
  ],
  "{0} refused it: {1}": [
@@ -3847,7 +3881,7 @@
   "n"
  ],
  "{0} series": [
-  "series"
+  "m.used"
  ],
  "{0} series added: their new episodes download from now on": [
   "picks.length"
@@ -3875,25 +3909,17 @@
  "{0} services": [
   "st.services"
  ],
+ "{0} services confirmed": [
+  "counts.confirmed"
+ ],
  "{0} services need approval": [
   "approvals.length"
  ],
+ "{0} services need attention": [
+  "needing"
+ ],
  "{0} services or series pick their own": [
   "picked"
- ],
- "{0} service{1} to renew soon": [
-  "warn",
-  "warn === 1 ? \"\" : \"s\""
- ],
- "{0} service{1} with expired or missing cookies": [
-  "bad",
-  "bad === 1 ? \"\" : \"s\""
- ],
- "{0} service{1} · {2} file{3}": [
-  "services.length",
-  "services.length === 1 ? \"\" : \"s\"",
-  "nFiles",
-  "nFiles === 1 ? \"\" : \"s\""
  ],
  "{0} session available": [
   "named"

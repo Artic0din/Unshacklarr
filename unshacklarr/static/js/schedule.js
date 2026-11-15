@@ -396,14 +396,14 @@ async function refreshBusy() {
       showApprovals(b.approvals || []);
       S.authenticationLive = b.authentication || [];
       S.authenticationSetups = b.authentication_setups || [];
-      if (currentTab === "settings" && settingsSec === "unshackle" && unshackleDetails) renderUnshackleStatus(unshackleDetails);
+      if (currentTab === "settings" && settingsSec === "services") renderServices();  // a sign-in waiting for its answer moves on its own
     } catch { /* offline a moment: the next round */ }
   }
   setTimeout(refreshBusy, 5000);
 }
 async function refreshHealth(full = false) {
   if (document.hidden && !full) { clearTimeout(healthTimer); healthTimer = setTimeout(refreshHealth, 60000); return; }  // out of sight
-  const authentication = !full && currentTab === "settings" && settingsSec === "unshackle";
+  const authentication = !full && currentTab === "settings" && (settingsSec === "services" || settingsSec === "unshackle");  // Unshackle's own page lists the queue it brings
   try { renderHealth(await api(`/api/status${full ? "?full=1" : authentication ? "?auth=1" : ""}`)); } catch { /* the lights keep their last state */ }
   clearTimeout(healthTimer);  // after the await: calls that overlapped leave one loop, not one each
   healthTimer = setTimeout(refreshHealth, 60000);
@@ -428,6 +428,7 @@ function renderHealth(h) {
     ...h.unshackle, ...(unshackleDetails.tools ? { tools: unshackleDetails.tools } : {}),
   };
   if (detailed || h.authentication && unshackleDetails) renderUnshackleStatus(unshackleDetails);  // down: its actions and why
+  if (h.authentication) renderServices();
   renderSonarrState(h.sonarr);
   renderUnshackleState(h.unshackle);
   paintServers(h.servers);

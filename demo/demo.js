@@ -114,6 +114,7 @@
     const rest = mine.filter((c) => !c.waiting).sort((a, b) => b.started.localeCompare(a.started));
     return copy([...waiting, ...rest, ...(mem.cleared ? [] : R["/api/runs"].filter((c) => !ids.has(c.id)))]);
   };
+  const setups = () => mem.setups || R["/api/busy"].authentication_setups || [];  // the sign-ins waiting, as recorded until this tab changes them
   const liveCards = () => copy(sim.map((x) => x.card).filter((c) => c.outcome === "running" && !c.waiting));
 
   /* ---- The routes ---- */
@@ -188,7 +189,16 @@
     }
     if (p === "/api/runs") return runs();
     if (p === "/api/runs/clear") { mem.cleared = true; keep(); return { deleted: R["/api/runs"].length }; }
-    if (p === "/api/busy") return { running: liveCards().length, queued: sim.filter((x) => x.card.waiting).length };
+    if (p === "/api/busy") return { running: liveCards().length, queued: sim.filter((x) => x.card.waiting).length, approvals: [],
+      authentication: copy(R["/api/busy"].authentication || []), authentication_setups: copy(setups()) };
+    if ((m = p.match(/^\/api\/unshackle\/authentication\/([^/]+)(\/input)?$/))) {  // a sign-in started, cancelled or answered here
+      const service = decodeURIComponent(m[1]), backend = body?.backend || "";
+      mem.setups = setups().filter((x) => x.service !== service || (x.backend || "") !== backend);
+      const setup = method === "DELETE" ? { service, backend, state: "cancelled", method: "cookies" } : { service, backend, state: "authenticating" };
+      if (method === "POST" && !m[2]) mem.setups.push(setup);
+      keep();
+      return m[2] ? {} : setup;
+    }
     if (p === "/api/download") {
       const batch = body.batch || (body.episodeIds.length > 1 ? `${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15).replace(/^(\d{8})/, "$1-")}-${Math.random().toString(16).slice(2, 8)}` : null);
       if (!queue(body.episodeIds, batch)) throw new Refused(409, "Already downloading");
@@ -222,7 +232,12 @@
     if (p === "/api/series/search") return { results: [  // what a service's search gives: the series, and others like it
       { id: "demo-1", title: body.query, label: "SERIES", description: "The one you look for.", url: `https://example.com/series/${encodeURIComponent(body.query.toLowerCase().replace(/\s+/g, "-"))}` },
       { id: "demo-2", title: `${body.query}: the documentary`, label: "MOVIE", description: "Another title with the same name.", url: "https://example.com/movie/demo-2" }] };
-    if (p === "/api/status") return copy(R[url.searchParams.get("full") ? "/api/status?full=1" : "/api/status"]);
+    if (p === "/api/status") {
+      const auth = url.searchParams.get("auth");
+      const status = copy(R[url.searchParams.get("full") ? "/api/status?full=1" : auth ? "/api/status?auth=1" : "/api/status"]);
+      if (status.authentication) status.authentication_setups = copy(setups());
+      return status;
+    }
     if (p.startsWith("/api/cdm") && method === "POST") {
       if (p === "/api/cdm/test") return { ok: true, revoked: null, error: null, keys: 1, at: now() };
       throw new Refused(400, NOT_HERE);
@@ -339,8 +354,8 @@
       points: ["Missing episodes found by their number or their title", "Pick a few and Download: one job", "Its Settings: numbering, release time, episodes in parts (Koh-Lanta airs in two)"] },
     { route: "#/activity", target: "#tab-log", icon: "nav [data-tab=log] svg", title: "Activity", lead: "Every download, live. One is running now.",
       points: ["Tracks, speed and Unshackle's own output", "Pause, stop or retry a whole job", "A history, with stats per service"] },
-    { route: "#/settings/cdm", target: "#tab-settings", icon: "nav [data-tab=settings] svg", title: "Settings", lead: "Set up once, then checked for you.",
-      points: ["Cookies and CDM devices tested, a warning before they expire", "unshackle.yaml edited with checks and its last versions", "An API key for scripts and Home Assistant"] },
+    { route: "#/settings/services", target: "#tab-settings", icon: "nav [data-tab=settings] svg", title: "Settings", lead: "Set up once, then checked for you.",
+      points: ["Every service's sign-in and cookies on one page, a warning before they expire", "unshackle.yaml edited with checks and its last versions", "An API key for scripts and Home Assistant"] },
     { route: "#/schedule", target: "#bell", icon: "#bell svg", title: "Notifications", lead: "Nothing to watch: you are told.",
       points: ["Downloads, failures, cookies about to expire", "Discord, Telegram, ntfy, e-mail, or this device", "Quiet hours hold them for one summary"], last: true },
   ];

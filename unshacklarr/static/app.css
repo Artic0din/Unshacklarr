@@ -1156,23 +1156,13 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
 .probe-map { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border-radius: var(--r-md);
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .sx-state.warn .dot { background: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 18%, transparent); } .sx-state.warn b { color: var(--warn); }
-.ck-card { border-left: 3px solid var(--line); } .ck-card.ok { border-left-color: var(--ok); } .ck-card.warn { border-left-color: var(--warn); } .ck-card.bad { border-left-color: var(--err); }
-.ck-card .sx-head { margin-bottom: 10px; align-items: center; } .ck-card .sx-head > div { flex: 1; min-width: 0; }
 .sx-head p a { color: var(--accent); text-underline-offset: 2px; }
-.ck-ico.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); } .ck-ico.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); } .ck-ico.bad { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); } .ck-ico.mut { color: var(--muted); background: rgb(255 255 255 / .06); }
-.ck-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 12px 14px; border-radius: var(--r-md); background: rgb(0 0 0 / .14); font-size: var(--fs-sub); }
-.ck-row + .ck-row { margin-top: 8px; }
-.ck-row .ck-file { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; } .ck-row .ck-file b { font: 600 var(--fs-sub) ui-monospace, SFMono-Regular, Menlo, monospace; }
-.ck-row small { grid-column: 1; color: var(--muted); font-size: var(--fs-sub); }
-.ck-row .btns { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 6px; }
 .ck-pill { padding: 2px 9px; border-radius: 999px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: rgb(255 255 255 / .06); white-space: nowrap; }
 .ck-pill.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); } .ck-pill.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); } .ck-pill.bad { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
-@media (max-width: 700px) { .ck-row { grid-template-columns: 1fr; } .ck-row .btns { grid-column: 1; grid-row: auto; margin-top: 6px; } }
 .ck-fields { display: grid; gap: 12px; margin-bottom: 16px; }
 .ck-fields textarea { width: 100%; font: var(--fs-footnote)/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); color: var(--text);
   border: 1px solid var(--field-line); border-radius: var(--r-md); padding: 8px 10px; resize: vertical; }
 .ck-fields input[type=file] { color: var(--muted); }
-@media (max-width: 700px) { .ck-row { grid-template-columns: 1fr; gap: 4px; } }
 .act-box { display: grid; gap: 8px; justify-items: start; padding: 14px 16px; border: 1px solid var(--warn); border-radius: var(--r-md); background: color-mix(in srgb, var(--warn) 8%, transparent); }
 .act-box > b { color: var(--warn); } .act-box > span { color: var(--muted); font-size: var(--fs-sub); }
 .act-code { font: 700 var(--fs-title1)/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; padding: 6px 12px; border: 1px dashed var(--line);
@@ -1763,3 +1753,41 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); box-shadow: 0 0 
 #next-sync b { font-variant-numeric: tabular-nums; }
 /* iOS zooms the page on focus of a field under 16px: these monospace boxes set their own size above */
 @media (max-width: 700px) { .ck-fields textarea, #d-progmap { font-size: 16px; } }
+
+/* Settings, Services: a row a service; at phone width each row stacks, its cells named by their own labels */
+.sv-card { padding-inline: 12px; }
+.sv-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sub); }
+.sv-table th, .sv-table td { text-align: left; vertical-align: top; padding: 12px 10px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.sv-table thead th { border-top: 0; padding-top: 4px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; white-space: nowrap; }
+.sv-table tbody th { font-weight: 600; font-size: var(--fs-callout); }
+.sv-row[data-attention] > :first-child { box-shadow: inset 3px 0 0 var(--err); }
+.sv-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sv-k { display: none; }
+.sv-label, .sv-table td small { display: block; color: var(--muted); font-size: var(--fs-sub); }
+.sv-label { margin-bottom: 6px; }
+.sv-ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.sv-ctl input { min-width: 0; width: 100%; max-width: 16rem; }
+.sv-file + .sv-file { margin-top: 12px; }
+.sv-file-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.sv-file-top b { font: 600 var(--fs-sub) ui-monospace, SFMono-Regular, Menlo, monospace; }
+.sv-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.sv-chip { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: var(--fs-footnote); }
+.sv-confirm, .st-confirm { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--err) 45%, transparent); border-radius: var(--r-md); font-size: var(--fs-sub); }
+.sv-confirm .sv-ctl { margin-top: 0; }
+#sv-note:not(:empty) { margin: 12px 10px 0; }
+.ds-fix { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; color: var(--muted); font-size: var(--fs-sub); overflow-wrap: anywhere; }
+.ds-fix[hidden] { display: none; }
+.wz-signin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; color: var(--muted); font-size: var(--fs-callout); }
+.wz-signin p { margin: 0; }
+@media (max-width: 700px) {
+  .sv-card { padding-inline: 16px; }
+  .sv-table, .sv-table tbody, .sv-table tr, .sv-table th, .sv-table td { display: block; }
+  .sv-table thead { display: none; }
+  .sv-table tr { padding: 10px 0; border-top: 1px solid var(--line); }
+  .sv-table tr:first-child { border-top: 0; }
+  .sv-table th, .sv-table td { border: 0; padding: 6px 0; }
+  .sv-k { display: block; margin-bottom: 2px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; }
+  .sv-row[data-attention] > :first-child { box-shadow: none; }
+  .sv-row[data-attention] { box-shadow: inset 3px 0 0 var(--err); padding-left: 10px; }
+}
+.sv-table td .btn, .sv-table td:nth-child(5) { white-space: nowrap; }

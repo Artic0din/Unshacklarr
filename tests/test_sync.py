@@ -977,7 +977,7 @@ def test_a_login_failure_points_to_the_cookies(tmp_path, monkeypatch):
     monkeypatch.setattr(sync, "run_job", refused)
     assert sync.main() == 1
     [message] = discord_messages()
-    assert "Login failed on RTLP: Show S02E05" in message and "Settings, Cookies" in message
+    assert "Login failed on RTLP: Show S02E05" in message and "Settings › Services" in message
     [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
     assert "auth_failures" not in card  # free text alone is not retained as classified authentication evidence
 

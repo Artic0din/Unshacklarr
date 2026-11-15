@@ -417,7 +417,7 @@ async function openDrawer(s, tab, fromRoute = false) {
   $("#d-sick").hidden = !sick;
   if (sick) $("#d-sick").replaceChildren(el("b", { textContent: `Its last ${sick.failing} downloads failed` }),
     el("span", { textContent: sick.cause || "See the history in Activity for why." }),
-    el("span", { textContent: "Test this series below: a URL the service no longer knows, or cookies to update in Settings, Cookies." }));
+    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }));
   $("#d-probe-state").textContent = "Asks the service which episodes it has. Nothing is downloaded.";
   drawerPushed = !fromRoute;
   if (!fromRoute) { drawerTab = tab || "episodes"; navigate(true); }  // back will close it
@@ -489,6 +489,10 @@ function renderSeriesState() {
   box.classList.remove("ok", "down", "warn");
   if (cls) box.classList.add(cls);
   $("#ds-state-text").textContent = text;
+  // What failed, and where to mend it: the service's row in Settings, Services
+  $("#ds-fix").hidden = !sick;
+  $("#ds-fix").replaceChildren(...(sick ? [el("span", { textContent: sick.cause || "See the history in Activity for why." }),
+    el("button", { type: "button", className: "btn small", textContent: `Check ${svcName(conf.service)} in Settings › Services`, onclick: () => openServiceRow(conf.service) })] : []));
 }
 /* Service options only show for a service that has some; "stop" only for a managed series. */
 async function renderServiceOptions(conf) {

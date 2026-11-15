@@ -4529,7 +4529,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                             failures += 1
                         run.say(f"\r\n\x1b[31m{label}: Unshackle FAILED\x1b[0m\n{error}".replace("\n", "\r\n"))
                         if login_failure(cause):
-                            hint = f"{show['service']} refused Unshackle: its cookies may have expired. Update them in Settings, Cookies."
+                            hint = f"{show['service']} refused Unshackle: its cookies may have expired. Update them in Settings › Services."
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Login failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
                             run.finish("failed", cause, hint, auth_failed=authentication_failed)
                         else:
