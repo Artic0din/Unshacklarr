@@ -4,18 +4,18 @@ const ago_days = (ts) => { const d = Math.floor((Date.now() / 1000 - ts) / 86400
 function cookieStatus(f) {
   const left = f.expires ? Math.floor((f.expires * 1000 - Date.now()) / 86400000) : null;
   if (f.expired) return ["bad", "Expired", "The service will refuse them: replace them with fresh ones"];
-  // Session cookies carry no date: how long they log in is the service's secret
-  if (left === null || left < 0) return ["mut", "Session only", "Session cookies have no expiry date: only a failed login shows they are over"];
+  // Session cookies carry no date: how long they sign in is the service's secret
+  if (left === null || left < 0) return ["mut", "Session only", "Session cookies have no expiry date: only a failed sign-in shows they are over"];
   const days = left === 1 ? "1 day" : `${left} days`;
   return left < 7 ? ["warn", `Expires in ${days}`, "Replace them soon"] : ["ok", `Valid · ${days} left`, "Nothing to do"];
 }
 function openCookieDialog(service = "", profile = "default", newProfile = false) {
-  $("#ck-service").replaceChildren(...S.services.map((t) => el("option", { value: t, textContent: t })));
+  $("#ck-service").replaceChildren(...S.services.map((t) => el("option", { value: t, textContent: svcName(t) })));
   $("#ck-service").value = service || S.services[0] || "";
   $("#ck-service").disabled = Boolean(service);
   $("#ck-profile").value = profile;
   $("#ck-profile").disabled = Boolean(service) && !newProfile;  // adding: any profile name; replacing: that one
-  $("#ck-title").textContent = service ? `Cookies for ${service}` : "Add cookies";
+  $("#ck-title").textContent = service ? `Cookies for ${svcName(service)}` : "Add cookies";
   $("#ck-text").value = "";
   $("#ck-file").value = "";
   $("#ck-error").replaceChildren();
@@ -30,7 +30,7 @@ $("#ck-form").onsubmit = async (e) => {
   try {
     const saved = await api("/api/cookies", { method: "POST", body: JSON.stringify(body) });
     $("#cookie-dialog").close();
-    toast(`${body.service} cookies saved: ${saved.count} cookies`);
+    toast(`${svcName(body.service)} cookies saved: ${saved.count} cookies`);
     loadServices();
   } catch (err) { $("#ck-error").replaceChildren(failed(err.message)); }
 };
@@ -61,7 +61,7 @@ function cdmStatus(d) {
   const t = d.test;
   if (!t) return ["mut", "Not tested", "Test asks the DRM's own test server for a license"];
   const when = tr(`tested ${ago(t.at)}`);  // translated here: glued to the server's own words below
-  if (t.ok) return ["ok", "Works", `Got a license (${t.keys} key${t.keys === 1 ? "" : "s"}), ${when}. A service may still refuse this device.`];
+  if (t.ok) return ["ok", "Works", `Got a license (${COUNT.key(t.keys)}), ${when}. A service may still refuse this device.`];
   if (t.revoked) return ["bad", "Revoked", `${t.error}, ${when}`];
   return ["warn", "Failed", `${t.error}, ${when}`];
 }
@@ -97,7 +97,7 @@ async function testCdms(list) {
   cdmTesting = false;
   renderCdm();
   const bad = list.filter((d) => !d.test?.ok).length;
-  toast(`${list.length} device${list.length === 1 ? "" : "s"} tested${bad ? `, ${bad} not working` : ", all working"}`, bad > 0);
+  toast(`${COUNT.device(list.length)} tested${bad ? `, ${bad} not working` : ", all working"}`, bad > 0);
 }
 /* A device's short name: its maker and model once (Apple TV+'s "EXPRESS LUCK … EXPRESS LUCK … LE-*" twice over),
    then its DRM and level. */
@@ -140,7 +140,7 @@ async function cdmChoose(service, device, also = []) {  // also: other services 
     for (const svc of [service, ...also]) cdmData = await api("/api/cdm/choose", { method: "POST", body: JSON.stringify({ service: svc, device }) });
     renderCdm();
     const d = [...cdmData.devices, ...cdmData.remote].find((x) => x.name === device);
-    toast(service === "default" ? `Default device: ${cdmShort(d) || device}` : device ? `${service}: ${cdmShort(d) || device}` : `${service}: the default device`);
+    toast(service === "default" ? `Default device: ${cdmShort(d) || device}` : device ? `${svcName(service)}: ${cdmShort(d) || device}` : `${svcName(service)}: the default device`);
   } catch (e) { toast(e.message, true); loadCdm(); }
 }
 /* Pick a device for a service: searched, grouped by DRM, what uses each in sight. */
@@ -168,11 +168,11 @@ function cdmPicker(anchor, service, current, also = []) {
   };
   q.oninput = draw;
   draw();
-  const who = service === "default" ? "The default device" : `Device for ${[service, ...also].join(", ")}`;
+  const who = service === "default" ? "The default device" : `Device for ${[service, ...also].map(svcName).join(", ")}`;
   if (cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: who }), q, list)) q.focus();
 }
-const cdmCard = (icon, title, text, extra, ...body) => el("div", { className: "sx-card" },
-  el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: icon }),
+const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
+  el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: svg }),
     el("div", {}, el("h3", { textContent: title }), el("p", { textContent: text })), ...(extra ? [extra] : [])), ...body);
 function renderCdm() {
   const data = cdmData;
@@ -180,7 +180,7 @@ function renderCdm() {
   $("#cdm-add").hidden = !data.folder;
   const state = $("#cdm-state");
   const show = (cls, b, small) => { state.className = `sx-state ${cls}`; state.querySelector("b").textContent = b; state.querySelector("small").textContent = small; };
-  if (!data.folder && S.config.settings.unshackle_mode === "remote") { show("", "Managed where unshackle serve runs", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren();
+  if (!data.folder && S.config.settings.unshackle_mode === "remote") { show("", "Managed where Unshackle runs", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren();
     return $("#cdm-list").replaceChildren(el("p", { className: "muted", textContent: "To manage its devices here too, mount the folder of its unshackle.yaml and set its path in Settings, Unshackle, Folders." })); }
   if (!data.folder) { show("down", "No CDM folder", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren(); return $("#cdm-list").replaceChildren(el("p", { className: "status-err", textContent: data.error })); }
   const all = [...data.devices, ...data.remote.map((r) => ({ ...r, remote: true }))];
@@ -191,8 +191,8 @@ function renderCdm() {
   const shown = [...new Set([...Object.keys(data.map).filter((k) => k.toLowerCase() !== "default"), ...inSeries])]
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   const current = (svc) => data.map[Object.keys(data.map).find((k) => k.toLowerCase() === svc.toLowerCase())];
-  const chip = (svc, now) => el("button", { type: "button", className: "cdm-chip cdm-pop-btn", dataset: { key: `svc:${svc}` }, textContent: svc,
-    title: `Change the device ${svc} uses`, onclick: (e) => cdmPicker(e.currentTarget, svc, now) });
+  const chip = (svc, now) => el("button", { type: "button", className: "cdm-chip cdm-pop-btn", dataset: { key: `svc:${svc}` }, textContent: svcName(svc),
+    title: `Change the device ${svcName(svc)} uses`, onclick: (e) => cdmPicker(e.currentTarget, svc, now) });
   const deviceCell = (name) => {
     if (name === "none") return el("span", { className: "cdm-to" }, el("b", { textContent: "No CDM" }), el("small", { textContent: "no DRM: no device used" }));
     const d = deviceOf(name);
@@ -213,8 +213,8 @@ function renderCdm() {
   const others = data.services.filter((t) => !shown.some((x) => x.toLowerCase() === t.toLowerCase()) && t !== "EXAMPLE");
   const addSvc = el("button", { type: "button", className: "btn small cdm-pop-btn", dataset: { key: "add" }, textContent: "+ Another service", onclick: (e) => {
     const anchor = e.currentTarget, q = el("input", { type: "search", className: "cdm-pop-search", placeholder: "Search a service" }), list = el("div", { className: "cdm-pop-list" });
-    const draw = () => list.replaceChildren(...others.filter((t) => t.toLowerCase().includes(q.value.trim().toLowerCase()))
-      .map((t) => el("button", { type: "button", className: "cdm-opt", onclick: () => { closeCdmPop(); anchor.dataset.key = `svc:${t}`; cdmPicker(anchor, t, ""); } }, el("b", { textContent: t }))));
+    const draw = () => list.replaceChildren(...others.filter((t) => `${t} ${svcName(t)}`.toLowerCase().includes(q.value.trim().toLowerCase()))
+      .map((t) => el("button", { type: "button", className: "cdm-opt", onclick: () => { closeCdmPop(); anchor.dataset.key = `svc:${t}`; cdmPicker(anchor, t, ""); } }, el("b", { textContent: svcName(t) }))));
     q.oninput = draw; draw();
     if (cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: "A device of its own for…" }), q, list)) q.focus();
   } });
@@ -224,7 +224,7 @@ function renderCdm() {
       el("div", { className: `cdm-grp${deviceOf(name) || name === "none" ? "" : " bad"}` }, el("span", { className: "cdm-chips" }, ...svcs.map((svc) => chip(svc, name))), deviceCell(name))),
     ...(onDefault.length ? [el("div", { className: "cdm-grp cdm-fold" }, el("span", { className: "cdm-chips" }, ...onDefault.map((svc) => chip(svc, ""))),
       el("span", { className: "cdm-to" }, el("small", { textContent: onDefault.length === 1 ? "uses the default device" : "use the default device" })))] : []),
-    ...rules.map(([svc, v]) => el("div", { className: "cdm-grp" }, el("span", { className: "cdm-chips" }, el("span", { className: "cdm-chip static", textContent: svc })),
+    ...rules.map(([svc, v]) => el("div", { className: "cdm-grp" }, el("span", { className: "cdm-chips" }, el("span", { className: "cdm-chip static", textContent: svcName(svc) })),
       el("span", { className: "cdm-to" }, el("small", { textContent: `Set by a rule by profile, quality or DRM (${v.rule.join(", ")}): edit it in unshackle.yaml` })))),
     ...(others.length ? [el("div", { className: "cdm-add-svc" }, addSvc)] : []));
   // What needs you: a service on a device that is not there, a device in use that failed its test
@@ -264,7 +264,7 @@ function renderCdm() {
       { disabled: d.info?.unreadable || d.folder || data.details_error || cdmTesting || cdmRunning.has(d.name), sub: "A license from a test server" });
     const reprov = d.kind === "PlayReady" && d.info?.reprovisionable ? item("Reprovision", async (e) => {
       const b = e.currentTarget;
-      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.querySelector("b").textContent = "Sure? New keys"; return; }
+      if (!confirmClick(b, `Reprovision ${cdmShort(d)}?`, b.querySelector("b"))) return;
       closeCdmPop(); toast(`${cdmShort(d)}: reprovisioning…`);
       try {
         const r = await api("/api/cdm/reprovision", { method: "POST", wait: 90, body: JSON.stringify({ name: d.name }) });
@@ -277,7 +277,7 @@ function renderCdm() {
     }, { sub: "New keys, from its group key" }) : "";
     const del = item("Delete", async (e) => {
       const b = e.currentTarget;
-      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.querySelector("b").textContent = "Sure? Delete the file"; return; }
+      if (!confirmClick(b, `Delete ${cdmShort(d)}?`, b.querySelector("b"))) return;
       closeCdmPop();
       try { cdmData = await api("/api/cdm/delete", { method: "POST", body: JSON.stringify({ name: d.name, kind: d.kind }) }); renderCdm(); }
       catch (err) { toast(err.message, true); }
@@ -308,10 +308,10 @@ function renderCdm() {
   };
   // Where things stand, in the header: what needs you first, else how the devices in use last tested
   const used = data.devices.filter((d) => d.used_by.length), untested = used.filter((d) => !d.test && !d.info?.unreadable);
-  const facts = [`${data.devices.length} device${data.devices.length === 1 ? "" : "s"}`, `${used.length} in use`, ...(data.remote.length ? [`${data.remote.length} remote`] : [])].join(" · ");
-  if (alerts.length) show("down", `${alerts.length} problem${alerts.length === 1 ? "" : "s"} to fix`, facts);
+  const facts = [COUNT.device(data.devices.length), `${used.length} in use`, ...(data.remote.length ? [`${data.remote.length} remote`] : [])].join(" · ");
+  if (alerts.length) show("down", `${COUNT.problem(alerts.length)} to fix`, facts);
   else if (!data.devices.length && !data.remote.length) show("", "No device yet", "Add a .wvd or .prd file");
-  else if (untested.length) show("", `${untested.length} device${untested.length === 1 ? "" : "s"} in use not tested yet`, facts);
+  else if (untested.length) show("", `${COUNT.device(untested.length)} in use not tested yet`, facts);
   else show("ok", used.length ? "The devices in use work" : "Nothing in use", facts);
   $("#cdm-alerts").replaceChildren(...alerts);
   const plus = el("button", { type: "button", className: "btn small", textContent: "+ Add a remote CDM", onclick: () => editRemote(null) });
@@ -324,7 +324,7 @@ function renderCdm() {
       el("div", { className: "cdm-tools" }, search, testAll),
       filters,
       el("div", { className: "cdm-devs" }, ...(list.length ? list.map(row) : [el("p", { className: "muted cdm-empty", textContent: data.devices.length ? "No device matches." : "No device yet: add a .wvd or .prd file." })]),
-        ...(folded ? [el("button", { type: "button", className: "cdm-more-btn", textContent: `Show ${folded} more device${folded === 1 ? "" : "s"}, not in use`, onclick: () => { cdmShowUnused = true; renderCdm(); } })] : []))),
+        ...(folded ? [el("button", { type: "button", className: "cdm-more-btn", textContent: `Show ${COUNT.moreDevice(folded)}, not in use`, onclick: () => { cdmShowUnused = true; renderCdm(); } })] : []))),
     cdmCard('<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>', "Remote CDMs",
       "A device on a server: pywidevine serve, a PlayReady API, Decrypt Labs. Saved in unshackle.yaml.", plus,
       ...(data.remote.length ? [el("div", { className: "cdm-devs" }, ...data.remote.map(remoteRow))] : [])));
@@ -336,7 +336,7 @@ function remoteRow(r) {
       el("b", { textContent: text }), ...(extra.sub ? [el("small", { textContent: extra.sub })] : []));
     const del = item("Delete", async (ev) => {
       const b = ev.currentTarget;
-      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.querySelector("b").textContent = "Sure? Remove it from unshackle.yaml"; return; }
+      if (!confirmClick(b, `Remove ${r.name} from unshackle.yaml?`, b.querySelector("b"))) return;
       closeCdmPop();
       try { cdmData = await api("/api/cdm/remote-delete", { method: "POST", body: JSON.stringify({ name: r.name }) }); renderCdm(); }
       catch (err) { toast(err.message, true); }

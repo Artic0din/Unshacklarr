@@ -28,15 +28,15 @@ async function renderServiceDefaults() {
     backend.value = levels.backend || "";
     const ladder = ladderSelect(levels.ladder, S.config.settings.quality_ladder, (v) => { if (v) levels.ladder = v; else delete levels.ladder; dirty(); });
     blocks.push(el("div", { className: "svc-block" },
-      el("div", { className: "svc-block-head" }, el("b", { textContent: tag }),
-        el("small", { textContent: count ? `${count} option${count > 1 ? "s" : ""}` : "Nothing set yet" }),
+      el("div", { className: "svc-block-head" }, el("b", { textContent: svcName(tag) }),
+        el("small", { textContent: count ? COUNT.option(count) : "Nothing set yet" }),
         el("button", { className: "btn small danger", textContent: "Remove", onclick: () => { delete all[tag]; dirty(); renderServiceDefaults(); } })),
       el("div", { className: "sx-grid svc-picks" },
-        ...(servers.length || levels.backend ? [field("Unshackle server", backend, `Where ${tag} downloads.`)] : []),
+        ...(servers.length || levels.backend ? [field("Unshackle server", backend, `Where ${svcName(tag)} downloads.`)] : []),
         field("Quality ladder", ladder, "Default: the one of Settings, Quality.")),
       el("span", { className: "sub", textContent: "Download options" }), dl,
-      ...(specs.length || Object.keys(levels.service_options).length ? [el("span", { className: "sub", textContent: `Options of ${tag}` }), own] : []),
-      el("div", { className: "dx-cmd" }, el("span", { textContent: `A ${tag} download starts as` }),
+      ...(specs.length || Object.keys(levels.service_options).length ? [el("span", { className: "sub", textContent: `Options of ${svcName(tag)}` }), own] : []),
+      el("div", { className: "dx-cmd" }, el("span", { textContent: `A ${svcName(tag)} download starts as` }),
         el("code", { className: "dx-svc-cmd", translate: "no", dataset: { tag } }))));
   }
   $("#svc-defaults").replaceChildren(...(blocks.length ? blocks : [el("p", { className: "dx-empty", textContent: "No service has options of its own yet." })]));
@@ -63,7 +63,7 @@ function renderInherited(conf) {
 }
 function inheritedRows(root, from, own, redraw) {
   const last = new Map(from.map((x) => [x[0], x]));
-  root.replaceChildren(...[...last.values()].map(([flag, value, src]) => {
+  root.replaceChildren(el("span", { className: "inh-label", textContent: "Set for this service" }), ...[...last.values()].map(([flag, value, src]) => {
     const over = flag in own;
     return el("div", { className: `opt inh${over ? " over" : ""}` },
       el("code", { textContent: flag }),
@@ -130,11 +130,11 @@ function renderHistory() {
     const done = count("downloaded", "kept", "import"), failed = count("failed", "interrupted"), missing = count("unavailable");
     const oldest = hsCards.map((c) => c.started).sort()[0];
     box.className = "sx-state";  // a count, neither good nor bad
-    box.querySelector("b").textContent = hsCards.length ? `${hsCards.length} download${hsCards.length === 1 ? "" : "s"} kept` : "Nothing kept yet";
+    box.querySelector("b").textContent = hsCards.length ? `${COUNT.download(hsCards.length)} kept` : "Nothing kept yet";
     box.querySelector("small").textContent = hsCards.length ? [done ? `${done} downloaded` : "", failed ? `${failed} failed` : "", missing ? `${missing} not out yet` : "", oldest ? `the oldest ${ago(oldest)}` : ""].filter(Boolean).join(" · ") : "";
   }
   const full = hsCards && keep && hsCards.length >= keep;
-  $("#hs-say").textContent = !(keep && days) ? "" : `Keeps the last ${keep} downloads, none older than ${days} day${days === 1 ? "" : "s"}.`
+  $("#hs-say").textContent = !(keep && days) ? "" : `Keeps the last ${keep} downloads, none older than ${COUNT.day(days)}.`
     + (full ? ` Full now: each new download pushes the oldest out.` : hsCards ? ` Now: ${hsCards.length} of ${keep}.` : "");
   const on = set.debug === true;
   $("#hs-debug-card").classList.toggle("hs-on", on);
@@ -210,7 +210,7 @@ function pwCheck() {
   $("#pw-again").classList.toggle("good", !!same);
   $("#pw-again").classList.toggle("bad", !!again && !same && !typing);
   $("#pw-match").className = `pw-match ${!again || typing ? "" : same ? "good" : "bad"}`;
-  $("#pw-match").textContent = !again || typing ? "" : same ? "✓ Passwords match" : "Passwords do not match";
+  $("#pw-match").replaceChildren(...(!again || typing ? [] : same ? [icon("check", "inl"), "Passwords match"] : ["Passwords do not match"]));
 }
 $("#pw-new").oninput = $("#pw-again").oninput = $("#pw-current").oninput = () => { pwCheck(); acReady(); };
 /* Account: the button only once it can work; the wrong current password said on its field; the session in words. */
@@ -226,7 +226,7 @@ $("#pw-change").onclick = async () => {
     await api("/api/password", { method: "POST", body: JSON.stringify({ current: $("#pw-current").value, new: $("#pw-new").value }) });
     $("#pw-current").value = $("#pw-new").value = $("#pw-again").value = "";
     pwCheck();
-    b.textContent = "✓ Changed";
+    b.replaceChildren(icon("check", "inl"), "Changed");
     setTimeout(() => { b.textContent = "Change the password"; }, 2500);
     loadAccount();
   } catch (e) {
@@ -241,7 +241,7 @@ async function loadAccount() {
   try { s = await api("/api/session"); } catch { return; }
   const until = s.expires ? new Date(s.expires * 1000).toLocaleDateString(LOCALE, { day: "numeric", month: "long" }) : "";
   // Let in by the reverse proxy, with no session of its own here: logging out is done there
-  $("#ac-state b").textContent = s.proxy_user && !s.expires ? `Signed in by your reverse proxy as ${s.proxy_user}` : "Logged in on this device";
+  $("#ac-state b").textContent = s.proxy_user && !s.expires ? `Signed in by your reverse proxy as ${s.proxy_user}` : "Signed in on this device";
   $("#logout").hidden = Boolean(s.proxy_user && !s.expires);
   $("#ac-state small").textContent = [until && `until ${until}`, s.password_changed ? `password changed ${ago(s.password_changed)}` : "password set at the first run"].filter(Boolean).join(" · ");
   akShow(s.api_key);
@@ -278,7 +278,7 @@ $("#ak-pass").oninput = () => akPassSay();
 $("#ak-pass").onkeydown = (e) => { if (e.key === "Enter") $("#ak-new").click(); };
 $("#ak-delete").onclick = async (e) => {
   const b = e.currentTarget;
-  if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Sure? Programs using it will stop working"; return setTimeout(() => { if (b.dataset.sure === "1") { b.dataset.sure = ""; b.textContent = "Delete the key"; } }, 4000); }
+  if (!confirmClick(b, "Delete the key? Programs using it will stop working")) return;
   try { await api("/api/api-key/delete", { method: "POST" }); akShow({ set: false }); }
   catch (err) { toast(err.message, true); }
 };
@@ -290,8 +290,8 @@ $("#ak-cmd").after((() => {
 })());
 $("#ac-others").onclick = async (e) => {
   const b = e.currentTarget;
-  if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Sure? They log in again"; return setTimeout(() => { b.dataset.sure = ""; b.textContent = "Log out other devices"; }, 4000); }
-  try { await api("/api/logout-others", { method: "POST" }); b.dataset.sure = ""; b.textContent = "✓ Others logged out"; loadAccount(); }
+  if (!confirmClick(b, "Sign out other devices? They sign in again")) return;
+  try { await api("/api/logout-others", { method: "POST" }); b.replaceChildren(icon("check", "inl"), "Others signed out"); loadAccount(); }
   catch (err) { toast(err.message, true); }
 };
 $("#ac-reset").after((() => {
@@ -333,7 +333,7 @@ function renderOffsite() {
   $("#bo-url").placeholder = s3 ? "https://s3.eu-west-3.amazonaws.com" : "https://cloud.example.com/remote.php/dav/files/me/backups";
   $("#bo-url-help").textContent = s3 ? "Backblaze B2, Cloudflare R2, Wasabi, Scaleway, OVH, AWS or MinIO." : "Nextcloud, Synology, QNAP, kDrive, pCloud… The folder must already exist.";
   $("#bo-user-l").textContent = s3 ? "Access key" : "User name";
-  $("#bo-user-help").textContent = s3 ? "" : "Leave empty if the folder needs no login.";
+  $("#bo-user-help").textContent = s3 ? "" : "Leave empty if the folder needs no sign-in.";
   $("#bo-secret-l").textContent = s3 ? "Secret key" : "Password";
   $("#bo-secret-help").textContent = s3 ? (set.backup_remote_secret_set ? "Leave empty to keep the saved one." : "")
     : set.backup_remote_secret_set ? "An app password is safer than your account's password. Leave empty to keep the saved one."
@@ -397,10 +397,10 @@ async function backupFile(name) {
     const a = el("a", { href: URL.createObjectURL(new Blob([r.text], { type: "text/yaml" })), download: r.name });
     a.click();
     URL.revokeObjectURL(a.href);
-    bkSay(`✓ ${r.name} downloaded`, false);
+    bkSay(`${r.name} downloaded`, false);
   } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
 }
-const bkSay = (text = "", bad = true) => { $("#bk-say").textContent = text || "Asked again: the file holds secrets."; $("#bk-say").className = `pw-match${text ? (bad ? " bad" : " good") : ""}`; };
+const bkSay = (text = "", bad = true) => { $("#bk-say").replaceChildren(...(text && !bad ? [icon("check", "inl"), text] : [text || "Asked again: the file holds secrets."])); $("#bk-say").className = `pw-match${text ? (bad ? " bad" : " good") : ""}`; };
 const bkPassword = () => { if ($("#bk-pass").value) return true; bkSay("Type your password first"); $("#bk-pass").focus(); return false; };
 $("#bk-pass").oninput = () => bkSay();
 $("#bk-save").onclick = async () => {
@@ -410,7 +410,7 @@ $("#bk-save").onclick = async () => {
     const a = el("a", { href: URL.createObjectURL(new Blob([r.text], { type: "text/yaml" })), download: r.name });
     a.click();
     URL.revokeObjectURL(a.href);
-    bkSay(`✓ ${r.name} downloaded`, false);
+    bkSay(`${r.name} downloaded`, false);
   } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
 };
 $("#bk-load").onclick = () => { if (bkPassword()) $("#bk-file").click(); };
@@ -491,7 +491,7 @@ const BUILDERS = {
     fields: [["topic", "Topic", "unshacklarr-7f3k"], ["server", "Server, if not ntfy.sh", "ntfy.example.com"]],
     url: (f) => f.server ? `ntfys://${f.server.replace(/^https?:\/\//, "").replace(/\/+$/, "")}/${f.topic}` : `ntfy://${f.topic}`,
     check: (f) => /^[\w-]{1,64}$/.test(f.topic) || ["topic", "A topic: letters, digits, - and _"] },
-  Pushover: { hint: "Your user key is shown on pushover.net once you log in. Create an application there to get the API token.",
+  Pushover: { hint: "Your user key is shown on pushover.net once you sign in. Create an application there to get the API token.",
     fields: [["user", "User key"], ["token", "API token"]], url: (f) => `pover://${f.user}@${f.token}`,
     check: (f) => !/^\w{30}$/.test(f.user) ? ["user", "A user key is 30 letters and digits"] : /^\w{30}$/.test(f.token) || ["token", "An API token is 30 letters and digits"] },
   "E-mail": { hint: "For Gmail, Outlook or iCloud: use an app password, created in your account's security settings (not your usual password).",
@@ -521,7 +521,7 @@ function renderTargets() {
     return el("div", { className: `nt-target${t.levels.length ? "" : " off"}` },
       el("span", { className: "nt-badge", textContent: badgeOf(appOf(t.url)), ariaHidden: "true" }),
       el("span", { className: "nt-who" }, el("b", { textContent: appOf(t.url) + (targets.filter((x) => appOf(x.url) === appOf(t.url)).length > 1 ? ` ${targets.filter((x, j) => j <= i && appOf(x.url) === appOf(t.url)).length}` : "") }),
-        ...(tested && tested !== "…" ? [el("em", { className: tested.ok ? "ok" : "bad", textContent: tested.ok ? "✓ Delivered" : `✗ ${tested.error}` })] : [])),
+        ...(tested && tested !== "…" ? [el("em", { className: tested.ok ? "ok" : "bad" }, icon(tested.ok ? "check" : "x", "inl"), tested.ok ? "Delivered" : tested.error)] : [])),
       el("span", { className: "nt-chips", role: "group", ariaLabel: `What ${appOf(t.url)} gets` }, el("small", { textContent: "Sends" }), ...chips),
       el("span", { className: "btns" }, test, remove));
   }) : [el("p", { className: "muted cdm-empty", textContent: "No address yet: add Discord, Telegram, ntfy or another." })]));
@@ -545,7 +545,7 @@ function renderNotify() {
   box.querySelector("b").textContent = !targets.length ? "No address yet" : !used.length ? "Nothing goes out" : used.length === 1 ? "Sending to 1 address" : `Sending to ${used.length} addresses`;
   box.querySelector("small").textContent = [[...new Set(used.map((t) => appOf(t.url)))].join(", "), n.quiet ? `quiet ${n.quiet.from}–${n.quiet.to}` : ""].filter(Boolean).join(" · ");
   const late = Number($("#nt-late").value), warnOff = !(n.warning ?? true);
-  $("#nt-late-say").replaceChildren(late > 0 ? `Now: a message when an episode is still missing ${late} hour${late === 1 ? "" : "s"} after airing.` : "Now: no message for late episodes.",
+  $("#nt-late-say").replaceChildren(late > 0 ? `Now: a message when an episode is still missing ${COUNT.hour(late)} after airing.` : "Now: no message for late episodes.",
     ...(late > 0 && warnOff ? [el("span", { className: "status-err", textContent: " Needs a look is turned off above, so this message will not be sent." })] : []));
   $("#nt-quiet-on").checked = Boolean(n.quiet);
   $("#nt-quiet").hidden = !n.quiet;
@@ -583,11 +583,11 @@ async function loadSent() {
   let data;
   try { data = await api("/api/notifications/sent"); } catch (e) { return $("#nt-sent").replaceChildren(failed(e.message, loadSent)); }
   $("#nt-sent").replaceChildren(
-    ...(data.held ? [el("p", { className: "nt-held", textContent: `${data.held} message${data.held === 1 ? "" : "s"} waiting for the end of the quiet hours` })] : []),
+    ...(data.held ? [el("p", { className: "nt-held", textContent: `${COUNT.message(data.held)} waiting for the end of the quiet hours` })] : []),
     ...(data.sent.length ? data.sent.map((m) => el("div", { className: `nt-msg ${m.level}` }, el("i"),
       el("span", { className: "nt-who" }, el("b", { textContent: m.title }), el("small", { textContent: ago(m.at) })),
-      el("span", { className: "nt-to" }, ...m.to.map((t) => t.ok ? el("span", { className: "rg-chip", textContent: `✓ ${t.app}` })
-        : hoverTip(el("span", { className: "rg-chip bad", textContent: `✗ ${t.app}` }), () => [t.error || "Not delivered"])))))
+      el("span", { className: "nt-to" }, ...m.to.map((t) => t.ok ? el("span", { className: "rg-chip" }, icon("check", "inl", "Delivered"), t.app)
+        : hoverTip(el("span", { className: "rg-chip bad" }, icon("x", "inl", "Not delivered"), t.app), () => [t.error || "Not delivered"])))))
       : [el("p", { className: "muted cdm-empty", textContent: "Nothing sent yet." })]));
 }
 document.querySelectorAll("[data-level]").forEach((c) => c.onchange = () => { S.config.notifications[c.dataset.level] = c.checked; renderNotify(); dirty(); });
@@ -628,7 +628,7 @@ $("#nt-d-test").onclick = async () => {
   $("#nt-d-result").replaceChildren(el("span", { className: "muted", textContent: "Sending…" }));
   try {
     const { results: [r] } = await api("/api/notifications/test", { method: "POST", body: JSON.stringify({ urls: [url] }) });
-    $("#nt-d-result").replaceChildren(el("span", { className: r.ok ? "ok" : "status-err", textContent: r.ok ? "✓ Delivered: look for it, then Add." : `✗ ${r.error}` }));
+    $("#nt-d-result").replaceChildren(el("span", { className: r.ok ? "ok" : "status-err" }, icon(r.ok ? "check" : "x", "inl"), r.ok ? "Delivered: look for it, then Add." : r.error));
   } catch (e) { $("#nt-d-result").replaceChildren(el("span", { className: "status-err", textContent: e.message })); }
 };
 $("#nt-form").onsubmit = (e) => {
@@ -695,7 +695,7 @@ async function saveHere(button, bar = null) {
   const shown = bar || button;  // what save() just hid
   shown.hidden = false;
   button.classList.add("saved");
-  button.textContent = "✓ Saved";
+  button.replaceChildren(icon("check", "inl"), "Saved");
   setTimeout(() => {
     button.classList.remove("saved");
     button.innerHTML = label;

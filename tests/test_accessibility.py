@@ -151,3 +151,74 @@ ctx.go("HULU"); ctx.go("NF"); ctx.go("STAN");
 console.log(JSON.stringify(focused));
 """)
     assert shown == ["sv-HULU@vpn", "sv-NF", "sv-STAN@nas"]
+
+
+def test_an_icon_that_alone_carries_a_meaning_is_named():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const svg = () => ({ attrs: { "aria-hidden": "true" }, setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; } });
+const ctx = { document: { createElement: () => ({ set innerHTML(_) { this.content = { firstChild: svg() }; } }) } };
+vm.createContext(ctx);
+vm.runInContext(src.match(/^const ICON_PATHS = \{.*?^\};/ms)[0] + src.match(/^function icon\(.*?^\}/ms)[0], ctx);
+console.log(JSON.stringify({ plain: ctx.icon("check", "inl").attrs, named: ctx.icon("check", "inl", "Delivered").attrs }));
+""")
+    assert shown == {"plain": {"aria-hidden": "true"}, "named": {"role": "img", "aria-label": "Delivered"}}
+
+
+def test_no_name_in_the_page_hides_the_icon_helper():
+    import re
+    shadow = re.compile(r"[(,]\s*icon\s*[=,)]|\b(?:const|let|var)\s+icon\b|,\s*icon\s*=|\bicon\.\w+\s*=[^=]")
+    found = [f"{path.name}:{n}" for path in JS.glob("*.js")
+             for n, line in enumerate(path.read_text().splitlines(), 1) if shadow.search(line)]
+    assert not found  # a parameter or variable named icon makes icon() "not a function" in its scope
+
+
+def test_translations_add_no_glyph_their_english_lacks():
+    glyph = ("✓ ", "✗ ")
+    extra = [f"{path.name}: {key}" for path in (JS.parent / "i18n").glob("*.json") if path.name != "en.json"
+             for key, text in json.loads(path.read_text()).items()
+             if isinstance(text, str) and text.startswith(glyph) and not key.startswith(glyph)]
+    assert not extra  # the page draws the tick as an icon: a translated one would show two
+
+
+def test_hover_styles_apply_only_where_a_pointer_hovers():
+    import re
+    css = (JS.parent / "app.css").read_text()
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    stack, start, sticky = [], 0, []
+    for i, ch in enumerate(css):
+        if ch == "{":
+            stack.append(css[start:i].strip()); start = i + 1
+        elif ch in "};":
+            if ch == "}" and stack:
+                stack.pop()
+            start = i + 1
+        if ch == "{" and ":hover" in stack[-1] and not any("hover: hover" in a for a in stack[:-1]):
+            sticky.append(stack[-1])
+    assert not sticky  # on a touch screen a :hover style sticks after the tap
+
+
+def test_a_two_click_confirmation_is_taken_back_by_a_press_elsewhere():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const target = () => { const l = {}; return { l, addEventListener(t, f) { (l[t] ||= []).push(f); }, removeEventListener(t, f) { l[t] = (l[t] || []).filter((x) => x !== f); },
+  fire(t, e) { [...(l[t] || [])].forEach((f) => f({ type: t, ...e })); } }; };
+const doc = target(), button = { ...target(), dataset: {}, textContent: "Delete", contains: (n) => n === button };
+const ctx = { document: doc };
+vm.createContext(ctx);
+vm.runInContext(src.match(/^function confirmClick\(.*?^\}/ms)[0], ctx);
+const out = {};
+ctx.confirmClick(button, "Delete RMCBFM.txt?");
+out.asked = button.textContent;
+doc.fire("pointerdown", { target: button });  // pressing the button again: still asking
+out.onItself = button.textContent;
+out.confirmed = ctx.confirmClick(button, "Delete RMCBFM.txt?");
+ctx.confirmClick(button, "Delete RMCBFM.txt?");
+doc.fire("pointerdown", { target: {} });  // a press anywhere else, no blur (Safari)
+out.elsewhere = [button.textContent, button.dataset.sure ?? null, ctx.confirmClick(button, "Delete RMCBFM.txt?")];
+console.log(JSON.stringify(out));
+""")
+    assert shown == {"asked": "Delete RMCBFM.txt?", "onItself": "Delete RMCBFM.txt?", "confirmed": True,
+                     "elsewhere": ["Delete", None, False]}  # taken back: the next click only asks again

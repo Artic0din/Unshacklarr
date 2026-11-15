@@ -436,7 +436,7 @@ class Unshackle:
             provider_auth_failed = payload.get("error_code") == "AUTH_FAILED"
             if r.status_code == 401:
                 if provider_auth_failed:
-                    message = f"{message}. Check this service's login/session in Unshackle."
+                    message = f"{message}. Check this service's sign-in/session in Unshackle."
                 else:
                     message = "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle."
             if not provider_auth_failed and "requested CDM is not permitted" in message:  # --cdm, Unshackle 6: the operator's opt-in

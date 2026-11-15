@@ -90,7 +90,7 @@ document.querySelectorAll("[data-health]").forEach((b) => b.onclick = () => {
   showSettingsSec(b.dataset.health);
 });
 
-const CLEAR_CACHE_WHY = "Deletes Unshackle's cache, logins included: services log in again next time";
+const CLEAR_CACHE_WHY = "Deletes Unshackle's cache, sign-ins included: services sign in again next time";
 let confirmingClear = false;  // the question under Maintenance is open
 function renderUnshackleStatus(st) {
   const local = st.mode === "local";
@@ -126,7 +126,7 @@ function renderUnshackleStatus(st) {
       ? `Queue · ${st.queue.downloading} downloading${st.queue.queued ? `, ${st.queue.queued} waiting` : ""}` : "Queue" }),
       ...(st.jobs?.length ? [el("div", { className: "st-jobs" }, ...st.jobs.map((j) => el("div", { className: "st-job" },
         el("span", { textContent: `${j.title}`, title: j.title }),
-        el("small", { textContent: j.status === "queued" ? `${j.service} · waiting` : `${j.service} · ${j.progress}%` }),
+        el("small", { textContent: j.status === "queued" ? `${svcName(j.service)} · waiting` : `${svcName(j.service)} · ${j.progress}%` }),
         el("button", { className: "btn small danger", textContent: "Cancel", onclick: async (e) => {
           e.target.disabled = true;
           try { await api(`/api/unshackle/jobs/${encodeURIComponent(j.id)}/cancel`, { method: "POST" }); toast("Cancelling"); setTimeout(loadUnshackleStatus, 1500); }
@@ -165,8 +165,8 @@ function renderUnshackleStatus(st) {
     ...(st.tools ? [el("details", { className: "tools-box" },
       el("summary", { className: missing.length ? "bad" : "ok", textContent: missing.length ? `Tools: ${missing.length} missing` : `Tools: all ${st.tools.filter((t) => t.required).length} required ones found` }),
       el("div", { className: "tools" }, ...st.tools.map((t) => el("span", { className: t.installed ? "" : t.required ? "missing" : "optional-missing",
-        title: t.installed ? `${t.name} ${t.version || ""}`.trim() : `${t.name} is missing${t.required ? "" : " (optional)"}`,
-        textContent: `${t.installed ? "✓" : "✗"} ${t.name}` }))))] : []));
+        title: t.installed ? `${t.name} ${t.version || ""}`.trim() : `${t.name} is missing${t.required ? "" : " (optional)"}` },
+        icon(t.installed ? "check" : "x", "inl"), t.name))))] : []));
 }
 async function loadUnshackleStatus() {
   $("#u-status").replaceChildren(loading("Checking Unshackle…"));
@@ -227,7 +227,7 @@ async function openBulk() {
     const opt = (l, i) => el("label", {
       title: l ? l.url : "Leave it without a service",
     }, el("input", { type: "radio", name, value: l ? JSON.stringify([l.service, l.url]) : "",
-      checked: !l, onchange: pickCount }), l ? (l.name ? `${l.service} · ${l.name}` : l.service) : "Skip",
+      checked: !l, onchange: pickCount }), l ? (l.name ? `${svcName(l.service)} · ${l.name}` : svcName(l.service)) : "Skip",
       l ? el("small", { textContent: l.country }) : "");
     li.querySelector(".opts").replaceChildren(...(usable.length ? [...usable.map(opt), opt(null, -1)] : [el("span", { className: "none", textContent: "Nothing found on TMDB" })]));
     $("#bulk-progress").textContent = `Checked ${++done} of ${todo.length}`;
@@ -262,7 +262,7 @@ async function showReleaseSeen(s) {
   if (!sg || current?.tvdbId !== s.tvdbId) return;
   const same = conf?.release_time === sg.time && Number(conf?.release_day || 0) === sg.day;
   const when = sg.between[0] ? `between ${sg.between[0]} and ${sg.between[1]}` : `by ${sg.between[1]}`;
-  box.replaceChildren(el("span", { textContent: `${sg.episodes} episode${sg.episodes > 1 ? "s" : ""} came out on the service ${when}${sg.day ? `, ${releaseDayLabel(sg.day)} airing` : ""}. Suggested release time: ${sg.time}` }),
+  box.replaceChildren(el("span", { textContent: `${COUNT.episode(sg.episodes)} came out on the service ${when}${sg.day ? `, ${releaseDayLabel(sg.day)} airing` : ""}. Suggested release time: ${sg.time}` }),
     same ? el("span", { className: "muted", textContent: "· in use" }) : el("button", { type: "button", className: "btn small primary", textContent: "Use it", onclick: () => {
       $("#d-release").value = sg.time;
       $("#d-release-day").value = String(sg.day);
@@ -290,8 +290,8 @@ $("#d-probe").onclick = async () => {
     state.textContent = "";
     const seasons = r.seasons.map((x) => `S${x.season} (${x.episodes})`).join(", ");
     const rows = r.checks.map((c) => el("div", { className: "probe-row" },
-      el("span", { className: c.found ? "y" : "n", textContent: c.found ? "✓" : c.aired ? "✗" : "…",
-        title: c.found ? "On the service" : c.aired ? "Not on the service" : "Not aired yet" }),
+      el("span", { className: c.found ? "y" : "n", title: c.found ? "On the service" : c.aired ? "Not on the service" : "Not aired yet" },
+        c.found ? icon("check", "inl") : c.aired ? icon("x", "inl") : "…"),
       el("b", { textContent: c.sxxeyy }),
       el("span", { className: "mut", textContent: c.service && c.service !== c.sxxeyy ? `= ${c.service}` : "" }),
       el("span", {}, c.found ? `${c.name || ""} ` : c.aired ? "not on the service" + (c.hasFile ? " (on disk already)" : "") : "not aired yet",

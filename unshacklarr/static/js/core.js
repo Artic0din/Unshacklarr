@@ -50,15 +50,14 @@ async function setLang(lang) {
   await api("/api/language", { method: "POST", body: JSON.stringify({ language: lang }) }).catch(() => {});  // the notifications' too; before logging in, nothing to tell
   location.reload();
 }
-const FLAGS = { en: "🇬🇧", fr: "🇫🇷", es: "🇪🇸", de: "🇩🇪", "pt-BR": "🇧🇷", it: "🇮🇹", ru: "🇷🇺", "zh-CN": "🇨🇳", ja: "🇯🇵" };
-/* The language, in a corner of the login and the first run: a flag and its name, the others in a menu. */
+/* The language, in a corner of the login and the first run: its name, the others in a menu. */
 function langCorner() {
   const menu = el("div", { className: "lang-menu", role: "menu", hidden: true },
     ...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", role: "menuitemradio", ariaChecked: String(k === LANG),
-      className: k === LANG ? "on" : "", onclick: () => { if (k !== LANG) setLang(k); } }, el("span", { className: "flag", textContent: FLAGS[k] }), name)));
+      className: k === LANG ? "on" : "", onclick: () => { if (k !== LANG) setLang(k); } }, name)));
   const open = (on) => { menu.hidden = !on; button.setAttribute("aria-expanded", String(on)); };
   const button = el("button", { type: "button", className: "lang-btn", ariaHasPopup: "menu", ariaExpanded: "false", ariaLabel: `Language: ${LANGS[LANG]}`,
-    onclick: () => open(menu.hidden) }, el("span", { className: "flag", textContent: FLAGS[LANG] }), el("span", { textContent: LANGS[LANG] }), el("span", { className: "caret", ariaHidden: "true" }));
+    onclick: () => open(menu.hidden) }, el("span", { textContent: LANGS[LANG] }), el("span", { className: "caret", ariaHidden: "true" }));
   const corner = el("div", { className: "lang-corner", translate: "no" }, button, menu);
   document.addEventListener("click", (e) => { if (!corner.contains(e.target)) open(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") open(false); });
@@ -178,11 +177,62 @@ async function api(path, { wait = 30, ...opts } = {}) {
       ? `Unshacklarr did not answer after ${wait} s. Try again.`
       : "Unshacklarr can't be reached. Check that it is running, then try again.");
   }
-  if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw new Error("Log in first"); }
+  if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw new Error("Sign in first"); }
   if (!r.ok) throw await responseError(r);
   return r.json();
 }
 
+/* The inline SVG icons of the page (stroke in currentColor, as .ico): for a tick, a chevron or an arrow, never a text glyph.
+   "inl" sizes one to the line of text it starts. */
+const ICON_PATHS = {
+  check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', alert: '<path d="M12 6v8M12 18h.01"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>', chevronLeft: '<path d="m15 6-6 6 6 6"/>',
+  arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
+  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
+};
+function icon(name, className = "", label = "") {
+  const holder = document.createElement("template");
+  holder.innerHTML = `<svg class="ico ${className}" viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
+  const svg = holder.content.firstChild;
+  if (label) { svg.removeAttribute("aria-hidden"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", label); }  // the only sign of what it means
+  return svg;
+}
+/* A counted noun, one whole text for one and one for many: a language writes its own plural from either, no suffix glued on. */
+const COUNT = {
+  episode: (n) => n === 1 ? "1 episode" : `${n} episodes`,
+  missingEpisode: (n) => n === 1 ? "1 missing episode" : `${n} missing episodes`,
+  upgrade: (n) => n === 1 ? "1 upgrade" : `${n} upgrades`,
+  download: (n) => n === 1 ? "1 download" : `${n} downloads`,
+  device: (n) => n === 1 ? "1 device" : `${n} devices`,
+  moreDevice: (n) => n === 1 ? "1 more device" : `${n} more devices`,
+  problem: (n) => n === 1 ? "1 problem" : `${n} problems`,
+  key: (n) => n === 1 ? "1 key" : `${n} keys`,
+  option: (n) => n === 1 ? "1 option" : `${n} options`,
+  message: (n) => n === 1 ? "1 message" : `${n} messages`,
+  service: (n) => n === 1 ? "1 service" : `${n} services`,
+  earlierCheck: (n) => n === 1 ? "1 earlier check" : `${n} earlier checks`,
+  day: (n) => n === 1 ? "1 day" : `${n} days`,
+  hour: (n) => n === 1 ? "1 hour" : `${n} hours`,
+};
+/* Two clicks for what cannot be undone: the first turns the label into the question, naming the action and what it is done to;
+   the second does it. No timer takes the question back while it is being read: leaving the button, a press anywhere else
+   (Safari does not focus a clicked button, so it never blurs), or Escape does. */
+function confirmClick(button, question, label = button) {
+  if (button.dataset.sure === "1") { label.textContent = button.dataset.was; delete button.dataset.sure; return true; }
+  button.dataset.sure = "1"; button.dataset.was = label.textContent;
+  label.textContent = question;
+  const cancel = (e) => {
+    if (e.type === "keydown" && e.key !== "Escape") return;
+    if (e.type === "pointerdown" && button.contains(e.target)) return;  // the second click on the button itself
+    button.removeEventListener("blur", cancel); button.removeEventListener("keydown", cancel);
+    document.removeEventListener("pointerdown", cancel, true);
+    if (button.dataset.sure !== "1") return;
+    delete button.dataset.sure; label.textContent = button.dataset.was;
+  };
+  button.addEventListener("blur", cancel); button.addEventListener("keydown", cancel);
+  document.addEventListener("pointerdown", cancel, true);
+  return false;
+}
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */
 const slowHint = (svc) => setTimeout(() => toast(`${svc} is slow to answer. It may be waiting for you to sign in: look at Unshackle's log.`, false, ["OK", () => {}]), 20000);
 function toast(msg, err = false, action = null) {  // action: [label, onclick], e.g. ["Undo", …]
@@ -260,8 +310,8 @@ function optionsEditor(root, specs, values) {
     root.append(el("div", { className: "opt" },
       el("code", { title: spec.help }, flag),
       input,
-      el("button", { className: "rm", title: "Remove", ariaLabel: `Remove ${flag}`, textContent: "×",
-        onclick: () => { delete values[flag]; dirty(); optionsEditor(root, specs, values); } })));
+      el("button", { className: "rm", title: "Remove", ariaLabel: `Remove ${flag}`,
+        onclick: () => { delete values[flag]; dirty(); optionsEditor(root, specs, values); } }, icon("x"))));
   }
   const free = specs.filter((s) => !(s.flag in values)).sort((a, b) => a.flag.localeCompare(b.flag));
   if (!specs.length && !Object.keys(values).length) root.append(el("small", { className: "muted", textContent: "None." }));
@@ -370,7 +420,7 @@ function renderWall() {
       const conf = S.config.series[s.tvdbId];
       const art = el("span", { className: "art" });
       if (s.poster) art.append(el("img", { src: s.poster, alt: "", loading: "lazy", decoding: "async" }));
-      if (conf?.service) art.append(el("span", { className: "svc", textContent: conf.service }));
+      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service) }));
       if (libsOf(s).length) {  // the Sonarr libraries it is in, by their names; one switched off for it dimmed (by mj23au, #10)
         const off = (name, main) => Boolean(conf?.service) && Boolean(main ? conf.main_off : conf.sonarrs?.[name]?.off);
         art.append(el("span", { className: "lib" }, ...[...(s.id ? [[mainSonarr(), true]] : []), ...libsOf(s).map((o) => [o.name, false])]
@@ -379,7 +429,7 @@ function renderWall() {
       }
       const sick = conf?.service && S.health[s.tvdbId];
       if (sick) art.append(el("span", { className: "sick", role: "img", ariaLabel: sick.cause ? `Failing: ${sick.cause}` : "Failing",
-        title: `Its last ${sick.failing} downloads failed${sick.cause ? `: ${sick.cause}` : ""}`, textContent: "!" }));
+        title: `Its last ${sick.failing} downloads failed${sick.cause ? `: ${sick.cause}` : ""}` }, icon("alert")));
       if (S.config.hidden_series.includes(s.tvdbId)) {
         const off = el("span", { className: "off", role: "img", ariaLabel: "Hidden from the schedule", title: "Hidden from the schedule" });
         off.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${EYE_SHUT}</svg>`;
@@ -396,7 +446,7 @@ function renderWall() {
     });
   const managed0 = document.querySelector("#tab-series .seg [aria-pressed=true]").dataset.managed === "*" && !counts["*"];
   const empty = managed0
-    ? el("div", { className: "empty" }, el("b", { textContent: "No series is downloaded by Unshackle yet." }),
+    ? el("div", { className: "empty" }, el("b", { textContent: "No series is downloading yet." }),
         "Open a series under All, pick a service or one of the links found on TMDB, then save.")
     : el("div", { className: "empty" }, el("b", { textContent: "No series match these filters." }), "Clear the search or pick another filter.");
   $("#wall").removeAttribute("aria-busy");
@@ -429,8 +479,8 @@ async function openDrawer(s, tab, fromRoute = false) {
   $("#d-poster").src = posterSrc(s.poster, s.title);
   $("#d-title").textContent = s.title;
   renderMeta(s);
-  $("#d-service").replaceChildren(el("option", { value: "", textContent: "Not downloaded by Unshackle" }),
-    ...S.services.map((t) => el("option", { value: t, textContent: t })));
+  $("#d-service").replaceChildren(el("option", { value: "", textContent: "Not downloading" }),
+    ...S.services.map((t) => el("option", { value: t, textContent: svcName(t) })));
   $("#d-service").value = conf.service || "";
   $("#d-url").value = conf.title || "";
   fillProgrammes(conf);
@@ -482,7 +532,7 @@ function renderSeriesState() {
   const conf = current && S.config.series[current.tvdbId], box = $("#ds-state");
   if (!conf) return;
   const sick = conf.service && S.health[current.tvdbId];
-  const [cls, text] = !conf.service ? ["", "Not downloaded by Unshackle"]
+  const [cls, text] = !conf.service ? ["", "Not downloading"]
     : sick ? ["down", `Its downloads from ${svcName(conf.service)} fail`]
     : !conf.title && !conf.programmes ? ["warn", `On ${svcName(conf.service)}: its series URL is missing`]
     : conf.programmes ? ["ok", `Downloaded from ${svcName(conf.service)}, each episode its own programme`]
@@ -607,7 +657,7 @@ function networkButton(s, tag) {
     $("#d-find").hidden = true;
     $("#d-find-q").value = s.title;
     $("#d-find-open").click();
-  } }, el("b", { textContent: tag }), el("span", { textContent: `Find ${s.title} on ${svcName(tag)}` }));
+  } }, el("b", { textContent: svcName(tag) }), el("span", { textContent: `Find ${s.title} on ${svcName(tag)}` }));
 }
 /* No link from TMDB: the channel's service is all there is to offer. */
 function networkPick(s, box, none, lead) {
@@ -636,9 +686,9 @@ async function loadSuggestions(s, refresh = false) {
   if (!links.length && !brands.length) return networkPick(s, box, `TMDB lists no supported service in ${S.config.tmdb_countries.join(", ")}. Enter it below by hand.`,
     "TMDB lists no supported service.");
   box.replaceChildren(...links.map((l) => el("button", {
-    ariaLabel: `Use ${l.service}: ${[l.name, l.url].filter(Boolean).join(", ")}`,
+    ariaLabel: `Use ${svcName(l.service)}: ${[l.name, l.url].filter(Boolean).join(", ")}`,
     onclick: () => applySuggestion(l),
-  }, el("b", { textContent: l.service }), el("span", { textContent: (l.name ? `${l.name} · ` : "")  // a service linking several titles names each
+  }, el("b", { textContent: svcName(l.service) }), el("span", { textContent: (l.name ? `${l.name} · ` : "")  // a service linking several titles names each
     + (l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.found_by === "homepage" ? `TMDB homepage · ${l.url}` : l.url) }),
     el("small", { textContent: l.country }))));
   box.querySelectorAll("button").forEach((b, i) => b.dataset.url = links[i].url);

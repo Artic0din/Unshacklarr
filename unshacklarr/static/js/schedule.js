@@ -174,9 +174,9 @@ async function loadWeek() {
   catch (e) { if (current()) $("#week-board").replaceChildren(failed(`Could not load the calendar: ${e.message}`, loadWeek)); return; }
   if (current()) renderWeek();  // not a week left since, whether it loaded or failed
 }
-const countText = (list) => {  // "2 episodes · 1 managed"
-  const mine = list.filter((e) => e.managed).length;
-  return `${list.length} episode${list.length > 1 ? "s" : ""}${!mine ? "" : mine === list.length ? (mine > 1 ? ", all managed" : ", managed") : ` · ${mine} managed`}`;
+const countText = (list) => {  // "2 episodes · 1 downloading"
+  const mine = list.filter((e) => e.managed).length, episodes = COUNT.episode(list.length);
+  return !mine ? episodes : `${episodes} · ${mine === list.length ? (mine > 1 ? "all downloading" : "downloading") : `${mine} downloading`}`;
 };
 function renderWeek() {
   const start = weekStartOf(cal.date), now = new Date(), today = isoDay(now), tomorrow = isoDay(addDays(startOfDay(now), 1));
@@ -217,7 +217,7 @@ function schedStatus(d) {
   if (d.hasFile) return ["ok", d.managed ? "Downloaded" : "On disk"];
   if (!d.managed) return null;
   if (d.waitingImport) return ["wait", "Waiting for Sonarr"];
-  if (d.fromLate) return ["late", `Late · not on ${d.service} yet`];
+  if (d.fromLate) return ["late", `Late · not on ${svcName(d.service)} yet`];
   if (d.firstTry && new Date(d.firstTry) > Date.now()) return null;  // the time says it: "try 09:00"
   return new Date(d.airDateUtc) < Date.now() ? ["try", "Tries at the next sync"] : null;
 }
@@ -247,7 +247,7 @@ function renderMonth() {
     const shown = [...list].sort((a, b) => b.managed - a.managed).slice(0, 3).sort(byWhen);
     const cell = el("button", {
       className: "cal-cell" + (date.getMonth() !== first.getMonth() ? " out" : "") + (key === today ? " today" : "") + (key === cal.pick ? " picked" : ""),
-      ariaLabel: `${date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })}: ${list.length} episode${list.length === 1 ? "" : "s"}`,
+      ariaLabel: `${date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })}: ${COUNT.episode(list.length)}`,
       onclick: () => { pickDay(key); renderMonth(); $("#cal-day").scrollIntoView({ behavior: SCROLL, block: "nearest" }); },
     },
       el("span", { className: "cal-date", textContent: date.getDate() }),
@@ -462,12 +462,12 @@ function showApprovals(approvals, force = false) {
     approvalShown = "";
     return;
   }
-  const details = approvals.map((approval) => [approval.service, approval.message].filter(Boolean).join("\n")).join("\n\n");
+  const details = approvals.map((approval) => [approval.service && svcName(approval.service), approval.message].filter(Boolean).join("\n")).join("\n\n");
   const signature = details;
   if (!force && signature === approvalShown) return;
   approvalShown = signature;
   $("#signin-title").textContent = approvals.length > 1 ? `${approvals.length} services need approval`
-    : approvals[0].service ? `${approvals[0].service} needs approval` : "Service approval";
+    : approvals[0].service ? `${svcName(approvals[0].service)} needs approval` : "Service approval";
   $("#signin-message").textContent = details;
   $("#signin-copy").onclick = async () => {
     try { await navigator.clipboard.writeText(details); toast("Details copied"); } catch { /* the details stay on screen */ }

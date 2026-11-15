@@ -90,7 +90,7 @@ function ladderCard(lad) {
       $("#ql-default").querySelectorAll("button").forEach((b, i) => { if (i && list[i - 1] === lad) b.textContent = v; });
     } });
   const del = el("button", { type: "button", className: "btn small danger", textContent: "Delete", onclick: (e) => {
-    if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = use.length ? "Sure? It is in use" : "Sure?"; return; }
+    if (!confirmClick(e.target, use.length ? `Delete ${lad.name}? It is in use` : `Delete ${lad.name}?`)) return;
     list.splice(list.indexOf(lad), 1);
     renameRefs("ladder", lad.name, "");
     dirty(); renderQuality(); renderServiceDefaults();
@@ -177,9 +177,7 @@ $("#ql-add").onclick = () => {
   $("#ql-list .ql-card:last-child .ql-name")?.select();
 };
 $("#ql-reset").onclick = (e) => {
-  if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure? Your own ladders will be deleted"; return; }
-  delete e.target.dataset.sure;
-  e.target.textContent = "Reset to the built-in ladders";
+  if (!confirmClick(e.target, "Delete your own ladders?")) return;
   const keep = new Set(S.builtinLadders.map((l) => l.name));
   for (const l of ladders()) if (!keep.has(l.name)) renameRefs("ladder", l.name, "");
   S.config.quality_ladders = structuredClone(S.builtinLadders);
@@ -226,22 +224,22 @@ function backendBlock(b) {
     state.className = "ub-state"; state.textContent = "Testing…";
     try {
       const { services } = await api("/api/unshackle/test", { method: "POST", body: JSON.stringify({ unshackle_mode: "remote", unshackle_url: b.url, unshackle_api_key: b.api_key || "" }) });
-      state.className = "ub-state ok"; state.textContent = services === 1 ? "✓ Reached: 1 service" : `✓ Reached: ${services} services`;
+      state.className = "ub-state ok"; state.replaceChildren(icon("check", "inl"), `Reached: ${COUNT.service(services)}`);
     } catch (err) { state.className = "ub-state bad"; state.textContent = err.message; }
     state.dataset.tested = "1";  // its test speaks until the page reloads
   } });
   const remove = el("button", { type: "button", className: "btn small danger", textContent: "Remove", onclick: (e) => {
-    if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure?"; return; }
+    if (!confirmClick(e.target, `Remove ${b.name}?`)) return;
     list.splice(list.indexOf(b), 1);
     renameRefs("backend", b.name, "");
     dirty(); renderBackends(); renderServiceDefaults();
   } });
   const withHelp = (label, input, saved) => el("div", { className: "field" },
-    el("label", { htmlFor: input.id ||= `ub-${++fieldIds}` }, ...[label].flat(), ...(saved ? [" ", el("span", { className: "sx-saved", textContent: "✓ Saved" })] : [])),
-    input, el("small", { textContent: input.dataset.help || "The serve: api_secret of its unshackle.yaml. Empty keeps the saved one." }));
+    el("label", { htmlFor: input.id ||= `ub-${++fieldIds}` }, ...[label].flat(), ...(saved ? [" ", el("span", { className: "sx-saved" }, icon("check", "inl"), "Saved")] : [])),
+    input, el("small", {}, ...(input.dataset.help ? [input.dataset.help] : ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml. Empty keeps the saved one."])));
   return el("div", { className: "svc-block ub-block" },
     el("div", { className: "svc-block-head" }, head, el("span", { className: "ub-acts" }, state, test, remove)),
-    el("div", { className: "sx-grid" }, withHelp("Name", name), withHelp(["Address of ", el("code", { textContent: "unshackle serve" })], url),
+    el("div", { className: "sx-grid" }, withHelp("Name", name), withHelp("Unshackle address", url),
       withHelp("API key", key, b.api_key_set), withHelp("Downloads folder, as it sees it", dl)));
 }
 /* Each saved server's state from the health check (every minute): reachable with its version, or why not. */
@@ -320,17 +318,17 @@ function sonarrBlock(i) {
     state.className = "ub-state"; state.textContent = "Testing…";
     try {
       const { version } = await api("/api/sonarr/test", { method: "POST", body: JSON.stringify({ sonarr_url: i.url, sonarr_api_key: i.api_key || "" }) });
-      state.className = "ub-state ok"; state.textContent = `✓ Reached: Sonarr ${version}`;
+      state.className = "ub-state ok"; state.replaceChildren(icon("check", "inl"), `Reached: Sonarr ${version}`);
     } catch (err) { state.className = "ub-state bad"; state.textContent = err.message; }
     state.dataset.tested = "1";
   } });
   const remove = el("button", { type: "button", className: "btn small danger", textContent: "Remove", onclick: (e) => {
-    if (e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure?"; return; }
+    if (!confirmClick(e.target, `Remove ${i.name}?`)) return;
     list.splice(list.indexOf(i), 1);
     dirty(); renderSonarrs();
   } });
   const withHelp = (label, input, saved, help) => el("div", { className: "field" },
-    el("label", { htmlFor: input.id ||= `sn-${++fieldIds}` }, label, ...(saved ? [" ", el("span", { className: "sx-saved", textContent: "✓ Saved" })] : [])),
+    el("label", { htmlFor: input.id ||= `sn-${++fieldIds}` }, label, ...(saved ? [" ", el("span", { className: "sx-saved" }, icon("check", "inl"), "Saved")] : [])),
     input, el("small", { textContent: help || input.dataset.help || "In Sonarr: Settings, General. Empty keeps the saved one." }));
   return el("div", { className: "svc-block ub-block" },
     el("div", { className: "svc-block-head" }, head, el("span", { className: "ub-acts" }, state, test, remove)),
@@ -544,7 +542,7 @@ function checkLibrary() {
     try { r = await api(`/api/library/check?${q}`); } catch (e) { say.textContent = e.message; return; }
     if ((libWho || "") !== (q.get("sonarr") || "")) return;  // another Sonarr picked meanwhile
     libRoots = r.roots || []; libCommon = r.common || ""; renderLibraryPicks();
-    if (r.ok === true) { say.className = "lib-check ok"; say.textContent = `✓ Unshacklarr reads ${who}'s library: ${r.local_path}`; }
+    if (r.ok === true) { say.className = "lib-check ok"; say.replaceChildren(icon("check", "inl"), `Unshacklarr reads ${who}'s library: ${r.local_path}`); }
     else if (r.ok === false && r.guess) {  // found elsewhere in the container: both folders, one click
       say.className = "lib-check";
       say.replaceChildren(el("span", { textContent: `Your library was found in another folder: ${r.guess.sonarr_root} in Sonarr is ${r.guess.local_root} in Unshacklarr.` }), " ",
@@ -568,8 +566,8 @@ function openFolders(side, start, use) {
     here = r.path || "/";
     $("#folder-path").textContent = here;
     $("#folder-use").disabled = !r.path;
-    const row = (label, path, icon = true) => el("button", { type: "button", className: "url-hit", onclick: () => load(path) },
-      ...(icon ? [el("i", { innerHTML: FOLDER_ICON })] : [el("i", { textContent: "↑" })]), el("span", { textContent: label }));
+    const row = (label, path, folder = true) => el("button", { type: "button", className: "url-hit", onclick: () => load(path) },
+      ...(folder ? [el("i", { innerHTML: FOLDER_ICON })] : [el("i", {}, icon("arrowUp"))]), el("span", { textContent: label }));
     $("#folder-list").replaceChildren(...(r.parent != null ? [row("Up", r.parent, false)] : []),
       ...r.dirs.map((d) => row(d.split(/[\\/]/).filter(Boolean).pop() || d, d)),
       ...(!r.dirs.length ? [el("p", { className: "muted", textContent: "No folder in it." })] : []));

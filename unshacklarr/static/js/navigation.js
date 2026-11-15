@@ -114,7 +114,7 @@ function renderServiceFilter() {
   f.querySelectorAll("option.svc-opt").forEach((o) => o.remove());
   const n = (t) => S.series.filter((s) => usesService(S.config.series[s.tvdbId], t)).length;
   f.options[0].textContent = `All services (${S.series.length})`;
-  f.append(...used.map((t) => el("option", { className: "svc-opt", value: t, textContent: `${t} (${n(t)})` })));
+  f.append(...used.map((t) => el("option", { className: "svc-opt", value: t, textContent: `${svcName(t)} (${n(t)})` })));
   f.value = [...f.options].some((o) => o.value === keep) ? keep : "";
   renderLibraryFilter();
 }

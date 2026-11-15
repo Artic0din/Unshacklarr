@@ -49,7 +49,7 @@ def wanted(text: str) -> bool:
         return False
     if re.fullmatch(r"X-[\w-]+|[A-Z][a-z]+(-[A-Z][a-z]+)+|[a-z]+/[\w.+-]+|\*\.\w+", text):  # a header, a MIME type, a glob
         return False
-    if re.match(r"^[\^?]|^(from|import) \w|^docker ", text):  # a pattern, a query, Python, a command to copy
+    if re.match(r"^[\^?]|^from [\w.]+ import |^import [\w.]+$|^docker ", text):  # a pattern, a query, Python, a command to copy
         return False
     if re.search(r"\b\d+px\b|^[a-z]+-[a-z-]+:\s|\b(sans-serif|monospace)\b", text):  # CSS
         return False
@@ -81,7 +81,7 @@ class Markup(HTMLParser):
 
 
 CODE_BEFORE = re.compile(r"(className|type|kind|mode|role|inputMode|autocomplete|rel|target|method|key|dataset|href|src|name|value|id)\s*:\s*$"
-                         r"|(classList\.\w+|querySelector(All)?|closest|matches|\$|getElementById|setAttribute|getAttribute|removeAttribute"
+                         r"|(classList\.\w+|querySelector(All)?|closest|matches|\$|getElementById|setAttribute|getAttribute|removeAttribute|icon"
                          r"|addEventListener|matchMedia|api|fetch|startsWith|endsWith|split|join|replace(All)?|includes|localStorage\.\w+)\(\s*$|[\w)\]]\[\s*$")  # x["key"], not an array
 
 

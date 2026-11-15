@@ -97,7 +97,7 @@ function renderBroadcast() {
   for (let d = new Date(first); d.getMonth() === first.getMonth(); d.setDate(d.getDate() + 1)) {
     const iso = isoDay(d), n = iso < plan.start ? 0 : broadcastCount(plan, d, plan.start), changed = iso in (plan.evenings || {});
     const usual = Number(((plan.every === "daily" || (plan.days || []).includes(weekday(d)) || iso === plan.start) ? plan.per_evening || 1 : 0));
-    const say = `${n} episode${n === 1 ? "" : "s"} that day${changed ? " (changed)" : ""}: click to change`;
+    const say = `${COUNT.episode(n)} that day${changed ? " (changed)" : ""}: click to change`;
     cells.push(el("button", { type: "button", className: `${n ? "on" : ""}${changed ? " changed" : ""}${iso === today ? " today" : ""}`,
       disabled: iso < plan.start, title: say, ariaLabel: `${d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })} · ${say}`,
       onclick: () => {
@@ -109,9 +109,9 @@ function renderBroadcast() {
   }
   const move = (step) => { bcMonth = new Date(bcMonth.getFullYear(), bcMonth.getMonth() + step, 1); renderBroadcast(); };
   $("#d-bc-cal").replaceChildren(
-    el("div", { className: "bc-cal-head" }, el("button", { type: "button", ariaLabel: "Previous month", textContent: "‹", onclick: () => move(-1) }),
+    el("div", { className: "bc-cal-head" }, el("button", { type: "button", ariaLabel: "Previous month", onclick: () => move(-1) }, icon("chevronLeft")),
       el("span", { textContent: first.toLocaleDateString(LOCALE, { month: "long", year: "numeric" }) }),
-      el("button", { type: "button", ariaLabel: "Next month", textContent: "›", onclick: () => move(1) })),
+      el("button", { type: "button", ariaLabel: "Next month", onclick: () => move(1) }, icon("chevron"))),
     el("div", { className: "bc-cal-grid" }, ...DAY_NAMES.map((n) => el("small", { textContent: n.slice(0, 2) })), ...cells));
   // what it gives: the episodes around now, dated
   const dates = broadcastDates(plan, eps), dated = eps.filter((e) => dates.has(e.id));
@@ -167,7 +167,7 @@ function renderReleaseNext() {
   const aired = new Date(ep.airDateUtc), slot = releaseSlot(conf, ep);
   const when = (d) => `${day(d)} ${time(d)}`;
   box.replaceChildren(el("span", { textContent: "Next" }), el("b", { textContent: `S${pad2(ep.seasonNumber)}E${pad2(ep.episodeNumber)}` }),
-    el("span", { textContent: `airs ${when(aired)}` }), el("span", { className: "arrow", textContent: "→" }),
+    el("span", { textContent: `airs ${when(aired)}` }), el("span", { className: "arrow", ariaHidden: "true" }, icon("arrow", "inl")),
     el("b", { textContent: slot ? `tried ${when(slot)}` : "tried at the first sync after it airs" }));
 }
 $("#d-filename").oninput = (e) => { advConf().file_name = e.target.value.trim(); advDirty(); };
@@ -460,8 +460,8 @@ function openColumns() {
     const box = el("input", { type: "checkbox", checked: p.on, onchange: () => { p.on = box.checked; saveColPrefs(colsNow); } });
     const move = (d) => { const next = [...colsNow]; [next[i], next[i + d]] = [next[i + d], next[i]]; saveColPrefs(next); draw(); $("#col-rows").children[i + d]?.querySelector(d < 0 ? ".up" : ".down")?.focus(); };
     return el("li", {}, el("label", {}, box, c.label, c.file ? "" : el("small", { textContent: "any episode" })),
-      el("button", { type: "button", className: "mv up", textContent: "↑", ariaLabel: `Move ${c.label} left`, disabled: i === 0, onclick: () => move(-1) }),
-      el("button", { type: "button", className: "mv down", textContent: "↓", ariaLabel: `Move ${c.label} right`, disabled: i === colsNow.length - 1, onclick: () => move(1) }));
+      el("button", { type: "button", className: "mv up", ariaLabel: `Move ${c.label} left`, disabled: i === 0, onclick: () => move(-1) }, icon("arrowUp")),
+      el("button", { type: "button", className: "mv down", ariaLabel: `Move ${c.label} right`, disabled: i === colsNow.length - 1, onclick: () => move(1) }, icon("arrowDown")));
   }));
   $("#cols-reset").onclick = (e) => { e.preventDefault(); try { localStorage.removeItem(COLS_KEY); } catch { /* nothing kept */ } colsNow = colPrefs(); renderSeason(); draw(); };
   draw();
@@ -650,8 +650,8 @@ function renderCatchUp() {
   const free = there.filter((e) => !epBusy.has(e.id));
   box.classList.toggle("none", !there.length && !upgrades.length);
   box.replaceChildren(
-    el("div", {}, el("b", { textContent: !missing.length && !upgrades.length ? "Available on other services" : !missing.length ? `${upgrades.length} episode${upgrades.length > 1 ? "s" : ""} may be better on ${svc}`
-      : there.length ? `${svc} has ${there.length} of your ${missing.length} missing episode${missing.length > 1 ? "s" : ""}` : `${svc} has none of your ${missing.length} missing episode${missing.length > 1 ? "s" : ""}` }),
+    el("div", {}, el("b", { textContent: !missing.length && !upgrades.length ? "Available on other services" : !missing.length ? `${COUNT.episode(upgrades.length)} may be better on ${svc}`
+      : there.length ? `${svc} has ${there.length} of your ${COUNT.missingEpisode(missing.length)}` : `${svc} has none of your ${COUNT.missingEpisode(missing.length)}` }),
       ...(bySeason.length ? [el("small", { textContent: bySeason.map(([n, list]) => `${Number(n) === 0 ? "Specials" : `S${pad2(n)}`} (${list.length})`).join(" · ") })] : []),
       ...(upgrades.length && missing.length ? [el("small", { className: "renum", textContent: epUp ? `${upgrades.length} on disk ${svc} has in better quality (Activity, Upgrades)` : `${upgrades.length} on disk in a lower resolution than asked: ${svc} may have better` })] : []),
       ...(renumbered ? [el("small", { className: "renum", textContent: renumbered > 1 ? `${renumbered} episodes have another number on ${svc}: Download takes care of them` : `1 episode has another number on ${svc}: Download takes care of it` })] : []),
@@ -669,18 +669,18 @@ function renderCatchUp() {
         } }))),
       // a season its service lacks, found on another one by the weekly check: offered, never set on its own
       ...elsewhere.map(([season, p]) => el("small", { className: "renum" },
-          `Season ${season} is on ${p.service} (${p.count} episode${p.count === 1 ? "" : "s"}). `,
-          el("button", { className: "btn small", type: "button", textContent: `Use ${p.service} for season ${season}`, title: p.url, onclick: () => {
+          `Season ${season} is on ${svcName(p.service)} (${COUNT.episode(p.count)}). `,
+          el("button", { className: "btn small", type: "button", textContent: `Use ${svcName(p.service)} for season ${season}`, title: p.url, onclick: () => {
             const conf = S.config.series[current.tvdbId];
             conf.season_pages = { ...(conf.season_pages || {}), [season]: { url: p.url, service: p.service, ...(p.season ? { season: p.season } : {}) } };
             delete epElsewhere[season];
             fillPages(conf);
             dirty();
-            toast(`Season ${season} will be downloaded from ${p.service}. Click Save, then check again.`);
+            toast(`Season ${season} will be downloaded from ${svcName(p.service)}. Click Save, then check again.`);
             renderCatchUp();
           } })))),
     el("div", { className: "catchup-acts" },
-      ...(upgrades.length ? [el("button", { className: "btn small", type: "button", textContent: `Select ${upgrades.length} upgrade${upgrades.length > 1 ? "s" : ""}`,
+      ...(upgrades.length ? [el("button", { className: "btn small", type: "button", textContent: `Select ${COUNT.upgrade(upgrades.length)}`,
         title: `On disk in a lower resolution than asked of ${svc}, and available on ${svc}`, onclick: () => { upgrades.forEach((e) => picked.add(e.id)); renderSeason(); updateEpBar(); } })] : []),
       ...(free.length ? [el("button", { className: "btn primary small", type: "button", textContent: `Select all ${free.length}`,
         onclick: () => { free.forEach((e) => picked.add(e.id)); renderSeason(); updateEpBar(); } })] : [])));
@@ -891,7 +891,7 @@ function renderPreview() {
     if (conf.parts) notes.push([`Waits for ${conf.parts} parts before importing`, ""]);
     const named = e.title && e.title !== "TBA" ? e.title : "";
     return el("li", {}, el("div", { className: "ours" }, el("b", { textContent: sx }), ...(named ? [el("small", { textContent: named, title: named })] : [])),
-      el("span", { className: "arrow", textContent: "→" }), ask,
+      el("span", { className: "arrow", ariaHidden: "true" }, icon("arrow", "inl")), ask,
       el("div", { className: "side" }, el("small", { className: "file", title: "The file it becomes",
         textContent: `${dotted(name)}.${sx}${!dropName && epName ? `.${dotted(epName)}` : ""}….mkv` }),
         ...notes.map(([text, cls]) => el("small", { className: cls, textContent: text }))));
@@ -909,7 +909,7 @@ function agreement(e, theirs, found, svc) {
   const ours = plainTitle(e.title), other = plainTitle(found[0].name), generic = /^(tba|tbd|episode( \d+)?)$/;
   const titled = epAvail?.[e.id]?.match === "title" && epAvail[e.id].service === theirs;
   if (titled || (ours && other && (ours === other || ours.includes(other) || other.includes(ours))))
-    return el("span", { className: "st ok", textContent: "✓ Same title" });
+    return el("span", { className: "st ok" }, icon("check", "inl"), "Same title");
   if (!ours || !other || generic.test(ours) || generic.test(other)) return "";
   return el("span", { className: "st warn", textContent: "Other title", title: `In Sonarr: ${e.title}\nOn ${svc}: ${found[0].name}` });
 }
@@ -955,7 +955,7 @@ async function startDownload(numbering = null) {
   try {
     await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: [...picked], replace, ...(numbering ? { numbering } : {}),
       ...(epSonarr ? { sonarr: epSonarr } : {}) }) });  // picked in another Sonarr's episodes: its ids, its ladder
-    toast(`Downloading ${picked.size} episode${picked.size > 1 ? "s" : ""}${epSonarr ? ` for ${epSonarr}` : ""}: follow it in Activity`);
+    toast(`Downloading ${COUNT.episode(picked.size)}${epSonarr ? ` for ${epSonarr}` : ""}: follow it in Activity`);
     $("#ep-clear").click();
     const s = current;
     setTimeout(() => { if (s && current === s) refreshEpBusy(s); }, 1500);

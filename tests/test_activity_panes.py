@@ -24,7 +24,7 @@ const ctx = {
   el: (tag, props = {}, ...kids) => ({ tag, ...props, kids }),
   failed: (t) => ({ failed: t }),
   api: (path) => new Promise((resolve) => { pending[path] = resolve; }),
-  day: () => "", ago: () => "", duration: () => "", LOCALE: "en", S: { series: [] }, posterSrc: () => "", posterFail: () => null, OUTCOME: {},
+  day: () => "", ago: () => "", duration: () => "", LOCALE: "en", S: { series: [] }, svcName: (tag) => tag, icon: () => ({}), COUNT: {}, posterSrc: () => "", posterFail: () => null, OUTCOME: {},
 };
 vm.createContext(ctx);
 vm.runInContext(`var picked_run = null;\n${grab("showLeftovers")}\n${grab("showStats")}`, ctx);
@@ -106,7 +106,7 @@ def test_other_service_suggestions_are_visible_when_every_aired_episode_is_on_di
 const fs = require("fs"), vm = require("vm"), src = fs.readFileSync(process.argv[1], "utf8");
 const box = { hidden: true, classList: {toggle() {}}, replaceChildren(...kids) { this.kids = kids; } };
 const onService = process.argv[2];
-const ctx = { $: () => box, current: {tvdbId: 1}, S: {config: {series: {1: {service: "BINGE"}}}},
+const ctx = { $: () => box, svcName: (tag) => tag, COUNT: { episode: (n) => n === 1 ? "1 episode" : `${n} episodes`, upgrade: (n) => `${n}`, missingEpisode: (n) => `${n}` }, current: {tvdbId: 1}, S: {config: {series: {1: {service: "BINGE"}}}},
   epSeasons: {7: [{id: 1, seasonNumber: 7, hasFile: true, sonarrAir: "2000-01-01T00:00:00Z"}, {id: 2, seasonNumber: 7, hasFile: false, sonarrAir: "2999-01-01T00:00:00Z"}]},
   epAvail: onService === "none" ? {} : {[onService === "aired" ? 1 : 2]: {service: "S07E01"}}, epBusy: new Map(), epPages: {}, epElsewhere: {7: {service: "NINE", count: 5, url: "https://9now/paramedics"}},
   state: (e) => e.hasFile ? "disk" : "soon", belowAsked: () => false, seriesSvcs: () => "BINGE", seasonSvc: () => "BINGE",

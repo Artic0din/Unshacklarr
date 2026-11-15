@@ -5677,7 +5677,7 @@ async def password_required(request, handler):
     if not auth.get("password"):
         raise web.HTTPForbidden(text="Set Unshackle up first")
     if not (logged_in(request, auth) or proxy_user(request) or api_key_ok(request, auth)):
-        raise web.HTTPUnauthorized(text="Log in first")
+        raise web.HTTPUnauthorized(text="Sign in first")
     return await handler(request)
 
 
@@ -6168,7 +6168,7 @@ def main() -> None:
             reset_password(new)
         except ValueError as e:
             sys.exit(f"{e}; nothing changed.")
-        print("Password changed. Log in again on every device.")
+        print("Password changed. Sign in again on every device.")
         return
     cleaned = sonarr_sync.clean_approval_history()
     if any(cleaned.values()):

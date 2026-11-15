@@ -271,9 +271,9 @@ function cdmOf(c) {
   const drm = [d.drm, d.level != null ? `${d.drm === "PlayReady" ? "SL" : "L"}${d.level}` : ""].filter(Boolean).join(" ");
   return d.server ? `The server's (${drm})` : [d.name, drm].filter(Boolean).join(" · ");
 }
-function metaChip(icon, text) {
+function metaChip(svg, text) {
   const chip = el("span", { className: "mchip" });
-  chip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>`;
+  chip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${svg}</svg>`;
   chip.append(text);
   return chip;
 }
@@ -295,8 +295,8 @@ function renderJob(j) {
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(first)),
     el("div", {}, el("h3", { textContent: title }),
-      el("small", { className: "line1", textContent: `${first.service} · ${KIND[first.kind] || first.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
-      el("small", { className: "line2" }, el("b", { textContent: first.service }), `${KIND[first.kind] || first.kind} · ${day(started)} ${time(started)}`)),
+      el("small", { className: "line1", textContent: `${svcName(first.service)} · ${KIND[first.kind] || first.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
+      el("small", { className: "line2" }, el("b", { textContent: svcName(first.service) }), `${KIND[first.kind] || first.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
   const overall = el("div", { className: "job-sum" },
     el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused", textContent: "⏸ Paused: the next episode waits" })] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
@@ -315,8 +315,8 @@ function renderJob(j) {
     const downloading = isDownloading(c);
     const detail = downloading ? el("div", { className: "jmeta" },  // how fast, how long still: in sight, not a grey line
         ...[...(afterTracks(c) ? [[ICON_CLOCK, muxLeft(c) ? `${afterTracks(c)} · ${muxLeft(c)} left` : `${afterTracks(c)} · ${since(c.mux_from || c.tracks_in)}`]] : [[ICON_SPEED, speedOf(c)], [ICON_CLOCK, timeLeft(c) && `${timeLeft(c)} left`]]), [ICON_GLOBE, proxyOf(c), "extra"], [ICON_FILM, videoOf(c), "extra"],
-          [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${c.service}`, "extra"]]
-          .filter(([, t]) => t).map(([icon, t, extra]) => { const chip = metaChip(icon, t); if (extra) chip.classList.add(extra); return chip; }))
+          [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${svcName(c.service)}`, "extra"]]
+          .filter(([, t]) => t).map(([svg, t, extra]) => { const chip = metaChip(svg, t); if (extra) chip.classList.add(extra); return chip; }))
       : el("small", { textContent: !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "" });
     const open = openCards.has(c.id) && !c.waiting;
     const acts = open ? cardActs(c) : [];
@@ -335,7 +335,7 @@ function renderJob(j) {
         el("div", { className: "mid" }, el("div", { className: "steps mini", ariaHidden: "true" }, ...stepStates(c).filter((x) => x !== "skip").map(() => el("span")))),
         el("span", { className: "jstate", textContent: "Queued" }),
         el("button", { type: "button", className: "jx", title: "Cancel", ariaLabel: `Cancel ${c.sxxeyy}`,
-          onclick: () => unqueue(c) }, "×")));
+          onclick: () => unqueue(c) }, icon("x"))));
     return el("li", { className: `jcard ${tone}${open ? " open" : ""}${hovering(`card:${c.id}`)}`, dataset: { hk: `card:${c.id}` } },
       el("div", { className: "jrow" }, el("button", { type: "button", className: "jhead", ariaExpanded: String(open), onclick: fold },
         el("b", { className: "ep", textContent: c.sxxeyy }),
@@ -348,7 +348,7 @@ function renderJob(j) {
         el("span", { className: `jstate ${tone}`, textContent: label }),
         ),
         ...(acts.length ? [el("div", { className: "jacts" }, ...acts)] : []),  // unfolded: its actions in its head, not a line of their own
-        el("span", { className: "chev", ariaHidden: "true", textContent: "›", onclick: fold })),  // last, after the actions
+        el("span", { className: "chev", ariaHidden: "true", onclick: fold }, icon("chevron"))),  // last, after the actions
       ...(open ? [el("div", { className: "jbody" + (justOpened === c.id ? " opening" : "") }, ...runBody(c))] : []));
   }));
   keepPromptFocus(() => $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, head, st.live ? overall : jobDone(j, st), cards)));
@@ -382,9 +382,9 @@ function jobDone(j, st) {
 function listRow(c) {
   const started = new Date(c.started);
   const sub = isLive(c)
-    ? (c.prompt ? `${c.service} · waiting for your answer` : c.waiting ? `${c.service} · in the queue`
-      : isQueued(c) ? `${c.service} · waiting for a slot` : `${c.service} · ${afterTracks(c) || speedOf(c) || c.step}`)
-    : c.outcome === "unavailable" && c.checks > 1 ? `${c.service} · checked ${c.checks} times, last ${day(started)} ${time(started)}`
+    ? (c.prompt ? `${svcName(c.service)} · waiting for your answer` : c.waiting ? `${svcName(c.service)} · in the queue`
+      : isQueued(c) ? `${svcName(c.service)} · waiting for a slot` : `${svcName(c.service)} · ${afterTracks(c) || speedOf(c) || c.step}`)
+    : c.outcome === "unavailable" && c.checks > 1 ? `${svcName(c.service)} · checked ${c.checks} times, last ${day(started)} ${time(started)}`
     : `${day(started)} ${time(started)}${c.ended ? ` · ${duration(new Date(c.ended) - started)}` : ""}`;
   const side = isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
     : el("span", { className: `chip o-${c.outcome}`, textContent: outcomeOf(c) });
@@ -415,7 +415,7 @@ async function showLeftovers() {
   $("#con-left-n").textContent = r.items.length ? `(${r.items.length})` : "";
   if (picked_run !== "left") return;  // another pane was picked while this answer was on its way
   const act = (item, action, label, cls) => el("button", { className: `btn small ${cls}`, textContent: label, onclick: async (e) => {
-    if (action === "delete" && e.target.dataset.sure !== "1") { e.target.dataset.sure = "1"; e.target.textContent = "Sure?"; return; }
+    if (action === "delete" && !confirmClick(e.target, `Delete ${item.folder}?`)) return;
     e.target.disabled = true;
     try {
       await api(`/api/leftovers/${action}`, { method: "POST", wait: 360, body: JSON.stringify({ folder: item.folder }) });
@@ -429,7 +429,7 @@ async function showLeftovers() {
     return el("div", { className: "left-row" }, el("img", { alt: "", loading: "lazy", src: poster, onerror: posterFail(it.series) }),
       el("div", {}, el("b", { textContent: `${it.series || `TVDB ${it.tvdbId}`} ${it.sxxeyy}` }),
         el("small", { className: "why", textContent: it.cause || (it.outcome ? OUTCOME[it.outcome] : "No download history for it") }),
-        el("small", { textContent: `${it.size >= 2 ** 30 ? `${(it.size / 2 ** 30).toFixed(1)} GB` : `${Math.max(1, Math.round(it.size / 2 ** 20))} MB`} · waiting ${age < 1 ? "since today" : `${age} day${age > 1 ? "s" : ""}`} · ${it.sonarr_path}` }),
+        el("small", { textContent: `${it.size >= 2 ** 30 ? `${(it.size / 2 ** 30).toFixed(1)} GB` : `${Math.max(1, Math.round(it.size / 2 ** 20))} MB`} · waiting ${age < 1 ? "since today" : COUNT.day(age)} · ${it.sonarr_path}` }),
         ...(it.by_hand ? [el("small", { className: "left-hand", textContent: "Download only: kept until you import or delete it" })] : [])),
       el("div", { className: "btns" }, act(it, "import", it.by_hand ? "Import" : "Import anyway", it.by_hand ? "primary" : ""), act(it, "delete", "Delete", "danger")));
   });
@@ -605,7 +605,7 @@ async function showStats() {
       el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) })));
   }));
   const table = el("table", { className: "svc-table" }, el("thead", {}, el("tr", {}, ...["Service", "Downloaded", "Failed", "Kept", "Success", "Last success", "Average"].map((t) => el("th", { textContent: t })))),
-    el("tbody", {}, ...st.services.map((v) => el("tr", {}, el("td", {}, el("b", { textContent: v.service })), el("td", { textContent: v.downloaded }),
+    el("tbody", {}, ...st.services.map((v) => el("tr", {}, el("td", {}, el("b", { textContent: svcName(v.service) })), el("td", { textContent: v.downloaded }),
       el("td", { className: v.failed ? "bad" : "", textContent: v.failed }), el("td", { textContent: v.kept }),
       el("td", { className: v.success === null ? "" : v.success < 70 ? "bad" : "fine", textContent: fmt(v.success, "%") }),
       el("td", { textContent: v.last_success ? ago(v.last_success) : "never" }), el("td", { textContent: v.average ? duration(v.average * 1000) : "–" })))));
@@ -656,8 +656,8 @@ function renderDetail(c) {
   const onService = c.serviceEpisode && c.serviceEpisode !== c.sxxeyy ? `, as ${c.serviceEpisode}` : "";
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(c)),
     el("div", {}, el("h3", { textContent: `${c.series} ${c.sxxeyy}` }),
-      el("small", { className: "line1", textContent: `${c.service}${onService} · ${KIND[c.kind] || c.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
-      el("small", { className: "line2" }, el("b", { textContent: `${c.service}${onService}` }), `${KIND[c.kind] || c.kind} · ${day(started)} ${time(started)}`)),
+      el("small", { className: "line1", textContent: `${svcName(c.service)}${onService} · ${KIND[c.kind] || c.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
+      el("small", { className: "line2" }, el("b", { textContent: `${svcName(c.service)}${onService}` }), `${KIND[c.kind] || c.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
   $("#cd-top-title").textContent = `${c.series} ${c.sxxeyy}`;
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
@@ -774,7 +774,7 @@ function runBody(c) {
       stopped: ["mut", "Stopped"], interrupted: ["mut", "Interrupted: Unshacklarr stopped during it"],
       unavailable: ["mut", c.notOn ? `${outcomeOf(c)}: nothing to download` : "Not out yet: nothing to download"] }[c.outcome] || ["mut", c.outcome];
     if (c.outcome === "downloaded") {  // all went well: one quiet line, not a block
-      parts.push(el("div", { className: "cd-note ok inline" }, el("b", { textContent: "✓ Imported" }),  // imported says downloaded too
+      parts.push(el("div", { className: "cd-note ok inline" }, el("b", {}, icon("check", "inl"), "Imported"),  // imported says downloaded too
         ...[c.ended && duration(new Date(c.ended) - started), c.size && size(c.size), checksNote(c)].filter(Boolean).map((t) => el("span", { textContent: t }))));
     } else parts.push(el("div", { className: `cd-note ${note[0]}` }, el("b", { textContent: note[1] }),
       ...[c.cause, c.detail, c.ended ? `Took ${duration(new Date(c.ended) - started)}` : "",
@@ -950,7 +950,7 @@ function promptBox(p) {
     } catch (err) { send.disabled = false; toast(err.message, true); }
   } }, field, send);
   return el("div", { className: "act-box", role: "status" },
-    el("b", { textContent: `${p.service} asks` }), el("span", { className: "q", textContent: p.text }), form);
+    el("b", { textContent: `${svcName(p.service)} asks` }), el("span", { className: "q", textContent: p.text }), form);
 }
 /* A redraw rebuilds the answer field: the one being typed in keeps its focus and caret. */
 function keepPromptFocus(draw) {

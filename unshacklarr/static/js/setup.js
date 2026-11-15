@@ -46,8 +46,8 @@ function showLogin() {
   if (!$("#gate").hidden) return;
   const pw = el("input", { type: "password", name: "password", autocomplete: "current-password", required: true, autofocus: true });
   const error = el("div");
-  gate("Log in to continue.", el("div", { className: "card" }, field("Password", pw), error),
-    el("button", { className: "btn primary", type: "submit", textContent: "Log in" }));
+  gate("Sign in to continue.", el("div", { className: "card" }, field("Password", pw), error),
+    el("button", { className: "btn primary", type: "submit", textContent: "Sign in" }));
   $("#gate-form").onsubmit = async (e) => {
     e.preventDefault();
     try { await api("/api/login", { method: "POST", body: JSON.stringify({ password: pw.value }) }); location.reload(); }
@@ -175,7 +175,7 @@ function showSetup(found) {
     f.confirm.classList.toggle("good", !!same);
     f.confirm.classList.toggle("bad", !!again && !same && !typing);
     match.className = `pw-match ${!again || typing ? "" : same ? "good" : "bad"}`;
-    match.textContent = !again || typing ? "" : same ? "✓ Passwords match" : "Passwords do not match";
+    match.replaceChildren(...(!again || typing ? [] : same ? [icon("check", "inl"), "Passwords match"] : ["Passwords do not match"]));
   };
   f.password.oninput = f.confirm.oninput = pwLive;
 
@@ -199,17 +199,17 @@ function showSetup(found) {
     onclick: () => { f.unshackle_mode.value = value; f.unshackle_mode.dispatchEvent(new Event("change")); keep(); } },
     ico(value, "wz-tile-ico"), el("b", { textContent: name }), el("small", { textContent: sub }));
   const tiles = el("div", { className: "wz-tiles", role: "group", ariaLabel: "Unshackle runs" },
-    tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "unshackle serve runs elsewhere"));
+    tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "On another machine"));
   const country = countryPicker(f.country);
   const unshackleParams = () => Object.fromEntries(["unshackle_mode", "unshackle_command", "unshackle_url", "unshackle_api_key"].map((k) => [k, f[k].value]));
   f.unshackle_mode.hidden = true;
   const uPanel = el("div", { className: "wiz-group" },
     el("div", { className: "field" }, el("label", { textContent: "Unshackle runs" }), tiles, f.unshackle_mode),
     el("div", { className: "only-local" }, field("Unshackle command", f.unshackle_command, "Empty: unshackle from the PATH. Otherwise its full path, e.g. the .venv/bin/unshackle of a git clone.")),
-    el("div", { className: "only-remote" }, field("Address of unshackle serve", f.unshackle_url),
-      field("API key", f.unshackle_api_key, "The serve: api_secret of its unshackle.yaml.")),
+    el("div", { className: "only-remote" }, field("Unshackle address", f.unshackle_url),
+      field("API key", f.unshackle_api_key, ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml."])),
     field("Downloads folder", f.downloads, "Where episodes land before Sonarr imports them, as Unshacklarr sees it."),
-    el("div", { className: "only-remote" }, field("Downloads folder, as Unshackle sees it", f.unshackle_downloads, "Its path on the machine where unshackle serve runs. Empty: the same path as above.")));
+    el("div", { className: "only-remote" }, field("Downloads folder, as Unshackle sees it", f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
   const showMode = () => {
     uPanel.dataset.mode = f.unshackle_mode.value;
     tiles.querySelectorAll(".wz-tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.value === f.unshackle_mode.value)));
@@ -277,7 +277,7 @@ function showSetup(found) {
     back.hidden = true;
     next.type = "button";
     next.disabled = false;
-    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", textContent: "→", ariaHidden: "true" }));
+    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", ariaHidden: "true" }, icon("arrow")));
     next.onclick = () => location.reload();
     next.focus();
   }
@@ -304,12 +304,12 @@ function showSetup(found) {
       body: [uPanel], fields: () => f.unshackle_mode.value === "local" ? [f.unshackle_command] : [f.unshackle_url, f.unshackle_api_key],
       check: async () => {
         if (f.unshackle_mode.value === "remote") {
-          if (!f.unshackle_url.value.trim()) return wrong("Enter the address of unshackle serve", f.unshackle_url);
+          if (!f.unshackle_url.value.trim()) return wrong("Enter the Unshackle address", f.unshackle_url);
           const bad = urlProblem(f.unshackle_url.value);
           if (bad) return wrong(bad, f.unshackle_url);
         }
         const { services } = await api("/api/unshackle/test", { method: "POST", body: JSON.stringify({ ...unshackleParams(), setup_code: f.setup_code.value }) });
-        return { ok: `Connected to Unshackle (${services} services)` };
+        return { ok: `Connected to Unshackle (${COUNT.service(services)})` };
       }, checking: "Testing… (a first start of Unshackle takes a few seconds)" },
     { name: "Sonarr", icon: "sonarr", title: "Connect Sonarr", sub: "Your library",
       body: [field("Sonarr URL", f.sonarr_url),
@@ -336,7 +336,7 @@ function showSetup(found) {
   const progress = el("div", { className: "wz-progress" }, el("span"), el("i", {}, el("b")));
   const panel = el("div", { className: "wiz-panel" });
   const note = el("div", { className: "wiz-note", ariaLive: "polite" });
-  const back = el("button", { type: "button", className: "btn wz-back", onclick: () => go(at - 1) }, el("span", { className: "arr", textContent: "←", ariaHidden: "true" }), "Back");
+  const back = el("button", { type: "button", className: "btn wz-back", onclick: () => go(at - 1) }, el("span", { className: "arr", ariaHidden: "true" }, icon("arrowLeft")), "Back");
   const next = el("button", { type: "submit", className: "btn primary wz-next" });
   const oks = {};  // what each step's check found: the end screen sums it up
   const drawRail = (current) => rail.replaceChildren(...steps.map((x, i) => {
@@ -358,7 +358,7 @@ function showSetup(found) {
     note.replaceChildren();
     back.hidden = at === 0;
     const last = at === steps.length - 1;
-    next.replaceChildren(last ? "Finish the setup" : "Next", el("span", { className: "arr", textContent: last ? "✓" : "→", ariaHidden: "true" }));
+    next.replaceChildren(last ? "Finish the setup" : "Next", el("span", { className: "arr", ariaHidden: "true" }, icon(last ? "check" : "arrow")));
     panel.querySelector("input, select")?.focus({ preventScroll: true });
     keep();
   }
@@ -380,7 +380,7 @@ function showSetup(found) {
     back.hidden = true;
     next.type = "button";
     next.disabled = false;
-    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", textContent: "→", ariaHidden: "true" }));
+    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", ariaHidden: "true" }, icon("arrow")));
     next.onclick = () => location.reload();
     next.focus();
   }
@@ -427,7 +427,7 @@ function showSetup(found) {
     if (result?.ok) oks[at] = result.ok;
     if (at < steps.length - 1) {
       go(at + 1);
-      if (result?.ok) note.replaceChildren(el("p", { className: "ok-text", textContent: `✓ ${result.ok}` }));
+      if (result?.ok) note.replaceChildren(el("p", { className: "ok-text" }, icon("check", "inl"), result.ok));
       return;
     }
     const first = await steps[0].check();  // after a language change the password is typed again (it is never kept)
@@ -450,7 +450,7 @@ function showSetup(found) {
 let setupDraft = null;  // what setLang keeps for the page to come back to, on the first run
 
 $("#lang-row").append(...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", className: "rg-lang", ariaPressed: String(k === LANG),
-  onclick: () => { if (k !== LANG) setLang(k); } }, el("span", { className: "flag", textContent: FLAGS[k] }), el("b", { textContent: name }))));
+  onclick: () => { if (k !== LANG) setLang(k); } }, el("b", { textContent: name }))));
 settingsCountry = countryPicker($("[data-set=country]"));
 settingsZone = zonePicker($("#tz-select"));
 for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#tz-select"), settingsZone]]) {

@@ -1299,7 +1299,7 @@ def test_supported_methods_do_not_hide_classified_authentication_status():
 def test_only_the_selected_backend_authentication_row_is_actionable():
     assert run_authentication_ui("selected_backend_actions") == [
         {"name": "PAIRED · vpn", "label": "Sign-in needed", "controls": ["Reauthenticate"]},
-        {"name": "OPEN", "label": "No login required", "controls": []},
+        {"name": "OPEN", "label": "No sign-in required", "controls": []},
         {"name": "PAIRED", "label": "Confirmed now", "controls": []},
     ]
 
