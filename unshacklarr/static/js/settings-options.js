@@ -29,7 +29,7 @@ async function renderServiceDefaults() {
     const ladder = ladderSelect(levels.ladder, S.config.settings.quality_ladder, (v) => { if (v) levels.ladder = v; else delete levels.ladder; dirty(); });
     blocks.push(el("div", { className: "svc-block" },
       el("div", { className: "svc-block-head" }, el("b", { textContent: svcName(tag) }),
-        el("small", { textContent: count ? `${count} option${count > 1 ? "s" : ""}` : "Nothing set yet" }),
+        el("small", { textContent: count ? COUNT.option(count) : "Nothing set yet" }),
         el("button", { className: "btn small danger", textContent: "Remove", onclick: () => { delete all[tag]; dirty(); renderServiceDefaults(); } })),
       el("div", { className: "sx-grid svc-picks" },
         ...(servers.length || levels.backend ? [field("Unshackle server", backend, `Where ${svcName(tag)} downloads.`)] : []),
@@ -130,11 +130,11 @@ function renderHistory() {
     const done = count("downloaded", "kept", "import"), failed = count("failed", "interrupted"), missing = count("unavailable");
     const oldest = hsCards.map((c) => c.started).sort()[0];
     box.className = "sx-state";  // a count, neither good nor bad
-    box.querySelector("b").textContent = hsCards.length ? `${hsCards.length} download${hsCards.length === 1 ? "" : "s"} kept` : "Nothing kept yet";
+    box.querySelector("b").textContent = hsCards.length ? `${COUNT.download(hsCards.length)} kept` : "Nothing kept yet";
     box.querySelector("small").textContent = hsCards.length ? [done ? `${done} downloaded` : "", failed ? `${failed} failed` : "", missing ? `${missing} not out yet` : "", oldest ? `the oldest ${ago(oldest)}` : ""].filter(Boolean).join(" · ") : "";
   }
   const full = hsCards && keep && hsCards.length >= keep;
-  $("#hs-say").textContent = !(keep && days) ? "" : `Keeps the last ${keep} downloads, none older than ${days} day${days === 1 ? "" : "s"}.`
+  $("#hs-say").textContent = !(keep && days) ? "" : `Keeps the last ${keep} downloads, none older than ${COUNT.day(days)}.`
     + (full ? ` Full now: each new download pushes the oldest out.` : hsCards ? ` Now: ${hsCards.length} of ${keep}.` : "");
   const on = set.debug === true;
   $("#hs-debug-card").classList.toggle("hs-on", on);
@@ -545,7 +545,7 @@ function renderNotify() {
   box.querySelector("b").textContent = !targets.length ? "No address yet" : !used.length ? "Nothing goes out" : used.length === 1 ? "Sending to 1 address" : `Sending to ${used.length} addresses`;
   box.querySelector("small").textContent = [[...new Set(used.map((t) => appOf(t.url)))].join(", "), n.quiet ? `quiet ${n.quiet.from}–${n.quiet.to}` : ""].filter(Boolean).join(" · ");
   const late = Number($("#nt-late").value), warnOff = !(n.warning ?? true);
-  $("#nt-late-say").replaceChildren(late > 0 ? `Now: a message when an episode is still missing ${late} hour${late === 1 ? "" : "s"} after airing.` : "Now: no message for late episodes.",
+  $("#nt-late-say").replaceChildren(late > 0 ? `Now: a message when an episode is still missing ${COUNT.hour(late)} after airing.` : "Now: no message for late episodes.",
     ...(late > 0 && warnOff ? [el("span", { className: "status-err", textContent: " Needs a look is turned off above, so this message will not be sent." })] : []));
   $("#nt-quiet-on").checked = Boolean(n.quiet);
   $("#nt-quiet").hidden = !n.quiet;
@@ -583,7 +583,7 @@ async function loadSent() {
   let data;
   try { data = await api("/api/notifications/sent"); } catch (e) { return $("#nt-sent").replaceChildren(failed(e.message, loadSent)); }
   $("#nt-sent").replaceChildren(
-    ...(data.held ? [el("p", { className: "nt-held", textContent: `${data.held} message${data.held === 1 ? "" : "s"} waiting for the end of the quiet hours` })] : []),
+    ...(data.held ? [el("p", { className: "nt-held", textContent: `${COUNT.message(data.held)} waiting for the end of the quiet hours` })] : []),
     ...(data.sent.length ? data.sent.map((m) => el("div", { className: `nt-msg ${m.level}` }, el("i"),
       el("span", { className: "nt-who" }, el("b", { textContent: m.title }), el("small", { textContent: ago(m.at) })),
       el("span", { className: "nt-to" }, ...m.to.map((t) => t.ok ? el("span", { className: "rg-chip", textContent: `✓ ${t.app}` })

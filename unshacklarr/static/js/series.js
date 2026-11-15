@@ -97,7 +97,7 @@ function renderBroadcast() {
   for (let d = new Date(first); d.getMonth() === first.getMonth(); d.setDate(d.getDate() + 1)) {
     const iso = isoDay(d), n = iso < plan.start ? 0 : broadcastCount(plan, d, plan.start), changed = iso in (plan.evenings || {});
     const usual = Number(((plan.every === "daily" || (plan.days || []).includes(weekday(d)) || iso === plan.start) ? plan.per_evening || 1 : 0));
-    const say = `${n} episode${n === 1 ? "" : "s"} that day${changed ? " (changed)" : ""}: click to change`;
+    const say = `${COUNT.episode(n)} that day${changed ? " (changed)" : ""}: click to change`;
     cells.push(el("button", { type: "button", className: `${n ? "on" : ""}${changed ? " changed" : ""}${iso === today ? " today" : ""}`,
       disabled: iso < plan.start, title: say, ariaLabel: `${d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })} · ${say}`,
       onclick: () => {
@@ -650,8 +650,8 @@ function renderCatchUp() {
   const free = there.filter((e) => !epBusy.has(e.id));
   box.classList.toggle("none", !there.length && !upgrades.length);
   box.replaceChildren(
-    el("div", {}, el("b", { textContent: !missing.length && !upgrades.length ? "Available on other services" : !missing.length ? `${upgrades.length} episode${upgrades.length > 1 ? "s" : ""} may be better on ${svc}`
-      : there.length ? `${svc} has ${there.length} of your ${missing.length} missing episode${missing.length > 1 ? "s" : ""}` : `${svc} has none of your ${missing.length} missing episode${missing.length > 1 ? "s" : ""}` }),
+    el("div", {}, el("b", { textContent: !missing.length && !upgrades.length ? "Available on other services" : !missing.length ? `${COUNT.episode(upgrades.length)} may be better on ${svc}`
+      : there.length ? `${svc} has ${there.length} of your ${COUNT.missingEpisode(missing.length)}` : `${svc} has none of your ${COUNT.missingEpisode(missing.length)}` }),
       ...(bySeason.length ? [el("small", { textContent: bySeason.map(([n, list]) => `${Number(n) === 0 ? "Specials" : `S${pad2(n)}`} (${list.length})`).join(" · ") })] : []),
       ...(upgrades.length && missing.length ? [el("small", { className: "renum", textContent: epUp ? `${upgrades.length} on disk ${svc} has in better quality (Activity, Upgrades)` : `${upgrades.length} on disk in a lower resolution than asked: ${svc} may have better` })] : []),
       ...(renumbered ? [el("small", { className: "renum", textContent: renumbered > 1 ? `${renumbered} episodes have another number on ${svc}: Download takes care of them` : `1 episode has another number on ${svc}: Download takes care of it` })] : []),
@@ -669,7 +669,7 @@ function renderCatchUp() {
         } }))),
       // a season its service lacks, found on another one by the weekly check: offered, never set on its own
       ...elsewhere.map(([season, p]) => el("small", { className: "renum" },
-          `Season ${season} is on ${svcName(p.service)} (${p.count} episode${p.count === 1 ? "" : "s"}). `,
+          `Season ${season} is on ${svcName(p.service)} (${COUNT.episode(p.count)}). `,
           el("button", { className: "btn small", type: "button", textContent: `Use ${svcName(p.service)} for season ${season}`, title: p.url, onclick: () => {
             const conf = S.config.series[current.tvdbId];
             conf.season_pages = { ...(conf.season_pages || {}), [season]: { url: p.url, service: p.service, ...(p.season ? { season: p.season } : {}) } };
@@ -680,7 +680,7 @@ function renderCatchUp() {
             renderCatchUp();
           } })))),
     el("div", { className: "catchup-acts" },
-      ...(upgrades.length ? [el("button", { className: "btn small", type: "button", textContent: `Select ${upgrades.length} upgrade${upgrades.length > 1 ? "s" : ""}`,
+      ...(upgrades.length ? [el("button", { className: "btn small", type: "button", textContent: `Select ${COUNT.upgrade(upgrades.length)}`,
         title: `On disk in a lower resolution than asked of ${svc}, and available on ${svc}`, onclick: () => { upgrades.forEach((e) => picked.add(e.id)); renderSeason(); updateEpBar(); } })] : []),
       ...(free.length ? [el("button", { className: "btn primary small", type: "button", textContent: `Select all ${free.length}`,
         onclick: () => { free.forEach((e) => picked.add(e.id)); renderSeason(); updateEpBar(); } })] : [])));
@@ -955,7 +955,7 @@ async function startDownload(numbering = null) {
   try {
     await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: [...picked], replace, ...(numbering ? { numbering } : {}),
       ...(epSonarr ? { sonarr: epSonarr } : {}) }) });  // picked in another Sonarr's episodes: its ids, its ladder
-    toast(`Downloading ${picked.size} episode${picked.size > 1 ? "s" : ""}${epSonarr ? ` for ${epSonarr}` : ""}: follow it in Activity`);
+    toast(`Downloading ${COUNT.episode(picked.size)}${epSonarr ? ` for ${epSonarr}` : ""}: follow it in Activity`);
     $("#ep-clear").click();
     const s = current;
     setTimeout(() => { if (s && current === s) refreshEpBusy(s); }, 1500);

@@ -262,7 +262,7 @@ async function showReleaseSeen(s) {
   if (!sg || current?.tvdbId !== s.tvdbId) return;
   const same = conf?.release_time === sg.time && Number(conf?.release_day || 0) === sg.day;
   const when = sg.between[0] ? `between ${sg.between[0]} and ${sg.between[1]}` : `by ${sg.between[1]}`;
-  box.replaceChildren(el("span", { textContent: `${sg.episodes} episode${sg.episodes > 1 ? "s" : ""} came out on the service ${when}${sg.day ? `, ${releaseDayLabel(sg.day)} airing` : ""}. Suggested release time: ${sg.time}` }),
+  box.replaceChildren(el("span", { textContent: `${COUNT.episode(sg.episodes)} came out on the service ${when}${sg.day ? `, ${releaseDayLabel(sg.day)} airing` : ""}. Suggested release time: ${sg.time}` }),
     same ? el("span", { className: "muted", textContent: "· in use" }) : el("button", { type: "button", className: "btn small primary", textContent: "Use it", onclick: () => {
       $("#d-release").value = sg.time;
       $("#d-release-day").value = String(sg.day);

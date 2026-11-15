@@ -236,10 +236,10 @@ function backendBlock(b) {
   } });
   const withHelp = (label, input, saved) => el("div", { className: "field" },
     el("label", { htmlFor: input.id ||= `ub-${++fieldIds}` }, ...[label].flat(), ...(saved ? [" ", el("span", { className: "sx-saved", textContent: "✓ Saved" })] : [])),
-    input, el("small", { textContent: input.dataset.help || "The serve: api_secret of its unshackle.yaml. Empty keeps the saved one." }));
+    input, el("small", {}, ...(input.dataset.help ? [input.dataset.help] : ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml. Empty keeps the saved one."])));
   return el("div", { className: "svc-block ub-block" },
     el("div", { className: "svc-block-head" }, head, el("span", { className: "ub-acts" }, state, test, remove)),
-    el("div", { className: "sx-grid" }, withHelp("Name", name), withHelp(["Address of ", el("code", { textContent: "unshackle serve" })], url),
+    el("div", { className: "sx-grid" }, withHelp("Name", name), withHelp("Unshackle address", url),
       withHelp("API key", key, b.api_key_set), withHelp("Downloads folder, as it sees it", dl)));
 }
 /* Each saved server's state from the health check (every minute): reachable with its version, or why not. */

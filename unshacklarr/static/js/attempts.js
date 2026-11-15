@@ -4,7 +4,7 @@ function checksNote(c) {
   const since = `since ${day(new Date(c.first_check))} ${time(new Date(c.first_check))}`;
   const before = c.checks - 1;
   return c.outcome === "unavailable" ? `Checked ${c.checks} times ${since}. Each check is in the output below.`
-    : `Not out yet at the ${before} earlier check${before > 1 ? "s" : ""} ${since}. Each check is in the output below.`;
+    : `Not out yet at the ${COUNT.earlierCheck(before)} ${since}. Each check is in the output below.`;
 }
 /* Kept: the download waits in the downloads folder; Sonarr takes it in place of its own file. */
 async function importKept(c, button) {
@@ -42,7 +42,7 @@ $("#hist-clear").onclick = () => {
     if (what !== "failed" && what !== "all") return;
     try {
       const { deleted } = await api("/api/runs/clear", { method: "POST", body: JSON.stringify({ what }) });
-      toast(`${deleted} download${deleted === 1 ? "" : "s"} cleared from the history`);
+      toast(`${COUNT.download(deleted)} cleared from the history`);
       picked_run = null;
       openActivity();
     } catch (e) { toast(e.message, true); }
@@ -55,7 +55,7 @@ async function retryJob(j, cards, button) {
   button.disabled = true;
   try {
     await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: cards.map((c) => c.episodeId), retry: true, batch: j.job, ...forSonarr(cards) }) });
-    toast(`${cards.length} episode${cards.length > 1 ? "s" : ""} downloading again`);
+    toast(`${COUNT.episode(cards.length)} downloading again`);
     picked_run = `job:${j.job}`;
     setTimeout(openActivity, 1500);
   } catch (e) { button.disabled = false; toast(e.message, true); }

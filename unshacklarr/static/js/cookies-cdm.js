@@ -61,7 +61,7 @@ function cdmStatus(d) {
   const t = d.test;
   if (!t) return ["mut", "Not tested", "Test asks the DRM's own test server for a license"];
   const when = tr(`tested ${ago(t.at)}`);  // translated here: glued to the server's own words below
-  if (t.ok) return ["ok", "Works", `Got a license (${t.keys} key${t.keys === 1 ? "" : "s"}), ${when}. A service may still refuse this device.`];
+  if (t.ok) return ["ok", "Works", `Got a license (${COUNT.key(t.keys)}), ${when}. A service may still refuse this device.`];
   if (t.revoked) return ["bad", "Revoked", `${t.error}, ${when}`];
   return ["warn", "Failed", `${t.error}, ${when}`];
 }
@@ -97,7 +97,7 @@ async function testCdms(list) {
   cdmTesting = false;
   renderCdm();
   const bad = list.filter((d) => !d.test?.ok).length;
-  toast(`${list.length} device${list.length === 1 ? "" : "s"} tested${bad ? `, ${bad} not working` : ", all working"}`, bad > 0);
+  toast(`${COUNT.device(list.length)} tested${bad ? `, ${bad} not working` : ", all working"}`, bad > 0);
 }
 /* A device's short name: its maker and model once (Apple TV+'s "EXPRESS LUCK … EXPRESS LUCK … LE-*" twice over),
    then its DRM and level. */
@@ -180,7 +180,7 @@ function renderCdm() {
   $("#cdm-add").hidden = !data.folder;
   const state = $("#cdm-state");
   const show = (cls, b, small) => { state.className = `sx-state ${cls}`; state.querySelector("b").textContent = b; state.querySelector("small").textContent = small; };
-  if (!data.folder && S.config.settings.unshackle_mode === "remote") { show("", "Managed where unshackle serve runs", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren();
+  if (!data.folder && S.config.settings.unshackle_mode === "remote") { show("", "Managed where Unshackle runs", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren();
     return $("#cdm-list").replaceChildren(el("p", { className: "muted", textContent: "To manage its devices here too, mount the folder of its unshackle.yaml and set its path in Settings, Unshackle, Folders." })); }
   if (!data.folder) { show("down", "No CDM folder", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren(); return $("#cdm-list").replaceChildren(el("p", { className: "status-err", textContent: data.error })); }
   const all = [...data.devices, ...data.remote.map((r) => ({ ...r, remote: true }))];
@@ -308,10 +308,10 @@ function renderCdm() {
   };
   // Where things stand, in the header: what needs you first, else how the devices in use last tested
   const used = data.devices.filter((d) => d.used_by.length), untested = used.filter((d) => !d.test && !d.info?.unreadable);
-  const facts = [`${data.devices.length} device${data.devices.length === 1 ? "" : "s"}`, `${used.length} in use`, ...(data.remote.length ? [`${data.remote.length} remote`] : [])].join(" · ");
-  if (alerts.length) show("down", `${alerts.length} problem${alerts.length === 1 ? "" : "s"} to fix`, facts);
+  const facts = [COUNT.device(data.devices.length), `${used.length} in use`, ...(data.remote.length ? [`${data.remote.length} remote`] : [])].join(" · ");
+  if (alerts.length) show("down", `${COUNT.problem(alerts.length)} to fix`, facts);
   else if (!data.devices.length && !data.remote.length) show("", "No device yet", "Add a .wvd or .prd file");
-  else if (untested.length) show("", `${untested.length} device${untested.length === 1 ? "" : "s"} in use not tested yet`, facts);
+  else if (untested.length) show("", `${COUNT.device(untested.length)} in use not tested yet`, facts);
   else show("ok", used.length ? "The devices in use work" : "Nothing in use", facts);
   $("#cdm-alerts").replaceChildren(...alerts);
   const plus = el("button", { type: "button", className: "btn small", textContent: "+ Add a remote CDM", onclick: () => editRemote(null) });
@@ -324,7 +324,7 @@ function renderCdm() {
       el("div", { className: "cdm-tools" }, search, testAll),
       filters,
       el("div", { className: "cdm-devs" }, ...(list.length ? list.map(row) : [el("p", { className: "muted cdm-empty", textContent: data.devices.length ? "No device matches." : "No device yet: add a .wvd or .prd file." })]),
-        ...(folded ? [el("button", { type: "button", className: "cdm-more-btn", textContent: `Show ${folded} more device${folded === 1 ? "" : "s"}, not in use`, onclick: () => { cdmShowUnused = true; renderCdm(); } })] : []))),
+        ...(folded ? [el("button", { type: "button", className: "cdm-more-btn", textContent: `Show ${COUNT.moreDevice(folded)}, not in use`, onclick: () => { cdmShowUnused = true; renderCdm(); } })] : []))),
     cdmCard('<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>', "Remote CDMs",
       "A device on a server: pywidevine serve, a PlayReady API, Decrypt Labs. Saved in unshackle.yaml.", plus,
       ...(data.remote.length ? [el("div", { className: "cdm-devs" }, ...data.remote.map(remoteRow))] : [])));

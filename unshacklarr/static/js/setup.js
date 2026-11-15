@@ -199,17 +199,17 @@ function showSetup(found) {
     onclick: () => { f.unshackle_mode.value = value; f.unshackle_mode.dispatchEvent(new Event("change")); keep(); } },
     ico(value, "wz-tile-ico"), el("b", { textContent: name }), el("small", { textContent: sub }));
   const tiles = el("div", { className: "wz-tiles", role: "group", ariaLabel: "Unshackle runs" },
-    tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "unshackle serve runs elsewhere"));
+    tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "On another machine"));
   const country = countryPicker(f.country);
   const unshackleParams = () => Object.fromEntries(["unshackle_mode", "unshackle_command", "unshackle_url", "unshackle_api_key"].map((k) => [k, f[k].value]));
   f.unshackle_mode.hidden = true;
   const uPanel = el("div", { className: "wiz-group" },
     el("div", { className: "field" }, el("label", { textContent: "Unshackle runs" }), tiles, f.unshackle_mode),
     el("div", { className: "only-local" }, field("Unshackle command", f.unshackle_command, "Empty: unshackle from the PATH. Otherwise its full path, e.g. the .venv/bin/unshackle of a git clone.")),
-    el("div", { className: "only-remote" }, field("Address of unshackle serve", f.unshackle_url),
-      field("API key", f.unshackle_api_key, "The serve: api_secret of its unshackle.yaml.")),
+    el("div", { className: "only-remote" }, field("Unshackle address", f.unshackle_url),
+      field("API key", f.unshackle_api_key, ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml."])),
     field("Downloads folder", f.downloads, "Where episodes land before Sonarr imports them, as Unshacklarr sees it."),
-    el("div", { className: "only-remote" }, field("Downloads folder, as Unshackle sees it", f.unshackle_downloads, "Its path on the machine where unshackle serve runs. Empty: the same path as above.")));
+    el("div", { className: "only-remote" }, field("Downloads folder, as Unshackle sees it", f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
   const showMode = () => {
     uPanel.dataset.mode = f.unshackle_mode.value;
     tiles.querySelectorAll(".wz-tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.value === f.unshackle_mode.value)));
@@ -304,12 +304,12 @@ function showSetup(found) {
       body: [uPanel], fields: () => f.unshackle_mode.value === "local" ? [f.unshackle_command] : [f.unshackle_url, f.unshackle_api_key],
       check: async () => {
         if (f.unshackle_mode.value === "remote") {
-          if (!f.unshackle_url.value.trim()) return wrong("Enter the address of unshackle serve", f.unshackle_url);
+          if (!f.unshackle_url.value.trim()) return wrong("Enter the Unshackle address", f.unshackle_url);
           const bad = urlProblem(f.unshackle_url.value);
           if (bad) return wrong(bad, f.unshackle_url);
         }
         const { services } = await api("/api/unshackle/test", { method: "POST", body: JSON.stringify({ ...unshackleParams(), setup_code: f.setup_code.value }) });
-        return { ok: `Connected to Unshackle (${services} services)` };
+        return { ok: `Connected to Unshackle (${COUNT.service(services)})` };
       }, checking: "Testing… (a first start of Unshackle takes a few seconds)" },
     { name: "Sonarr", icon: "sonarr", title: "Connect Sonarr", sub: "Your library",
       body: [field("Sonarr URL", f.sonarr_url),

@@ -134,7 +134,7 @@
         </div>
         <div class="set-group" role="group" aria-label="Service access"><p>Service access</p>
         <button data-sec="services"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span>Services</span><small>Sign-in and cookies</small></button>
-        <button data-sec="cdm"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2"/></svg><span>CDM</span><small>Widevine and PlayReady devices</small></button>
+        <button data-sec="cdm"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2"/></svg><span>Devices (CDM)</span><small>Widevine and PlayReady devices</small></button>
         </div>
         <div class="set-group" role="group" aria-label="General"><p>General</p>
         <button data-sec="interface"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg><span>Interface</span><small>Language, no spoilers</small></button>
@@ -159,13 +159,13 @@
           <div class="sx-head"><div><h3>How it runs</h3></div></div>
           <div class="wz-tiles ux-tiles" role="group" aria-label="Unshackle runs">
             <button type="button" class="wz-tile" data-value="local"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>Local</b><small>Unshacklarr starts it on this machine</small></button>
-            <button type="button" class="wz-tile" data-value="remote"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></span><b>Remote</b><small>unshackle serve runs elsewhere</small></button>
+            <button type="button" class="wz-tile" data-value="remote"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></span><b>Remote</b><small>On another machine</small></button>
             <select data-set="unshackle_mode" id="mode-select" hidden><option value="local">Local</option><option value="remote">Remote</option></select>
           </div>
           <div class="sx-grid">
             <div class="field only-local"><label for="ux-cmd">Unshackle command</label><input id="ux-cmd" type="text" data-set="unshackle_command" placeholder="unshackle" spellcheck="false"><small>Empty: uses <code>unshackle</code> from the PATH. Otherwise, its full path, e.g. <code>.venv/bin/unshackle</code> in a git clone.</small></div>
-            <div class="field only-remote"><label for="ux-url">Address of <code>unshackle serve</code></label><input id="ux-url" type="url" data-set="unshackle_url" placeholder="http://unshackle:8786"></div>
-            <div class="field only-remote"><label for="ux-key">API key <span class="sx-saved" id="ux-key-saved" hidden>✓ Saved</span></label><input id="ux-key" type="password" data-set="unshackle_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>The <code>serve: api_secret</code> value of its unshackle.yaml. Leave empty to keep the saved key.</small></div>
+            <div class="field only-remote"><label for="ux-url">Unshackle address</label><input id="ux-url" type="url" data-set="unshackle_url" placeholder="http://unshackle:8786"></div>
+            <div class="field only-remote"><label for="ux-key">API key <span class="sx-saved" id="ux-key-saved" hidden>✓ Saved</span></label><input id="ux-key" type="password" data-set="unshackle_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>Copy <code>serve.api_secret</code> from unshackle.yaml. Leave empty to keep the saved key.</small></div>
             <div class="field" id="ux-at-once-field"><label for="ux-at-once">Downloads at once</label><div class="unit-input"><input id="ux-at-once" type="number" data-set="downloads_at_once" data-num min="0" max="10" step="1" inputmode="numeric"><span>per server</span></div><small>How many episodes each Unshackle server downloads together. 1 is gentler on a small NAS. 0: as many as Unshackle allows, 2 by default.</small></div>
           </div>
         </section>
@@ -174,7 +174,7 @@
           <div class="sx-grid">
             <div class="field"><label for="downloads-input">Downloads folder</label><input type="text" data-set="downloads" id="downloads-input" spellcheck="false"></div>
             <div class="field"><label for="ux-free">Room kept free</label><div class="unit-input"><input id="ux-free" type="number" data-set="min_free_gb" data-num min="0" max="100000" step="1" inputmode="numeric"><span>GB</span></div><small>Nothing is downloaded while the downloads folder, or the library folder Sonarr moves a series into, has less free space than this, and you get a notification. 0: not checked.</small></div>
-            <div class="field only-remote"><label for="ux-udl">Downloads folder, as Unshackle sees it</label><input id="ux-udl" type="text" data-set="unshackle_downloads" placeholder="Same path" spellcheck="false"><small>Its path on the machine where unshackle serve runs. Empty: the same path as above.</small></div>
+            <div class="field only-remote"><label for="ux-udl">Downloads folder, as Unshackle sees it</label><input id="ux-udl" type="text" data-set="unshackle_downloads" placeholder="Same path" spellcheck="false"><small>Its path on the machine where Unshackle runs. Empty: the same path as above.</small></div>
             <div class="field"><label for="ux-cookies">Cookies folder</label><input id="ux-cookies" type="text" data-set="cookies_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to manage them in Settings › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
             <div class="field"><label for="ux-cfg">Unshackle config folder</label><input id="ux-cfg" type="text" data-set="unshackle_config_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>The folder with unshackle.yaml and the WVD and PRD files, for Settings, CDM. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
           </div>
@@ -421,7 +421,7 @@
       <div class="set-sec sx" data-sec="cdm" hidden>
         <section class="sx-hero">
           <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2"/></svg></span>
-          <div class="sx-id"><h2>CDM</h2><p id="cdm-folder"></p></div>
+          <div class="sx-id"><h2>Devices (CDM)</h2><p id="cdm-folder"></p></div>
           <div class="sx-state" id="cdm-state"><span class="dot"></span><span><b>Reading Unshackle's CDMs…</b><small></small></span></div>
           <div class="sx-actions"><span id="cdm-hero-test"></span><button class="btn small primary" id="cdm-add">Add a device</button><input type="file" id="cdm-file" accept=".wvd,.prd" hidden></div>
           <div class="ux-more" id="cdm-alerts"></div>
@@ -501,7 +501,7 @@
           <p class="rt-who" id="hs-say"></p>
         </section>
         <section class="sx-card" id="hs-debug-card">
-          <div class="sx-head"><div><h3>Debug mode</h3><p>Each download's output shows much more: Unshackle's debug log, every call to Sonarr, and the job as unshackle serve reports it.</p></div>
+          <div class="sx-head"><div><h3>Debug mode</h3><p>Each download's output shows much more: Unshackle's debug log, every call to Sonarr, and the job as Unshackle reports it.</p></div>
             <input type="checkbox" class="switch" id="debug-mode" aria-label="Debug mode"></div>
           <p class="rt-who" id="hs-debug-say"></p>
         </section>

@@ -183,6 +183,23 @@ async function api(path, { wait = 30, ...opts } = {}) {
   return r.json();
 }
 
+/* A counted noun, one whole text for one and one for many: a language writes its own plural from either, no suffix glued on. */
+const COUNT = {
+  episode: (n) => n === 1 ? "1 episode" : `${n} episodes`,
+  missingEpisode: (n) => n === 1 ? "1 missing episode" : `${n} missing episodes`,
+  upgrade: (n) => n === 1 ? "1 upgrade" : `${n} upgrades`,
+  download: (n) => n === 1 ? "1 download" : `${n} downloads`,
+  device: (n) => n === 1 ? "1 device" : `${n} devices`,
+  moreDevice: (n) => n === 1 ? "1 more device" : `${n} more devices`,
+  problem: (n) => n === 1 ? "1 problem" : `${n} problems`,
+  key: (n) => n === 1 ? "1 key" : `${n} keys`,
+  option: (n) => n === 1 ? "1 option" : `${n} options`,
+  message: (n) => n === 1 ? "1 message" : `${n} messages`,
+  service: (n) => n === 1 ? "1 service" : `${n} services`,
+  earlierCheck: (n) => n === 1 ? "1 earlier check" : `${n} earlier checks`,
+  day: (n) => n === 1 ? "1 day" : `${n} days`,
+  hour: (n) => n === 1 ? "1 hour" : `${n} hours`,
+};
 /* Two clicks for what cannot be undone: the first turns the label into the question, naming the action and what it is done to;
    the second does it. No timer takes the question back while it is being read: leaving the button, or Escape, does. */
 function confirmClick(button, question, label = button) {
