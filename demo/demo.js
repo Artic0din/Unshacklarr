@@ -350,7 +350,7 @@
         "Sonarr's other series shown too: add one in a click"] },
     { route: "#/series", target: "#wall", icon: "nav [data-tab=series] svg", title: "Series", lead: "Your Sonarr library, a card per series.",
       points: ["A service and a link: all a series needs", "Paste a link: its service is picked for you", "A series that keeps failing stands out"] },
-    { route: "#/series/s/900004/episodes", target: "#ep-catchup", icon: "nav [data-tab=series] svg", title: "A series", lead: "What the service has, set against Sonarr.",
+    { route: "#/series/s/900004/episodes", target: ".ep-tools", icon: "nav [data-tab=series] svg", title: "A series", lead: "What the service has, set against Sonarr.",
       points: ["Missing episodes found by their number or their title", "Pick a few and Download: one job", "Its Settings: numbering, release time, episodes in parts (Koh-Lanta airs in two)"] },
     { route: "#/activity", target: "#tab-log", icon: "nav [data-tab=log] svg", title: "Activity", lead: "Every download, live. One is running now.",
       points: ["Tracks, speed and Unshackle's own output", "Pause, stop or retry a whole job", "A history, with stats per service"] },

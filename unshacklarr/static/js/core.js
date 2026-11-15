@@ -366,7 +366,6 @@ function renderWall() {
         && (!$("#f-monitored").checked || s.monitored);
     })
     .sort(sorts[$("#f-sort").value]);
-  $("#count").textContent = `${shown.length} series`;
   const cards = shown.map((s) => {
       const conf = S.config.series[s.tvdbId];
       const art = el("span", { className: "art" });
