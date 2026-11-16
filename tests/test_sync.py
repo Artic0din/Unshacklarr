@@ -6370,3 +6370,48 @@ def test_an_audio_merge_cut_short_is_never_offered_for_import(tmp_path, monkeypa
     assert sorted(f.name for f in folder.iterdir()) == ["audio.mka"]
     assert not gone.exists()  # left empty: removed with it
     assert (busy / "Show - S02E06.mkv.part").exists()
+
+
+def test_an_empty_episode_folder_does_not_turn_adding_the_audio_into_a_whole_download(tmp_path, monkeypatch):
+    # A folder left without a video (an import done after its poll gave up) is in the way of nothing, as in the sync
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: {"path": "/tv/Show/Season 02/Show - S02E05.mkv",
+                                                               "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    asked = []
+
+    def download(payload, run=None):
+        asked.append(payload)
+        Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True)
+        (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"fr")
+
+    def tools(cmd, **_):
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined")
+        return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+    imported = []
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append(sorted(f.name for f in out.iterdir())))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    folder = tmp_path / "unshackle-111-S02E05"
+    (folder / "sub").mkdir(parents=True)  # what an import leaves: folders, no video
+    assert sync.add_track(205, "fr") is True  # the track added, not the whole episode again
+    assert asked[0]["audio_only"] is True and imported == [["Show - S02E05.mkv"]]
+    shutil.rmtree(folder)
+    folder.mkdir()
+    (folder / "Show.S02E05.mkv").write_bytes(b"waiting")  # a download waiting for Sonarr: still kept as it is
+    asked.clear()
+    assert sync.add_track(205, "fr") is False and asked == []
+    assert (folder / "Show.S02E05.mkv").read_bytes() == b"waiting"

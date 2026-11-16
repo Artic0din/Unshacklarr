@@ -3511,8 +3511,9 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
     service_sxxeyy = service_episode(show, ep["seasonNumber"], ep["episodeNumber"]) or sxxeyy
     label = f"{ep['series']['title']} {sxxeyy}"
     with episode_lock(out) as mine:
-        if not mine or out.exists():
+        if not mine or out.is_symlink() or videos_in(out):  # a download waits there for Sonarr, or a link: never written through
             return False
+        shutil.rmtree(out, ignore_errors=True)  # left without a video (an import done after its poll gave up, a crash): nothing to keep
         run = EpisodeRun(ep, show, "upgrade", service_sxxeyy)
         got: list[Path] = []
         try:
