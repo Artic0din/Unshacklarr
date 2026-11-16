@@ -322,6 +322,20 @@ console.log(JSON.stringify(out));
                     "shiftTabWraps": True, "arrows": True, "otherKeysFree": True, "closed": "false", "backOnButton": True, "focusKept": True, "backOnItsReplacement": True}
 
 
+def test_a_popup_with_every_action_off_holds_the_focus_itself_until_escape():
+    seen = node(POP_DOM + r"""
+const series = read(process.argv[1]);
+const ctx = sandbox({ ...popDom });
+vm.runInContext(grab(series, /function popOpen\b[\s\S]*?\n}\n/) + grab(series, /function popClose\b[\s\S]*?\n}\n/), ctx);
+const pop = make("div", {}, make("button", { disabled: true })), anchor = make("button");
+ctx.popOpen(pop, anchor, "Actions");
+const out = { onWindow: active === pop, focusable: pop.tabIndex === -1, tabKept: keys(pop, "Tab") && active === pop };
+ctx.popClose(pop);
+out.back = active === anchor;
+console.log(JSON.stringify(out));
+""", str(JS / "series.js"))
+    assert seen == {"onWindow": True, "focusable": True, "tabKept": True, "back": True}
+
 def test_the_device_menus_open_with_focus_inside_and_escape_returns_it_to_the_button():
     seen = node(POP_DOM + r"""
 const series = read(process.argv[1]), src = read(process.argv[2]);

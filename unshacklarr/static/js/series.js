@@ -537,6 +537,7 @@ function popOpen(pop, anchor, label, refind = () => null) {
   pop.setAttribute("aria-label", label);
   anchor.setAttribute("aria-haspopup", "dialog");
   anchor.setAttribute("aria-expanded", "true");
+  pop.tabIndex = -1;  // every action off (a device in use, nothing to test): the window itself holds the focus until Escape
   const fields = () => [...pop.querySelectorAll("button:not(:disabled), input")];
   pop.addEventListener("keydown", (e) => {
     const step = e.key === "Tab" ? (e.shiftKey ? -1 : 1) : e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
@@ -545,7 +546,7 @@ function popOpen(pop, anchor, label, refind = () => null) {
     const all = fields();
     all[(all.indexOf(document.activeElement) + step + all.length) % all.length]?.focus();
   });
-  fields()[0]?.focus();
+  (fields()[0] || pop).focus();
 }
 function popClose(pop) {
   const back = pop.anchor.isConnected ? pop.anchor : pop.refind();
