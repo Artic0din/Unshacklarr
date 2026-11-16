@@ -120,7 +120,7 @@ function cdmPopAt(anchor, ...nodes) {
   document.body.append(cdmPop);
   onTop(cdmPop);
   placeCdmPop();
-  popOpen(cdmPop, anchor, nodes[0].textContent, () => anchor.dataset.key && document.querySelector(`[data-key="${anchor.dataset.key}"]`));
+  popOpen(cdmPop, anchor, nodes[0].textContent, () => anchor.dataset.key && document.querySelector(`[data-key="${CSS.escape(anchor.dataset.key)}"]`));
   return cdmPop;
 }
 function placeCdmPop() {  // by its button, as the page scrolls; gone when the button is
