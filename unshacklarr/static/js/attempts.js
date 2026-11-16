@@ -121,7 +121,7 @@ function fitTerminal() {
   }
 }
 $("#sync").onclick = async () => {
-  if (!$("#savebar").hidden) return toast("Save your changes first: the sync reads the saved settings.", true);
+  if (unsaved) return toast("Save your changes first: the sync reads the saved settings.", true);
   try { await api("/api/sync", { method: "POST" }); showTab("log"); }
   catch (e) { toast(e.message, true); }
 };

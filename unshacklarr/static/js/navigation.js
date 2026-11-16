@@ -100,7 +100,8 @@ function showTab(name, fromRoute = false, quiet = false) {
   if (name === "schedule") loadSchedule();
 }
 document.querySelectorAll("nav button").forEach((b) => b.onclick = () => { if (b.dataset.tab === "log") landOnLive = true; showTab(b.dataset.tab); });
-$("#search").oninput = renderWall;
+let wallTimer = null;  // typed: the wall drawn once the typing pauses, not at each key
+$("#search").oninput = () => { clearTimeout(wallTimer); wallTimer = setTimeout(renderWall, 150); };
 document.querySelectorAll("#tab-series .seg button").forEach((b) => b.onclick = () => {
   document.querySelectorAll("#tab-series .seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
   renderWall();
