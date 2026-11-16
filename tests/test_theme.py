@@ -112,3 +112,26 @@ def test_no_later_rule_reshapes_a_tag():
     late = [sel.strip() for i, (sel, body) in enumerate(rules) if i > shared and shaping.search(body)
             and any(name in [s.strip() for s in sel.split(",")] for name in names)]
     assert not late  # the shared shape is the last word for every tag
+
+
+FADED_TEXT = [".sched-card.other", ".cal-cell.out", ".inbox-filters b", ".seg button span", ".toolbar .pill span", ".con-filters button span",
+              ".job-counts button.off", ".tools span.optional-missing", ".oneoff-preview .file", ".wall.selecting .poster:not(.picked)"]
+
+
+@pytest.mark.parametrize("selector", FADED_TEXT)
+def test_text_is_never_faded_with_opacity(selector):
+    # opacity composites the text with what is behind it, below 4.5:1 (WCAG 1.4.3); a quieter look takes a colour token instead
+    rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", CSS, flags=re.S))
+    faded = [sel.strip() for sel, body in rules if re.search(r"(?<![\w-])opacity\s*:\s*0?\.\d", body)
+             and any(name.strip().split(":hover")[0].split(":focus-within")[0] == selector for name in sel.split(","))]
+    assert not faded
+
+def test_reduced_motion_also_stills_what_before_and_after_draw():
+    """`*` matches elements only: a looping ::before (the running step's shimmer) kept moving."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)  # a commented-out rule does nothing
+    moving = [sel.strip() for sel, body in re.findall(r"([^{}]*::(?:before|after)[^{}]*)\{([^{}]*)\}", css)
+              if re.search(r"animation:\s*(?!none)[\w-]+", body)]
+    assert moving, "no animated ::before/::after left to check"
+    stilled = [{part.strip() for part in sel.split(",")} for sel in
+               re.findall(r"@media \(prefers-reduced-motion: reduce\) \{ ([^{]+)\{[^}]*animation: none !important", css)]
+    assert any({"*", "::before", "::after"} <= parts for parts in stilled), moving
