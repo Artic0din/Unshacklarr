@@ -256,6 +256,14 @@ Every change worth knowing, newest first. The format follows
   yours: its episodes then match the service's better.
 - **Episode order.** A series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering; when that
   order changes, its new episodes wait until you confirm the numbering.
+- An episode that aired just after midnight on 1 January is no longer refused as a year too early: the programme's year is now Sonarr's own air date, or the UTC time converted to your time zone.
+- One series with an unreadable start date no longer stops the automatic sync of every series after it, nor makes the missing list fail: Save now refuses a start date that is not a date, and one already stored that way counts as no start date.
+- A second Sonarr now gets the same automatic sync as the main one: a series' own broadcast schedule and its early releases (a negative release day) reach it too, so a weekly series Sonarr dates all on its premiere is no longer missed there.
+- A failure whose message merely contains "log in" inside another word ("catalog index", "assign in time") is no longer taken for a sign-in problem, so it no longer tries every fallback profile or says the cookies may have expired.
+- Hiding an approval code no longer hides ordinary words with it: "enter your code ABCD-1234" hides only the code, not every "your" in the history and in error messages, so a download error such as "connection refused" still matches its retry rule.
+- A sign-in question in the bell is now crossed off when the service asks a new one ("wrong code, try again"), and when the download fails or is stopped while it was asking, instead of staying open.
+- Quiet hours typed by hand without quotes (`from: 23:00`, which the settings file reads as a number) no longer break every notification and the check that sends the held summary; a time that cannot be read now means no quiet hours.
+- The summary of messages held during the quiet hours is no longer lost when every address fails as they end: it is kept and tried again the next minute, and messages that arrived while it was going out are kept too.
 
 ### Removed
 

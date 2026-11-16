@@ -434,6 +434,14 @@ def inbox_resolve(key: str) -> None:
     change_inbox(done)
 
 
+def close_question(key: str) -> None:
+    """inbox_resolve for a run: the bell lagging behind (full disk) must not stop the run itself."""
+    try:
+        inbox_resolve(key)
+    except OSError as e:
+        print(f"Inbox not written: {e}", file=sys.stderr)
+
+
 ALL_LEVELS = ("success", "warning", "error")
 APPS = [(r"discord(app)?\.com/api/webhooks|^discord:", "Discord"), (r"^tgram:", "Telegram"), (r"^ntfys?:", "ntfy"), (r"^pover:", "Pushover"),
         (r"^slack:|hooks\.slack\.com", "Slack"), (r"^mailtos?:", "E-mail"), (r"^gotifys?:", "Gotify"), (r"^matrixs?:", "Matrix"),
@@ -452,13 +460,22 @@ def notification_targets(settings: dict) -> list[dict]:
     return [{"url": u, "levels": list(ALL_LEVELS)} for u in notification_urls(settings)]
 
 
+def quiet_time(value) -> str | None:
+    """A quiet-hours time as "HH:MM". Typed without quotes in the file, YAML reads 23:00 as the number 1380 (minutes)
+    but 08:00 as text: the number is turned back. None for anything else."""
+    if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < 24 * 60:
+        return f"{value // 60:02}:{value % 60:02}"
+    return value if isinstance(value, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value) else None
+
+
 def in_quiet_hours(settings: dict, now: datetime | None = None) -> bool:
-    """Within the quiet hours ("23:00" to "08:00", over midnight or not), in the chosen time zone."""
+    """Within the quiet hours ("23:00" to "08:00", over midnight or not), in the chosen time zone.
+    Times that cannot be read: no quiet hours."""
     quiet = settings.get("quiet") or {}
-    if not quiet.get("from") or not quiet.get("to") or quiet["from"] == quiet["to"]:
+    start, end = quiet_time(quiet.get("from")), quiet_time(quiet.get("to"))
+    if not start or not end or start == end:
         return False
     now = (now or datetime.now(timezone.utc)).astimezone(LOCAL).strftime("%H:%M")
-    start, end = quiet["from"], quiet["to"]
     return start <= now < end if start < end else now >= start or now < end
 
 
@@ -494,14 +511,18 @@ def note_sent(level: str, title: str, to: list[dict]) -> None:
             print(f"Sent notifications not written: {e}", file=sys.stderr)
 
 
-def deliver(settings: dict, level: str, title: str, message: str, details: dict | None = None) -> bool:
-    """Out to this device and to each address that takes this level; what each said is kept."""
+def deliver(settings: dict, level: str, title: str, message: str, details: dict | None = None, push: bool = True,
+            device_failed: list | None = None) -> bool:
+    """Out to this device (unless it has it already) and to each address that takes this level; what each said is kept.
+    device_failed gets an item when the push to this device raised."""
     to = []
     try:
-        if PUSH.send(title, message):
+        if push and PUSH.send(title, message):
             to.append({"app": "This device", "ok": True})
     except Exception as e:
         print(f"Push notification not sent: {e}", file=sys.stderr)
+        if device_failed is not None:
+            device_failed.append(True)
         to.append({"app": "This device", "ok": False, "error": no_credentials(e)[:200]})
     for target in notification_targets(settings):
         if level not in (ALL_LEVELS if target.get("levels") is None else target["levels"]):  # [] is every box unticked: nothing
@@ -577,20 +598,37 @@ def notify(settings: dict, level: str, title: str, message: str, action: dict | 
     return deliver(settings, level, title, message, details)
 
 
+held_pushed: list | None = None  # the summary the devices already have, while an address still fails to take it
+
+
 def send_held(settings: dict) -> bool:
     """The quiet hours are over: what came meanwhile, in one message."""
+    global held_pushed
     if in_quiet_hours(settings):
         return False
-    with sent_lock:
-        held = read_json(HELD_FILE, [])
-        if not held:
-            return False
-        HELD_FILE.unlink(missing_ok=True)
+    held = read_json(HELD_FILE, [])
+    if not held:
+        return False
     worst = "error" if any(h["level"] == "error" for h in held) else "warning" if any(h["level"] == "warning" for h in held) else "success"
     lines = [f"{'✓' if h['level'] == 'success' else '!' if h['level'] == 'warning' else '✗'} {h['title']}" for h in held[:30]]
     more = f"\n…and {len(held) - 30} more" if len(held) > 30 else ""
     title = f"During the quiet hours: {len(held)} message{'s' if len(held) > 1 else ''}"
-    return deliver(settings, worst, i18n.tr_lines(title, SETTINGS.get("language", "en")), "\n".join(lines) + more)
+    device_failed: list = []
+    delivered = deliver(settings, worst, i18n.tr_lines(title, SETTINGS.get("language", "en")), "\n".join(lines) + more,
+                        push=held != held_pushed, device_failed=device_failed)
+    if not device_failed:  # a push that raised is tried again with the next attempt
+        held_pushed = held
+    takes = any(worst in (ALL_LEVELS if t.get("levels") is None else t["levels"]) for t in notification_targets(settings))
+    if delivered or not takes:  # sent, or no address takes it: else kept, tried again next minute
+        held_pushed = None
+        with sent_lock:
+            current = read_json(HELD_FILE, [])
+            rest = current[len(held):] if current[:len(held)] == held else current  # what came while it was going out stays
+            if rest:
+                write_atomic(HELD_FILE, json.dumps(rest))
+            else:
+                HELD_FILE.unlink(missing_ok=True)
+    return delivered
 
 
 def missing_episodes(now: datetime | None = None) -> list[dict]:
@@ -1744,6 +1782,8 @@ class EpisodeRun:
             print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
 
     def finish(self, outcome: str, cause: str = "", detail: str = "", *, auth_failed: bool = False) -> None:
+        if asked := self.card.pop("prompt", None):  # failed or stopped mid-question: nobody can answer it now
+            close_question(asked["id"])
         self.set_approval(None)
         self.set_authentication(None)
         if getattr(current, "run", None) is self:
@@ -1965,16 +2005,16 @@ def approval_from_job(job: dict, terminal: bool = False) -> dict | None:
 def approval_fragments(job: dict, approval: dict | None) -> set[str]:
     """Known secret-bearing approval text to exclude from legacy core output."""
     message = str((approval or {}).get("message") or "")
-    fragments = {line for line in message.splitlines() if line}
+    fragments = {line.strip() for line in message.splitlines() if len(line.strip()) >= 4}
     fragments.update(re.findall(r"https?://[^\s\"<>]+", message))
-    fragments.update(match.group(1) for match in re.finditer(
-        r"\b(?:code(?:\s+is)?|(?:enter|use)(?:\s+the)?(?:\s+code)?)\s*:?\s*([A-Za-z0-9-]{4,32})",
+    # Only what looks like a code: "enter your code ABCD-1234" must not take "your" with it
+    for match in (*re.finditer(
+        r"\b(?:code(?:\s+is)?|(?:enter|use)(?:\s+the)?(?:\s+code)?)\s*(:?)\s*([A-Za-z0-9-]{4,32})",
         message,
         re.IGNORECASE,
-    ))
-    for match in re.finditer(r"\bapprove\s*:?\s*([A-Za-z0-9-]{4,32})", message, re.IGNORECASE):
-        candidate = match.group(1)
-        if candidate.isupper() or any(character.isdigit() or character == "-" for character in candidate):
+    ), *re.finditer(r"\bapprove\s*(:?)\s*([A-Za-z0-9-]{4,32})", message, re.IGNORECASE)):
+        labelled, candidate = match.groups()  # "code: abcd" is a code in any case; "code expires" is a sentence
+        if labelled or candidate.isupper() or any(character.isdigit() or character == "-" for character in candidate):
             fragments.add(candidate)
     action = job.get("action_needed")
     if isinstance(action, dict):
@@ -2168,6 +2208,8 @@ def ask_for_input(run: EpisodeRun, prompt: str | None) -> None:
     on the run's card and in the bell, with a field to answer; sent once per question."""
     had = run.card.get("prompt")
     if prompt and prompt != (had or {}).get("text"):
+        if had:
+            close_question(had["id"])  # replaced ("wrong code, try again"): the old question no longer waits
         service = run.card["service"]
         run.card["prompt"] = {"id": uuid.uuid4().hex[:12], "text": prompt, "service": service, "run": run.id}
         run.say(f"\r\n\x1b[33m{service} asks: {prompt}\x1b[0m")
@@ -2176,7 +2218,7 @@ def ask_for_input(run: EpisodeRun, prompt: str | None) -> None:
                action={"kind": "input", **run.card["prompt"]})
     elif not prompt and had:
         del run.card["prompt"]
-        inbox_resolve(had["id"])
+        close_question(had["id"])
         run.say(f"\r\n\x1b[32m{had['service']}: answered, going on\x1b[0m")
 
 
@@ -2530,7 +2572,7 @@ UNREACHABLE = "unshackle serve is unreachable"  # Unshackle.call's words when it
 SIGN_IN_HINT = 120  # seconds with no track before a download says the service may wait for a sign-in
 POLL_MISSES = 12  # job statuses missed in a row (5 s apart at least) before the job counts as lost
 # The service turned Unshackle away: cookies or credentials out of date, most of the time.
-LOGIN = re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|not logged|log ?in|sign ?in|cookie|expired|session|"
+LOGIN = re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|not logged|\blog ?in(?![a-z])|\bsign ?in(?![a-z])|cookie|expired|session|"
                    r"invalid token|access token|credential|authenticat", re.IGNORECASE)
 # the files themselves refused (the login went through): the downloads leave from a country the service blocks
 FILES_REFUSED = re.compile(r"download worker failed.*\b40[13]\b", re.IGNORECASE | re.DOTALL)
@@ -2722,7 +2764,11 @@ def wanted_automatically(show: dict, ep: dict, now: datetime) -> bool:
     aired = parse_time(aired)
     if not slot and aired > now:  # not aired yet, and no release before: Sonarr's wanted list alone kept these out
         return False
-    return aired >= parse_time(str(since)) and now - aired <= timedelta(days=AUTO_DAYS)
+    try:
+        started = parse_time(str(since))
+    except ValueError:  # a start date nobody can read: as none, so one series never stops the others
+        return False
+    return aired >= started and now - aired <= timedelta(days=AUTO_DAYS)
 
 
 BROADCAST_DAYS_MAX = 3 * 366  # how far a series' own schedule is followed: its episodes then go undated
@@ -3116,7 +3162,10 @@ def episode_in_brands(show: dict, want: str, results: list[dict], backend, param
 
 def find_programme(show: dict, ep: dict, config: dict, key: str, sxxeyy: str, pasted: str | None, backend, params: dict) -> dict:
     """programme_for's search: the pasted URL, else the service's search by the episode's title."""
-    want, year = title_key(ep.get("title")), (ep.get("airDateUtc") or "")[:4]
+    # Sonarr's own airDate first; else the UTC instant in local time (just after midnight on 1 January is still the old year in UTC)
+    aired_utc = ep.get("airDateUtc")
+    year = str(ep.get("airDate") or "")[:4] or (str(parse_time(aired_utc).astimezone(LOCAL).year) if aired_utc else "")
+    want = title_key(ep.get("title"))
     chosen = None  # the episode itself, when it was found inside its series' listing
     if pasted:
         found, how = {"id": pasted, "title": ep.get("title")}, "pasted"
@@ -4247,6 +4296,20 @@ def clean_leftovers(now: float | None = None) -> list[str]:
 sweep_lock = threading.Lock()
 
 
+def automatic_episodes(config: dict) -> list[dict]:
+    """What the automatic sync of the current Sonarr looks at: its missing episodes, the ones a service puts out
+    before they air, and the ones a series' own schedule has air; Sonarr's own dates are set aside for the last."""
+    now, plans = datetime.now(timezone.utc), broadcast_plans(config, fresh=True)
+    dated = broadcast_dated(plans)
+    own = lambda ep: ep["id"] in dated  # its own schedule dates it
+    wanted = [ep for ep in missing_episodes() if not own(ep)]
+    seen = {ep["id"] for ep in wanted}
+    wanted += [ep for ep in early_episodes(config, now) if ep["id"] not in seen and not own(ep)]
+    wanted += [ep for ep in broadcast_episodes(config, now - timedelta(days=AUTO_DAYS + 1), now + timedelta(days=EARLY_DAYS_MAX + 1), plans)
+               if not ep.get("hasFile") and ep.get("monitored", True) and ep["series"].get("monitored", True)]
+    return wanted
+
+
 def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str = "manual", numbering: dict | None = None,
          batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None) -> int:
     config = read_file()
@@ -4269,15 +4332,7 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
                 print("Outside the download window (Settings, Automation): the sync waits for it.", flush=True)
                 return 0
             try:  # the main Sonarr down: told once per cause, and the other Sonarrs still synced
-                now, plans = datetime.now(timezone.utc), broadcast_plans(config, fresh=True)
-                dated = broadcast_dated(plans)
-                own = lambda ep: ep["id"] in dated  # its own schedule dates it
-                wanted = [ep for ep in missing_episodes() if not own(ep)]
-                seen = {ep["id"] for ep in wanted}
-                wanted += [ep for ep in early_episodes(config, now) if ep["id"] not in seen and not own(ep)]
-                wanted += [ep for ep in broadcast_episodes(config, now - timedelta(days=AUTO_DAYS + 1), now + timedelta(days=EARLY_DAYS_MAX + 1), plans)
-                           if not ep.get("hasFile") and ep.get("monitored", True) and ep["series"].get("monitored", True)]
-                failed = sync(config, settings, wanted, kind="auto")
+                failed = sync(config, settings, automatic_episodes(config), kind="auto")
                 instance_failed.pop("", None)
             except Exception as e:
                 why = no_credentials(f"{type(e).__name__}: {e}")
@@ -4339,7 +4394,7 @@ def sync_instance(inst: dict, config: dict, settings: dict) -> int:
     with on_instance(inst):
         try:
             series = {k: v for k, v in (config.get("series") or {}).items() if not off_in(inst, v)}
-            wanted = [ep for ep in missing_episodes() if ep["series"].get("tvdbId") in series]
+            wanted = [ep for ep in automatic_episodes(config) if ep["series"].get("tvdbId") in series]
             failed = sync(instance_config(inst, config), settings, wanted, kind="auto")
             instance_failed.pop(inst["name"], None)
             return failed
