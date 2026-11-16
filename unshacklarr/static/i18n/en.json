@@ -2482,6 +2482,12 @@
  "The URL of {0} cannot start with '-'": [
   "key"
  ],
+ "The WebDAV server answered HTTP {0}, not a stored file": [
+  "r.status_code"
+ ],
+ "The WebDAV server redirected the backup to {0}: nothing was stored. Use the address it leads to, or let Unshacklarr past the login proxy": [
+  "host"
+ ],
  "The WebDAV server refused the user name or password": [],
  "The address has a space in it": [],
  "The address must start with http:// or https://": [],

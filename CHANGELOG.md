@@ -215,6 +215,8 @@ Every change worth knowing, newest first. The format follows
   restart, are tried again as before.
 - **No more false cookie warnings.** Crave's load balancer cookies (a week) and Apple's `utsdc` (an hour) no longer
   count as the date the login ends.
+- **A WebDAV backup sent to a login page is a failed backup.** A redirect (a forward-auth proxy's login) is no
+  longer followed and recorded as sent: it fails with the host it leads to, and only a stored file counts as sent.
 - **One odd cookie file no longer empties the Cookies list.** A cookie dated `inf` is skipped like any other bad
   date, and a file Unshacklarr cannot read shows as Unreadable while the others still show.
 - **Translated notifications on Windows.** With a language set, notifications no longer fail to load their
