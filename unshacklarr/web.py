@@ -660,16 +660,22 @@ MASK = "•••"  # what stands for a secret the browser never gets
 OPTION_LEVELS = ("options", "service_options")
 
 
+# Webhook paths that name the app, not a secret; any other path may be one (an ntfy topic is the whole secret)
+PLAIN_WEBHOOK_PATHS = {"discord.com": "api/webhooks/", "discordapp.com": "api/webhooks/", "hooks.slack.com": "services/"}
+
+
 def masked_url(url: str) -> str:
-    """A notification address as the browser gets it: its app still shows (scheme, host, first plain path
-    words), its tokens never do. Its #ref finds the real one again on save and test."""
+    """A notification address as the browser gets it: its app still shows (scheme, host, and a known webhook
+    path), its tokens never do. Its #ref finds the real one again on save and test."""
     ref = hashlib.sha256(url.encode()).hexdigest()[:10]
     scheme, sep, rest = url.partition("://")
     keep = ""
     if sep and scheme.lower() in ("http", "https"):
         host, _, path = rest.partition("/")
-        words = [w for w in path.split("/")[:2] if re.fullmatch(r"[a-z]{2,15}", w)]
-        keep = host.rpartition("@")[2] + "/" + "".join(w + "/" for w in words)
+        host = host.rpartition("@")[2]
+        name = host.partition(":")[0].lower()
+        plain = next((p for h, p in PLAIN_WEBHOOK_PATHS.items() if (name == h or name.endswith("." + h)) and path.startswith(p)), "")
+        keep = host + "/" + plain
     return f"{scheme}://{keep}{MASK}#{ref}" if sep else f"{MASK}#{ref}"
 
 

@@ -7687,3 +7687,17 @@ def test_missing_with_a_superscript_digit_in_days_is_a_400_not_a_500(tmp_path, m
     monkeypatch.setattr(web, "on_sonarr", lambda inst, fn, days: [])
     with pytest.raises(web.web.HTTPBadRequest):
         asyncio.run(web.missing(SimpleNamespace(query={"days": "²"})))
+
+
+def test_a_masked_notification_address_hides_an_ntfy_topic_and_keeps_known_webhook_paths(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    shown = lambda url: web.masked_url(url).partition("#")[0]
+    assert shown("https://ntfy.sh/familyalerts") == "https://ntfy.sh/•••"  # the topic is the whole secret
+    assert shown("https://user:pw@ntfy.example/alerts/more") == "https://ntfy.example/•••"
+    assert shown("https://discord.com/api/webhooks/123/SECRET") == "https://discord.com/api/webhooks/•••"
+    assert shown("https://hooks.slack.com/services/T0/B0/SECRET") == "https://hooks.slack.com/services/•••"
+    assert shown("tgram://BOTTOKEN/42") == "tgram://•••"

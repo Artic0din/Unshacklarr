@@ -110,6 +110,7 @@ Every change worth knowing, newest first. The format follows
 
 - The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
 - The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
+- A notification address over https, such as an ntfy topic at `https://ntfy.sh/familyalerts`, now reaches the page with everything after its host hidden; only Discord's and Slack's webhook paths still show.
 - Activity's catch-up with a superscript digit as its number of days (`/api/missing?days=²`) now answers that days is a number instead of a server error.
 - Someone signed in through the reverse proxy can now use the Test buttons for Sonarr and Unshackle, instead of being told to enter the setup code first.
 - A setup code or session cookie with an accented character is now refused as wrong instead of failing with a server error that kept the page from loading.
