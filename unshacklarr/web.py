@@ -5152,7 +5152,8 @@ language_scan = {"running": False, "done": 0, "total": 0, "series": "", "errors"
 def file_languages(f: dict) -> tuple[list[str], list[str]]:
     """A file's audio languages and its forced subtitles' (fr, en), from Sonarr 5's tracks; "und" (no tag) left out."""
     info = f.get("mediaInfo") or {}
-    lang = lambda t: sonarr_sync.base_lang(sonarr_sync.LANGS.get(str(t).lower(), str(t)))
+    # its region kept (pt-PT is not pt-BR): speaks() already takes a plain fr for fr-FR or fr-CA
+    lang = lambda t: sonarr_sync.LANGS.get(str(t).lower(), str(t).strip(" '[]").lower())
     audio = [lang(a["language"]) for a in info.get("audioStreams") or [] if a.get("language") and a["language"] != "und"]
     forced = [lang(x["language"]) for x in info.get("subtitleStreams") or [] if x.get("forced") and x.get("language")]
     return list(dict.fromkeys(audio)), list(dict.fromkeys(forced))

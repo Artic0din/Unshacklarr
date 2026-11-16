@@ -7407,3 +7407,11 @@ def test_a_library_file_over_a_steps_bitrate_cap_does_not_fit_that_step():
     assert not web.sonarr_sync.fits(capped, track)
     assert web.sonarr_sync.fits({**capped, "max_kbps": 10000}, track)
     assert web.ladder_track({"resolution": "1920x1080", "videoCodec": "x265"})["bitrate"] == 0  # none known: no cap applies
+
+
+def test_a_files_regional_audio_tag_is_kept_for_the_language_scan():
+    # pt-PT is not pt-BR: cut to a plain pt it would count as maybe Brazilian, and the file would be left out of Languages
+    from unshacklarr import web
+    audio, _ = web.file_languages({"mediaInfo": {"audioStreams": [{"language": "pt-PT"}, {"language": "eng"}]}})
+    assert audio == ["pt-pt", "en"]
+    assert not web.sonarr_sync.speaks(audio[:1], ["pt-br"]) and web.sonarr_sync.speaks(audio[:1], ["pt"])
