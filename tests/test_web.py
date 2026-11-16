@@ -7701,3 +7701,46 @@ def test_a_masked_notification_address_hides_an_ntfy_topic_and_keeps_known_webho
     assert shown("https://discord.com/api/webhooks/123/SECRET") == "https://discord.com/api/webhooks/•••"
     assert shown("https://hooks.slack.com/services/T0/B0/SECRET") == "https://hooks.slack.com/services/•••"
     assert shown("tgram://BOTTOKEN/42") == "tgram://•••"
+
+
+def test_password_key_language_and_restore_writes_read_and_write_the_config_under_its_lock(tmp_path, monkeypatch):
+    # a sync thread that read the config just before would otherwise write the old password or key back
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def no_reauth(request, password):
+        return None
+    monkeypatch.setattr(web, "reauth", no_reauth)
+    monkeypatch.setattr(web, "backup_data", lambda text, passphrase: {"series": {}})
+    events = []
+    real_read, real_write = web.read_config, web.write_config
+    monkeypatch.setattr(web, "read_config", lambda: events.append(("read", web.CONFIG_LOCK.locked())) or real_read())
+    monkeypatch.setattr(web, "write_config", lambda config: events.append(("write", web.CONFIG_LOCK.locked())) or real_write(config))
+
+    def request(body, action=""):
+        async def json():
+            return body
+        return SimpleNamespace(json=json, match_info={"action": action}, secure=False, headers={}, cookies={})
+
+    calls = {
+        "set_language": lambda: web.set_language(request({"language": "en"})),
+        "change_password": lambda: web.change_password(request({"current": "password1", "new": "password2"})),
+        "logout_others": lambda: web.logout_others(request({})),
+        "api_key_action": lambda: web.api_key_action(request({"password": "password2"}, "new")),
+        "restore": lambda: web.restore(request({"password": "password2", "text": "x"})),
+        "backup_offsite": lambda: web.backup_offsite(request({"password": "password2", "settings": {}})),
+    }
+    unlocked = []
+    for name, call in [*calls.items(), ("reset_password", None)]:
+        events.clear()
+        asyncio.run(call()) if call else web.reset_password("password3")
+        writes = [i for i, (kind, _) in enumerate(events) if kind == "write"]
+        if not writes or not all(events[i][1] and events[i - 1] == ("read", True) for i in writes):
+            unlocked.append(name)
+    assert unlocked == []

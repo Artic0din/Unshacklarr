@@ -2977,9 +2977,10 @@ async def restore(request):
     body = await json_object(request)
     await reauth(request, str(body.get("password") or ""))
     data = await asyncio.to_thread(backup_data, str(body.get("text") or ""), str(body.get("passphrase") or ""))
-    current = read_config()
-    write_atomic(BEFORE_RESTORE, backup_text(current), PRIVATE)
-    write_config({**{k: data[k] for k in BACKUP_KEYS if data.get(k) is not None}, "auth": current["auth"]})
+    with CONFIG_LOCK:  # a sync's write in between would put the old settings back
+        current = read_config()
+        write_atomic(BEFORE_RESTORE, backup_text(current), PRIVATE)
+        write_config({**{k: data[k] for k in BACKUP_KEYS if data.get(k) is not None}, "auth": current["auth"]})
     return web.json_response({"series": len(data.get("series") or {})})
 
 
@@ -3042,9 +3043,10 @@ async def backup_offsite(request):
     another place), then a backup sent there at once to test it."""
     body = await json_object(request)
     await reauth(request, str(body.get("password") or ""))
-    config = read_config()
-    config["settings"] = {**config["settings"], **check_offsite(body.get("settings") or {}, sonarr_sync.load_settings(config))}
-    write_config(config)
+    with CONFIG_LOCK:
+        config = read_config()
+        config["settings"] = {**config["settings"], **check_offsite(body.get("settings") or {}, sonarr_sync.load_settings(config))}
+        write_config(config)
     sent = {}
     if config["settings"]["backup_remote"]:
         name = f"unshacklarr-{datetime.now(sonarr_sync.LOCAL):%Y-%m-%d-%H%M}.yaml"
@@ -6100,14 +6102,15 @@ async def api_key_action(request):
     again: a session left open somewhere must not be enough to mint lasting access."""
     if request.match_info["action"] == "new":
         await reauth(request, str((await json_object(request)).get("password") or ""))
-    config = read_config()
-    for k in ("api_key", "api_key_created"):
-        config["auth"].pop(k, None)
-    key = None
-    if request.match_info["action"] == "new":
-        key = secrets.token_urlsafe(32)
-        config["auth"].update(api_key=hashlib.sha256(key.encode()).hexdigest(), api_key_created=datetime.now(timezone.utc).isoformat())
-    write_config(config)
+    with CONFIG_LOCK:  # a sync's write in between would bring a revoked key back
+        config = read_config()
+        for k in ("api_key", "api_key_created"):
+            config["auth"].pop(k, None)
+        key = None
+        if request.match_info["action"] == "new":
+            key = secrets.token_urlsafe(32)
+            config["auth"].update(api_key=hashlib.sha256(key.encode()).hexdigest(), api_key_created=datetime.now(timezone.utc).isoformat())
+        write_config(config)
     return web.json_response({"key": key, "created": config["auth"].get("api_key_created")})
 
 
@@ -6589,9 +6592,10 @@ async def set_language(request):
     lang = str((await json_object(request)).get("language") or "")
     if lang not in i18n.languages():
         raise web.HTTPBadRequest(text=f"No translation for {lang!r}")
-    config = read_config()
-    config.setdefault("settings", {})["language"] = lang
-    write_config(config)
+    with CONFIG_LOCK:
+        config = read_config()
+        config.setdefault("settings", {})["language"] = lang
+        write_config(config)
     return web.json_response({"ok": True})
 
 
@@ -6601,22 +6605,25 @@ async def change_password(request):
         await reauth(request, str(body.get("current") or ""))  # login's limit on tries
     except web.HTTPForbidden:
         raise web.HTTPForbidden(text="The current password is wrong") from None  # not 401: the page reads that as a lost session
-    config = read_config()
     new = str(body.get("new") or "")
     if len(new) < 8:
         raise web.HTTPBadRequest(text="Password must be at least 8 characters")
-    # A new secret too: every other open session is logged out. The API key stays.
-    config["auth"].update(password=hash_password(new), secret=secrets.token_hex(32), changed=datetime.now(timezone.utc).isoformat())
-    write_config(config)
+    hashed = hash_password(new)  # scrypt before the lock: the sync's writes do not wait for it
+    with CONFIG_LOCK:  # a sync's write in between would bring the old password back
+        config = read_config()
+        # A new secret too: every other open session is logged out. The API key stays.
+        config["auth"].update(password=hashed, secret=secrets.token_hex(32), changed=datetime.now(timezone.utc).isoformat())
+        write_config(config)
     await asyncio.to_thread(sonarr_sync.PUSH.unsubscribe_all)  # a device added by someone else stops listening too
     return with_session(request, web.json_response({"ok": True}), config["auth"])
 
 
 async def logout_others(request):
     """A new session secret, the password kept: every device but this one logs in again."""
-    config = read_config()
-    config["auth"] = {**config["auth"], "secret": secrets.token_hex(32)}
-    write_config(config)
+    with CONFIG_LOCK:
+        config = read_config()
+        config["auth"] = {**config["auth"], "secret": secrets.token_hex(32)}
+        write_config(config)
     await asyncio.to_thread(sonarr_sync.PUSH.unsubscribe_all)  # their push notifications too: turn them on again on yours
     return with_session(request, web.json_response({"ok": True}), config["auth"])
 
@@ -6846,9 +6853,11 @@ def reset_password(password: str) -> None:
     Every open session is logged out; settings and series stay as they are."""
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters")
-    config = read_config()
-    config["auth"].update(password=hash_password(password), secret=secrets.token_hex(32), changed=datetime.now(timezone.utc).isoformat())
-    write_config(config)
+    hashed = hash_password(password)
+    with CONFIG_LOCK:  # as the server's own writes: only within this process
+        config = read_config()
+        config["auth"].update(password=hashed, secret=secrets.token_hex(32), changed=datetime.now(timezone.utc).isoformat())
+        write_config(config)
     sonarr_sync.PUSH.unsubscribe_all()
 
 
