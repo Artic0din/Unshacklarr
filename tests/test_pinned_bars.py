@@ -64,3 +64,18 @@ def test_settings_end_clears_the_save_bar():
 
 def test_shortcut_jumps_use_the_scroll_padding_not_a_second_margin():
     assert "scroll-margin-top" not in CSS
+
+
+def test_wide_activity_pane_clears_the_dock_it_scrolls_under():
+    """Activity scrolls inside .con-detail on a wide screen: padding on the page alone does not reach it."""
+    assert rule_for(CSS, ".con-detail:has(#dock", side="bottom")
+
+
+def test_phone_page_top_follows_the_header_when_a_status_row_makes_it_taller():
+    page = [body for sel, body in padding_rules(phone_blocks()) if sel == "html"]
+    assert "var(--head-h" in page[0]
+    assert '"--head-h"' in (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "navigation.js").read_text()
+
+
+def test_phone_series_download_bar_counts_only_while_it_shows():
+    assert rule_for(phone_blocks(), "#ep-bar:not([hidden]):not(.off)", side="bottom")  # Settings tab hides it with .off

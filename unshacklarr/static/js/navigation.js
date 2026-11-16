@@ -77,6 +77,8 @@ function applyRoute() {
 }
 window.addEventListener("popstate", applyRoute);
 
+// the header's real height, for the page's scroll padding: a status row under it (a service down, an update) makes it taller
+new ResizeObserver(() => document.documentElement.style.setProperty("--head-h", `${$("header").offsetHeight}px`)).observe($("header"));
 function showTab(name, fromRoute = false, quiet = false) {
   if (currentTab === "yaml" && name !== "yaml") {  // leaving the editor: it forgets the password and the file
     if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }

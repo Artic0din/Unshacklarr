@@ -1627,6 +1627,7 @@ body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 96px; }
 .d-body:has(#dt-settings:not([hidden])) { scroll-padding-top: 64px; }
 @media (min-width: 701px) {  /* the page's floating bars; a phone's are below, above its tab bar */
   html:has(#tab-log:not([hidden]) #dock:not([hidden])) { scroll-padding-bottom: 76px; }
+  .con-detail:has(#dock:not([hidden])) { scroll-padding-bottom: 76px; }  /* Activity scrolls in its own pane here, not the page */
   html:has(#savebar:not([hidden]), .sel-bar:not([hidden])) { scroll-padding-bottom: 88px; }
 }
 body:has(#savebar:not([hidden])) main { padding-bottom: 96px; }  /* the last row clears the save bar */
@@ -1659,7 +1660,7 @@ details.sx-card > summary.sx-head { padding-right: 28px; } details.sx-card > sum
 }
 /* Phones: the header above, the tab bar below, and the bars stacked over it (their heights as they are placed above) */
 @media (max-width: 700px) {
-  html { scroll-padding-top: calc(72px + env(safe-area-inset-top)); scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  html { scroll-padding-top: var(--head-h, calc(72px + env(safe-area-inset-top))); scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom)); }  /* --head-h: the header as tall as it is, a status row under it included */
   html:has(body:not(.drawer-open) #tab-log:not([hidden]) #dock:not([hidden])) { scroll-padding-bottom: calc(134px + env(safe-area-inset-bottom)); }
   html:has(body:not(.drawer-open) .sel-bar:not([hidden])) { scroll-padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
   html:has(body:not(.drawer-open) #savebar:not([hidden])) { scroll-padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
@@ -1667,7 +1668,7 @@ details.sx-card > summary.sx-head { padding-right: 28px; } details.sx-card > sum
   /* the series page has no tab bar: its sticky head (and the settings' shortcuts under it) above, its download bar below */
   html:has(body.drawer-open) { scroll-padding-top: calc(var(--d-head, 118px) + 8px); scroll-padding-bottom: 0; }
   html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: calc(var(--d-head, 118px) + 64px); }
-  html:has(body.drawer-open #ep-bar:not([hidden])) { scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  html:has(body.drawer-open #ep-bar:not([hidden]):not(.off)) { scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 }
 /* Pull to reload (the installed app): a badge that follows the finger down from the top, its ring filling up. */
 .ptr { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) - 56px); z-index: 1000; display: flex; flex-direction: column; align-items: center; gap: 8px;
