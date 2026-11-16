@@ -249,6 +249,7 @@ function renderMonth() {
     const cell = el("button", {
       className: "cal-cell" + (date.getMonth() !== first.getMonth() ? " out" : "") + (key === today ? " today" : "") + (key === cal.pick ? " picked" : ""),
       ariaLabel: `${date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })}: ${COUNT.episode(list.length)}`,
+      ariaPressed: String(key === cal.pick),
       onclick: () => { pickDay(key); renderMonth(); $("#cal-day").scrollIntoView({ behavior: SCROLL, block: "nearest" }); },
     },
       el("span", { className: "cal-date", textContent: date.getDate() }),
@@ -259,7 +260,7 @@ function renderMonth() {
         ...(list.length > 3 ? [el("span", { className: "cal-ep more", textContent: `+${list.length - 3} more` })] : [])));
     cells.push(cell);
   }
-  $("#cal-grid").replaceChildren(...heads, ...cells);
+  keepFocus($("#cal-grid"), () => $("#cal-grid").replaceChildren(...heads, ...cells));
   const picked = cal.pick && (cal.byDay.get(cal.pick) || []).filter(inScope);
   $("#cal-day").replaceChildren(...(picked ? [
     el("h3", { className: "sched-day", textContent: day(dayOfKey(cal.pick)) }),
@@ -342,7 +343,7 @@ function detailsNode(d) {
   const buttons = [...(plan.download ? [now] : []),
     ...(d.run ? [el("button", { type: "button", className: "btn small", textContent: "See in Activity", title: "Open its last download: its steps and output",
       onclick: () => { closeDetails(false); showTab("log"); pickRun(d.run); } })] : []),
-    ...(series ? [el("button", { type: "button", className: "btn small", textContent: "Open the series", onclick: () => { closeDetails(false); openDrawer(series); } })] : [])];
+    ...(series ? [el("button", { type: "button", className: "btn small", textContent: "Open the series", onclick: () => { closeDetails(); openDrawer(series); } })] : [])];
   const close = el("button", { type: "button", className: "inbox-x", ariaLabel: "Close", onclick: () => closeDetails() });
   close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
   return el("div", { className: "sd" },
@@ -418,7 +419,7 @@ function day(d) {
 }
 function until(d) {
   const min = Math.max(0, Math.round((d - Date.now()) / 60000));
-  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")}`;
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min`;
 }
 $("#sched-refresh").onclick = () => loadSchedule();
 document.querySelectorAll(".sched-filter .pill").forEach((b) => b.onclick = () => {

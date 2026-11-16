@@ -59,9 +59,9 @@ function ladderChips(value, inherited, onchange) {
   const def = inherited && ladders().some((l) => l.name === inherited) ? inherited : "off";
   let now = !value || !ladders().some((l) => l.name === value) && value !== "off" ? def : value;
   const box = el("div", { className: "ax-seg", role: "group", ariaLabel: "Quality ladder" });
-  const paint = () => box.replaceChildren(...[["off", "Off"], ...ladders().map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
+  const paint = () => keepFocus(box, () => box.replaceChildren(...[["off", "Off"], ...ladders().map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
     type: "button", ariaPressed: String(now === v), onclick: () => { now = v; paint(); onchange(v === def ? "" : v); } },
-    el("span", { textContent: label }), ...(v === def ? [el("small", { className: "chip-default", textContent: "default" })] : []))));
+    el("span", { textContent: label }), ...(v === def ? [el("small", { className: "chip-default", textContent: "default" })] : [])))));
   paint();
   return el("div", { className: "ladder-pick" }, box, el("a", { className: "ax-edit", href: "#/settings/quality", textContent: "Edit ladders" }));
 }
@@ -89,9 +89,9 @@ function ladderLine(code, lad) {
    default; picking it follows that level again, any other is the series' own. */
 function defaultChips(box, choices, own, inherited, pick) {
   const now = own ?? inherited;
-  box.replaceChildren(...choices.map(([v, label]) => el("button", { type: "button", ariaPressed: String(now === v),
+  keepFocus(box, () => box.replaceChildren(...choices.map(([v, label]) => el("button", { type: "button", ariaPressed: String(now === v),
     onclick: () => pick(v === inherited ? undefined : v) },
-    el("span", { textContent: label }), ...(v === inherited ? [el("small", { className: "chip-default", textContent: "default" })] : []))));
+    el("span", { textContent: label }), ...(v === inherited ? [el("small", { className: "chip-default", textContent: "default" })] : [])))));
 }
 
 function renderQuality() {
@@ -452,14 +452,17 @@ function upgradeSeries() {
 function renderUpgradeSeries() {
   const box = $("#ug-series");
   if (!box) return;
-  const find = $("#ug-find").value.trim().toLowerCase(), all = upgradeSeries();
+  const typed = $("#ug-find").value.trim(), find = typed.toLowerCase(), all = upgradeSeries();
   const shown = all.filter((s) => !find || s.title.toLowerCase().includes(find));
   box.replaceChildren(...shown.map((s) => el("label", { className: "ug-line" },
     el("input", { type: "checkbox", checked: s.conf.skip_upgrades !== true, onchange: (e) => {
       if (e.target.checked) delete s.conf.skip_upgrades; else s.conf.skip_upgrades = true;
       dirty(); upgradeSay(all);
     } }), el("span", { textContent: s.title }))));
-  if (!shown.length) box.replaceChildren(el("p", { className: "dx-empty", textContent: all.length ? "No series matches." : "No series set up yet." }));
+  if (!shown.length) box.replaceChildren(all.length
+    ? el("div", { role: "status" }, el("p", { className: "dx-empty", textContent: `No series matches “${typed}”.` }),
+        el("button", { type: "button", className: "btn small", textContent: "Clear search", onclick: () => { $("#ug-find").value = ""; renderUpgradeSeries(); $("#ug-find").focus(); } }))
+    : el("p", { className: "dx-empty", textContent: "No series set up yet." }));
   upgradeSay(all);
 }
 function upgradeSay(all) {

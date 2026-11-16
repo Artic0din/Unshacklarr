@@ -448,6 +448,7 @@ $("#bk-file").onchange = async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
+  if (!await askToConfirm(`Restore the settings from ${file.name}?`, "Every setting now in Unshacklarr is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.", "Replace the settings")) return;
   try {
     const text = await file.text();
     bkFile = text;
@@ -495,11 +496,11 @@ function renderRegion() {
   const state = $("#rg-state");
   state.querySelector("b").textContent = `${at({ weekday: "long" })} ${at({ hour: "2-digit", minute: "2-digit" })}`;
   const offset = at({ timeZoneName: "shortOffset" }).split(" ").pop().replace("GMT", "UTC");
-  state.querySelector("small").textContent = [tz.replaceAll("_", " "), offset, set.country ? `${flagOf(set.country)} ${names.of(set.country) || set.country}` : ""].filter(Boolean).join(" · ");
+  state.querySelector("small").textContent = [tz.replaceAll("_", " "), offset, set.country ? names.of(set.country) || set.country : ""].filter(Boolean).join(" · ");
   const typed = $("#countries").value.toUpperCase().split(/[\s,]+/).filter(Boolean);
   $("#countries").classList.toggle("bad", typed.some((c) => !COUNTRIES.split(" ").includes(c)));
   $("#rg-countries").replaceChildren(...typed.map((c) => COUNTRIES.split(" ").includes(c)
-    ? el("span", { className: "rg-chip" }, el("span", { className: "flag", textContent: flagOf(c) }), names.of(c) || c)
+    ? el("span", { className: "rg-chip", textContent: names.of(c) || c })
     : el("span", { className: "rg-chip bad", textContent: `${c}: not a country code` })));
   const mine = Intl.DateTimeFormat().resolvedOptions().timeZone;
   $("#tz-hint").replaceChildren(`Now ${at({ hour: "2-digit", minute: "2-digit" })} there.`,
@@ -544,7 +545,7 @@ const BUILDERS = {
 let ntApp = "Discord";
 function renderTargets() {
   const targets = S.config.notifications.targets;
-  $("#nt-targets").replaceChildren(...(targets.length ? targets.map((t, i) => {
+  keepFocus($("#nt-targets"), () => $("#nt-targets").replaceChildren(...(targets.length ? targets.map((t, i) => {
     const tested = ntTested.get(t.url);
     const chips = Object.entries(LEVEL_NAMES).map(([lv, name]) => el("button", { type: "button", role: "checkbox", className: `nt-pick ${lv}`,
       ariaChecked: String(t.levels.includes(lv)), onclick: () => {
@@ -559,7 +560,7 @@ function renderTargets() {
         ...(tested && tested !== "…" ? [el("em", { className: tested.ok ? "ok" : "bad" }, icon(tested.ok ? "check" : "x", "inl"), tested.ok ? "Delivered" : tested.error)] : [])),
       el("span", { className: "nt-chips", role: "group", ariaLabel: `What ${appOf(t.url)} gets` }, el("small", { textContent: "Sends" }), ...chips),
       el("span", { className: "btns" }, test, remove));
-  }) : [el("p", { className: "muted cdm-empty", textContent: "No address yet: add Discord, Telegram, ntfy or another." })]));
+  }) : [el("p", { className: "muted cdm-empty", textContent: "No address yet: add Discord, Telegram, ntfy or another." })])));
 }
 async function testTargets(urls) {
   urls.forEach((u) => ntTested.set(u, "…"));

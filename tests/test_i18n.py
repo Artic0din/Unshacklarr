@@ -336,7 +336,7 @@ def counted_nouns() -> list[str]:
 
 def test_a_language_with_more_plural_forms_has_a_text_for_each_of_them():
     nouns = counted_nouns()
-    assert len(nouns) == 14
+    assert len(nouns) == 15
     for lang, needed in NEEDED_CATEGORIES.items():
         translated = json.loads((I18N / f"{lang}.json").read_text())
         for noun in set(nouns) - ABBREVIATED.get(lang, set()):
