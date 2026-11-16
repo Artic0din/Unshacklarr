@@ -6325,3 +6325,17 @@ def test_a_job_that_lets_its_slot_go_never_frees_one_another_of_its_episodes_jus
     leave.set()
     threads[0].join(5)
     assert held  # still downloading: its slot is not free for the next in line
+
+
+def test_a_run_whose_end_could_not_be_written_is_no_longer_running(tmp_path, monkeypatch):
+    # a full disk at the very end: the save fails, but Activity must not show it running (and refuse Delete) till restart
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05")
+    assert run.id in sync.EpisodeRun.active
+
+    def full(self):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(sync.EpisodeRun, "save", full)
+    with pytest.raises(OSError):
+        run.finish("downloaded")
+    assert run.id not in sync.EpisodeRun.active

@@ -1781,21 +1781,24 @@ class EpisodeRun:
         if outcome == "downloaded":  # a new file: Upgrades' find for it is done with (by mj23au)
             drop_upgrade_find(self.card.get("instance", ""), self.card.get("tvdbId"), self.card.get("sxxeyy"))
         self.fold_checks()
-        self.save()
         try:
-            for validated_service, result in validations.items():
-                record_authentication_observation(
-                    validated_service, result["backend"], "validated", result["observed_at"]
-                )
-            for failed_service, result in attempt_failures.items():
-                record_authentication_observation(
-                    failed_service, result["backend"], "needs_user_action", result["observed_at"]
-                )
-        except OSError as error:
-            print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
-        # Only once its end is on disk: the page, told a run ended, reads the history at once; read between the two, a
-        # card without an end that no run follows was "interrupted", and stayed so on the page (by mj23au, #17)
-        EpisodeRun.active.discard(self.id)
+            self.save()
+            try:
+                for validated_service, result in validations.items():
+                    record_authentication_observation(
+                        validated_service, result["backend"], "validated", result["observed_at"]
+                    )
+                for failed_service, result in attempt_failures.items():
+                    record_authentication_observation(
+                        failed_service, result["backend"], "needs_user_action", result["observed_at"]
+                    )
+            except OSError as error:
+                print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
+        finally:
+            # Only once its end is on disk: the page, told a run ended, reads the history at once; read between the two, a
+            # card without an end that no run follows was "interrupted", and stayed so on the page (by mj23au, #17).
+            # Its end not written (a full disk): no longer running all the same, or it stays so until a restart
+            EpisodeRun.active.discard(self.id)
         prune_runs()
 
     def take_over_failures(self, batch: str | None = None, automatic: bool = False) -> None:

@@ -219,6 +219,8 @@ Every change worth knowing, newest first. The format follows
   while the history said cancelled.
 - **Downloads at once is kept when a job pauses.** Pausing a job, or its episode ending while it was paused, no
   longer let one more download run than the limit.
+- **A run whose end could not be saved ends anyway.** On a full disk it no longer showed as running, with Delete
+  refused, until a restart.
 
 **🆕 Sonarr 5, on this branch until it is out of beta**
 - **Languages.** Your files without your audio languages, read from Sonarr 5's own tracks: watch them for the
