@@ -564,7 +564,7 @@ function renderTargets() {
   keepFocus($("#nt-targets"), () => $("#nt-targets").replaceChildren(...(targets.length ? targets.map((t, i) => {
     const tested = ntTested.get(t.url);
     const nth = targets.filter((x, j) => j <= i && appOf(x.url) === appOf(t.url)).length;
-    const name = appOf(t.url) + (targets.filter((x) => appOf(x.url) === appOf(t.url)).length > 1 ? ` ${nth}` : "");  // two Discords are told apart
+    const name = tr(appOf(t.url)) + (targets.filter((x) => appOf(x.url) === appOf(t.url)).length > 1 ? ` ${nth}` : "");  // two Discords are told apart; "E-mail" in the language
     const chips = Object.entries(LEVEL_NAMES).map(([lv, name]) => el("button", { type: "button", role: "checkbox", className: `nt-pick ${lv}`,
       ariaChecked: String(t.levels.includes(lv)), onclick: () => {
         t.levels = t.levels.includes(lv) ? t.levels.filter((x) => x !== lv) : [...t.levels, lv];

@@ -425,3 +425,11 @@ def test_the_labels_that_name_an_item_are_translated_whole():
                         ("settings-options.js", '"Test {0}"'), ("settings-options.js", '"Remove {0}"'), ("settings-options.js", '"Download backup from {0}"'),
                         ("core.js", '"Language: {0}"')):
         assert f"trWith({label}" in js[name], (name, label)
+
+
+def test_a_notification_address_is_named_by_its_app_in_the_language():
+    """The row reads "Correo electrónico": its Test and Remove say the same, not "Probar E-mail"."""
+    assert page_translate("es", ['trWith("Test {0}", tr("E-mail"))', 'trWith("Remove {0}", tr("E-mail") + " 2")']) == [
+        "Probar Correo electrónico", "Quitar Correo electrónico 2"]
+    options = (CORE.parent / "settings-options.js").read_text()
+    assert "const name = tr(appOf(t.url))" in options
