@@ -6424,6 +6424,27 @@ def test_a_held_summary_waiting_on_an_address_is_not_pushed_to_devices_again(tmp
     assert sync.send_held(settings) is True and len(pushed) == 2  # the next night's summary is new, even if the same
 
 
+def test_a_held_summary_whose_device_push_failed_is_pushed_again(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    pushed = []
+    device_up = [False]
+
+    def push(title, message):
+        pushed.append(title)
+        if not device_up[0]:
+            raise OSError("device unreachable")
+        return True
+
+    monkeypatch.setattr(sync.PUSH, "send", push)
+    monkeypatch.setattr(sync, "send_to", lambda *a, **k: "503 Service Unavailable")
+    settings = {"targets": [{"url": "ntfy://ok", "levels": ["success", "warning", "error"]}]}
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    assert sync.send_held(settings) is False and len(pushed) == 1  # the device was down
+    device_up[0] = True
+    assert sync.send_held(settings) is False and len(pushed) == 2  # tried again, now it has it
+    assert sync.send_held(settings) is False and len(pushed) == 2  # and not a third time
+
+
 def test_a_labelled_approval_code_is_redacted_in_any_case(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     fragments = sync.approval_fragments({}, {"message": "Enter code: aBcDeF"})

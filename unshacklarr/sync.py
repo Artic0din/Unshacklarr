@@ -509,14 +509,18 @@ def note_sent(level: str, title: str, to: list[dict]) -> None:
             print(f"Sent notifications not written: {e}", file=sys.stderr)
 
 
-def deliver(settings: dict, level: str, title: str, message: str, details: dict | None = None, push: bool = True) -> bool:
-    """Out to this device (unless it has it already) and to each address that takes this level; what each said is kept."""
+def deliver(settings: dict, level: str, title: str, message: str, details: dict | None = None, push: bool = True,
+            device_failed: list | None = None) -> bool:
+    """Out to this device (unless it has it already) and to each address that takes this level; what each said is kept.
+    device_failed gets an item when the push to this device raised."""
     to = []
     try:
         if push and PUSH.send(title, message):
             to.append({"app": "This device", "ok": True})
     except Exception as e:
         print(f"Push notification not sent: {e}", file=sys.stderr)
+        if device_failed is not None:
+            device_failed.append(True)
         to.append({"app": "This device", "ok": False, "error": no_credentials(e)[:200]})
     for target in notification_targets(settings):
         if level not in (ALL_LEVELS if target.get("levels") is None else target["levels"]):  # [] is every box unticked: nothing
@@ -607,9 +611,11 @@ def send_held(settings: dict) -> bool:
     lines = [f"{'✓' if h['level'] == 'success' else '!' if h['level'] == 'warning' else '✗'} {h['title']}" for h in held[:30]]
     more = f"\n…and {len(held) - 30} more" if len(held) > 30 else ""
     title = f"During the quiet hours: {len(held)} message{'s' if len(held) > 1 else ''}"
+    device_failed: list = []
     delivered = deliver(settings, worst, i18n.tr_lines(title, SETTINGS.get("language", "en")), "\n".join(lines) + more,
-                        push=held != held_pushed)
-    held_pushed = held
+                        push=held != held_pushed, device_failed=device_failed)
+    if not device_failed:  # a push that raised is tried again with the next attempt
+        held_pushed = held
     takes = any(worst in (ALL_LEVELS if t.get("levels") is None else t["levels"]) for t in notification_targets(settings))
     if delivered or not takes:  # sent, or no address takes it: else kept, tried again next minute
         held_pushed = None
