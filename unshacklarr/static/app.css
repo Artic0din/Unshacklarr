@@ -1645,8 +1645,8 @@ body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 96px; }
    The settings shortcuts are the series' scroller's own bar; the cards they jump to land just under it. */
 .d-body:has(#dt-settings:not([hidden])) { scroll-padding-top: 64px; }
 @media (min-width: 701px) {  /* the page's floating bars; a phone's are below, above its tab bar */
-  html:has(#tab-log:not([hidden]) #dock:not([hidden])) { scroll-padding-bottom: 76px; }
-  .con-detail:has(#dock:not([hidden])) { scroll-padding-bottom: 76px; }  /* Activity scrolls in its own pane here, not the page */
+  html:has(#tab-log:not([hidden]) #dock:not([hidden])) { scroll-padding-bottom: var(--dock-h, 76px); }
+  .con-detail:has(#dock:not([hidden])) { scroll-padding-bottom: var(--dock-h, 76px); }  /* Activity scrolls in its own pane here, not the page */
   html:has(#savebar:not([hidden]), .sel-bar:not([hidden])) { scroll-padding-bottom: 88px; }
 }
 body:has(#savebar:not([hidden])) main { padding-bottom: 96px; }  /* the last row clears the save bar */

@@ -48,9 +48,9 @@ def measured(bars):
     code = src[src.index("const BOTTOM_BARS"):src.index("const barsSeen")]
     out = subprocess.run(["node", "-e", r"""
 const vm = require("vm"), [code, bars] = process.argv.slice(1), set = {};
-const nodes = { header: { offsetHeight: 65, style: {} } };
+const nodes = { header: { offsetHeight: 65, style: {} }, "#con-detail": { bottom: "auto", pad: "20px" } };
 for (const [sel, [h, bottom]] of Object.entries(JSON.parse(bars))) nodes[sel] = { offsetHeight: h, bottom };
-const ctx = vm.createContext({ $: (sel) => nodes[sel], getComputedStyle: (n) => ({ bottom: n.bottom }), Math, parseFloat,
+const ctx = vm.createContext({ $: (sel) => nodes[sel], getComputedStyle: (n) => ({ bottom: n.bottom, paddingBottom: n.pad || "0px" }), Math, parseFloat,
   document: { documentElement: { style: { setProperty: (k, v) => { set[k] = v; } } } } });
 vm.runInContext(code + "\nmeasureBars();", ctx);
 console.log(JSON.stringify(set));
@@ -64,7 +64,7 @@ NONE = {"#savebar": [0, "auto"], "#sel-bar": [0, "auto"], "#dock": [0, "auto"], 
 
 def test_phone_bars_reach_as_far_up_as_the_highest_one():
     tab = {'nav[aria-label="Main"]': [72, "0px"]}
-    assert measured({**NONE, **tab}) == {"--head-h": "65px", "--bars-h": "80px"}
+    assert measured({**NONE, **tab}) == {"--head-h": "65px", "--bars-h": "80px", "--dock-h": "28px"}
     # the save bar over the tab bar, and the selection bar wrapped to two rows over both: the highest one counts
     shown = {**NONE, **tab, "#savebar": [56, "76px"], "#sel-bar": [104, "140px"]}
     assert measured(shown)["--bars-h"] == "252px"
@@ -95,9 +95,10 @@ def test_series_slide_out_clears_the_settings_shortcuts_it_scrolls_under():
 def test_wide_screens_clear_the_dock_save_bar_and_select_bar():
     wide = CSS[CSS.index("@media (min-width: 701px) {  /* the page's floating bars"):]
     wide = wide[:wide.index("\n}\n")]
-    for bar in ("#dock", "#savebar", ".sel-bar"):
+    for bar in ("#savebar", ".sel-bar"):
         rules = rule_for(wide, bar, side="bottom")
         assert rules and int(re.search(r"scroll-padding-bottom: (\d+)px", rules[0])[1]) >= BAR_MIN, f"{bar}: no room on a wide screen"
+    assert "var(--dock-h" in " ".join(rule_for(wide, "#dock", side="bottom"))
 
 
 def test_settings_end_clears_the_save_bar():
@@ -112,7 +113,14 @@ def test_shortcut_jumps_use_the_scroll_padding_not_a_second_margin():
 def test_wide_activity_pane_clears_the_dock_it_scrolls_under():
     """Activity scrolls inside .con-detail on a wide screen: padding on the page alone does not reach it."""
     rules = rule_for(CSS, ".con-detail:has(#dock", side="bottom")
-    assert rules and int(re.search(r"scroll-padding-bottom: (\d+)px", rules[0])[1]) >= BAR_MIN
+    assert rules and "var(--dock-h" in rules[0]  # measured: the dock grows when its output opens
+
+
+def test_wide_dock_is_measured_as_tall_as_it_is():
+    tab = {'nav[aria-label="Main"]': [0, "0px"]}  # a wide screen: the tab bar is the header's nav, not pinned
+    # the pane's 20px bottom padding counts: the dock sticks 12px above it
+    assert measured({**NONE, **tab, "#dock": [56, "12px"]})["--dock-h"] == "96px"
+    assert measured({**NONE, **tab, "#dock": [549, "12px"]})["--dock-h"] == "589px"  # expanded, with its output
 
 
 def test_phone_page_top_follows_the_header_when_a_status_row_makes_it_taller():
