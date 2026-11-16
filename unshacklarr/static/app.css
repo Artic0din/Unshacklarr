@@ -1567,7 +1567,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   body.drawer-open .toasts { top: calc(128px + env(safe-area-inset-top)); }
   .toast { border-radius: var(--r-lg); padding: 10px 14px; font-size: var(--fs-callout); animation: toast-in .22s ease-out; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: opacity .15s !important; animation: none !important; } }  /* a short cross-fade stays: it moves nothing */
+@media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: opacity .15s !important; animation: none !important; } }  /* a short cross-fade stays: it moves nothing; * alone skips ::before/::after */
 .fb-known { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: var(--fs-sub); color: var(--muted); }
 .chip-btn { font: inherit; font-size: var(--fs-footnote); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--text); cursor: pointer; }
 @media (hover: hover) { .chip-btn:hover { border-color: var(--accent); } }
