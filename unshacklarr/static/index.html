@@ -897,7 +897,7 @@
   </div>
 </aside>
 <div class="toasts" id="toasts" aria-live="polite"></div>
-<div class="sr-only" id="sure-say" role="status"></div>
+<div class="sr-only sure-say" id="sure-say" role="status"></div>
 <dialog class="modal" id="signin-dlg" aria-labelledby="signin-title">
   <form method="dialog">
     <h2 id="signin-title">Service approval</h2>
@@ -906,6 +906,7 @@
   </form>
 </dialog>
 <dialog class="modal wide" id="inbox-dialog" aria-labelledby="inbox-title">
+  <div class="sr-only sure-say" role="status"></div>
   <div class="inbox-head"><div><h2 id="inbox-title" tabindex="-1" autofocus>Notifications</h2><small id="inbox-summary"></small></div>
     <button class="inbox-clear" id="inbox-clear" type="button" title="Clear every notification except those waiting for you"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>Clear</span></button>
     <button class="inbox-x" id="inbox-full" type="button" aria-label="Open the whole list" title="Open the whole list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
@@ -1003,7 +1004,7 @@
     <div class="modal-actions"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="use" id="folder-use">Use this folder</button></div>
   </form>
 </dialog>
-<dialog class="modal" id="confirm-dialog" aria-labelledby="confirm-title">
+<dialog class="modal" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
   <form method="dialog">
     <h2 id="confirm-title"></h2>
     <p id="confirm-text"></p>

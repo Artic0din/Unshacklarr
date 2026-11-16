@@ -248,13 +248,18 @@ const COUNT = {
 /* Two clicks for what cannot be undone: the first turns the label into the question, naming the action and what it is done to;
    the second does it. No timer takes the question back while it is being read: leaving the button, a press anywhere else
    (Safari does not focus a clicked button, so it never blurs), or Escape does (and only the question: the window around it stays).
-   The question is also spoken, in a live region: a screen reader does not announce a label that changes under its focus. */
+   The question is also spoken, in a live region: a screen reader does not announce a label that changes under its focus.
+   A window opened as a modal makes everything outside it inert, so the region is the one inside the window the button is in. */
+const sureSay = (button, text) => { (button.closest("dialog")?.querySelector(".sure-say") ?? $("#sure-say")).textContent = text; };
+function confirmCancel(button, label = button) {  // the question taken back: the label as it was
+  if (button.dataset.sure !== "1") return;
+  delete button.dataset.sure; label.textContent = button.dataset.was; sureSay(button, "");
+}
 function confirmClick(button, question, label = button) {
-  const say = (text) => { $("#sure-say").textContent = text; };
-  if (button.dataset.sure === "1") { label.textContent = button.dataset.was; delete button.dataset.sure; say(""); return true; }
+  if (button.dataset.sure === "1") { confirmCancel(button, label); return true; }
   button.dataset.sure = "1"; button.dataset.was = label.textContent;
   label.textContent = question;
-  say(question);
+  sureSay(button, question);
   const cancel = (e) => {
     if (e.type === "keydown" && e.key !== "Escape") return;
     if (e.type === "pointerdown" && button.contains(e.target)) return;  // the second click on the button itself
@@ -262,22 +267,29 @@ function confirmClick(button, question, label = button) {
     document.removeEventListener("keydown", cancel, true); document.removeEventListener("pointerdown", cancel, true);
     if (button.dataset.sure !== "1") return;
     if (e.type === "keydown") { e.preventDefault(); e.stopPropagation(); }  // not also the window it sits in
-    delete button.dataset.sure; label.textContent = button.dataset.was; say("");
+    confirmCancel(button, label);
   };
   button.addEventListener("blur", cancel);
   document.addEventListener("keydown", cancel, true); document.addEventListener("pointerdown", cancel, true);
   return false;
 }
 /* The same question in a window, Cancel first, for what needs a sentence, has no label to turn into one, or sits where the page
-   redraws its buttons (a job's, a status's: a question in the label would vanish with the redraw); true if confirmed. */
-function askToConfirm(title, text, verb) {
+   redraws its buttons (a job's, a status's: a question in the label would vanish with the redraw); true if confirmed.
+   Cancelled, focus goes back to the button it came from: if the page redrew it meanwhile, to its new copy, found by data-focus-key. */
+function askToConfirm(title, text, verb, trigger = null) {
   const dialog = $("#confirm-dialog");
   $("#confirm-title").textContent = title;
   $("#confirm-text").textContent = text;
   $("#confirm-go").textContent = verb;
   dialog.returnValue = "cancel";
   dialog.showModal();
-  return new Promise((done) => dialog.addEventListener("close", () => done(dialog.returnValue === "go"), { once: true }));
+  return new Promise((done) => dialog.addEventListener("close", () => {
+    const key = trigger?.dataset.focusKey;
+    if (dialog.returnValue !== "go" && key && !trigger.isConnected) {
+      [...document.querySelectorAll(`[data-focus-key="${CSS.escape(key)}"]`)].find((b) => b.getClientRects().length)?.focus();
+    }
+    done(dialog.returnValue === "go");
+  }, { once: true }));
 }
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */
 const slowHint = (svc) => setTimeout(() => toast(`${svc} is slow to answer. It may be waiting for you to sign in: look at Unshackle's log.`, false, ["OK", () => {}]), 20000);
