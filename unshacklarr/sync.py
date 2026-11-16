@@ -1972,12 +1972,12 @@ def approval_fragments(job: dict, approval: dict | None) -> set[str]:
     fragments.update(re.findall(r"https?://[^\s\"<>]+", message))
     # Only what looks like a code: "enter your code ABCD-1234" must not take "your" with it
     for match in (*re.finditer(
-        r"\b(?:code(?:\s+is)?|(?:enter|use)(?:\s+the)?(?:\s+code)?)\s*:?\s*([A-Za-z0-9-]{4,32})",
+        r"\b(?:code(?:\s+is)?|(?:enter|use)(?:\s+the)?(?:\s+code)?)\s*(:?)\s*([A-Za-z0-9-]{4,32})",
         message,
         re.IGNORECASE,
-    ), *re.finditer(r"\bapprove\s*:?\s*([A-Za-z0-9-]{4,32})", message, re.IGNORECASE)):
-        candidate = match.group(1)
-        if candidate.isupper() or any(character.isdigit() or character == "-" for character in candidate):
+    ), *re.finditer(r"\bapprove\s*(:?)\s*([A-Za-z0-9-]{4,32})", message, re.IGNORECASE)):
+        labelled, candidate = match.groups()  # "code: abcd" is a code in any case; "code expires" is a sentence
+        if labelled or candidate.isupper() or any(character.isdigit() or character == "-" for character in candidate):
             fragments.add(candidate)
     action = job.get("action_needed")
     if isinstance(action, dict):

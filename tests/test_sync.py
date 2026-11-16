@@ -6421,3 +6421,12 @@ def test_a_held_summary_waiting_on_an_address_is_not_pushed_to_devices_again(tmp
     assert sync.send_held(settings) is True and len(pushed) == 1
     sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
     assert sync.send_held(settings) is True and len(pushed) == 2  # the next night's summary is new, even if the same
+
+
+def test_a_labelled_approval_code_is_redacted_in_any_case(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    fragments = sync.approval_fragments({}, {"message": "Enter code: aBcDeF"})
+    assert "aBcDeF" in fragments
+    assert sync.without_approval("Pairing failed for aBcDeF", fragments) == "Pairing failed for [approval removed]"
+    assert "abcd" in sync.approval_fragments({}, {"message": "Approve: abcd"})
+    assert "expires" not in sync.approval_fragments({}, {"message": "Your code expires soon"})  # no label colon: a word
