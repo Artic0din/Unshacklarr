@@ -2471,28 +2471,41 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
     timed: dict[str, list] = {}  # each track's [first seen, done]: how long it took
     labels: dict[str, str] = {}  # a track's key (its part and its place, or its label from an older serve): its label
     titles: list[str] = []
-    misses, since, hinted, quiet_count, stop_asked = 0, time.monotonic(), False, 0, False
+    misses, since, hinted, quiet_count, stop_asked, busy_since = 0, time.monotonic(), False, 0, False, None
     secret_approval_fragments: set[str] = set()
+
+    def give_up() -> None:
+        try:
+            backend.cancel(job_id)  # gone for good: nothing of it may go on behind a retry
+        except UnshackleError as refused:
+            # serve couldn't be reached, or refused even that: the job may go on there and finish (by mj23au, #10).
+            # Only 404 (no such job) means it is gone: nothing to keep
+            if run and refused.status != 404:
+                run.card["unconfirmed_job"] = {"backend": backend.name or "", "job_id": job_id}
+                run.save()
+
     while True:
         try:
             job = backend.job(job_id)
-            misses = 0
+            misses, busy_since = 0, None
         except UnshackleError as e:
             if e.retry_after:  # serve's limit of requests reached (Unshackle 6): waited for, not counted as a miss
+                busy_since = time.monotonic() if busy_since is None else busy_since
+                if time.monotonic() - busy_since >= BUSY_GIVE_UP:  # timed, not counted: an hourly limit gets through
+                    give_up()
+                    # the cause, a retry's test, without the name: a server named "timeout" is no network stumble
+                    raise JobFailed(f"unshackle serve{f' {backend.name}' if backend.name else ''} stayed busy for "
+                                    f"{BUSY_GIVE_UP // 3600} hours: its limit of "
+                                    "requests for this key is still reached, the download is given up",
+                                    cause=f"unshackle serve stayed busy for {BUSY_GIVE_UP // 3600} hours: its limit of "
+                                    "requests for this key is still reached, the download is given up") from e
                 time.sleep(min(e.retry_after, 120))
                 continue
             # One status that didn't come is not a failed download: the job still runs on serve, and a
             # retry now would start it a second time into the same folder.
             misses += 1
             if misses >= POLL_MISSES or not (TRANSIENT.search(str(e)) or e.status == 500):
-                try:
-                    backend.cancel(job_id)  # gone for good: nothing of it may go on behind a retry
-                except UnshackleError as refused:
-                    # serve couldn't be reached, or refused even that: the job may go on there and finish (by mj23au, #10).
-                    # Only 404 (no such job) means it is gone: nothing to keep
-                    if run and refused.status != 404:
-                        run.card["unconfirmed_job"] = {"backend": backend.name or "", "job_id": job_id}
-                        run.save()
+                give_up()
                 raise
             time.sleep(max(poll, 5))
             continue
@@ -2611,6 +2624,7 @@ SERVE_RETRY_AFTER = (60, 180, 600)  # serve itself too slow to answer (its disks
 UNREACHABLE = "unshackle serve is unreachable"  # Unshackle.call's words when it can't reach serve, not an answer
 SIGN_IN_HINT = 120  # seconds with no track before a download says the service may wait for a sign-in
 POLL_MISSES = 12  # job statuses missed in a row (5 s apart at least) before the job counts as lost
+BUSY_GIVE_UP = 2 * 3600  # seconds of nothing but "busy" (429) from serve before a download is given up
 # The service turned Unshackle away: cookies or credentials out of date, most of the time.
 LOGIN = re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|not logged|\blog ?in(?![a-z])|\bsign ?in(?![a-z])|cookie|expired|session|"
                    r"invalid token|access token|credential|authenticat", re.IGNORECASE)

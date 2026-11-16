@@ -5698,9 +5698,9 @@ def still_on_serve(ids: list[int], instance: str = "") -> str | None:
         try:
             status = sonarr_sync.backend_named(u.get("backend") or None).job(u["job_id"]).get("status")
         except UnshackleError as e:
-            if sonarr_sync.UNREACHABLE in str(e):
+            if e.status != 404:  # unreachable, busy (429) or any other refusal says nothing of it, as in unconfirmed_still_on
                 return f"Unshackle doesn't answer yet: the last try of {c['sxxeyy']} may still be downloading there"
-            continue  # serve answered (404: it has no such job): nothing of it can still be running (by mj23au, #10)
+            continue  # serve answered 404 (no such job): nothing of it can still be running (by mj23au, #10)
         if status in ("queued", "downloading"):
             return f"{c['sxxeyy']} is still downloading from its last try"
         if status == "completed":
