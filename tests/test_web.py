@@ -7772,3 +7772,24 @@ def test_a_cache_clear_that_fails_partway_still_unconfirms_the_service(tmp_path,
 
     states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
     assert states["PAIRED"] == "unknown"  # part of its sign-in was deleted: no longer evidence
+
+
+def test_a_cache_clear_that_fails_before_deleting_anything_keeps_the_sign_in(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(tmp_path / "Cache")
+    (tmp_path / "Cache" / "PAIRED").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Cache" / "PAIRED" / "a").write_text("x")
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "PAIRED"}, {"tag": "OTHER"}])
+    monkeypatch.setattr(web.UNSHACKLE, "jobs", lambda: [])
+    from pathlib import Path
+
+    def lstat(self):
+        raise PermissionError("cannot look")
+    monkeypatch.setattr(Path, "lstat", lstat)
+
+    with pytest.raises(PermissionError):
+        web.clear_service_cache("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states["PAIRED"] == "validated"  # nothing was deleted

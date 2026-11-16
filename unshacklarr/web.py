@@ -3216,17 +3216,21 @@ def clear_service_cache(tag: str) -> int:
     if any(j.get("service") == tag and j.get("status") in ("queued", "downloading") for j in UNSHACKLE.jobs()):
         raise web.HTTPConflict(text=f"A {tag} download is running: clear its cache once it is done")
     folder = cache_folder() / tag
-    freed = 0
+    freed, deleting, done = 0, False, False
     try:
         for item in folder.iterdir() if folder.is_dir() else []:
             if item.is_dir() and not item.is_symlink():
                 freed += sum(f.stat().st_size for f in item.rglob("*") if f.is_file())
+                deleting = True
                 shutil.rmtree(item)
             else:
                 freed += item.lstat().st_size
+                deleting = True
                 item.unlink()
-    finally:  # even a part deleted is no longer evidence of a sign-in
-        sonarr_sync.record_authentication_clear(tag)
+        done = True
+    finally:  # even a part deleted is no longer evidence of a sign-in; nothing deleted leaves it as it was
+        if done or deleting:
+            sonarr_sync.record_authentication_clear(tag)
     return freed
 
 
