@@ -194,7 +194,7 @@ function renderServices() {
           } })));
       return el("div", { className: "sv-file" },
         el("div", { className: "sv-file-top" }, el("b", { textContent: file }), hoverTip(el("span", { className: `ck-pill ${cls}`, textContent: word }), () => [why])),
-        el("small", { textContent: [f.count === 1 ? "1 cookie" : `${f.count} cookies`, `updated ${ago_days(f.updated)}`].join(" · ") }),
+        ...(f.unreadable ? [] : [el("small", { textContent: [f.count === 1 ? "1 cookie" : `${f.count} cookies`, `updated ${ago_days(f.updated)}`].join(" · ") })]),
         ...(servicesAsked === ask ? [sure] : [el("div", { className: "sv-ctl" },
           el("button", { className: `btn small${cls === "bad" || cls === "warn" ? " primary" : ""}`, textContent: "Replace", ariaLabel: `Replace ${file}`, onclick: () => openCookieDialog(m.service, f.profile) }), del)]));
     }).concat(el("div", { className: "sv-ctl" }, el("button", { className: "btn small", textContent: "Add cookies", ariaLabel: `Add cookies for ${svcName(m.service)}`,

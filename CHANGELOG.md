@@ -215,6 +215,8 @@ Every change worth knowing, newest first. The format follows
   restart, are tried again as before.
 - **No more false cookie warnings.** Crave's load balancer cookies (a week) and Apple's `utsdc` (an hour) no longer
   count as the date the login ends.
+- **One odd cookie file no longer empties the Cookies list.** A cookie dated `inf` is skipped like any other bad
+  date, and a file Unshacklarr cannot read shows as Unreadable while the others still show.
 - **Translated notifications on Windows.** With a language set, notifications no longer fail to load their
   translations, which are now read as UTF-8 whatever the system's encoding.
 

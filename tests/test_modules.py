@@ -733,6 +733,27 @@ def test_load_balancer_and_short_technical_cookies_say_nothing_of_the_login(tmp_
     assert cookies.summary(path)["expires"] is None
 
 
+
+def test_one_odd_cookie_file_does_not_hide_the_others(tmp_path, monkeypatch):
+    # an "inf" expiry overflowed int(), and a file that can't be read raised: the whole Cookies list failed
+    from unshacklarr import cookies
+    good = "# Netscape HTTP Cookie File\n.example.com\tTRUE\t/\tTRUE\t0\tsid\tx\n"
+    (tmp_path / "NF.txt").write_text(good)
+    (tmp_path / "AMZN.txt").write_text(good + ".amazon.com\tTRUE\t/\tTRUE\tinf\tat-main\tx\n")
+    (tmp_path / "DSNP.txt").write_text(good)
+    read_text = Path.read_text
+    def locked(self, *args, **kwargs):
+        if self.name == "DSNP.txt":
+            raise PermissionError(13, "Permission denied", str(self))  # left owned by root after a docker exec
+        return read_text(self, *args, **kwargs)
+    monkeypatch.setattr(Path, "read_text", locked)
+    found = cookies.list_all(tmp_path)
+    assert found["NF"][0]["count"] == 1 and not found["NF"][0].get("unreadable")
+    assert found["AMZN"][0]["count"] == 1  # the inf line is skipped like any other bad date
+    assert found["DSNP"] == [{"profile": "", "count": 0, "updated": None, "expires": None, "session": 0,
+                              "expired": False, "unreadable": True}]
+
+
 @responses.activate
 def test_a_remote_servers_services_come_from_unshackles_own_api(tmp_path):
     # After 6.0.0: the names in /api/config, each server's services in /api/services?remote=; 6.0.0 has neither

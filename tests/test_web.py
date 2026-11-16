@@ -1171,6 +1171,19 @@ const promptState = (input) => {
       cookieStatus: find(row, (node) => node.className === "ck-pill bad")?.textContent,
     }));
   }
+  if (scenario === "unreadable_cookie_file") {
+    box.S.authentication = {};
+    box.S.authenticationMethods = { HULU: ["cookies"] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" } };
+    vm.runInContext('servicesCookies = { folder: "/cookies", files: { HULU: [{ profile: "", count: 0, updated: null, expires: null, session: 0, expired: false, unreadable: true }] } }', box);
+    box.renderServices();
+    const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    console.log(JSON.stringify({
+      attention: !!row.dataset.attention,
+      cookies: findAll(row.children[2], (node) => node.textContent && node.className !== "sv-k" && !(node.children || []).some((c) => c.textContent)).map((node) => node.textContent),
+    }));
+  }
   if (scenario === "validated_pairing_without_cookies") {
     box.S.authentication = {
       HULU: {
@@ -1360,6 +1373,14 @@ def test_validated_cookie_only_service_still_reports_a_deleted_cookie_file():
     assert run_authentication_ui("validated_cookie_only_missing") == {
         "attention": True,
         "cookieStatus": "Missing",
+    }
+
+
+def test_an_unreadable_cookie_file_is_shown_as_such():
+    # the server lists a file it can't read instead of failing the whole list; the row says so and asks for attention
+    assert run_authentication_ui("unreadable_cookie_file") == {
+        "attention": True,
+        "cookies": ["HULU.txt", "Unreadable", "Replace", "Delete", "Add cookies"],
     }
 
 

@@ -2838,6 +2838,7 @@
  "Unshacklarr can't be reached: {0}": [
   "e.message"
  ],
+ "Unshacklarr cannot read this file: check its permissions, or replace it": [],
  "Unshacklarr cannot see Unshackle's Cache folder: mount it and set its path in Settings, Unshackle (CACHE_DIR with Docker)": [],
  "Unshacklarr cannot see Unshackle's Cookies folder: mount it and set its path in Settings, Unshackle (COOKIES_DIR with Docker)": [],
  "Unshacklarr cannot see Unshackle's config: mount its folder (unshackle.yaml, WVDs, PRDs) and set its path in Settings, Unshackle (UNSHACKLE_CONFIG_DIR with Docker)": [],
