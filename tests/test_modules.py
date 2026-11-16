@@ -793,3 +793,33 @@ def test_serves_passing_errors_say_their_code_and_a_restart_waits_for_its_downlo
     with pytest.raises(UnshackleError, match="still downloading"):
         backend.restart("dash-key")
     assert responses.calls[-1].request.method == "DELETE"  # the drain called off: it takes new work again
+
+
+def test_a_local_serve_that_failed_to_start_is_not_started_again_for_a_minute(tmp_path, monkeypatch):
+    import unshacklarr.backend as backend
+
+    starts, now = [], [1000.0]
+
+    def failing_start(self, command):
+        starts.append(command)
+        raise UnshackleError("unshackle serve did not answer within 90 s: no output")
+
+    monkeypatch.setattr(backend.Local, "start", failing_start)
+    monkeypatch.setattr(backend.time, "monotonic", lambda: now[0])
+    local = backend.Local(tmp_path / "serve.log")
+    for _ in range(3):
+        with pytest.raises(UnshackleError, match="did not answer within 90 s"):
+            local.endpoint("unshackle")
+    assert starts == ["unshackle"]  # the second and third caller were told, not made to wait for another start
+    with pytest.raises(UnshackleError):
+        local.endpoint("other-unshackle")
+    assert starts == ["unshackle", "other-unshackle"]  # another command is another try
+    now[0] += 61
+    with pytest.raises(UnshackleError):
+        local.endpoint("other-unshackle")
+    assert starts == ["unshackle", "other-unshackle", "other-unshackle"]  # a minute later it is tried again
+
+    other = Unshackle(tmp_path)  # a save of the settings clears the memory of a failed start
+    other.local.failed = ("unshackle", now[0], UnshackleError("x"))
+    other.configure({})
+    assert other.local.failed is None

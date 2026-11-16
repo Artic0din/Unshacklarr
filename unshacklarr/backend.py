@@ -210,13 +210,25 @@ class Local:
         self.url = self.key = ""
         self.command = None
         self.lock = threading.Lock()
+        self.failed: tuple[str, float, UnshackleError] | None = None  # the command that would not start, when, and why
+
+    def recent_failure(self, command: str) -> None:
+        """Say a start that failed under a minute ago again, instead of every caller waiting up to 90 s for another."""
+        if self.failed and self.failed[0] == command and time.monotonic() - self.failed[1] < 60:
+            raise self.failed[2]
 
     def endpoint(self, command: str) -> tuple[str, str]:
+        self.recent_failure(command)
         with self.lock:
+            self.recent_failure(command)  # callers that waited for the start that has just failed
             if self.process and self.process.poll() is None and command == self.command:
                 return self.url, self.key
             self.stop()
-            self.start(command)
+            try:
+                self.start(command)
+            except UnshackleError as e:
+                self.failed = (command, time.monotonic(), e)
+                raise
             return self.url, self.key
 
     def start(self, command: str) -> None:
@@ -313,6 +325,7 @@ class Local:
 
     def restart(self, command: str) -> None:
         with self.lock:
+            self.failed = None  # asked for: tried now, not refused for the minute
             self.stop()
             self.start(command)
 
@@ -345,6 +358,7 @@ class Unshackle:
         self._remote = (0.0, [])
         self._config = (0.0, {})
         self._down = (0.0, None)
+        self.local.failed = None  # settings or unshackle.yaml changed: a start is worth another try
 
     def cached_get(self, path: str) -> dict:
         """A GET whose answer is kept: an unreachable serve is said at once for a minute, instead of each call (the
