@@ -2402,6 +2402,8 @@
  "{0} timed out": "{0}: tempo scaduto",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} è rimasto occupato per {1} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato",
  "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve è rimasto occupato per {0} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato",
+ "Update available": "Aggiornamento disponibile",
+ "Waiting": "In attesa",
  "1 notification": "1 notifica",
  "{0} notifications": "{0} notifiche",
  "Clear every notification except those waiting for you": "Elimina tutte le notifiche tranne quelle che aspettano te",

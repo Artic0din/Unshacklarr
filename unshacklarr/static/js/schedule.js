@@ -249,6 +249,7 @@ function renderMonth() {
     const cell = el("button", {
       className: "cal-cell" + (date.getMonth() !== first.getMonth() ? " out" : "") + (key === today ? " today" : "") + (key === cal.pick ? " picked" : ""),
       ariaLabel: `${date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })}: ${COUNT.episode(list.length)}`,
+      ariaPressed: String(key === cal.pick),
       onclick: () => { pickDay(key); renderMonth(); $("#cal-day").scrollIntoView({ behavior: SCROLL, block: "nearest" }); },
     },
       el("span", { className: "cal-date", textContent: date.getDate() }),
@@ -259,7 +260,7 @@ function renderMonth() {
         ...(list.length > 3 ? [el("span", { className: "cal-ep more", textContent: `+${list.length - 3} more` })] : [])));
     cells.push(cell);
   }
-  $("#cal-grid").replaceChildren(...heads, ...cells);
+  keepFocus($("#cal-grid"), () => $("#cal-grid").replaceChildren(...heads, ...cells));
   const picked = cal.pick && (cal.byDay.get(cal.pick) || []).filter(inScope);
   $("#cal-day").replaceChildren(...(picked ? [
     el("h3", { className: "sched-day", textContent: day(dayOfKey(cal.pick)) }),
@@ -342,7 +343,7 @@ function detailsNode(d) {
   const buttons = [...(plan.download ? [now] : []),
     ...(d.run ? [el("button", { type: "button", className: "btn small", textContent: "See in Activity", title: "Open its last download: its steps and output",
       onclick: () => { closeDetails(false); showTab("log"); pickRun(d.run); } })] : []),
-    ...(series ? [el("button", { type: "button", className: "btn small", textContent: "Open the series", onclick: () => { closeDetails(false); openDrawer(series); } })] : [])];
+    ...(series ? [el("button", { type: "button", className: "btn small", textContent: "Open the series", onclick: () => { closeDetails(); openDrawer(series); } })] : [])];
   const close = el("button", { type: "button", className: "inbox-x", ariaLabel: "Close", onclick: () => closeDetails() });
   close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
   return el("div", { className: "sd" },
@@ -505,7 +506,9 @@ function renderHealth(h) {
   for (const [name, label] of [["unshackle", "Unshackle"], ["sonarr", "Sonarr"]]) {
     const st = h[name] || {}, b = document.querySelector(`[data-health=${name}]`);
     b.querySelector(".dot").className = "dot " + (st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "");
-    b.querySelector("small").textContent = st.ok === false ? "Unreachable" : "";  // said in words, not by the colour alone
+    const state = st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "wait";
+    b.dataset.state = state;
+    b.querySelector("small").textContent = { warn: "Update available", down: "Unreachable", wait: "Checking…" }[state] || "";  // said in words, not by the colour alone
     b.title = st.ok ? `${label} ${st.version || ""} is running${st.latest ? ` (${st.latest} is out)` : ""}`
       : st.ok === false ? st.error || `${label} is unreachable` : `Checking ${label}…`;
   }
