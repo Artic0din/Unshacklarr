@@ -3800,14 +3800,15 @@ def room_for_one_more() -> None:
 
 
 def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: str = "manual", numbering: dict | None = None,
-             batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None, audio: str = "") -> threading.Thread:
+             batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None, audio: str = "",
+             restored: tuple[str, int] | None = None) -> threading.Thread:
     """A sync in the background: every missing episode, or the ones given. Each episode has
     its own lock, so these runs never download the same one twice."""
     def work():
         global last_sync
         try:
             sonarr_sync.main(episode_ids, replace=replace, kind=kind, numbering=numbering, batch=batch, sonarr=sonarr, proxy=proxy, video=video,
-                             audio=audio)
+                              audio=audio, restored=restored)
         except Exception as e:  # notified already; the page shows the history
             print(f"Sync stopped: {type(e).__name__}: {e}", flush=True)
         finally:
@@ -6756,29 +6757,34 @@ def resume_queue() -> int:
     except (OSError, ValueError):
         return 0
     n = 0
-    for batch, job in sorted(jobs.items()) if isinstance(jobs, dict) else []:
+    # one entry per sync of a job; the release before wrote one per job, a dict: read as a job of one sync
+    syncs = [(batch, place, job) for batch, entries in (sorted(jobs.items()) if isinstance(jobs, dict) else [])
+             for place, job in enumerate([entries] if isinstance(entries, dict) else entries if isinstance(entries, list) else [])
+             if isinstance(job, dict)]
+    for batch, place, job in syncs:
         ids = [i for i in job.get("episodes") or [] if isinstance(i, int) and i > 0]
         if not ids or not BATCH_ID.fullmatch(batch):
             continue
+        key = (batch, place)
         try:  # its own numbering, keys as the sync reads them (JSON made the season numbers text)
             numbering = check_numbering(job["numbering"], f"job {batch}") if isinstance(job.get("numbering"), dict) else None
         except web.HTTPBadRequest as e:  # a damaged entry: not downloaded by the series' numbering, kept in the file
             print(f"Job {batch} not picked up again: {e.text}", flush=True)
             with sonarr_sync.jobs_lock:
-                sonarr_sync.restoring[batch] = (None, job)
+                sonarr_sync.restoring[key] = (None, job)
             continue
         if job.get("paused"):
             sonarr_sync.paused_jobs.add(batch)
         if isinstance(job.get("options"), dict):
             sonarr_sync.job_options[batch] = job["options"]
         print(f"Picking up job {batch} again: {len(ids)} episode{'s' if len(ids) > 1 else ''}{' (paused)' if job.get('paused') else ''}", flush=True)
-        sonarr_sync.restoring[batch] = (None, job)  # kept in the file until it runs; before it starts, as it may run at once
+        sonarr_sync.restoring[key] = (None, job)  # kept in the file until it runs; before it starts, as it may run at once
         thread = run_sync(list(dict.fromkeys(ids)), replace=job.get("replace") is True, kind=job.get("kind") or "manual",
                           numbering=numbering, batch=batch, sonarr=job.get("sonarr") or "", proxy=job.get("proxy") or "",
-                          video=job.get("video"), audio=job.get("audio") or "")
+                          video=job.get("video"), audio=job.get("audio") or "", restored=key)
         with sonarr_sync.jobs_lock:
-            if batch in sonarr_sync.restoring:  # not running yet: its thread, so save_queue can tell it never started
-                sonarr_sync.restoring[batch] = (thread, job)
+            if key in sonarr_sync.restoring:  # not running yet: its thread, so save_queue can tell it never started
+                sonarr_sync.restoring[key] = (thread, job)
         n += len(ids)
     return n
 

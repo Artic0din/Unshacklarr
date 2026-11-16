@@ -849,6 +849,7 @@ def test_an_episode_queued_into_a_paused_job_is_handed_out_after_resume(tmp_path
     first, second, added = episode(111, 2, 5), episode(111, 2, 6), episode(111, 2, 7)
     episodes = [first, second]
     monkeypatch.setitem(sync.running_jobs, "J", {"episodes": episodes, "stubs": {}, "closed": False, "replace": False})
+    monkeypatch.setitem(sync.batch_jobs, "J", [sync.running_jobs["J"]])
     taken, sleeps = [], []
     handed = sync.job_episodes(episodes, "J")
     taken.append(next(handed))
@@ -865,6 +866,28 @@ def test_an_episode_queued_into_a_paused_job_is_handed_out_after_resume(tmp_path
     taken.extend(handed)
     assert [ep["id"] for ep in taken] == [205, 206, 207] and len(sleeps) == 2
     assert sync.running_jobs["J"]["closed"]
+
+
+def test_a_retry_into_a_job_whose_other_sync_ended_goes_next_not_behind(tmp_path, monkeypatch):
+    # A retry with another Replace ran beside the job under its batch, the job going on meanwhile: once the retry
+    # ends, a retry accepted into the job goes right after the episode it is on, never before it (then skipped)
+    sync = load(tmp_path, monkeypatch)
+    episodes = [episode(111, 2, 5), episode(111, 2, 6), episode(111, 2, 7)]
+    job = {"episodes": episodes, "stubs": {}, "closed": False, "replace": False}
+    retry = {"episodes": [], "stubs": {}, "closed": False, "replace": True}
+    monkeypatch.setitem(sync.batch_jobs, "J", [job])
+    monkeypatch.setitem(sync.running_jobs, "J", job)
+    handed = sync.job_episodes(episodes, "J")
+    taken = [next(handed)]
+    sync.batch_jobs["J"].append(retry)  # the retry starts: the running one under the batch
+    sync.running_jobs["J"] = retry
+    taken.append(next(handed))
+    sync.batch_jobs["J"].remove(retry)  # and ends: the job is the running one again
+    sync.running_jobs["J"] = job
+    assert sync.add_to_job("J", episode(111, 2, 8), {"service": "NF"}, first=True)
+    taken.extend(handed)
+    assert [ep["id"] for ep in taken] == [205, 206, 208, 207]
+    assert job["closed"] and not retry["closed"]
 
 
 def test_a_discord_card_has_colour_fields_and_poster():
@@ -4098,7 +4121,7 @@ def test_a_download_asked_in_one_audio_language_asks_it_first_and_accepts_it(tmp
 
     def download(payload, run=None):
         downloads.append(payload)
-        queued.extend([c.get("audio_override") for c in sync.waiting.values()] + [j.get("audio") for j in sync.queue_snapshot().values()])
+        queued.extend([c.get("audio_override") for c in sync.waiting.values()] + [e.get("audio") for jobs in sync.queue_snapshot().values() for e in jobs])
         out = Path(payload["output_dir"])
         out.mkdir(parents=True, exist_ok=True)
         (out / "Show.mkv").touch()
@@ -6653,11 +6676,109 @@ def test_a_job_queued_with_an_empty_numbering_keeps_it_across_a_restart(tmp_path
     # numbering {} sets the series' season maps and offsets aside; dropped from queue.json, they would apply again
     sync = load(tmp_path, monkeypatch)
     stub = object()
-    monkeypatch.setitem(sync.running_jobs, "J", {"episodes": [{"id": 5}], "stubs": {5: stub}, "numbering": {}, "kind": "manual"})
+    monkeypatch.setitem(sync.batch_jobs, "J", [{"episodes": [{"id": 5}], "stubs": {5: stub}, "numbering": {}, "kind": "manual"}])
     monkeypatch.setitem(sync.waiting, 5, stub)
-    assert sync.queue_snapshot()["J"]["numbering"] == {}
-    monkeypatch.setitem(sync.running_jobs, "J", {"episodes": [{"id": 5}], "stubs": {5: stub}, "kind": "manual"})
-    assert "numbering" not in sync.queue_snapshot()["J"]  # none given: the series' own, as before
+    assert sync.queue_snapshot()["J"][0]["numbering"] == {}
+    monkeypatch.setitem(sync.batch_jobs, "J", [{"episodes": [{"id": 5}], "stubs": {5: stub}, "kind": "manual"}])
+    assert "numbering" not in sync.queue_snapshot()["J"][0]  # none given: the series' own, as before
+
+
+def test_a_sync_still_to_start_after_a_restart_is_saved_with_its_jobs_live_pause_and_options(tmp_path, monkeypatch):
+    # One sync of the job resumed, another could not start: resuming the job or changing its options must not be
+    # undone by the waiting one's old pause and options at the next restart
+    sync = load(tmp_path, monkeypatch)
+    entry = {"episodes": [7], "paused": True, "options": {"options": {"--a-lang": ["fr"]}}, "replace": True, "numbering": {}}
+    monkeypatch.setitem(sync.restoring, ("B", 1), (None, entry))
+    monkeypatch.setitem(sync.batch_jobs, "B", [{"episodes": [], "stubs": {}}])  # the job's other sync, running
+    monkeypatch.setitem(sync.job_options, "B", {"options": {"--a-lang": ["de"]}})  # changed since, and resumed
+    sync.save_queue()
+    saved = {"episodes": [7], "paused": False, "options": {"options": {"--a-lang": ["de"]}}, "replace": True, "numbering": {}}
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [saved]}
+    sync.batch_jobs.pop("B")  # the running sync over: the waiting one keeps what the job had last
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [saved]}
+
+
+def test_a_sync_still_to_start_keeps_a_pause_and_options_given_just_before_the_jobs_last_sync_ended(tmp_path, monkeypatch):
+    # Paused and set to German, then the job's running sync ends before the next save: the sync that could not
+    # start must not come back after a restart unpaused and in French
+    sync = load(tmp_path, monkeypatch)
+    entry = {"episodes": [7], "paused": False, "options": {"options": {"--a-lang": ["fr"]}}, "kind": "manual"}
+    monkeypatch.setitem(sync.restoring, ("B", 1), (None, entry))
+    monkeypatch.setitem(sync.job_options, "B", {"options": {"--a-lang": ["fr"]}})
+
+    def run_episodes(*a, **k):  # while it downloads, after the last save
+        sync.pause_job("B", True)
+        sync.job_options["B"] = {"options": {"--a-lang": ["de"]}}
+        return 0
+
+    monkeypatch.setattr(sync, "run_episodes", run_episodes)
+    sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [{**entry, "paused": True, "options": {"options": {"--a-lang": ["de"]}}}]}
+
+
+def test_a_pause_given_before_the_jobs_last_running_sync_ends_holds_for_a_sync_of_it_still_starting(tmp_path, monkeypatch):
+    # Two syncs of a job picked up after a restart: one ends, paused, while the other still fetches its episodes. The
+    # other must start paused, not download its queue without the job being resumed
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setitem(sync.restoring, ("B", 1), (None, {"episodes": [7], "kind": "manual"}))
+    seen = []
+    monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: sync.pause_job("B", True) or 0)
+    sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
+    monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: seen.append("B" in sync.paused_jobs) or 0)
+    try:
+        sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B", restored=("B", 1))
+        assert seen == [True]
+        assert "B" not in sync.paused_jobs  # the job's last sync over: nothing left to pause
+    finally:
+        sync.paused_jobs.discard("B")
+
+
+def test_a_sync_picked_up_again_starting_while_the_queue_is_saved_is_not_left_out(tmp_path, monkeypatch):
+    # It starts between the running jobs and the waiting ones being read: one read for both, or it is in neither
+    sync = load(tmp_path, monkeypatch)
+    lock, started = threading.Lock(), []
+    stub, job = object(), {"episodes": [{"id": 7}], "stubs": {}}
+
+    class Lock:
+        def __enter__(self):
+            lock.acquire()
+
+        def __exit__(self, *exc):
+            lock.release()
+            if not started:  # the sync picked up again takes its place in the jobs right after the first read
+                started.append(True)
+                with lock:
+                    job["stubs"][7] = sync.waiting[7] = stub
+                    sync.batch_jobs["B"] = [job]
+                    sync.restoring.pop(("B", 0))
+
+    monkeypatch.setattr(sync, "jobs_lock", Lock())
+    monkeypatch.setitem(sync.restoring, ("B", 0), (None, {"episodes": [7], "kind": "manual"}))
+    try:
+        sync.save_queue()
+        assert [e["episodes"] for e in json.loads(sync.QUEUE_FILE.read_text())["B"]] == [[7]]
+    finally:
+        sync.batch_jobs.pop("B", None)
+        sync.waiting.pop(7, None)
+
+
+def test_a_paused_job_stays_paused_and_running_while_another_sync_of_it_still_downloads(tmp_path, monkeypatch):
+    # Two syncs of a job picked up after a restart, the later one ends first: the other is still the job in Activity,
+    # its pause and options buttons working, and it stays paused
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: 0)
+    other = {"episodes": [], "stubs": {}, "closed": False}
+    monkeypatch.setitem(sync.batch_jobs, "B", [other])
+    monkeypatch.setitem(sync.running_jobs, "B", other)
+    sync.paused_jobs.add("B")
+    try:
+        sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
+        assert sync.running_jobs.get("B") is other
+        assert "B" in sync.paused_jobs
+    finally:
+        sync.paused_jobs.discard("B")
 
 
 def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_path, monkeypatch):
@@ -6665,10 +6786,14 @@ def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_pa
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: 0)
     sync.job_options["B"] = {"options": {"--a-lang": ["fr"]}}
-    sync.batch_syncs["B"] = 1  # the job's own sync, still running
+    sync.batch_jobs["B"] = [{"episodes": [], "stubs": {}}]  # the job's own sync, still running
     sync.sync(sync.read_file(), {}, [], manual=True, kind="retry", batch="B")
     assert sync.job_options.get("B") == {"options": {"--a-lang": ["fr"]}}
-    sync.batch_syncs.pop("B")  # the job's own sync gone: one more sync of it is then the last
+    sync.batch_jobs.pop("B")  # the job's own sync gone: one more sync of it is then the last
+    sync.restoring[("B", 1)] = (None, {"episodes": [5]})  # unless a sync of it picked up after a restart has yet to start
+    sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
+    assert sync.job_options.get("B") == {"options": {"--a-lang": ["fr"]}}
+    sync.restoring.clear()
     sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
     assert "B" not in sync.job_options
 

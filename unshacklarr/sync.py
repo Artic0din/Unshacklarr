@@ -671,7 +671,7 @@ unqueued: set[int] = set()  # episodes taken out of a job's queue from Activity:
 running_jobs: dict[str, dict] = {}
 jobs_lock = threading.Lock()
 paused_jobs: set[str] = set()  # jobs paused from Activity: the download going on ends, the next waits
-batch_syncs: dict[str, int] = {}  # syncs running under a batch now: a retry with another Replace runs beside its job
+batch_jobs: dict[str, list[dict]] = {}  # every sync running under a batch, oldest first: a retry with another Replace runs beside its job
 
 
 job_options: dict[str, dict] = {}  # job -> {"options", "service_options"} set in Activity for its episodes still to come
@@ -689,32 +689,52 @@ def with_job_options(show: dict, batch: str | None) -> dict:
 QUEUE_FILE = DATA / "queue.json"  # the episodes jobs still have to download: picked up again after a restart
 
 
-def queue_snapshot() -> dict:
+def queue_snapshot() -> dict[str, list[dict]]:
     """What each job still has to download, in order, and how: queued episodes only (the one downloading, stopped
-    by a restart, is in the history as interrupted, its Retry there)."""
-    with jobs_lock:
-        return {batch: {"episodes": ids, "paused": batch in paused_jobs, **({"options": job_options[batch]} if job_options.get(batch) else {}),
-                        **{k: job.get(k) for k in ("replace", "kind", "sonarr", "proxy", "video", "audio") if job.get(k)},
-                        # an empty numbering is one too: the series' own set aside, kept so after a restart
-                        **({"numbering": job["numbering"]} if job.get("numbering") is not None else {})}
-                for batch, job in sorted(running_jobs.items())
-                if (ids := list(dict.fromkeys(ep["id"] for ep in job["episodes"] if waiting.get(ep["id"]) is job["stubs"].get(ep["id"], False))))}
+    by a restart, is in the history as interrupted, its Retry there). One entry per sync of the job, each with its
+    own settings: a retry with another Replace beside it is one more. Under jobs_lock."""
+    queue: dict[str, list[dict]] = {}
+    for batch, jobs in sorted(batch_jobs.items()):
+        for job in jobs:
+            if ids := list(dict.fromkeys(ep["id"] for ep in job["episodes"] if waiting.get(ep["id"]) is job["stubs"].get(ep["id"], False))):
+                queue.setdefault(batch, []).append(
+                    {"episodes": ids, "paused": batch in paused_jobs, **({"options": job_options[batch]} if job_options.get(batch) else {}),
+                     **{k: job.get(k) for k in ("replace", "kind", "sonarr", "proxy", "video", "audio") if job.get(k)},
+                     # an empty numbering is one too: the series' own set aside, kept so after a restart
+                     **({"numbering": job["numbering"]} if job.get("numbering") is not None else {})})
+    return queue
 
 
-restoring: dict[str, tuple] = {}  # job -> (its thread, its entry in the file) while picked up again after a restart
+restoring: dict[tuple[str, int], tuple] = {}  # (job, its sync's place in the file) -> (its thread, its entry) while picked up again
+
+
+def syncs_alive(batch: str) -> bool:
+    """A sync of the job running, or picked up after a restart and still starting. Under jobs_lock."""
+    return bool(batch_jobs.get(batch)) or any(key[0] == batch for key in restoring)
+
+
+def keep_live(batch: str) -> None:
+    """The job's syncs still to start after a restart, given its pause and options as they are now. Under jobs_lock."""
+    live = job_options.get(batch)
+    for key, (thread, entry) in list(restoring.items()):
+        if key[0] == batch:
+            restoring[key] = (thread, {**{k: v for k, v in entry.items() if k != "options"}, "paused": batch in paused_jobs,
+                                       **({"options": live} if live else {})})
 
 
 def save_queue(last: str | None = None) -> str:
     """The queue on disk when it changed; returns what was written, to compare with next time. A job picked up again
     after a restart stays as it was in the file until it runs: if it could not start (Sonarr down), the next start
     tries again, instead of the queue written empty losing it."""
-    queue = queue_snapshot()
-    for batch, (thread, entry) in list(restoring.items()):
-        if batch not in queue:
-            queue[batch] = entry
+    with jobs_lock:  # one read of both: a sync picked up again starting in between would be in neither
+        queue = queue_snapshot()
+        for batch in {key[0] for key in restoring} & batch_jobs.keys():  # its job runs: kept once that sync ends
+            keep_live(batch)
+        for key, (thread, entry) in list(restoring.items()):
+            queue.setdefault(key[0], []).append(entry)
             if thread is not None and not thread.is_alive():
-                print(f"Job {batch} could not be picked up again: kept for the next start", flush=True)
-                restoring[batch] = (None, entry)  # said once
+                print(f"Job {key[0]} could not be picked up again: kept for the next start", flush=True)
+                restoring[key] = (None, entry)  # said once
     text = json.dumps(queue)
     if text != last:
         write_atomic(QUEUE_FILE, text)
@@ -739,16 +759,18 @@ def job_episodes(episodes: list, batch: str | None):
     i = 0
     while True:
         with jobs_lock:
+            # the sync these episodes are of: another sync of the job (a retry with another Replace) may be the running one
+            job = next((j for j in batch_jobs.get(batch, []) if j["episodes"] is episodes), None)
             if i >= len(episodes):  # nothing left, paused or not: the job ends
-                if batch in running_jobs:
-                    running_jobs[batch]["closed"] = True
+                if job:
+                    job["closed"] = True
                 return
             if batch in paused_jobs:
                 ep = None
             else:
                 ep = episodes[i]
-                if batch in running_jobs:
-                    running_jobs[batch]["at"] = i + 1  # where a retry goes: next
+                if job:
+                    job["at"] = i + 1  # where a retry goes: next
         if ep is None:  # paused: the one before is done, this one waits
             time.sleep(1)
             continue
@@ -4431,7 +4453,8 @@ def automatic_episodes(config: dict) -> list[dict]:
 
 
 def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str = "manual", numbering: dict | None = None,
-         batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None, audio: str = "") -> int:
+         batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None, audio: str = "",
+         restored: tuple[str, int] | None = None) -> int:
     config = read_file()
     settings = config.get("notifications") or {}
     try:
@@ -4443,7 +4466,8 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
                 raise RuntimeError(f"Choose a quality ladder for Sonarr {sonarr} in Settings, Sonarr first")
             with on_instance(inst):
                 return sync(instance_config(inst, config) if inst else config, settings, chosen_episodes(episode_ids),
-                            manual=True, replace=replace, kind=kind, numbering=numbering, batch=batch, proxy=proxy, video=video, audio=audio)
+                            manual=True, replace=replace, kind=kind, numbering=numbering, batch=batch, proxy=proxy, video=video, audio=audio,
+                            restored=restored)
         if not sweep_lock.acquire(blocking=False):  # one automatic sweep at a time
             print("A sync is already running, nothing to do.")
             return 0
@@ -4531,7 +4555,8 @@ NUMBERING = ("season_map", "season_offset", "season_offset_from", "episode_offse
 
 
 def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: bool = False, kind: str = "auto",
-         numbering: dict | None = None, batch: str | None = None, proxy: str = "", video: dict | None = None, audio: str = "") -> int:
+         numbering: dict | None = None, batch: str | None = None, proxy: str = "", video: dict | None = None, audio: str = "",
+         restored: tuple[str, int] | None = None) -> int:
     series = config.get("series") or {}
     if numbering is not None:  # this download's own, in place of the series': the file keeps its own
         series = {k: {**{o: v for o, v in show.items() if o not in NUMBERING}, **numbering} for k, show in series.items()}
@@ -4566,8 +4591,8 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
         number_job(batch, kind == "retry")  # its place for a download slot: the order it was picked in (#10), a retry first
         with jobs_lock:
             running_jobs[batch] = job  # a job's episode started again once it closed takes its place here
-            batch_syncs[batch] = batch_syncs.get(batch, 0) + 1
-            restoring.pop(batch, None)  # picked up again after a restart: it runs, its queue is its own now
+            batch_jobs.setdefault(batch, []).append(job)
+            restoring.pop(restored, None)  # picked up again after a restart: it runs, its queue is its own now
     try:
         return run_episodes(config, settings, episodes, manual, replace, kind, batch, numbering)
     finally:
@@ -4576,15 +4601,19 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
                 waiting.pop(episode_id, None)
                 unqueued.discard(episode_id)
         with jobs_lock:
-            if running_jobs.get(batch) is job:
-                running_jobs.pop(batch)
+            others = [j for j in batch_jobs.pop(batch, []) if j is not job] if batch else []
+            last = not others
+            if others:
+                batch_jobs[batch] = others
+            if running_jobs.get(batch) is job:  # another sync of it still downloading is the job now, paused or not
+                if others:
+                    running_jobs[batch] = others[-1]
+                else:
+                    running_jobs.pop(batch)
+                    keep_live(batch)  # a pause or options given since the last save: not lost by one still to start
+            if batch and not syncs_alive(batch):  # its pause and own options: kept while another sync of it lives
                 paused_jobs.discard(batch)
-            last = not batch or batch_syncs.get(batch, 1) <= 1
-            if batch and last:
-                batch_syncs.pop(batch, None)
-                job_options.pop(batch, None)  # its own options: not while another sync of it still downloads
-            elif batch:
-                batch_syncs[batch] -= 1
+                job_options.pop(batch, None)
             if last:  # the job is over: its slot goes to the next pick in line (#10); not while another sync of it runs,
                 release_job(batch)  # and under the lock, so none can start under the batch in between
 

@@ -7432,11 +7432,12 @@ def test_a_jobs_queue_is_kept_on_disk_and_picked_up_after_a_restart(tmp_path, mo
     for ep in eps[2:]:  # 1 done, 2 downloading, 3 and 4 queued
         sync.waiting[ep["id"]] = job["stubs"][ep["id"]] = sync.queued_card(ep, {"service": "NF"}, "manual", "20261018-194616-f77846")
     sync.running_jobs["20261018-194616-f77846"] = job
+    sync.batch_jobs["20261018-194616-f77846"] = [job]
     sync.paused_jobs.add("20261018-194616-f77846")
     sync.save_queue()
-    assert json.loads(sync.QUEUE_FILE.read_text()) == {"20261018-194616-f77846": {"episodes": [3, 4], "paused": True, "kind": "manual"}}
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"20261018-194616-f77846": [{"episodes": [3, 4], "paused": True, "kind": "manual"}]}
 
-    sync.running_jobs.clear(); sync.waiting.clear(); sync.paused_jobs.clear()  # a restart
+    sync.running_jobs.clear(); sync.batch_jobs.clear(); sync.waiting.clear(); sync.paused_jobs.clear()  # a restart
     started = []
     monkeypatch.setattr(web, "run_sync", lambda ids, **kw: started.append((ids, kw["batch"], kw["kind"])))
     assert web.resume_queue() == 2
@@ -7511,7 +7512,7 @@ def test_a_job_that_could_not_be_picked_up_again_is_kept_for_the_next_start(tmp_
     web.resume_queue()
     assert asked == [[3, 4]]  # each episode once
     sync.save_queue()
-    assert json.loads(sync.QUEUE_FILE.read_text()) == {"20261021-121217-33d6d0": entry}  # not written empty: kept
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"20261021-121217-33d6d0": [entry]}  # not written empty: kept
     monkeypatch.setattr(sync, "sonarr_get", lambda path, **kw: [{"id": i, "seriesId": 1, "seasonNumber": 1, "episodeNumber": i} for i in kw["episodeIds"]])
     assert [e["id"] for e in sync.chosen_episodes([5, 5, 6])] == [5, 6]
 
@@ -7717,16 +7718,90 @@ def test_a_job_picked_up_again_that_runs_at_once_is_not_kept_for_the_next_start(
     sync = importlib.reload(unshacklarr.sync)
     web = importlib.reload(unshacklarr.web)
     sync.QUEUE_FILE.write_text(json.dumps({"20261021-121217-33d6d0": {"episodes": [3], "kind": "manual"}}))
-    def run_sync(ids, batch=None, **kw):  # the worker gets its turn before this returns
+    def run_sync(ids, restored=None, **kw):  # the worker gets its turn before this returns
         with sync.jobs_lock:
-            sync.restoring.pop(batch, None)
+            sync.restoring.pop(restored, None)
         t = threading.Thread(target=lambda: None); t.start(); t.join()
         return t
     monkeypatch.setattr(web, "run_sync", run_sync)
     web.resume_queue()
-    assert "20261021-121217-33d6d0" not in sync.restoring
+    assert sync.restoring == {}
     sync.save_queue()
     assert json.loads(sync.QUEUE_FILE.read_text()) == {}
+
+
+def test_a_restart_while_a_retry_of_a_job_runs_keeps_every_queued_episode_of_the_job(tmp_path, monkeypatch):
+    # A retry with another Replace runs beside its job under the same batch: the job's own queue is saved too,
+    # while the retry runs and once it ended first, and each is picked up again with its own settings
+    import threading
+    import time
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    batch = "20261021-121217-33d6d0"
+    eps = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "series": {"title": "Smallville", "tvdbId": 1}} for n in (1, 2, 3, 4, 9)]
+    config = {"series": {1: {"service": "NF"}}}
+    go = {"manual": threading.Event(), "retry": threading.Event()}
+    monkeypatch.setattr(sync, "run_episodes", lambda config, settings, episodes, manual, replace, kind, *a: go[kind].wait(10) and 0)
+
+    def start(episodes, **kw):
+        before = sync.running_jobs.get(batch)
+        thread = threading.Thread(target=sync.sync, args=(config, {}, episodes), kwargs={"manual": True, "batch": batch, **kw})
+        thread.start()
+        while sync.running_jobs.get(batch) is before:  # registered under the batch
+            time.sleep(0.01)
+        return thread
+
+    job = start(eps[:4], kind="manual", proxy="nordvpn:fr")
+    sync.waiting.pop(1)  # episode 1 downloading: queued are 2, 3 and 4
+    retry = start(eps[4:], kind="retry", replace=True)  # another Replace: a sync of its own under the batch
+    sync.save_queue()
+    both = sync.QUEUE_FILE.read_text()
+    assert json.loads(both) == {batch: [{"episodes": [2, 3, 4], "paused": False, "kind": "manual", "proxy": "nordvpn:fr"},
+                                        {"episodes": [9], "paused": False, "replace": True, "kind": "retry"}]}
+    go["retry"].set(); retry.join()  # the retry ends first
+    sync.save_queue()
+    alone = sync.QUEUE_FILE.read_text()
+    assert json.loads(alone) == {batch: [{"episodes": [2, 3, 4], "paused": False, "kind": "manual", "proxy": "nordvpn:fr"}]}
+    go["manual"].set(); job.join()
+
+    for text, expected in ((both, [([2, 3, 4], False, "manual", "nordvpn:fr"), ([9], True, "retry", "")]),
+                           (alone, [([2, 3, 4], False, "manual", "nordvpn:fr")])):
+        web = reloaded_web(tmp_path, monkeypatch)  # a restart
+        web.sonarr_sync.QUEUE_FILE.write_text(text)
+        started = []
+        monkeypatch.setattr(web, "run_sync", lambda ids, **kw: started.append((ids, kw["replace"], kw["kind"], kw["proxy"])))
+        web.resume_queue()
+        assert started == expected  # every episode once, each with its own settings
+
+
+def test_a_queue_file_written_by_the_previous_release_loads_whole_and_is_saved_in_the_new_layout(tmp_path, monkeypatch):
+    # queue.json as the release before held it, one entry per job: nothing of it lost, the next save in the new layout
+    import threading
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    sync.QUEUE_FILE.write_text(
+        '{"20261021-121217-33d6d0": {"episodes": [3, 4], "paused": true, "options": {"options": {"--a-lang": ["fr"]}},'
+        ' "replace": true, "kind": "retry", "sonarr": "4K", "proxy": "nordvpn:fr", "video": {"vcodec": "H.265", "quality": 2160},'
+        ' "numbering": {"season_map": {"2": 1}}},'
+        ' "20261021-121218-44d6d0": {"episodes": [7], "paused": false, "kind": "manual", "numbering": {}}}')
+    old = json.loads(sync.QUEUE_FILE.read_text())
+    started = []
+
+    def run_sync(ids, **kw):  # Sonarr down: neither starts, both kept as they were
+        started.append((ids, kw))
+        t = threading.Thread(target=lambda: None); t.start(); t.join()
+        return t
+    monkeypatch.setattr(web, "run_sync", run_sync)
+    assert web.resume_queue() == 3
+    assert [(ids, {k: kw[k] for k in ("batch", "replace", "kind", "numbering", "sonarr", "proxy", "video")}) for ids, kw in started] == [
+        ([3, 4], {"batch": "20261021-121217-33d6d0", "replace": True, "kind": "retry", "numbering": {"season_map": {2: 1}},
+                  "sonarr": "4K", "proxy": "nordvpn:fr", "video": {"vcodec": "H.265", "quality": 2160}}),
+        ([7], {"batch": "20261021-121218-44d6d0", "replace": False, "kind": "manual", "numbering": {},
+               "sonarr": "", "proxy": "", "video": None})]
+    assert sync.paused_jobs == {"20261021-121217-33d6d0"}
+    assert sync.job_options == {"20261021-121217-33d6d0": {"options": {"--a-lang": ["fr"]}}}
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {batch: [entry] for batch, entry in old.items()}
 
 
 def test_an_episode_watched_from_languages_is_watched_on_its_seasons_own_page(tmp_path, monkeypatch):
@@ -7969,7 +8044,7 @@ def test_a_queued_jobs_own_season_map_is_read_back_as_the_sync_reads_it(tmp_path
     assert got == {}
     sync.save_queue()
     kept = json.loads(sync.QUEUE_FILE.read_text())
-    assert kept["20261021-121218-44d6d0"] == damaged["20261021-121218-44d6d0"]
+    assert kept["20261021-121218-44d6d0"] == [damaged["20261021-121218-44d6d0"]]
 
 
 def test_a_queued_episode_taken_out_is_never_handed_to_the_job_loop_as_well(tmp_path, monkeypatch):
