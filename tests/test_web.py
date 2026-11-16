@@ -811,7 +811,7 @@ def test_lightweight_authentication_refresh_repaints_visible_status():
     harness = f"""
 const vm = require("vm");
 const renders = [], services = [];
-const button = {{ querySelector: () => ({{ className: "" }}), title: "", ariaLabel: "" }};
+const button = {{ querySelector: () => ({{ className: "" }}), title: "", ariaLabel: "", dataset: {{}} }};
 const box = {{
   S: {{ authentication: {{}} }}, document: {{ querySelector: () => button }},
   renderUnshackleStatus: (status) => renders.push(status), renderServices: () => services.push(1), renderSonarrState() {{}},

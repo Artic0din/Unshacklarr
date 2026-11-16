@@ -2918,6 +2918,7 @@
   "data.unshackle_error"
  ],
  "Up": [],
+ "Update available": [],
  "Update {0}": [
   "data.update.version"
  ],
@@ -2985,6 +2986,7 @@
  "Wait for 3 parts": [],
  "Wait for 4 parts": [],
  "Wait for it": [],
+ "Waiting": [],
  "Waiting for Sonarr": [],
  "Waiting for a slot": [],
  "Waiting for you": [],

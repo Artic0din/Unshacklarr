@@ -2397,5 +2397,7 @@
  "{0} session rejected": "{0}-Sitzung abgelehnt",
  "{0} timed out": "{0}: Zeitüberschreitung",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} war {1} Stunden lang ausgelastet: das Anfragelimit dieses Schlüssels ist noch erreicht, der Download wird aufgegeben",
- "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve war {0} Stunden lang ausgelastet: das Anfragelimit dieses Schlüssels ist noch erreicht, der Download wird aufgegeben"
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve war {0} Stunden lang ausgelastet: das Anfragelimit dieses Schlüssels ist noch erreicht, der Download wird aufgegeben",
+ "Update available": "Update verfügbar",
+ "Waiting": "Wartet"
 }
