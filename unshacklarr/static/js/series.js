@@ -850,9 +850,9 @@ $("#ep-go-edit").onclick = () => {
   renderPreview();
   $("#oneoff-cdm").replaceChildren(cdmNote(conf.service));
   $("#oneoff-dialog").showModal();
-  // the preview says what the service has; a listing from before season pages' titles were kept is asked again
-  if (!epTitles || Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).some((page) => !epTitles.some((t) => t.page != null && String(t.page) === page) 
-    && !(epPagesListed[page]?.count === 0 && epPagesListed[page].url === S.config.series[current.tvdbId].season_pages[page].url))) askService(current);  // listed empty, at this URL
+  // the preview says what the service has; a listing from before season pages' titles were kept is asked again (a series with no main page: nothing to ask)
+  if (conf.title && (!epTitles || Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).some((page) => !epTitles.some((t) => t.page != null && String(t.page) === page) 
+    && !(epPagesListed[page]?.count === 0 && epPagesListed[page].url === S.config.series[current.tvdbId].season_pages[page].url)))) askService(current);  // listed empty, at this URL
 };
 /* Sonarr's episode as the service numbers it, the rule sync.service_episode applies: the episode table, else offset and seasons. */
 const pad2 = (n) => String(n).padStart(2, "0");

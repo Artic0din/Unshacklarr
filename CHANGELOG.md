@@ -234,6 +234,7 @@ Backup and diagnostic downloads no longer fail on Safari: the file is kept for 3
 Tapping a push notification now opens the bell even when the app's window cannot be navigated: it opens a new window on it.
 Activity no longer grows in memory while its tab stays open: what the page keeps per download (time left, bar widths, posters, unfolded tracks) is dropped once the download leaves the list.
 Typing in the series search no longer redraws every poster on each key: the wall updates once you pause for 150 ms, so large libraries stay smooth.
+"Change and download…" no longer shows "Pick a service and its URL first" on a series that only has season pages.
 
 ### Removed
 

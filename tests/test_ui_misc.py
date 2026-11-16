@@ -236,3 +236,19 @@ waiting.forEach(([fn]) => fn());
 console.log(JSON.stringify({ drawnWhileTyping, waiting: waiting.map(([, ms]) => ms), draws }));
 """, str(JS / "navigation.js"))
     assert seen == {"drawnWhileTyping": 0, "waiting": [150], "draws": 1}
+
+
+@pytest.mark.parametrize("title,asks", [("Show", 1), (None, 0)])
+def test_change_and_download_only_asks_the_service_for_a_series_with_a_main_page(title, asks):
+    asked = node(r"""
+const [title] = process.argv.slice(2);
+let asked = 0;
+const node_ = { before() {}, append() {}, replaceChildren() {}, showModal() {} };
+const conf = { service: "BINGE", season_pages: { 1: { url: "https://x/1" } }, ...(title ? { title } : {}) };
+const ctx = sandbox({ $: () => node_, current: { tvdbId: 1, title: "Show" }, S: { config: { series: { 1: conf } } }, NUMBERING: [], epSeasons: {}, picked: new Set(), epTitles: null, epPagesListed: {},
+  elsewhere: () => false, askService: () => { asked++; } });
+vm.runInContext(grab(read(process.argv[1]), /\$\("#ep-go-edit"\)\.onclick = \(\) => \{[\s\S]*?\n\};\n/), ctx);
+node_.onclick();
+console.log(JSON.stringify(asked));
+""", str(JS / "series.js"), title or "")
+    assert asked == asks
