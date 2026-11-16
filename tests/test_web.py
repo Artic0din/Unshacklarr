@@ -3326,6 +3326,59 @@ def test_wrong_passwords_sent_all_at_once_are_all_counted(tmp_path, monkeypatch)
     assert statuses.count(401) == 5 and statuses.count(429) == 15 and len(checked) == 5  # not one scrypt more than the limit
 
 
+def login_limit_app(tmp_path, monkeypatch, proxy_from):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    web.sonarr_sync.SETTINGS.update(proxy_auth_header="", proxy_auth_from=proxy_from)  # the proxy listed, no proxy sign-in
+    monkeypatch.setattr(web, "password_ok", lambda pw, stored: pw == "password1")
+    return web
+
+
+def test_a_forged_client_address_from_a_peer_that_is_not_the_proxy_gains_no_tries(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    web = login_limit_app(tmp_path, monkeypatch, "10.9.9.9/32")  # the test client connects from 127.0.0.1: not the proxy
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            return [(await client.post("/api/login", json={"password": "guess"},
+                                       headers={"X-Unshackle": "1", "X-Real-IP": f"203.0.113.{i}"})).status for i in range(6)]
+
+    assert asyncio.run(go()) == [401] * 5 + [429]  # counted by the peer's own address, whatever X-Real-IP says
+
+
+def test_behind_the_listed_proxy_each_client_has_its_own_tries_and_none_can_lock_out_another(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    web = login_limit_app(tmp_path, monkeypatch, "127.0.0.1/32")  # the test client is the proxy
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            async def login(client_address, password):
+                return (await client.post("/api/login", json={"password": password},
+                                          headers={"X-Unshackle": "1", "X-Real-IP": client_address})).status
+
+            attacker = [await login(f"203.0.113.{i // 6}", "guess") for i in range(42)]  # 7 clients, 6 tries each
+            return attacker, await login("198.51.100.7", "password1")
+
+    attacker, owner = asyncio.run(go())
+    assert attacker == ([401] * 5 + [429]) * 7  # each client stopped after its own 5
+    assert owner == 200  # 35 wrong passwords in all, and the owner still signs in
+
+
+def test_the_proxy_addresses_can_be_saved_without_proxy_sign_in(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    assert web.check_proxy_auth("", " 172.18.0.5/16 ") == ("", "172.18.0.0/16")  # trusted for X-Real-IP only
+
+
 def test_check_targets_keeps_an_empty_level_list_and_defaults_only_a_missing_one(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -5858,8 +5911,11 @@ def test_a_job_serve_never_confirmed_stopped_is_asked_about_first(monkeypatch):
         def job(self, job_id):
             if status["s"] is None:
                 raise UnshackleError("unshackle serve is unreachable at http://serve:8786: Read timed out")
-            if status["s"] == "gone":
-                raise UnshackleError("unshackle serve: Job not found")
+            if status["s"] in ("gone", "busy"):
+                error = UnshackleError("unshackle serve: Job not found" if status["s"] == "gone" else
+                                       "unshackle serve is busy: its limit of requests for this key is reached")
+                error.status = 404 if status["s"] == "gone" else 429
+                raise error
             return {"status": status["s"]}
     monkeypatch.setattr(web.sonarr_sync, "backend_named", lambda name: Serve())
     assert "still downloading" in web.still_on_serve([5])
@@ -5867,6 +5923,8 @@ def test_a_job_serve_never_confirmed_stopped_is_asked_about_first(monkeypatch):
     assert "finished after all" in web.still_on_serve([5])
     status["s"] = None
     assert "doesn't answer" in web.still_on_serve([5])
+    status["s"] = "busy"
+    assert "doesn't answer" in web.still_on_serve([5])  # busy says nothing of it: only a 404 means it's gone
     status["s"] = "failed"
     assert web.still_on_serve([5]) is None  # it ended there: a new download is fine
     status["s"] = "gone"

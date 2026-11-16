@@ -575,7 +575,7 @@
           <div class="sx-head"><div><h3>Sign in through a reverse proxy</h3><p>For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.<br>Your password is still asked before the most sensitive changes.</p></div></div>
           <div class="sx-grid">
             <div class="field"><label for="ac-proxy-header">User header</label><input id="ac-proxy-header" type="text" data-set="proxy_auth_header" placeholder="Remote-User" spellcheck="false" autocomplete="off"><small>The header your proxy sets: Remote-User for Authelia, X-authentik-username for Authentik. Empty: off.</small></div>
-            <div class="field"><label for="ac-proxy-from">The proxy's addresses</label><input id="ac-proxy-from" type="text" data-set="proxy_auth_from" placeholder="172.18.0.0/16" spellcheck="false" autocomplete="off"><small>The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header is trusted only from there, since anyone else could send it.</small></div>
+            <div class="field"><label for="ac-proxy-from">The proxy's addresses</label><input id="ac-proxy-from" type="text" data-set="proxy_auth_from" placeholder="172.18.0.0/16" spellcheck="false" autocomplete="off"><small>The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.</small></div>
           </div>
         </section>
       </div>

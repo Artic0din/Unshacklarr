@@ -1366,7 +1366,7 @@
  "The proxy's addresses": "Die Adressen des Proxys",
  "The reverse proxy's header is a name like Remote-User": "Der Header des Reverse-Proxys ist ein Name wie Remote-User",
  "For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.": "Für den Fall, dass Authelia, Authentik oder ein anderer Proxy dich schon anmeldet. Der Proxy gibt deinen Namen in einem Header weiter, und Unshacklarr öffnet sich, ohne nach seinem eigenen Passwort zu fragen.",
- "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header is trusted only from there, since anyone else could send it.": "Die Adressen, von denen sich der Proxy verbindet, aus Sicht von Unshacklarr (das Netzwerk seines Containers). Der Header wird nur von dort akzeptiert, da jeder andere ihn senden könnte.",
+ "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.": "Die Adressen, von denen sich der Proxy verbindet, aus Sicht von Unshacklarr (das Netzwerk seines Containers). Der Header und X-Real-IP werden nur von dort akzeptiert, da jeder andere sie senden könnte.",
  "none": "keins",
  "the settings": "den Einstellungen",
  "{0} is not an address or a range like 172.18.0.0/16": "{0} ist keine Adresse und kein Bereich wie 172.18.0.0/16",
@@ -2394,5 +2394,7 @@
  "{0} session available": "{0}-Sitzung verfügbar",
  "{0} session expired": "{0}-Sitzung abgelaufen",
  "{0} session rejected": "{0}-Sitzung abgelehnt",
- "{0} timed out": "{0}: Zeitüberschreitung"
+ "{0} timed out": "{0}: Zeitüberschreitung",
+ "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} war {1} Stunden lang ausgelastet: das Anfragelimit dieses Schlüssels ist noch erreicht, der Download wird aufgegeben",
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve war {0} Stunden lang ausgelastet: das Anfragelimit dieses Schlüssels ist noch erreicht, der Download wird aufgegeben"
 }

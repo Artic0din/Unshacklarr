@@ -1387,7 +1387,7 @@
  "The proxy's addresses": "Gli indirizzi del proxy",
  "The reverse proxy's header is a name like Remote-User": "L'header del reverse proxy è un nome come Remote-User",
  "For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.": "Per quando Authelia, Authentik o un altro proxy ti fa già accedere. Il proxy passa il tuo nome in un header, e Unshacklarr si apre senza chiedere la sua password.",
- "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header is trusted only from there, since anyone else could send it.": "Gli indirizzi da cui si connette il proxy, come li vede Unshacklarr (la rete del suo container). L'header è considerato affidabile solo da lì, perché chiunque altro potrebbe inviarlo.",
+ "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.": "Gli indirizzi da cui si connette il proxy, come li vede Unshacklarr (la rete del suo container). L'header e X-Real-IP sono considerati affidabili solo da lì, perché chiunque altro potrebbe inviarli.",
  "none": "nessuno",
  "the settings": "le impostazioni",
  "{0} is not an address or a range like 172.18.0.0/16": "{0} non è un indirizzo né un intervallo come 172.18.0.0/16",
@@ -2400,5 +2400,7 @@
  "{0} session available": "Sessione {0} disponibile",
  "{0} session expired": "Sessione {0} scaduta",
  "{0} session rejected": "Sessione {0} rifiutata",
- "{0} timed out": "{0}: tempo scaduto"
+ "{0} timed out": "{0}: tempo scaduto",
+ "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} è rimasto occupato per {1} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato",
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve è rimasto occupato per {0} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato"
 }
