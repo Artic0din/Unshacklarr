@@ -285,6 +285,10 @@ Behind a reverse proxy:
   the session cookie is marked `Secure` over HTTPS. Nginx Proxy Manager sends both.
 - **Let WebSockets and streams through**: Activity's output is a WebSocket and its live view a
   stream (in Nginx Proxy Manager, turn on *Websockets Support*).
+- **Pass on the original Host**: Activity's live output is refused ("Cross-origin terminal refused")
+  when the Host Unshacklarr sees is not the address in the browser. Nginx Proxy Manager, Caddy and
+  Traefik keep it; plain Nginx needs `proxy_set_header Host $http_host;` (`$host` drops a port such
+  as `:8443`).
 - **Sign in once, at the proxy** (optional): when Authelia or Authentik already asks who you are,
   Settings, Account, *Sign in through a reverse proxy* takes the header that names you (`Remote-User`)
   and the proxy's addresses. The header is believed from those addresses only; the password is still
