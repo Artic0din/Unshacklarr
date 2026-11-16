@@ -103,7 +103,7 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
   };
   const pick = (c) => {
     real.value = c.code;
-    input.classList.remove("bad");
+    markInvalid(input, null, false);  // the box marked wrong is this one, not the hidden input the event comes from
     real.dispatchEvent(new Event("input", { bubbles: true }));
     sync();
     close();

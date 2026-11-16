@@ -230,19 +230,20 @@ function pwCheck() {
   const pw = $("#pw-new").value, again = $("#pw-again").value, score = pwStrength(pw);
   $("#pw-meter").dataset.score = score;
   $("#pw-meter span").textContent = ["", pw.length < 8 ? "Too short" : "Weak", "Fair", "Good", "Strong"][score];
-  $("#pw-new").classList.toggle("bad", pw.length > 0 && pw.length < 8);
-  $("#pw-new").classList.toggle("good", pw.length >= 8);
+    $("#pw-new").classList.toggle("good", pw.length >= 8);
   const same = again && again === pw, typing = again && !same && pw.startsWith(again);  // still typing it: neither yet
   $("#pw-again").classList.toggle("good", !!same);
-  $("#pw-again").classList.toggle("bad", !!again && !same && !typing);
+  markInvalid($("#pw-new"), null, pw.length > 0 && pw.length < 8);  // the state said to a screen reader too, not only in red
+  markInvalid($("#pw-again"), $("#pw-match"), !!again && !same && !typing);
   $("#pw-match").className = `pw-match ${!again || typing ? "" : same ? "good" : "bad"}`;
   $("#pw-match").replaceChildren(...(!again || typing ? [] : same ? [icon("check", "inl"), "Passwords match"] : ["Passwords do not match"]));
 }
-$("#pw-new").oninput = $("#pw-again").oninput = $("#pw-current").oninput = () => { pwClear(); pwCheck(); };
+$("#pw-new").oninput = $("#pw-again").oninput = $("#pw-current").oninput = (e) => { pwClear(e.target.id); pwCheck(); };  // only the field edited loses its mistake
 /* Account: a mistake said on its field when the button is pressed (a button that stays off says nothing); the session in words. */
 const PW_SAYS = { "pw-current": "pw-current-say", "pw-new": "pw-new-say", "pw-again": "pw-match" };
-function pwClear() {
+function pwClear(only = null) {
   for (const [id, say] of Object.entries(PW_SAYS)) {
+    if (only && id !== only) continue;
     markInvalid($(`#${id}`), $(`#${say}`), false);
     if (id !== "pw-again") $(`#${say}`).textContent = "";
   }
@@ -657,7 +658,7 @@ function ntDraw() {
   $("#nt-d-hint").textContent = b.hint;
   $("#nt-fields").replaceChildren(...b.fields.map(([key, label, ph = "", type = "text"]) => el("label", { className: "field" }, label,
     el("input", { type, name: key, placeholder: ph, spellcheck: false, autocomplete: "off", dataset: { bwignore: "", "1pIgnore": "", lpignore: "true" },
-      oninput: (e) => { markInvalid(e.target, $("#nt-d-result"), false); $("#nt-d-result").replaceChildren(); } }))));
+      oninput: () => { $("#nt-fields").querySelectorAll("input").forEach((i) => markInvalid(i, $("#nt-d-result"), false)); $("#nt-d-result").replaceChildren(); } }))));  // the message goes, so does the mark it explained
   $("#nt-d-result").replaceChildren();
 }
 function ntBuilt() {

@@ -334,3 +334,34 @@ console.log(JSON.stringify(out));
 def test_the_settings_password_checks_are_in_regions_that_exist_before_they_are_filled():
     assert re.search(r'<div role="status"><div class="pw-meter" id="pw-meter"', HTML)
     assert re.search(r'id="pw-match" role="status"', HTML)
+
+
+def test_editing_a_password_after_a_rejection_keeps_what_is_still_wrong_said_to_a_screen_reader():
+    seen = node(PASSWORD_BUTTON.replace("pwCheck() {}, ", "") + r"""
+vm.runInContext(grab(src, /^function pwStrength[\s\S]*?^}\n/m) + grab(src, /^function pwCheck[\s\S]*?^}\n/m) + grab(src, /^\$\("#pw-new"\)\.oninput = .*\n/m), ctx);
+const edit = (id, value) => { $(`#${id}`).value = value; $(`#${id}`).oninput({ target: { id } }); };
+(async () => {
+  set("old", "short", "short");
+  await $("#pw-change").onclick();
+  edit("pw-new", "sixchr");  // still too short
+  const out = { stillShort: say("pw-new")[0] };
+  edit("pw-new", "newpassword"); edit("pw-again", "newpassworX");  // long enough now, but the two differ
+  out.newOk = say("pw-new")[0];
+  out.mismatch = [say("pw-again")[0], ($("#pw-again").getAttribute("aria-describedby") || "").split(" ").includes("pw-match")];
+  edit("pw-again", "newpassword");
+  out.matched = say("pw-again")[0];
+  console.log(JSON.stringify(out));
+})();
+""", str(JS / "settings-options.js"))
+    assert seen == {"stillShort": "true", "newOk": None, "mismatch": ["true", True], "matched": None}
+
+
+def test_editing_another_notification_field_clears_the_flag_with_its_message():
+    src = (JS / "settings-options.js").read_text()
+    assert 'querySelectorAll("input").forEach((i) => markInvalid(i, $("#nt-d-result"), false)); $("#nt-d-result").replaceChildren();' in src
+
+
+def test_picking_a_country_clears_the_flag_on_the_box_that_was_flagged():
+    src = (JS / "setup.js").read_text()
+    pick = src[src.index("const pick = (c) => {"):src.index("};", src.index("const pick = (c) => {"))]
+    assert "markInvalid(input, null, false)" in pick  # the visible box, not the hidden input the input event comes from
