@@ -263,10 +263,6 @@ whole_syncs: list[threading.Thread] = []  # the ones of every missing episode: "
 last_sync: datetime | None = None
 
 
-def service_tags() -> list[str]:
-    return sorted(s["tag"] for s in sonarr_sync.all_services())
-
-
 def service_name(service: dict) -> str:
     """What people call a service ("RMC+" for RMCP), from its help ("Service code for RMC+ (https://…)"),
     else its site ("netflix.com"), else its tag."""
@@ -6293,8 +6289,6 @@ async def v1_start_download(request):
     video = video_override(body)
     ids, tvdb = body.get("episodeIds"), body.get("tvdbId")
     inst = sonarr_named(str(body.get("sonarr") or ""))  # None: the main Sonarr (by mj23au, #10)
-    if body.get("sonarr") and not inst:
-        raise web.HTTPBadRequest(text=f"No Sonarr named {body['sonarr']}")
     names = [str(x).upper() for x in body.get("episodes") or []] if isinstance(body.get("episodes"), list) else []
     if type(tvdb) is int and names and all(re.fullmatch(r"S\d+E\d+", x) for x in names):
         if not (read_config()["series"].get(tvdb) or {}).get("service"):
@@ -6589,7 +6583,7 @@ async def test_unshackle(request):
     if settings["unshackle_mode"] == "remote":
         if not URL.fullmatch(settings["unshackle_url"]):
             raise web.HTTPBadRequest(text="Enter the address of unshackle serve, like http://unshackle:8786")
-        if not settings["unshackle_api_key"] and trusted(request, body):
+        if not settings["unshackle_api_key"]:
             settings["unshackle_api_key"] = stored_key_for(settings["unshackle_url"], "unshackle")
     try:
         count = await asyncio.to_thread(check_unshackle, settings)
