@@ -998,7 +998,6 @@
  "For example fr, en, or orig for the series' original language. An episode with none of them is not downloaded. It is tried again at each sync.": [],
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": [],
  "For the episodes still to come in this job. It starts from the options they have now; what you change is for this job only, the series itself does not change.": [],
- "For this browser only. The page reloads in the new language.": [],
  "For this series only. They take priority over the options set for its service.": [],
  "For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.": [],
  "For when every episode comes in that many parts. Until all parts are out, nothing is imported and the episode is tried again. An episode is never imported half-done.": [],
@@ -2389,7 +2388,6 @@
  "Success rate": [],
  "Suggest services": [],
  "Sun": [],
- "Supports": [],
  "Supports: {0} of {1}": [
   "st.caps.filter((c) => c.ok).length",
   "st.caps.length"
@@ -2698,7 +2696,7 @@
  "The {0} titles are in Sonarr.": [
   "want"
  ],
- "Then add the file here with Add cookies.": [],
+ "Then add the file here with Add.": [],
  "These settings were changed elsewhere since this page was loaded. Reload the page, then make your change again.": [],
  "These {0} episodes are": [
   "onDisk"

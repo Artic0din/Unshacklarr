@@ -1152,7 +1152,7 @@ const promptState = (input) => {
     const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => {
       const cells = row.children.slice(1);
       return { name: find(row, (node) => node.className === "sv-name").textContent, label: find(row, (node) => node.className === "sv-label").textContent,
-        cookies: words(cells[1]), used: words(cells[3]), attention: !!row.dataset.attention };
+        cookies: words(cells[2]), used: words(cells[3]), attention: !!row.dataset.attention };
     });
     console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className }));
   }
@@ -1345,13 +1345,13 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     assert rows["HULU"] == {
         "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series"],
         "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
-                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete", "Add cookies"],
+                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete"],
     }
     # another backend's row never gets the main Unshackle's cookie files, nor its series count
     assert rows["HULU · vpn"] == {
         "name": "HULU · vpn", "label": "Confirmed now", "attention": False, "used": ["—"], "cookies": ["—", "Managed on that server"],
     }
-    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete", "Add cookies"]
+    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series"]
     assert result["state"] == "sx-state down"
 
