@@ -51,7 +51,6 @@ CHANGED_ERROR_TEXTS = {
     "Sign-in and cookies",
     "Sign-in methods",
     "Subtitles: {0}",
-    "Supports",
     "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services.",
     "The push service refused the message",
     "The sign-in check could not reach Unshackle.",
