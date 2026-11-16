@@ -264,8 +264,7 @@ async function openServiceRow(service) {
 }
 function showSeriesOf(service) {  // every series of that service: the other filters cleared, as they could hide some
   showTab("series");
-  $("#search").value = ""; $("#f-library").value = ""; $("#f-missing").checked = false; $("#f-monitored").checked = false;
-  document.querySelectorAll("#tab-series .seg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.managed === ""));
+  clearWallFilters(false);
   $("#f-service").value = service;
   renderWall();
 }

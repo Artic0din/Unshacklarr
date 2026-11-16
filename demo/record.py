@@ -336,7 +336,7 @@ live = run(by_title["The Bear"], airing[0], 2, "running", kind="manual", running
 
 sync.inbox_add("success", "Downloaded: The Simpsons S02E11", "1.4 GB in 5 min, imported by Sonarr.", batch=batch)
 sync.inbox_add("error", "Not downloaded: Wheeler Dealers S01E07", "RMC BFM Play: your session has expired, log in again (cookies or credentials)")
-sync.inbox_add("warning", "HULU cookies expire in 5 days", "Replace them before, in Settings › Services.")
+sync.inbox_add("warning", "HULU cookies expire in 5 days", "Replace them before they expire, in Settings › Services.")
 sync.inbox_add("success", "Downloaded: Koh-Lanta S01E09", "Both parts joined into one file, imported by Sonarr.")
 (DATA / "notifications_sent.json").write_text(json.dumps([
     {"at": ago(hours=h), "level": lv, "title": t, "to": [{"app": "Discord", "ok": True}, {"app": "ntfy", "ok": lv != "success"}]}
