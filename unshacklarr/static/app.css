@@ -1663,11 +1663,14 @@ details.sx-card > summary.sx-head { padding-right: 28px; } details.sx-card > sum
 .ds-sub summary b { font-size: var(--fs-callout); } .ds-sub summary small { color: var(--muted); font-size: var(--fs-sub); }
 .inh-list[hidden] { display: none; }
 @media (min-width: 901px) { .ds .ds-svc { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); } }
-@media (max-width: 700px) and (max-height: 480px) { .d-head { position: static; } }  /* a landscape phone or a zoomed page: a pinned head would fill the screen */
-@media (max-width: 700px) {  /* the page scrolls under the series' sticky head; the shortcuts scroll with it */
-  .ds-nav { position: static; }
-  #dt-settings .card { scroll-margin-top: calc(var(--d-head, 118px) + 8px); }
+@media (max-width: 700px) {  /* the page scrolls under the series' sticky head; the shortcuts stay just below it */
+  .ds-nav { top: var(--d-head, 118px); }
+  #dt-settings .card { scroll-margin-top: calc(var(--d-head, 118px) + 56px); }
   #dt-settings .sx-card { border-radius: var(--r-md); }
+}
+@media (max-width: 700px) and (max-height: 480px) {  /* a landscape phone or a zoomed page: pinned bars would fill the screen */
+  .d-head, .ds-nav { position: static; }
+  #dt-settings .card { scroll-margin-top: 8px; }
 }
 /* Pull to reload (the installed app): a badge that follows the finger down from the top, its ring filling up. */
 .ptr { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) - 56px); z-index: 1000; display: flex; flex-direction: column; align-items: center; gap: 8px;

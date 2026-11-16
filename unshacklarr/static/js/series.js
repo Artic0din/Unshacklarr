@@ -1026,14 +1026,19 @@ $(".ds-nav").onclick = (e) => {
 };
 // the card in view lights its shortcut
 let dsPicked = null;  // the shortcut clicked: lit until the person scrolls on their own
-function dsLight() {  // the card in view: the last one whose top went under the bar
+function dsLight() {  // the card in view: the last one whose top went under what is pinned
   if ($("#dt-settings").hidden) return;  // the episodes scrolling, or the drawer closed: nothing to light
-  const links = [...document.querySelectorAll(".ds-nav a[data-to]")], bar = $(".ds-nav").getBoundingClientRect().bottom + 24;
+  const nav = $(".ds-nav"), links = [...nav.querySelectorAll("a[data-to]")];
+  const pinned = (box) => (getComputedStyle(box).position === "sticky" ? box.getBoundingClientRect().bottom : 0);  // a bar that scrolled away covers nothing
+  const bar = Math.max(pinned($(".d-head")), pinned(nav)) + 24;
   let on = dsPicked || links[0]?.dataset.to;
   if (!dsPicked) for (const a of links) if ($(`#${a.dataset.to}`)?.getBoundingClientRect().top <= bar) on = a.dataset.to;
   links.forEach((a) => {
     const lit = a.dataset.to === on;
-    if (lit && a.getAttribute("aria-current") !== "true") a.scrollIntoView({ block: "nearest", inline: "nearest" });  // a phone's bar scrolls sideways
+    if (lit && a.getAttribute("aria-current") !== "true") {  // a phone's bar scrolls sideways: its own scroll only, never the page's or the drawer's
+      const at = a.getBoundingClientRect(), box = nav.getBoundingClientRect();
+      nav.scrollLeft += at.left < box.left ? at.left - box.left : Math.max(0, at.right - box.right);
+    }
     a.setAttribute("aria-current", String(lit));
   });
 }

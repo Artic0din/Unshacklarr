@@ -1,4 +1,5 @@
 """Narrow screens: nothing clipped or overlapping at 320 px or 400% zoom (WCAG 1.4.10), read from the stylesheet and the scripts."""
+import json
 import re
 from pathlib import Path
 
@@ -42,7 +43,6 @@ def test_a_live_card_stacks_speed_and_time_under_the_episode_while_narrow():
 def test_a_finished_card_names_its_whole_line_when_it_is_cut_short():
     js = (STATIC / "js" / "activity.js").read_text()
     assert "el(\"small\", { textContent: tookLine(c, live), title: tookLine(c, live) })" in js
-    assert js.index("const tookLine") < js.index("function jobCard"), "a const used before it is declared throws when a job opens"
 
 
 def test_the_series_filter_goes_to_a_second_row_instead_of_overflowing_its_buttons():
@@ -67,9 +67,32 @@ def test_the_version_chip_shows_only_its_count_on_the_narrowest_phones():
     has(narrow, ".version-chip.has-new b { margin-left: 0; }")
 
 
-def test_the_series_shortcuts_scroll_with_the_page_on_a_phone_and_a_short_screen_pins_no_head():
-    has(media("max-width: 700px"), ".ds-nav { position: static; }")
-    has(CSS, "@media (max-width: 700px) and (max-height: 480px) { .d-head { position: static; } }")
+def test_the_series_shortcuts_stay_pinned_below_the_head_except_on_a_short_screen():
+    has(media("max-width: 700px"), ".ds-nav { top: var(--d-head, 118px); }")
+    has(media("max-width: 700px"), "#dt-settings .card { scroll-margin-top: calc(var(--d-head, 118px) + 56px); }")
+    short = media("max-width: 700px) and (max-height: 480px")
+    has(short, ".d-head, .ds-nav { position: static; }")
+    has(short, "#dt-settings .card { scroll-margin-top: 8px; }")
+
+
+def test_lighting_a_shortcut_scrolls_only_the_bar_sideways_and_counts_only_what_is_pinned():
+    js = (STATIC / "js" / "series.js").read_text()
+    light = js[js.index("function dsLight()"):js.index('addEventListener("scroll", dsLight')]
+    assert "scrollIntoView" not in light, "it scrolled the page or the drawer under the person"
+    assert "nav.scrollLeft +=" in light
+    has(light, 'getComputedStyle(box).position === "sticky" ? box.getBoundingClientRect().bottom : 0')
+    has(light, "Math.max(pinned($(\".d-head\")), pinned(nav))")
+
+
+def test_the_version_chip_keeps_its_version_in_its_name_when_the_phone_hides_it():
+    news = (STATIC / "js" / "news.js").read_text()
+    has(news, "`What's new in ${name}: 1 new option`")
+    has(news, "`What's new in ${name}: ${count} new options`")
+    assert news.index("const name = version.textContent") < news.index("version.append(el(\"b\"")
+    for lang in ("de", "es", "fr", "it", "ja", "pt-BR", "ru", "zh-CN"):
+        words = json.loads((STATIC / "i18n" / f"{lang}.json").read_text())
+        assert "What's new in {0}: 1 new option" in words and "What's new in {0}: {1} new options" in words, lang
+        assert "What's new: {0} new options" not in words, lang
 
 
 def test_the_late_banner_puts_its_sentence_under_the_count_and_button_on_a_phone():

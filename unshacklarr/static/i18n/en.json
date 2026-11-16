@@ -3036,8 +3036,11 @@
  ],
  "What's new": [],
  "What's new in each version": [],
- "What's new: 1 new option": [],
- "What's new: {0} new options": [
+ "What's new in {0}: 1 new option": [
+  "name"
+ ],
+ "What's new in {0}: {1} new options": [
+  "name",
   "count"
  ],
  "What's on {0}?": [
