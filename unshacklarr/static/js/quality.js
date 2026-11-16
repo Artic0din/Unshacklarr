@@ -551,7 +551,7 @@ function renderUpgradeMode() {
 }
 /* Add audio track: each Sonarr's library, as it sees it and as Unshacklarr does; its root folders offered, both sides
    browsable, and a real episode file of that Sonarr's looked for with the two folders, so a wrong pair shows at once. */
-let libWho = "", libRoots = [], libCommon = "", libTimer = null;  // "": the main Sonarr; else another one's name
+let libWho = "", libRoots = [], libCommon = "", libTimer = null, libSeq = 0;  // "": the main Sonarr; else another one's name; libSeq: the newest check, an older answer is dropped
 const libOf = () => (libWho && (S.config.settings.sonarrs || []).find((i) => i.name === libWho)) || S.config.settings;
 const FOLDER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 function renderLibrary() {
@@ -584,6 +584,7 @@ function setLibrary(side, path) {
 $("#dx-lib-sonarr").oninput = (e) => { libOf().library_sonarr_root = e.target.value.trim() || undefined; dirty(); checkLibrary(); };
 $("#dx-lib-local").oninput = (e) => { libOf().library_local_root = e.target.value.trim() || undefined; dirty(); checkLibrary(); };
 function checkLibrary() {
+  const seq = ++libSeq;  // taken now, not when the debounce fires: an answer for an earlier path is stale from this keystroke
   clearTimeout(libTimer);
   libTimer = setTimeout(async () => {
     const lib = libOf(), main = S.config.settings, own = lib.library_sonarr_root || lib.library_local_root ? lib : main;
@@ -591,8 +592,8 @@ function checkLibrary() {
     const say = $("#dx-lib-check"), who = libWho || mainSonarr();
     say.className = "lib-check"; say.textContent = "Looking for one of your episode files…";
     let r;
-    try { r = await api(`/api/library/check?${q}`); } catch (e) { say.textContent = e.message; return; }
-    if ((libWho || "") !== (q.get("sonarr") || "")) return;  // another Sonarr picked meanwhile
+    try { r = await api(`/api/library/check?${q}`); } catch (e) { if (seq === libSeq) say.textContent = e.message; return; }
+    if (seq !== libSeq || (libWho || "") !== (q.get("sonarr") || "")) return;  // a newer check, or another Sonarr picked meanwhile
     libRoots = r.roots || []; libCommon = r.common || ""; renderLibraryPicks();
     if (r.ok === true) { say.className = "lib-check ok"; say.replaceChildren(icon("check", "inl"), `Unshacklarr reads ${who}'s library: ${r.local_path}`); }
     else if (r.ok === false && r.guess) {  // found elsewhere in the container: both folders, one click

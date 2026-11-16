@@ -96,6 +96,7 @@ function openTerm() {
   fitTerminal();
   term.reset();
   termSocket?.close();
+  termSocket = null;  // a closed one left here would be taken for a live stream and resumed
   return true;
 }
 function streamRun(c) { streamTerm(c.id, `run=${encodeURIComponent(c.id)}`); }

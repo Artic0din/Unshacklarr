@@ -235,7 +235,9 @@ function sonarrSwitch(s) {
       ...(o.ladder ? [el("small", { textContent: o.ladder })] : []),
       ...(o.missing ? [el("em", { textContent: `${o.missing} missing` })] : []))));
 }
+let epSeq = 0;  // the newest loadEpisodes call: an older answer (another library, a quick switch) is dropped
 async function loadEpisodes(s, keep = false) {  // keep: a reload after a download ended, same season and selection
+  const seq = ++epSeq;
   const box = $("#d-episodes");
   const libs = S.sonarrsOf?.[s.tvdbId] || [];
   if (epSonarrOf !== s.tvdbId) { epSonarr = s.id ? "" : libs[0]?.name || ""; epSonarrOf = s.tvdbId; }  // the main Sonarr's first
@@ -272,13 +274,16 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
       if ($("#ep-list")) { $("#ep-avail").hidden = false; renderSeason(); checkLabel(`Refresh what's on ${seriesSvcs(S.config.series[s.tvdbId])}`); }
     }).catch(() => {});
   }
-  let eps;
+  let eps, keys = null;
   try {
-    eps = await api(inst ? `/api/series/${inst.id}/episodes?sonarr=${encodeURIComponent(inst.name)}` : `/api/series/${s.id}/episodes`);
-    mainKeys = inst && s.id ? Object.fromEntries((await api(`/api/series/${s.id}/episodes`)).map((e) => [e.id, sxxOf(e)])) : null;
+    // as long as the server waits for a busy Sonarr (120 s)
+    eps = await api(inst ? `/api/series/${inst.id}/episodes?sonarr=${encodeURIComponent(inst.name)}` : `/api/series/${s.id}/episodes`, { wait: 130 });
+    if (seq !== epSeq || current !== s) return;  // superseded: no second request to a busy Sonarr for an answer nobody draws
+    if (inst && s.id) keys = Object.fromEntries((await api(`/api/series/${s.id}/episodes`, { wait: 130 })).map((e) => [e.id, sxxOf(e)]));
   }
-  catch (e) { if (current === s) box.replaceChildren(failed(`Could not load the episodes: ${e.message}`, () => loadEpisodes(s))); return; }
-  if (current !== s) return;
+  catch (e) { if (seq === epSeq && current === s) box.replaceChildren(failed(`Could not load the episodes: ${e.message}`, () => loadEpisodes(s))); return; }
+  if (seq !== epSeq || current !== s) return;
+  mainKeys = keys;
   epSeasons = {};
   for (const e of eps) { e.sonarrAir = e.airDateUtc; (epSeasons[e.seasonNumber] ??= []).push(e); }
   if (epAvailRaw && epSonarr) epAvail = viewAvail(epAvailRaw);  // what the service has, by this Sonarr's ids
@@ -367,7 +372,7 @@ async function refreshEpBusy(s) {
   if (current !== s) return;
   if (cards) {
     const was = epBusy;
-    epBusy = new Map(cards.filter((c) => isLive(c) && c.tvdbId === s.tvdbId).map((c) => [c.episodeId, c]));
+    epBusy = new Map(cards.filter((c) => isLive(c) && c.tvdbId === s.tvdbId && (c.instance || "") === epSonarr).map((c) => [c.episodeId, c]));
     epBusy.forEach((_, id) => picked.delete(id));
     if ([...was.keys()].some((id) => !epBusy.has(id))) loadEpisodes(s, true);  // one ended: on disk now, or not
     else if ($("#ep-list")) renderSeason();

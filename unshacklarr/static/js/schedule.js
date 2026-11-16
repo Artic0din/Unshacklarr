@@ -115,7 +115,8 @@ async function fetchNetworks(episodes) {
   ids.forEach((i) => networksById[i] = null);  // asked: don't ask twice
   try { Object.assign(networksById, await api(`/api/networks?tmdb=${ids.join(",")}`)); }
   catch { return; }  // just no logos this time
-  renderCalendar();
+  // a range still loading shows its spinner: it draws the logos itself when it lands
+  if (cal.fetched.has(schedView() === "month" ? `${isoDay(weekStartOf(cal.month))}+42` : `${isoDay(weekStartOf(cal.date))}+7`)) renderCalendar();
 }
 function networkBadge(d, extra = "") {
   const tmdbId = S.series.find((x) => x.tvdbId === d.tvdbId)?.tmdbId;
