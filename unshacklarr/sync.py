@@ -3093,7 +3093,10 @@ def episode_in_brands(show: dict, want: str, results: list[dict], backend, param
 
 def find_programme(show: dict, ep: dict, config: dict, key: str, sxxeyy: str, pasted: str | None, backend, params: dict) -> dict:
     """programme_for's search: the pasted URL, else the service's search by the episode's title."""
-    want, year = title_key(ep.get("title")), (ep.get("airDateUtc") or "")[:4]
+    # Sonarr's own airDate first; else the UTC instant in local time (just after midnight on 1 January is still the old year in UTC)
+    aired_utc = ep.get("airDateUtc")
+    year = str(ep.get("airDate") or "")[:4] or (str(parse_time(aired_utc).astimezone(LOCAL).year) if aired_utc else "")
+    want = title_key(ep.get("title"))
     chosen = None  # the episode itself, when it was found inside its series' listing
     if pasted:
         found, how = {"id": pasted, "title": ep.get("title")}, "pasted"

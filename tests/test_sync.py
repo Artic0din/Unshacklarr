@@ -5534,6 +5534,26 @@ def test_the_very_title_from_years_apart_is_another_programme(tmp_path, monkeypa
     assert sync.programme_for(show, ep(33, "2026-01-10T21:00:00Z"), {}, True)["code"] == "S01E01"
 
 
+def test_the_year_of_a_new_years_airing_is_the_local_one(tmp_path, monkeypatch):
+    # Aired 00:30 on 1 January in Paris, 23:30 on 31 December in UTC: the programme from 2026 is the one, not refused
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "LOCAL", sync.ZoneInfo("Europe/Paris"))
+
+    class Serve:
+        def call(self, method, path, json=None):
+            if path == "/api/search":
+                return {"results": [{"id": "p", "title": "Wonder: The Film"}]}
+            return {"titles": [{"type": "movie", "name": "Wonder", "year": 2026}]}
+    monkeypatch.setattr(sync, "backend_for", lambda tag, config=None: Serve())
+    monkeypatch.setattr(sync, "serve_params", lambda show, config: {})
+    show = {"service": "iP", "programmes": True}
+    ep = {"id": 1, "seasonNumber": 2026, "episodeNumber": 1, "title": "Wonder", "airDateUtc": "2025-12-31T23:30:00Z"}
+    assert sync.programme_for(show, ep, {}, True)["how"] == "title and subtitle"  # the UTC date converted to local
+    assert sync.programme_for(show, {**ep, "id": 2, "airDate": "2026-01-01"}, {}, True)["how"] == "title and subtitle"  # Sonarr's own date
+    with pytest.raises(sync.Unmatched, match="aired in 2025"):
+        sync.programme_for(show, {**ep, "id": 3, "airDate": "2025-12-31"}, {}, True)  # a real year apart is still refused
+
+
 def test_a_job_paused_while_waiting_for_a_slot_blocks_no_one(tmp_path, monkeypatch):
     # A job paused while it waits loses its number (release_job): the next one asking still gets in line and in
     sync = load(tmp_path, monkeypatch)
