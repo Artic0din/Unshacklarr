@@ -7604,3 +7604,22 @@ def test_stop_ignores_the_job_of_a_try_that_ended_and_still_stops_the_run(tmp_pa
     (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "live", "live": {"status": "downloading"}}))
     asyncio.run(web.stop_run(request))  # a job going on: cancelled as before
     assert cancelled == ["live"]
+
+
+def test_stop_is_done_when_the_job_loop_already_cancelled_the_job_but_not_when_serve_still_runs_it(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    run_id = "20261116-000000-123456-1-S01E02"
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "live", "live": {"status": "downloading"}}))
+    monkeypatch.setattr(sync.EpisodeRun, "active", {run_id})
+
+    def refused(job_id):
+        raise sync.UnshackleError("no such job")
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", refused)
+    request = SimpleNamespace(match_info={"run_id": run_id})
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "cancelled"})  # the job loop got there first
+    assert json.loads(asyncio.run(web.stop_run(request)).text) == {"stopping": True}
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "downloading"})  # still going: Stop failed
+    with pytest.raises(web.web.HTTPBadGateway):
+        asyncio.run(web.stop_run(request))

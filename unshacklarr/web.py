@@ -3273,10 +3273,17 @@ async def stop_run(request):
         sonarr_sync.slots.notify_all()
     if not job_id or (card.get("live") or {}).get("status") in sonarr_sync.TERMINAL:  # no job, or an ended try's
         return web.json_response({"stopping": True})
+    backend = sonarr_sync.backend_named(card.get("backend"))
     try:
-        await asyncio.to_thread(sonarr_sync.backend_named(card.get("backend")).cancel, job_id)
+        await asyncio.to_thread(backend.cancel, job_id)
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=no_credentials(e))
+        # the run's own job loop sees the mark too and may have cancelled it first: that is a stop done
+        try:
+            cancelled = (await asyncio.to_thread(backend.job, job_id)).get("status") in sonarr_sync.TERMINAL
+        except UnshackleError:
+            cancelled = False
+        if not cancelled:
+            raise web.HTTPBadGateway(text=no_credentials(e))
     return web.json_response({"stopping": True})
 
 
