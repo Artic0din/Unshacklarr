@@ -3491,8 +3491,15 @@
   "url",
   "e"
  ],
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": [
+  "BUSY_GIVE_UP // 3600"
+ ],
  "unshackle serve stopped at start: {0}": [
   "self.tail()"
+ ],
+ "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": [
+  "f' {backend.name}' if backend.name else ''",
+  "BUSY_GIVE_UP // 3600"
  ],
  "unshackle serve{0} still has job {1}: followed again": [
   "f' {backend.name}' if backend.name else ''",
