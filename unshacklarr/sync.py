@@ -715,6 +715,11 @@ def save_queue(last: str | None = None) -> str:
     tries again, instead of the queue written empty losing it."""
     queue = queue_snapshot()
     for key, (thread, entry) in list(restoring.items()):
+        with jobs_lock:
+            if key[0] in batch_jobs:  # its job runs: its pause and options as they are now, kept once that sync ends
+                live = job_options.get(key[0])
+                entry = {**{k: v for k, v in entry.items() if k != "options"}, "paused": key[0] in paused_jobs, **({"options": live} if live else {})}
+                restoring[key] = (thread, entry)
         queue.setdefault(key[0], []).append(entry)
         if thread is not None and not thread.is_alive():
             print(f"Job {key[0]} could not be picked up again: kept for the next start", flush=True)

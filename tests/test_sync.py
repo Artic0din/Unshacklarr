@@ -6466,6 +6466,22 @@ def test_a_job_queued_with_an_empty_numbering_keeps_it_across_a_restart(tmp_path
     assert "numbering" not in sync.queue_snapshot()["J"][0]  # none given: the series' own, as before
 
 
+def test_a_sync_still_to_start_after_a_restart_is_saved_with_its_jobs_live_pause_and_options(tmp_path, monkeypatch):
+    # One sync of the job resumed, another could not start: resuming the job or changing its options must not be
+    # undone by the waiting one's old pause and options at the next restart
+    sync = load(tmp_path, monkeypatch)
+    entry = {"episodes": [7], "paused": True, "options": {"options": {"--a-lang": ["fr"]}}, "replace": True, "numbering": {}}
+    monkeypatch.setitem(sync.restoring, ("B", 1), (None, entry))
+    monkeypatch.setitem(sync.batch_jobs, "B", [{"episodes": [], "stubs": {}}])  # the job's other sync, running
+    monkeypatch.setitem(sync.job_options, "B", {"options": {"--a-lang": ["de"]}})  # changed since, and resumed
+    sync.save_queue()
+    saved = {"episodes": [7], "paused": False, "options": {"options": {"--a-lang": ["de"]}}, "replace": True, "numbering": {}}
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [saved]}
+    sync.batch_jobs.pop("B")  # the running sync over: the waiting one keeps what the job had last
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [saved]}
+
+
 def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_path, monkeypatch):
     # A retry ran beside its job under the same batch and ended first: the job's next episodes keep its French override
     sync = load(tmp_path, monkeypatch)
