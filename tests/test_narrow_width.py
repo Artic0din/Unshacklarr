@@ -69,10 +69,10 @@ def test_the_version_chip_shows_only_its_count_on_the_narrowest_phones():
 
 def test_the_series_shortcuts_stay_pinned_below_the_head_except_on_a_short_screen():
     has(media("max-width: 700px"), ".ds-nav { top: var(--d-head, 118px); }")
-    has(media("max-width: 700px"), "#dt-settings .card { scroll-margin-top: calc(var(--d-head, 118px) + 56px); }")
+    has(media("max-width: 700px"), "html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: calc(var(--d-head, 118px) + 64px); }")
     short = media("max-width: 700px) and (max-height: 480px")
     has(short, ".d-head, .ds-nav { position: static; }")
-    has(short, "#dt-settings .card { scroll-margin-top: 8px; }")
+    has(short, "html:has(body.drawer-open), html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: 8px; }")
 
 
 def test_lighting_a_shortcut_scrolls_only_the_bar_sideways_and_counts_only_what_is_pinned():

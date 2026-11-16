@@ -1664,7 +1664,15 @@ body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 96px; }
 .ds-nav a:focus-visible { background: color-mix(in srgb, var(--accent) 8%, transparent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 @media (hover: hover) { .ds-nav a:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); } }
 .ds-nav a[aria-current="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); color: var(--accent); }
-#dt-settings .card { scroll-margin-top: 56px; }
+/* A bar that stays in view hides what scrolls under it: focus and anchors stop short of it, by the bar's height and a gap.
+   The settings shortcuts are the series' scroller's own bar; the cards they jump to land just under it. */
+.d-body:has(#dt-settings:not([hidden])) { scroll-padding-top: 64px; }
+@media (min-width: 701px) {  /* the page's floating bars; a phone's are below, above its tab bar */
+  html:has(#tab-log:not([hidden]) #dock:not([hidden])) { scroll-padding-bottom: var(--dock-h, 76px); }
+  .con-detail:has(#dock:not([hidden])) { scroll-padding-bottom: var(--dock-h, 76px); }  /* Activity scrolls in its own pane here, not the page */
+  html:has(#savebar:not([hidden]), .sel-bar:not([hidden])) { scroll-padding-bottom: 88px; }
+}
+body:has(#savebar:not([hidden])) main { padding-bottom: 96px; }  /* the last row clears the save bar */
 /* A series' settings: where it stands, then one card per subject in the Settings look, most used first. */
 .ds:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding-bottom: 8px; }
 .ds-state { grid-area: auto; align-items: flex-start; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); }
@@ -1690,12 +1698,18 @@ details.sx-card > summary.sx-head { padding-right: 28px; } details.sx-card > sum
 @media (min-width: 901px) { .ds .ds-svc { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); } }
 @media (max-width: 700px) {  /* the page scrolls under the series' sticky head; the shortcuts stay just below it */
   .ds-nav { top: var(--d-head, 118px); }
-  #dt-settings .card { scroll-margin-top: calc(var(--d-head, 118px) + 56px); }
   #dt-settings .sx-card { border-radius: var(--r-md); }
+}
+/* Phones: the header above; below, the tab bar and the bars over it, as far up as they reach (--bars-h, measured: stacked, wrapped or expanded) */
+@media (max-width: 700px) {
+  html { scroll-padding-top: var(--head-h, calc(72px + env(safe-area-inset-top))); scroll-padding-bottom: var(--bars-h, calc(72px + env(safe-area-inset-bottom))); }  /* --head-h: the header as tall as it is, a status row under it included */
+  /* the series page has no tab bar: its sticky head (and the settings' shortcuts under it) above */
+  html:has(body.drawer-open) { scroll-padding-top: calc(var(--d-head, 118px) + 8px); }
+  html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: calc(var(--d-head, 118px) + 64px); }
 }
 @media (max-width: 700px) and (max-height: 480px) {  /* a landscape phone or a zoomed page: pinned bars would fill the screen */
   .d-head, .ds-nav { position: static; }
-  #dt-settings .card { scroll-margin-top: 8px; }
+  html:has(body.drawer-open), html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: 8px; }  /* nothing pinned above */
 }
 /* Pull to reload (the installed app): a badge that follows the finger down from the top, its ring filling up. */
 .ptr { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) - 56px); z-index: 1000; display: flex; flex-direction: column; align-items: center; gap: 8px;
