@@ -849,6 +849,7 @@ def test_an_episode_queued_into_a_paused_job_is_handed_out_after_resume(tmp_path
     first, second, added = episode(111, 2, 5), episode(111, 2, 6), episode(111, 2, 7)
     episodes = [first, second]
     monkeypatch.setitem(sync.running_jobs, "J", {"episodes": episodes, "stubs": {}, "closed": False, "replace": False})
+    monkeypatch.setitem(sync.batch_jobs, "J", [sync.running_jobs["J"]])
     taken, sleeps = [], []
     handed = sync.job_episodes(episodes, "J")
     taken.append(next(handed))
@@ -866,6 +867,27 @@ def test_an_episode_queued_into_a_paused_job_is_handed_out_after_resume(tmp_path
     assert [ep["id"] for ep in taken] == [205, 206, 207] and len(sleeps) == 2
     assert sync.running_jobs["J"]["closed"]
 
+
+def test_a_retry_into_a_job_whose_other_sync_ended_goes_next_not_behind(tmp_path, monkeypatch):
+    # A retry with another Replace ran beside the job under its batch, the job going on meanwhile: once the retry
+    # ends, a retry accepted into the job goes right after the episode it is on, never before it (then skipped)
+    sync = load(tmp_path, monkeypatch)
+    episodes = [episode(111, 2, 5), episode(111, 2, 6), episode(111, 2, 7)]
+    job = {"episodes": episodes, "stubs": {}, "closed": False, "replace": False}
+    retry = {"episodes": [], "stubs": {}, "closed": False, "replace": True}
+    monkeypatch.setitem(sync.batch_jobs, "J", [job])
+    monkeypatch.setitem(sync.running_jobs, "J", job)
+    handed = sync.job_episodes(episodes, "J")
+    taken = [next(handed)]
+    sync.batch_jobs["J"].append(retry)  # the retry starts: the running one under the batch
+    sync.running_jobs["J"] = retry
+    taken.append(next(handed))
+    sync.batch_jobs["J"].remove(retry)  # and ends: the job is the running one again
+    sync.running_jobs["J"] = job
+    assert sync.add_to_job("J", episode(111, 2, 8), {"service": "NF"}, first=True)
+    taken.extend(handed)
+    assert [ep["id"] for ep in taken] == [205, 206, 208, 207]
+    assert job["closed"] and not retry["closed"]
 
 
 def test_a_discord_card_has_colour_fields_and_poster():

@@ -754,16 +754,18 @@ def job_episodes(episodes: list, batch: str | None):
     i = 0
     while True:
         with jobs_lock:
+            # the sync these episodes are of: another sync of the job (a retry with another Replace) may be the running one
+            job = next((j for j in batch_jobs.get(batch, []) if j["episodes"] is episodes), None)
             if i >= len(episodes):  # nothing left, paused or not: the job ends
-                if batch in running_jobs:
-                    running_jobs[batch]["closed"] = True
+                if job:
+                    job["closed"] = True
                 return
             if batch in paused_jobs:
                 ep = None
             else:
                 ep = episodes[i]
-                if batch in running_jobs:
-                    running_jobs[batch]["at"] = i + 1  # where a retry goes: next
+                if job:
+                    job["at"] = i + 1  # where a retry goes: next
         if ep is None:  # paused: the one before is done, this one waits
             time.sleep(1)
             continue
