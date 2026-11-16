@@ -784,7 +784,8 @@ def add_to_job(batch: str, ep: dict, show: dict, replace: bool = False, first: b
             job["episodes"].insert(job.get("at", 0), ep)
         else:
             job["episodes"].append(ep)
-        waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, "manual", batch, replace), "paused": batch in paused_jobs}
+        waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, "manual", batch, replace, audio=job.get("audio") or ""),
+                                                      "paused": batch in paused_jobs}
         return True
 
 

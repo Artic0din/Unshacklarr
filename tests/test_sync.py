@@ -4116,6 +4116,11 @@ def test_a_download_asked_in_one_audio_language_asks_it_first_and_accepts_it(tmp
     assert sync.download_request(show, {}, "S01E01", tmp_path)["a_lang"] == ["fr"]
     assert sync.accepted_audio(show, {}) == ["fr"]
 
+    # queued again in its job while it runs, its card keeps the language: cancelled again, then queued again, it still asks it
+    sync.running_jobs["20261117-000000-abcdef"] = {"episodes": [], "stubs": {}, "closed": False, "audio": "fr"}
+    assert sync.add_to_job("20261117-000000-abcdef", episode(111, 2, 8), config["series"][111])
+    assert sync.waiting[episode(111, 2, 8)["id"]]["audio_override"] == "fr"
+
 
 @responses.activate
 def test_a_download_only_series_is_downloaded_never_imported_nor_cleaned(tmp_path, monkeypatch):
