@@ -173,10 +173,13 @@ nav .short { display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .icon-btn { display: none; place-items: center; width: 44px; height: 44px; margin-left: -8px; background: none; border: 0; border-radius: 50%; color: var(--text); cursor: pointer; }
 .icon-btn .ico { width: 24px; height: 24px; }
-.pill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 999px;
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--field-line); border-radius: 999px;
   background: var(--panel); color: var(--muted); cursor: pointer; white-space: nowrap; font-weight: 500; user-select: none; }
 .pill input { position: absolute; opacity: 0; pointer-events: none; }
 .pill:has(input:checked) { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); color: var(--text); }
+.pill:has(input:checked)::before { content: ""; width: 12px; height: 12px; background: currentColor;  /* the same tick as the Select toggle's */
+  clip-path: polygon(14% 52%, 0 66%, 38% 100%, 100% 22%, 86% 8%, 38% 72%); }
 .pill:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 3px; margin-bottom: 14px; max-width: 100%; overflow-x: auto; }
 .seg button { background: none; border: 0; border-radius: var(--r-sm); padding: 7px 14px; cursor: pointer; color: var(--muted); white-space: nowrap; font-weight: 500; }
@@ -539,7 +542,7 @@ input[type=checkbox].switch:checked { background: var(--accent); } input[type=ch
 .cp-list[hidden] { display: none; }
 .cp-list li { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: var(--r-sm); cursor: pointer; font-size: var(--fs-callout); }
 .cp-list li span:not(.flag) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cp-list li small { color: var(--muted); font-size: var(--fs-footnote); } .cp-list li.on { background: color-mix(in srgb, var(--text) 7%, transparent); }
+.cp-list li small { color: var(--muted); font-size: var(--fs-footnote); } .cp-list li.on { background: color-mix(in srgb, var(--text) 7%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
 @media (hover: hover) { .cp-list li:hover { background: color-mix(in srgb, var(--text) 7%, transparent); } }
 .cp-list li.cp-none { color: var(--muted); cursor: default; } @media (hover: hover) { .cp-list li.cp-none:hover { background: none; } }
 .cp-input { width: 100%; }
@@ -924,6 +927,7 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .svc-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sub); }
 .svc-table th { text-align: left; font-size: var(--fs-footnote); color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .svc-table td { padding: 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.svc-table tbody th { color: var(--text); font-size: var(--fs-sub); font-weight: 400; }
 .svc-table .bad { color: var(--err); font-weight: 600; } .svc-table .fine { color: var(--ok); }
 .con-empty { padding: 8px; font-size: var(--fs-sub); color: var(--muted); }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); animation: pulse 1.6s infinite; }
@@ -950,6 +954,9 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .steps .fail { color: var(--err); font-weight: 600; } .steps .fail::before { background: var(--err); }
 .steps .warn { color: var(--warn); font-weight: 600; } .steps .warn::before { background: var(--warn); }
 .steps .halt { color: var(--muted); font-weight: 600; } .steps .halt::before { background: var(--muted); }
+/* failed and stopped carry a mark of their own too, not only a colour; the state's word is in .sr-only */
+.steps .fail :is(.l, .s)::before { content: "\2715\00a0"; content: "\2715\00a0" / ""; }
+.steps .halt :is(.l, .s)::before { content: "\25A0\00a0"; content: "\25A0\00a0" / ""; }
 .cd-stats { display: flex; gap: 28px; flex-wrap: wrap; }
 .cd-stats div { display: grid; } .cd-stats small { color: var(--muted); font-size: var(--fs-footnote); }
 .cd-stats b { font-size: var(--fs-title3); font-variant-numeric: tabular-nums; }
@@ -1226,6 +1233,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
 .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 15%, transparent); }
 .dot.down { background: var(--err); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent); }
 .dot.warn { background: var(--warn); }
+.health .dot:not(.ok, .down, .warn) { background: none; box-shadow: inset 0 0 0 2px var(--muted); }  /* checking: a ring, not a filled dot */
 .status-err { margin: 0; color: var(--err); font-size: var(--fs-callout); overflow-wrap: anywhere; }
 .modal.wide { width: min(760px, calc(100vw - 32px)); max-width: none; }
 .bulk-rows { list-style: none; margin: 0 0 16px; padding: 0; max-height: min(58vh, 560px); overflow-y: auto; }
@@ -1403,11 +1411,11 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .last-sync { display: none; }
   .health span:not(.dot) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  /* a service that is down says so in words on a phone too, not by the dot's colour alone */
-  .health button:has(small:not(:empty)) span:not(.dot) { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
+  /* a service that is down or has an update says so in words on a phone too, not by the dot's colour alone */
+  .health button:is([data-state=warn], [data-state=down]) span:not(.dot) { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
   /* ...on a row of its own under the title, so the header's buttons stay on screen */
-  header:has(.health small:not(:empty)) { flex-wrap: wrap; }
-  header:has(.health small:not(:empty)) .health { order: 10; flex-basis: 100%; margin-left: 0; }
+  header:has(.health :is([data-state=warn], [data-state=down])) { flex-wrap: wrap; }
+  header:has(.health :is([data-state=warn], [data-state=down])) .health { order: 10; flex-basis: 100%; margin-left: 0; }
   .inbox-x { width: 44px; height: 44px; }
   .update-pill span { display: none; } .update-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
   .health button { padding: 12px 8px; }
@@ -1930,7 +1938,8 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); box-shadow: 0 0 
 @media (min-width: 1440px) { .sv-table td .sv-ctl:not(:has(input)) { flex-wrap: nowrap; } .sv-file { grid-template-columns: minmax(9.5rem, 1fr) auto; } }
 
 /* A ladder picker: Edit ladders after its chips; the options it takes over, and the video it picks under a command */
-.ax-seg .ax-edit { align-self: center; margin-left: 4px; font-size: var(--fs-sub); color: var(--accent); }
+.ladder-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: var(--gap-field); }
+.ladder-pick .ax-seg { margin: 0; } .ladder-pick .ax-edit { font-size: var(--fs-sub); color: var(--accent); }
 .ladder-clash { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; padding: 8px 12px; border-radius: var(--r-md); font-size: var(--fs-sub);
   color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); }
 .ladder-clash[hidden] { display: none; }

@@ -113,6 +113,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **States no longer rest on a colour alone.** The header says "Update available" and "Checking…" in words (on a phone an update gets the same row as "Unreachable", and a check shows a ring); each download step says Done, Running, Failed, Stopped, Kept or Waiting to a screen reader, the current one is marked, and a failed or stopped one carries a mark; the weekly Stats bars come with a table of their numbers; the chosen quality ladder is marked like the other chips, with "Edit ladders" outside the group; the active country in the setup has an accent bar; and the Missing and Monitored pills have a visible edge and a tick when on. (#280)
 - A restart while a retry ran beside its job (another Replace choice) no longer loses the job's queued episodes: each is kept with its own settings and picked up again. The queue saved by the version before still loads; once this version has saved it, an older version can no longer read it.
 - An API download request with `"audio"` now asks the service for that language first, with the series' own audio languages after it, and accepts the file in it (an episode that has a file is replaced only by one in that language), instead of downloading the series' usual language again and counting it as an audio upgrade. (#187)
 - With `--generate-dv` on, an episode with HDR10+ and no Dolby Vision now fits a quality ladder's Hybrid step, in downloads and in Upgrades, instead of failing with "None of the quality ladder's steps" or taking a lower step.
