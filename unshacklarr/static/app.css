@@ -824,6 +824,7 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
   border-radius: var(--r-md); padding: 10px 12px 10px 18px; display: flex; gap: 14px; align-items: center; z-index: 20;
   box-shadow: var(--sh-md); }
 .savebar[hidden] { display: none; }
+.savebar-actions { display: flex; gap: 8px; }
 .btn.primary.saved, .btn.primary.saved:disabled { background: var(--ok); border-color: var(--ok); color: var(--accent-ink); opacity: 1; }
 .toasts { position: fixed; top: auto; left: auto; margin: 0; border: 0; padding: 0; background: none; overflow: visible; color: inherit;  /* a popover: none of its defaults */
   right: 24px; bottom: 84px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 30; pointer-events: none; }
@@ -1558,7 +1559,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   #inbox-dialog.menu { inset: 60px 8px auto 8px; width: auto; border-radius: var(--r-lg); padding-bottom: 8px; }
   .modal-actions { flex-direction: column-reverse; }
   .modal-actions .btn { width: 100%; }
-  .savebar { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); justify-content: space-between; }
+  .savebar { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); justify-content: space-between; flex-wrap: wrap; }
   body.drawer-open .savebar { display: none; }
   /* Notices drop in under the head, as on iOS, instead of floating over the page's bottom. */
   .toasts { left: 12px; right: 12px; top: calc(72px + env(safe-area-inset-top)); bottom: auto; align-items: center; }

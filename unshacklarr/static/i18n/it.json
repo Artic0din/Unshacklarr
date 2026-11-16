@@ -193,6 +193,8 @@
  "Disable folder creation for TV Shows.": "Disattiva la creazione delle cartelle per le serie TV.",
  "Disable the source tag from the output file name and path.": "Toglie il tag della sorgente dal nome e dal percorso del file.",
  "Discard": "Scarta",
+ "Discard changes": "Scarta modifiche",
+ "Changes discarded": "Modifiche scartate",
  "Discord, this device and more": "Discord, questo dispositivo e altro",
  "Do not download audio tracks.": "Non scarica le tracce audio.",
  "Do not download chapter markers.": "Non scarica i capitoli.",

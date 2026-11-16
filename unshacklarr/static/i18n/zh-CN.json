@@ -196,6 +196,8 @@
  "Disable folder creation for TV Shows.": "不为电视剧创建文件夹。",
  "Disable the source tag from the output file name and path.": "在输出文件名和路径中去掉来源标签。",
  "Discard": "放弃",
+ "Discard changes": "放弃更改",
+ "Changes discarded": "已放弃更改",
  "Discord, this device and more": "Discord、本设备等",
  "Do not download audio tracks.": "不下载音频轨道。",
  "Do not download chapter markers.": "不下载章节标记。",

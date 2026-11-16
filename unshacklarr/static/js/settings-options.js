@@ -801,6 +801,24 @@ async function saveHere(button, bar = null) {
   }, 1600);
 }
 $("#save").onclick = () => saveHere($("#save"), $("#savebar"));
+/* Back to what is saved: every part the bar counts as a change (the settings, the series with a service), drawn again.
+   Notification addresses staged for removal are in the settings, so they come back too. */
+function discardChanges() {
+  const saved = JSON.parse(savedConfig);
+  const { series: savedSeries = {}, ...savedRest } = saved;
+  const outside = ["series", "versions", "hidden_series"];  // not part of a save's changes: left as they are
+  for (const k of Object.keys(S.config)) if (!outside.includes(k) && !(k in savedRest)) delete S.config[k];
+  Object.assign(S.config, savedRest);
+  for (const [id, conf] of Object.entries(S.config.series)) if (conf.service && !(id in savedSeries)) delete S.config.series[id];
+  Object.assign(S.config.series, savedSeries);
+  optionsEditor($("#defaults"), S.dlOptions, S.config.defaults);
+  renderSettings();
+  renderServiceFilter();
+  renderWall();
+  dirty();
+  toast("Changes discarded");
+}
+$("#discard").onclick = discardChanges;
 
 let logTimer = null;
 function ago(iso) {

@@ -79,6 +79,11 @@ Every change worth knowing, newest first. The format follows
   `docker exec`.
 - **Search by any title.** The series search also finds a series by its other titles in Sonarr and its name in files.
 
+**💾 Saving**
+- **Discard unsaved changes.** The bar at the bottom has a Discard changes button next to Save changes: it puts the
+  settings back as last saved, a notification address you removed included, and says "Unsaved changes" to a screen
+  reader when it shows. (#280)
+
 ### Changed
 
 - Buttons, dropdowns, search boxes and filters share two heights everywhere (36px in toolbars and forms, 30px in rows and cards), dropdowns look the same in Safari, plain buttons have a visible edge, cards and rows that need attention are framed in their colour instead of a bar on the left, Settings uses the whole width, Interface and Region cards sit side by side with a Language dropdown, the Services table reads Service, Sign-in methods, Sign-in, Cookies, Used by, Actions with each cookie file on one line and Add only when there is none, notifications are two-line rows, and the job bar at the bottom of Activity is readable in the light look.

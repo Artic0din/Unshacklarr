@@ -278,3 +278,39 @@ const after = replaced.map(([sel, json]) => [sel, /alpha\.wvd/.test(json), /beta
 console.log(JSON.stringify({ listRedrawn: after.some(([sel]) => sel === "#cdm-list"), shown: after.filter(([, a]) => a).length > 0, hidden: after.every(([, , b]) => !b) }));
 """, str(JS / "cookies-cdm.js"))
     assert seen == {"listRedrawn": False, "shown": True, "hidden": True}
+
+
+def test_discard_puts_the_settings_back_as_saved_and_draws_them_again():
+    shown = node(r"""
+const saved = { settings: { timezone: "Europe/Paris" }, notifications: { targets: [{ url: "ntfy://a" }, { url: "ntfy://b" }] }, defaults: { quality: "1080" },
+  series: { 1: { service: "BINGE", title: "Kept" } } };
+const config = JSON.parse(JSON.stringify(saved));
+Object.assign(config, { versions: { settings: "7" }, hidden_series: [9] });
+config.settings.timezone = "UTC";                                   // an edited field
+config.settings.sonarr_api_key = "typed";                           // a key typed, never saved
+config.notifications.targets.splice(0, 1);                          // an address staged for removal
+config.series[1].title = "Edited"; config.series[2] = { service: "STAN", title: "Added" };
+config.series[3] = { title: "No service: not part of a save" };
+config.extra = true;
+const calls = [];
+const ctx = sandbox({ S: { config, dlOptions: [] }, savedConfig: JSON.stringify(saved), $: (sel) => sel,
+  optionsEditor: (...a) => calls.push("options"), renderSettings: () => calls.push("settings"), renderServiceFilter: () => calls.push("filter"),
+  renderWall: () => calls.push("wall"), dirty: () => calls.push("dirty"), toast: (t) => calls.push(t) });
+vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
+ctx.discardChanges();
+console.log(JSON.stringify({ config, calls }));
+""", str(JS / "settings-options.js"))
+    config = shown["config"]
+    assert config["settings"] == {"timezone": "Europe/Paris"}
+    assert [t["url"] for t in config["notifications"]["targets"]] == ["ntfy://a", "ntfy://b"]
+    assert "extra" not in config
+    assert config["series"] == {"1": {"service": "BINGE", "title": "Kept"}, "3": {"title": "No service: not part of a save"}}
+    assert config["versions"] == {"settings": "7"} and config["hidden_series"] == [9]  # not changes of a save: left as they are
+    assert shown["calls"] == ["options", "settings", "filter", "wall", "dirty", "Changes discarded"]
+
+
+def test_the_save_bar_offers_discard_and_announces_itself():
+    page = (STATIC / "index.html").read_text()
+    bar = page[page.index('<div class="savebar"'):].split("</div>", 1)[0]
+    assert 'role="status"' in bar.split(">", 1)[0]
+    assert bar.index('id="discard"') < bar.index('id="save"')
