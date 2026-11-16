@@ -81,7 +81,7 @@ function renderHiddenButton() {
 $("#hidden-open").onclick = () => {
   const rows = S.config.hidden_series.map((tvdbId) => {
     const series = S.series.find((x) => x.tvdbId === tvdbId), name = series?.title || `TVDB ${tvdbId}`;
-    const input = el("input", { type: "checkbox", checked: false, ariaLabel: `In schedule: ${name}` });
+    const input = el("input", { type: "checkbox", checked: false, ariaLabel: trWith("In schedule: {0}", name) });
     const li = el("li", { className: "off" }, el("img", { alt: "", loading: "lazy", src: posterSrc(series?.poster, name), onerror: posterFail(name) }), el("span", { className: "n", textContent: name }),
       el("label", { className: "switch" }, "In schedule", input, el("i")));
     input.onchange = async () => {

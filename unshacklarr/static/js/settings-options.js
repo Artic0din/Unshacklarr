@@ -352,7 +352,7 @@ function renderBackups() {
   $("#bk-saved-head").replaceChildren("Saved backups", el("small", { textContent: ` · ${saved.length} in ${S.backups.folder}` }));
   $("#bk-list").replaceChildren(...saved.map((f) => el("div", { className: "bk-row" },
     el("span", { textContent: when(f.at) }), el("small", { textContent: `${Math.max(1, Math.round(f.size / 1024))} KB` }),
-    el("button", { className: "btn small", type: "button", textContent: "Download", ariaLabel: `Download backup from ${when(f.at)}`, onclick: () => backupFile(f.name) }))));
+    el("button", { className: "btn small", type: "button", textContent: "Download", ariaLabel: trWith("Download backup from {0}", when(f.at)), onclick: () => backupFile(f.name) }))));
 }
 /* Account, backups sent elsewhere: WebDAV or S3, its fields, the passphrase, and how the last one went. Saved with
    its own button and the password, never by the settings' Save: a session alone must not send the keys elsewhere. */
@@ -570,8 +570,8 @@ function renderTargets() {
         t.levels = t.levels.includes(lv) ? t.levels.filter((x) => x !== lv) : [...t.levels, lv];
         renderTargets(); renderNotify(); dirty();
       } }, el("i", { ariaHidden: "true" }), name));
-    const test = el("button", { type: "button", className: "btn small", textContent: tested === "…" ? "Sending…" : "Test", disabled: tested === "…", ...(tested === "…" ? {} : { ariaLabel: `Test ${name}` }), onclick: () => testTargets([t.url]) });
-    const remove = el("button", { type: "button", className: "btn small danger", textContent: "Remove", ariaLabel: `Remove ${name}`, onclick: () => { targets.splice(i, 1); renderTargets(); renderNotify(); dirty(); } });
+    const test = el("button", { type: "button", className: "btn small", textContent: tested === "…" ? "Sending…" : "Test", disabled: tested === "…", ...(tested === "…" ? {} : { ariaLabel: trWith("Test {0}", name) }), onclick: () => testTargets([t.url]) });
+    const remove = el("button", { type: "button", className: "btn small danger", textContent: "Remove", ariaLabel: trWith("Remove {0}", name), onclick: () => { targets.splice(i, 1); renderTargets(); renderNotify(); dirty(); } });
     return el("div", { className: `nt-target${t.levels.length ? "" : " off"}` },
       el("span", { className: "nt-badge", textContent: badgeOf(appOf(t.url)), ariaHidden: "true" }),
       el("span", { className: "nt-who" }, el("b", { textContent: name }),

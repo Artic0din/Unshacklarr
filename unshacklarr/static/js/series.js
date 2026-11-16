@@ -482,8 +482,8 @@ function openColumns() {
     const box = el("input", { type: "checkbox", checked: p.on, onchange: () => { p.on = box.checked; saveColPrefs(colsNow); } });
     const move = (d) => { const next = [...colsNow]; [next[i], next[i + d]] = [next[i + d], next[i]]; saveColPrefs(next); draw(); $("#col-rows").children[i + d]?.querySelector(d < 0 ? ".up" : ".down")?.focus(); };
     return el("li", {}, el("label", {}, box, c.label, c.file ? "" : el("small", { textContent: "any episode" })),
-      el("button", { type: "button", className: "mv up", ariaLabel: `Move ${c.label} up`, disabled: i === 0, onclick: () => move(-1) }, icon("arrowUp")),
-      el("button", { type: "button", className: "mv down", ariaLabel: `Move ${c.label} down`, disabled: i === colsNow.length - 1, onclick: () => move(1) }, icon("arrowDown")));
+      el("button", { type: "button", className: "mv up", ariaLabel: trWith("Move {0} up", c.label), disabled: i === 0, onclick: () => move(-1) }, icon("arrowUp")),
+      el("button", { type: "button", className: "mv down", ariaLabel: trWith("Move {0} down", c.label), disabled: i === colsNow.length - 1, onclick: () => move(1) }, icon("arrowDown")));
   }));
   $("#cols-reset").onclick = (e) => { e.preventDefault(); try { localStorage.removeItem(COLS_KEY); } catch { /* nothing kept */ } colsNow = colPrefs(); renderSeason(); draw(); };
   draw();

@@ -78,7 +78,7 @@ function langCorner() {
     ...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", ariaCurrent: String(k === LANG),
       className: k === LANG ? "on" : "", onclick: () => { if (k !== LANG) setLang(k); } }, name)));
   const open = (on) => { menu.hidden = !on; button.setAttribute("aria-expanded", String(on)); };
-  const button = el("button", { type: "button", className: "lang-btn", ariaExpanded: "false", ariaLabel: tr("Language: {0}").replace("{0}", LANGS[LANG]),  // whole, with the name filled in after: a template this short takes no name it has no text for
+  const button = el("button", { type: "button", className: "lang-btn", ariaExpanded: "false", ariaLabel: trWith("Language: {0}", LANGS[LANG]),
     onclick: () => open(menu.hidden) }, el("span", { textContent: LANGS[LANG] }), el("span", { className: "caret", ariaHidden: "true" }));
   const corner = el("div", { className: "lang-corner" }, button, menu);
   corner.setAttribute("translate", "no");  // the property takes a boolean: "no" is true, which sets translate="yes"
@@ -113,6 +113,9 @@ function tr(text, depth = 0) {
   else if (out === undefined) out = trFind(key, depth);
   return out === undefined ? text : text.match(/^\s*/)[0] + out + text.match(/\s*$/)[0];
 }
+// A short template naming an item ("Test {0}"), translated whole, then filled: matched after the fact, a template this
+// short takes no name it has no text for, so "Test Discord" would stay English
+const trWith = (template, ...fill) => tr(template).replace(/\{(\d+)\}/g, (_, i) => fill[i]);
 function trFind(key, depth) {
   let out = trTemplate(key, depth, true);  // a template that has the " · " itself ("Sign-in failed · {0}"): before pieces are split
   if (out === undefined && key.includes(" · ")) {  // pieces joined by " · ": each its own text
@@ -394,7 +397,7 @@ function optionsEditor(root, specs, values, anyFlag = false) {  // anyFlag: a se
     if (spec.is_flag) {
       input = el("label", { className: "check" }, el("input", { type: "checkbox", checked: !!value, ariaLabel: flag, onchange: (e) => { values[flag] = e.target.checked; dirty(); } }), "on");
     } else {
-      input = el("input", { type: "text", value: value ?? "", placeholder: spec.choices.length ? spec.choices.join(", ") : spec.help, ariaLabel: `${flag} value`,
+      input = el("input", { type: "text", value: value ?? "", placeholder: spec.choices.length ? spec.choices.join(", ") : spec.help, ariaLabel: trWith("{0} value", flag),
         oninput: (e) => { values[flag] = e.target.value; dirty(); } });
       if (spec.choices.length) {
         const id = "dl" + Math.random().toString(36).slice(2);
