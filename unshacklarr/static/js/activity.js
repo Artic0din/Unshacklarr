@@ -569,7 +569,7 @@ async function showUpgrades(fresh = true) {
   // every series, or one from its card (asked afresh); the ticks only choose what is replaced (by mj23au, #18)
   const checkUp = async (button, only = []) => {
     button.disabled = true;
-    try { await api(scan.running ? "/api/upgrades/stop" : "/api/upgrades/check", { method: "POST", body: JSON.stringify({ sonarr: upgradeSonarr, series: only }) }); } catch (err) { toast(err.message, true); }
+    try { await api(scan.running ? "/api/upgrades/stop" : "/api/upgrades/check", { method: "POST", body: JSON.stringify({ sonarr, series: only }) }); } catch (err) { toast(err.message, true); }
     showUpgrades();
   };
   // a stopped check ends the batch it is asking (up to 10 episodes of a series): said, so Stop is seen to work

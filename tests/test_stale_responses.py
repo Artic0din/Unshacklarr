@@ -168,6 +168,12 @@ const goText = () => find(draws[draws.length - 1], (n) => n.className === "btn p
     const slow = show(pane === "missing" ? "" : "A", 0), fast = show(pane === "missing" ? "" : "B", 7);
     await Promise.all([slow, fast]);
     console.log(JSON.stringify({ shown: goText() }));
+  } else if (scenario === "check") {  // A's list is on screen, the picker moves to B, a tick redraws A's cached list, and its Check button is pressed
+    await show("A", 0);
+    vm.runInContext('upgradeSonarr = "B";', ctx);
+    await ctx.showUpgrades(false);
+    await find(draws[draws.length - 1], (n) => n.textContent === "Check now").onclick({ target: {} });
+    console.log(JSON.stringify({ sent: posts.map((p) => p.sonarr ?? null) }));
   } else {  // the list for Sonarr A is on screen, the picker moves to B, and the button of A's list is pressed meanwhile
     await show("A", 0);
     const go = find(draws[draws.length - 1], (n) => n.className === "btn primary");
@@ -188,6 +194,10 @@ def test_list_pane_shows_the_newest_request_not_the_slowest(pane, count):
 @pytest.mark.parametrize("pane", ["missing", "upgrades"])
 def test_list_pane_buttons_send_the_sonarr_the_list_is_for(pane):
     assert node(LIST_PANES, str(JS / "activity.js"), pane, "click") == {"sent": ["A"]}
+
+
+def test_cached_upgrades_list_checks_the_library_it_shows():
+    assert node(LIST_PANES, str(JS / "activity.js"), "upgrades", "check") == {"sent": ["A"]}
 
 
 # Runs the page's real "Test this series" click with the probe's answers released by hand.
