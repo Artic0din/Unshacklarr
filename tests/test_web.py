@@ -7674,3 +7674,16 @@ def test_someone_the_reverse_proxy_signed_in_can_use_the_test_buttons(tmp_path, 
             return before, await tests()
 
     assert asyncio.run(go()) == ((403, 403), (200, 200))
+
+
+def test_missing_with_a_superscript_digit_in_days_is_a_400_not_a_500(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "on_sonarr", lambda inst, fn, days: [])
+    with pytest.raises(web.web.HTTPBadRequest):
+        asyncio.run(web.missing(SimpleNamespace(query={"days": "²"})))

@@ -5452,7 +5452,7 @@ async def watch_upgrade_checks():
 async def missing(request):
     """Activity's catch-up: what missing_of_managed finds, aired within ?days= when given, in ?sonarr= when given."""
     days = request.query.get("days", "")
-    if days and not days.isdigit():
+    if days and not (days.isascii() and days.isdigit()):
         raise web.HTTPBadRequest(text="days is a number of days")
     inst = sonarr_named(request.query.get("sonarr", ""))
     try:
