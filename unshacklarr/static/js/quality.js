@@ -58,13 +58,12 @@ function ladderUse(name) {
 function ladderChips(value, inherited, onchange) {
   const def = inherited && ladders().some((l) => l.name === inherited) ? inherited : "off";
   let now = !value || !ladders().some((l) => l.name === value) && value !== "off" ? def : value;
-  const box = el("div", { className: "ax-seg", role: "radiogroup", ariaLabel: "Quality ladder" });
+  const box = el("div", { className: "ax-seg", role: "group", ariaLabel: "Quality ladder" });
   const paint = () => box.replaceChildren(...[["off", "Off"], ...ladders().map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
-    type: "button", role: "radio", ariaChecked: String(now === v), onclick: () => { now = v; paint(); onchange(v === def ? "" : v); } },
-    el("span", { textContent: label }), ...(v === def ? [el("small", { className: "chip-default", textContent: "default" })] : []))),
-    el("a", { className: "ax-edit", href: "#/settings/quality", textContent: "Edit ladders" }));
+    type: "button", ariaPressed: String(now === v), onclick: () => { now = v; paint(); onchange(v === def ? "" : v); } },
+    el("span", { textContent: label }), ...(v === def ? [el("small", { className: "chip-default", textContent: "default" })] : []))));
   paint();
-  return box;
+  return el("div", { className: "ladder-pick" }, box, el("a", { className: "ax-edit", href: "#/settings/quality", textContent: "Edit ladders" }));
 }
 const ladderNamed = (name) => (name && name !== "off" && ladders().find((l) => l.name === name)) || null;
 /* What a ladder decides itself: these options would only fight it (sync.apply_ladder drops or replaces them). */

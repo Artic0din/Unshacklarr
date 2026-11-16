@@ -733,12 +733,16 @@ async function showStats() {
   if (picked_run !== "stats") return;  // another pane was picked while this answer was on its way
   const m = st.month, fmt = (v, unit = "") => v === null || v === undefined ? "–" : `${v}${unit}`;
   const max = Math.max(1, ...st.weeks.map((w) => w.downloaded + w.failed + w.kept));
-  const weeks = el("div", { className: "weeks", role: "img", ariaLabel: "Downloads per week, the last 8 weeks" }, ...st.weeks.map((w) => {
+  const weekOf = (w) => new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
+  const weeks = el("div", { className: "weeks", ariaHidden: "true" }, ...st.weeks.map((w) => {  // drawn for the eye: the table under it has the numbers
     const n = w.downloaded + w.failed + w.kept, h = (k) => `height:${(w[k] / max) * 130}px`;
-    return el("div", { className: "w", title: `Week of ${new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
+    return el("div", { className: "w", title: `Week of ${weekOf(w)}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
       el("span", { className: "stack" }, el("i", { className: "ok", style: h("downloaded") }), el("i", { className: "kp", style: h("kept") }), el("i", { className: "ko", style: h("failed") })),
-      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) })));
+      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: weekOf(w) })));
   }));
+  const perWeek = el("table", { className: "svc-table" }, el("caption", { className: "sr-only", textContent: "Downloads per week, the last 8 weeks" }),
+    el("thead", {}, el("tr", {}, ...["Week", "Downloaded", "Failed", "Kept"].map((t) => el("th", { textContent: t })))),
+    el("tbody", {}, ...st.weeks.map((w) => el("tr", {}, el("th", { scope: "row", textContent: weekOf(w) }), el("td", { textContent: w.downloaded }), el("td", { textContent: w.failed }), el("td", { textContent: w.kept })))));
   const table = el("table", { className: "svc-table" }, el("thead", {}, el("tr", {}, ...["Service", "Downloaded", "Failed", "Kept", "Success", "Last success", "Average"].map((t) => el("th", { textContent: t })))),
     el("tbody", {}, ...st.services.map((v) => el("tr", {}, el("td", {}, el("b", { textContent: svcName(v.service) })), el("td", { textContent: v.downloaded }),
       el("td", { className: v.failed ? "bad" : "", textContent: v.failed }), el("td", { textContent: v.kept }),
@@ -750,9 +754,10 @@ async function showStats() {
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
       ["Kept by Sonarr", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
       .map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v })))),
-    el("div", { style: "display:grid;gap:8px" }, weeks, el("div", { className: "legend" }, el("span", {}, el("i", { className: "ok", style: "background:var(--ok)" }), "Downloaded"),
+    el("div", { style: "display:grid;gap:8px" }, weeks, el("div", { className: "legend", ariaHidden: "true" }, el("span", {}, el("i", { className: "ok", style: "background:var(--ok)" }), "Downloaded"),
       el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept by Sonarr"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
-    st.services.length ? el("div", { style: "overflow-x:auto" }, table) : ""));
+    perWeek,
+    st.services.length ? el("div", { className: "svc-scroll" }, table) : ""));
 }
 $("#con-stats").onclick = showStats;
 $("#cd-back").onclick = () => { $("#con").classList.remove("open"); picked_run = null; renderConsole(); };
@@ -772,6 +777,7 @@ addEventListener("scroll", () => {  // a phone: the list is the page
 
 const STEPS = ["Queued", "Downloading", "Decrypting and muxing", "Joining parts", "Renaming", "Sonarr import"];
 const STEPS_SHORT = ["Queued", "Download", "Mux", "Join", "Rename", "Import"];
+const STEP_STATE = { done: "Done", now: "Running", fail: "Failed", halt: "Stopped", "": "Waiting" };  // each step's state in words (warn: the outcome's own), the bar's colour aside
 function stepStates(c) {
   const at = c.step === "downloading" && afterTracks(c) ? 2  // every track in: serve makes the file
     : { queued: 0, downloading: 1, joining: 3, finishing: 3, renaming: 4, importing: 5, done: 6 }[c.step] ?? 0;
@@ -943,13 +949,18 @@ function trackDone(t) {
   return span;
 }
 const tracksOpen = new Set();  // attempts whose downloaded tracks were unfolded: they stay so as it moves on
+/* An attempt's steps, each with its state in words and the current one marked, so no state rests on a colour. */
+function stepList(c) {
+  return el("div", { className: "steps", role: "list", ariaLabel: "Steps" },
+    ...stepStates(c).flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms`, ...(["now", "fail", "halt"].includes(st) ? { ariaCurrent: "step" } : {}) },
+      el("span", { className: "l", textContent: STEPS[i] }),
+      el("span", { className: "s", textContent: STEPS_SHORT[i] }),
+      el("span", { className: "sr-only", textContent: st === "halt" ? OUTCOME[c.outcome] || STEP_STATE.halt : STEP_STATE[st] || OUTCOME[c.outcome] }))]));  // halted: why, in the outcome's own word
+}
 /* An attempt's steps, what waits for you, its figures or its end, and its tracks: in its own view and in a job's card. */
 function runBody(c) {
   const started = new Date(c.started), live = isLive(c);
-  const steps = el("div", { className: "steps", role: "list", ariaLabel: "Steps" },
-    ...stepStates(c).flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms` },
-      el("span", { className: "l", textContent: STEPS[i] }),
-      el("span", { className: "s", textContent: STEPS_SHORT[i] }))]));
+  const steps = stepList(c);
   const parts = [steps];
   if (live && c.prompt) parts.push(promptBox(c.prompt));
   if (live) {
@@ -1015,12 +1026,12 @@ function runBody(c) {
 /* How a download runs, out of the way: an ⓘ opening a small menu (where, proxy, CDM, the episode on the service,
    the attempt, and the same as a command to copy). Closed by a click elsewhere or Escape. */
 let setupPop = null;
-const closeSetup = () => { setupPop?.remove(); setupPop = null; };
+const closeSetup = () => { if (!setupPop) return; const pop = setupPop; setupPop = null; popClose(pop); pop.remove(); };
 document.addEventListener("pointerdown", (e) => { if (setupPop && !setupPop.contains(e.target) && !e.target.closest?.(".setup-btn")) closeSetup(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSetup(); });
 function setupButton(c, className = "jact") {
   if (!c.setup) return "";
-  const b = el("button", { type: "button", className: `${className} setup-btn`, ariaLabel: "How it runs",
+  const b = el("button", { type: "button", className: `${className} setup-btn`, ariaLabel: "How it runs", dataset: { run: c.id },
     onclick: (e) => { e.stopPropagation(); openSetup(c, e.currentTarget); } });
   b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
   return b;
@@ -1036,6 +1047,7 @@ function openSetup(c, at) {
   const r = at.getBoundingClientRect(), p = setupPop.getBoundingClientRect();
   setupPop.style.left = `${Math.min(Math.max(8, r.right - p.width), innerWidth - p.width - 8)}px`;
   setupPop.style.top = `${r.bottom + 8 + p.height > innerHeight - 8 ? Math.max(8, r.top - p.height - 8) : r.bottom + 8}px`;
+  popOpen(setupPop, at, "How it runs", () => [...document.querySelectorAll(`.setup-btn[data-run="${CSS.escape(c.id)}"]`)].find((b) => b.getClientRects().length));
 }
 function setupBox(c) {
   const rows = [["Runs on", c.setup.via], ["On the service", c.serviceEpisode !== c.sxxeyy && c.serviceEpisode],
