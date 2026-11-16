@@ -4773,7 +4773,7 @@ def test_upgrades_find_the_files_a_service_has_on_an_earlier_step(tmp_path, monk
     web = importlib.reload(unshacklarr.web)
     sync = web.sonarr_sync
     assert web.ladder_track({"resolution": "1920x800", "videoCodec": "x265", "videoDynamicRangeType": "DV HDR10"}) == \
-        {"height": 800, "width": 1920, "codec": "HEVC", "range": "DV", "layers": ["DV", "HDR10"]}
+        {"height": 800, "width": 1920, "codec": "HEVC", "range": "DV", "layers": ["DV", "HDR10"], "bitrate": 0}
     assert web.ladder_track({"resolution": "1280x720", "videoCodec": "h264", "videoDynamicRangeType": ""})["range"] == "SDR"
     hevc_first = {"name": "HEVC first", "steps": [{"codec": "HEVC", "range": "SDR", "min": 1080, "max": 1080},
                                                   {"codec": "AVC", "range": "SDR", "min": 1080, "max": 1080}]}
@@ -7392,3 +7392,14 @@ def test_the_unwritable_files_check_stops_walking_at_its_limit(monkeypatch):
     monkeypatch.setattr(web, "cache_folder", lambda: (_ for _ in ()).throw(web.UnshackleError("no serve")))
     monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", "")
     assert len(web.unwritable_files(Huge(), most=20)) == 20
+
+
+def test_a_library_file_over_a_steps_bitrate_cap_does_not_fit_that_step():
+    # A 9000 kbps 1080p HEVC file and a first step capped at 6000 kbps: outside it, so Upgrades still looks for one
+    from unshacklarr import web
+    track = web.ladder_track({"resolution": "1920x1080", "videoCodec": "x265", "videoBitrate": 9_000_000, "videoDynamicRangeType": ""})
+    assert track["bitrate"] == 9000
+    capped = {"codec": "", "range": "", "min": 1080, "max_kbps": 6000}
+    assert not web.sonarr_sync.fits(capped, track)
+    assert web.sonarr_sync.fits({**capped, "max_kbps": 10000}, track)
+    assert web.ladder_track({"resolution": "1920x1080", "videoCodec": "x265"})["bitrate"] == 0  # none known: no cap applies

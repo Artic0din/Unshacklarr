@@ -3836,7 +3836,9 @@ def ladder_track(mi: dict) -> dict:
             "codec": LADDER_CODECS.get(CODECS.get(str(mi.get("videoCodec") or "").lower(), ""), ""),
             "range": "DV" if "DV" in dynamic else "HDR10P" if "PLUS" in dynamic else "HLG" if "HLG" in dynamic
             else "HDR10" if "HDR" in dynamic or "PQ" in dynamic else "SDR",
-            "layers": layers(dynamic)}  # a hybrid file sits on the earliest step any of its layers fits
+            "layers": layers(dynamic),  # a hybrid file sits on the earliest step any of its layers fits
+            # its video bitrate in kbps (Sonarr gives bits per second), for a step's cap; 0 when Sonarr has none
+            "bitrate": int(mi.get("videoBitrate") or 0) // 1000}
 
 
 LIST_KEEP = 60  # seconds: the Series page reads the other Sonarrs as it reads the main one, a series added there shows
