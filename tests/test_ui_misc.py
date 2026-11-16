@@ -55,3 +55,33 @@ vm.runInContext(grab(read(process.argv[1]), /const RELEASE_DAYS = [^\n]*\n/), ct
 console.log(JSON.stringify(vm.runInContext("RELEASE_DAYS", ctx)));
 """, str(JS / "series.js"))
     assert days == list(range(-sync.EARLY_DAYS_MAX, 2))
+
+
+# Safari before 17.4 has no Object.groupBy
+NO_GROUP_BY = "const NoGroupBy = Object.fromEntries(Object.getOwnPropertyNames(Object).filter((k) => k !== 'groupBy').map((k) => [k, Object[k]]));"
+
+
+def test_catch_up_box_draws_on_a_browser_without_object_groupby():
+    shown = node(NO_GROUP_BY + r"""
+const box = { hidden: true, classList: { toggle() {} }, replaceChildren(...kids) { this.kids = kids; } };
+const ctx = sandbox({ Object: NoGroupBy, pad2: (n) => String(n).padStart(2, "0"), $: () => box, current: { tvdbId: 1 }, S: { config: { series: { 1: { service: "BINGE" } } } },
+  epSeasons: { 7: [{ id: 2, seasonNumber: 7, hasFile: false, sonarrAir: "2999-01-01T00:00:00Z" }] }, epAvail: { 2: { service: "S07E02" } },
+  epBusy: new Map(), epPages: {}, epElsewhere: { 7: { service: "NINE", count: 5, url: "https://9now/show" } }, state: () => "miss", belowAsked: () => false, seriesSvcs: () => "BINGE", seasonSvc: () => "BINGE",
+  COUNT: { episode: String, upgrade: String, missingEpisode: String } });
+vm.runInContext(grab(read(process.argv[1]), /function renderCatchUp\b[\s\S]*?\n}\n/), ctx);
+ctx.renderCatchUp();
+console.log(JSON.stringify(JSON.stringify(box.kids)));
+""", str(JS / "series.js"))
+    assert "S07 (1)" in shown
+
+
+def test_live_track_list_draws_parts_on_a_browser_without_object_groupby():
+    classes = node(NO_GROUP_BY + r"""
+const tracks = [{ label: "Part 1 · video 1080p", progress: 100 }, { label: "Part 2 · video 1080p", progress: 40 }];
+const ctx = sandbox({ Object: NoGroupBy, isLive: () => false, stepStates: () => [], STEPS: [], STEPS_SHORT: [], tracksOpen: new Set() });
+vm.runInContext(grab(read(process.argv[1]), /function runBody\b[\s\S]*?\n}\n/), ctx);
+const names = [];
+(function walk(n) { if (!n || typeof n !== "object") return; if (typeof n.className === "string") names.push(n.className); (n.kids || []).forEach(walk); })({ kids: ctx.runBody({ id: "r1", outcome: "failed", started: "2026-01-01T00:00:00Z", tracks }) });
+console.log(JSON.stringify(names));
+""", str(JS / "activity.js"))
+    assert [c for c in classes if c in ("tpart", "tpart done")] == ["tpart done", "tpart"]

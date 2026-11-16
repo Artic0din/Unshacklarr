@@ -662,7 +662,7 @@ function renderCatchUp() {
   // One season's counts are in the title row and the select row: the box says more only for several, or for what they lack
   box.hidden = !epAvail || !(new Set(missing.map((e) => e.seasonNumber)).size > 1 || upgrades.length || renumbered || elsewhere.length || Object.keys(epPages).length);
   if (box.hidden) return;
-  const bySeason = Object.entries(Object.groupBy(there, (e) => e.seasonNumber)).sort((a, b) => b[0] - a[0]);
+  const bySeason = Object.entries(there.reduce((g, e) => ((g[e.seasonNumber] ||= []).push(e), g), {})).sort((a, b) => b[0] - a[0]);  // not Object.groupBy: Safari 17.4
   const free = there.filter((e) => !epBusy.has(e.id));
   box.classList.toggle("none", !there.length && !upgrades.length);
   box.replaceChildren(

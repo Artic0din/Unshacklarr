@@ -958,7 +958,7 @@ function runBody(c) {
       trackLabel(t.label, true),
       el("span", { className: "bar" + (t.progress >= 100 ? " done" : "") }, el("i", { style: `width:${t.progress}%`, dataset: { k: `t:${c.id}:${t.label}` } })),
       t.progress >= 100 ? trackDone(t) : el("span", { textContent: `${Math.round(t.progress)}%` }));
-    const byPart = Object.groupBy(tracks, (t) => /^Part (\d+)/.exec(t.label)?.[1] || "");
+    const byPart = tracks.reduce((g, t) => ((g[/^Part (\d+)/.exec(t.label)?.[1] || ""] ||= []).push(t), g), {});  // not Object.groupBy: Safari 17.4
     const numbers = Object.keys(byPart).filter(Boolean);
     // An episode in parts (Koh-Lanta on Molotov): each part under its own head, how far it is, then its tracks
     const list = numbers.length > 1 ? el("div", { className: "cd-tracks" }, ...numbers.map((n) => {
