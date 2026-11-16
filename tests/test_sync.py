@@ -5931,7 +5931,7 @@ def test_a_retry_follows_the_job_serve_never_confirmed_stopped_instead_of_downlo
     monkeypatch.setattr(sync.time, "sleep", lambda s: None)
 
     class Run:
-        card = {"step": "queued"}
+        id, card = "r1", {"step": "queued"}
         def save(self): pass
         def say(self, text): pass
         def raw(self, data): pass
@@ -6804,6 +6804,186 @@ def test_generate_dv_lets_hdr10_plus_alone_fill_a_hybrid_step(tmp_path, monkeypa
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload))
     sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
     assert [(d["quality"], d["range"], d.get("generate_dv")) for d in downloads] == [([2160], ["HYBRID"], True)]
+
+
+@pytest.mark.parametrize("ends", ["pause", "episode"])
+def test_a_job_that_lets_its_slot_go_never_frees_one_another_of_its_episodes_just_took(tmp_path, monkeypatch, ends):
+    # another episode of the job starts just after it was found idle: the slot it now downloads in stays held,
+    # whether the job was paused between episodes or its episode ended while it was paused
+    sync = load(tmp_path, monkeypatch)
+    run = lambda rid: type("Run", (), {"card": {"batch": "J"}, "id": rid, "say": lambda self, text: None})()
+    entered, leave, threads = threading.Event(), threading.Event(), []
+
+    def another_episode():
+        with sync.download_slot("", run("b")):
+            entered.set()
+            leave.wait(5)
+
+    class Racy(dict):
+        fired = False
+
+        def __contains__(self, job):
+            found = super().__contains__(job)
+            if job == "J" and not Racy.fired:  # found idle: the other episode starts now
+                Racy.fired = True
+                threads.append(threading.Thread(target=another_episode, daemon=True))
+                threads[-1].start()
+                entered.wait(0.3)
+            return found
+    monkeypatch.setattr(sync, "slot_active", Racy())
+    if ends == "pause":
+        with sync.slots:
+            sync.slot_jobs[""] = ["J"]
+        sync.pause_job("J", True)
+    else:
+        sync.paused_jobs.add("J")
+        with sync.download_slot("", run("a")):
+            pass
+    assert entered.wait(5)
+    held = "J" in sync.slot_jobs.get("", [])
+    leave.set()
+    threads[0].join(5)
+    assert held  # still downloading: its slot is not free for the next in line
+
+
+def test_a_run_whose_end_could_not_be_written_is_no_longer_running(tmp_path, monkeypatch):
+    # a full disk at the very end: the save fails, but Activity must not show it running (and refuse Delete) till restart
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05")
+    assert run.id in sync.EpisodeRun.active
+
+    def full(self):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(sync.EpisodeRun, "save", full)
+    with pytest.raises(OSError):
+        run.finish("downloaded")
+    assert run.id not in sync.EpisodeRun.active
+
+
+def test_saving_settings_never_leaves_the_servers_or_sonarrs_missing_meanwhile(tmp_path, monkeypatch):
+    # a download starting while Settings are saved finds its server and its Sonarr, not the main ones
+    sync = load(tmp_path, monkeypatch)
+    settings = {**sync.SETTINGS, "backends": [{"name": "vpn", "url": "http://vpn:8786"}, {"name": "nas", "url": "http://nas:8786"}],
+                "sonarrs": [{"name": "4K", "url": "http://4k:8989"}]}
+    sync.apply_settings(settings)
+    seen = []
+    real = sync.Unshackle
+    look = lambda: seen.append((sync.backend_named("vpn") is not sync.UNSHACKLE, "4K" in sync.SONARRS))
+
+    def watched(data):  # each server rebuilt: what a download starting now finds
+        look()
+        return real(data)
+
+    class Watched(dict):  # the Sonarr rebuilt: the same
+        def get(self, key, default=None):
+            look()
+            return super().get(key, default)
+    monkeypatch.setattr(sync, "Unshackle", watched)
+    sync.apply_settings({**settings, "sonarrs": [Watched(settings["sonarrs"][0])]})
+    assert seen and all(s == (True, True) for s in seen)
+    assert sorted(sync.BACKENDS) == ["nas", "vpn"] and list(sync.SONARRS) == ["4K"]
+
+
+def test_two_downloads_muxing_at_once_each_measure_their_own_folder(tmp_path, monkeypatch):
+    # another client's download muxes in serve's work folder when this one starts: this one's mux is its new folder,
+    # not two candidates (no progress) or the other's
+    sync = load(tmp_path, monkeypatch)
+    root = tmp_path / "temp"
+
+    def muxing(name, done):
+        folder = root / name
+        folder.mkdir(parents=True)
+        (folder / "Video_1.mp4").write_bytes(b"v" * 1000)
+        (folder / "Video_1.muxed.1.mkv").write_bytes(b"m" * done)
+        return folder
+    other = muxing("task_other", 900)
+    monkeypatch.setitem(sync.SETTINGS, "unshackle_temp_dir", str(root))
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05")
+    mux = []
+
+    def download(payload):
+        muxing("task_mine", 400)
+        return "job1"
+    states = iter([{"status": "downloading", "phase": "muxing"},
+                   {"status": "completed", "output_files": ["/downloads/x/Show.S02E05.mkv"]}])
+
+    def job(job_id):
+        mux.append(run.card.get("mux"))
+        return next(states)
+    monkeypatch.setattr(sync.UNSHACKLE, "download", download)
+    monkeypatch.setattr(sync.UNSHACKLE, "job", job)
+    sync.run_job({}, run, poll=0)
+    assert mux[-1] == {"done": 400, "total": 1000} and other not in sync.work_claimed
+    run.finish("downloaded")
+
+
+def test_stop_between_two_tries_or_before_a_later_episode_hands_nothing_more_to_serve(tmp_path, monkeypatch):
+    # Stop pressed while the run waits to try again, or while a later episode of the job (its slot already held) is
+    # still being checked: no new download is handed to serve, it ends as stopped, and its mark goes with it
+    sync = load(tmp_path, monkeypatch)
+    sync.SETTINGS["downloads_at_once"] = 1
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05", "J")
+    handed = []
+
+    def download(payload):
+        handed.append(payload)
+        raise sync.UnshackleError("unshackle serve: HTTP 502: bad gateway")
+    monkeypatch.setattr(sync.UNSHACKLE, "download", download)
+    stop = lambda seconds: sync.stop_waiting.add(run.id)  # pressed during the wait
+    with pytest.raises(sync.JobFailed) as stopped:
+        sync.run_job_retrying({}, run, sleep=stop)
+    assert stopped.value.status == "cancelled" and len(handed) == 1
+    with sync.slots:
+        sync.slot_jobs[""] = ["J"]  # the job holds its slot: the next episode never waits for one
+    sync.stop_waiting.add(run.id)
+    with pytest.raises(sync.JobFailed) as stopped:
+        sync.run_job({}, run)
+    assert stopped.value.status == "cancelled" and len(handed) == 1
+    sync.stop_waiting.add(run.id)  # pressed once nothing was left to stop: gone with the run
+    run.finish("downloaded")
+    assert run.id not in sync.stop_waiting
+
+
+def test_stop_pressed_as_the_download_was_handed_to_serve_cancels_it(tmp_path, monkeypatch):
+    # the job was not yet on the card when Stop read it: the download, followed, cancels it itself
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05")
+    cancelled = []
+
+    def download(payload):
+        sync.stop_waiting.add(run.id)  # just after the last look
+        return "job1"
+    monkeypatch.setattr(sync.UNSHACKLE, "download", download)
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", lambda job_id: cancelled.append(job_id))
+    polls = iter([{"status": "downloading"}] * 20 + [{"status": "completed", "output_files": []}])  # unstopped: it ends
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "cancelled"} if cancelled else next(polls))
+    with pytest.raises(sync.JobFailed) as stopped:
+        sync.run_job({}, run, poll=0)
+    assert stopped.value.status == "cancelled" and cancelled == ["job1"]
+    run.finish("stopped")
+
+
+def test_stop_pressed_as_the_download_was_handed_to_serve_asks_again_when_serve_missed_the_first_cancel(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05")
+    asked = []
+
+    def download(payload):
+        sync.stop_waiting.add(run.id)
+        return "job1"
+
+    def cancel(job_id):
+        asked.append(job_id)
+        if len(asked) == 1:
+            raise sync.UnshackleError("serve could not be reached")
+    monkeypatch.setattr(sync.UNSHACKLE, "download", download)
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", cancel)
+    polls = iter([{"status": "downloading"}] * 20 + [{"status": "completed", "output_files": []}])
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "cancelled"} if len(asked) > 1 else next(polls))
+    with pytest.raises(sync.JobFailed) as stopped:
+        sync.run_job({}, run, poll=0)
+    assert stopped.value.status == "cancelled" and asked == ["job1", "job1"]
+    run.finish("stopped")
 
 
 def test_a_held_summary_waiting_on_an_address_is_not_pushed_to_devices_again(tmp_path, monkeypatch):

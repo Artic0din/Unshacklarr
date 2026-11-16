@@ -132,6 +132,9 @@ Every change worth knowing, newest first. The format follows
 - Settings, Per service no longer stays blank when one service's options cannot be loaded (Unshackle down, or a service it no longer has): the list shows, and the stale entry can be removed.
 - The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
 - The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
+- The sign-in texts added since 1.5.0 (approvals, reauthenticate, session available or expired, signed in with…, not checked yet…) are now translated into German, Spanish, French, Italian, Japanese, Brazilian Portuguese, Russian and Chinese instead of showing in English. A line such as "Sign-in failed · authentication rejected" is now translated whole. (#166)
+- After you clear Unshackle's cache, the Services page no longer shows those sign-ins as confirmed: the services read "Not checked yet" until a check or a download confirms them again. Clearing one service's cache does this for that service only. (#171)
+- Counts now follow each language's plural forms: in Russian, 2 devices read "2 устройства" and 21 read "21 устройство"; French and Brazilian Portuguese count 0 as singular. (#175)
 - Run sync now (`POST /api/sync` and `/api/v1/sync`) now starts while a single download, a retry or an upgrade is going, and only a sync of every missing episode counts as "a sync running" on Settings and in `/api/v1/status`.
 - A retry through the API (`"retry": true` on `POST /api/v1/downloads`) now repeats its last attempt's numbering and Replace anyway, as the page's Retry does, instead of asking for the series' numbering and keeping the file.
 - Changing the password, the API key or the page's language, logging out other devices, restoring a backup and saving where backups are sent now wait for a sync's settings write, so a revoked key or an old password can no longer come back when both happen at once.
@@ -253,6 +256,21 @@ Every change worth knowing, newest first. The format follows
   restart, are tried again as before.
 - **No more false cookie warnings.** Crave's load balancer cookies (a week) and Apple's `utsdc` (an hour) no longer
   count as the date the login ends.
+- **A queued episode taken out stays out.** Removed or stopped just as its turn came, it no longer downloaded
+  while the history said cancelled.
+- **Downloads at once is kept when a job pauses.** Pausing a job, or its episode ending while it was paused, no
+  longer let one more download run than the limit.
+- **A run whose end could not be saved ends anyway.** On a full disk it no longer showed as running, with Delete
+  refused, until a restart.
+- **Saving Settings no longer sends a download to the wrong server.** One starting during the save could find
+  no Unshackle or Sonarr of its own and use the main ones.
+- **Mux progress with two downloads muxing at once.** Each shows its own again, instead of none, or another
+  client's.
+- **A job's output shows its last episode.** It no longer closed just before that episode's log began.
+- **Delete and Import in Waiting in downloads leave a running download alone.** On a folder a new download has
+  just started into, they now say it is downloading instead of deleting or importing it.
+- **Stop stops.** Pressed between two tries, during a fallback try, or on a job's second or later episode before
+  its download began, the episode was downloaded and imported anyway; it now ends as stopped.
 
 **🆕 Sonarr 5, on this branch until it is out of beta**
 - **Languages.** Your files without your audio languages, read from Sonarr 5's own tracks: watch them for the
