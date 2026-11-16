@@ -215,6 +215,9 @@ Every change worth knowing, newest first. The format follows
   restart, are tried again as before.
 - **No more false cookie warnings.** Crave's load balancer cookies (a week) and Apple's `utsdc` (an hour) no longer
   count as the date the login ends.
+- **A tab still running the old page after an update is told to reload.** Its Save no longer replaces every
+  setting and series with its old copy, removing those set up on another device: it is refused with a message to
+  reload the page.
 - **Two Saves at nearly the same moment both stay.** A Save now merges its changes with the settings as they are
   when it writes, so another tab's Save that landed while it waited on Unshackle is no longer written over.
 - **A WebDAV backup sent to a login page is a failed backup.** A redirect (a forward-auth proxy's login) is no

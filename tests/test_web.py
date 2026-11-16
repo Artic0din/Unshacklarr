@@ -3252,6 +3252,14 @@ def test_every_answer_refuses_frames_and_the_api_replaces_only_when_asked(tmp_pa
     assert too_many == 400
 
 
+def as_page_sends(web, body: dict, versions: dict | None = None) -> dict:
+    """A Save as the page sends it: the parts it changed (here, every part it sends) and the versions it loaded them
+    at, by default the config as it is now."""
+    versions = versions or web.public_config(web.read_config())["versions"]
+    units = [f"series:{k}" for k in body.get("series") or {}] + [k for k in body if k != "series"]
+    return {**body, "changed": units, "base": {u: versions.get(u) for u in units}}
+
+
 def test_a_save_keeps_what_the_server_changed_since_the_page_loaded(tmp_path, monkeypatch):
     # a password changed during the wait on Unshackle, and a release time learnt after the page loaded (#29)
     import asyncio
@@ -3272,44 +3280,57 @@ def test_a_save_keeps_what_the_server_changed_since_the_page_loaded(tmp_path, mo
         web.release_learned(8, "21:00", 1)
     monkeypatch.setattr(web, "known_services", unshackle_slow)
 
-    async def body():  # the page's copy, from before both: 8's time was cleared on the page, 7 was not touched
-        return {"series": {"7": dict(show), "8": {**show, "release_time": ""}}}
+    async def body():  # the page's copy, from before both: neither series touched there
+        return as_page_sends(web, {"series": {"7": dict(show), "8": dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=body)))
     saved = web.read_config()
     assert saved["auth"] == new
     assert (saved["series"][7].get("release_time"), saved["series"][7].get("release_day")) == ("21:00", 1)
-    assert "release_time" not in saved["series"][8]  # cleared on the page: cleared
+    assert (saved["series"][8].get("release_time"), saved["series"][8].get("release_day")) == ("21:00", 1)
+    monkeypatch.setattr(web, "known_services", lambda: None)
+    # a time cleared on a page loaded before it was learnt: the same field changed both ways, refused
+    stale = web.unit_versions(web.public_config({**web.read_config(), "series": {7: dict(show), 8: dict(show)}}))
+
+    async def cleared_unseen():
+        return as_page_sends(web, {"series": {"8": {**show, "release_time": ""}}}, stale)
+    with pytest.raises(web.web.HTTPConflict):
+        asyncio.run(web.save_config(SimpleNamespace(json=cleared_unseen)))
+    assert web.read_config()["series"][8]["release_time"] == "21:00"
+
+    async def cleared():  # cleared on a page that showed it: cleared
+        return as_page_sends(web, {"series": {"8": {**show, "release_time": ""}}})
+    asyncio.run(web.save_config(SimpleNamespace(json=cleared)))
+    assert "release_time" not in web.read_config()["series"][8]
     # each field on its own: a day the page sent stays as sent, one it did not send stays as stored
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: {**show, "release_day": -2}}})
-    monkeypatch.setattr(web, "known_services", lambda: None)
 
     async def edits():
-        return {"series": {"7": {**show, "release_day": 0}, "8": dict(show)}}
+        return as_page_sends(web, {"series": {"7": {**show, "release_day": 0}, "8": dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=edits)))
     saved = web.read_config()["series"]
     assert (saved[7].get("release_time"), saved[7].get("release_day")) == ("21:00", None) and saved[8].get("release_day") == -2
 
     async def new_time():
-        return {"series": {"7": {**show, "release_time": "22:00"}, "8": dict(show)}}
+        return as_page_sends(web, {"series": {"7": {**show, "release_time": "22:00"}, "8": dict(show)}})
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=new_time)))
     assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("22:00", 1)
 
     async def new_day():  # the day after, sent alone: the learnt time makes it count
-        return {"series": {"7": {**show, "release_day": 1}, "8": dict(show)}}
+        return as_page_sends(web, {"series": {"7": {**show, "release_day": 1}, "8": dict(show)}})
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00"}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=new_day)))
     assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("21:00", 1)
 
     async def other_source():  # moved to another service: the old one's learnt time is not its
-        return {"series": {"7": {**show, "service": "7P", "title": "https://7plus.example/show"}, "8": dict(show)}}
+        return as_page_sends(web, {"series": {"7": {**show, "service": "7P", "title": "https://7plus.example/show"}, "8": dict(show)}})
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=other_source)))
     assert "release_time" not in web.read_config()["series"][7] and "release_day" not in web.read_config()["series"][7]
     web.write_config({**web.read_config(), "hidden_series": [7]})  # hidden from the Schedule while the Save ran
 
-    async def stale_hidden():  # the page's list from before
-        return {"series": {"7": dict(show), "8": dict(show)}, "hidden_series": []}
+    async def stale_hidden():  # the page's list from before, sent as changed: a Save still never writes it
+        return as_page_sends(web, {"series": {"7": dict(show), "8": dict(show)}, "hidden_series": []})
     asyncio.run(web.save_config(SimpleNamespace(json=stale_hidden)))
     assert web.read_config()["hidden_series"] == [7]
     with web.CONFIG_LOCK:  # the sync's write waits for a Save's read and write
@@ -3359,7 +3380,8 @@ def test_saving_the_config_as_the_page_got_it_changes_nothing_and_leaks_no_secre
             await client.post("/api/login", json={"password": "password1"}, headers=page)
             replies = []
             for _ in range(2):  # the first Save fills in the defaults a hand-made file lacks; the second must change nothing
-                reply = await client.put("/api/config", json=web.public_config(web.read_config()), headers=page)  # as /api/state gives it
+                public = web.public_config(web.read_config())  # as /api/state gives it, every part sent back
+                reply = await client.put("/api/config", json={**public, "changed": list(public["versions"]), "base": public["versions"]}, headers=page)
                 replies.append((reply.status, await reply.text(), web.read_config()))
             return replies
 
@@ -7210,10 +7232,12 @@ def test_a_page_saves_only_what_it_changed_and_a_clash_is_refused(tmp_path, monk
     body = {**loaded, "series": {"2": {"service": "B", "title": "w"}}, "changed": ["series:2"], "base": {"series:2": versions["series:2"]}}
     with pytest.raises(web.web.HTTPConflict):
         web.merge_page_changes(body, now)
-    # a page that says nothing of its changes saves everything, as before
+    # a page that says nothing of its changes (an old page script, a client posting its whole copy) is told to reload:
+    # it would write every part back, another device's series and settings with them
     body = {**loaded}
-    web.merge_page_changes(body, now)
-    assert body["settings"]["sonarrs"] == [{"name": "4K"}]
+    with pytest.raises(web.web.HTTPConflict) as refused:
+        web.merge_page_changes(body, now)
+    assert "Reload" in refused.value.text
 
 
 
@@ -7497,7 +7521,7 @@ def test_a_save_lets_a_release_held_for_its_episode_order_be_tried_again(tmp_pat
     web.sonarr_sync.held_bursts[("", 1)] = 0.0
 
     async def body():
-        return {"series": {"7": {**show, "season_map": {"2": 3}}}}
+        return as_page_sends(web, {"series": {"7": {**show, "season_map": {"2": 3}}}})
     asyncio.run(web.save_config(SimpleNamespace(json=body)))
     assert web.sonarr_sync.held_bursts == {}
 

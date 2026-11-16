@@ -809,9 +809,10 @@ def merge_page_changes(body: dict, current: dict) -> None:
     """A page sends its whole config, but only the parts it changed (body["changed"]) are taken from it; the others
     stay as saved, so a tab opened before another change no longer writes old settings back. A part changed both
     here and elsewhere since the page loaded it is merged key by key; the same key changed both ways is a conflict.
-    A page that sends no "changed" saves everything, as before."""
+    A body without "changed" (an old page script, a client posting its whole copy) is refused: it would write every
+    part back, the series and settings another device changed with them."""
     if not isinstance(body.get("changed"), list):
-        return
+        raise web.HTTPConflict(text="This page is out of date. Reload it, then make your change again.")
     changed, base = {str(u) for u in body.pop("changed")}, body.pop("base", None) or {}
     norm = lambda v: json.loads(json.dumps(v, sort_keys=True, default=str))  # noqa: E731
     now = norm(config_units(current))
