@@ -226,6 +226,7 @@ Every change worth knowing, newest first. The format follows
 - **Episode order.** A series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering; when that
   order changes, its new episodes wait until you confirm the numbering.
 The episode list and a running download's track list now draw on iPhones before iOS 17.4, where "What's on…?" results and the live track list used to stop the page drawing.
+"What's on…?" for a series that is in no main Sonarr now asks the Sonarr you are viewing (for example 4K), not always the first, so its badges match that library's episodes.
 
 ### Removed
 

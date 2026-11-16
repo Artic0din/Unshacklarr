@@ -727,13 +727,14 @@ async function followTitles(s, want) {
 }
 async function askService(s) {
   const conf = S.config.series[s.tvdbId], svc = seriesSvcs(conf), check = $(".ep-check");
+  const libs = S.sonarrsOf?.[s.tvdbId] || [], inst = libs.find((o) => o.name === epSonarr) || libs[0];  // in no main Sonarr: the Sonarr being viewed, else the first
   if (check) { check.setAttribute("aria-disabled", "true"); check.replaceChildren(el("span", { className: "spinner", ariaHidden: "true" }), ` Asking ${svc}…`); }
   let r = null;
   const slow = slowHint(svc);
   try {
     // Each season page can list for 65 s; each other service can search and list, plus its 2 s pause.
-    r = await api("/api/probe", { method: "POST", wait: 120 + 65 * Object.keys(conf.season_pages || {}).length + 132 * S.services.length, body: JSON.stringify({ show: conf, seriesId: s.id ?? S.sonarrsOf?.[s.tvdbId]?.[0]?.id, tvdbId: s.tvdbId, title: s.title,
-      ...(s.id ? {} : { sonarr: S.sonarrsOf?.[s.tvdbId]?.[0]?.name }) }) });  // in no main Sonarr: its own Sonarr's episodes
+    r = await api("/api/probe", { method: "POST", wait: 120 + 65 * Object.keys(conf.season_pages || {}).length + 132 * S.services.length, body: JSON.stringify({ show: conf, seriesId: s.id ?? inst?.id, tvdbId: s.tvdbId, title: s.title,
+      ...(s.id ? {} : { sonarr: inst?.name }) }) });  // in no main Sonarr: its own Sonarr's episodes
     if (current === s) { epElsewhere = r.elsewhere || {}; epElsewhereFresh = true; epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview();
       epTitlesAgree = r.titlesAgree ?? null; renderSeriesLanguage(); }
     if (current === s && r.elsewhere_error) toast(`Availability refreshed, but the search on other services failed: ${r.elsewhere_error}`, true);
