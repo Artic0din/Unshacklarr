@@ -223,6 +223,7 @@ Every change worth knowing, newest first. The format follows
   yours: its episodes then match the service's better.
 - **Episode order.** A series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering; when that
   order changes, its new episodes wait until you confirm the numbering.
+- Activity's progress bar no longer steps back for a moment when the history is reloaded: a download the live feed has just drawn keeps its newer progress. (#133)
 
 ### Removed
 

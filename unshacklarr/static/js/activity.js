@@ -28,7 +28,7 @@ function timeLeft(c) {
 
 let runsSeq = 0;
 async function openActivity() {
-  const seq = ++runsSeq;
+  const seq = ++runsSeq, asked = Date.now();
   let cards;
   try { cards = await api("/api/runs"); }
   catch (e) {
@@ -39,7 +39,9 @@ async function openActivity() {
     return;
   }
   if (seq !== runsSeq) return;  // a newer call is on its way: this answer may predate a Stop
-  runCards = cards;
+  // a card the live feed drew since the request began is newer than this answer's: the bar must not step back
+  const drawn = new Map(runCards.map((c) => [c.id, c]));
+  runCards = cards.map((c) => (isLive(c) && drawn.get(c.id)?.liveAt >= asked ? drawn.get(c.id) : c));
   clearTimeout(runsTimer);
   renderConsole();
   api("/api/leftovers").then((r) => { $("#con-left-n").textContent = r.items.length ? `(${r.items.length})` : ""; }).catch(() => {});
@@ -95,7 +97,8 @@ function liveTick(data) {
     if (!feedReloading) feedReload();
     return;
   }
-  runCards = runCards.map((c) => (ids.has(c.id) ? live.find((x) => x.id === c.id) : c));
+  const now = Date.now();
+  runCards = runCards.map((c) => (ids.has(c.id) ? { ...live.find((x) => x.id === c.id), liveAt: now } : c));
   renderConsole(true);
 }
 /* Out of sight, Activity stops its live feed and Unshackle's output: a hidden tab runs its timers once a minute
