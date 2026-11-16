@@ -2316,6 +2316,9 @@ async def watch_releases():
                     print(f"Release watch{f' ({name})' if name else ''}: {no_credentials(e)}", flush=True)
                     continue
                 for episode_id in due:
+                    if (held := sonarr_sync.held_bursts.get((name, episode_id))) and \
+                            time.time() - held < float(sonarr_sync.SETTINGS["burst_minutes"]) * 60:
+                        continue  # held for its episode order: no new try every 30 s, the sync tries again later
                     run = burst_runs.get((name, episode_id))
                     if (run is None or not run.is_alive()) and not await asyncio.to_thread(burst_failed, episode_id, name):  # the previous try is over
                         if sonarr_sync.SETTINGS.get("download_window_bursts") and not sonarr_sync.in_download_window():
@@ -5153,7 +5156,10 @@ def file_languages(f: dict) -> tuple[list[str], list[str]]:
     """A file's audio languages and its forced subtitles' (fr, en), from Sonarr 5's tracks; "und" (no tag) left out."""
     info = f.get("mediaInfo") or {}
     # its region kept (pt-PT is not pt-BR): speaks() already takes a plain fr for fr-FR or fr-CA
-    lang = lambda t: sonarr_sync.LANGS.get(str(t).lower(), str(t).strip(" '[]").lower())
+    def lang(tag) -> str:  # each part on its own: eng-US is en-us, as speaks() reads it
+        code, _, region = str(tag).strip(" '[]").lower().partition("-")
+        code = sonarr_sync.LANGS.get(code, code)
+        return f"{code}-{region}" if region else code
     audio = [lang(a["language"]) for a in info.get("audioStreams") or [] if a.get("language") and a["language"] != "und"]
     forced = [lang(x["language"]) for x in info.get("subtitleStreams") or [] if x.get("forced") and x.get("language")]
     return list(dict.fromkeys(audio)), list(dict.fromkeys(forced))

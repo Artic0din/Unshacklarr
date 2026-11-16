@@ -7415,3 +7415,5 @@ def test_a_files_regional_audio_tag_is_kept_for_the_language_scan():
     audio, _ = web.file_languages({"mediaInfo": {"audioStreams": [{"language": "pt-PT"}, {"language": "eng"}]}})
     assert audio == ["pt-pt", "en"]
     assert not web.sonarr_sync.speaks(audio[:1], ["pt-br"]) and web.sonarr_sync.speaks(audio[:1], ["pt"])
+    audio, _ = web.file_languages({"mediaInfo": {"audioStreams": [{"language": "eng-US"}, {"language": "fre"}]}})
+    assert audio == ["en-us", "fr"] and web.sonarr_sync.speaks(audio[:1], ["en"])  # a three-letter code with its region
