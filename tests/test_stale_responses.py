@@ -55,3 +55,44 @@ vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged"].map(grab).join(""
 ctx.openActivity().then(() => console.log(JSON.stringify({ progress: ctx.runCards[0].live.progress })));
 """, str(JS / "activity.js"))
     assert shown == {"progress": 30}
+
+
+def test_episodes_of_a_library_switched_away_from_are_not_drawn():
+    shown = node(r"""
+const s = { tvdbId: 1, id: 10, title: "Show" }, drawn = [];
+const wait = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
+const ctx = { S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
+  $: () => ({ replaceChildren() {} }), loading: () => null, failed: () => null, updateEpBar() {}, refreshEpBusy() {}, sxxOf: () => "S01E01",
+  api: (path) => path.startsWith("/api/series/9/") ? wait(30, [{ id: 900, seasonNumber: 1 }]) : path.startsWith("/api/series/10/") ? wait(0, [{ id: 100, seasonNumber: 1 }]) : wait(0, null),
+  applyBroadcast() { drawn.push({ sonarr: ctx.epSonarr, ids: Object.values(ctx.epSeasons).flat().map((e) => e.id) }); throw new Error("past the guard"); } };
+vm.createContext(ctx);
+vm.runInContext("let epSeq = 0;" + grab("loadEpisodes"), ctx);
+(async () => {
+  const slow = ctx.loadEpisodes(s);  // the 4K library, slow
+  ctx.epSonarr = "";
+  const fast = ctx.loadEpisodes(s);  // the main library, picked right after
+  (await Promise.allSettled([slow, fast])).forEach((r) => r.reason && r.reason.message !== "past the guard" && drawn.push({ error: r.reason.message }));
+  console.log(JSON.stringify(drawn));
+})();
+""", str(JS / "series.js"))
+    assert shown == [{"sonarr": "", "ids": [100]}]
+
+
+def test_episodes_error_of_a_library_switched_away_from_is_not_drawn():
+    shown = node(r"""
+const s = { tvdbId: 1, id: 10, title: "Show" }, errors = [];
+const wait = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
+const ctx = { S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
+  $: () => ({ replaceChildren() {} }), loading: () => null, failed: (m) => errors.push(m), updateEpBar() {}, refreshEpBusy() {}, sxxOf: () => "S01E01",
+  api: (path) => path.startsWith("/api/series/9/") ? wait(30).then(() => { throw new Error("Sonarr did not answer"); }) : path.startsWith("/api/series/10/") ? wait(0, []) : wait(0, null),
+  applyBroadcast() { throw new Error("past the guard"); } };
+vm.createContext(ctx);
+vm.runInContext("let epSeq = 0;" + grab("loadEpisodes"), ctx);
+(async () => {
+  const slow = ctx.loadEpisodes(s);
+  ctx.epSonarr = "";
+  await Promise.allSettled([slow, ctx.loadEpisodes(s)]);
+  console.log(JSON.stringify(errors));
+})();
+""", str(JS / "series.js"))
+    assert shown == []

@@ -224,6 +224,7 @@ Every change worth knowing, newest first. The format follows
 - **Episode order.** A series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering; when that
   order changes, its new episodes wait until you confirm the numbering.
 - Activity's progress bar no longer steps back for a moment when the history is reloaded: a download the live feed has just drawn keeps its newer progress. (#133)
+- Switching quickly between a series' libraries (main and 4K) no longer leaves the other library's episodes on screen: the slower answer is dropped, so Download no longer sends one library's episodes to the other. (#193)
 
 ### Removed
 
