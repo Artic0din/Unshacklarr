@@ -709,21 +709,24 @@ async function save() {
   // while the request ran, so the next save of them does not send this page's older copy back. In place, down to
   // each Sonarr or server of a list: the open editors hold references into S.config.
   const alike = (a, b) => stableJSON(a) === stableJSON(b);
+  const plain = (x) => x && typeof x === "object" && !Array.isArray(x);
+  // the same entry of a list: by its address or its name, so one removed and another added is not taken for it
+  const same = (a, b) => alike(a, b) || (plain(a) && plain(b) && ((a.url !== undefined && a.url === b.url) || (a.name !== undefined && a.name === b.name)));
   const nested = (a, b) => a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b)
-    && (!Array.isArray(a) || a.length === b.length);
+    && (!Array.isArray(a) || (a.length === b.length && a.every((x, n) => same(x, b[n]))));
+  let clash = false;  // a list changed here while the Save ran and elsewhere: the next Save is merged by the server
   const take = (into, was, now, series = false) => {
     const moved = series && (into.service !== now.service || into.title !== now.title);  // a time learnt for another source is not its
     let took = false;
     for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
       if (alike(now[k], was[k]) || (moved && ["release_time", "release_day"].includes(k))) continue;
-      if (nested(into[k], now[k]) && nested(into[k], was[k])) { took = take(into[k], was[k], now[k]) || took; continue; }  // each key inside on its own
-      if (!alike(into[k], was[k])) continue;  // changed here while the Save ran
+      if (nested(into[k], now[k]) && nested(into[k], was[k]) && nested(now[k], was[k])) { took = take(into[k], was[k], now[k]) || took; continue; }  // each key inside on its own
+      if (!alike(into[k], was[k])) { clash ||= Array.isArray(was[k]) || Array.isArray(into[k]); continue; }  // changed here while the Save ran
       if (k in now) into[k] = now[k]; else delete into[k];
       took = true;
     }
     return took;
   };
-  const plain = (x) => x && typeof x === "object" && !Array.isArray(x);
   const merged = {};
   let redraw = false;
   for (const u of changed) {
@@ -731,7 +734,9 @@ async function save() {
     const theirs = id ? saved?.series?.[id] : saved?.[u], mine = id ? S.config.series[id] : S.config[u];
     if (!units[u] || !plain(theirs) || !plain(mine) || (id && !mine.service)) continue;  // stopped meanwhile: stays so
     merged[u] = [JSON.parse(units[u]), theirs, Boolean(id)];
+    clash = false;
     if (take(mine, ...merged[u]) && !id) redraw = true;
+    if (clash) { if (unitBase[u]) S.config.versions[u] = unitBase[u]; else delete S.config.versions?.[u]; }  // the version it started from: refused there, a reload
     if (id) base.series[id] = theirs; else base[u] = theirs;
     savedUnits[u] = JSON.stringify(alike(mine, theirs) ? mine : theirs);
   }

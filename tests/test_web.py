@@ -2225,6 +2225,16 @@ const fresh = () => {
   saving = page.save(); box.S.config.settings.sonarrs.splice(0, 1); box.S.config.settings.sonarrs.push({ name: "third", url: "http://c" });
   release({ settings: { debug: true, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] } }); await saving;
   out.listEditedMeanwhileKeepsNames = page.savedSonarr("second") === "second" && page.savedSonarr("third") === "third";
+  // another tab changed first's folder while this page removed first and added third: by index, second would get it
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a", downloads: "" }, { name: "second", url: "http://b", downloads: "" }] },
+    versions: { settings: "v1" }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); box.S.config.settings.sonarrs.splice(0, 1); box.S.config.settings.sonarrs.push({ name: "third", url: "http://c", downloads: "" });
+  release({ settings: { debug: true, sonarrs: [{ name: "first", url: "http://a", downloads: "/first" }, { name: "second", url: "http://b", downloads: "" }] },
+    versions: { settings: "v2" } }); await saving;
+  const left = box.S.config.settings.sonarrs;
+  out.listEntriesMatchedByIdentity = left.map((i) => i.name + i.downloads).join() === "second,third" && box.S.config.versions.settings === "v1";
   console.log(JSON.stringify(out));
 })();
 """
@@ -2271,6 +2281,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "nestedEditKeepsOthersRename": True,  # an edit inside a list entry does not block another tab's change beside it
         "mergedRenameIsSavedName": True,  # a rename another tab saved is the name the server knows
         "listEditedMeanwhileKeepsNames": True,  # Sonarrs removed or added while the Save ran: no name moves to another
+        "listEntriesMatchedByIdentity": True,  # and no other tab's change lands on another entry: the next Save asks to reload
     }
 
 
