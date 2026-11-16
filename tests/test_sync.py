@@ -6190,3 +6190,22 @@ def test_another_sonarrs_copies_take_the_service_options_the_series_adds_for_it(
     got = sync.instance_config({"name": "4K", "quality_ladder": ""}, config)["series"][1]
     assert got["options"] == {"--quality": "2160"} and got["service_options"] == {"--tier": "x", "--profile-name": "uhd"}
     assert sync.instance_config({"name": "AV1", "quality_ladder": ""}, config)["series"][1]["service_options"] == {"--tier": "x"}
+
+
+def test_a_job_that_lent_its_slot_on_one_server_downloads_its_next_episode_on_another(tmp_path, monkeypatch):
+    # Its place was kept in server X's line for a retry; its next episode goes through server Y: it downloads there,
+    # and X's line no longer holds a place nobody will take
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setitem(sync.SETTINGS, "downloads_at_once", 1)
+
+    class Run:
+        def __init__(self, batch, n): self.card, self.id = {"batch": batch}, f"{batch}-{n}"
+        def say(self, text): pass
+
+    sync.number_job("job1")
+    sync.slot_line["X"] = ["job1"]
+    sync.lent["job1"] = "X"
+    with sync.download_slot("Y", Run("job1", 2)):
+        assert sync.slot_jobs["Y"] == ["job1"]
+    assert sync.slot_line["X"] == [] and "job1" not in sync.lent
+    sync.release_job("job1")

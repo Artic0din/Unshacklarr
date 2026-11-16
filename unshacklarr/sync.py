@@ -2160,7 +2160,7 @@ slot_jobs: dict[str, list[str]] = {}  # by server name ("" the main one): the jo
 slot_line: dict[str, list[str]] = {}  # by server name: the jobs waiting for one, in the order they asked
 stop_waiting: set[str] = set()  # runs stopped from Activity while they waited for a slot
 slot_active: dict[str, int] = {}  # jobs with an episode downloading now: how many (a retry with another Replace runs beside its job)
-lent: set[str] = set()  # jobs that lent their slot to a retry between two episodes: in line, their next not asking yet
+lent: dict[str, str] = {}  # jobs that lent their slot to a retry between two episodes: the server whose line keeps their place
 job_order: dict[str, int] = {}  # job -> its place: numbered when picked, so the line keeps the order picks were made
 job_numbers = itertools.count()
 RETRY_FIRST = 10**9  # a retry's number: below every pick's, so it is first in line (in the order retries were asked)
@@ -2194,9 +2194,12 @@ def download_slot(server: str, run: EpisodeRun | None = None):
             job_order.setdefault(job, next(job_numbers) - (RETRY_FIRST if run and run.card.get("kind") == "retry" else 0))
             told = False
             try:
-                if job in lent:  # a job that lent its slot to a retry is in line already, at its place
-                    lent.discard(job)
+                if lent.get(job) == server:  # a job that lent its slot to a retry is in line already, at its place
+                    del lent[job]
                 else:
+                    if (kept := lent.pop(job, None)) is not None:  # its place was kept on another server: no longer
+                        while job in slot_line.get(kept, []):
+                            slot_line[kept].remove(job)
                     line.append(job)
                 # in the order picked, whenever each got here; a job paused while it waited lost its number: last
                 line.sort(key=lambda j: job_order.get(j, float("inf")))
@@ -2245,7 +2248,7 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                 if any(job_order.get(j, 0) < 0 for j in line):
                     release_job(job, keep_place=True)
                     line.append(job)  # its place kept: after the retry, before the jobs picked after it
-                    lent.add(job)
+                    lent[job] = server
                     line.sort(key=lambda j: job_order.get(j, float("inf")))
 
 
@@ -2259,8 +2262,7 @@ def release_job(job: str | None, keep_place: bool = False) -> None:
                 holders.remove(job)
         if not keep_place:
             job_order.pop(job, None)  # over, or paused: resumed, it is numbered again, at the end of the line
-            if job in lent:  # and the place it kept after lending its slot, gone
-                lent.discard(job)
+            if lent.pop(job, None) is not None:  # and the place it kept after lending its slot, gone
                 for line in slot_line.values():
                     while job in line:
                         line.remove(job)
