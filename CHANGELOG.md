@@ -121,6 +121,8 @@ Every change worth knowing, newest first. The format follows
 - Typing in the device search (Settings, CDM) no longer jumps the cursor to the end or breaks Japanese and Chinese input: the box stays, and only the list under it is redrawn.
 - A release day from 8 to 13 days before airing can now be picked (the list skipped them), instead of a suggested one saving as "the day it airs".
 - Settings, Per service no longer stays blank when one service's options cannot be loaded (Unshackle down, or a service it no longer has): the list shows, and the stale entry can be removed.
+- The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
+- The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
 - The example Docker Compose file now builds Unshackle from this repository's Dockerfile at the reviewed commit and pulls this repository's image, instead of upstream's, which ignored the commit pin; that commit now includes official Unshackle's latest development work.
 - The `--remote` servers' options now show in the first 10 minutes after the machine starts, instead of being missing until then.
 - Renaming or removing a Sonarr in Settings no longer makes every later Save fail with "no Sonarr named …": a rename keeps each series' own settings for it (such as switched off), and a removal drops them.

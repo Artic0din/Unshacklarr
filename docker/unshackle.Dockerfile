@@ -3,7 +3,7 @@
 # (unshackle.yaml with a serve: api_secret, Cookies/, WVDs/, PRDs/).
 FROM python:3.12-slim-trixie
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.22 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /usr/local/bin/uv
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl ffmpeg git libmediainfo0v5 mkvtoolnix tzdata unzip \
