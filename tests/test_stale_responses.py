@@ -80,6 +80,26 @@ vm.runInContext("let epSeq = 0;" + grab("loadEpisodes"), ctx);
     assert shown == [{"sonarr": "", "ids": [100]}]
 
 
+def test_superseded_library_load_does_not_ask_for_the_main_library():
+    asked = node(r"""
+const s = { tvdbId: 1, id: 10, title: "Show" }, asked = [];
+const wait = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
+const ctx = { S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
+  $: () => ({ replaceChildren() {} }), loading: () => null, failed: () => null, updateEpBar() {}, refreshEpBusy() {}, sxxOf: () => "S01E01",
+  api: (path) => { asked.push(path.split("?")[0]); return wait(path.startsWith("/api/series/9/") ? 30 : 0, path.startsWith("/api/series/") ? [] : null); },
+  applyBroadcast() { throw new Error("past the guard"); } };
+vm.createContext(ctx);
+vm.runInContext("let epSeq = 0;" + grab("loadEpisodes"), ctx);
+(async () => {
+  const slow = ctx.loadEpisodes(s);
+  ctx.epSonarr = "";
+  await Promise.allSettled([slow, ctx.loadEpisodes(s)]);
+  console.log(JSON.stringify(asked.filter((p) => p.startsWith("/api/series/"))));
+})();
+""", str(JS / "series.js"))
+    assert asked == ["/api/series/9/episodes", "/api/series/10/episodes"]
+
+
 def test_episodes_error_of_a_library_switched_away_from_is_not_drawn():
     shown = node(r"""
 const s = { tvdbId: 1, id: 10, title: "Show" }, errors = [];

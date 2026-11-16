@@ -278,6 +278,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
   try {
     // as long as the server waits for a busy Sonarr (120 s)
     eps = await api(inst ? `/api/series/${inst.id}/episodes?sonarr=${encodeURIComponent(inst.name)}` : `/api/series/${s.id}/episodes`, { wait: 130 });
+    if (seq !== epSeq || current !== s) return;  // superseded: no second request to a busy Sonarr for an answer nobody draws
     if (inst && s.id) keys = Object.fromEntries((await api(`/api/series/${s.id}/episodes`, { wait: 130 })).map((e) => [e.id, sxxOf(e)]));
   }
   catch (e) { if (seq === epSeq && current === s) box.replaceChildren(failed(`Could not load the episodes: ${e.message}`, () => loadEpisodes(s))); return; }
