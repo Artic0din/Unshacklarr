@@ -6261,3 +6261,14 @@ def test_a_ladder_picks_a_language_every_part_of_the_episode_has(tmp_path, monke
     monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload))
     sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
     assert [d.get("a_lang") for d in downloads] == [["en"]]
+
+
+def test_a_job_queued_with_an_empty_numbering_keeps_it_across_a_restart(tmp_path, monkeypatch):
+    # numbering {} sets the series' season maps and offsets aside; dropped from queue.json, they would apply again
+    sync = load(tmp_path, monkeypatch)
+    stub = object()
+    monkeypatch.setitem(sync.running_jobs, "J", {"episodes": [{"id": 5}], "stubs": {5: stub}, "numbering": {}, "kind": "manual"})
+    monkeypatch.setitem(sync.waiting, 5, stub)
+    assert sync.queue_snapshot()["J"]["numbering"] == {}
+    monkeypatch.setitem(sync.running_jobs, "J", {"episodes": [{"id": 5}], "stubs": {5: stub}, "kind": "manual"})
+    assert "numbering" not in sync.queue_snapshot()["J"]  # none given: the series' own, as before

@@ -644,7 +644,9 @@ def queue_snapshot() -> dict:
     by a restart, is in the history as interrupted, its Retry there)."""
     with jobs_lock:
         return {batch: {"episodes": ids, "paused": batch in paused_jobs, **({"options": job_options[batch]} if job_options.get(batch) else {}),
-                        **{k: job.get(k) for k in ("replace", "kind", "sonarr", "proxy", "video", "numbering") if job.get(k)}}
+                        **{k: job.get(k) for k in ("replace", "kind", "sonarr", "proxy", "video") if job.get(k)},
+                        # an empty numbering is one too: the series' own set aside, kept so after a restart
+                        **({"numbering": job["numbering"]} if job.get("numbering") is not None else {})}
                 for batch, job in sorted(running_jobs.items())
                 if (ids := list(dict.fromkeys(ep["id"] for ep in job["episodes"] if waiting.get(ep["id"]) is job["stubs"].get(ep["id"], False))))}
 
