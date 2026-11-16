@@ -332,6 +332,7 @@ class Local:
     def restart(self, command: str) -> None:
         with self.lock:
             self.failed = None  # asked for: tried now, not refused for the minute
+            self.__dict__.pop("_paths", None)  # unshackle.yaml's directories: may have changed: asked again
             self.stop()
             self.start(command)
 

@@ -854,3 +854,28 @@ def test_a_launcher_that_asks_env_for_python_runs_that_python(tmp_path, shebang)
         assert python == shutil.which("python3")  # the interpreter env would find, not env itself
     finally:
         os.environ["PATH"] = path
+
+
+def test_a_restart_makes_unshackle_say_again_where_its_folders_are(tmp_path, monkeypatch):
+    import sys
+    import types
+    import unshacklarr.backend as backend
+
+    folders = [f"/old/{n}" for n in ("config.yaml", "cookies", "wvds", "prds", "temp", "cache")]
+    asked = []
+
+    def run(argv, **kwargs):
+        asked.append(list(folders))
+        return types.SimpleNamespace(stdout="\n".join(folders), stderr="", returncode=0)
+
+    monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
+    monkeypatch.setattr(backend.subprocess, "run", run)
+    monkeypatch.setattr(backend.Local, "start", lambda self, command: None)
+    local = backend.Local(tmp_path / "serve.log")
+    assert local.cookies_dir("unshackle") == Path("/old/cookies")
+    local.paths("unshackle")
+    assert len(asked) == 1  # asked once while it runs
+
+    folders[:] = [f.replace("/old/", "/new/") for f in folders]  # directories: changed in unshackle.yaml
+    local.restart("unshackle")
+    assert local.cookies_dir("unshackle") == Path("/new/cookies")  # sign-ins are looked for where it keeps them now
