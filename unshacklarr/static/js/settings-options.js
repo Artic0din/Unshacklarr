@@ -230,23 +230,39 @@ function pwCheck() {
   const pw = $("#pw-new").value, again = $("#pw-again").value, score = pwStrength(pw);
   $("#pw-meter").dataset.score = score;
   $("#pw-meter span").textContent = ["", pw.length < 8 ? "Too short" : "Weak", "Fair", "Good", "Strong"][score];
-  $("#pw-new").classList.toggle("bad", pw.length > 0 && pw.length < 8);
-  $("#pw-new").classList.toggle("good", pw.length >= 8);
+    $("#pw-new").classList.toggle("good", pw.length >= 8);
   const same = again && again === pw, typing = again && !same && pw.startsWith(again);  // still typing it: neither yet
   $("#pw-again").classList.toggle("good", !!same);
-  $("#pw-again").classList.toggle("bad", !!again && !same && !typing);
+  markInvalid($("#pw-new"), null, pw.length > 0 && pw.length < 8);  // the state said to a screen reader too, not only in red
+  markInvalid($("#pw-again"), $("#pw-match"), !!again && !same && !typing);
   $("#pw-match").className = `pw-match ${!again || typing ? "" : same ? "good" : "bad"}`;
   $("#pw-match").replaceChildren(...(!again || typing ? [] : same ? [icon("check", "inl"), "Passwords match"] : ["Passwords do not match"]));
 }
-$("#pw-new").oninput = $("#pw-again").oninput = $("#pw-current").oninput = () => { pwCheck(); acReady(); };
-/* Account: the button only once it can work; the wrong current password said on its field; the session in words. */
-function acReady() {
+$("#pw-new").oninput = $("#pw-again").oninput = $("#pw-current").oninput = (e) => { pwClear(e.target.id); pwCheck(); };  // only the field edited loses its mistake
+/* Account: a mistake said on its field when the button is pressed (a button that stays off says nothing); the session in words. */
+const PW_SAYS = { "pw-current": "pw-current-say", "pw-new": "pw-new-say", "pw-again": "pw-match" };
+function pwClear(only = null) {
+  for (const [id, say] of Object.entries(PW_SAYS)) {
+    if (only && id !== only) continue;
+    markInvalid($(`#${id}`), $(`#${say}`), false);
+    if (id !== "pw-again") $(`#${say}`).textContent = "";
+  }
+}
+function pwMistake() {
   const pw = $("#pw-new").value;
-  $("#pw-current").classList.remove("bad"); $("#pw-current-say").textContent = "";
-  $("#pw-change").disabled = !$("#pw-current").value || pw.length < 8 || pw !== $("#pw-again").value;
+  return !$("#pw-current").value ? ["pw-current", "Enter your current password"]
+    : pw.length < 8 ? ["pw-new", "Password must be at least 8 characters"]
+    : pw !== $("#pw-again").value ? ["pw-again", "Passwords do not match"] : null;
 }
 $("#pw-change").onclick = async () => {
-  const b = $("#pw-change");
+  const b = $("#pw-change"), mistake = pwMistake();
+  pwClear();
+  if (mistake) {
+    const [id, text] = mistake, say = $(`#${PW_SAYS[id]}`);
+    say.className = "pw-match bad"; say.textContent = text;
+    markInvalid($(`#${id}`), say);
+    return $(`#${id}`).focus();
+  }
   b.disabled = true;
   try {
     await api("/api/password", { method: "POST", body: JSON.stringify({ current: $("#pw-current").value, new: $("#pw-new").value }) });
@@ -257,10 +273,10 @@ $("#pw-change").onclick = async () => {
     loadAccount();
   } catch (e) {
     if (/current password/i.test(errorDetail(e))) {
-      $("#pw-current").classList.add("bad"); $("#pw-current-say").className = "pw-match bad"; $("#pw-current-say").textContent = e.message; $("#pw-current").focus();
+      markInvalid($("#pw-current"), $("#pw-current-say")); $("#pw-current-say").className = "pw-match bad"; $("#pw-current-say").textContent = e.message; $("#pw-current").focus();
     } else toast(e.message, true);
-    b.disabled = false;
   }
+  b.disabled = false;
 };
 async function loadAccount() {
   let s;
@@ -448,6 +464,7 @@ $("#bk-file").onchange = async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
+  if (!await askToConfirm(`Restore the settings from ${file.name}?`, "Every setting now in Unshacklarr is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.", "Replace the settings")) return;
   try {
     const text = await file.text();
     bkFile = text;
@@ -495,11 +512,11 @@ function renderRegion() {
   const state = $("#rg-state");
   state.querySelector("b").textContent = `${at({ weekday: "long" })} ${at({ hour: "2-digit", minute: "2-digit" })}`;
   const offset = at({ timeZoneName: "shortOffset" }).split(" ").pop().replace("GMT", "UTC");
-  state.querySelector("small").textContent = [tz.replaceAll("_", " "), offset, set.country ? `${flagOf(set.country)} ${names.of(set.country) || set.country}` : ""].filter(Boolean).join(" · ");
+  state.querySelector("small").textContent = [tz.replaceAll("_", " "), offset, set.country ? names.of(set.country) || set.country : ""].filter(Boolean).join(" · ");
   const typed = $("#countries").value.toUpperCase().split(/[\s,]+/).filter(Boolean);
   $("#countries").classList.toggle("bad", typed.some((c) => !COUNTRIES.split(" ").includes(c)));
   $("#rg-countries").replaceChildren(...typed.map((c) => COUNTRIES.split(" ").includes(c)
-    ? el("span", { className: "rg-chip" }, el("span", { className: "flag", textContent: flagOf(c) }), names.of(c) || c)
+    ? el("span", { className: "rg-chip", textContent: names.of(c) || c })
     : el("span", { className: "rg-chip bad", textContent: `${c}: not a country code` })));
   const mine = Intl.DateTimeFormat().resolvedOptions().timeZone;
   $("#tz-hint").replaceChildren(`Now ${at({ hour: "2-digit", minute: "2-digit" })} there.`,
@@ -544,7 +561,7 @@ const BUILDERS = {
 let ntApp = "Discord";
 function renderTargets() {
   const targets = S.config.notifications.targets;
-  $("#nt-targets").replaceChildren(...(targets.length ? targets.map((t, i) => {
+  keepFocus($("#nt-targets"), () => $("#nt-targets").replaceChildren(...(targets.length ? targets.map((t, i) => {
     const tested = ntTested.get(t.url);
     const chips = Object.entries(LEVEL_NAMES).map(([lv, name]) => el("button", { type: "button", role: "checkbox", className: `nt-pick ${lv}`,
       ariaChecked: String(t.levels.includes(lv)), onclick: () => {
@@ -559,7 +576,7 @@ function renderTargets() {
         ...(tested && tested !== "…" ? [el("em", { className: tested.ok ? "ok" : "bad" }, icon(tested.ok ? "check" : "x", "inl"), tested.ok ? "Delivered" : tested.error)] : [])),
       el("span", { className: "nt-chips", role: "group", ariaLabel: `What ${appOf(t.url)} gets` }, el("small", { textContent: "Sends" }), ...chips),
       el("span", { className: "btns" }, test, remove));
-  }) : [el("p", { className: "muted cdm-empty", textContent: "No address yet: add Discord, Telegram, ntfy or another." })]));
+  }) : [el("p", { className: "muted cdm-empty", textContent: "No address yet: add Discord, Telegram, ntfy or another." })])));
 }
 async function testTargets(urls) {
   urls.forEach((u) => ntTested.set(u, "…"));
@@ -642,7 +659,7 @@ function ntDraw() {
   $("#nt-d-hint").textContent = b.hint;
   $("#nt-fields").replaceChildren(...b.fields.map(([key, label, ph = "", type = "text"]) => el("label", { className: "field" }, label,
     el("input", { type, name: key, placeholder: ph, spellcheck: false, autocomplete: "off", dataset: { bwignore: "", "1pIgnore": "", lpignore: "true" },
-      oninput: (e) => { e.target.classList.remove("bad"); $("#nt-d-result").replaceChildren(); } }))));
+      oninput: () => { $("#nt-fields").querySelectorAll("input").forEach((i) => markInvalid(i, $("#nt-d-result"), false)); $("#nt-d-result").replaceChildren(); } }))));  // the message goes, so does the mark it explained
   $("#nt-d-result").replaceChildren();
 }
 function ntBuilt() {
@@ -650,7 +667,7 @@ function ntBuilt() {
   const ok = b.check(f);
   if (ok !== true) {
     const input = $(`#nt-fields [name=${ok[0]}]`);
-    input.classList.add("bad"); input.focus();
+    markInvalid(input, $("#nt-d-result")); input.focus();
     $("#nt-d-result").replaceChildren(el("span", { className: "status-err", textContent: ok[1] }));
     return null;
   }

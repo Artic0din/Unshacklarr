@@ -19,15 +19,21 @@ function openCookieDialog(service = "", profile = "default", newProfile = false)
   $("#ck-title").textContent = service ? `Cookies for ${svcName(service)}` : "Add cookies";
   $("#ck-text").value = "";
   $("#ck-file").value = "";
-  $("#ck-error").replaceChildren();
+  ckClear();
   $("#cookie-dialog").showModal();
 }
-$("#ck-file").onchange = async (e) => { const f = e.target.files[0]; if (f) $("#ck-text").value = await f.text(); };
+const ckClear = () => { markInvalid($("#ck-text"), $("#ck-error"), false); $("#ck-error").replaceChildren(); };
+$("#ck-text").oninput = ckClear;
+$("#ck-file").onchange = async (e) => { const f = e.target.files[0]; if (f) { $("#ck-text").value = await f.text(); ckClear(); } };
 $("#ck-form").onsubmit = async (e) => {
   if (e.submitter?.value !== "save") return;
   e.preventDefault();
   const body = { service: $("#ck-service").value, profile: $("#ck-profile").value.trim(), text: $("#ck-text").value };
-  if (!body.text.trim()) return $("#ck-error").replaceChildren(failed("Pick a file or paste the cookies."));
+  if (!body.text.trim()) {
+    $("#ck-error").replaceChildren(failed("Pick a file or paste the cookies."));
+    markInvalid($("#ck-text"), $("#ck-error"));
+    return $("#ck-text").focus();
+  }
   try {
     const saved = await api("/api/cookies", { method: "POST", body: JSON.stringify(body) });
     $("#cookie-dialog").close();
@@ -107,7 +113,7 @@ function cdmShort(d) {
 }
 /* A small window by a button: a device to pick, a device's actions; gone on a click elsewhere or Escape. */
 let cdmPop = null;
-const closeCdmPop = () => { cdmPop?.remove(); cdmPop = null; };
+const closeCdmPop = () => { if (!cdmPop) return; const pop = cdmPop; cdmPop = null; popClose(pop); pop.remove(); };
 document.addEventListener("pointerdown", (e) => { if (cdmPop && !cdmPop.contains(e.target) && !e.target.closest?.(".cdm-pop-btn")) closeCdmPop(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCdmPop(); });
 function cdmPopAt(anchor, ...nodes) {
@@ -120,6 +126,7 @@ function cdmPopAt(anchor, ...nodes) {
   document.body.append(cdmPop);
   onTop(cdmPop);
   placeCdmPop();
+  popOpen(cdmPop, anchor, nodes[0].textContent, () => anchor.dataset.key && document.querySelector(`[data-key="${CSS.escape(anchor.dataset.key)}"]`));
   return cdmPop;
 }
 function placeCdmPop() {  // by its button, as the page scrolls; gone when the button is
@@ -172,6 +179,17 @@ function cdmPicker(anchor, service, current, also = []) {
 const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
   el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: svg }),
     el("div", {}, el("h3", { textContent: title }), el("p", { textContent: text })), ...(extra ? [extra] : [])), ...body);
+/* No device to list: what was asked for named, with a way back to the whole list. */
+function emptyDevices(known) {
+  if (!known) return el("p", { className: "muted cdm-empty", textContent: "No device yet: add a .wvd or .prd file." });
+  const label = { Widevine: "Widevine", PlayReady: "PlayReady", used: "In use", problems: "Problems" }[cdmFilter];
+  const typed = cdmQuery.trim();
+  const text = typed && label ? `No device under ${label} matches “${typed}”.` : typed ? `No device matches “${typed}”.`
+    : label ? `No device under ${label}.` : "No device matches.";
+  return el("div", { className: "cdm-empty", role: "status" }, el("p", { className: "muted", textContent: text }),
+    ...(typed ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", onclick: () => { cdmQuery = ""; renderCdm(); $("#cdm-list .con-search")?.focus(); } })] : []),
+    ...(label ? [el("button", { type: "button", className: "btn small", textContent: "Show all", onclick: () => { cdmFilter = "all"; renderCdm(); $("#cdm-list .con-filters [aria-pressed=true]")?.focus(); } })] : []));
+}
 function renderCdm(typing = false) {  // typing: in the search box, whose own element must stay
   const data = cdmData;
   $("#cdm-folder").textContent = data.folder || "";
@@ -238,9 +256,9 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   ];
   // Devices: one line each, those in use or in trouble first, the others folded
   const matches = (d) => ({ all: true, Widevine: d.kind === "Widevine", PlayReady: d.kind === "PlayReady", used: d.used_by.length > 0, problems: problem(d) }[cdmFilter])
-    && (!cdmQuery || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")}`.toLowerCase().includes(cdmQuery.toLowerCase()));
+    && (!cdmQuery.trim() || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")}`.toLowerCase().includes(cdmQuery.trim().toLowerCase()));  // the same trimmed query the empty line names
   const found = data.devices.filter(matches).sort((a, b) => (b.used_by.length > 0) - (a.used_by.length > 0) || (cdmTesting ? 0 : (problem(b) ? 1 : 0) - (problem(a) ? 1 : 0)));  // no jumping about while a batch is tested
-  const folding = cdmFilter === "all" && !cdmQuery && !cdmShowUnused;
+  const folding = cdmFilter === "all" && !cdmQuery.trim() && !cdmShowUnused;
   const list = folding ? found.filter((d) => d.used_by.length || problem(d)) : found;
   const folded = found.length - list.length;
   const counts = { all: data.devices.length, Widevine: data.devices.filter((d) => d.kind === "Widevine").length,
@@ -285,23 +303,19 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   };
   const row = (d) => {
     const [tone, word, why] = cdmRunning.has(d.name) ? ["run", "Testing…", "Asking the test server for a license"] : cdmStatus(d);
-    const menu = el("button", { type: "button", className: "jact cdm-pop-btn", dataset: { key: `dev:${d.name}` }, title: "Actions", ariaLabel: `Actions for ${cdmTitle(d)}`, onclick: (e) => actions(d, e.currentTarget) });
+    const menu = el("button", { type: "button", className: "jact cdm-pop-btn", dataset: { key: `dev:${d.name}`, fk: `menu:${d.kind}:${d.name}` }, title: "Actions", ariaLabel: `Actions for ${cdmTitle(d)}`, onclick: (e) => actions(d, e.currentTarget) });
     menu.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
     const lvl = d.info?.level || d.level;
     const fold = () => { cdmOpen.has(d.name) ? cdmOpen.delete(d.name) : cdmOpen.add(d.name); renderCdm(); };
-    return el("div", { className: `cdm-dev t-${tone}${cdmOpen.has(d.name) ? " open" : ""}${cdmJust.has(d.name) ? " just" : ""}`, tabIndex: 0, role: "button",
-      ariaExpanded: String(cdmOpen.has(d.name)),
-      // the row unfolds its details; not its buttons, nor a click in the details (their text can be selected)
-      onclick: (e) => { if (!e.target.closest("button, .cdm-more") && !getSelection().toString()) fold(); },
-      onkeydown: (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); fold(); } } },
+    const summary = el("button", { type: "button", className: "cdm-sum", ariaExpanded: String(cdmOpen.has(d.name)), dataset: { fk: `row:${d.kind}:${d.name}` }, onclick: fold },
       el("span", { className: "dot", title: why, ariaHidden: "true" }),
       el("span", { className: "who" }, el("b", { textContent: cdmTitle(d).replace(/^(.{6,}?)\s+\1\b/i, "$1") }),
         el("small", { textContent: d.folder ? `${d.name}/` : `${d.name}.${d.kind === "Widevine" ? "wvd" : "prd"}` })),
       el("span", { className: "kind" }, el("i", { textContent: `${d.kind === "PlayReady" ? "PlayReady" : "Widevine"}${lvl ? ` ${lvl}` : ""}` }), ...(d.info?.vmp ? [el("i", { textContent: "VMP" })] : [])),
       el("span", { className: "used" }, ...(d.used_by.length ? d.used_by.map((u) => el("span", { className: "cdm-chip static", textContent: u.toLowerCase() === "default" ? "default" : u }))
         : [el("small", { textContent: "not in use" })])),
-      el("span", { className: `st ${tone}`, title: why, textContent: word }),
-      menu,
+      el("span", { className: `st ${tone}`, title: why, textContent: word }));
+    return el("div", { className: `cdm-dev t-${tone}${cdmOpen.has(d.name) ? " open" : ""}${cdmJust.has(d.name) ? " just" : ""}` }, summary, menu,
       ...(cdmOpen.has(d.name) ? [el("div", { className: "cdm-more" }, ...(d.test && !d.test.ok ? [el("p", { className: `why ${tone}`, textContent: why })] : []), cdmDetails(d))] : []));
   };
   // Where things stand, in the header: what needs you first, else how the devices in use last tested
@@ -313,11 +327,11 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   else show("ok", used.length ? "The devices in use work" : "Nothing in use", facts);
   $("#cdm-alerts").replaceChildren(...alerts);
   const plus = el("button", { type: "button", className: "btn small", textContent: "+ Add a remote CDM", onclick: () => editRemote(null) });
-  const devices = el("div", { id: "cdm-devices", className: "cdm-devs" }, ...(list.length ? list.map(row) : [el("p", { className: "muted cdm-empty", textContent: data.devices.length ? "No device matches." : "No device yet: add a .wvd or .prd file." })]),
+  const devices = el("div", { id: "cdm-devices", className: "cdm-devs" }, ...(list.length ? list.map(row) : [emptyDevices(data.devices.length)]),
     ...(folded ? [el("button", { type: "button", className: "cdm-more-btn", textContent: `Show ${COUNT.moreDevice(folded)}, not in use`, onclick: () => { cdmShowUnused = true; renderCdm(); } })] : []));
   // Typing keeps the search box itself (a new one would put the cursor at the end and break an input method's composition): only what it filters is drawn again
   if (typing && $("#cdm-devices")) { $("#cdm-devices").replaceWith(devices); $("#cdm-test-all").replaceWith(testAll); return; }
-  $("#cdm-list").replaceChildren(
+  keepFocus($("#cdm-list"), () => $("#cdm-list").replaceChildren(
     cdmCard('<svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h6M4 17h10"/><path d="m15 9 4 3-4 3"/></svg>', "Which device each service uses",
       "Click a service to move it to another device. A change applies to the next download.", null, services),
     cdmCard('<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>', "Devices",
@@ -328,7 +342,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
       devices),
     cdmCard('<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>', "Remote CDMs",
       "A device on a server: pywidevine serve, a PlayReady API, Decrypt Labs. Saved in unshackle.yaml.", plus,
-      ...(data.remote.length ? [el("div", { className: "cdm-devs" }, ...data.remote.map(remoteRow))] : [])));
+      ...(data.remote.length ? [el("div", { className: "cdm-devs" }, ...data.remote.map(remoteRow))] : []))));
 }
 /* A remote CDM: a device on a server, named in unshackle.yaml's remote_cdm; changed from the page, its secret never shown. */
 function remoteRow(r) {
