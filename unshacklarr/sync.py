@@ -4377,10 +4377,10 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
             if running_jobs.get(batch) is job:
                 running_jobs.pop(batch)
                 paused_jobs.discard(batch)
-                job_options.pop(batch, None)
             last = not batch or batch_syncs.get(batch, 1) <= 1
             if batch and last:
                 batch_syncs.pop(batch, None)
+                job_options.pop(batch, None)  # its own options: not while another sync of it still downloads
             elif batch:
                 batch_syncs[batch] -= 1
             if last:  # the job is over: its slot goes to the next pick in line (#10); not while another sync of it runs,

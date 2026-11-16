@@ -7461,3 +7461,17 @@ def test_a_ladder_prefers_an_exact_language_to_an_earlier_base_match():
     assert sync.common_language(["en-US", "fr"], parts) == "fr"
     assert sync.common_language(["en-US"], parts) == "en-US"  # no exact one anywhere: by its base language
     assert sync.common_language(["de"], parts) is None
+
+
+def test_a_queued_jobs_own_season_map_is_read_back_as_the_sync_reads_it(tmp_path, monkeypatch):
+    # JSON turns the map's season numbers into text; passed on as is, service_episode would not find season 2
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync.QUEUE_FILE.write_text(json.dumps({"20261021-121217-33d6d0": {"episodes": [3], "kind": "manual", "numbering": {"season_map": {2: 1}}}}))
+    got = {}
+    monkeypatch.setattr(web, "run_sync", lambda ids, numbering=None, **kw: got.update(numbering=numbering))
+    web.resume_queue()
+    assert sync.service_episode({"service": "X", **got["numbering"]}, 2, 5) == "S01E05"

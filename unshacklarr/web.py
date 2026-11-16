@@ -6659,6 +6659,11 @@ def resume_queue() -> int:
         ids = [i for i in job.get("episodes") or [] if isinstance(i, int) and i > 0]
         if not ids or not BATCH_ID.fullmatch(batch):
             continue
+        try:  # its own numbering, keys as the sync reads them (JSON made the season numbers text)
+            numbering = check_numbering(job["numbering"], f"job {batch}") if isinstance(job.get("numbering"), dict) else None
+        except web.HTTPBadRequest as e:  # a damaged entry: left out rather than downloaded by the series' numbering
+            print(f"Job {batch} not picked up again: {e.text}", flush=True)
+            continue
         if job.get("paused"):
             sonarr_sync.paused_jobs.add(batch)
         if isinstance(job.get("options"), dict):
@@ -6666,7 +6671,7 @@ def resume_queue() -> int:
         print(f"Picking up job {batch} again: {len(ids)} episode{'s' if len(ids) > 1 else ''}{' (paused)' if job.get('paused') else ''}", flush=True)
         sonarr_sync.restoring[batch] = (None, job)  # kept in the file until it runs; before it starts, as it may run at once
         thread = run_sync(list(dict.fromkeys(ids)), replace=job.get("replace") is True, kind=job.get("kind") or "manual",
-                          numbering=job.get("numbering"), batch=batch, sonarr=job.get("sonarr") or "", proxy=job.get("proxy") or "",
+                          numbering=numbering, batch=batch, sonarr=job.get("sonarr") or "", proxy=job.get("proxy") or "",
                           video=job.get("video"))
         with sonarr_sync.jobs_lock:
             if batch in sonarr_sync.restoring:  # not running yet: its thread, so save_queue can tell it never started
