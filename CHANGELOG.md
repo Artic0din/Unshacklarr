@@ -226,6 +226,7 @@ Every change worth knowing, newest first. The format follows
 - Activity's progress bar no longer steps back for a moment when the history is reloaded: a download the live feed has just drawn keeps its newer progress. (#133)
 - Switching quickly between a series' libraries (main and 4K) no longer leaves the other library's episodes on screen: the slower answer is dropped, so Download no longer sends one library's episodes to the other. (#193)
 - A download of a series in one library (main or 4K) no longer greys out and marks the same episodes as downloading in the series' other library. (#245)
+- Catch up and Upgrades no longer show a slower, older answer under the filter or Sonarr you picked last, and their Download and Replace buttons send the Sonarr their list was fetched for, not the one the picker has moved to. (#194)
 
 ### Removed
 

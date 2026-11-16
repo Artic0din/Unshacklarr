@@ -480,7 +480,7 @@ $("#con-left").onclick = showLeftovers;
 
 /* Catch up: the aired episodes Unshacklarr's series still miss (those before a series got its service, or the
    automatic sync gave up on), downloaded together as one job. Within so many days, or all. */
-let missingDays = 30, missingSonarr = "";
+let missingDays = 30, missingSonarr = "", missingSeq = 0;  // missingSeq: the newest ask, an older answer is dropped
 /* Catch up and Upgrades for another Sonarr (a 4K one) too: which one, beside the rest; one whose ladder was never chosen
    says so, and nothing is downloaded for it. */
 function sonarrPicker(picked, pick) {
@@ -496,6 +496,7 @@ function unsetNote(name) {
 }
 async function showMissing() {
   picked_run = "missing";
+  const seq = ++missingSeq;
   $("#con").classList.add("open");
   document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-missing"));
   $("#cd-top-title").textContent = "Catch up";
@@ -504,17 +505,18 @@ async function showMissing() {
   $("#cd-main").replaceChildren(loading("Asking Sonarr what your series miss…"));
   let r;
   if (missingSonarr && !(S.config.settings.sonarrs || []).some((i) => i.name === missingSonarr)) missingSonarr = "";
-  const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(missingSonarr ? { sonarr: missingSonarr } : {}) });
-  try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`); } catch (e) { return $("#cd-main").replaceChildren(failed(e.message, showMissing)); }
-  if (picked_run !== "missing") return;
+  const sonarr = missingSonarr;  // the one this list is for: the buttons send it, whatever the picker says by then
+  const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(sonarr ? { sonarr } : {}) });
+  try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`); } catch (e) { return seq === missingSeq && picked_run === "missing" ? $("#cd-main").replaceChildren(failed(e.message, showMissing)) : undefined; }
+  if (picked_run !== "missing" || seq !== missingSeq) return;
   const ages = el("div", { className: "ax-seg", role: "group", ariaLabel: "Aired within" }, ...[[7, "7 days"], [30, "30 days"], [90, "90 days"], [0, "All"]].map(([d, label]) =>
     el("button", { type: "button", textContent: label, ariaPressed: String(missingDays === d), onclick: () => { missingDays = d; showMissing(); } })));
-  const unset = unsetNote(missingSonarr);
+  const unset = unsetNote(sonarr);
   const go = el("button", { className: "btn primary", textContent: r.items.length === 1 ? "Download it" : `Download the ${r.items.length}`, hidden: !r.items.length || !!unset,
     onclick: async (e) => {
       e.target.disabled = true;
       try {
-        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: r.items.map((x) => x.episodeId), ...(missingSonarr ? { sonarr: missingSonarr } : {}) }) });
+        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: r.items.map((x) => x.episodeId), ...(sonarr ? { sonarr } : {}) }) });
         toast(r.items.length === 1 ? "1 episode queued" : `${r.items.length} episodes queued, one after the other`);
       } catch (err) { e.target.disabled = false; toast(err.message, true); }
     } });
@@ -527,7 +529,7 @@ async function showMissing() {
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Catch up" }),
       el("small", { className: "line1", textContent: "Episodes that aired, are monitored and have no file in Sonarr, for the series Unshackle downloads. The automatic sync only looks at recent ones." }))),
-    ...[sonarrPicker(missingSonarr, (n) => { missingSonarr = n; showMissing(); }), unset].filter(Boolean),
+    ...[sonarrPicker(sonarr, (n) => { missingSonarr = n; showMissing(); }), unset].filter(Boolean),
     el("div", { className: "miss-bar" }, ages, go),
     ...(rows.length ? [el("div", {}, ...rows)] : [el("p", { className: "muted", textContent: missingDays ? `Nothing missing from the last ${missingDays} days.` : "Nothing missing: every aired episode has its file." })])));
 }
@@ -535,8 +537,8 @@ $("#con-missing").onclick = showMissing;
 
 /* Upgrades: the files of the series with a quality ladder that are not on its first step, checked against the
    service's tracks (a series' episodes 10 at a time, in the background; answers kept); those it has on an earlier step are replaced. */
-let upgradeTimer = null, upgradePick = new Set(), upgradeOpen = new Set(), upgradeSonarr = "";
-let upgradeLast = null;  // the last answer: a tick of a box draws again from it, without asking the server
+let upgradeTimer = null, upgradePick = new Set(), upgradeOpen = new Set(), upgradeSonarr = "", upgradeSeq = 0;  // upgradeSeq: the newest ask, an older answer is dropped
+let upgradeLast = null, upgradeLastSonarr = "";  // the last answer: a tick of a box draws again from it, without asking the server
 async function showUpgrades(fresh = true) {
   picked_run = "upgrades";
   clearTimeout(upgradeTimer);
@@ -547,9 +549,16 @@ async function showUpgrades(fresh = true) {
   $("#cd-foot").replaceChildren();
   let r;
   if (upgradeSonarr && !(S.config.settings.sonarrs || []).some((i) => i.name === upgradeSonarr)) upgradeSonarr = "";
+  let sonarr = upgradeSonarr;  // the one this list is for: the buttons send it, whatever the picker says by then
   if (fresh !== false || !upgradeLast) {
-    try { r = upgradeLast = await api(`/api/upgrades${upgradeSonarr ? `?sonarr=${encodeURIComponent(upgradeSonarr)}` : ""}`); } catch (e) { return $("#cd-main").replaceChildren(failed(e.message, showUpgrades)); }
-  } else r = upgradeLast;
+    const seq = ++upgradeSeq;
+    let got;
+    try { got = await api(`/api/upgrades${sonarr ? `?sonarr=${encodeURIComponent(sonarr)}` : ""}`); }
+    catch (e) { return seq === upgradeSeq && picked_run === "upgrades" ? $("#cd-main").replaceChildren(failed(e.message, showUpgrades)) : undefined; }
+    if (seq !== upgradeSeq) return;
+    r = upgradeLast = got;
+    upgradeLastSonarr = sonarr;
+  } else { r = upgradeLast; sonarr = upgradeLastSonarr; }
   if (picked_run !== "upgrades") return;
   const scan = r.scan, free = r.items.filter((i) => !i.running), picked = free.filter((i) => upgradePick.has(i.episodeId));
   // every series, or one from its card (asked afresh); the ticks only choose what is replaced (by mj23au, #18)
@@ -565,7 +574,7 @@ async function showUpgrades(fresh = true) {
     textContent: picked.length === 1 ? "Replace it" : `Replace the ${picked.length} selected`, onclick: async (e) => {
       e.target.disabled = true;
       try {
-        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: picked.map((i) => i.episodeId), replace: true, ...(upgradeSonarr ? { sonarr: upgradeSonarr } : {}) }) });
+        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: picked.map((i) => i.episodeId), replace: true, ...(sonarr ? { sonarr } : {}) }) });
         toast(picked.length === 1 ? "1 episode queued, replacing its file" : `${picked.length} episodes queued, replacing their files`);
         picked.forEach((i) => upgradePick.delete(i.episodeId));
         showUpgrades();
@@ -579,7 +588,7 @@ async function showUpgrades(fresh = true) {
   const bySeries = new Map();
   for (const it of r.items) { const k = `${it.tvdbId}|${it.series}`; if (!bySeries.has(k)) bySeries.set(k, []); bySeries.get(k).push(it); }
   const FIN = { joining: "Joining parts", finishing: "Finishing", renaming: "Renaming", importing: "Importing" };
-  const liveBy = new Map(runCards.filter((c) => isLive(c) && (c.instance || "") === upgradeSonarr).map((c) => [`${c.tvdbId}|${c.sxxeyy}`, c]));
+  const liveBy = new Map(runCards.filter((c) => isLive(c) && (c.instance || "") === sonarr).map((c) => [`${c.tvdbId}|${c.sxxeyy}`, c]));
   const liveOf = (it) => liveBy.get(`${it.tvdbId}|${it.sxxeyy}`);  // one lookup per row, not a scan of every card
   const stateOf = (c) => !c ? "" : c.waiting || isQueued(c) ? "Queued" : FIN[c.step] || `Downloading ${Math.round(Number(c.live?.progress) || 0)}%`;
   const rows = [...bySeries].map(([k, eps]) => {
@@ -614,7 +623,7 @@ async function showUpgrades(fresh = true) {
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Upgrades" }),
       el("small", { className: "line1", textContent: "Files your quality ladder says could be better. Check now asks each service what it has, up to 10 episodes of a series at a time, and keeps each answer for the days set in Settings, Upgrades. Replace downloads the better ones over your files, even when Sonarr ranks both the same (H.264 and H.265 in 1080p)." }))),
-    ...[sonarrPicker(upgradeSonarr, (n) => { upgradeSonarr = n; upgradePick.clear(); upgradeOpen.clear(); showUpgrades(); }), unsetNote(upgradeSonarr)].filter(Boolean),
+    ...[sonarrPicker(sonarr, (n) => { upgradeSonarr = n; upgradePick.clear(); upgradeOpen.clear(); showUpgrades(); }), unsetNote(sonarr)].filter(Boolean),
     el("div", { className: "miss-bar" }, el("span", { className: "muted", textContent: state }), el("span", { className: "up-acts" }, selAll, check, go)),
     ...(rows.length ? [el("div", {}, ...rows)] : [el("p", { className: "muted", textContent: scan.running ? "Nothing better found yet." : r.checked ? "Nothing better on the services: every file is already on the best step they have." : "Check now asks each service what it has, one episode at a time." })])));
   // asked again every 3 s while something runs, but not while Activity or the tab is out of sight

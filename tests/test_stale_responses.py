@@ -110,3 +110,55 @@ vm.runInContext(grab("refreshEpBusy"), ctx);
 ctx.refreshEpBusy(s).then(() => console.log(JSON.stringify([...ctx.epBusy.keys()])));
 """, str(JS / "series.js"), library)
     assert shown == ([1] if library == "" else [2])
+
+
+# Runs the page's real showMissing / showUpgrades (Catch up, Upgrades) with api answers delayed by request, and prints what was drawn or sent.
+LIST_PANES = r"""
+const [pane, scenario] = [process.argv[2], process.argv[3]];
+const draws = [], posts = [];
+const wait = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
+const find = (node, test) => { if (!node || typeof node !== "object") return null; if (test(node)) return node; for (const k of node.kids || (Array.isArray(node) ? node : [])) { const f = find(k, test); if (f) return f; } return null; };
+const items = (ids) => ids.map((episodeId) => ({ episodeId, tvdbId: 1, series: "Show", sxxeyy: `S01E0${episodeId}`, aired: "2026-01-01", running: false, file: "1080p", fileStep: 2, better: "4K", betterStep: 1, ladder: 3 }));
+const boxes = {};
+const ctx = { $: (sel) => (boxes[sel] ??= { classList: { add() {}, toggle() {} }, textContent: "", hidden: false, replaceChildren: (...kids) => { if (sel === "#cd-main") draws.push(kids); } }),
+  document: { hidden: false, querySelectorAll: () => [] }, el: (tag, props = {}, ...kids) => ({ tag, ...props, kids }), loading: (t) => ({ loading: t }), failed: (t) => ({ failed: t }),
+  S: { config: { settings: { sonarrs: [{ name: "A", quality_ladder: "x" }, { name: "B", quality_ladder: "x" }] } }, series: [] }, runCards: [], isLive: () => false, isQueued: () => false,
+  renderDock() {}, posterSrc: () => "", posterFail: () => null, ago: () => "", episodeTitle: () => "", thumb: () => ({}), mainSonarr: () => "Main", URLSearchParams, toast() {}, setTimeout: () => 0, clearTimeout() {}, picked_run: null,
+  api: (path, opts = {}) => {
+    if (opts.method === "POST") { posts.push(JSON.parse(opts.body)); return wait(0, {}); }
+    const slow = pane === "missing" ? !path.includes("days=") && !path.includes("sonarr=B") : path.includes("sonarr=A") || path === "/api/upgrades";
+    const slowIds = [1, 2, 3], fastIds = [1, 2];
+    const ids = scenario === "click" ? slowIds : slow ? slowIds : fastIds;
+    return wait(scenario === "click" ? 0 : slow ? 30 : 0, pane === "missing" ? { items: items(ids) } : { scan: { running: false }, items: items(ids), checked: null });
+  } };
+vm.createContext(ctx);
+const lets = [/^let missingDays.*\n/m, /^let upgradeTimer.*\n/m, /^let upgradeLast\b.*\n/m].map((re) => src.match(re)[0]).join("");
+vm.runInContext(lets + ["sonarrPicker", "unsetNote", "showMissing", "showUpgrades"].map(grab).join(""), ctx);
+vm.runInContext("upgradePick.add(1); upgradePick.add(2); upgradePick.add(3);", ctx);
+const show = (sonarr, days) => { vm.runInContext(pane === "missing" ? `missingSonarr = ${JSON.stringify(sonarr)}; missingDays = ${days};` : `upgradeSonarr = ${JSON.stringify(sonarr)};`, ctx); return pane === "missing" ? ctx.showMissing() : ctx.showUpgrades(); };
+const goText = () => find(draws[draws.length - 1], (n) => n.className === "btn primary")?.textContent;
+(async () => {
+  if (scenario === "overtaken") {  // the slow request first (All, or Sonarr A), the quick one picked right after (7 days, or Sonarr B)
+    const slow = show(pane === "missing" ? "" : "A", 0), fast = show(pane === "missing" ? "" : "B", 7);
+    await Promise.all([slow, fast]);
+    console.log(JSON.stringify({ shown: goText() }));
+  } else {  // the list for Sonarr A is on screen, the picker moves to B, and the button of A's list is pressed meanwhile
+    await show("A", 0);
+    const go = find(draws[draws.length - 1], (n) => n.className === "btn primary");
+    const next = show("B", 0);
+    await go.onclick({ target: {} });
+    await next;
+    console.log(JSON.stringify({ sent: posts.map((p) => p.sonarr ?? null) }));
+  }
+})();
+"""
+
+
+@pytest.mark.parametrize("pane, count", [("missing", "Download the 2"), ("upgrades", "Replace the 2 selected")])
+def test_list_pane_shows_the_newest_request_not_the_slowest(pane, count):
+    assert node(LIST_PANES, str(JS / "activity.js"), pane, "overtaken") == {"shown": count}
+
+
+@pytest.mark.parametrize("pane", ["missing", "upgrades"])
+def test_list_pane_buttons_send_the_sonarr_the_list_is_for(pane):
+    assert node(LIST_PANES, str(JS / "activity.js"), pane, "click") == {"sent": ["A"]}
