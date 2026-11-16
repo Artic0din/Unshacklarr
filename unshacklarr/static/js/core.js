@@ -515,7 +515,7 @@ async function loadServiceOptions(tag) {
   return serviceOptions[tag];
 }
 
-const BACK_NAME = { schedule: "Back to the schedule", log: "Back to Activity", settings: "Back to Settings" };
+const BACK_NAME = { schedule: "Back to the schedule", log: "Back to Activity", settings: "Back to Settings", yaml: "Back to unshackle.yaml" };
 async function openDrawer(s, tab, fromRoute = false) {
   current = s;
   $("#d-probe-out").replaceChildren();

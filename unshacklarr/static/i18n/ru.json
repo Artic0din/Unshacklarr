@@ -2460,6 +2460,7 @@
  "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": "Эти эпизоды в последний раз пробовали с другой нумерацией, другим «Всё равно заменить» или другим языком звука: повторите их по отдельности",
  "{0} did not finish within {1}: is the downloads folder reachable?": "{0} не завершилась за {1}: доступна ли папка загрузок?",
  "Back to the schedule": "Назад к расписанию",
+ "Back to unshackle.yaml": "Назад к unshackle.yaml",
  "Back to Activity": "Назад к активности",
  "Back to Settings": "Назад к настройкам",
  "Diagnostic saved: check it, then attach it to the issue": "Диагностика сохранена: проверьте её и приложите к issue",

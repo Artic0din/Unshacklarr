@@ -342,9 +342,9 @@ def test_a_phones_back_button_is_named_for_the_page_it_returns_to():
 const src = read(process.argv[1]);
 const ctx = sandbox();
 vm.runInContext(grab(src, /^const BACK_NAME = .*$/m) + "\nthis.BACK_NAME = BACK_NAME;", ctx);
-console.log(JSON.stringify([ctx.BACK_NAME.schedule, ctx.BACK_NAME.log, ctx.BACK_NAME.series ?? null]));
+console.log(JSON.stringify([ctx.BACK_NAME.schedule, ctx.BACK_NAME.log, ctx.BACK_NAME.yaml, ctx.BACK_NAME.series ?? null]));
 """, str(JS / "core.js"))
-    assert shown == ["Back to the schedule", "Back to Activity", None]  # the series wall is the default: "Back to all series"
+    assert shown == ["Back to the schedule", "Back to Activity", "Back to unshackle.yaml", None]  # the editor too, from Notifications or a deep link  # the series wall is the default: "Back to all series"
     assert 'BACK_NAME[currentTab] || "Back to all series"' in (JS / "core.js").read_text()
 
 

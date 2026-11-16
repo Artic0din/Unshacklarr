@@ -2407,6 +2407,7 @@
  "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": "这些剧集上次尝试时使用了不同的编号、“仍然替换”设置或音频语言：请分别重试",
  "{0} did not finish within {1}: is the downloads folder reachable?": "{0} 在 {1} 内未完成：下载文件夹是否可访问？",
  "Back to the schedule": "返回日程",
+ "Back to unshackle.yaml": "返回 unshackle.yaml",
  "Back to Activity": "返回活动",
  "Back to Settings": "返回设置",
  "Diagnostic saved: check it, then attach it to the issue": "诊断已保存：检查后附加到 Issue",

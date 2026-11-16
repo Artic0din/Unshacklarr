@@ -2376,6 +2376,7 @@
  "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": "Estos episodios se probaron por última vez con otra numeración, otro Reemplazar de todos modos u otro idioma de audio: reinténtalos por separado",
  "{0} did not finish within {1}: is the downloads folder reachable?": "{0} no terminó en {1}: ¿se puede acceder a la carpeta de descargas?",
  "Back to the schedule": "Volver al calendario",
+ "Back to unshackle.yaml": "Volver a unshackle.yaml",
  "Back to Activity": "Volver a Actividad",
  "Back to Settings": "Volver a Ajustes",
  "Diagnostic saved: check it, then attach it to the issue": "Diagnóstico guardado: revísalo y adjúntalo a la incidencia",

@@ -2402,6 +2402,7 @@
  "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": "これらのエピソードは前回、異なる番号設定、「それでも置き換え」、または音声言語で試されました: 別々にやり直してください",
  "{0} did not finish within {1}: is the downloads folder reachable?": "{0}が{1}以内に終了しませんでした: ダウンロードフォルダーにアクセスできますか?",
  "Back to the schedule": "スケジュールに戻る",
+ "Back to unshackle.yaml": "unshackle.yaml に戻る",
  "Back to Activity": "アクティビティに戻る",
  "Back to Settings": "設定に戻る",
  "Diagnostic saved: check it, then attach it to the issue": "診断を保存しました。確認してから Issue に添付してください",
