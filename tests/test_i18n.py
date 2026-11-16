@@ -182,6 +182,55 @@ CHANGED_ERROR_TEXTS = {
     "{0}: {1} refused the sign-in, trying the profile {2}",
 }
 
+# The sign-in lifecycle texts added since 1.5.0 ("DRM" and the Python "Traceback" line are not translated).
+SIGN_IN_TEXTS = {
+    "Approval",
+    "Approvals · {0}",
+    "Approve this device",
+    "Authentication backend identity is unavailable",
+    "Authentication backend is no longer configured",
+    "Authentication cleanup is no longer available",
+    "Authentication session is no longer available",
+    "Authentication session is not on the configured backend",
+    "Code: {0}",
+    "Configure a {0} series before signing in",
+    "Confirmed {0}",
+    "Copy details",
+    "Details copied",
+    "Enter the requested response",
+    "Invalid service or backend",
+    "No authentication session is waiting",
+    "Not checked yet",
+    "Open: {0}",
+    "Ready · {0}",
+    "Reauthenticate",
+    "Renewing {0} session",
+    "Repairing {0} session",
+    "Service approval",
+    "Sign-in cancelled",
+    "Sign-in failed · {0}",
+    "Sign-in needed",
+    "Signed in with {0}",
+    "Signing in",
+    "Submit",
+    "The configured Unshackle does not support secure device approvals; update it before using this local core",
+    "Unknown backend",
+    "Unshackle could not cancel sign-in",
+    "Unshackle could not start sign-in",
+    "Unshackle did not accept the response",
+    "Unshackle did not create an authentication session",
+    "Waiting for {0} approval",
+    "authentication rejected",
+    "{0} failed · {1} · trying {2}",
+    "{0} needs approval",
+    "{0} rejected · trying {1}",
+    "{0} services need approval",
+    "{0} session available",
+    "{0} session expired",
+    "{0} session rejected",
+    "{0} timed out",
+}
+
 
 def test_translations_fit_the_page():
     """Each language translates texts the page has, with no {n} the English lacks (it would show as is)."""
@@ -196,6 +245,18 @@ def test_translations_fit_the_page():
                 assert isinstance(text, str) and text.strip(), f"{path.name}: {key!r} is empty"
                 assert set(HOLE.findall(text)) <= set(HOLE.findall(key)), f"{path.name}: {key!r} has a {{n}} of its own"
         assert CHANGED_ERROR_TEXTS <= translated.keys(), f"{path.name}: changed error text is untranslated"
+
+
+def test_every_language_translates_the_sign_in_texts_with_their_placeholders():
+    english = json.loads((I18N / "en.json").read_text())
+    assert SIGN_IN_TEXTS <= english.keys()
+    for path in I18N.glob("*.json"):
+        if path.name == "en.json":
+            continue
+        translated = json.loads(path.read_text())
+        assert SIGN_IN_TEXTS <= translated.keys(), f"{path.name}: {sorted(SIGN_IN_TEXTS - translated.keys())}"
+        for key in SIGN_IN_TEXTS:
+            assert set(HOLE.findall(translated[key])) == set(HOLE.findall(key)), f"{path.name}: {key!r} loses or adds a {{n}}"
 
 
 def test_authentication_guidance_translates_without_changing_the_provider_reason():
@@ -283,27 +344,48 @@ def test_the_server_picks_the_plural_form_of_the_language(lang, expected):
     assert {n: i18n.tr(english(n), lang) for n in expected} == expected
 
 
-@pytest.mark.parametrize("lang, expected", [
-    ("ru", {1: "1 устройство", 2: "2 устройства", 5: "5 устройств", 21: "21 устройство"}),
-    ("en", {1: "1 device", 2: "2 devices", 5: "5 devices", 21: "21 devices"}),
-])
-def test_the_page_picks_the_plural_form_of_the_language(lang, expected):
+def page_translate(lang: str, expressions: list[str]) -> list[str]:
+    """What the page's own tr() makes of each JavaScript expression (a string, or COUNT.device(2)), in this language."""
     if not shutil.which("node"):
         pytest.skip("node is not installed")
     source = CORE.read_text()
     code = "\n".join(re.search(pattern, source, re.M | re.S).group() for pattern in (
         r"^let T = null, TP = \[\];", r"^const PLURALS = .*?;$", r"^function plural\([^\n]*\}$", r"^function templates\(.*?^\}",
         r"^const translated = .*?;", r"^const trSeen = .*?;", r"^function tr\(.*?^\}", r"^function trFind\(.*?^\}",
-        r"^const COUNT = \{.*?^\};"))
+        r"^function trTemplate\(.*?^\}", r"^const COUNT = \{.*?^\};"))
     harness = f"""
 const vm = require("vm"), fs = require("fs");
-const box = {{ LANG: {json.dumps(lang)}, Intl }};
+const box = {{ LANG: {json.dumps(lang)}, Intl, fs, path: {json.dumps(str(I18N / f"{lang}.json"))} }};
 vm.createContext(box);
 vm.runInContext({json.dumps(code)} + `
 if (LANG !== "en") {{ T = JSON.parse(fs.readFileSync(path, "utf8")); TP = templates(T); }}
-out = [1, 2, 5, 21].map((n) => tr(COUNT.device(n)));`, Object.assign(box, {{ fs, path: {json.dumps(str(I18N / f"{lang}.json"))} }}));
+out = [{", ".join(expressions)}].map((text) => tr(text));`, box);
 console.log(JSON.stringify(box.out));
 """
     done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
     assert done.returncode == 0, done.stderr
-    assert json.loads(done.stdout) == list(expected.values())
+    return json.loads(done.stdout)
+
+
+@pytest.mark.parametrize("lang, expected", [
+    ("ru", ["1 устройство", "2 устройства", "5 устройств", "21 устройство"]),
+    ("en", ["1 device", "2 devices", "5 devices", "21 devices"]),
+])
+def test_the_page_picks_the_plural_form_of_the_language(lang, expected):
+    assert page_translate(lang, [f"COUNT.device({n})" for n in (1, 2, 5, 21)]) == expected
+
+
+SIGN_IN_LABELS = {
+    "Sign-in failed · authentication rejected": "Échec de la connexion · authentification refusée",
+    "Pairing failed · network · trying cookies": "Appairage en échec · network · essai de cookies",
+    "Cookies rejected · trying pairing": "Cookies refusé · essai de pairing",
+    "Waiting for pairing approval": "En attente de l'approbation (pairing)",
+    "Signed in with cookies": "Connecté avec cookies",
+}
+
+
+def test_a_template_with_a_dot_separator_is_read_whole_before_its_pieces():
+    from unshacklarr import i18n
+    # "Sign-in failed" alone would match the older "{0} failed" and leave the rest of the line in English
+    assert {text: i18n.tr(text, "fr") for text in SIGN_IN_LABELS} == SIGN_IN_LABELS
+    assert page_translate("fr", [json.dumps(text) for text in SIGN_IN_LABELS]) == list(SIGN_IN_LABELS.values())

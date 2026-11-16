@@ -110,6 +110,7 @@ Every change worth knowing, newest first. The format follows
 
 - The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
 - The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
+- The sign-in texts added since 1.5.0 (approvals, reauthenticate, session available or expired, signed in with…, not checked yet…) are now translated into German, Spanish, French, Italian, Japanese, Brazilian Portuguese, Russian and Chinese instead of showing in English. A line such as "Sign-in failed · authentication rejected" is now translated whole. (#166)
 - After you clear Unshackle's cache, the Services page no longer shows those sign-ins as confirmed: the services read "Not checked yet" until a check or a download confirms them again. Clearing one service's cache does this for that service only. (#171)
 - Counts now follow each language's plural forms: in Russian, 2 devices read "2 устройства" and 21 read "21 устройство"; French and Brazilian Portuguese count 0 as singular. (#175)
 - The example Docker Compose file now builds Unshackle from this repository's Dockerfile at the reviewed commit and pulls this repository's image, instead of upstream's, which ignored the commit pin; that commit now includes official Unshackle's latest development work.

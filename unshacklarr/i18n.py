@@ -11,6 +11,7 @@ from pathlib import Path
 
 FOLDER = Path(__file__).parent / "static" / "i18n"
 HOLE = re.compile(r"\{(\d+)\}")
+JOINER = " · "
 
 
 def plural_category(lang: str, n: int | None) -> str:
@@ -55,7 +56,7 @@ def catalog(lang: str) -> tuple[dict, list]:
         if len(parts) > 1 and re.search(r"[^\W\d_]", anchor):
             # "{0} ago", "{0} of {1}", "{0} episode{1}{2}": one short piece of text, short fillers only
             weak = len(re.sub(r"[^\w]|[\d_]", "", "".join(parts))) < 10 and sum(1 for p in parts if p.strip()) < 2
-            patterns.append((len("".join(parts)), anchor, parts, to, weak))
+            patterns.append((len("".join(parts)), anchor, parts, to, weak, JOINER in "".join(parts)))
     patterns.sort(key=lambda p: -p[0])
     return exact, patterns
 
@@ -76,6 +77,14 @@ def holes(parts: list[str], key: str) -> list[str] | None:
     return found + [key[pos:end]]
 
 
+def from_template(key: str, lang: str, patterns: list, exact: dict, depth: int, joined: bool) -> str | None:
+    for _, anchor, parts, to, weak, has_joiner in patterns if depth < 3 else []:
+        if has_joiner == joined and anchor in key and (found := holes(parts, key)) is not None and not (weak and any(
+                len(g) > 24 or not (re.search(r"\d", g) or g.strip() in exact or not g.strip()) for g in found)):
+            return HOLE.sub(lambda h: tr(found[int(h[1])], lang, depth + 1) if int(h[1]) < len(found) else "", pick(to, lang, found))
+    return None
+
+
 def tr(text: str, lang: str, depth: int = 0) -> str:
     exact, patterns = catalog(lang)
     key = " ".join(text.split())
@@ -83,13 +92,11 @@ def tr(text: str, lang: str, depth: int = 0) -> str:
         return text
     if key in exact:
         return pick(exact[key], lang, None)
-    if " · " in key:  # pieces joined by " · ": each its own text
-        return " · ".join(tr(part, lang, depth + 1) for part in key.split(" · "))
-    for _, anchor, parts, to, weak in patterns if depth < 3 else []:
-        if anchor in key and (found := holes(parts, key)) is not None and not (weak and any(
-                len(g) > 24 or not (re.search(r"\d", g) or g.strip() in exact or not g.strip()) for g in found)):
-            return HOLE.sub(lambda h: tr(found[int(h[1])], lang, depth + 1) if int(h[1]) < len(found) else "", pick(to, lang, found))
-    return text
+    if (done := from_template(key, lang, patterns, exact, depth, True)) is not None:  # a template with the " · " itself: before pieces are split
+        return done
+    if JOINER in key:  # pieces joined by " · ": each its own text
+        return JOINER.join(tr(part, lang, depth + 1) for part in key.split(JOINER))
+    return done if (done := from_template(key, lang, patterns, exact, depth, False)) is not None else text
 
 
 def tr_lines(text: str, lang: str) -> str:
