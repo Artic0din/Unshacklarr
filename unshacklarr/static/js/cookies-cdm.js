@@ -173,6 +173,17 @@ function cdmPicker(anchor, service, current, also = []) {
 const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
   el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: svg }),
     el("div", {}, el("h3", { textContent: title }), el("p", { textContent: text })), ...(extra ? [extra] : [])), ...body);
+/* No device to list: what was asked for named, with a way back to the whole list. */
+function emptyDevices(known) {
+  if (!known) return el("p", { className: "muted cdm-empty", textContent: "No device yet: add a .wvd or .prd file." });
+  const label = { Widevine: "Widevine", PlayReady: "PlayReady", used: "In use", problems: "Problems" }[cdmFilter];
+  const typed = cdmQuery.trim();
+  const text = typed && label ? `No device under ${label} matches “${typed}”.` : typed ? `No device matches “${typed}”.`
+    : label ? `No device under ${label}.` : "No device matches.";
+  return el("div", { className: "cdm-empty", role: "status" }, el("p", { className: "muted", textContent: text }),
+    ...(typed ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", onclick: () => { cdmQuery = ""; renderCdm(); $("#cdm-list .con-search")?.focus(); } })] : []),
+    ...(label ? [el("button", { type: "button", className: "btn small", textContent: "Show all", onclick: () => { cdmFilter = "all"; renderCdm(); $("#cdm-list .con-filters [aria-pressed=true]")?.focus(); } })] : []));
+}
 function renderCdm(typing = false) {  // typing: in the search box, whose own element must stay
   const data = cdmData;
   $("#cdm-folder").textContent = data.folder || "";
@@ -239,9 +250,9 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   ];
   // Devices: one line each, those in use or in trouble first, the others folded
   const matches = (d) => ({ all: true, Widevine: d.kind === "Widevine", PlayReady: d.kind === "PlayReady", used: d.used_by.length > 0, problems: problem(d) }[cdmFilter])
-    && (!cdmQuery || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")}`.toLowerCase().includes(cdmQuery.toLowerCase()));
+    && (!cdmQuery.trim() || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")}`.toLowerCase().includes(cdmQuery.trim().toLowerCase()));  // the same trimmed query the empty line names
   const found = data.devices.filter(matches).sort((a, b) => (b.used_by.length > 0) - (a.used_by.length > 0) || (cdmTesting ? 0 : (problem(b) ? 1 : 0) - (problem(a) ? 1 : 0)));  // no jumping about while a batch is tested
-  const folding = cdmFilter === "all" && !cdmQuery && !cdmShowUnused;
+  const folding = cdmFilter === "all" && !cdmQuery.trim() && !cdmShowUnused;
   const list = folding ? found.filter((d) => d.used_by.length || problem(d)) : found;
   const folded = found.length - list.length;
   const counts = { all: data.devices.length, Widevine: data.devices.filter((d) => d.kind === "Widevine").length,
@@ -310,7 +321,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   else show("ok", used.length ? "The devices in use work" : "Nothing in use", facts);
   $("#cdm-alerts").replaceChildren(...alerts);
   const plus = el("button", { type: "button", className: "btn small", textContent: "+ Add a remote CDM", onclick: () => editRemote(null) });
-  const devices = el("div", { id: "cdm-devices", className: "cdm-devs" }, ...(list.length ? list.map(row) : [el("p", { className: "muted cdm-empty", textContent: data.devices.length ? "No device matches." : "No device yet: add a .wvd or .prd file." })]),
+  const devices = el("div", { id: "cdm-devices", className: "cdm-devs" }, ...(list.length ? list.map(row) : [emptyDevices(data.devices.length)]),
     ...(folded ? [el("button", { type: "button", className: "cdm-more-btn", textContent: `Show ${COUNT.moreDevice(folded)}, not in use`, onclick: () => { cdmShowUnused = true; renderCdm(); } })] : []));
   // Typing keeps the search box itself (a new one would put the cursor at the end and break an input method's composition): only what it filters is drawn again
   if (typing && $("#cdm-devices")) { $("#cdm-devices").replaceWith(devices); $("#cdm-test-all").replaceWith(testAll); return; }

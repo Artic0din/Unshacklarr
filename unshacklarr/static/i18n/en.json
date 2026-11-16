@@ -552,8 +552,10 @@
  "Clear failed ({0})": [
   "failedN"
  ],
+ "Clear filters": [],
  "Clear finished": [],
  "Clear one service's cache": [],
+ "Clear search": [],
  "Clear the history": [],
  "Clear the search or pick another filter.": [],
  "Clear title cache before fetching.": [],
@@ -1432,12 +1434,31 @@
  "No device called {0}": [
   "device"
  ],
+ "No device matches “{0}”.": [
+  "typed"
+ ],
  "No device matches.": [],
+ "No device under {0} matches “{1}”.": [
+  "label",
+  "typed"
+ ],
+ "No device under {0}.": [
+  "label"
+ ],
  "No device yet": [],
  "No device yet: add a .wvd or .prd file.": [],
  "No download history for it": [],
- "No download matches.": [],
- "No download yet.": [],
+ "No download matches “{0}”.": [
+  "query"
+ ],
+ "No download under {0} matches “{1}”.": [
+  "label",
+  "query"
+ ],
+ "No download under {0}.": [
+  "label"
+ ],
+ "No download yet. Downloads start from a series, or with Run sync now.": [],
  "No earlier version yet": [],
  "No episode of Sonarr is {0}'s {1} for this series": [
   "svc",
@@ -1465,7 +1486,12 @@
  "No series has a release time yet. Set one on a series' page, in its Settings tab.": [],
  "No series is downloading yet.": [],
  "No series match these filters.": [],
- "No series matches.": [],
+ "No series match “{0}”.": [
+  "query"
+ ],
+ "No series matches “{0}”.": [
+  "typed"
+ ],
  "No series set up yet.": [],
  "No service has options of its own yet.": [],
  "No service is known yet. Unshackle lists them once it answers.": [],
@@ -2138,6 +2164,7 @@
  "Several series": [],
  "Shaka Packager": [],
  "Show": [],
+ "Show all": [],
  "Show changes": [],
  "Show me": [],
  "Show more": [],

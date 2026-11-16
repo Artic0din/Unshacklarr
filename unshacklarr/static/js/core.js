@@ -489,8 +489,14 @@ const SEL = { on: false, ids: new Set() };  // the series picked to change toget
 const usesService = (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || {}).some((page) => page.service === tag);
 // The names a series is searched by: Sonarr's title, its other titles there, its name in file names
 const seriesNames = (s) => [s.title, ...(s.altTitles || []), S.config.series[s.tvdbId]?.file_name || ""];
+/* Every filter of the wall back to nothing (the sort stays: it hides no series). */
+function clearWallFilters(draw = true) {  // draw: false when the caller sets a filter of its own and draws once after
+  $("#search").value = ""; $("#f-service").value = ""; $("#f-library").value = ""; $("#f-missing").checked = false; $("#f-monitored").checked = false;
+  document.querySelectorAll("#tab-series .seg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.managed === ""));
+  if (draw) renderWall();
+}
 function renderWall() {
-  const q = $("#search").value.trim().toLowerCase();
+  const query = $("#search").value.trim(), q = query.toLowerCase();
   const svc = $("#f-service").value, lib = $("#f-library").value;
   const libsOf = (s) => S.sonarrsOf?.[s.tvdbId] || [];
   const on = (s) => Boolean(S.config.series[s.tvdbId]?.service);
@@ -557,7 +563,9 @@ function renderWall() {
   const empty = managed0
     ? el("div", { className: "empty" }, el("b", { textContent: "No series is downloading yet." }),
         "Open a series under All, pick a service or one of the links found on TMDB, then save.")
-    : el("div", { className: "empty" }, el("b", { textContent: "No series match these filters." }), "Clear the search or pick another filter.");
+    : el("div", { className: "empty", role: "status" },
+        el("b", { textContent: query ? `No series match “${query}”.` : "No series match these filters." }), "Clear the search or pick another filter.",
+        el("button", { type: "button", className: "btn small", textContent: "Clear filters", onclick: () => { clearWallFilters(); $("#search").focus(); } }));
   $("#wall").removeAttribute("aria-busy");
   keepFocus($("#wall"), () => $("#wall").replaceChildren(...(cards.length ? cards : [empty])));
 }
