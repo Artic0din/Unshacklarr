@@ -1,4 +1,8 @@
 const $ = (s) => document.querySelector(s);
+/* A phone-width window: the layout of the one-column pages. */
+const phoneLayout = () => matchMedia("(max-width: 700px)").matches;
+/* The copy icon of a button with nothing else in it. */
+const ICON_COPY = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>';
 /* Scrolling that glides, unless this person asked their system for less motion. */
 let SCROLL = "smooth";
 if (matchMedia("(prefers-reduced-motion: reduce)").matches) SCROLL = "auto";

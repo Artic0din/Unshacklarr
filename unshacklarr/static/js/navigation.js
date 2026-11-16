@@ -1,11 +1,10 @@
 /* Settings sections: one shown at a time, remembered in the URL (#/settings/automation). On a phone,
    #/settings is the list of sections, and a section is a page of its own that goes back to it. */
 let settingsSec = "unshackle", settingsList = false, secFromList = false;
-const phone = () => matchMedia("(max-width: 700px)").matches;
 const inSettingsSec = () => currentTab === "settings" && !settingsList;  // a section on screen, not the phone's list
 function showSettingsList(on) {
-  if (on && phone() && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);  // back to the list: the section is left
-  settingsList = on && phone();
+  if (on && phoneLayout() && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);  // back to the list: the section is left
+  settingsList = on && phoneLayout();
   $(".set-layout").classList.toggle("at-list", settingsList);
 }
 function showSettingsSec(name, fromRoute = false) {
