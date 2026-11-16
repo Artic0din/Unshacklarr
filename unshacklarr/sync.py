@@ -450,13 +450,22 @@ def notification_targets(settings: dict) -> list[dict]:
     return [{"url": u, "levels": list(ALL_LEVELS)} for u in notification_urls(settings)]
 
 
+def quiet_time(value) -> str | None:
+    """A quiet-hours time as "HH:MM". Typed without quotes in the file, YAML reads 23:00 as the number 1380 (minutes)
+    but 08:00 as text: the number is turned back. None for anything else."""
+    if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < 24 * 60:
+        return f"{value // 60:02}:{value % 60:02}"
+    return value if isinstance(value, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value) else None
+
+
 def in_quiet_hours(settings: dict, now: datetime | None = None) -> bool:
-    """Within the quiet hours ("23:00" to "08:00", over midnight or not), in the chosen time zone."""
+    """Within the quiet hours ("23:00" to "08:00", over midnight or not), in the chosen time zone.
+    Times that cannot be read: no quiet hours."""
     quiet = settings.get("quiet") or {}
-    if not quiet.get("from") or not quiet.get("to") or quiet["from"] == quiet["to"]:
+    start, end = quiet_time(quiet.get("from")), quiet_time(quiet.get("to"))
+    if not start or not end or start == end:
         return False
     now = (now or datetime.now(timezone.utc)).astimezone(LOCAL).strftime("%H:%M")
-    start, end = quiet["from"], quiet["to"]
     return start <= now < end if start < end else now >= start or now < end
 
 

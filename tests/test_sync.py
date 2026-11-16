@@ -3359,6 +3359,20 @@ def test_quiet_hours_over_midnight(tmp_path, monkeypatch):
     assert not sync.in_quiet_hours(quiet, at("08:00")) and not sync.in_quiet_hours({}, at("02:00"))
 
 
+def test_quiet_hours_typed_without_quotes_still_work_and_unreadable_ones_are_off(tmp_path, monkeypatch):
+    # YAML reads an unquoted 23:00 as the number 1380 (minutes) but 08:00 as text: neither may break a notification
+    sync = load(tmp_path, monkeypatch)
+    at = lambda hm: datetime.fromisoformat(f"2026-09-30T{hm}:00").replace(tzinfo=sync.LOCAL)
+    unquoted = {"quiet": {"from": 1380, "to": "08:00"}}
+    assert sync.in_quiet_hours(unquoted, at("23:30")) and sync.in_quiet_hours(unquoted, at("07:59"))
+    assert not sync.in_quiet_hours(unquoted, at("12:00"))
+    assert sync.in_quiet_hours({"quiet": {"from": "23:00", "to": 480}}, at("02:00"))  # 8:00: 480
+    for broken in ({"from": "late", "to": "08:00"}, {"from": 99999, "to": "08:00"}, {"from": 1.5, "to": "08:00"}, {"from": True, "to": "08:00"}):
+        assert not sync.in_quiet_hours({"quiet": broken}, at("23:30"))
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    assert sync.notify({"quiet": {"from": 1380, "to": "08:00"}}, "success", "Downloaded: Show", "x") is False  # held, not a TypeError
+
+
 def test_a_missed_job_status_waits_instead_of_downloading_twice(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     started, answers = [], iter([sync.UnshackleError("unshackle serve is unreachable: Read timed out"),
