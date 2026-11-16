@@ -6448,3 +6448,48 @@ def test_a_full_disk_in_the_quiet_hours_sends_the_message_and_the_job_goes_on(tm
     config["notifications"] = settings
     sync.sync(config, settings, [episode(111, 2, 5), episode(111, 2, 6)], manual=True, kind="manual")
     assert tried == ["S02E05", "S02E06"]  # the rest of the job still ran
+
+
+@pytest.mark.parametrize("which", ["inbox", "sent", "held", "warned", "authentication", "sign-in"])
+def test_a_saved_file_that_cannot_be_read_is_never_written_over(tmp_path, monkeypatch, which):
+    # A NAS share gone for a moment: the file read as empty, then written with the new item only, lost the rest
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    monkeypatch.setattr(sync, "send_to", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "in_quiet_hours", lambda s, now=None: bool(s.get("quiet")))
+    path = {"inbox": sync.INBOX_FILE, "sent": sync.SENT_FILE, "held": sync.HELD_FILE, "warned": sync.WARNED_FILE,
+            "authentication": sync.AUTHENTICATION_FILE, "sign-in": sync.AUTHENTICATION_SESSIONS_FILE}[which]
+    write = {
+        "inbox": lambda: sync.notify({}, "success", "Downloaded: Show S01E01", "x"),
+        "sent": lambda: sync.note_sent("success", "Downloaded: Show S01E01", []),
+        "held": lambda: sync.notify({"quiet": {"from": "00:00", "to": "23:59"}}, "success", "Downloaded: Show S01E01", "x"),
+        "warned": lambda: sync.first_warning("unshackle-111-S01E01"),
+        "authentication": lambda: sync.record_authentication_observation("RTLP", "", "validated", "2026-11-16T00:00:00+00:00"),
+        "sign-in": lambda: sync.start_authentication_setup("RTLP"),
+    }[which]
+    asked = []
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, **k: asked.append(method) or {"session_id": "session-one"})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b'{"kept": "everything already there"}')
+    broken = [True]
+    real_read = Path.read_text
+
+    def flaky(self, *a, **k):
+        if broken[0] and self == path:
+            raise OSError(5, "Input/output error")
+        return real_read(self, *a, **k)
+
+    monkeypatch.setattr(Path, "read_text", flaky)
+    try:
+        write()
+    except OSError:  # as a failed write would: its callers already log it and go on
+        pass
+    assert path.read_bytes() == b'{"kept": "everything already there"}'
+    if which == "inbox":
+        assert sync.read_inbox()["items"] == []  # a read for the page stays as lenient as it was
+    if which == "sign-in":
+        assert asked == ["POST", "DELETE"]  # the session it could not keep is closed on Unshackle, not left open
+    broken[0] = False
+    path.unlink()
+    write()
+    assert path.exists()  # a missing file is still an empty one, started with the new item

@@ -397,14 +397,14 @@ def notification_urls(settings: dict) -> list[str]:
     return urls or ([settings["discord_webhook"]] if settings.get("discord_webhook") else [])
 
 
-def read_inbox() -> dict:
-    return read_json(INBOX_FILE, {"read_at": None, "items": []})
+def read_inbox(strict: bool = False) -> dict:
+    return read_json(INBOX_FILE, {"read_at": None, "items": []}, strict)
 
 
 def change_inbox(change) -> dict:
     """Read, change and write the inbox under its lock; what was written."""
     with inbox_lock:
-        inbox = read_inbox()
+        inbox = read_inbox(strict=True)
         change(inbox)
         too_old = (datetime.now(timezone.utc) - timedelta(days=INBOX_DAYS)).isoformat()
         inbox["items"] = [i for i in inbox["items"] if i["at"] >= too_old][:INBOX_KEEP]
@@ -485,8 +485,9 @@ def send_to(url: str, level: str, title: str, message: str, details: dict | None
 
 def note_sent(level: str, title: str, to: list[dict]) -> None:
     with sent_lock:
-        log = [{"at": datetime.now(timezone.utc).isoformat(), "level": level, "title": title, "to": to}, *read_json(SENT_FILE, [])][:SENT_KEEP]
         try:
+            log = [{"at": datetime.now(timezone.utc).isoformat(), "level": level, "title": title, "to": to},
+                   *read_json(SENT_FILE, [], strict=True)][:SENT_KEEP]
             write_atomic(SENT_FILE, json.dumps(log))
         except OSError as e:
             print(f"Sent notifications not written: {e}", file=sys.stderr)
@@ -571,7 +572,7 @@ def notify(settings: dict, level: str, title: str, message: str, action: dict | 
         if not action:
             try:
                 with sent_lock:
-                    write_atomic(HELD_FILE, json.dumps([*read_json(HELD_FILE, []), {"level": level, "title": title}]))
+                    write_atomic(HELD_FILE, json.dumps([*read_json(HELD_FILE, [], strict=True), {"level": level, "title": title}]))
                 return False
             except OSError as e:  # a full disk: sent now rather than lost, and never the job stopped for it
                 print(f"Quiet hours: could not hold a message, sending it now: {no_credentials(e)}", file=sys.stderr)
@@ -819,9 +820,9 @@ def carry_authentication_failures(target: dict, source: dict) -> None:
             target_backends[service] = source_backends.get(service, "")
 
 
-def read_authentication_observations() -> dict[str, dict[str, dict]]:
+def read_authentication_observations(strict: bool = False) -> dict[str, dict[str, dict]]:
     """Latest redacted authentication result by backend and service."""
-    stored = read_json(AUTHENTICATION_FILE, {})
+    stored = read_json(AUTHENTICATION_FILE, {}, strict)
     if not isinstance(stored, dict):
         return {}
     observations = {}
@@ -860,7 +861,7 @@ def record_authentication_observations(observations_to_record: list[tuple[str, s
     if not observations_to_record:
         return
     with authentication_lock:
-        observations = read_authentication_observations()
+        observations = read_authentication_observations(strict=True)
         changed = False
         for service, backend, state, observed_at in observations_to_record:
             backend_observations = observations.setdefault(backend, {})
@@ -902,7 +903,7 @@ def record_authentication_observation(
     ):
         return
     with authentication_lock:
-        observations = read_authentication_observations()
+        observations = read_authentication_observations(strict=True)
         current = (observations.get(backend) or {}).get(service)
         if not current or current.get("observed_at") != observed_at:
             return
@@ -1016,8 +1017,8 @@ def _safe_authentication_record(session, *, active: bool) -> dict | None:
     return safe
 
 
-def _read_authentication_checkpoint() -> tuple[dict[str, dict], dict[str, dict]]:
-    stored = read_json(AUTHENTICATION_SESSIONS_FILE, {})
+def _read_authentication_checkpoint(strict: bool = False) -> tuple[dict[str, dict], dict[str, dict]]:
+    stored = read_json(AUTHENTICATION_SESSIONS_FILE, {}, strict)
     if not isinstance(stored, dict):
         return {}, {}
     sessions = {}
@@ -1066,7 +1067,7 @@ def _authentication_setup_session(key: str) -> dict | None:
 
 def _checkpoint_authentication_setup(key: str, session: dict) -> bool:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = sessions.get(key)
         if not current or current["session_id"] != session["session_id"]:
             return False
@@ -1085,7 +1086,7 @@ def _retain_authentication_setup_error(key: str, session: dict) -> None:
 
 def _remove_authentication_setup(key: str, session_id: str) -> None:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = sessions.get(key)
         if current and current["session_id"] == session_id:
             sessions.pop(key)
@@ -1094,7 +1095,7 @@ def _remove_authentication_setup(key: str, session_id: str) -> None:
 
 def _orphan_authentication_setup(key: str, session: dict) -> bool:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = sessions.get(key)
         if not current or current["session_id"] != session["session_id"]:
             return False
@@ -1116,7 +1117,7 @@ def _orphan_authentication_setup(key: str, session: dict) -> bool:
 
 def _checkpoint_authentication_cleanup(cleanup_id: str, cleanup: dict) -> bool:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = cleanups.get(cleanup_id)
         if not current or current["session_id"] != cleanup["session_id"]:
             return False
@@ -1128,7 +1129,7 @@ def _checkpoint_authentication_cleanup(cleanup_id: str, cleanup: dict) -> bool:
 
 def _remove_authentication_cleanup(cleanup_id: str, session_id: str) -> None:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = cleanups.get(cleanup_id)
         if current and current["session_id"] == session_id:
             cleanups.pop(cleanup_id)
@@ -1456,7 +1457,7 @@ def start_authentication_setup(service: str, backend: str = "") -> dict:
         }
         try:
             with authentication_sessions_lock:
-                sessions, cleanups = _read_authentication_checkpoint()
+                sessions, cleanups = _read_authentication_checkpoint(strict=True)
                 sessions[key] = session
                 _write_authentication_checkpoint(sessions, cleanups)
         except BaseException:
@@ -4900,7 +4901,11 @@ def order_changed(show: dict, serie: dict) -> str:
 def first_warning(key: str) -> bool:
     """True the first time an episode is late, and noted at once: runs side by side, or one cut off, never warn twice."""
     with warned_lock:
-        warned = set(read_json(WARNED_FILE, []))
+        try:
+            warned = set(read_json(WARNED_FILE, [], strict=True))
+        except OSError as e:  # never known as given: it waits for the next sync rather than the list written over
+            print(f"Warnings already given not read: {e}", file=sys.stderr)
+            return False
         if key in warned:
             return False
         write_atomic(WARNED_FILE, json.dumps(sorted(warned | {key})))
