@@ -688,6 +688,7 @@ async function save() {
   const changed = [...new Set([...Object.keys(units), ...Object.keys(savedUnits)])].filter((u) => units[u] !== savedUnits[u]);
   const unitBase = Object.fromEntries(changed.map((u) => [u, S.config.versions?.[u] ?? null]));
   const names = sonarrNames();  // as sent: a rename made while the Save runs is not saved yet
+  const sentUrls = names.map(([i]) => i.url);  // each one found again by it when another tab's list is taken whole
   const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series, changed, base: unitBase }) });
   keepSonarrNames(names);
   for (const u of changed) {  // only these are as the server has them now: the others keep the version they were loaded at
@@ -751,7 +752,11 @@ async function save() {
   const theirSonarrs = Array.isArray(saved?.settings?.sonarrs) ? saved.settings.sonarrs : [];
   keepSonarrNames((S.config.settings.sonarrs || []).flatMap((i) => theirSonarrs.filter((o) => i.url && o.url === i.url).map((o) => [i, o.name])));
   // another tab's rename taken here: the libraries each series is in follow it, as a rename made here does (at once)
-  const renamed = new Map(names.filter(([i, sent]) => i.name !== sent && sonarrSavedName.get(i) === i.name).map(([i, sent]) => [sent, i.name]));
+  const held = S.config.settings.sonarrs || [];
+  const renamed = new Map(names.flatMap(([was, sent], n) => {
+    const i = held.includes(was) ? was : held.find((o) => sentUrls[n] && o.url === sentUrls[n]);
+    return i && i.name !== sent && sonarrSavedName.get(i) === i.name ? [[sent, i.name]] : [];
+  }));
   if (renamed.size) for (const [tvdb, libs] of Object.entries(S.sonarrsOf || {}))
     S.sonarrsOf[tvdb] = libs.map((o) => renamed.has(o.name) ? { ...o, name: renamed.get(o.name) } : o);
   savedConfig = stableJSON(base);
