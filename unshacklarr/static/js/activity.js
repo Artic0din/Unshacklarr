@@ -178,6 +178,7 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
   landOnLive = false;
   // On a wide screen, something is always shown: what runs first, else the latest download.
   if (!picked_run && innerWidth > 700) picked_run = itemKey(liveItems[0] || jobsOf(runCards)[0]) || null;
+  markPicked(picked_run);  // the rows were drawn before this pick, and the summary rows are not redrawn
   if (picked_run === "serve" || picked_run === "stats" || picked_run === "left") return;
   if (picked_run?.startsWith("job:")) {
     const job = jobsOf(runCards).find((i) => i.job === picked_run.slice(4));
@@ -464,8 +465,13 @@ function listRow(c) {
     side);
   return row;
 }
-function markPicked(id) {  // the summary rows (Waiting in downloads, Stats…) are picked outside renderConsole
-  document.querySelectorAll(".crow").forEach((r) => { r.classList.toggle("sel", r.id === id); r.setAttribute("aria-current", String(r.id === id)); });
+// The one row shown as current: a summary row (Waiting in downloads, Stats…) by its id or its picked_run key,
+// a download or job by its key. Nothing else is: picking one clears the others, and the serve log clears them all.
+function markPicked(key) {
+  document.querySelectorAll(".crow").forEach((r) => {
+    const on = !!key && (r.id === key || r.id === `con-${key}` || r.dataset.hk === `row:${key}`);
+    r.classList.toggle("sel", on); r.setAttribute("aria-current", String(on));
+  });
 }
 function pickRun(id) {
   picked_run = id;

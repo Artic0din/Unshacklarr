@@ -97,10 +97,19 @@ if (scenario === "activity") {  // Activity: the running dot, the picked row, th
   out.rows = [attr(job("j1"), "aria-current"), attr(job("j2"), "aria-current")];
   // the summary rows picked outside the console
   const rows = ["con-left", "con-stats"].map((id) => Object.assign(new Node("button"), { id, className: "crow" }));
+  const download = Object.assign(new Node("button"), { className: "crow", dataset: { hk: "row:42" } });
+  rows.push(download);
   doc.querySelectorAll = () => rows;
   run(grab(activity, "markPicked"));
+  const states = () => rows.map((r) => [r.className, r.attrs["aria-current"]]);
   ctx.markPicked("con-stats");
-  out.summary = rows.map((r) => [r.className, r.attrs["aria-current"]]);
+  out.summary = states();
+  ctx.markPicked("42");  // a download picked after a summary: only it is current
+  out.thenDownload = states().map(([, a]) => a);
+  ctx.markPicked("stats");  // by picked_run's own value, as the console redraw passes it
+  out.byKey = states().map(([, a]) => a);
+  ctx.markPicked("serve");  // the serve log has no row: none is current
+  out.serve = states().map(([, a]) => a);
   // the output toggle follows the dock
   const open = new Node("button"), dock = new Node("div"), raw = new Node("details");
   dock.querySelector = () => open; dock.prepend = () => {};
@@ -202,8 +211,22 @@ def test_activity_names_the_running_dot_the_picked_row_and_the_output_state():
     shown = run_scenario("activity")
     assert shown["pulse"] == ["img", "Running"]
     assert shown["rows"] == ["true", "false"]
-    assert shown["summary"] == [["crow", "false"], ["crow sel", "true"]]
+    assert shown["summary"] == [["crow", "false"], ["crow sel", "true"], ["crow", "false"]]
+    assert shown["thenDownload"] == ["false", "false", "true"]
+    assert shown["byKey"] == ["false", "true", "false"]
+    assert shown["serve"] == ["false", "false", "false"]
     assert shown["opened"] == "true" and shown["closed"] == "false"
+
+
+def test_the_current_row_follows_every_pick():
+    """The console redraw marks the row it picked itself (a wide screen's first download), and the serve log clears the mark."""
+    activity = (JS / "activity.js").read_text()
+    draw = activity[activity.index("function drawConsole("):activity.index("function jobsOf(")]
+    assert draw.index("markPicked(picked_run)") > draw.index("if (!picked_run && innerWidth > 700)")
+    assert draw.index("markPicked(picked_run)") < draw.index('if (picked_run === "serve"')
+    serve = (JS / "settings-services.js").read_text()
+    serve = serve[serve.index("async function showServeLog("):]
+    assert serve.index("markPicked(picked_run)") > serve.index('picked_run = "serve"')
 
 
 def test_repeated_buttons_name_their_item_and_the_badge_letters_are_hidden():

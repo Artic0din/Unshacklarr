@@ -194,6 +194,7 @@ async function showServeLog() {
   try { ({ log } = await api("/api/unshackle/log")); } catch (e) { return toast(e.message, true); }
   showTab("log");
   picked_run = "serve";
+  markPicked(picked_run);
   $("#con").classList.add("open");
   $("#cd-main").replaceChildren(el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "unshackle serve" }),
     el("small", { textContent: "Its log, last lines" }))));
