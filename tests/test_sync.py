@@ -575,6 +575,14 @@ def test_a_run_redacts_credentials_before_saving_a_failure(tmp_path, monkeypatch
     assert card["detail"] == "Authorization: Bearer ***"
 
 
+def test_log_in_inside_an_ordinary_word_is_not_a_login_failure():
+    from unshacklarr.sync import login_failure
+    assert not login_failure("Title not found in the catalog index")
+    assert not login_failure("could not assign in time")
+    assert not login_failure("Failed while signing the manifest") and not login_failure("logins table is empty")
+    assert login_failure("Please log in again") and login_failure("You must sign in first") and login_failure("login required")
+
+
 def test_http_context_does_not_turn_a_server_permission_failure_into_a_login_failure():
     from unshacklarr.sync import login_failure
     assert not login_failure("Unshackle: HTTP 403: Unshackle refuses to pick the requested CDM")
@@ -2886,6 +2894,18 @@ def test_current_and_legacy_approval_payloads_share_the_transient_contract(tmp_p
     assert "this" not in sync.approval_fragments(fallback_job, sync.approval_from_job(fallback_job))
 
 
+def test_redacting_an_approval_keeps_ordinary_words(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    entered = sync.approval_fragments({}, {"message": "enter your code ABCD-1234"})
+    assert "ABCD-1234" in entered and "your" not in entered
+    assert "expires" not in sync.approval_fragments({}, {"message": "Your code expires soon"})
+    assert "this" not in sync.approval_fragments({}, {"message": "Use  this device"})
+    padded = sync.approval_fragments({}, {"message": "Link a device\n   \n\t\nUse code ABCD-1234"})
+    assert all(len(fragment.strip()) >= 4 and fragment == fragment.strip() for fragment in padded)  # no blank line
+    assert sync.without_approval("connection refused: check your network, ABCD-1234", entered) == (
+        "connection refused: check your network, [approval removed]")
+
+
 def test_terminal_first_job_snapshot_cannot_retain_approval(tmp_path, monkeypatch):
     import contextlib
 
@@ -3203,6 +3223,19 @@ def test_a_question_is_asked_once_kept_in_the_bell_and_done_once_answered(tmp_pa
     run.finish("failed")
 
 
+def test_a_replaced_or_abandoned_question_is_done_in_the_bell(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    monkeypatch.setattr(sync, "notification_urls", lambda settings: [])
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "DSNP"}, "auto")
+    sync.ask_for_input(run, "Enter the code sent to your e-mail")
+    sync.ask_for_input(run, "Wrong code, try again")  # a new question: the old one is no longer waiting
+    first, second = sync.read_inbox()["items"][::-1]
+    assert first["action"].get("done") is True and not second["action"].get("done")
+    run.finish("failed")  # stopped or failed while it asked: nothing waits for an answer
+    assert all(item["action"].get("done") for item in sync.read_inbox()["items"]) and "prompt" not in run.card
+
+
 @responses.activate
 def test_an_episode_in_two_parts_waits_for_both(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
@@ -3308,6 +3341,34 @@ def test_each_address_gets_its_levels_and_quiet_hours_hold_messages_for_one_summ
     assert sync.send_held(settings) is False
 
 
+def test_a_held_summary_is_kept_until_it_is_delivered_and_keeps_what_came_meanwhile(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    up = [False]
+    got = []
+
+    def send_to(url, level, title, message, details=None):
+        got.append(message)
+        if not up[0]:
+            return "503 Service Unavailable"
+        sync.write_atomic(sync.HELD_FILE, json.dumps([*sync.read_json(sync.HELD_FILE, []), {"level": "success", "title": "Came during"}]))
+        return None
+    monkeypatch.setattr(sync, "send_to", send_to)
+    settings = {"targets": [{"url": "ntfy://ok", "levels": ["success", "warning", "error"]}]}
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    assert sync.send_held(settings) is False  # every address failed: the night's summary waits for the next try
+    assert [h["title"] for h in sync.read_json(sync.HELD_FILE, [])] == ["Failed: Show S01E04"]
+    up[0] = True
+    assert sync.send_held(settings) is True  # delivered: gone, but not the message that came while it went
+    assert [h["title"] for h in sync.read_json(sync.HELD_FILE, [])] == ["Came during"]
+    assert "Failed: Show S01E04" in got[-1]
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "x"}]))
+    assert sync.send_held({}) is False and not sync.HELD_FILE.exists()  # no address to send to: nothing to wait for
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "success", "title": "Downloaded: Show"}]))
+    assert sync.send_held({"targets": [{"url": "ntfy://errors", "levels": ["error"]}]}) is False
+    assert not sync.HELD_FILE.exists()  # the one address takes failures only: this summary has nowhere to go
+
+
 def test_an_address_with_no_level_ticked_gets_nothing_and_one_without_a_levels_key_gets_all(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
@@ -3325,6 +3386,20 @@ def test_quiet_hours_over_midnight(tmp_path, monkeypatch):
     quiet = {"quiet": {"from": "23:00", "to": "08:00"}}
     assert sync.in_quiet_hours(quiet, at("23:30")) and sync.in_quiet_hours(quiet, at("07:59"))
     assert not sync.in_quiet_hours(quiet, at("08:00")) and not sync.in_quiet_hours({}, at("02:00"))
+
+
+def test_quiet_hours_typed_without_quotes_still_work_and_unreadable_ones_are_off(tmp_path, monkeypatch):
+    # YAML reads an unquoted 23:00 as the number 1380 (minutes) but 08:00 as text: neither may break a notification
+    sync = load(tmp_path, monkeypatch)
+    at = lambda hm: datetime.fromisoformat(f"2026-09-30T{hm}:00").replace(tzinfo=sync.LOCAL)
+    unquoted = {"quiet": {"from": 1380, "to": "08:00"}}
+    assert sync.in_quiet_hours(unquoted, at("23:30")) and sync.in_quiet_hours(unquoted, at("07:59"))
+    assert not sync.in_quiet_hours(unquoted, at("12:00"))
+    assert sync.in_quiet_hours({"quiet": {"from": "23:00", "to": 480}}, at("02:00"))  # 8:00: 480
+    for broken in ({"from": "late", "to": "08:00"}, {"from": 99999, "to": "08:00"}, {"from": 1.5, "to": "08:00"}, {"from": True, "to": "08:00"}):
+        assert not sync.in_quiet_hours({"quiet": broken}, at("23:30"))
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    assert sync.notify({"quiet": {"from": 1380, "to": "08:00"}}, "success", "Downloaded: Show", "x") is False  # held, not a TypeError
 
 
 def test_a_missed_job_status_waits_instead_of_downloading_twice(tmp_path, monkeypatch):
@@ -4254,6 +4329,23 @@ def test_another_sonarr_needs_a_ladder_chosen_and_waits_until_it_is(tmp_path, mo
         raise AssertionError("a hand-picked download went to a paused instance")
     except RuntimeError as e:
         assert "Choose a quality ladder" in str(e)
+
+
+def test_another_sonarr_takes_the_same_episodes_the_main_one_does(tmp_path, monkeypatch):
+    # Early releases and a series' own schedule reach the second Sonarr too, for the series set up here only
+    sync = load(tmp_path, monkeypatch)
+    inst = with_4k(sync)
+    now = datetime.now(timezone.utc)
+    show = lambda tvdb: {"tvdbId": tvdb, "monitored": True}
+    ep = lambda id_, tvdb: {"id": id_, "seasonNumber": 1, "episodeNumber": id_, "airDateUtc": days_ago(1), "series": show(tvdb)}
+    plan = [(show(111), [{"id": 3, "seasonNumber": 1, "episodeNumber": 3}], {3: now - timedelta(hours=5)})]
+    monkeypatch.setattr(sync, "missing_episodes", lambda: [ep(1, 111), ep(3, 111), ep(4, 999)])  # 3: dated by its schedule
+    monkeypatch.setattr(sync, "early_episodes", lambda config, at: [ep(2, 111), ep(5, 999)])
+    monkeypatch.setattr(sync, "broadcast_plans", lambda config, fresh=False: plan)
+    taken = []
+    monkeypatch.setattr(sync, "sync", lambda config, settings, episodes, **kw: taken.extend(e["id"] for e in episodes) or 0)
+    assert sync.sync_instance(inst, sync.read_file(), {}) == 0
+    assert sorted(taken) == [1, 2, 3]
 
 
 def test_each_sonarr_keeps_its_own_series_list(tmp_path, monkeypatch):
@@ -5582,6 +5674,35 @@ def test_the_very_title_from_years_apart_is_another_programme(tmp_path, monkeypa
     assert sync.programme_for(show, ep(33, "2026-01-10T21:00:00Z"), {}, True)["code"] == "S01E01"
 
 
+def test_the_year_of_a_new_years_airing_is_the_local_one(tmp_path, monkeypatch):
+    # Aired 00:30 on 1 January in Paris, 23:30 on 31 December in UTC: the programme from 2026 is the one, not refused
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "LOCAL", sync.ZoneInfo("Europe/Paris"))
+
+    class Serve:
+        def call(self, method, path, json=None):
+            if path == "/api/search":
+                return {"results": [{"id": "p", "title": "Wonder: The Film"}]}
+            return {"titles": [{"type": "movie", "name": "Wonder", "year": 2026}]}
+    monkeypatch.setattr(sync, "backend_for", lambda tag, config=None: Serve())
+    monkeypatch.setattr(sync, "serve_params", lambda show, config: {})
+    show = {"service": "iP", "programmes": True}
+    ep = {"id": 1, "seasonNumber": 2026, "episodeNumber": 1, "title": "Wonder", "airDateUtc": "2025-12-31T23:30:00Z"}
+    assert sync.programme_for(show, ep, {}, True)["how"] == "title and subtitle"  # the UTC date converted to local
+    assert sync.programme_for(show, {**ep, "id": 2, "airDate": "2026-01-01"}, {}, True)["how"] == "title and subtitle"  # Sonarr's own date
+    with pytest.raises(sync.Unmatched, match="aired in 2025"):
+        sync.programme_for(show, {**ep, "id": 3, "airDate": "2025-12-31"}, {}, True)  # a real year apart is still refused
+
+
+def test_a_series_with_an_unreadable_start_date_takes_nothing_and_stops_no_other(tmp_path, monkeypatch):
+    # since: soon (a hand edit or an API client) read as no start date, as when none is set
+    sync = load(tmp_path, monkeypatch)
+    now = datetime(2026, 10, 1, 12, tzinfo=timezone.utc)
+    ep = {"airDateUtc": "2026-09-30T18:00:00Z"}
+    assert sync.wanted_automatically({"since": "2026-09-01T00:00:00Z"}, ep, now)
+    assert not sync.wanted_automatically({"since": "soon"}, ep, now)
+
+
 def test_a_job_paused_while_waiting_for_a_slot_blocks_no_one(tmp_path, monkeypatch):
     # A job paused while it waits loses its number (release_job): the next one asking still gets in line and in
     sync = load(tmp_path, monkeypatch)
@@ -6513,3 +6634,66 @@ def test_stop_pressed_as_the_download_was_handed_to_serve_asks_again_when_serve_
         sync.run_job({}, run, poll=0)
     assert stopped.value.status == "cancelled" and asked == ["job1", "job1"]
     run.finish("stopped")
+
+
+def test_a_held_summary_waiting_on_an_address_is_not_pushed_to_devices_again(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    pushed = []
+    monkeypatch.setattr(sync.PUSH, "send", lambda title, message: pushed.append(title) or True)
+    up = [False]
+    monkeypatch.setattr(sync, "send_to", lambda *a, **k: None if up[0] else "503 Service Unavailable")
+    settings = {"targets": [{"url": "ntfy://ok", "levels": ["success", "warning", "error"]}]}
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    assert sync.send_held(settings) is False and sync.send_held(settings) is False  # the address is down: retried
+    assert len(pushed) == 1  # the devices have it already
+    up[0] = True
+    assert sync.send_held(settings) is True and len(pushed) == 1
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    assert sync.send_held(settings) is True and len(pushed) == 2  # the next night's summary is new, even if the same
+
+
+def test_a_held_summary_whose_device_push_failed_is_pushed_again(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    pushed = []
+    device_up = [False]
+
+    def push(title, message):
+        pushed.append(title)
+        if not device_up[0]:
+            raise OSError("device unreachable")
+        return True
+
+    monkeypatch.setattr(sync.PUSH, "send", push)
+    monkeypatch.setattr(sync, "send_to", lambda *a, **k: "503 Service Unavailable")
+    settings = {"targets": [{"url": "ntfy://ok", "levels": ["success", "warning", "error"]}]}
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    assert sync.send_held(settings) is False and len(pushed) == 1  # the device was down
+    device_up[0] = True
+    assert sync.send_held(settings) is False and len(pushed) == 2  # tried again, now it has it
+    assert sync.send_held(settings) is False and len(pushed) == 2  # and not a third time
+
+
+def test_a_labelled_approval_code_is_redacted_in_any_case(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    fragments = sync.approval_fragments({}, {"message": "Enter code: aBcDeF"})
+    assert "aBcDeF" in fragments
+    assert sync.without_approval("Pairing failed for aBcDeF", fragments) == "Pairing failed for [approval removed]"
+    assert "abcd" in sync.approval_fragments({}, {"message": "Approve: abcd"})
+    assert "expires" not in sync.approval_fragments({}, {"message": "Your code expires soon"})  # no label colon: a word
+
+
+def test_a_run_finishes_even_when_the_inbox_cannot_be_written(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    monkeypatch.setattr(sync, "notification_urls", lambda settings: [])
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "DSNP"}, "auto")
+    sync.ask_for_input(run, "Enter the code sent to your e-mail")
+    original_write = sync.write_atomic
+
+    def full_disk(path, data):
+        if path == sync.INBOX_FILE:
+            raise OSError("disk full")
+        return original_write(path, data)
+    monkeypatch.setattr(sync, "write_atomic", full_disk)
+    run.finish("failed")  # the bell is behind, the run's own record is not
+    assert run.card["outcome"] == "failed" and "prompt" not in run.card

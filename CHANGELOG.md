@@ -268,6 +268,24 @@ Every change worth knowing, newest first. The format follows
   yours: its episodes then match the service's better.
 - **Episode order.** A series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering; when that
   order changes, its new episodes wait until you confirm the numbering.
+- Activity's progress bar no longer steps back for a moment when the history is reloaded: a download the live feed has just drawn keeps its newer progress. (#133)
+- Switching quickly between a series' libraries (main and 4K) no longer leaves the other library's episodes on screen: the slower answer is dropped, so Download no longer sends one library's episodes to the other. (#193)
+- A download of a series in one library (main or 4K) no longer greys out and marks the same episodes as downloading in the series' other library. (#245)
+- Catch up and Upgrades no longer show a slower, older answer under the filter or Sonarr you picked last, and their Download and Replace buttons send the Sonarr their list was fetched for, not the one the picker has moved to. (#194)
+- Opening another series while "Test this series" is still asking no longer shows the first series' result in it (or lets Apply write its season map there), and the Test button is no longer stuck waiting for the first series' answer. (#217)
+- The library-path check in Settings no longer shows an old result ("Not found here" for `/mnt/t` after you typed `/mnt/tv`): only the newest check's answer is drawn. (#246)
+- Hiding the browser tab with the serve log open and coming back no longer replaces the log with the output of a run opened earlier. (#242)
+- The Schedule no longer shows seven empty "Nothing that day." columns when a late logo download finishes while a new week or month is still loading: the spinner stays until the shows arrive. (#244)
+- Closing and quickly reopening "Suggest services" no longer leaves the first run's workers asking TMDB alongside the new ones or overwriting the progress count. (#254)
+- Episodes, Catch up and Upgrades no longer say Sonarr "did not answer" when it takes between 30 seconds and 2 minutes: they wait as long as the Schedule and the server do, and the series search on a service waits 70 seconds instead of 30. (#222)
+- An episode that aired just after midnight on 1 January is no longer refused as a year too early: the programme's year is now Sonarr's own air date, or the UTC time converted to your time zone.
+- One series with an unreadable start date no longer stops the automatic sync of every series after it, nor makes the missing list fail: Save now refuses a start date that is not a date, and one already stored that way counts as no start date.
+- A second Sonarr now gets the same automatic sync as the main one: a series' own broadcast schedule and its early releases (a negative release day) reach it too, so a weekly series Sonarr dates all on its premiere is no longer missed there.
+- A failure whose message merely contains "log in" inside another word ("catalog index", "assign in time") is no longer taken for a sign-in problem, so it no longer tries every fallback profile or says the cookies may have expired.
+- Hiding an approval code no longer hides ordinary words with it: "enter your code ABCD-1234" hides only the code, not every "your" in the history and in error messages, so a download error such as "connection refused" still matches its retry rule.
+- A sign-in question in the bell is now crossed off when the service asks a new one ("wrong code, try again"), and when the download fails or is stopped while it was asking, instead of staying open.
+- Quiet hours typed by hand without quotes (`from: 23:00`, which the settings file reads as a number) no longer break every notification and the check that sends the held summary; a time that cannot be read now means no quiet hours.
+- The summary of messages held during the quiet hours is no longer lost when every address fails as they end: it is kept and tried again the next minute, and messages that arrived while it was going out are kept too.
 
 ### Removed
 
