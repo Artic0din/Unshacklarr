@@ -113,6 +113,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Tabbing to a control no longer leaves it hidden behind a bar.** The page, and a series' slide-out, now stop the focused control short of the header, the tab bar, the save bar, the select bar, the download bar at the bottom of a job and the series' settings shortcuts, instead of leaving it under them. The last row of Settings also clears the save bar at the end of the page. (#280)
 - A restart while a retry ran beside its job (another Replace choice) no longer loses the job's queued episodes: each is kept with its own settings and picked up again. The queue saved by the version before still loads; once this version has saved it, an older version can no longer read it.
 - An API download request with `"audio"` now asks the service for that language first, with the series' own audio languages after it, and accepts the file in it (an episode that has a file is replaced only by one in that language), instead of downloading the series' usual language again and counting it as an audio upgrade. (#187)
 - With `--generate-dv` on, an episode with HDR10+ and no Dolby Vision now fits a quality ladder's Hybrid step, in downloads and in Upgrades, instead of failing with "None of the quality ladder's steps" or taking a lower step.
