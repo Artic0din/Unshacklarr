@@ -229,6 +229,7 @@ Every change worth knowing, newest first. The format follows
 - Catch up and Upgrades no longer show a slower, older answer under the filter or Sonarr you picked last, and their Download and Replace buttons send the Sonarr their list was fetched for, not the one the picker has moved to. (#194)
 - Opening another series while "Test this series" is still asking no longer shows the first series' result in it (or lets Apply write its season map there), and the Test button is no longer stuck waiting for the first series' answer. (#217)
 - The library-path check in Settings no longer shows an old result ("Not found here" for `/mnt/t` after you typed `/mnt/tv`): only the newest check's answer is drawn. (#246)
+- Hiding the browser tab with the serve log open and coming back no longer replaces the log with the output of a run opened earlier. (#242)
 
 ### Removed
 

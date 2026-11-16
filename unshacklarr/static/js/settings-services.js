@@ -197,7 +197,7 @@ async function showServeLog() {
     el("small", { textContent: "Its log, last lines" }))));
   $("#cd-raw").hidden = false;
   $("#cd-raw").open = true;
-  if (openTerm()) { termFor = "serve"; term.write(log.replaceAll("\n", "\r\n")); }
+  if (openTerm()) { termFor = "serve"; termQuery = ""; term.write(log.replaceAll("\n", "\r\n")); }
   document.querySelectorAll(".crow").forEach((r) => r.classList.remove("sel"));
 }
 

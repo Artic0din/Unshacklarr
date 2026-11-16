@@ -12,7 +12,8 @@ JS = Path(__file__).parents[1] / "unshacklarr" / "static" / "js"
 PRELUDE = r"""
 const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8");
-const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n|const ${name} = [\\s\\S]*?\\n};?\\n|const ${name} = [^\\n]*\\n`))[0];
+const read = (file) => fs.readFileSync(file, "utf8");
+const grab = (name, text = src) => text.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n|const ${name} = [\\s\\S]*?\\n};?\\n|const ${name} = [^\\n]*\\n`))[0];
 """
 
 
@@ -32,7 +33,7 @@ const ctx = { runCards: [card(10)], runsTimer: null, liveFeed: null, feedReloadi
   $: () => ({ hidden: false, textContent: "" }), api: (path) => (path === "/api/runs" ? new Promise((resolve) => { answer = resolve; }) : Promise.resolve({ items: [] })),
   renderConsole() {}, followLive() {}, activityLater() {}, failed: () => null, setTimeout: () => 0, clearTimeout() {} };
 vm.createContext(ctx);
-vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged"].map(grab).join("") + grab("openActivity") + grab("liveTick"), ctx);
+vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
 (async () => {
   const reload = ctx.openActivity();
   ctx.liveTick(JSON.stringify([card(60)]));  // drawn while the history answer is on its way
@@ -51,7 +52,7 @@ const ctx = { runCards: [card(10)], runsTimer: null, liveFeed: null, feedReloadi
   $: () => ({ hidden: false, textContent: "" }), api: async (path) => (path === "/api/runs" ? [card(30)] : { items: [] }),
   renderConsole() {}, followLive() {}, activityLater() {}, failed: () => null, setTimeout: () => 0, clearTimeout() {} };
 vm.createContext(ctx);
-vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged"].map(grab).join("") + grab("openActivity") + grab("liveTick"), ctx);
+vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
 ctx.openActivity().then(() => console.log(JSON.stringify({ progress: ctx.runCards[0].live.progress })));
 """, str(JS / "activity.js"))
     assert shown == {"progress": 30}
@@ -133,7 +134,7 @@ const ctx = { $: (sel) => (boxes[sel] ??= { classList: { add() {}, toggle() {} }
   } };
 vm.createContext(ctx);
 const lets = [/^let missingDays.*\n/m, /^let upgradeTimer.*\n/m, /^let upgradeLast\b.*\n/m].map((re) => src.match(re)[0]).join("");
-vm.runInContext(lets + ["sonarrPicker", "unsetNote", "showMissing", "showUpgrades"].map(grab).join(""), ctx);
+vm.runInContext(lets + ["sonarrPicker", "unsetNote", "showMissing", "showUpgrades"].map((n) => grab(n)).join(""), ctx);
 vm.runInContext("upgradePick.add(1); upgradePick.add(2); upgradePick.add(3);", ctx);
 const show = (sonarr, days) => { vm.runInContext(pane === "missing" ? `missingSonarr = ${JSON.stringify(sonarr)}; missingDays = ${days};` : `upgradeSonarr = ${JSON.stringify(sonarr)};`, ctx); return pane === "missing" ? ctx.showMissing() : ctx.showUpgrades(); };
 const goText = () => find(draws[draws.length - 1], (n) => n.className === "btn primary")?.textContent;
@@ -258,3 +259,29 @@ vm.runInContext("let libSeq = 0;" + grab("checkLibrary"), ctx);
 })();
 """, str(JS / "quality.js"), slow_answer)
     assert shown == {"text": "Unshacklarr reads Sonarr's library: /mnt/tv", "className": "lib-check ok", "roots": ["/mnt/tv"]}
+
+
+def test_coming_back_to_the_tab_does_not_stream_an_old_run_into_the_serve_log():
+    shown = node(r"""
+const jsDir = process.argv[2], sockets = [], written = [];
+class FakeSocket { constructor(url) { this.url = url; sockets.push(this); } close() {} }
+class FakeTerminal { loadAddon() {} open() {} reset() {} resize() {} write(t) { written.push(typeof t === "string" ? t : "output"); } }
+let hidden = false, onVisibility;
+const box = { hidden: false, open: true, replaceChildren() {}, classList: { add() {} }, textContent: "" };
+const ctx = { window: { Terminal: FakeTerminal }, Terminal: FakeTerminal, FitAddon: { FitAddon: class { proposeDimensions() {} } }, ResizeObserver: class { observe() {} },
+  term: null, termFit: null, termSocket: null, termFor: null, termQuery: "", termResume: null, liveFeed: null, liveNext: null, picked_run: null, TERM_COLS: 110,
+  $: () => box, el: () => ({}), termFilter: () => (b) => b, WebSocket: FakeSocket, location: { protocol: "http:", host: "x" }, api: async () => ({ log: "serve line" }), showTab() {},
+  openActivity() {}, document: { get hidden() { return hidden; }, addEventListener: (_, fn) => { onVisibility = fn; }, querySelectorAll: () => [] } };
+vm.createContext(ctx);
+vm.runInContext(["fitTerminal", "openTerm", "streamTerm"].map((n) => grab(n)).join(""), ctx);
+vm.runInContext(grab("showServeLog", read(jsDir + "/settings-services.js")), ctx);
+vm.runInContext(`document.addEventListener("visibilitychange", ${read(jsDir + "/activity.js").match(/addEventListener\("visibilitychange", (\(\) => \{[\s\S]*?\n\})\);/)[1]});`, ctx);
+(async () => {
+  ctx.streamTerm("run:1", "run=1");  // a run's output is streaming
+  await ctx.showServeLog();  // then the serve log is opened over it
+  hidden = true; onVisibility();  // the tab is hidden, then back in sight
+  hidden = false; onVisibility();
+  console.log(JSON.stringify(sockets.map((s) => s.url.split("?")[1])));
+})();
+""", str(JS / "attempts.js"), str(JS))
+    assert shown == ["run=1"]
