@@ -278,3 +278,280 @@ const after = replaced.map(([sel, json]) => [sel, /alpha\.wvd/.test(json), /beta
 console.log(JSON.stringify({ listRedrawn: after.some(([sel]) => sel === "#cdm-list"), shown: after.filter(([, a]) => a).length > 0, hidden: after.every(([, , b]) => !b) }));
 """, str(JS / "cookies-cdm.js"))
     assert seen == {"listRedrawn": False, "shown": True, "hidden": True}
+
+
+def test_a_duration_names_the_unit_of_each_part():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const ctx = sandbox();
+vm.runInContext(grab(src, /^function duration\(.*?^\}/ms) + "\nthis.duration = duration;", ctx);
+console.log(JSON.stringify([25000, 144000, 3900000].map((ms) => ctx.duration(ms))));
+""", str(JS / "activity.js"))
+    assert shown == ["25 s", "2 min 24 s", "1 h 05 min"]
+
+
+def test_the_server_names_the_unit_of_each_part_of_a_duration_too():
+    from unshacklarr import sync
+    assert [sync.human_time(s) for s in (25, 144, 3900)] == ["25 s", "2 min 24 s", "1 h 05 min"]
+
+
+def test_the_logo_goes_to_the_schedule_and_is_named_from_its_text():
+    import re
+    page = (STATIC / "index.html").read_text()
+    link = re.search(r'<a href="([^"]+)" id="home" aria-label="([^"]+)"', page)
+    assert link and link.group(1) == "#/schedule"  # the app opens on the schedule
+    assert link.group(2).startswith("Unshacklarr")  # the visible name starts the accessible one (and the narrowest phones hide the text)
+
+
+def test_a_failing_series_says_so_once_with_its_fix():
+    page = (STATIC / "index.html").read_text()
+    assert 'id="d-sick"' not in page and "#d-sick" not in (JS / "core.js").read_text()
+    shown = node(r"""
+const src = read(process.argv[1]);
+const box = { classList: { remove() {}, add() {} } }, fix = { hidden: true, kids: [] }, text = { textContent: "" };
+const sels = { "#ds-state": box, "#ds-state-text": text, "#ds-fix": { ...fix, set hidden(v) { fix.hidden = v; }, replaceChildren: (...k) => { fix.kids = k; } } };
+const ctx = sandbox({ $: (sel) => sels[sel] || any, current: { tvdbId: 7 }, svcName: (s) => s, renderSeriesLanguage() {}, openServiceRow() {},
+  S: { config: { series: { 7: { service: "HULU", title: "x" } } }, health: { 7: { failing: 3, cause: "Session expired" } } } });
+vm.runInContext(grab(src, /function renderSeriesState\b[\s\S]*?\n}\n/) + "\nthis.renderSeriesState = renderSeriesState;", ctx);
+ctx.renderSeriesState();
+console.log(JSON.stringify({ state: text.textContent, fix: fix.kids.map((k) => k.textContent) }));
+""", str(JS / "core.js"))
+    assert shown == {"state": "Its last 3 downloads from HULU failed", "fix": [
+        "Session expired", "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services.",
+        "Check HULU in Settings › Services"]}
+
+
+def test_an_empty_choice_of_episodes_is_hidden_not_greyed():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const out = {};
+for (const onService of [0, 2]) {
+  const pick = { hidden: false, disabled: false, textContent: "" };
+  const list = [{ id: 1 }, { id: 2 }];
+  const ctx = sandbox({ $: (sel) => (sel === "#ep-avail" ? pick : any), list, state: () => (onService ? "miss" : "disk"), epAvail: { 1: 1, 2: 1 }, seasonSvc: () => "HULU", epSeason: 1 });
+  vm.runInContext(grab(src, /if \(\$\("#ep-avail"\)\) \{[\s\S]*?\n  \}\n/), ctx);
+  out[onService] = pick.hidden;
+}
+console.log(JSON.stringify(out));
+""", str(JS / "series.js"))
+    assert shown == {"0": True, "2": False}
+
+
+def test_a_phones_back_button_is_named_for_the_page_it_returns_to():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const ctx = sandbox();
+vm.runInContext(grab(src, /^const BACK_NAME = .*$/m) + "\nthis.BACK_NAME = BACK_NAME;", ctx);
+console.log(JSON.stringify([ctx.BACK_NAME.schedule, ctx.BACK_NAME.log, ctx.BACK_NAME.yaml, ctx.BACK_NAME.series ?? null]));
+""", str(JS / "core.js"))
+    assert shown == ["Back to the schedule", "Back to Activity", "Back to unshackle.yaml", None]  # the editor too, from Notifications or a deep link  # the series wall is the default: "Back to all series"
+    assert 'BACK_NAME[currentTab] || "Back to all series"' in (JS / "core.js").read_text()
+
+
+def test_the_page_draws_no_emoji():
+    import re
+    emoji = re.compile("[\U0001F000-\U0001FFFF⏩-⏿]")  # flags are regional-indicator pairs: both in this range
+    found = [f"{path.name}:{n}" for path in JS.glob("*.js")
+             for n, line in enumerate(path.read_text().splitlines(), 1) if emoji.search(line)]
+    assert not found
+
+# A tiny stand-in for the DOM a pop-up touches: nodes that keep what is set on them and a shared "focused" node.
+POP_DOM = r"""
+let active = null;
+const make = (tag, props = {}, ...kids) => ({ tag, ...props, kids, attrs: {}, handlers: {}, style: {}, isConnected: true,
+  setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(type, fn) { this.handlers[type] = fn; }, focus() { active = this; }, remove() { this.removed = true; },
+  getBoundingClientRect: () => ({ left: 0, right: 10, top: 0, bottom: 10, width: 10, height: 10 }),
+  contains(n) { return n === this || this.kids.some((k) => k.contains?.(n)); },
+  querySelectorAll() { const out = []; const walk = (n) => { for (const k of n.kids || []) { if ((k.tag === "button" && !k.disabled) || k.tag === "input") out.push(k); walk(k); } }; walk(this); return out; } });
+const keys = (pop, key, shiftKey = false) => { let stopped = false; pop.handlers.keydown({ key, shiftKey, preventDefault: () => { stopped = true; } }); return stopped; };
+const popDom = { make, document: { body: { append() {} }, addEventListener() {}, get activeElement() { return active; } }, innerWidth: 800, innerHeight: 600 };
+"""
+
+
+def test_a_popup_takes_focus_keeps_tab_and_arrows_inside_and_gives_focus_back():
+    seen = node(POP_DOM + r"""
+const series = read(process.argv[1]);
+const ctx = sandbox({ ...popDom });
+vm.runInContext(grab(series, /function popOpen\b[\s\S]*?\n}\n/) + grab(series, /function popClose\b[\s\S]*?\n}\n/), ctx);
+const [first, off, last] = [make("button"), make("button", { disabled: true }), make("button")];
+const pop = make("div", {}, make("b"), make("div", {}, first, off, last)), anchor = make("button"), elsewhere = make("button");
+ctx.popOpen(pop, anchor, "Actions");
+const out = { focused: active === first, role: pop.attrs.role, label: pop.attrs["aria-label"], popup: anchor.attrs["aria-haspopup"], open: anchor.attrs["aria-expanded"] };
+out.tabLast = keys(pop, "Tab") && active === last;  // not the disabled one
+out.tabWraps = keys(pop, "Tab") && active === first;
+out.shiftTabWraps = keys(pop, "Tab", true) && active === last;
+out.arrows = keys(pop, "ArrowUp") && active === first && keys(pop, "ArrowDown") && active === last;
+out.otherKeysFree = !keys(pop, "a");
+ctx.popClose(pop);
+out.closed = anchor.attrs["aria-expanded"]; out.backOnButton = active === anchor;
+active = elsewhere; ctx.popClose(pop);
+out.focusKept = active === elsewhere;
+const moved = make("button"), gone = make("button"), pop2 = make("div", {}, make("button"));  // the page drew the button again while the pop-up was open
+ctx.popOpen(pop2, gone, "Actions", () => moved);
+gone.isConnected = false;
+ctx.popClose(pop2);
+out.backOnItsReplacement = active === moved;
+console.log(JSON.stringify(out));
+""", str(JS / "series.js"))
+    assert seen == {"focused": True, "role": "dialog", "label": "Actions", "popup": "dialog", "open": "true", "tabLast": True, "tabWraps": True,
+                    "shiftTabWraps": True, "arrows": True, "otherKeysFree": True, "closed": "false", "backOnButton": True, "focusKept": True, "backOnItsReplacement": True}
+
+
+def test_a_popup_with_every_action_off_holds_the_focus_itself_until_escape():
+    seen = node(POP_DOM + r"""
+const series = read(process.argv[1]);
+const ctx = sandbox({ ...popDom });
+vm.runInContext(grab(series, /function popOpen\b[\s\S]*?\n}\n/) + grab(series, /function popClose\b[\s\S]*?\n}\n/), ctx);
+const pop = make("div", {}, make("button", { disabled: true })), anchor = make("button");
+ctx.popOpen(pop, anchor, "Actions");
+const out = { onWindow: active === pop, focusable: pop.tabIndex === -1, tabKept: keys(pop, "Tab") && active === pop };
+ctx.popClose(pop);
+out.back = active === anchor;
+console.log(JSON.stringify(out));
+""", str(JS / "series.js"))
+    assert seen == {"onWindow": True, "focusable": True, "tabKept": True, "back": True}
+
+def test_the_device_menus_open_with_focus_inside_and_escape_returns_it_to_the_button():
+    seen = node(POP_DOM + r"""
+const series = read(process.argv[1]), src = read(process.argv[2]);
+const ctx = sandbox({ ...popDom, el: make });
+vm.runInContext(grab(series, /function popOpen\b[\s\S]*?\n}\n/) + grab(series, /function popClose\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(src, /let cdmPop = null;\nconst closeCdmPop = .*\n/) + grab(src, /function cdmPopAt\b[\s\S]*?\n}\n/), ctx);
+const [test, del] = [make("button"), make("button", { disabled: true })], anchor = make("button", { dataset: { key: "dev:x" } });
+const pop = ctx.cdmPopAt(anchor, make("b", { textContent: "Widevine device" }), make("div", {}, test, del));
+const out = { focused: active === test, open: anchor.attrs["aria-expanded"], popup: anchor.attrs["aria-haspopup"], label: pop.attrs["aria-label"] };
+vm.runInContext("closeCdmPop()", ctx);  // what Escape does
+out.back = active === anchor; out.closed = anchor.attrs["aria-expanded"]; out.gone = pop.removed === true;
+console.log(JSON.stringify(out));
+""", str(JS / "series.js"), str(JS / "cookies-cdm.js"))
+    assert seen == {"focused": True, "open": "true", "popup": "dialog", "label": "Widevine device", "back": True, "closed": "false", "gone": True}
+
+
+def test_the_setup_popup_takes_focus_and_escape_returns_it_to_the_info_button():
+    seen = node(POP_DOM + r"""
+const series = read(process.argv[1]), src = read(process.argv[2]);
+const copy = make("button");
+const ctx = sandbox({ ...popDom, el: make, setupBox: () => [copy] });
+vm.runInContext(grab(series, /function popOpen\b[\s\S]*?\n}\n/) + grab(series, /function popClose\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(src, /let setupPop = null;\nconst closeSetup = .*\n/) + grab(src, /function openSetup\b[\s\S]*?\n}\n/), ctx);
+const info = make("button");
+ctx.openSetup({ id: "job" }, info);
+const out = { focused: active === copy, open: info.attrs["aria-expanded"] };
+vm.runInContext("closeSetup()", ctx);  // what Escape does
+out.back = active === info; out.closed = info.attrs["aria-expanded"];
+console.log(JSON.stringify(out));
+""", str(JS / "series.js"), str(JS / "activity.js"))
+    assert seen == {"focused": True, "open": "true", "back": True, "closed": "false"}
+
+
+def test_a_device_row_is_a_div_with_a_real_summary_button_beside_its_actions_button():
+    seen = node(r"""
+const src = read(process.argv[1]);
+const nodes = {};
+const $ = (sel) => (nodes[sel] ??= { value: "", hidden: false, textContent: "", focus() {}, select() {}, classList: { toggle() {} },
+  querySelector: () => ({ textContent: "" }), replaceChildren() {}, replaceWith() {} });
+const cdmOpen = new Set();
+const ctx = sandbox({ $, cdmData: { folder: "/cdm", devices: [{ name: "alpha", kind: "Widevine", used_by: [], info: {} }], remote: [], services: [], map: {} },
+  cdmFilter: "all", cdmQuery: "", cdmTesting: false, cdmShowUnused: true, cdmRunning: new Set(), cdmOpen, S: { config: { series: {}, settings: {} } },
+  COUNT: { device: String, problem: String, moreDevice: String }, svcName: String, cdmShort: (d) => d.name });
+for (const name of ["cdmTitle", "cdmStatus"]) vm.runInContext(grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`)), ctx);
+vm.runInContext(grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/), ctx);
+vm.runInContext(grab(src, /function renderCdm\b[\s\S]*?\n}\n/), ctx);
+let row = null;
+const made = ctx.el;
+ctx.el = (tag, props, ...kids) => { const n = made(tag, props, ...kids); if (/^cdm-dev /.test(props?.className || "")) row = n; return n; };
+ctx.renderCdm();
+const [summary, menu] = row.kids;
+const buttonsIn = (n) => (n.kids || []).flatMap((k) => (k.tag === "button" ? [k] : []).concat(buttonsIn(k)));
+summary.onclick();
+console.log(JSON.stringify({ rowTag: row.tag, rowRole: row.role ?? null, rowTab: row.tabIndex ?? null, summary: [summary.tag, summary.type, summary.ariaExpanded],
+  menu: [menu.tag, menu.className.includes("cdm-pop-btn")], nested: buttonsIn(summary).length, unfolds: cdmOpen.has("alpha") }));
+""", str(JS / "cookies-cdm.js"))
+    assert seen == {"rowTag": "div", "rowRole": None, "rowTab": None, "summary": ["button", "button", "false"], "menu": ["button", True], "nested": 0, "unfolds": True}
+
+def test_the_header_says_an_update_or_a_check_in_words_not_by_the_dot_alone():
+    shown = node(r"""
+const buttons = Object.fromEntries(["unshackle", "sonarr"].map((n) => [n, { dataset: {}, title: "", dot: { className: "" }, small: { textContent: "" },
+  querySelector(sel) { return sel === ".dot" ? this.dot : this.small; } }]));
+const ctx = sandbox({ S: {}, document: { querySelector: (sel) => buttons[sel.match(/data-health=(\w+)/)[1]] }, unshackleDetails: null });
+vm.runInContext(grab(read(process.argv[1]), /^function renderHealth\(.*?^\}/ms), ctx);
+const say = (h) => { ctx.renderHealth(h); return ["unshackle", "sonarr"].map((n) => [buttons[n].small.textContent, buttons[n].dataset.state, buttons[n].dot.className.trim()]); };
+console.log(JSON.stringify({
+  running: say({ unshackle: { ok: true, version: "4.0.0" }, sonarr: { ok: true } }),
+  update: say({ unshackle: { ok: true, version: "4.0.0", latest: "4.1.0" }, sonarr: { ok: true } }),
+  unreachable: say({ unshackle: { ok: false }, sonarr: { ok: false } }),
+  checking: say({ unshackle: { ok: null }, sonarr: {} }),
+}));
+""", str(JS / "schedule.js"))
+    assert shown == {
+        "running": [["", "ok", "dot ok"], ["", "ok", "dot ok"]],
+        "update": [["Update available", "warn", "dot warn"], ["", "ok", "dot ok"]],
+        "unreachable": [["Unreachable", "down", "dot down"], ["Unreachable", "down", "dot down"]],
+        "checking": [["Checking…", "wait", "dot"], ["Checking…", "wait", "dot"]],
+    }
+
+
+def test_each_download_step_says_its_state_and_the_current_one_is_marked():
+    shown = node(r"""
+const ctx = sandbox({ afterTracks: () => false });
+const src = read(process.argv[1]);
+for (const re of [/^const OUTCOME = [^\n]*\n/m, /^const STEPS = [^\n]*\n/m, /^const STEPS_SHORT = [^\n]*\n/m, /^const STEP_STATE = [^\n]*\n/m,
+  /^function stepStates\(.*?^\}/ms, /^function stepList\(.*?^\}/ms]) vm.runInContext(grab(src, re), ctx);
+const read_ = (c) => ctx.stepList(c).kids.map((s) => [s.className, s.ariaCurrent ?? null, s.kids[2].textContent]);
+console.log(JSON.stringify({
+  running: read_({ step: "downloading", outcome: "running", parts: 1 }),
+  failed: read_({ step: "renaming", outcome: "failed", parts: 1 }),
+  stopped: read_({ step: "downloading", outcome: "stopped", parts: 1 }),
+  interrupted: read_({ step: "downloading", outcome: "interrupted", parts: 1 }),
+  unavailable: read_({ step: "searching", outcome: "unavailable", parts: 1 }),
+  kept: read_({ step: "done", outcome: "kept", parts: 1 }),
+}));
+""", str(JS / "activity.js"))
+    assert shown["running"] == [["done", None, "Done"], ["now", "step", "Running"], ["", None, "Waiting"], ["", None, "Waiting"], ["", None, "Waiting"]]
+    assert [row[2] for row in shown["failed"]] == ["Done", "Done", "Done", "Failed", "Waiting"]
+    assert [row[1] for row in shown["failed"]].count("step") == 1
+    assert shown["stopped"][1] == ["halt", "step", "Stopped"]
+    assert ["halt", "step", "Interrupted"] in shown["interrupted"]  # a halt says why, not always "Stopped"
+    assert ["halt", "step", "Not out yet"] in shown["unavailable"]
+    assert shown["kept"][-1] == ["warn", None, "Kept"]  # the outcome's own word, not a colour
+
+
+def test_the_weekly_bars_come_with_their_numbers_as_a_table():
+    shown = node(r"""
+const weeks = [{ start: "2026-11-02", downloaded: 5, kept: 2, failed: 1 }, { start: "2026-11-09", downloaded: 0, kept: 0, failed: 0 }];
+const find = (n, pred, out = []) => { if (n && typeof n === "object") { if (pred(n)) out.push(n); (n.kids || []).forEach((k) => find(k, pred, out)); } return out; };
+let main = null;
+const ctx = sandbox({ LOCALE: "en", picked_run: "stats", api: async () => ({ month: {}, weeks, services: [], since: null }), svcName: String,
+  $: (sel) => (sel === "#cd-main" ? { replaceChildren: (...k) => { main = k; } } : { classList: { add() {} }, replaceChildren() {}, hidden: false, textContent: "" }),
+  document: { querySelectorAll: () => [] }, day: String, ago: String, duration: String, failed: any, renderDock() {} });
+vm.runInContext(grab(read(process.argv[1]), /^async function showStats\(.*?^\}/ms), ctx);
+ctx.showStats().then(() => {
+  const page = { kids: main };
+  const chart = find(page, (n) => n.className === "weeks")[0];
+  const table = find(page, (n) => n.tag === "table")[0];
+  const rows = find(table, (n) => n.tag === "tr").map((r) => r.kids.map((c) => c.textContent));
+  console.log(JSON.stringify({ chartHidden: chart.ariaHidden, chartRole: chart.role ?? null, caption: find(table, (n) => n.tag === "caption")[0].textContent, rows }));
+});
+""", str(JS / "activity.js"))
+    assert shown["chartHidden"] == "true" and shown["chartRole"] is None  # the bars are the picture; the table has the data
+    assert shown["caption"] == "Downloads per week, the last 8 weeks"
+    assert shown["rows"] == [["Week", "Downloaded", "Failed", "Kept"], ["Nov 2", 5, 1, 2], ["Nov 9", 0, 0, 0]]
+
+
+def test_the_quality_ladder_chips_say_which_is_chosen_and_the_edit_link_stays_outside_them():
+    shown = node(r"""
+const made = (tag, props = {}, ...kids) => ({ tag, ...props, kids, replaceChildren(...k) { this.kids = k; } });
+const ctx = sandbox({ el: made, ladders: () => [{ name: "UHD" }, { name: "HD" }], keepFocus: (box, draw) => draw() });
+vm.runInContext(grab(read(process.argv[1]), /^function ladderChips\(.*?^\}/ms), ctx);
+const picked = [];
+const root = ctx.ladderChips("HD", "UHD", (v) => picked.push(v));
+const group = root.kids[0], state = () => group.kids.map((b) => [b.kids[0].textContent, b.ariaPressed, b.role ?? null, b.ariaChecked ?? null]);
+const before = state();
+group.kids[0].onclick();  // Off
+console.log(JSON.stringify({ root: [root.className, root.kids.map((k) => k.tag)], group: [group.role, group.ariaLabel], before, after: state(), picked }));
+""", str(JS / "quality.js"))
+    assert shown["root"] == ["ladder-pick", ["div", "a"]]  # the link is beside the group, not one of its chips
+    assert shown["group"] == ["group", "Quality ladder"]
+    assert shown["before"] == [["Off", "false", None, None], ["UHD", "false", None, None], ["HD", "true", None, None]]
+    assert shown["after"][0][1] == "true" and shown["after"][2][1] == "false"
+    assert shown["picked"] == ["off"]

@@ -3,9 +3,11 @@
 let settingsSec = "unshackle", settingsList = false, secFromList = false;
 const inSettingsSec = () => currentTab === "settings" && !settingsList;  // a section on screen, not the phone's list
 function showSettingsList(on) {
-  if (on && phoneLayout() && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);  // back to the list: the section is left
+  const fromSec = on && phoneLayout() && inSettingsSec();
+  if (fromSec) leaveNews((n) => n.sec === settingsSec);  // back to the list: the section is left
   settingsList = on && phoneLayout();
   $(".set-layout").classList.toggle("at-list", settingsList);
+  if (fromSec) document.querySelector(`.set-nav [data-sec="${settingsSec}"]`).focus({ preventScroll: true });  // the item it came from
 }
 function showSettingsSec(name, fromRoute = false) {
   if (name === "cookies") name = "services";  // the cookies page before: its files are on each service's row now
@@ -29,7 +31,7 @@ function showSettingsSec(name, fromRoute = false) {
   if (name === "upgrades") { renderUpgradeSeries(); renderUpgradeGroups(); }
   if (name === "interface") renderInterface();
   if (!fromRoute && currentTab === "settings") navigate(fromList);  // from the list: back returns to it
-  if (fromList) scrollTo({ top: 0 });
+  if (fromList) { scrollTo({ top: 0 }); focusHeading(document.querySelector(`.set-sec[data-sec="${name}"]`).querySelector("h2, h3")); }
 }
 document.querySelectorAll(".set-nav button").forEach((x) => x.onclick = () => showSettingsSec(x.dataset.sec));
 $("#set-back").onclick = () => {
