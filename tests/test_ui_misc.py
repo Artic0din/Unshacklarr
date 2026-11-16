@@ -136,3 +136,27 @@ vm.runInContext(grab(read(process.argv[1]), /\$\("#sync"\)\.onclick = async [\s\
 sync.onclick().then(() => console.log(JSON.stringify(calls)));
 """, str(JS / "attempts.js"), str(unsaved).lower())
     assert calls == (["/api/sync"] if goes else [])
+
+
+BACKUP_ENTRY = {
+    "download": ("async function backupFile\\b[\\s\\S]*?\\n}\\n", 'ctx.backupFile("b.yaml")'),
+    "save": ('\\$\\("#bk-save"\\)\\.onclick = async [\\s\\S]*?\\n};\\n', 'nodes["#bk-save"].onclick()'),
+    "restore": ('\\$\\("#bk-file"\\)\\.onchange = async [\\s\\S]*?\\n};\\n', 'nodes["#bk-file"].onchange({ target: { files: [{ text: async () => "yaml" }], value: "" } })'),
+}
+
+
+@pytest.mark.parametrize("fails", [False, True])
+@pytest.mark.parametrize("entry", BACKUP_ENTRY)
+def test_backup_password_is_cleared_once_the_backup_is_done_with_it(entry, fails):
+    pattern, call = BACKUP_ENTRY[entry]
+    left = node(r"""
+const [file, pattern, call, fails] = process.argv.slice(1);
+const nodes = {};
+const $ = (sel) => (nodes[sel] ??= { value: "", hidden: false, focus() {}, select() {}, replaceChildren() {}, click() {} });
+$("#bk-pass").value = "secret";
+const ctx = sandbox({ $, el: (tag, props) => ({ ...props, click() {} }), bkPassword: () => true, bkSay() {}, toast() {}, errorDetail: (e) => e.message, setTimeout() {}, location: { reload() {} },
+  api: async () => { if (fails === "true") throw Error("Server said no"); return { text: "yaml", name: "b.yaml", series: 3 }; } });
+vm.runInContext(grab(read(file), new RegExp(pattern)), ctx);
+Promise.resolve(eval(call)).then(() => console.log(JSON.stringify($("#bk-pass").value)));
+""", str(JS / "settings-options.js"), pattern, call, str(fails).lower())
+    assert left == ("secret" if fails else "")

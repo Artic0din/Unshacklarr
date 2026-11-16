@@ -426,6 +426,7 @@ async function backupFile(name) {
     a.click();
     URL.revokeObjectURL(a.href);
     bkSay(`${r.name} downloaded`, false);
+    $("#bk-pass").value = "";  // typed to get the file, not kept
   } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
 }
 const bkSay = (text = "", bad = true) => { $("#bk-say").replaceChildren(...(text && !bad ? [icon("check", "inl"), text] : [text || "Asked again: the file holds secrets."])); $("#bk-say").className = `pw-match${text ? (bad ? " bad" : " good") : ""}`; };
@@ -439,6 +440,7 @@ $("#bk-save").onclick = async () => {
     a.click();
     URL.revokeObjectURL(a.href);
     bkSay(`${r.name} downloaded`, false);
+    $("#bk-pass").value = "";  // typed to get the file, not kept
   } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
 };
 $("#bk-load").onclick = () => { if (bkPassword()) $("#bk-file").click(); };
@@ -450,6 +452,7 @@ $("#bk-file").onchange = async (e) => {
     const text = await file.text();
     bkFile = text;
     const r = await api("/api/restore", { method: "POST", body: JSON.stringify({ password: $("#bk-pass").value, text, passphrase: $("#bk-phrase").value }) });
+    $("#bk-pass").value = "";
     toast(`Settings restored: ${r.series} series`);
     setTimeout(() => location.reload(), 900);  // everything on the page comes from the settings
   } catch (err) {
@@ -462,6 +465,7 @@ $("#bk-phrase").onkeydown = async (e) => {
   if (e.key !== "Enter" || !bkFile) return;
   try {
     const r = await api("/api/restore", { method: "POST", body: JSON.stringify({ password: $("#bk-pass").value, text: bkFile, passphrase: e.target.value }) });
+    $("#bk-pass").value = "";
     toast(`Settings restored: ${r.series} series`);
     setTimeout(() => location.reload(), 900);
   } catch (err) { bkSay(err.message); }

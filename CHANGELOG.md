@@ -229,6 +229,7 @@ The episode list and a running download's track list now draw on iPhones before 
 "What's on…?" for a series that is in no main Sonarr now asks the Sonarr you are viewing (for example 4K), not always the first, so its badges match that library's episodes.
 Reloading on Settings, Automation or Interface no longer throws, so the installed app keeps pull-to-reload on those pages.
 Download and Sync no longer say "Save your changes first" for 1.6 seconds after a Save: they only wait when something is really unsaved.
+The account password you type to download or restore a backup is now cleared from the form afterwards.
 
 ### Removed
 
