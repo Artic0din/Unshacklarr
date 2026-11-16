@@ -759,7 +759,7 @@ input.bad { border-color: var(--err); } .field small.bad { color: var(--err); } 
 .gate-card .card { margin: 0; }
 .gate-card .btn.primary { width: 100%; min-height: 46px; font-size: var(--fs-headline); }
 .gate-card input[type=password], .gate-card input[type=text], .gate-card input[type=url] { background: var(--field-bg); }
-body.gated > :not(.gate):not(.toasts) { display: none !important; }
+body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !important; }  /* setup asks through the confirm dialog too */
 /* Settings: sections in a side menu, one at a time, as label | control rows. */
 .set-layout { display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 32px; align-items: start; }  /* the whole width, as the other pages: no empty band on the right */
 .set-nav { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 2px; min-height: calc(100dvh - 109px); }  /* the version at the bottom */

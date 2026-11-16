@@ -164,3 +164,12 @@ console.log(JSON.stringify({ placeholder: sonarrKey.placeholder ?? "", described
     assert seen["hidden"] is False
     assert seen["text"] == "Found in the environment for the URL above. Leave empty to use it"
     assert seen["unshackle"] == [False, True]  # Sonarr's found, the remote Unshackle's not
+
+
+def test_the_setup_gate_leaves_the_confirm_dialog_visible():
+    """The gate hides the page behind setup; the language switch asks through #confirm-dialog, a child of the body."""
+    css = (Path(__file__).parents[1] / "unshacklarr" / "static" / "app.css").read_text()
+    hiding = re.search(r"body\.gated > ([^{]+)\{ display: none !important; \}", css)
+    assert hiding and ":not(#confirm-dialog)" in hiding[1]
+    html = (Path(__file__).parents[1] / "unshacklarr" / "static" / "index.html").read_text()
+    assert re.search(r"<body[^>]*>[\s\S]*<dialog[^>]*id=\"confirm-dialog\"", html)
