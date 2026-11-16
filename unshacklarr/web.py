@@ -13,6 +13,7 @@ import difflib
 import functools
 import hashlib
 import hmac
+import itertools
 import ipaddress
 import json
 import ntpath
@@ -2721,7 +2722,7 @@ def unwritable_files(cookies_dir: Path, most: int = 20) -> list[str]:
             pass
     out, seen = [], 0
     for folder in dict.fromkeys(folders):
-        for path in [folder, *folder.rglob("*")] if folder.is_dir() else []:
+        for path in itertools.chain([folder], folder.rglob("*")) if folder.is_dir() else []:  # lazy: the limit bounds the walk
             seen += 1
             if seen > 20_000 or len(out) >= most:  # ponytail: a bounded walk, a huge cache is not read whole
                 return out

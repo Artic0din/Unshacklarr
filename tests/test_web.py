@@ -7373,3 +7373,22 @@ def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
         queue.clear()
         asyncio.run(web.download(Request({"episodeIds": [1, 2, 3], "batch": "20261012-070357-6b5682", "retry": retry})))
         assert queue == [1, 2, 3], retry
+
+
+def test_the_unwritable_files_check_stops_walking_at_its_limit(monkeypatch):
+    # A huge cache is never listed whole: the walk ends with the check, not after reading the entire tree
+    from pathlib import Path
+    from unshacklarr import web
+
+    class Huge:
+        def is_dir(self): return True
+        def __fspath__(self): return "/nowhere"
+        def __hash__(self): return 1
+        def __eq__(self, other): return other is self
+        def rglob(self, pattern):
+            for n in range(25):
+                yield Path(f"/nowhere/{n}")  # not writable: each one found
+            raise RuntimeError("walked past the limit")
+    monkeypatch.setattr(web, "cache_folder", lambda: (_ for _ in ()).throw(web.UnshackleError("no serve")))
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", "")
+    assert len(web.unwritable_files(Huge(), most=20)) == 20
