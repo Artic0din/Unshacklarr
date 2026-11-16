@@ -2217,6 +2217,7 @@ const fresh = () => {
   release({ settings: { debug: true, sonarrs: [{ name: "UHD", url: "http://a", downloads: "" }] } }); await saving;
   const four = box.S.config.settings.sonarrs[0];
   out.nestedEditKeepsOthersRename = four.name === "UHD" && four.downloads === "/dl" && page.state().unsaved;
+  out.mergedRenameIsSavedName = page.savedSonarr("UHD") === "UHD";
   console.log(JSON.stringify(out));
 })();
 """
@@ -2261,6 +2262,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "renamedAsSaved": True,  # an unsaved rename is not a name the server knows (#181)
         "renameSavedIsUsed": True,  # once saved, the new name; a rename made while the Save ran still is not
         "nestedEditKeepsOthersRename": True,  # an edit inside a list entry does not block another tab's change beside it
+        "mergedRenameIsSavedName": True,  # a rename another tab saved is the name the server knows
     }
 
 
