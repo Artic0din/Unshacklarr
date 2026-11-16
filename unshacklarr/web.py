@@ -4865,10 +4865,11 @@ async def download(request):
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     if batch and not inst:  # the job still runs: in its queue (retries next, in order), one download at a time
-        left = [i for i in reversed(ids) if not await join_job(batch, i, replace, first=body.get("retry") is True)][::-1]  # main Sonarr's ids
+        first = body.get("retry") is True  # each put next: the last one first, so they run in the order picked
+        left = [i for i in (ids[::-1] if first else ids) if not await join_job(batch, i, replace, first=first)]  # main Sonarr's ids
         if not left:
             return web.json_response({"running": True})
-        ids = left
+        ids = left[::-1] if first else left
     room_for_one_more()
     run_sync(ids, replace=replace, kind="retry" if body.get("retry") is True else "manual", numbering=numbering, batch=batch or None,
              sonarr=inst["name"] if inst else "")

@@ -7349,3 +7349,27 @@ def test_an_audio_request_for_many_episodes_starts_one_download_not_one_each(tmp
             assert (await browser.post("/api/v1/downloads", headers={"X-Api-Key": key}, json=body)).status == 200
             assert added == [list(range(1, 31))] and not started
     asyncio.run(go())
+
+
+def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
+    # Added at the end, they go in as picked; retries go in next, each before the one after it, so last first
+    import asyncio
+    from unshacklarr import web
+    queue = []
+
+    async def join(batch, episode_id, replace=False, sonarr="", first=False):
+        queue.insert(0, episode_id) if first else queue.append(episode_id)  # as add_to_job puts it in the queue
+        return True
+    monkeypatch.setattr(web, "join_job", join)
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    monkeypatch.setattr(web, "retried_numbering", lambda ids, batch: None)
+    monkeypatch.setattr(web, "retried_replace", lambda ids, batch: False)
+
+    class Request:
+        def __init__(self, body): self.body = body
+        async def json(self): return self.body
+    for retry in (False, True):
+        queue.clear()
+        asyncio.run(web.download(Request({"episodeIds": [1, 2, 3], "batch": "20261012-070357-6b5682", "retry": retry})))
+        assert queue == [1, 2, 3], retry
