@@ -4846,6 +4846,13 @@ def retried_replace(ids: list[int], batch: str, instance: str) -> bool:
     return any(card.get("replace") is True for card in last_attempts(ids, batch, instance))
 
 
+def retried_alike(ids: list[int], instance: str) -> tuple[dict | None, bool] | None:
+    """The numbering and Replace anyway an API retry repeats: its episodes' own last attempts', None when they
+    differ (episodes of different jobs: one's numbering can't stand for another's)."""
+    picks = [(retried_numbering([i], "", instance), retried_replace([i], "", instance)) for i in ids]
+    return picks[0] if all(p == picks[0] for p in picks) else None
+
+
 def cdm_refusal(ids: list[int]) -> str:
     """Why these episodes can't be downloaded: a service among theirs has no CDM at all. Sonarr is asked
     which series they belong to only when a series' service lacks one."""
@@ -6268,8 +6275,9 @@ async def v1_start_download(request):
         raise web.HTTPBadRequest(text=why)
     numbering = None
     if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries: as the page's Retry
-        numbering = await asyncio.to_thread(retried_numbering, ids, "", inst["name"] if inst else "")
-        replace = replace or await asyncio.to_thread(retried_replace, ids, "", inst["name"] if inst else "")
+        if not (alike := await asyncio.to_thread(retried_alike, ids, inst["name"] if inst else "")):
+            raise web.HTTPBadRequest(text="These episodes were last tried with different numbering or Replace anyway: retry them apart")
+        numbering, replace = alike[0], replace or alike[1]
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     room_for_one_more()

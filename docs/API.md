@@ -75,7 +75,8 @@ going.
 Two optional fields: `"sonarr": "sonarr-2"` downloads for another Sonarr set up in Settings › Sonarr (its own
 episode ids and TVDB lookup, its ladder, imported into it), and `"retry": true` downloads it as a retry, as the
 page's Retry does: with the numbering its last attempt was given (by title on the page, say) and Replace anyway when
-that attempt had it. `409` when an earlier try of one of the episodes may still be downloading on Unshackle.
+that attempt had it; `400` when the episodes were last tried with different ones (in different jobs): retry them
+apart. `409` when an earlier try of one of the episodes may still be downloading on Unshackle.
 
 `"proxy"` picks the proxy for this download only, a proxy provider and a region as Unshackle's `--proxy` takes them:
 

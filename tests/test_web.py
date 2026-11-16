@@ -7818,6 +7818,15 @@ def test_an_api_retry_reads_only_the_attempts_of_its_own_sonarr(tmp_path, monkey
     assert api_retries(tmp_path, monkeypatch, cards, {"episodeIds": [70]}) == ([200], [([70], None, False)])
 
 
+def test_an_api_retry_of_episodes_tried_differently_is_refused(tmp_path, monkeypatch):
+    # From different jobs: one episode's numbering and Replace anyway can't stand for the other's
+    by_title = {"episode_map": {"S02E01": "S01E07"}}
+    cards = [("20261003-093229-000001-442345-S02E01", 70, {"numbering": by_title}),
+             ("20261003-093000-000001-442345-S02E02", 71, {"replace": True}),
+             ("20261003-092900-000001-442345-S02E03", 72, {"replace": True})]
+    statuses, asked = api_retries(tmp_path, monkeypatch, cards, {"episodeIds": [70, 71]}, {"episodeIds": [71, 72]})
+    assert (statuses, asked) == ([400, 200], [([71, 72], None, True)])
+
 def test_a_single_download_is_not_a_sync_running(tmp_path, monkeypatch):
     import asyncio
     import threading
