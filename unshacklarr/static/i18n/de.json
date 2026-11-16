@@ -351,6 +351,7 @@
  "Line {0}, column {1}{2}": "Zeile {0}, Spalte {1}{2}",
  "Ask {0} which episodes of this series it has, and mark them in the list": "{0} fragen, welche Episoden dieser Serie es hat, und sie in der Liste markieren",
  "Loading episodes from Sonarr…": "Episoden werden aus Sonarr geladen…",
+ "Loading series…": "Serien werden geladen…",
  "Loading the month…": "Monat wird geladen…",
  "Loading the schedule…": "Kalender wird geladen…",
  "Local": "Lokal",

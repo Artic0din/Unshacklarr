@@ -121,6 +121,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Focus is easier to see, and the small visual slips are gone.** A text field, the "Other" number pill, the Activity icon buttons and the filter bars now show a clear 2px ring when you reach them; "Open Sonarr", "Sign-in and cookies" and "CDM devices" are drawn in the button colour instead of the browser's link blue; the new remote CDM fields no longer make iOS zoom the page; choice chips have a visible edge; pressed controls scale to 96%; dialogs and menus no longer scroll the page behind them at their ends; a series with no poster, or one that fails to load, shows its initials on the wall; a failed load spans the whole wall, and the loading boxes can be seen and are announced as "Loading series…"; and the country list in setup is as wide as its field. (#280)
 - **Nothing is cut off or piled on top of anything else on a narrow screen.** At 320 px (or 400% zoom), a run's buttons
   wrap to a second line instead of losing "Delete", a running card's speed and time left sit on a row under the episode
   (and a finished card's line carries its whole text as a tooltip), the series filter takes a second row instead of

@@ -353,6 +353,7 @@
  "Line {0}, column {1}{2}": "Riga {0}, colonna {1}{2}",
  "Ask {0} which episodes of this series it has, and mark them in the list": "Chiedi a {0} quali episodi di questa serie ha, e segnali nell'elenco",
  "Loading episodes from Sonarr…": "Caricamento degli episodi da Sonarr…",
+ "Loading series…": "Caricamento delle serie…",
  "Loading the month…": "Caricamento del mese…",
  "Loading the schedule…": "Caricamento del calendario…",
  "Local": "Locale",
