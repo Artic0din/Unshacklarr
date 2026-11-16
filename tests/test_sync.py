@@ -6363,3 +6363,36 @@ def test_saving_settings_never_leaves_the_servers_or_sonarrs_missing_meanwhile(t
     sync.apply_settings({**settings, "sonarrs": [Watched(settings["sonarrs"][0])]})
     assert seen and all(s == (True, True) for s in seen)
     assert sorted(sync.BACKENDS) == ["nas", "vpn"] and list(sync.SONARRS) == ["4K"]
+
+
+def test_two_downloads_muxing_at_once_each_measure_their_own_folder(tmp_path, monkeypatch):
+    # another client's download muxes in serve's work folder when this one starts: this one's mux is its new folder,
+    # not two candidates (no progress) or the other's
+    sync = load(tmp_path, monkeypatch)
+    root = tmp_path / "temp"
+
+    def muxing(name, done):
+        folder = root / name
+        folder.mkdir(parents=True)
+        (folder / "Video_1.mp4").write_bytes(b"v" * 1000)
+        (folder / "Video_1.muxed.1.mkv").write_bytes(b"m" * done)
+        return folder
+    other = muxing("task_other", 900)
+    monkeypatch.setitem(sync.SETTINGS, "unshackle_temp_dir", str(root))
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05")
+    mux = []
+
+    def download(payload):
+        muxing("task_mine", 400)
+        return "job1"
+    states = iter([{"status": "downloading", "phase": "muxing"},
+                   {"status": "completed", "output_files": ["/downloads/x/Show.S02E05.mkv"]}])
+
+    def job(job_id):
+        mux.append(run.card.get("mux"))
+        return next(states)
+    monkeypatch.setattr(sync.UNSHACKLE, "download", download)
+    monkeypatch.setattr(sync.UNSHACKLE, "job", job)
+    sync.run_job({}, run, poll=0)
+    assert mux[-1] == {"done": 400, "total": 1000} and other not in sync.work_claimed
+    run.finish("downloaded")

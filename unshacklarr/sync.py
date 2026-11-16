@@ -2374,6 +2374,7 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
     before, work = task_folders(root), None
     asked = payload.get("vcodec") or []  # one codec asked: the video's, until the file says which came
     codec = CODEC_NAMES.get(str(asked[0]).replace(".", "").lower(), str(asked[0])) if len(asked) == 1 else ""
+    followed = bool(job_id)  # a job already on serve, followed again: its folder was there before (job_id is set below)
     if job_id:
         trace(f"unshackle serve{f' {backend.name}' if backend.name else ''} still has job {job_id}: followed again")
         if run:
@@ -2427,8 +2428,8 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             if str(job.get("phase") or "").startswith("mux"):
                 run.card.setdefault("mux_from", datetime.now(timezone.utc).isoformat())
                 if root and work is None:  # the folder that appeared with this download (or the one muxing, followed again)
-                    new = [f for f in task_folders(root) - (before if not job_id else set()) if f not in work_claimed]
-                    if job_id:
+                    new = [f for f in task_folders(root) - (set() if followed else before) if f not in work_claimed]
+                    if followed:
                         new = [f for f in new if mux_progress(f)]
                     if len(new) == 1:
                         work = new[0]

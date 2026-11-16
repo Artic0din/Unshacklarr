@@ -223,6 +223,8 @@ Every change worth knowing, newest first. The format follows
   refused, until a restart.
 - **Saving Settings no longer sends a download to the wrong server.** One starting during the save could find
   no Unshackle or Sonarr of its own and use the main ones.
+- **Mux progress with two downloads muxing at once.** Each shows its own again, instead of none, or another
+  client's.
 
 **🆕 Sonarr 5, on this branch until it is out of beta**
 - **Languages.** Your files without your audio languages, read from Sonarr 5's own tracks: watch them for the
