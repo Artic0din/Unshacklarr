@@ -879,3 +879,17 @@ def test_a_restart_makes_unshackle_say_again_where_its_folders_are(tmp_path, mon
     folders[:] = [f.replace("/old/", "/new/") for f in folders]  # directories: changed in unshackle.yaml
     local.restart("unshackle")
     assert local.cookies_dir("unshackle") == Path("/new/cookies")  # sign-ins are looked for where it keeps them now
+
+
+def test_a_failed_start_cleared_by_another_thread_mid_check_still_says_why(tmp_path):
+    import unshacklarr.backend as backend
+    local = backend.Local(tmp_path / "serve.log")
+
+    class Clearing(tuple):  # a restart or a save clears the memory as soon as it is first read
+        def __getitem__(self, index):
+            local.failed = None
+            return super().__getitem__(index)
+
+    local.failed = Clearing(("unshackle", time.monotonic(), UnshackleError("did not start")))
+    with pytest.raises(UnshackleError, match="did not start"):
+        local.recent_failure("unshackle")

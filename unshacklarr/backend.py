@@ -220,8 +220,9 @@ class Local:
 
     def recent_failure(self, command: str) -> None:
         """Say a start that failed under a minute ago again, instead of every caller waiting up to 90 s for another."""
-        if self.failed and self.failed[0] == command and time.monotonic() - self.failed[1] < 60:
-            raise self.failed[2]
+        failed = self.failed  # once: a restart or a save may clear it from another thread meanwhile
+        if failed and failed[0] == command and time.monotonic() - failed[1] < 60:
+            raise failed[2]
 
     def endpoint(self, command: str) -> tuple[str, str]:
         self.recent_failure(command)
