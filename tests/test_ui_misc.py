@@ -362,6 +362,23 @@ console.log(JSON.stringify({ renamed, requestWhileRenamed, libraries: ctx.S.sona
     assert shown == {"renamed": "Anime 2", "requestWhileRenamed": "Anime", "libraries": ["Anime"], "request": "Anime", "requestAfter": "Anime"}
 
 
+def test_discard_before_upgrades_was_opened_asks_the_server_nothing():
+    shown = node(r"""
+const saved = { settings: { upgrade_other_groups: false }, series: {} };
+const nodes = {}, $ = (sel) => (nodes[sel] ??= { checked: false, disabled: false, replaceChildren() {} });
+let asked = 0;
+const ctx = sandbox({ S: { config: JSON.parse(JSON.stringify(saved)), dlOptions: [], series: [] }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "{}", $,
+  api: async () => { asked++; return { groups: [], none: [] }; }, optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, dirty() {}, toast() {},
+  renderUpgradeSeries() {}, renderInterface() {}, keepSonarrNames() {}, sonarrNames: () => [] });
+vm.runInContext("let ugGroups = null;", ctx);
+vm.runInContext(grab(read(process.argv[2]), /async function renderUpgradeGroups\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
+ctx.discardChanges();
+setTimeout(() => console.log(JSON.stringify(asked)));
+""", str(JS / "settings-options.js"), str(JS / "quality.js"))
+    assert shown == 0  # the groups are looked up when Upgrades opens, not on every Discard
+
+
 def test_discard_waits_for_a_save_in_flight():
     shown = node(r"""
 const nodes = {}, $ = (sel) => (nodes[sel] ??= { disabled: false, hidden: false, classList: { add() {}, remove() {} }, replaceChildren() {} });

@@ -821,7 +821,7 @@ function discardChanges() {
   renderSettings();
   // drawn when their section opens, not by renderSettings: their handlers hold the objects just replaced
   renderUpgradeSeries();
-  renderUpgradeGroups(false);
+  if (ugGroups) renderUpgradeGroups(false);  // not looked up yet: Upgrades looks them up as it opens
   renderInterface();
   renderServiceFilter();
   renderWall();
