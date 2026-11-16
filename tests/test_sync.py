@@ -4779,7 +4779,7 @@ def test_the_added_audio_is_written_as_a_matroska_file_whatever_the_library_file
         assert imported[-1] == ([written], True)  # the one file, in place of the library's: Sonarr drops the old .mp4
 
 
-@pytest.mark.parametrize("code", [2, -9])  # an error, or the process killed (a signal: a negative code)
+@pytest.mark.parametrize("code", [2, -9, "stuck"])  # an error, the process killed (a negative code), or one that never ends
 @pytest.mark.parametrize("audio", ["audio.mka", "audio.mkv"])  # the audio alone may come in a video container
 def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch, code, audio):
     sync = load(tmp_path, monkeypatch)
@@ -4800,11 +4800,14 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
         (Path(payload["output_dir"]) / audio).parent.mkdir(parents=True, exist_ok=True)
         (Path(payload["output_dir"]) / audio).write_bytes(b"fr")
 
-    def tools(cmd, **_):
+    def tools(cmd, **kwargs):
         if cmd[:2] == ["mkvmerge", "-J"]:
             tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
             return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
         Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")  # disk full: the output is cut short
+        if code == "stuck":
+            assert kwargs.get("timeout") == sync.MKV_WRITE_TIMEOUT  # without one, the sync would wait for good
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
         return subprocess.CompletedProcess(cmd, code, stdout="Error: disk full")
 
     imported = []
@@ -4817,7 +4820,9 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
     assert not (folder / "Show - S02E05.mkv").exists() and not folder.exists()  # nothing left for Import to pick up
     assert imported == []
     card = next(json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))
-    assert card["outcome"] == "failed" and "mkvmerge could not add the audio: Error: disk full" in card["cause"]
+    assert card["outcome"] == "failed"
+    assert ("mkvmerge did not finish within 1 h 00" if code == "stuck" else "mkvmerge could not add the audio: Error: disk full") in card["cause"]
+    assert (library / "Show - S02E05.mkv").read_bytes() == b"video"
 
 
 def test_a_failed_audio_add_never_deletes_through_a_folder_swapped_for_a_link(tmp_path, monkeypatch):
@@ -6285,3 +6290,35 @@ def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_pa
     sync.batch_syncs.pop("B")  # the job's own sync gone: one more sync of it is then the last
     sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
     assert "B" not in sync.job_options
+
+
+def test_a_stuck_mkvmerge_or_mkvpropedit_fails_its_step_and_leaves_no_partial_file(tmp_path, monkeypatch):
+    # On a stalled share a tool never returns: without a time limit the sweep holds its lock for good
+    sync = load(tmp_path, monkeypatch)
+    out = tmp_path / "unshackle-111-S02E05"
+    out.mkdir()
+    for n in (1, 2):
+        (out / f"Show.S02E05.Part.{n}.mkv").write_bytes(b"part")
+    limits = []
+
+    def stuck(cmd, **kwargs):
+        if "timeout" not in kwargs:
+            raise AssertionError(f"{cmd[0]} has no time limit: it would hang the sync")
+        limits.append((cmd[0], cmd[1], kwargs["timeout"]))
+        if "-o" in cmd:
+            Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")  # cut short when it is killed
+        raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+
+    monkeypatch.setattr(sync.subprocess, "run", stuck)
+    with pytest.raises(RuntimeError, match="mkvmerge did not finish within 1 h 00"):
+        sync.finalize(out, "S02E05", "Show")
+    assert sorted(f.name for f in out.iterdir()) == ["Show.S02E05.Part.1.mkv", "Show.S02E05.Part.2.mkv"]  # no joined file
+    assert limits == [("mkvmerge", "-q", sync.MKV_WRITE_TIMEOUT)]
+    (out / "Show.S02E05.Part.2.mkv").unlink()
+    (out / "Show.S02E05.Part.1.mkv").rename(out / "Show.S02E05.mkv")
+    with pytest.raises(RuntimeError, match="did not finish within 2 min 00"):  # a probe that times out is not "no tracks"
+        sync.audio_languages(out / "Show.S02E05.mkv")
+    monkeypatch.setattr(sync, "mkvmerge_info", lambda path: {})
+    with pytest.raises(RuntimeError, match="mkvpropedit did not finish"):
+        sync.finalize(out, "S02E05", "Show")
+    assert limits[-1] == ("mkvpropedit", "-q", sync.MKV_READ_TIMEOUT)

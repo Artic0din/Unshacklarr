@@ -2611,6 +2611,17 @@ def retrying(payload: dict, run: EpisodeRun | None, sleep) -> list[str]:
 
 PART = re.compile(r"\.Part\.(\d+)", re.IGNORECASE)
 VIDEO = (".mkv", ".mp4")
+MKV_READ_TIMEOUT = 120  # mkvmerge -J and mkvpropedit read or edit a header only: longer is a stalled share
+MKV_WRITE_TIMEOUT = 3600  # a join or an audio merge copies the whole episode
+
+
+def mkv_run(cmd: list[str], timeout: int, **kwargs) -> subprocess.CompletedProcess:
+    """mkvmerge or mkvpropedit with a time limit: one stuck on a stalled share fails its step, instead of holding
+    the sync (and every later one, told "already running") for good."""
+    try:
+        return subprocess.run(cmd, timeout=timeout, **kwargs)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"{cmd[0]} did not finish within {human_time(timeout)}: is the downloads folder reachable?") from None
 
 
 # a file that is gone, or a link where a folder was: nothing to delete, and nothing deleted through it
@@ -3256,7 +3267,11 @@ def finalize(out: Path, sxxeyy: str, name: str, join_parts: bool = True, episode
         cmd = ["mkvmerge", "-q", "-o", str(joined), str(first)]
         for _, f in parts[1:]:
             cmd += ["+", str(f)]  # "+" appends: part 2 plays after part 1
-        run = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+        try:
+            run = mkv_run(cmd, MKV_WRITE_TIMEOUT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+        except RuntimeError:
+            joined.unlink(missing_ok=True)  # cut short: never offered for import
+            raise
         # 1 means warnings only, but not that one: "can probably not be appended correctly" is a file that may
         # stop playing where the parts meet. The parts are kept for a look, nothing is imported.
         if run.returncode > 1 or (run.returncode == 1 and "append" in run.stdout.lower()):
@@ -3278,7 +3293,7 @@ def finalize(out: Path, sxxeyy: str, name: str, join_parts: bool = True, episode
         if not match:  # Britains.Forgotten.Girls.2026.1080p...mkv: BBC.Documentaries.S2026E14.Britains.Forgotten...
             trace(f"renamed {f.name} to {dots(name)}.{sxxeyy}.{f.name}")
             f = f.rename(f.with_name(f"{dots(name)}.{sxxeyy}.{f.name}"))
-            subprocess.run(["mkvpropedit", "-q", str(f), "--edit", "info", "--set", f"title={name} {sxxeyy} {title}".strip()], check=True)
+            mkv_run(["mkvpropedit", "-q", str(f), "--edit", "info", "--set", f"title={name} {sxxeyy} {title}".strip()], MKV_READ_TIMEOUT, check=True)
             continue
         episode = title[m.end():].strip() if (m := TITLE_SXXEYY.search(title)) else ""
         rest = f.name[match.end():]
@@ -3288,8 +3303,9 @@ def finalize(out: Path, sxxeyy: str, name: str, join_parts: bool = True, episode
             episode = ""
         trace(f"renamed {f.name} to {dots(name)}.{sxxeyy}{rest}")
         f = f.rename(f.with_name(f"{dots(name)}.{sxxeyy}{rest}"))
-        subprocess.run(
+        mkv_run(
             ["mkvpropedit", "-q", str(f), "--edit", "info", "--set", f"title={name} {sxxeyy} {episode}".strip()],
+            MKV_READ_TIMEOUT,
             check=True,
         )
     return max(len(parts), 1)
@@ -3525,7 +3541,11 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             mine, theirs = default_flags(mkv_tracks(have), mkv_tracks(got[0]), want)
             cmd = ["mkvmerge", "-q", "-o", str(joined), *mine, str(have),
                    "--no-video", "--no-subtitles", "--no-chapters", "--no-attachments", *theirs, str(got[0])]
-            done = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+            try:
+                done = mkv_run(cmd, MKV_WRITE_TIMEOUT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+            except RuntimeError:
+                joined.unlink(missing_ok=True)  # cut short: it would replace the library's file
+                raise
             if done.returncode not in (0, 1):  # 1: warnings only; below 0: killed by a signal
                 joined.unlink(missing_ok=True)  # a cut-short video would be offered under Waiting in downloads and replace the library's
                 raise RuntimeError(f"mkvmerge could not add the audio: {done.stdout.strip()[-300:]}")
@@ -3848,8 +3868,8 @@ def first_language(order: list[str], tracks: list[dict]) -> str | None:
 
 
 def mkvmerge_info(path: Path) -> dict:
-    """What `mkvmerge -J` says of a file ({} when it can't tell)."""
-    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
+    """What `mkvmerge -J` says of a file ({} when it can't tell; a timeout raises, never read as no tracks)."""
+    info = mkv_run(["mkvmerge", "-J", str(path)], MKV_READ_TIMEOUT, stdout=subprocess.PIPE, text=True)
     return json.loads(info.stdout or "{}")
 
 
