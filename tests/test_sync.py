@@ -3895,7 +3895,7 @@ def test_classified_login_failure_survives_later_fallback_transport_failure(tmp_
 
 
 @pytest.mark.parametrize("profile_succeeds", [False, True])
-def test_fallback_authentication_keeps_its_identity_across_primary_profile_retries(
+def test_fallback_authentication_keeps_its_identity_across_its_profile_retries(
     tmp_path, monkeypatch, profile_succeeds
 ):
     sync = load(tmp_path, monkeypatch)
@@ -3917,9 +3917,9 @@ def test_fallback_authentication_keeps_its_identity_across_primary_profile_retri
     def download(payload, run=None):
         service, profile = payload["service"], payload.get("profile") or "default"
         tried.append((service, profile))
-        if service == "RTLP" and profile == "default":
+        if service == "RTLP":
             return []
-        if service == "MLT":
+        if profile == "default":
             raise sync.JobFailed("authentication failed", cause="401 Unauthorized", error_code="AUTH_FAILED")
         if not profile_succeeds:
             raise sync.JobFailed("network failed", cause="network failed")
@@ -3940,12 +3940,14 @@ def test_fallback_authentication_keeps_its_identity_across_primary_profile_retri
     sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
 
     card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
-    assert tried == [("RTLP", "default"), ("MLT", "default"), ("RTLP", "alt")]
-    assert card["auth_failure_backends"] == {"MLT": "fallback"}
+    assert tried == [("RTLP", "default"), ("MLT", "default"), ("MLT", "alt")]  # retried on the service that refused
     observations = sync.read_authentication_observations()
-    assert observations["fallback"]["MLT"]["state"] == "needs_user_action"
+    assert observations["primary"]["RTLP"]["state"] == "validated"
     if profile_succeeds:
-        assert observations["primary"]["RTLP"]["state"] == "validated"
+        assert observations["fallback"]["MLT"]["state"] == "validated" and card["outcome"] == "downloaded"
+    else:
+        assert card["auth_failure_backends"] == {"MLT": "fallback"}
+        assert observations["fallback"]["MLT"]["state"] == "needs_user_action"
 
 
 def test_an_episode_without_full_subtitles_in_a_required_language_waits(tmp_path, monkeypatch):
@@ -4700,7 +4702,7 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     assert asked[0]["title_id"] == "https://service/season-two" and asked[0]["wanted"] == ["S01E05"]
     assert asked[0]["audio_only"] is True and asked[0]["a_lang"] == ["fr"] and "lang" not in asked[0]
     merge = calls[-1]
-    assert merge[:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / "Show - S02E05.mkv")]
+    assert merge[:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / "Show - S02E05.mkv.part")]
     assert str(library / "Show - S02E05.mkv") in merge and merge[-1].endswith("audio.mka")
     # the French audio is the default one; French subtitles only its forced ones, the full ones off
     lib = merge.index(str(library / "Show - S02E05.mkv"))
@@ -4867,11 +4869,11 @@ def test_the_added_audio_is_written_as_a_matroska_file_whatever_the_library_file
         file.update(path=f"/tv/Show/Season 02/{name}", sceneName="Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264")
         shutil.rmtree(tmp_path / "unshackle-111-S02E05", ignore_errors=True)
         assert sync.add_track(205, "fr") is True
-        assert calls[-1][:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / written)]
+        assert calls[-1][:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / f"{written}.part")]
         assert imported[-1] == ([written], True)  # the one file, in place of the library's: Sonarr drops the old .mp4
 
 
-@pytest.mark.parametrize("code", [2, -9])  # an error, or the process killed (a signal: a negative code)
+@pytest.mark.parametrize("code", [2, -9, "stuck", "rename"])  # an error, killed (a negative code), never ends, or not renamed
 @pytest.mark.parametrize("audio", ["audio.mka", "audio.mkv"])  # the audio alone may come in a video container
 def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch, code, audio):
     sync = load(tmp_path, monkeypatch)
@@ -4892,13 +4894,26 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
         (Path(payload["output_dir"]) / audio).parent.mkdir(parents=True, exist_ok=True)
         (Path(payload["output_dir"]) / audio).write_bytes(b"fr")
 
-    def tools(cmd, **_):
+    def tools(cmd, **kwargs):
         if cmd[:2] == ["mkvmerge", "-J"]:
             tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
             return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
         Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")  # disk full: the output is cut short
+        if code == "stuck":
+            assert kwargs.get("timeout") == sync.MKV_WRITE_TIMEOUT  # without one, the sync would wait for good
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+        if code == "rename":
+            return subprocess.CompletedProcess(cmd, 0, stdout="")
         return subprocess.CompletedProcess(cmd, code, stdout="Error: disk full")
 
+    if code == "rename":  # only the merge's own rename refused (a share's permissions): the run's files still saved
+        real_replace = sync.os.replace
+
+        def refused(src, dst):
+            if str(src).endswith(".part"):
+                raise PermissionError(13, "Permission denied")
+            return real_replace(src, dst)
+        monkeypatch.setattr(sync.os, "replace", refused)
     imported = []
     monkeypatch.setattr(sync, "run_job_retrying", download)
     monkeypatch.setattr(sync.subprocess, "run", tools)
@@ -4909,7 +4924,11 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
     assert not (folder / "Show - S02E05.mkv").exists() and not folder.exists()  # nothing left for Import to pick up
     assert imported == []
     card = next(json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))
-    assert card["outcome"] == "failed" and "mkvmerge could not add the audio: Error: disk full" in card["cause"]
+    assert card["outcome"] == "failed"
+    assert {"stuck": "mkvmerge did not finish within 1 h 00", "rename": "could not be renamed: [Errno 13] Permission denied"}.get(
+        code, "mkvmerge could not add the audio: Error: disk full") in card["cause"]
+    assert sync.leftovers() == []
+    assert (library / "Show - S02E05.mkv").read_bytes() == b"video"
 
 
 def test_a_failed_audio_add_never_deletes_through_a_folder_swapped_for_a_link(tmp_path, monkeypatch):
@@ -6456,6 +6475,337 @@ def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_pa
     assert "B" not in sync.job_options
 
 
+def test_a_stuck_mkvmerge_or_mkvpropedit_fails_its_step_and_leaves_no_partial_file(tmp_path, monkeypatch):
+    # On a stalled share a tool never returns: without a time limit the sweep holds its lock for good
+    sync = load(tmp_path, monkeypatch)
+    out = tmp_path / "unshackle-111-S02E05"
+    out.mkdir()
+    for n in (1, 2):
+        (out / f"Show.S02E05.Part.{n}.mkv").write_bytes(b"part")
+    limits = []
+
+    def stuck(cmd, **kwargs):
+        if "timeout" not in kwargs:
+            raise AssertionError(f"{cmd[0]} has no time limit: it would hang the sync")
+        limits.append((cmd[0], cmd[1], kwargs["timeout"]))
+        if "-o" in cmd:
+            Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")  # cut short when it is killed
+        raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+
+    monkeypatch.setattr(sync.subprocess, "run", stuck)
+    with pytest.raises(RuntimeError, match="mkvmerge did not finish within 1 h 00"):
+        sync.finalize(out, "S02E05", "Show")
+    assert sorted(f.name for f in out.iterdir()) == ["Show.S02E05.Part.1.mkv", "Show.S02E05.Part.2.mkv"]  # no joined file
+    assert limits == [("mkvmerge", "-q", sync.MKV_WRITE_TIMEOUT)]
+    (out / "Show.S02E05.Part.2.mkv").unlink()
+    (out / "Show.S02E05.Part.1.mkv").rename(out / "Show.S02E05.mkv")
+    with pytest.raises(RuntimeError, match="did not finish within 2 min 00"):  # a probe that times out is not "no tracks"
+        sync.audio_languages(out / "Show.S02E05.mkv")
+    monkeypatch.setattr(sync, "mkvmerge_info", lambda path: {})
+    with pytest.raises(RuntimeError, match="mkvpropedit did not finish"):
+        sync.finalize(out, "S02E05", "Show")
+    assert limits[-1] == ("mkvpropedit", "-q", sync.MKV_READ_TIMEOUT)
+
+
+def test_an_audio_merge_cut_short_is_never_offered_for_import(tmp_path, monkeypatch):
+    # The merge is written under .part and renamed once whole: a restart midway leaves nothing Import takes for a video
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: {"path": "/tv/Show/Season 02/Show - S02E05.mkv",
+                                                               "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (
+        Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True), (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"fr")))
+    folder = tmp_path / "unshackle-111-S02E05"
+    while_merging = []
+
+    def tools(cmd, **_):
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")
+        while_merging.append((sorted(f.name for f in folder.iterdir()), sync.leftovers()))
+        raise KeyboardInterrupt  # the container stopped midway: nothing after this line runs, no clean-up
+    imported = []
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append(out))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync.shutil, "rmtree", lambda *a, **k: None)  # a killed process cleans nothing up
+    with pytest.raises(KeyboardInterrupt):
+        sync.add_track(205, "fr")
+    assert while_merging == [([".audio-add", "Show - S02E05.mkv.part", "audio.mka"], [])]  # no video in sight while it runs
+    assert sync.leftovers() == [] and imported == []  # after the stop, nothing waits in downloads to replace the file
+    busy = tmp_path / "unshackle-111-S02E06"
+    busy.mkdir()
+    (busy / "Show - S02E06.mkv.part").write_bytes(b"merging")
+    gone = tmp_path / "unshackle-111-S02E07"
+    gone.mkdir()
+    (gone / "Show - S02E07.mkv.part").write_bytes(b"half")
+    with sync.episode_lock(busy):  # a merge going on is never touched
+        assert sync.remove_partial_merges() == 2
+    assert not folder.exists()  # the audio add's own folder: its audio alone goes too
+    assert not gone.exists()  # left empty: removed with it
+    assert (busy / "Show - S02E06.mkv.part").exists()
+
+
+def test_removing_cut_short_merges_never_deletes_through_a_folder_swapped_for_a_link(tmp_path, monkeypatch):
+    # another writer of the shared folder swaps an episode folder for a link between the start-up clean-up's look and its delete
+    sync = load(tmp_path, monkeypatch)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "Show - S02E05.mkv.part").write_bytes(b"keep me")
+    folder = tmp_path / "unshackle-111-S02E05"
+    folder.mkdir()
+    (folder / "Show - S02E05.mkv.part").write_bytes(b"half")
+    real_is_file = Path.is_file
+
+    def is_file(self):
+        answer = real_is_file(self)
+        if self.parent == folder and not folder.is_symlink():  # looked at, then swapped
+            shutil.rmtree(folder)
+            folder.symlink_to(elsewhere, target_is_directory=True)
+        return answer
+    monkeypatch.setattr(Path, "is_file", is_file)
+    sync.remove_partial_merges()
+    assert (elsewhere / "Show - S02E05.mkv.part").read_bytes() == b"keep me"
+
+
+def test_audio_in_a_video_container_left_by_a_stop_mid_merge_is_never_offered_for_import(tmp_path, monkeypatch):
+    # The audio alone came as .mkv: after a stop midway and the next start, nothing waits in downloads to replace the file
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: {"path": "/tv/Show/Season 02/Show - S02E05.mkv",
+                                                               "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (
+        Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True), (Path(payload["output_dir"]) / "audio.mkv").write_bytes(b"fr")))
+
+    def tools(cmd, **_):
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")
+        raise KeyboardInterrupt  # the container stopped midway: no clean-up runs
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: None)
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    real_rmtree = sync.shutil.rmtree
+    monkeypatch.setattr(sync.shutil, "rmtree", lambda *a, **k: None)  # a killed process cleans nothing up
+    with pytest.raises(KeyboardInterrupt):
+        sync.add_track(205, "fr")
+    monkeypatch.setattr(sync.shutil, "rmtree", real_rmtree)
+    sync.remove_partial_merges()  # the next start
+    assert sync.leftovers() == []
+    assert not (tmp_path / "unshackle-111-S02E05").exists()
+
+
+def test_an_empty_episode_folder_does_not_turn_adding_the_audio_into_a_whole_download(tmp_path, monkeypatch):
+    # A folder left without a video (an import done after its poll gave up) is in the way of nothing, as in the sync
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: {"path": "/tv/Show/Season 02/Show - S02E05.mkv",
+                                                               "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    asked = []
+
+    def download(payload, run=None):
+        asked.append(payload)
+        Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True)
+        (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"fr")
+
+    def tools(cmd, **_):
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined")
+        return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+    imported = []
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append(sorted(f.name for f in out.iterdir())))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    folder = tmp_path / "unshackle-111-S02E05"
+    (folder / "sub").mkdir(parents=True)  # what an import leaves: folders, no video
+    assert sync.add_track(205, "fr") is True  # the track added, not the whole episode again
+    assert asked[0]["audio_only"] is True and imported == [["Show - S02E05.mkv"]]
+    shutil.rmtree(folder)
+    folder.mkdir()
+    (folder / "Show.S02E05.mkv").write_bytes(b"waiting")  # a download waiting for Sonarr: still kept as it is
+    asked.clear()
+    assert sync.add_track(205, "fr") is False and asked == []
+    assert (folder / "Show.S02E05.mkv").read_bytes() == b"waiting"
+
+
+def test_a_full_disk_in_the_quiet_hours_sends_the_message_and_the_job_goes_on(tmp_path, monkeypatch, capsys):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    got = []
+    monkeypatch.setattr(sync, "send_to", lambda url, level, title, message, details=None: got.append(title) or None)
+    monkeypatch.setattr(sync, "in_quiet_hours", lambda s, now=None: True)
+    real_write = sync.write_atomic
+
+    def full(path, *a, **k):
+        if Path(path) in (sync.HELD_FILE, sync.INBOX_FILE):
+            raise OSError(28, "No space left on device")
+        return real_write(path, *a, **k)
+
+    monkeypatch.setattr(sync, "write_atomic", full)
+    settings = {"targets": [{"url": "ntfy://ok"}], "quiet": {"from": "00:00", "to": "23:59"}}
+    assert sync.notify(settings, "error", "Failed: Show S01E01", "x") is True  # sent at once instead of held
+    assert got == ["Failed: Show S01E01"] and not sync.HELD_FILE.exists()
+    assert "could not hold a message" in capsys.readouterr().err
+    tried = []
+
+    def download(payload, run=None):  # the first episode breaks in an unexpected way: its handler notifies
+        tried.append(payload["wanted"][0])
+        if len(tried) == 1:
+            raise TypeError("unexpected")
+
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    config = sync.read_file()
+    config["notifications"] = settings
+    sync.sync(config, settings, [episode(111, 2, 5), episode(111, 2, 6)], manual=True, kind="manual")
+    assert tried == ["S02E05", "S02E06"]  # the rest of the job still ran
+
+
+@pytest.mark.parametrize("which", ["inbox", "sent", "held", "warned", "authentication", "sign-in"])
+def test_a_saved_file_that_cannot_be_read_is_never_written_over(tmp_path, monkeypatch, which):
+    # A NAS share gone for a moment: the file read as empty, then written with the new item only, lost the rest
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    monkeypatch.setattr(sync, "send_to", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "in_quiet_hours", lambda s, now=None: bool(s.get("quiet")))
+    path = {"inbox": sync.INBOX_FILE, "sent": sync.SENT_FILE, "held": sync.HELD_FILE, "warned": sync.WARNED_FILE,
+            "authentication": sync.AUTHENTICATION_FILE, "sign-in": sync.AUTHENTICATION_SESSIONS_FILE}[which]
+    write = {
+        "inbox": lambda: sync.notify({}, "success", "Downloaded: Show S01E01", "x"),
+        "sent": lambda: sync.note_sent("success", "Downloaded: Show S01E01", []),
+        "held": lambda: sync.notify({"quiet": {"from": "00:00", "to": "23:59"}}, "success", "Downloaded: Show S01E01", "x"),
+        "warned": lambda: sync.first_warning("unshackle-111-S01E01"),
+        "authentication": lambda: sync.record_authentication_observation("RTLP", "", "validated", "2026-11-16T00:00:00+00:00"),
+        "sign-in": lambda: sync.start_authentication_setup("RTLP"),
+    }[which]
+    asked = []
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, **k: asked.append(method) or {"session_id": "session-one"})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b'{"kept": "everything already there"}')
+    broken = [True]
+    real_read = Path.read_text
+
+    def flaky(self, *a, **k):
+        if broken[0] and self == path:
+            raise OSError(5, "Input/output error")
+        return real_read(self, *a, **k)
+
+    monkeypatch.setattr(Path, "read_text", flaky)
+    try:
+        write()
+    except OSError:  # as a failed write would: its callers already log it and go on
+        pass
+    assert path.read_bytes() == b'{"kept": "everything already there"}'
+    if which == "inbox":
+        assert sync.read_inbox()["items"] == []  # a read for the page stays as lenient as it was
+    if which == "sign-in":
+        assert asked == ["POST", "DELETE"]  # the session it could not keep is closed on Unshackle, not left open
+    broken[0] = False
+    path.unlink()
+    write()
+    assert path.exists()  # a missing file is still an empty one, started with the new item
+
+
+def test_a_sign_in_refused_on_the_fallback_service_is_retried_there_with_its_own_number(tmp_path, monkeypatch):
+    # The fallback's S02E05 is Sonarr's S01E05: asked of the series' own service, S02E05 is another episode
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111].update(fallback={"service": "MLT", "title": "https://mlt/show", "season_map": {1: 2}},
+                                 fallback_profiles="alt")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "download_request", lambda show, config, wanted, out, backend=None: {
+        "service": show["service"], "title_id": show["title"], "wanted": [wanted], "output_dir": str(out)})
+    asked, refused = [], {"default", "alt"}
+
+    def download(payload, run=None):
+        profile = payload.get("profile") or "default"
+        asked.append((payload["service"], payload["wanted"][0], profile))
+        if payload["service"] == "RTLP":
+            return  # not on its own service
+        if profile in refused:
+            raise sync.UnshackleError("unshackle serve: 401 Unauthorized: your session has expired")
+        out = Path(payload["output_dir"])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "Show.S02E05.mkv").write_bytes(b"x")
+
+    told = []
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
+    imported = []
+    monkeypatch.setattr(sync, "import_episode", lambda ep, out, replace=False: imported.append(ep["id"]))
+    for name in ("finalize", "check_audio"):
+        monkeypatch.setattr(sync, name, lambda *a, **k: 1)
+    sync.sync(config, {}, [episode(111, 1, 5)], manual=True, kind="manual")
+    assert asked == [("RTLP", "S01E05", "default"), ("MLT", "S02E05", "default"), ("MLT", "S02E05", "alt")]
+    assert told == ["Sign-in failed on MLT: Show S01E05"] and imported == []  # the service that refused, named
+
+    refused.discard("alt")
+    asked.clear()
+    shutil.rmtree(tmp_path / "runs")
+    sync.sync(config, {}, [episode(111, 1, 5)], manual=True, kind="manual")
+    assert asked[-1] == ("MLT", "S02E05", "alt") and imported == [105]
+    card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
+    assert card["service"] == "MLT" and card["profile"] == "alt" and card["outcome"] == "downloaded"
+
+
+def test_generate_dv_lets_hdr10_plus_alone_fill_a_hybrid_step(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    ladder = {"name": "Hybrid", "steps": [{"codec": "", "range": "HYBRID", "min": 2160, "max": 0},
+                                          {"codec": "", "range": "SDR", "min": 1080, "max": 1080}]}
+    hdr10p = {"height": 2160, "codec": "HEVC", "range": "HDR10P", "bitrate": 15000}
+    hdr10 = {"height": 2160, "codec": "HEVC", "range": "HDR10", "bitrate": 20000}
+    dv = {"height": 2160, "codec": "HEVC", "range": "DV", "bitrate": 16000}
+    sdr = {"height": 1080, "codec": "AVC", "range": "SDR"}
+    part = lambda *tracks: {"video": list(tracks)}
+    assert sync.climb(ladder, [part(hdr10p, sdr)], generate_dv=True) == (1, hdr10p)  # its DV made from the HDR10+
+    assert sync.climb(ladder, [part(hdr10p, sdr)]) == (2, sdr)  # without the option, as before: the next step
+    assert sync.climb(ladder, [part(hdr10p, hdr10, sdr)], generate_dv=True) == (1, hdr10p)  # never the plain HDR10 for it
+    assert sync.climb(ladder, [part(hdr10, sdr)], generate_dv=True) == (2, sdr)  # plain HDR10 has nothing to make DV from
+    for generate_dv in (False, True):  # a native DV and an HDR base: the step, with the option or not
+        assert sync.climb(ladder, [part(dv, hdr10, sdr)], generate_dv)[0] == 1
+    assert sync.climb(ladder, [part(hdr10p, sdr), part(hdr10, sdr)], generate_dv=True) == (2, sdr)  # every part must have it
+
+    config = sync.read_file()
+    config["quality_ladders"] = [ladder]
+    config["series"][111].update(ladder="Hybrid", options={"--generate-dv": True})
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, json=None, **_: {"episodes": [{"video": [hdr10p, sdr]}]})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    downloads = []
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload))
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+    assert [(d["quality"], d["range"], d.get("generate_dv")) for d in downloads] == [([2160], ["HYBRID"], True)]
+
+
 @pytest.mark.parametrize("ends", ["pause", "episode"])
 def test_a_job_that_lets_its_slot_go_never_frees_one_another_of_its_episodes_just_took(tmp_path, monkeypatch, ends):
     # another episode of the job starts just after it was found idle: the slot it now downloads in stays held,
@@ -6697,3 +7047,61 @@ def test_a_run_finishes_even_when_the_inbox_cannot_be_written(tmp_path, monkeypa
     monkeypatch.setattr(sync, "write_atomic", full_disk)
     run.finish("failed")  # the bell is behind, the run's own record is not
     assert run.card["outcome"] == "failed" and "prompt" not in run.card
+
+
+def test_held_messages_that_cannot_be_read_back_after_sending_are_kept(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    pushed = []
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: pushed.append(a) or 0)
+    monkeypatch.setattr(sync, "send_to", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "in_quiet_hours", lambda s, now=None: False)
+    sync.HELD_FILE.parent.mkdir(parents=True, exist_ok=True)
+    held = [{"level": "success", "title": "Downloaded: Show S01E01"}]
+    sync.HELD_FILE.write_text(json.dumps(held))
+    real_read, reads, broken = Path.read_text, [], [True]
+
+    def flaky(self, *a, **k):  # the read before deleting fails (a NAS share gone for a moment)
+        if self == sync.HELD_FILE:
+            reads.append(1)
+            if broken[0] and len(reads) % 2 == 0:
+                raise OSError(5, "Input/output error")
+        return real_read(self, *a, **k)
+    monkeypatch.setattr(Path, "read_text", flaky)
+    settings = {"targets": [{"url": "ntfy://ok", "levels": ["success", "warning", "error"]}]}
+    assert sync.send_held(settings)  # the error stays here: the hourly checks after it still run
+    assert json.loads(real_read(sync.HELD_FILE)) == held  # not deleted unread
+    broken[0] = False  # the next minute, the share is back
+    sync.send_held(settings)
+    assert len(pushed) == 1 and not sync.HELD_FILE.exists()  # the devices had it: not pushed twice
+
+
+def test_the_audio_add_mark_stays_while_its_audio_could_not_be_removed(tmp_path, monkeypatch):
+    # startup cleanup could not delete the audio-only .mkv: the mark must stay, or the next start offers it for import
+    sync = load(tmp_path, monkeypatch)
+    out = sync.DOWNLOADS / "unshackle-111-S02E05"
+    out.mkdir(parents=True)
+    (out / "audio.mkv").write_bytes(b"fr")
+    (out / sync.AUDIO_ADD).touch()
+    real = sync.unlink_inside
+    def refuse_audio(folder, files):  # a permission error on the audio alone: the rest goes
+        return [f for f in files if f.name == "audio.mkv"] + real(folder, [f for f in files if f.name != "audio.mkv"])
+    monkeypatch.setattr(sync, "unlink_inside", refuse_audio)
+    sync.remove_partial_merges()
+    assert (out / sync.AUDIO_ADD).is_file() and (out / "audio.mkv").is_file()
+    monkeypatch.setattr(sync, "unlink_inside", real)
+    sync.remove_partial_merges()  # the next start, the file deletable again: all gone
+    assert not out.exists()
+
+
+def test_a_folder_an_audio_add_left_marked_is_never_offered_or_imported(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    out = sync.DOWNLOADS / "unshackle-111-S02E05"
+    out.mkdir(parents=True)
+    (out / "audio.mkv").write_bytes(b"fr")  # cleanup could not delete it: the mark stayed
+    (out / sync.AUDIO_ADD).touch()
+    imported = []
+    monkeypatch.setattr(sync, "import_into_sonarr", lambda *a: imported.append(a))
+    assert sync.leftovers() == []
+    with pytest.raises(RuntimeError):
+        sync.import_leftover("unshackle-111-S02E05")
+    assert imported == []
