@@ -446,7 +446,8 @@ class Unshackle:
                                                 "which is not unshackle serve's: check its address in Settings, Unshackle"))
         if r.status_code == 429:  # a limit set on the key (Unshackle 6): waited for, not a lost job
             err = UnshackleError("unshackle serve is busy: its limit of requests for this key is reached")
-            err.retry_after = int(r.headers.get("Retry-After") or 60) if str(r.headers.get("Retry-After") or "60").isdigit() else 60
+            asked = str(r.headers.get("Retry-After") or "60")
+            err.retry_after = max(1, int(asked)) if asked.isdigit() else 60  # never 0: callers read that as "no wait asked"
             raise err
         if not r.ok:
             payload, message, service = response_error(r)

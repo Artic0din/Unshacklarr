@@ -823,3 +823,14 @@ def test_a_local_serve_that_failed_to_start_is_not_started_again_for_a_minute(tm
     other.local.failed = ("unshackle", now[0], UnshackleError("x"))
     other.configure({})
     assert other.local.failed is None
+
+
+@responses.activate
+@pytest.mark.parametrize("header, seconds", [("0", 1), ("7", 7), (None, 60), ("soon", 60)])
+def test_a_busy_answer_always_asks_for_a_wait(tmp_path, header, seconds):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-key"})
+    responses.get("http://backend:8786/api/download/jobs/j1", status=429, headers={"Retry-After": header} if header else {})
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("GET", "/api/download/jobs/j1")
+    assert caught.value.retry_after == seconds  # 0 would read as "no wait asked": a miss, then a cancelled download

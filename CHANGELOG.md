@@ -108,12 +108,10 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
-<<<<<<< HEAD
 - The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
 - The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
-=======
+- A busy Unshackle that answers "try again in 0 seconds" no longer makes Unshacklarr cancel the running download; it waits a second and asks again.
 - A local Unshackle that will not start is now said once for a minute, instead of every page load and sync waiting 90 seconds to start it again.
->>>>>>> 0cf447e (fix(backend): remember a local serve that would not start)
 - The example Docker Compose file now builds Unshackle from this repository's Dockerfile at the reviewed commit and pulls this repository's image, instead of upstream's, which ignored the commit pin; that commit now includes official Unshackle's latest development work.
 - The `--remote` servers' options now show in the first 10 minutes after the machine starts, instead of being missing until then.
 - Renaming or removing a Sonarr in Settings no longer makes every later Save fail with "no Sonarr named …": a rename keeps each series' own settings for it (such as switched off), and a removal drops them.
