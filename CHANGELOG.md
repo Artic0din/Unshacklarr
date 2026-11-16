@@ -221,6 +221,8 @@ Every change worth knowing, newest first. The format follows
   longer let one more download run than the limit.
 - **A run whose end could not be saved ends anyway.** On a full disk it no longer showed as running, with Delete
   refused, until a restart.
+- **Saving Settings no longer sends a download to the wrong server.** One starting during the save could find
+  no Unshackle or Sonarr of its own and use the main ones.
 
 **🆕 Sonarr 5, on this branch until it is out of beta**
 - **Languages.** Your files without your audio languages, read from Sonarr 5's own tracks: watch them for the

@@ -243,7 +243,7 @@ def load_settings(config: dict | None = None) -> dict:
 
 def apply_settings(settings: dict) -> None:
     """Set the module's working values; the web page calls it again after a save."""
-    global SETTINGS, SONARR, HEADERS, DOWNLOADS, LOCAL, LATE_AFTER, AUTO_DAYS, RUNS_KEEP, RUNS_MAX_DAYS, DEBUG
+    global SETTINGS, SONARR, HEADERS, DOWNLOADS, LOCAL, LATE_AFTER, AUTO_DAYS, RUNS_KEEP, RUNS_MAX_DAYS, DEBUG, BACKENDS, SONARRS
     SETTINGS = settings
     DEBUG = settings.get("debug") in (True, "true", "on", 1)
     SONARR = str(settings["sonarr_url"]).rstrip("/")
@@ -257,22 +257,24 @@ def apply_settings(settings: dict) -> None:
     AUTO_DAYS = float(settings["auto_days"])
     RUNS_KEEP, RUNS_MAX_DAYS = int(settings["history_keep"]), int(settings["history_days"])
     UNSHACKLE.configure(settings)
-    BACKENDS.clear()
+    # built aside, then swapped in at once: a download starting meanwhile finds its server and its Sonarr, never none
+    backends: dict[str, Unshackle] = {}
     for b in settings.get("backends") or []:
         other = Unshackle(DATA)
         other.name = b["name"]
         # its downloads folder empty: as the main serve sees it (both mount it alike), not as Unshacklarr does
         other.configure({"unshackle_mode": "remote", "unshackle_url": b.get("url"), "unshackle_api_key": b.get("api_key"),
                          "unshackle_downloads": b.get("downloads") or settings.get("unshackle_downloads")})
-        BACKENDS[b["name"]] = other
-    SONARRS.clear()
+        backends[b["name"]] = other
+    sonarrs: dict[str, dict] = {}
     for i in settings.get("sonarrs") or []:
-        SONARRS[i["name"]] = {"name": i["name"], "url": str(i.get("url") or "").rstrip("/"), "api_key": str(i.get("api_key") or ""),
+        sonarrs[i["name"]] = {"name": i["name"], "url": str(i.get("url") or "").rstrip("/"), "api_key": str(i.get("api_key") or ""),
                               "downloads": str(i.get("downloads") or ""), "quality_ladder": str(i.get("quality_ladder") or ""),
                               "download_only": i.get("download_only"),
                               # its library, for Add audio track; both empty: the main Sonarr's
                               "library_sonarr_root": str(i.get("library_sonarr_root") or ""),
                               "library_local_root": str(i.get("library_local_root") or "")}
+    BACKENDS, SONARRS = backends, sonarrs
 
 
 BACKENDS: dict[str, Unshackle] = {}  # the other unshackle serve, by name

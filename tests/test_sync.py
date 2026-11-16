@@ -6339,3 +6339,27 @@ def test_a_run_whose_end_could_not_be_written_is_no_longer_running(tmp_path, mon
     with pytest.raises(OSError):
         run.finish("downloaded")
     assert run.id not in sync.EpisodeRun.active
+
+
+def test_saving_settings_never_leaves_the_servers_or_sonarrs_missing_meanwhile(tmp_path, monkeypatch):
+    # a download starting while Settings are saved finds its server and its Sonarr, not the main ones
+    sync = load(tmp_path, monkeypatch)
+    settings = {**sync.SETTINGS, "backends": [{"name": "vpn", "url": "http://vpn:8786"}, {"name": "nas", "url": "http://nas:8786"}],
+                "sonarrs": [{"name": "4K", "url": "http://4k:8989"}]}
+    sync.apply_settings(settings)
+    seen = []
+    real = sync.Unshackle
+    look = lambda: seen.append((sync.backend_named("vpn") is not sync.UNSHACKLE, "4K" in sync.SONARRS))
+
+    def watched(data):  # each server rebuilt: what a download starting now finds
+        look()
+        return real(data)
+
+    class Watched(dict):  # the Sonarr rebuilt: the same
+        def get(self, key, default=None):
+            look()
+            return super().get(key, default)
+    monkeypatch.setattr(sync, "Unshackle", watched)
+    sync.apply_settings({**settings, "sonarrs": [Watched(settings["sonarrs"][0])]})
+    assert seen and all(s == (True, True) for s in seen)
+    assert sorted(sync.BACKENDS) == ["nas", "vpn"] and list(sync.SONARRS) == ["4K"]
