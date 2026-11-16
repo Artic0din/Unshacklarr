@@ -287,7 +287,7 @@ async function showReleaseSeen(s) {
 /* Test this series: the service's episodes, the next ones against Sonarr, a season map if needed. */
 $("#d-probe").onclick = async () => {
   if ($("#d-probe").ariaDisabled === "true") return;  // aria-disabled, not disabled: the button keeps the focus while it asks
-  const conf = S.config.series[current.tvdbId];
+  const s = current, conf = S.config.series[s.tvdbId];
   const out = $("#d-probe-out"), state = $("#d-probe-state");
   if (!conf?.service || !conf.title) { state.textContent = "Pick a service and its URL first."; return; }
   $("#d-probe").setAttribute("aria-disabled", "true");
@@ -296,7 +296,8 @@ $("#d-probe").onclick = async () => {
   const slow = slowHint(svcName(conf.service));
   try {
     const r = await api("/api/probe", { method: "POST", wait: 120,
-      body: JSON.stringify({ show: conf, seriesId: current.id, title: current.title }) });
+      body: JSON.stringify({ show: conf, seriesId: s.id, title: s.title }) });
+    if (current !== s) return;  // another series was opened meanwhile: the answer is not its
     state.textContent = "";
     const seasons = r.seasons.map((x) => `S${x.season} (${x.episodes})`).join(", ");
     const rows = r.checks.map((c) => el("div", { className: "probe-row" },
@@ -324,8 +325,8 @@ $("#d-probe").onclick = async () => {
     out.replaceChildren(el("div", { className: "probe-out" },
       el("div", { className: "head" }, "Found ", el("b", { textContent: r.series || "the series" }), `: ${r.count} episodes${seasons ? ` · ${seasons}` : ""}`),
       ...single, ...apply, ...rows));
-  } catch (e) { state.replaceChildren(failed(e.message)); }
-  finally { $("#d-probe").removeAttribute("aria-disabled"); clearTimeout(slow); }
+  } catch (e) { if (current === s) state.replaceChildren(failed(e.message)); }
+  finally { if (current === s) $("#d-probe").removeAttribute("aria-disabled"); clearTimeout(slow); }  // another series' button is its own
 };
 
 /* This device's notifications (Web Push): allowed here, sent by the server through the browser's push service. */

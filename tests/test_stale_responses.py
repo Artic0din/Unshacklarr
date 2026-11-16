@@ -162,3 +162,75 @@ def test_list_pane_shows_the_newest_request_not_the_slowest(pane, count):
 @pytest.mark.parametrize("pane", ["missing", "upgrades"])
 def test_list_pane_buttons_send_the_sonarr_the_list_is_for(pane):
     assert node(LIST_PANES, str(JS / "activity.js"), pane, "click") == {"sent": ["A"]}
+
+
+# Runs the page's real "Test this series" click with the probe's answers released by hand.
+PROBE = r"""
+const A = { tvdbId: 1, id: 10, title: "A" }, B = { tvdbId: 2, id: 20, title: "B" };
+const nodes = {}, drawn = [], release = {};
+const node = (sel) => (nodes[sel] ??= { ariaDisabled: null, textContent: "", setAttribute(n, v) { if (n === "aria-disabled") this.ariaDisabled = v; }, removeAttribute() { this.ariaDisabled = null; },
+  replaceChildren(...kids) { drawn.push([sel, kids.length]); } });
+const ctx = { current: A, S: { config: { series: { 1: { service: "X", title: "A" }, 2: { service: "X", title: "B" } } } }, $: node, loading: (t) => t, failed: (t) => ({ failed: t }),
+  slowHint: () => 0, clearTimeout() {}, svcName: (t) => t, icon: () => "", dirty() {}, toast() {}, el: (tag, props = {}, ...kids) => ({ tag, ...props, kids }),
+  api: (path, opts) => new Promise((resolve, reject) => { release[JSON.parse(opts.body).title] = { resolve, reject }; }) };
+vm.createContext(ctx);
+const click = vm.runInContext(src.match(/\$\("#d-probe"\)\.onclick = (async \(\) => \{[\s\S]*?\n\});/)[1], ctx);
+const answer = { seasons: [], checks: [], season_map: { 1: "2" }, count: 5, series: "Show" };
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+"""
+
+
+def test_probe_answer_of_a_series_closed_meanwhile_is_not_drawn():
+    shown = node(PROBE + r"""
+(async () => {
+  const first = click();  // series A is tested, then B is opened
+  ctx.current = B;
+  release.A.resolve(answer);
+  await first;
+  console.log(JSON.stringify({ drawnInB: drawn.filter(([sel, n]) => sel === "#d-probe-out" && n > 0), button: nodes["#d-probe"].ariaDisabled }));
+})();
+""", str(JS / "settings-services.js"))
+    assert shown["drawnInB"] == []
+
+
+def test_probe_failure_of_a_series_closed_meanwhile_is_not_drawn():
+    shown = node(PROBE + r"""
+(async () => {
+  const first = click();
+  ctx.current = B;
+  release.A.reject(new Error("Sonarr is down"));
+  await first;
+  console.log(JSON.stringify({ state: drawn.filter(([sel, n]) => sel === "#d-probe-state" && n > 0).length }));
+})();
+""", str(JS / "settings-services.js"))
+    assert shown == {"state": 1}  # only A's "Asking the service…"
+
+
+def test_probe_ending_in_a_closed_series_leaves_the_open_one_testing():
+    shown = node(PROBE + r"""
+(async () => {
+  const first = click();
+  ctx.current = B;
+  nodes["#d-probe"].ariaDisabled = null;  // opening B enables its button
+  const second = click();  // B is tested too
+  release.A.resolve(answer);
+  await first;
+  const whileBTests = nodes["#d-probe"].ariaDisabled;
+  release.B.resolve(answer);
+  await second;
+  console.log(JSON.stringify({ whileBTests, afterwards: nodes["#d-probe"].ariaDisabled }));
+})();
+""", str(JS / "settings-services.js"))
+    assert shown == {"whileBTests": "true", "afterwards": None}
+
+
+def test_opening_a_series_enables_its_test_button():
+    shown = node(r"""
+const button = { ariaDisabled: "true", removeAttribute() { this.ariaDisabled = null; } };
+const box = { replaceChildren() {}, textContent: "", hidden: false };
+const ctx = { current: null, $: (sel) => (sel === "#d-probe" ? button : box), showReleaseSeen() {}, S: { health: {}, config: { series: {} } }, el: () => ({}), drawerPushed: false, drawerTab: "", navigate() {} };
+vm.createContext(ctx);
+vm.runInContext(grab("openDrawer"), ctx);
+ctx.openDrawer({ tvdbId: 2 }, "episodes", true).catch(() => {}).then(() => console.log(JSON.stringify({ ariaDisabled: button.ariaDisabled })));  // later steps need the whole page: only the first lines matter
+""", str(JS / "core.js"))
+    assert shown == {"ariaDisabled": None}

@@ -500,6 +500,7 @@ async function loadServiceOptions(tag) {
 async function openDrawer(s, tab, fromRoute = false) {
   current = s;
   $("#d-probe-out").replaceChildren();
+  $("#d-probe").removeAttribute("aria-disabled");  // a test of the series left behind may still be asking
   $("#d-url").placeholder = "URL or ID of the series";  // a Crave suggestion changes it for one series only
   showReleaseSeen(s);
   const sick = S.config.series[s.tvdbId]?.service && S.health[s.tvdbId];
