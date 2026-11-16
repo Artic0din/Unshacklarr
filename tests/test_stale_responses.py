@@ -245,11 +245,11 @@ ctx.openDrawer({ tvdbId: 2 }, "episodes", true).catch(() => {}).then(() => conso
 @pytest.mark.parametrize("slow_answer", ["not found", "error"])
 def test_library_check_shows_the_newest_path_not_the_slowest(slow_answer):
     shown = node(r"""
-const slowAnswer = process.argv[2], runs = [];
+const slowAnswer = process.argv[2], timers = [];
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const say = { className: "", textContent: "", replaceChildren(...kids) { this.textContent = kids.join(""); } };
 const lib = {}, ctx = { libWho: "", libRoots: [], libCommon: "", libTimer: null, URLSearchParams, S: { config: { settings: {} } }, mainSonarr: () => "Sonarr", icon: () => "", el: () => ({}),
-  libOf: () => lib, renderLibraryPicks() {}, $: () => say, clearTimeout() {}, setTimeout: (fn) => { runs.push(fn()); return 1; },
+  libOf: () => lib, renderLibraryPicks() {}, $: () => say, clearTimeout() {}, setTimeout: (fn) => { timers.push(fn); return 1; },  // the 400 ms debounce, fired by hand
   api: async (path) => {
     if (path.includes("sonarr_root=%2Fmnt%2Ft&")) { await wait(30); if (slowAnswer === "error") throw new Error("Unshacklarr did not answer"); return { ok: false, local_path: "/mnt/t", roots: ["/mnt/old"] }; }
     return { ok: true, local_path: "/mnt/tv", roots: ["/mnt/tv"] };
@@ -258,38 +258,15 @@ vm.createContext(ctx);
 vm.runInContext("let libSeq = 0;" + grab("checkLibrary"), ctx);
 (async () => {
   lib.library_sonarr_root = "/mnt/t"; ctx.checkLibrary();
-  lib.library_sonarr_root = "/mnt/tv"; ctx.checkLibrary();
-  await Promise.all(runs);
-  console.log(JSON.stringify({ text: say.textContent, className: say.className, roots: ctx.libRoots }));
+  const old = timers[0]();  // its request is on its way
+  lib.library_sonarr_root = "/mnt/tv"; ctx.checkLibrary();  // typed on: the new check still waits out its debounce
+  await old;
+  const meanwhile = say.textContent;  // the old answer landed inside that debounce
+  await timers[1]();
+  console.log(JSON.stringify({ meanwhile, text: say.textContent, className: say.className, roots: ctx.libRoots }));
 })();
 """, str(JS / "quality.js"), slow_answer)
-    assert shown == {"text": "Unshacklarr reads Sonarr's library: /mnt/tv", "className": "lib-check ok", "roots": ["/mnt/tv"]}
-
-
-def test_coming_back_to_the_tab_does_not_stream_an_old_run_into_the_serve_log():
-    shown = node(r"""
-const jsDir = process.argv[2], sockets = [], written = [];
-class FakeSocket { constructor(url) { this.url = url; sockets.push(this); } close() {} }
-class FakeTerminal { loadAddon() {} open() {} reset() {} resize() {} write(t) { written.push(typeof t === "string" ? t : "output"); } }
-let hidden = false, onVisibility;
-const box = { hidden: false, open: true, replaceChildren() {}, classList: { add() {} }, textContent: "" };
-const ctx = { window: { Terminal: FakeTerminal }, Terminal: FakeTerminal, FitAddon: { FitAddon: class { proposeDimensions() {} } }, ResizeObserver: class { observe() {} },
-  term: null, termFit: null, termSocket: null, termFor: null, termQuery: "", termResume: null, liveFeed: null, liveNext: null, picked_run: null, TERM_COLS: 110,
-  $: () => box, el: () => ({}), termFilter: () => (b) => b, WebSocket: FakeSocket, location: { protocol: "http:", host: "x" }, api: async () => ({ log: "serve line" }), showTab() {},
-  openActivity() {}, document: { get hidden() { return hidden; }, addEventListener: (_, fn) => { onVisibility = fn; }, querySelectorAll: () => [] } };
-vm.createContext(ctx);
-vm.runInContext(["fitTerminal", "openTerm", "streamTerm"].map((n) => grab(n)).join(""), ctx);
-vm.runInContext(grab("showServeLog", read(jsDir + "/settings-services.js")), ctx);
-vm.runInContext(`document.addEventListener("visibilitychange", ${read(jsDir + "/activity.js").match(/addEventListener\("visibilitychange", (\(\) => \{[\s\S]*?\n\})\);/)[1]});`, ctx);
-(async () => {
-  ctx.streamTerm("run:1", "run=1");  // a run's output is streaming
-  await ctx.showServeLog();  // then the serve log is opened over it
-  hidden = true; onVisibility();  // the tab is hidden, then back in sight
-  hidden = false; onVisibility();
-  console.log(JSON.stringify(sockets.map((s) => s.url.split("?")[1])));
-})();
-""", str(JS / "attempts.js"), str(JS))
-    assert shown == ["run=1"]
+    assert shown == {"meanwhile": "Looking for one of your episode files…", "text": "Unshacklarr reads Sonarr's library: /mnt/tv", "className": "lib-check ok", "roots": ["/mnt/tv"]}
 
 
 @pytest.mark.parametrize("view, key", [("week", "2026-11-09+7"), ("month", "2026-10-26+42")])
@@ -359,3 +336,29 @@ const click = vm.runInContext(src.match(/\$\("#d-find-go"\)\.onclick = (async \(
 click().then(() => console.log(JSON.stringify({ waits })));
 """, str(JS / "core.js"))
     assert shown == {"waits": [70]}
+
+
+def test_coming_back_to_the_tab_does_not_stream_an_old_run_into_the_serve_log():
+    shown = node(r"""
+const jsDir = process.argv[2], sockets = [], written = [];
+class FakeSocket { constructor(url) { this.url = url; sockets.push(this); } close() {} }
+class FakeTerminal { loadAddon() {} open() {} reset() {} resize() {} write(t) { written.push(typeof t === "string" ? t : "output"); } }
+let hidden = false, onVisibility;
+const box = { hidden: false, open: true, replaceChildren() {}, classList: { add() {} }, textContent: "" };
+const ctx = { window: { Terminal: FakeTerminal }, Terminal: FakeTerminal, FitAddon: { FitAddon: class { proposeDimensions() {} } }, ResizeObserver: class { observe() {} },
+  term: null, termFit: null, termSocket: null, termFor: null, termQuery: "", termResume: null, liveFeed: null, liveNext: null, picked_run: null, TERM_COLS: 110,
+  $: () => box, el: () => ({}), termFilter: () => (b) => b, WebSocket: FakeSocket, location: { protocol: "http:", host: "x" }, api: async () => ({ log: "serve line" }), showTab() {},
+  openActivity() {}, document: { get hidden() { return hidden; }, addEventListener: (_, fn) => { onVisibility = fn; }, querySelectorAll: () => [] } };
+vm.createContext(ctx);
+vm.runInContext(["fitTerminal", "openTerm", "streamTerm"].map((n) => grab(n)).join(""), ctx);
+vm.runInContext(grab("showServeLog", read(jsDir + "/settings-services.js")), ctx);
+vm.runInContext(`document.addEventListener("visibilitychange", ${read(jsDir + "/activity.js").match(/addEventListener\("visibilitychange", (\(\) => \{[\s\S]*?\n\})\);/)[1]});`, ctx);
+(async () => {
+  ctx.streamTerm("run:1", "run=1");  // a run's output is streaming
+  await ctx.showServeLog();  // then the serve log is opened over it
+  hidden = true; onVisibility();  // the tab is hidden, then back in sight
+  hidden = false; onVisibility();
+  console.log(JSON.stringify(sockets.map((s) => s.url.split("?")[1])));
+})();
+""", str(JS / "attempts.js"), str(JS))
+    assert shown == ["run=1"]

@@ -584,9 +584,10 @@ function setLibrary(side, path) {
 $("#dx-lib-sonarr").oninput = (e) => { libOf().library_sonarr_root = e.target.value.trim() || undefined; dirty(); checkLibrary(); };
 $("#dx-lib-local").oninput = (e) => { libOf().library_local_root = e.target.value.trim() || undefined; dirty(); checkLibrary(); };
 function checkLibrary() {
+  const seq = ++libSeq;  // taken now, not when the debounce fires: an answer for an earlier path is stale from this keystroke
   clearTimeout(libTimer);
   libTimer = setTimeout(async () => {
-    const seq = ++libSeq, lib = libOf(), main = S.config.settings, own = lib.library_sonarr_root || lib.library_local_root ? lib : main;
+    const lib = libOf(), main = S.config.settings, own = lib.library_sonarr_root || lib.library_local_root ? lib : main;
     const q = new URLSearchParams({ sonarr_root: own.library_sonarr_root || "", local_root: own.library_local_root || "", ...(libWho ? { sonarr: libWho } : {}) });
     const say = $("#dx-lib-check"), who = libWho || mainSonarr();
     say.className = "lib-check"; say.textContent = "Looking for one of your episode files…";
