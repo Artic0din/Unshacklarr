@@ -4308,9 +4308,13 @@ def remove_partial_merges() -> int:
             continue
         try:
             stray = [f for f in d.glob(f"*{PARTIAL}") if f.is_file() and not f.is_symlink()]
-            if (d / AUDIO_ADD).is_file():  # an audio add stopped midway: its audio alone must not wait for import as a video
-                stray = sorted((f for f in d.rglob("*") if f.is_symlink() or not f.is_dir()), key=lambda f: f.name == AUDIO_ADD)  # its mark last
+            mark = d / AUDIO_ADD
+            if mark.is_file():  # an audio add stopped midway: its audio alone must not wait for import as a video
+                stray = [f for f in d.rglob("*") if (f.is_symlink() or not f.is_dir()) and f != mark]
             left = unlink_inside(d, stray)  # the folder may be swapped for a link after these checks
+            if mark.is_file() and not left:  # the mark goes only once nothing it guards is left
+                left = unlink_inside(d, [mark])
+                stray.append(mark)
             removed += len(left) < len(stray)
             if left:
                 print(f"Could not remove a cut-short merge in {d.name}: {', '.join(f.name for f in left)}", file=sys.stderr)

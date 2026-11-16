@@ -7070,3 +7070,21 @@ def test_held_messages_that_cannot_be_read_back_after_sending_are_kept(tmp_path,
     with pytest.raises(OSError):
         sync.send_held(settings)
     assert json.loads(real_read(sync.HELD_FILE)) == held  # not deleted unread
+
+
+def test_the_audio_add_mark_stays_while_its_audio_could_not_be_removed(tmp_path, monkeypatch):
+    # startup cleanup could not delete the audio-only .mkv: the mark must stay, or the next start offers it for import
+    sync = load(tmp_path, monkeypatch)
+    out = sync.DOWNLOADS / "unshackle-111-S02E05"
+    out.mkdir(parents=True)
+    (out / "audio.mkv").write_bytes(b"fr")
+    (out / sync.AUDIO_ADD).touch()
+    real = sync.unlink_inside
+    def refuse_audio(folder, files):  # a permission error on the audio alone: the rest goes
+        return [f for f in files if f.name == "audio.mkv"] + real(folder, [f for f in files if f.name != "audio.mkv"])
+    monkeypatch.setattr(sync, "unlink_inside", refuse_audio)
+    sync.remove_partial_merges()
+    assert (out / sync.AUDIO_ADD).is_file() and (out / "audio.mkv").is_file()
+    monkeypatch.setattr(sync, "unlink_inside", real)
+    sync.remove_partial_merges()  # the next start, the file deletable again: all gone
+    assert not out.exists()
