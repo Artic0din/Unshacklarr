@@ -5431,6 +5431,28 @@ def test_a_serve_busy_for_two_hours_gives_the_download_up_and_frees_its_slot(tmp
     assert run.id not in sync.slot_jobs.get("nas", [])  # the next download in line gets the slot
 
 
+def test_a_busy_server_named_like_a_network_error_is_given_up_once(tmp_path, monkeypatch):
+    # its name is in the message, not in the cause a retry is decided on: "timeout" doesn't make it a passing stumble
+    sync = load(tmp_path, monkeypatch)
+    clock = BusyClock()
+    monkeypatch.setattr(sync, "time", clock)
+    cancelled = []
+
+    class Serve:
+        name = "timeout"
+        def download(self, payload): return "j1"
+        def job(self, job_id): raise serve_error("unshackle serve is busy: its limit of requests for this key is reached",
+                                                 429, retry_after=3600)
+        def cancel(self, job_id): cancelled.append(job_id)
+
+    monkeypatch.setattr(sync, "backend_named", lambda name=None: Serve())
+    run = sync.EpisodeRun({"id": 5, "seriesId": 1, "series": {"title": "Show", "tvdbId": 111}, "seasonNumber": 1,
+                           "episodeNumber": 5}, {"service": "X"}, "manual")
+    with pytest.raises(sync.JobFailed, match="^unshackle serve timeout stayed busy for 2 hours"):
+        sync.run_job_retrying({"service": "X"}, run, sleep=clock.sleep)
+    assert cancelled == ["j1"] and clock.now == sync.BUSY_GIVE_UP  # not started again for another 2 hours
+
+
 def test_a_serve_busy_less_than_two_hours_at_a_time_keeps_the_download(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     clock = BusyClock()

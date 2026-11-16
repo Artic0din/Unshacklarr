@@ -2431,5 +2431,6 @@
  "{0} session expired": "Sessão de {0} expirada",
  "{0} session rejected": "Sessão de {0} rejeitada",
  "{0} timed out": "{0}: tempo esgotado",
- "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} ficou ocupado por {1} horas: o limite de requisições desta chave continua atingido, o download foi abandonado"
+ "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} ficou ocupado por {1} horas: o limite de requisições desta chave continua atingido, o download foi abandonado",
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve ficou ocupado por {0} horas: o limite de requisições desta chave continua atingido, o download foi abandonado"
 }
