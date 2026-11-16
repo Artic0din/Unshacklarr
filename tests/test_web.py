@@ -7746,3 +7746,29 @@ def test_clearing_one_services_cache_folder_unconfirms_it(tmp_path, monkeypatch)
 
     states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
     assert states == {"PAIRED": "unknown", "OTHER": "validated", "PAIRED@vpn": "validated"}
+
+
+def test_a_cache_clear_that_fails_partway_still_unconfirms_the_service(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(tmp_path / "Cache")
+    (tmp_path / "Cache" / "PAIRED").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Cache" / "PAIRED" / "a").write_text("x")
+    (tmp_path / "Cache" / "PAIRED" / "b").write_text("x")
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "PAIRED"}, {"tag": "OTHER"}])
+    monkeypatch.setattr(web.UNSHACKLE, "jobs", lambda: [])
+    from pathlib import Path
+    real_unlink, calls = Path.unlink, []
+
+    def unlink(self, *a, **k):
+        calls.append(self)
+        if len(calls) > 1:
+            raise PermissionError("locked")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", unlink)
+
+    with pytest.raises(PermissionError):
+        web.clear_service_cache("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states["PAIRED"] == "unknown"  # part of its sign-in was deleted: no longer evidence

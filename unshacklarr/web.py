@@ -3217,14 +3217,16 @@ def clear_service_cache(tag: str) -> int:
         raise web.HTTPConflict(text=f"A {tag} download is running: clear its cache once it is done")
     folder = cache_folder() / tag
     freed = 0
-    for item in folder.iterdir() if folder.is_dir() else []:
-        if item.is_dir() and not item.is_symlink():
-            freed += sum(f.stat().st_size for f in item.rglob("*") if f.is_file())
-            shutil.rmtree(item)
-        else:
-            freed += item.lstat().st_size
-            item.unlink()
-    sonarr_sync.record_authentication_clear(tag)
+    try:
+        for item in folder.iterdir() if folder.is_dir() else []:
+            if item.is_dir() and not item.is_symlink():
+                freed += sum(f.stat().st_size for f in item.rglob("*") if f.is_file())
+                shutil.rmtree(item)
+            else:
+                freed += item.lstat().st_size
+                item.unlink()
+    finally:  # even a part deleted is no longer evidence of a sign-in
+        sonarr_sync.record_authentication_clear(tag)
     return freed
 
 
