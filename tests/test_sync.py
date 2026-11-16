@@ -579,6 +579,7 @@ def test_log_in_inside_an_ordinary_word_is_not_a_login_failure():
     from unshacklarr.sync import login_failure
     assert not login_failure("Title not found in the catalog index")
     assert not login_failure("could not assign in time")
+    assert not login_failure("Failed while signing the manifest") and not login_failure("logins table is empty")
     assert login_failure("Please log in again") and login_failure("You must sign in first") and login_failure("login required")
 
 
