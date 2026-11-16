@@ -1384,7 +1384,7 @@
  "The proxy's addresses": "Os endereços do proxy",
  "The reverse proxy's header is a name like Remote-User": "O cabeçalho do proxy reverso é um nome como Remote-User",
  "For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.": "Para quando o Authelia, o Authentik ou outro proxy já faz o seu login. O proxy passa o seu nome em um cabeçalho, e o Unshacklarr abre sem pedir a própria senha.",
- "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header is trusted only from there, since anyone else could send it.": "Os endereços de onde o proxy se conecta, como o Unshacklarr os vê (a rede do contêiner dele). O cabeçalho só é aceito vindo de lá, já que qualquer outro poderia enviá-lo.",
+ "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.": "Os endereços de onde o proxy se conecta, como o Unshacklarr os vê (a rede do contêiner dele). O cabeçalho e o X-Real-IP só são aceitos vindos de lá, já que qualquer outro poderia enviá-los.",
  "none": "nenhum",
  "the settings": "as configurações",
  "{0} is not an address or a range like 172.18.0.0/16": "{0} não é um endereço nem uma faixa como 172.18.0.0/16",

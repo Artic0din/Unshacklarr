@@ -1395,7 +1395,7 @@
  "The proxy's addresses": "プロキシのアドレス",
  "The reverse proxy's header is a name like Remote-User": "リバースプロキシのヘッダーは Remote-User のような名前です",
  "For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.": "Authelia、Authentik などのプロキシがすでにログインを行っている場合に使います。プロキシがヘッダーで名前を渡し、Unshacklarr は自身のパスワードを求めずに開きます。",
- "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header is trusted only from there, since anyone else could send it.": "Unshacklarr から見たプロキシの接続元アドレス（コンテナのネットワーク）。他の誰でもヘッダーを送れるため、そこからのものだけを信頼します。",
+ "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.": "Unshacklarr から見たプロキシの接続元アドレス（コンテナのネットワーク）。他の誰でもヘッダーと X-Real-IP を送れるため、そこからのものだけを信頼します。",
  "none": "なし",
  "the settings": "設定",
  "{0} is not an address or a range like 172.18.0.0/16": "{0} は 172.18.0.0/16 のようなアドレスや範囲ではありません",
