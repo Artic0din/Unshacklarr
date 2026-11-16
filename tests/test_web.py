@@ -7817,6 +7817,144 @@ def test_the_page_fits_and_ranks_tracks_on_a_ladder_as_the_server_does(tmp_path,
     assert len(reached) >= 5  # the cases reach most steps, not one
 
 
+def seed_confirmed_sign_ins(web):
+    """PAIRED and OTHER confirmed on the main server, PAIRED on the server "vpn", all before any clear."""
+    confirmed = {"state": "validated", "observed_at": "2026-11-14T02:00:00+00:00", "validated_at": "2026-11-14T02:00:00+00:00"}
+    web.sonarr_sync.write_atomic(web.sonarr_sync.AUTHENTICATION_FILE, json.dumps(
+        {"": {"PAIRED": confirmed, "OTHER": confirmed}, "vpn": {"PAIRED": confirmed}}))
+    card = {"service": "PAIRED", "outcome": "downloaded", "ended": "2026-11-14T04:00:00+00:00"}  # a run card says so too
+    services = [{"tag": "PAIRED", "auth_methods": ["pairing"]}, {"tag": "OTHER", "auth_methods": ["cookies"]}]
+    return [card], services
+
+
+def test_a_cleared_cache_leaves_no_sign_in_confirmed(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    states = lambda: {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states() == {"PAIRED": "validated", "OTHER": "validated", "PAIRED@vpn": "validated"}
+
+    web.sonarr_sync.record_authentication_clear()  # every service of the main server
+
+    status = web.authentication_status(cards, services)
+    assert states() == {"PAIRED": "unknown", "OTHER": "unknown", "PAIRED@vpn": "validated"}  # the other server is not cleared
+    assert status["PAIRED"]["validated_at"] is None and status["PAIRED"]["observed_at"] is None
+
+    newer = [{"service": "PAIRED", "outcome": "downloaded", "ended": "2999-01-01T00:00:00+00:00"}]
+    assert {k: s["state"] for k, s in web.authentication_status(newer, services).items()}["PAIRED"] == "validated"  # a sign-in after it
+    assert {k: s["state"] for k, s in web.authentication_status(newer, services).items()}["OTHER"] == "unknown"
+
+
+def test_clearing_one_service_unconfirms_only_that_service(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+
+    web.sonarr_sync.record_authentication_clear("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states == {"PAIRED": "unknown", "OTHER": "validated", "PAIRED@vpn": "validated"}
+
+
+def test_a_failed_clear_leaves_the_sign_ins_as_they_were(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    answers = [web.UnshackleError("no answer"), {"cleared": True}]
+
+    def call(method, path, **kw):
+        if isinstance(answers[0], Exception):
+            raise answers.pop(0)
+        return answers.pop(0)
+
+    monkeypatch.setattr(web.UNSHACKLE, "call", call)
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            post = lambda: client.post("/api/unshackle/maintenance/clear-cache", headers={"X-Unshackle": "1"})
+            failed = (await post()).status
+            after_failure = web.authentication_status(cards, services)["PAIRED"]["state"]
+            return failed, after_failure, (await post()).status, web.authentication_status(cards, services)["PAIRED"]["state"]
+
+    assert asyncio.run(go()) == (502, "validated", 200, "unknown")
+
+
+def test_recording_a_cache_clear_does_not_block_the_event_loop(tmp_path, monkeypatch):
+    import threading
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    ran_on = []
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **kw: {"cleared": True})
+    monkeypatch.setattr(web.sonarr_sync, "record_authentication_clear", lambda *a, **kw: ran_on.append(threading.current_thread()))
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            loop_thread = threading.current_thread()
+            status = (await client.post("/api/unshackle/maintenance/clear-cache", headers={"X-Unshackle": "1"})).status
+            return status, loop_thread
+
+    status, loop_thread = asyncio.run(go())
+    assert status == 200 and ran_on and ran_on[0] is not loop_thread  # its lock and fsync would stall every request
+
+
+def test_clearing_one_services_cache_folder_unconfirms_it(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(tmp_path / "Cache")
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "PAIRED"}, {"tag": "OTHER"}])
+    monkeypatch.setattr(web.UNSHACKLE, "jobs", lambda: [])
+
+    web.clear_service_cache("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states == {"PAIRED": "unknown", "OTHER": "validated", "PAIRED@vpn": "validated"}
+
+
+def test_a_cache_clear_that_fails_partway_still_unconfirms_the_service(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(tmp_path / "Cache")
+    (tmp_path / "Cache" / "PAIRED").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Cache" / "PAIRED" / "a").write_text("x")
+    (tmp_path / "Cache" / "PAIRED" / "b").write_text("x")
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "PAIRED"}, {"tag": "OTHER"}])
+    monkeypatch.setattr(web.UNSHACKLE, "jobs", lambda: [])
+    from pathlib import Path
+    real_unlink, calls = Path.unlink, []
+
+    def unlink(self, *a, **k):
+        calls.append(self)
+        if len(calls) > 1:
+            raise PermissionError("locked")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", unlink)
+
+    with pytest.raises(PermissionError):
+        web.clear_service_cache("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states["PAIRED"] == "unknown"  # part of its sign-in was deleted: no longer evidence
+
+
+def test_a_cache_clear_that_fails_before_deleting_anything_keeps_the_sign_in(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(tmp_path / "Cache")
+    (tmp_path / "Cache" / "PAIRED").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Cache" / "PAIRED" / "a").write_text("x")
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "PAIRED"}, {"tag": "OTHER"}])
+    monkeypatch.setattr(web.UNSHACKLE, "jobs", lambda: [])
+    from pathlib import Path
+
+    def lstat(self):
+        raise PermissionError("cannot look")
+    monkeypatch.setattr(Path, "lstat", lstat)
+
+    with pytest.raises(PermissionError):
+        web.clear_service_cache("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states["PAIRED"] == "validated"  # nothing was deleted
 def test_a_non_ascii_setup_code_or_session_signature_is_refused_not_a_500(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer
