@@ -6661,8 +6661,10 @@ def resume_queue() -> int:
             continue
         try:  # its own numbering, keys as the sync reads them (JSON made the season numbers text)
             numbering = check_numbering(job["numbering"], f"job {batch}") if isinstance(job.get("numbering"), dict) else None
-        except web.HTTPBadRequest as e:  # a damaged entry: left out rather than downloaded by the series' numbering
+        except web.HTTPBadRequest as e:  # a damaged entry: not downloaded by the series' numbering, kept in the file
             print(f"Job {batch} not picked up again: {e.text}", flush=True)
+            with sonarr_sync.jobs_lock:
+                sonarr_sync.restoring[batch] = (None, job)
             continue
         if job.get("paused"):
             sonarr_sync.paused_jobs.add(batch)

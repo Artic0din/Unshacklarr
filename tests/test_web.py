@@ -7475,3 +7475,12 @@ def test_a_queued_jobs_own_season_map_is_read_back_as_the_sync_reads_it(tmp_path
     monkeypatch.setattr(web, "run_sync", lambda ids, numbering=None, **kw: got.update(numbering=numbering))
     web.resume_queue()
     assert sync.service_episode({"service": "X", **got["numbering"]}, 2, 5) == "S01E05"
+    # a damaged numbering: not downloaded, and still in the file after the next save
+    got.clear()
+    damaged = {"20261021-121218-44d6d0": {"episodes": [4], "kind": "manual", "numbering": {"episode_offset": "x"}}}
+    sync.QUEUE_FILE.write_text(json.dumps(damaged))
+    web.resume_queue()
+    assert got == {}
+    sync.save_queue()
+    kept = json.loads(sync.QUEUE_FILE.read_text())
+    assert kept["20261021-121218-44d6d0"] == damaged["20261021-121218-44d6d0"]
