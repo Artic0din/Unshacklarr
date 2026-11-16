@@ -7686,6 +7686,25 @@ def test_a_failed_clear_leaves_the_sign_ins_as_they_were(tmp_path, monkeypatch):
     assert asyncio.run(go()) == (502, "validated", 200, "unknown")
 
 
+def test_recording_a_cache_clear_does_not_block_the_event_loop(tmp_path, monkeypatch):
+    import threading
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    ran_on = []
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **kw: {"cleared": True})
+    monkeypatch.setattr(web.sonarr_sync, "record_authentication_clear", lambda *a, **kw: ran_on.append(threading.current_thread()))
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            loop_thread = threading.current_thread()
+            status = (await client.post("/api/unshackle/maintenance/clear-cache", headers={"X-Unshackle": "1"})).status
+            return status, loop_thread
+
+    status, loop_thread = asyncio.run(go())
+    assert status == 200 and ran_on and ran_on[0] is not loop_thread  # its lock and fsync would stall every request
+
+
 def test_clearing_one_services_cache_folder_unconfirms_it(tmp_path, monkeypatch):
     web = reloaded_web(tmp_path, monkeypatch)
     cards, services = seed_confirmed_sign_ins(web)

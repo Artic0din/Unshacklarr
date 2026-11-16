@@ -3194,7 +3194,7 @@ async def unshackle_maintenance(request):
     if action == "refresh-services":
         UNSHACKLE.configure(sonarr_sync.SETTINGS)  # forget the services it listed before
     if action == "clear-cache":
-        sonarr_sync.record_authentication_clear()
+        await asyncio.to_thread(sonarr_sync.record_authentication_clear)
     return web.json_response(result)
 
 
