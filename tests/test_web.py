@@ -7510,6 +7510,7 @@ def test_a_post_without_the_x_unshackle_header_is_refused_before_it_runs(tmp_pat
     web = reloaded_web(tmp_path, monkeypatch)
     ran = []
     monkeypatch.setattr(web.sonarr_sync, "import_leftover", lambda folder: ran.append(folder))
+    assert web.same_origin_only in web.app._middlewares  # the real app runs it, not only this test
     web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
 
     async def go():
