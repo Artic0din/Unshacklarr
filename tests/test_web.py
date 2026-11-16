@@ -2209,6 +2209,14 @@ const fresh = () => {
   saving = page.save(); box.S.config.settings.sonarrs[1].name = "children";  // renamed again while the Save runs: not sent
   release({}); await saving;
   out.renameSavedIsUsed = page.savedSonarr("UHD") === "UHD" && page.savedSonarr("children") === "kids";
+  // another tab renamed a Sonarr while this one saved debug and edited that Sonarr's folder: both stay, key by key
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "4K", url: "http://a", downloads: "" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); box.S.config.settings.sonarrs[0].downloads = "/dl";
+  release({ settings: { debug: true, sonarrs: [{ name: "UHD", url: "http://a", downloads: "" }] } }); await saving;
+  const four = box.S.config.settings.sonarrs[0];
+  out.nestedEditKeepsOthersRename = four.name === "UHD" && four.downloads === "/dl" && page.state().unsaved;
   console.log(JSON.stringify(out));
 })();
 """
@@ -2252,6 +2260,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "seriesMergedAndPanelClean": True,  # a series too, and its open panel does not ask to discard
         "renamedAsSaved": True,  # an unsaved rename is not a name the server knows (#181)
         "renameSavedIsUsed": True,  # once saved, the new name; a rename made while the Save ran still is not
+        "nestedEditKeepsOthersRename": True,  # an edit inside a list entry does not block another tab's change beside it
     }
 
 
@@ -4422,15 +4431,6 @@ def test_a_restore_refuses_what_a_save_would_refuse(tmp_path, monkeypatch):
     assert "name" in answers[0][1].lower() and "name" in answers[1][1].lower() and "release day" in answers[2][1]
     assert (tmp_path / "config.yaml").read_text() == before  # nothing written: the app still starts
 
-def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkeypatch):
-    import asyncio
-    import yaml
-    from aiohttp.test_utils import TestClient, TestServer
-    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
-    import unshacklarr.sync
-    import unshacklarr.web
-    importlib.reload(unshacklarr.sync)
-    web = importlib.reload(unshacklarr.web)
 
 def test_a_restore_checks_other_sonarrs_against_the_backups_own_main_one(tmp_path, monkeypatch):
     # the backup's main Sonarr replaces this install's: an other Sonarr at this install's main address is fine
@@ -4447,6 +4447,15 @@ def test_a_restore_checks_other_sonarrs_against_the_backups_own_main_one(tmp_pat
     with pytest.raises(web.web.HTTPBadRequest):  # its own main and other at one address: refused
         web.backup_data(text.replace("http://a:8989", "http://b:8989"))
 
+def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkeypatch):
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
     web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"},
                       "settings": {"history_keep": 50}})
     web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test

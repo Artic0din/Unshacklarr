@@ -715,10 +715,10 @@ async function save() {
     const moved = series && (into.service !== now.service || into.title !== now.title);  // a time learnt for another source is not its
     let took = false;
     for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
-      if (alike(now[k], was[k]) || !alike(into[k], was[k]) || (moved && ["release_time", "release_day"].includes(k))) continue;
-      if (nested(into[k], now[k])) take(into[k], was[k], now[k]);
-      else if (k in now) into[k] = now[k];
-      else delete into[k];
+      if (alike(now[k], was[k]) || (moved && ["release_time", "release_day"].includes(k))) continue;
+      if (nested(into[k], now[k]) && nested(into[k], was[k])) { took = take(into[k], was[k], now[k]) || took; continue; }  // each key inside on its own
+      if (!alike(into[k], was[k])) continue;  // changed here while the Save ran
+      if (k in now) into[k] = now[k]; else delete into[k];
       took = true;
     }
     return took;
