@@ -763,9 +763,9 @@ async function save() {
   const rekey = (conf) => {
     const s = conf?.sonarrs;
     if (!s) return conf;
-    const moved = [...renamed].filter(([from]) => from in s).map(([from, to]) => [to, s[from]]);
-    for (const [from, to] of renamed) { delete s[from]; delete s[to]; }
-    for (const [to, v] of moved) s[to] = v;
+    const moved = [...renamed].filter(([from]) => from in s).map(([from, to]) => [from, to, s[from]]);
+    for (const [from, to] of moved) { delete s[from]; delete s[to]; }  // only where an old name moves: one already new is kept
+    for (const [, to, v] of moved) s[to] = v;
     return conf;
   };
   if (renamed.size) {
