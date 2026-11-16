@@ -955,7 +955,7 @@ function stepList(c) {
     ...stepStates(c).flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms`, ...(["now", "fail", "halt"].includes(st) ? { ariaCurrent: "step" } : {}) },
       el("span", { className: "l", textContent: STEPS[i] }),
       el("span", { className: "s", textContent: STEPS_SHORT[i] }),
-      el("span", { className: "sr-only", textContent: STEP_STATE[st] || OUTCOME[c.outcome] }))]));
+      el("span", { className: "sr-only", textContent: st === "halt" ? OUTCOME[c.outcome] || STEP_STATE.halt : STEP_STATE[st] || OUTCOME[c.outcome] }))]));  // halted: why, in the outcome's own word
 }
 /* An attempt's steps, what waits for you, its figures or its end, and its tracks: in its own view and in a job's card. */
 function runBody(c) {

@@ -313,6 +313,8 @@ console.log(JSON.stringify({
   running: read_({ step: "downloading", outcome: "running", parts: 1 }),
   failed: read_({ step: "renaming", outcome: "failed", parts: 1 }),
   stopped: read_({ step: "downloading", outcome: "stopped", parts: 1 }),
+  interrupted: read_({ step: "downloading", outcome: "interrupted", parts: 1 }),
+  unavailable: read_({ step: "searching", outcome: "unavailable", parts: 1 }),
   kept: read_({ step: "done", outcome: "kept", parts: 1 }),
 }));
 """, str(JS / "activity.js"))
@@ -320,6 +322,8 @@ console.log(JSON.stringify({
     assert [row[2] for row in shown["failed"]] == ["Done", "Done", "Done", "Failed", "Waiting"]
     assert [row[1] for row in shown["failed"]].count("step") == 1
     assert shown["stopped"][1] == ["halt", "step", "Stopped"]
+    assert ["halt", "step", "Interrupted"] in shown["interrupted"]  # a halt says why, not always "Stopped"
+    assert ["halt", "step", "Not out yet"] in shown["unavailable"]
     assert shown["kept"][-1] == ["warn", None, "Kept"]  # the outcome's own word, not a colour
 
 
