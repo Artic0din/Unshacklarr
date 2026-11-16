@@ -2422,10 +2422,10 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
         status = job.get("status")
         if run and not stop_asked and status not in TERMINAL and run.id in stop_waiting:
             # Stop pressed as it was handed to serve, before the card named its job: cancelled from here
-            stop_asked = True
             try:
                 backend.cancel(job_id)
-            except UnshackleError as e:  # Activity's Stop may have cancelled it already: said, not a failure
+                stop_asked = True
+            except UnshackleError as e:  # asked again at the next look: it ends there if Activity's Stop got in first
                 trace(f"cancelling job {job_id}: {no_credentials(e)}")
         if run and "authentication" in job:
             run.set_authentication(job.get("authentication"))

@@ -6442,3 +6442,26 @@ def test_stop_pressed_as_the_download_was_handed_to_serve_cancels_it(tmp_path, m
         sync.run_job({}, run, poll=0)
     assert stopped.value.status == "cancelled" and cancelled == ["job1"]
     run.finish("stopped")
+
+
+def test_stop_pressed_as_the_download_was_handed_to_serve_asks_again_when_serve_missed_the_first_cancel(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05")
+    asked = []
+
+    def download(payload):
+        sync.stop_waiting.add(run.id)
+        return "job1"
+
+    def cancel(job_id):
+        asked.append(job_id)
+        if len(asked) == 1:
+            raise sync.UnshackleError("serve could not be reached")
+    monkeypatch.setattr(sync.UNSHACKLE, "download", download)
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", cancel)
+    polls = iter([{"status": "downloading"}] * 20 + [{"status": "completed", "output_files": []}])
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "cancelled"} if len(asked) > 1 else next(polls))
+    with pytest.raises(sync.JobFailed) as stopped:
+        sync.run_job({}, run, poll=0)
+    assert stopped.value.status == "cancelled" and asked == ["job1", "job1"]
+    run.finish("stopped")
