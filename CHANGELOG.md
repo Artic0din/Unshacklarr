@@ -108,6 +108,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- A full or read-only disk during the quiet hours no longer stops the rest of a job: a message that cannot be kept for later is sent at once instead.
 - An episode folder left without a video (an import that went through after Unshacklarr stopped waiting, or a crash) no longer turns "add the audio track" into a whole new download that replaces the library's file: the folder is cleared and the track is added.
 - Adding an audio track can no longer leave a cut-off file that Import puts over the library's good one: the merge is written as `.mkv.part` and renamed only once it is whole, and a `.part` left by a restart midway is removed when Unshacklarr starts.
 - A stuck `mkvmerge` or `mkvpropedit` (on a stalled network share, for example) no longer holds every later sync at "A sync is already running" until a restart: reading a file now gives up after 2 minutes and a join or an audio merge after an hour, that episode fails with the reason, and no cut-off file is left behind for import.

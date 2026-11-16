@@ -569,9 +569,12 @@ def notify(settings: dict, level: str, title: str, message: str, action: dict | 
     title, message = i18n.tr_lines(title, lang), i18n.tr_lines(message, lang)
     if in_quiet_hours(settings):  # kept for the end of the quiet hours; a question waiting for you goes at once
         if not action:
-            with sent_lock:
-                write_atomic(HELD_FILE, json.dumps([*read_json(HELD_FILE, []), {"level": level, "title": title}]))
-            return False
+            try:
+                with sent_lock:
+                    write_atomic(HELD_FILE, json.dumps([*read_json(HELD_FILE, []), {"level": level, "title": title}]))
+                return False
+            except OSError as e:  # a full disk: sent now rather than lost, and never the job stopped for it
+                print(f"Quiet hours: could not hold a message, sending it now: {no_credentials(e)}", file=sys.stderr)
     return deliver(settings, level, title, message, details)
 
 

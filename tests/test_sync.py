@@ -6415,3 +6415,36 @@ def test_an_empty_episode_folder_does_not_turn_adding_the_audio_into_a_whole_dow
     asked.clear()
     assert sync.add_track(205, "fr") is False and asked == []
     assert (folder / "Show.S02E05.mkv").read_bytes() == b"waiting"
+
+
+def test_a_full_disk_in_the_quiet_hours_sends_the_message_and_the_job_goes_on(tmp_path, monkeypatch, capsys):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    got = []
+    monkeypatch.setattr(sync, "send_to", lambda url, level, title, message, details=None: got.append(title) or None)
+    monkeypatch.setattr(sync, "in_quiet_hours", lambda s, now=None: True)
+    real_write = sync.write_atomic
+
+    def full(path, *a, **k):
+        if Path(path) in (sync.HELD_FILE, sync.INBOX_FILE):
+            raise OSError(28, "No space left on device")
+        return real_write(path, *a, **k)
+
+    monkeypatch.setattr(sync, "write_atomic", full)
+    settings = {"targets": [{"url": "ntfy://ok"}], "quiet": {"from": "00:00", "to": "23:59"}}
+    assert sync.notify(settings, "error", "Failed: Show S01E01", "x") is True  # sent at once instead of held
+    assert got == ["Failed: Show S01E01"] and not sync.HELD_FILE.exists()
+    assert "could not hold a message" in capsys.readouterr().err
+    tried = []
+
+    def download(payload, run=None):  # the first episode breaks in an unexpected way: its handler notifies
+        tried.append(payload["wanted"][0])
+        if len(tried) == 1:
+            raise TypeError("unexpected")
+
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    config = sync.read_file()
+    config["notifications"] = settings
+    sync.sync(config, settings, [episode(111, 2, 5), episode(111, 2, 6)], manual=True, kind="manual")
+    assert tried == ["S02E05", "S02E06"]  # the rest of the job still ran
