@@ -202,3 +202,22 @@ handlers.notificationclick({ notification: { close() {}, data: { url: "/#/inbox"
 waiting.then(() => console.log(JSON.stringify(opened)), (e) => console.log(JSON.stringify("rejected: " + e.message)));
 """, str(STATIC / "sw.js"), str(navigates).lower())
     assert seen == opened
+
+
+def test_activity_forgets_a_run_once_the_list_no_longer_has_it():
+    kept = node(r"""
+const src = read(process.argv[1]);
+const ctx = sandbox({ api: async () => [{ id: "a", batch: "J1" }] });
+vm.runInContext("let runCards = [], runsSeq = 0;", ctx);
+for (const re of [/const speedLog = \{\};/, /const barWidths = new Map\(\);/, /const thumbs = new Map\(\);/, /const muxLog = \{\};/, /const tracksOpen = new Set\(\);/, /function forgetGoneRuns\b[\s\S]*?\n}\n/, /async function openActivity\b[\s\S]*?\n}\n/])
+  vm.runInContext(grab(src, re), ctx);
+vm.runInContext(`
+  for (const id of ["a", "b"]) { speedLog[id] = [[1, 2]]; muxLog[id] = [[1, 2]]; tracksOpen.add(id); }
+  const keys = ["detail", "up:9", "lang:5", "row:a", "row:b", "row:job:J1", "row:job:J2", "job:J1", "job:J2", "mux:a", "mux:b", "t:a:Part 1 \\u00b7 video", "t:b:video"];
+  for (const k of keys) { barWidths.set(k, "10%"); thumbs.set(k, {}); }`, ctx);
+ctx.openActivity().then(() => console.log(vm.runInContext(`JSON.stringify({ speedLog: Object.keys(speedLog), muxLog: Object.keys(muxLog), tracksOpen: [...tracksOpen],
+  barWidths: [...barWidths.keys()].sort(), thumbs: [...thumbs.keys()].sort() })`, ctx)));
+""", str(JS / "activity.js"))
+    # "detail", "up:" and "lang:" are not a run's: kept
+    still = ["detail", "job:J1", "lang:5", "mux:a", "row:a", "row:job:J1", "t:a:Part 1 \u00b7 video", "up:9"]
+    assert kept == {"speedLog": ["a"], "muxLog": ["a"], "tracksOpen": ["a"], "barWidths": still, "thumbs": still}

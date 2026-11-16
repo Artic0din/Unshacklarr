@@ -26,6 +26,18 @@ function timeLeft(c) {
   return rate > 0 && p < 100 ? duration(((100 - p) / rate) * 1000) : "";
 }
 
+/* What the page keeps per download (time left, bar widths, posters, unfolded tracks) goes with the run, or it grows
+   for as long as the tab stays open. Keys are `row:<run>`, `row:job:<job>`, `job:<job>`, `mux:<run>`, `t:<run>:<track>`. */
+function forgetGoneRuns() {
+  const runs = new Set(runCards.map((c) => c.id)), jobs = new Set(runCards.map((c) => c.batch).filter(Boolean));
+  const listed = (key) => {
+    const [kind, a, b] = key.split(":");
+    return kind === "row" ? (a === "job" ? jobs.has(b) : runs.has(a)) : kind === "job" ? jobs.has(a) : kind === "mux" || kind === "t" ? runs.has(a) : true;
+  };
+  for (const log of [speedLog, muxLog]) for (const id of Object.keys(log)) if (!runs.has(id)) delete log[id];
+  for (const id of tracksOpen) if (!runs.has(id)) tracksOpen.delete(id);
+  for (const cache of [barWidths, thumbs]) for (const key of cache.keys()) if (!listed(key)) cache.delete(key);
+}
 let runsSeq = 0;
 async function openActivity() {
   const seq = ++runsSeq;
@@ -40,6 +52,7 @@ async function openActivity() {
   }
   if (seq !== runsSeq) return;  // a newer call is on its way: this answer may predate a Stop
   runCards = cards;
+  forgetGoneRuns();
   clearTimeout(runsTimer);
   renderConsole();
   api("/api/leftovers").then((r) => { $("#con-left-n").textContent = r.items.length ? `(${r.items.length})` : ""; }).catch(() => {});
