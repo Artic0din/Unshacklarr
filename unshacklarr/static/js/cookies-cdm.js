@@ -19,15 +19,21 @@ function openCookieDialog(service = "", profile = "default", newProfile = false)
   $("#ck-title").textContent = service ? `Cookies for ${svcName(service)}` : "Add cookies";
   $("#ck-text").value = "";
   $("#ck-file").value = "";
-  $("#ck-error").replaceChildren();
+  ckClear();
   $("#cookie-dialog").showModal();
 }
-$("#ck-file").onchange = async (e) => { const f = e.target.files[0]; if (f) $("#ck-text").value = await f.text(); };
+const ckClear = () => { markInvalid($("#ck-text"), $("#ck-error"), false); $("#ck-error").replaceChildren(); };
+$("#ck-text").oninput = ckClear;
+$("#ck-file").onchange = async (e) => { const f = e.target.files[0]; if (f) { $("#ck-text").value = await f.text(); ckClear(); } };
 $("#ck-form").onsubmit = async (e) => {
   if (e.submitter?.value !== "save") return;
   e.preventDefault();
   const body = { service: $("#ck-service").value, profile: $("#ck-profile").value.trim(), text: $("#ck-text").value };
-  if (!body.text.trim()) return $("#ck-error").replaceChildren(failed("Pick a file or paste the cookies."));
+  if (!body.text.trim()) {
+    $("#ck-error").replaceChildren(failed("Pick a file or paste the cookies."));
+    markInvalid($("#ck-text"), $("#ck-error"));
+    return $("#ck-text").focus();
+  }
   try {
     const saved = await api("/api/cookies", { method: "POST", body: JSON.stringify(body) });
     $("#cookie-dialog").close();

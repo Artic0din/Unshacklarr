@@ -1276,6 +1276,7 @@
  "Turn on": "オンにする",
  "Type a new key to replace it": "新しいキーを入力して置き換え",
  "Type your password first": "先にパスワードを入力してください",
+ "Enter your current password": "現在のパスワードを入力してください",
  "Unshacklarr downloads no series with TVDB id {0}: set it up on its page first": "Unshacklarr は TVDB ID {0} のシリーズをダウンロードしません。先にそのページで設定してください",
  "Unshacklarr {0}": "Unshacklarr {0}",
  "Unshacklarr · Today at {0}": "Unshacklarr · 今日 {0}",

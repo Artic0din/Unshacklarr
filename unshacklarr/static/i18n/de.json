@@ -1255,6 +1255,7 @@
  "Turn on": "Einschalten",
  "Type a new key to replace it": "Gib einen neuen Schlüssel ein, um ihn zu ersetzen",
  "Type your password first": "Gib zuerst dein Passwort ein",
+ "Enter your current password": "Gib dein aktuelles Passwort ein",
  "Unshacklarr downloads no series with TVDB id {0}: set it up on its page first": "Unshacklarr lädt keine Serie mit der TVDB-ID {0} herunter: richte sie zuerst auf ihrer Seite ein",
  "Unshacklarr · Today at {0}": "Unshacklarr · Heute um {0}",
  "Unshackle or Sonarr is unreachable": "Unshackle oder Sonarr ist nicht erreichbar",
