@@ -867,6 +867,7 @@ def test_an_episode_queued_into_a_paused_job_is_handed_out_after_resume(tmp_path
     assert sync.running_jobs["J"]["closed"]
 
 
+
 def test_a_discord_card_has_colour_fields_and_poster():
     from unshacklarr import sync
     card = sync.discord_payload("success", "Downloaded: Show S02E05", "Imported by Sonarr.",
@@ -6560,6 +6561,25 @@ def test_a_sync_still_to_start_after_a_restart_is_saved_with_its_jobs_live_pause
     sync.batch_jobs.pop("B")  # the running sync over: the waiting one keeps what the job had last
     sync.save_queue()
     assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [saved]}
+
+
+def test_a_sync_still_to_start_keeps_a_pause_and_options_given_just_before_the_jobs_last_sync_ended(tmp_path, monkeypatch):
+    # Paused and set to German, then the job's running sync ends before the next save: the sync that could not
+    # start must not come back after a restart unpaused and in French
+    sync = load(tmp_path, monkeypatch)
+    entry = {"episodes": [7], "paused": False, "options": {"options": {"--a-lang": ["fr"]}}, "kind": "manual"}
+    monkeypatch.setitem(sync.restoring, ("B", 1), (None, entry))
+    monkeypatch.setitem(sync.job_options, "B", {"options": {"--a-lang": ["fr"]}})
+
+    def run_episodes(*a, **k):  # while it downloads, after the last save
+        sync.pause_job("B", True)
+        sync.job_options["B"] = {"options": {"--a-lang": ["de"]}}
+        return 0
+
+    monkeypatch.setattr(sync, "run_episodes", run_episodes)
+    sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [{**entry, "paused": True, "options": {"options": {"--a-lang": ["de"]}}}]}
 
 
 def test_a_sync_picked_up_again_starting_while_the_queue_is_saved_is_not_left_out(tmp_path, monkeypatch):

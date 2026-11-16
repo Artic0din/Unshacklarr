@@ -708,17 +708,24 @@ def queue_snapshot() -> dict[str, list[dict]]:
 restoring: dict[tuple[str, int], tuple] = {}  # (job, its sync's place in the file) -> (its thread, its entry) while picked up again
 
 
+def keep_live(batch: str) -> None:
+    """The job's syncs still to start after a restart, given its pause and options as they are now. Under jobs_lock."""
+    live = job_options.get(batch)
+    for key, (thread, entry) in list(restoring.items()):
+        if key[0] == batch:
+            restoring[key] = (thread, {**{k: v for k, v in entry.items() if k != "options"}, "paused": batch in paused_jobs,
+                                       **({"options": live} if live else {})})
+
+
 def save_queue(last: str | None = None) -> str:
     """The queue on disk when it changed; returns what was written, to compare with next time. A job picked up again
     after a restart stays as it was in the file until it runs: if it could not start (Sonarr down), the next start
     tries again, instead of the queue written empty losing it."""
     with jobs_lock:  # one read of both: a sync picked up again starting in between would be in neither
         queue = queue_snapshot()
+        for batch in {key[0] for key in restoring} & batch_jobs.keys():  # its job runs: kept once that sync ends
+            keep_live(batch)
         for key, (thread, entry) in list(restoring.items()):
-            if key[0] in batch_jobs:  # its job runs: its pause and options as they are now, kept once that sync ends
-                live = job_options.get(key[0])
-                entry = {**{k: v for k, v in entry.items() if k != "options"}, "paused": key[0] in paused_jobs, **({"options": live} if live else {})}
-                restoring[key] = (thread, entry)
             queue.setdefault(key[0], []).append(entry)
             if thread is not None and not thread.is_alive():
                 print(f"Job {key[0]} could not be picked up again: kept for the next start", flush=True)
@@ -4584,6 +4591,7 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
                     running_jobs[batch] = others[-1]
                 else:
                     running_jobs.pop(batch)
+                    keep_live(batch)  # a pause or options given since the last save: not lost by one still to start
                     paused_jobs.discard(batch)
             if others:
                 batch_jobs[batch] = others
