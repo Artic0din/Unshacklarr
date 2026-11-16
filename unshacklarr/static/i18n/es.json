@@ -1242,6 +1242,7 @@
  "Turn on": "Activar",
  "Type a new key to replace it": "Escribe una clave nueva para sustituirla",
  "Type your password first": "Escribe primero tu contraseña",
+ "Enter your current password": "Escribe tu contraseña actual",
  "Unshacklarr downloads no series with TVDB id {0}: set it up on its page first": "Unshacklarr no descarga ninguna serie con el ID de TVDB {0}: configúrala primero en su página",
  "Unshackle or Sonarr is unreachable": "No se puede acceder a Unshackle o a Sonarr",
  "User key": "Clave de usuario",

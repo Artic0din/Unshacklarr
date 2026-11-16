@@ -238,15 +238,30 @@ function pwCheck() {
   $("#pw-match").className = `pw-match ${!again || typing ? "" : same ? "good" : "bad"}`;
   $("#pw-match").replaceChildren(...(!again || typing ? [] : same ? [icon("check", "inl"), "Passwords match"] : ["Passwords do not match"]));
 }
-$("#pw-new").oninput = $("#pw-again").oninput = $("#pw-current").oninput = () => { pwCheck(); acReady(); };
-/* Account: the button only once it can work; the wrong current password said on its field; the session in words. */
-function acReady() {
+$("#pw-new").oninput = $("#pw-again").oninput = $("#pw-current").oninput = () => { pwClear(); pwCheck(); };
+/* Account: a mistake said on its field when the button is pressed (a button that stays off says nothing); the session in words. */
+const PW_SAYS = { "pw-current": "pw-current-say", "pw-new": "pw-new-say", "pw-again": "pw-match" };
+function pwClear() {
+  for (const [id, say] of Object.entries(PW_SAYS)) {
+    markInvalid($(`#${id}`), $(`#${say}`), false);
+    if (id !== "pw-again") $(`#${say}`).textContent = "";
+  }
+}
+function pwMistake() {
   const pw = $("#pw-new").value;
-  $("#pw-current").classList.remove("bad"); $("#pw-current-say").textContent = "";
-  $("#pw-change").disabled = !$("#pw-current").value || pw.length < 8 || pw !== $("#pw-again").value;
+  return !$("#pw-current").value ? ["pw-current", "Enter your current password"]
+    : pw.length < 8 ? ["pw-new", "Password must be at least 8 characters"]
+    : pw !== $("#pw-again").value ? ["pw-again", "Passwords do not match"] : null;
 }
 $("#pw-change").onclick = async () => {
-  const b = $("#pw-change");
+  const b = $("#pw-change"), mistake = pwMistake();
+  pwClear();
+  if (mistake) {
+    const [id, text] = mistake, say = $(`#${PW_SAYS[id]}`);
+    say.className = "pw-match bad"; say.textContent = text;
+    markInvalid($(`#${id}`), say);
+    return $(`#${id}`).focus();
+  }
   b.disabled = true;
   try {
     await api("/api/password", { method: "POST", body: JSON.stringify({ current: $("#pw-current").value, new: $("#pw-new").value }) });
@@ -257,10 +272,10 @@ $("#pw-change").onclick = async () => {
     loadAccount();
   } catch (e) {
     if (/current password/i.test(errorDetail(e))) {
-      $("#pw-current").classList.add("bad"); $("#pw-current-say").className = "pw-match bad"; $("#pw-current-say").textContent = e.message; $("#pw-current").focus();
+      markInvalid($("#pw-current"), $("#pw-current-say")); $("#pw-current-say").className = "pw-match bad"; $("#pw-current-say").textContent = e.message; $("#pw-current").focus();
     } else toast(e.message, true);
-    b.disabled = false;
   }
+  b.disabled = false;
 };
 async function loadAccount() {
   let s;
@@ -642,7 +657,7 @@ function ntDraw() {
   $("#nt-d-hint").textContent = b.hint;
   $("#nt-fields").replaceChildren(...b.fields.map(([key, label, ph = "", type = "text"]) => el("label", { className: "field" }, label,
     el("input", { type, name: key, placeholder: ph, spellcheck: false, autocomplete: "off", dataset: { bwignore: "", "1pIgnore": "", lpignore: "true" },
-      oninput: (e) => { e.target.classList.remove("bad"); $("#nt-d-result").replaceChildren(); } }))));
+      oninput: (e) => { markInvalid(e.target, $("#nt-d-result"), false); $("#nt-d-result").replaceChildren(); } }))));
   $("#nt-d-result").replaceChildren();
 }
 function ntBuilt() {
@@ -650,7 +665,7 @@ function ntBuilt() {
   const ok = b.check(f);
   if (ok !== true) {
     const input = $(`#nt-fields [name=${ok[0]}]`);
-    input.classList.add("bad"); input.focus();
+    markInvalid(input, $("#nt-d-result")); input.focus();
     $("#nt-d-result").replaceChildren(el("span", { className: "status-err", textContent: ok[1] }));
     return null;
   }

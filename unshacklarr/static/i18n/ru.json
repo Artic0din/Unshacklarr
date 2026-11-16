@@ -1273,6 +1273,7 @@
  "Turn on": "Включить",
  "Type a new key to replace it": "Введите новый ключ, чтобы заменить его",
  "Type your password first": "Сначала введите свой пароль",
+ "Enter your current password": "Введите текущий пароль",
  "Unshackle or Sonarr is unreachable": "Unshackle или Sonarr недоступен",
  "Unshacklarr downloads no series with TVDB id {0}: set it up on its page first": "Unshacklarr не скачивает сериал с TVDB ID {0}: сначала настройте его на его странице",
  "Unshacklarr · Today at {0}": "Unshacklarr · сегодня в {0}",

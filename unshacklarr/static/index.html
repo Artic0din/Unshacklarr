@@ -274,7 +274,7 @@
           <div class="sx-head"><div><h3>Download window</h3><p>Automatic downloads only run between these times, at night for example. Episodes you start by hand are not affected.</p></div></div>
           <div class="sx-grid ax-grid">
             <div class="field"><label for="ax-from">From</label><input id="ax-from" type="time" data-set="download_from"><small>Leave empty for no limit.</small></div>
-            <div class="field"><label for="ax-to">To</label><input id="ax-to" type="time" data-set="download_to"><small>It can span midnight, for example 23:00 to 06:00.</small></div>
+            <div class="field"><label for="ax-to">To</label><input id="ax-to" type="time" data-set="download_to"><small>It can span midnight, for example 23:00 to 06:00.</small><small class="status-err" id="ax-window-err" role="status"></small></div>
           </div>
           <label class="check ax-bursts"><input type="checkbox" id="ax-window-bursts"> Also apply to release-time downloads</label>
           <p class="rt-who" id="ax-window-say"></p>
@@ -526,11 +526,11 @@
         <section class="sx-card">
           <div class="sx-head"><div><h3>Change the password</h3><p>At least 8 characters.<br>Every other device is signed out and stops getting push notifications. This one stays signed in.</p></div></div>
           <div class="sx-grid">
-            <div class="field ac-wide"><label for="pw-current">Current password</label><input type="password" id="pw-current" autocomplete="current-password"><small class="pw-match" id="pw-current-say"></small></div>
-            <div class="field"><label for="pw-new">New password</label><input type="password" id="pw-new" autocomplete="new-password" minlength="8" aria-describedby="pw-meter"><div class="pw-meter" id="pw-meter" data-score="0" aria-live="polite"><i></i><i></i><i></i><i></i><span></span></div></div>
-            <div class="field"><label for="pw-again">Confirm new password</label><input type="password" id="pw-again" autocomplete="new-password" minlength="8"><small class="pw-match" id="pw-match"></small></div>
+            <div class="field ac-wide"><label for="pw-current">Current password</label><input type="password" id="pw-current" autocomplete="current-password"><small class="pw-match" id="pw-current-say" role="alert"></small></div>
+            <div class="field"><label for="pw-new">New password</label><input type="password" id="pw-new" autocomplete="new-password" minlength="8" aria-describedby="pw-meter"><div role="status"><div class="pw-meter" id="pw-meter" data-score="0"><i></i><i></i><i></i><i></i><span></span></div></div><small class="pw-match" id="pw-new-say" role="alert"></small></div>
+            <div class="field"><label for="pw-again">Confirm new password</label><input type="password" id="pw-again" autocomplete="new-password" minlength="8"><small class="pw-match" id="pw-match" role="status"></small></div>
           </div>
-          <div class="ac-go"><button class="btn primary" id="pw-change" type="button" disabled>Change the password</button></div>
+          <div class="ac-go"><button class="btn primary" id="pw-change" type="button">Change the password</button></div>
         </section>
         <section class="sx-card">
           <div class="sx-head"><div><h3>API key <span class="sx-saved" id="ak-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></h3><p>It only opens the /api/v1 routes: never the password, the cookies or the settings.</p></div></div>
@@ -961,7 +961,7 @@
       <label class="field" data-for="widevine"><span>System ID</span><input name="system_id" inputmode="numeric" placeholder="26830"></label>
       <label class="field" data-for="widevine playready"><span>Security level</span><input name="security_level" inputmode="numeric" placeholder="3 or 3000"></label>
     </div>
-    <p class="status-err" id="remote-error"></p>
+    <p class="status-err" id="remote-error" role="alert"></p>
     <div class="modal-actions"><button class="btn" type="button" id="remote-cancel">Cancel</button><button class="btn primary" type="submit">Save</button></div>
   </form>
 </dialog>
@@ -969,7 +969,7 @@
   <form method="dialog" id="sel-form">
     <h2 id="sel-title">Change several series</h2>
     <p>Only the fields you fill in change. Everything else stays as it is for each series. Save afterwards, as for one series.</p>
-    <p class="status-warn" id="sel-noservice" hidden></p>
+    <p class="status-warn" id="sel-noservice" role="status" hidden></p>
     <div class="sel-grid">
       <div class="field"><label for="sel-service">Service</label><select id="sel-service"></select></div>
       <div class="field"><label for="sel-release">Release time</label><input type="time" id="sel-release"></div>
@@ -989,7 +989,7 @@
     <p>For the episodes still to come in this job. It starts from the options they have now; what you change is for this job only, the series itself does not change.</p>
     <div class="field"><span>Download options</span><div class="opts" id="jobopts-dl"></div></div>
     <div class="field"><span>Options of the service</span><div class="opts" id="jobopts-own"></div><small>A flag the service on a remote server knows, such as -B, can be written as is.</small></div>
-    <p class="status-err" id="jobopts-err"></p>
+    <p class="status-err" id="jobopts-err" role="alert"></p>
     <div class="modal-actions"><button class="btn" value="cancel" formnovalidate autofocus>Cancel</button><button class="btn primary" value="apply" id="jobopts-apply">Apply to this job</button></div>
   </form>
 </dialog>
@@ -998,7 +998,7 @@
     <h2 id="folder-title">Choose a folder</h2>
     <p class="folder-path" id="folder-path"></p>
     <div class="url-find-out folder-list" id="folder-list"></div>
-    <p class="status-err" id="folder-err"></p>
+    <p class="status-err" id="folder-err" role="alert"></p>
     <div class="modal-actions"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="use" id="folder-use">Use this folder</button></div>
   </form>
 </dialog>

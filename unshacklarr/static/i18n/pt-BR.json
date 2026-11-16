@@ -1264,6 +1264,7 @@
  "Turn on": "Ativar",
  "Type a new key to replace it": "Digite uma nova chave para substituí-la",
  "Type your password first": "Digite primeiro sua senha",
+ "Enter your current password": "Digite sua senha atual",
  "Unshacklarr downloads no series with TVDB id {0}: set it up on its page first": "O Unshacklarr não baixa nenhuma série com o ID do TVDB {0}: configure-a primeiro na página dela",
  "Unshacklarr · Today at {0}": "Unshacklarr · Hoje às {0}",
  "Unshackle or Sonarr is unreachable": "Unshackle ou Sonarr está inacessível",

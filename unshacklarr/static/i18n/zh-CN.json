@@ -1273,6 +1273,7 @@
  "Turn on": "开启",
  "Type a new key to replace it": "输入新密钥以替换",
  "Type your password first": "请先输入你的密码",
+ "Enter your current password": "请输入你的当前密码",
  "Unshacklarr downloads no series with TVDB id {0}: set it up on its page first": "Unshacklarr 没有在下载 TVDB ID 为 {0} 的剧集：请先在其页面中设置",
  "Unshacklarr {0}": "Unshacklarr {0}",
  "Unshacklarr · Today at {0}": "Unshacklarr · 今天 {0}",
