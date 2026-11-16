@@ -221,3 +221,18 @@ ctx.openActivity().then(() => console.log(vm.runInContext(`JSON.stringify({ spee
     # "detail", "up:" and "lang:" are not a run's: kept
     still = ["detail", "job:J1", "lang:5", "mux:a", "row:a", "row:job:J1", "t:a:Part 1 \u00b7 video", "up:9"]
     assert kept == {"speedLog": ["a"], "muxLog": ["a"], "tracksOpen": ["a"], "barWidths": still, "thumbs": still}
+
+
+def test_series_search_redraws_the_wall_once_the_typing_pauses():
+    seen = node(r"""
+let draws = 0, next = 1;
+const pending = new Map(), search = {};
+const ctx = sandbox({ $: (sel) => (sel === "#search" ? search : any), renderWall: () => { draws++; },
+  setTimeout: (fn, ms) => { pending.set(next, [fn, ms]); return next++; }, clearTimeout: (id) => pending.delete(id) });
+vm.runInContext(grab(read(process.argv[1]), /(?:let wallTimer[^\n]*\n)?\$\("#search"\)\.oninput = [^\n]*\n/), ctx);
+for (let i = 0; i < 3; i++) search.oninput();  // three keys
+const waiting = [...pending.values()], drawnWhileTyping = draws;
+waiting.forEach(([fn]) => fn());
+console.log(JSON.stringify({ drawnWhileTyping, waiting: waiting.map(([, ms]) => ms), draws }));
+""", str(JS / "navigation.js"))
+    assert seen == {"drawnWhileTyping": 0, "waiting": [150], "draws": 1}
