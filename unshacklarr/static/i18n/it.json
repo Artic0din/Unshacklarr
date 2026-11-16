@@ -128,7 +128,6 @@
  "Clear failed": "Rimuovi falliti",
  "Clear failed ({0})": "Rimuovi falliti ({0})",
  "Clear the history": "Svuota la cronologia",
- "Clear the notifications already seen": "Rimuovi le notifiche già viste",
  "Clear the search or pick another filter.": "Svuota la ricerca o scegli un altro filtro.",
  "Clear title cache before fetching.": "Svuota la cache dei titoli prima di recuperarli.",
  "Clear…": "Svuota…",
@@ -2404,5 +2403,19 @@
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} è rimasto occupato per {1} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato",
  "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve è rimasto occupato per {0} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato",
  "Update available": "Aggiornamento disponibile",
- "Waiting": "In attesa"
+ "Waiting": "In attesa",
+ "1 notification": "1 notifica",
+ "{0} notifications": "{0} notifiche",
+ "Clear every notification except those waiting for you": "Elimina tutte le notifiche tranne quelle che aspettano te",
+ "Clear {0}? They cannot be brought back": "Eliminare {0}? Non si possono recuperare",
+ "Delete this attempt": "Elimina questo tentativo",
+ "Delete this job's {0} from the history?": "Eliminare dalla cronologia i {0} di questo lotto?",
+ "Delete {0} {1} from the history?": "Eliminare {0} {1} dalla cronologia?",
+ "Every setting now in Unshacklarr is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.": "Tutte le impostazioni di Unshacklarr vengono sostituite da quelle di questo file: serie, indirizzi, password e chiavi. Non si possono recuperare. La pagina si ricarica.",
+ "Replace the settings": "Sostituisci le impostazioni",
+ "Restore the settings from {0}?": "Ripristinare le impostazioni da {0}?",
+ "This attempt and its Unshackle output are deleted and cannot be brought back. Your files and Sonarr are not touched.": "Questo tentativo e il suo output di Unshackle vengono eliminati e non si possono recuperare. I tuoi file e Sonarr non vengono toccati.",
+ "Delete the partial downloads?": "Eliminare i download parziali?",
+ "The leftovers of interrupted downloads are deleted and cannot be brought back.": "I resti dei download interrotti vengono eliminati e non si possono recuperare.",
+ "Their Unshackle output goes with them and cannot be brought back. Your files and Sonarr are not touched.": "Anche il loro output di Unshackle viene eliminato e non si può recuperare. I tuoi file e Sonarr non vengono toccati."
 }

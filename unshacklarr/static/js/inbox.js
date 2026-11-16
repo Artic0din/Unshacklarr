@@ -66,6 +66,7 @@ function inboxRow(g, n) {
   return el("div", { ...props, className: `${props.className} link`, role: "button", tabIndex: 0, title: `Open ${g.name}`, onclick: open,
     onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } } }, art, body, time);
 }
+const clearable = (items) => items.filter((i) => !(i.action && !i.action.done));  // what the server clears: all but what still waits for you
 function renderInbox(animate = false) {
   const items = inboxData?.items || [];
   const now = Date.now() / 1000;
@@ -96,6 +97,8 @@ function renderInbox(animate = false) {
     ...(!items.length ? [empty] : [])));
   $("#inbox-list").classList.toggle("enter", animate);
   $("#inbox-clear").hidden = !rest.length;
+  const clear = $("#inbox-clear");  // a question about N notifications is not left standing when N changed: the second click would clear another number
+  if (clear.dataset.sure === "1" && clear.dataset.asked !== String(clearable(items).length)) confirmCancel(clear, $("#inbox-clear span"));
 }
 /* The bell opens a menu under it; its ⤢ (or a push notification) the whole list, as a window over the page. */
 async function openInbox(mode = "full") {
@@ -106,7 +109,7 @@ async function openInbox(mode = "full") {
   dialog.style.top = mode === "menu" ? `${bell.bottom + 8}px` : "";
   dialog.style.right = mode === "menu" && !phoneLayout() ? `${Math.max(8, innerWidth - bell.right)}px` : "";
   if (!dialog.open) mode === "menu" ? dialog.show() : dialog.showModal();
-  if (!inboxData) $("#inbox-list").replaceChildren(loading("Reading the notifications…"));
+  if (!inboxData) { $("#inbox-list").replaceChildren(loading("Reading the notifications…")); $("#inbox-clear").hidden = true; }  // nothing to clear, or count, until it is read
   inboxFilter = "all";
   await refreshInbox();
   inboxSeenAt = inboxData?.read_at ?? null;  // what came since the last look is marked new while the list is open
@@ -130,7 +133,10 @@ $("#inbox-dialog").addEventListener("click", (e) => {  // a click outside the pa
   if (e.target === $("#inbox-dialog") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $("#inbox-dialog").close();
 });
 $("#inbox-dialog").addEventListener("close", refreshInbox);
-$("#inbox-clear").onclick = async () => {
+$("#inbox-clear").onclick = async (e) => {
+  const gone = clearable(inboxData.items).length;
+  e.currentTarget.dataset.asked = String(gone);
+  if (!confirmClick(e.currentTarget, `Clear ${COUNT.notification(gone)}? They cannot be brought back`, $("#inbox-clear span"))) return;
   try { inboxData = await api("/api/inbox/clear", { method: "POST" }); renderInbox(true); toast("Notifications cleared"); }
   catch (e) { toast(e.message, true); }
 };

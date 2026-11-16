@@ -130,7 +130,6 @@
  "Clear failed": "清除失败项",
  "Clear failed ({0})": "清除失败项（{0}）",
  "Clear the history": "清除历史",
- "Clear the notifications already seen": "清除已读通知",
  "Clear the search or pick another filter.": "清除搜索或选择其他筛选条件。",
  "Clear title cache before fetching.": "获取前清除标题缓存。",
  "Clear…": "清除…",
@@ -2414,5 +2413,19 @@
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} 已持续忙碌 {1} 小时：此密钥的请求次数仍已达上限，已放弃此次下载",
  "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve 已持续忙碌 {0} 小时：此密钥的请求次数仍已达上限，已放弃此次下载",
  "Update available": "有可用更新",
- "Waiting": "等待中"
+ "Waiting": "等待中",
+ "1 notification": "1 条通知",
+ "{0} notifications": "{0} 条通知",
+ "Clear every notification except those waiting for you": "清除所有通知，等你处理的除外",
+ "Clear {0}? They cannot be brought back": "清除 {0}？无法恢复",
+ "Delete this attempt": "删除此次尝试",
+ "Delete this job's {0} from the history?": "从历史记录中删除此任务的 {0}？",
+ "Delete {0} {1} from the history?": "从历史记录中删除 {0} {1}？",
+ "Every setting now in Unshacklarr is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.": "Unshacklarr 的所有设置都将被此文件中的设置替换：剧集、地址、密码和密钥。无法恢复。页面将重新加载。",
+ "Replace the settings": "替换设置",
+ "Restore the settings from {0}?": "从 {0} 恢复设置？",
+ "This attempt and its Unshackle output are deleted and cannot be brought back. Your files and Sonarr are not touched.": "此次尝试及其 Unshackle 输出将被删除，无法恢复。你的文件和 Sonarr 不受影响。",
+ "Delete the partial downloads?": "删除未完成的下载？",
+ "The leftovers of interrupted downloads are deleted and cannot be brought back.": "中断下载留下的文件将被删除，无法恢复。",
+ "Their Unshackle output goes with them and cannot be brought back. Your files and Sonarr are not touched.": "它们的 Unshackle 输出也会一并删除，无法恢复。你的文件和 Sonarr 不受影响。"
 }
