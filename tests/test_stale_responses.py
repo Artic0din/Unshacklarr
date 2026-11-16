@@ -63,7 +63,7 @@ def test_episodes_of_a_library_switched_away_from_are_not_drawn():
     shown = node(r"""
 const s = { tvdbId: 1, id: 10, title: "Show" }, drawn = [];
 const wait = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
-const ctx = { S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
+const ctx = { savedSonarr: (name) => name, S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
   $: () => ({ replaceChildren() {} }), loading: () => null, failed: () => null, updateEpBar() {}, refreshEpBusy() {}, sxxOf: () => "S01E01",
   api: (path) => path.startsWith("/api/series/9/") ? wait(30, [{ id: 900, seasonNumber: 1 }]) : path.startsWith("/api/series/10/") ? wait(0, [{ id: 100, seasonNumber: 1 }]) : wait(0, null),
   applyBroadcast() { drawn.push({ sonarr: ctx.epSonarr, ids: Object.values(ctx.epSeasons).flat().map((e) => e.id) }); throw new Error("past the guard"); } };
@@ -84,7 +84,7 @@ def test_superseded_library_load_does_not_ask_for_the_main_library():
     asked = node(r"""
 const s = { tvdbId: 1, id: 10, title: "Show" }, asked = [];
 const wait = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
-const ctx = { S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
+const ctx = { savedSonarr: (name) => name, S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
   $: () => ({ replaceChildren() {} }), loading: () => null, failed: () => null, updateEpBar() {}, refreshEpBusy() {}, sxxOf: () => "S01E01",
   api: (path) => { asked.push(path.split("?")[0]); return wait(path.startsWith("/api/series/9/") ? 30 : 0, path.startsWith("/api/series/") ? [] : null); },
   applyBroadcast() { throw new Error("past the guard"); } };
@@ -104,7 +104,7 @@ def test_episodes_error_of_a_library_switched_away_from_is_not_drawn():
     shown = node(r"""
 const s = { tvdbId: 1, id: 10, title: "Show" }, errors = [];
 const wait = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
-const ctx = { S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
+const ctx = { savedSonarr: (name) => name, S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
   $: () => ({ replaceChildren() {} }), loading: () => null, failed: (m) => errors.push(m), updateEpBar() {}, refreshEpBusy() {}, sxxOf: () => "S01E01",
   api: (path) => path.startsWith("/api/series/9/") ? wait(30).then(() => { throw new Error("Sonarr did not answer"); }) : path.startsWith("/api/series/10/") ? wait(0, []) : wait(0, null),
   applyBroadcast() { throw new Error("past the guard"); } };
@@ -142,7 +142,7 @@ const wait = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(va
 const find = (node, test) => { if (!node || typeof node !== "object") return null; if (test(node)) return node; for (const k of node.kids || (Array.isArray(node) ? node : [])) { const f = find(k, test); if (f) return f; } return null; };
 const items = (ids) => ids.map((episodeId) => ({ episodeId, tvdbId: 1, series: "Show", sxxeyy: `S01E0${episodeId}`, aired: "2026-01-01", running: false, file: "1080p", fileStep: 2, better: "4K", betterStep: 1, ladder: 3 }));
 const boxes = {};
-const ctx = { $: (sel) => (boxes[sel] ??= { classList: { add() {}, toggle() {} }, textContent: "", hidden: false, replaceChildren: (...kids) => { if (sel === "#cd-main") draws.push(kids); } }),
+const ctx = { savedSonarr: (name) => name, $: (sel) => (boxes[sel] ??= { classList: { add() {}, toggle() {} }, textContent: "", hidden: false, replaceChildren: (...kids) => { if (sel === "#cd-main") draws.push(kids); } }),
   document: { hidden: false, querySelectorAll: () => [] }, el: (tag, props = {}, ...kids) => ({ tag, ...props, kids }), loading: (t) => ({ loading: t }), failed: (t) => ({ failed: t }),
   S: { config: { settings: { sonarrs: [{ name: "A", quality_ladder: "x" }, { name: "B", quality_ladder: "x" }] } }, series: [] }, runCards: [], isLive: () => false, isQueued: () => false,
   renderDock() {}, posterSrc: () => "", posterFail: () => null, ago: () => "", episodeTitle: () => "", thumb: () => ({}), mainSonarr: () => "Main", URLSearchParams, toast() {}, setTimeout: () => 0, clearTimeout() {}, picked_run: null,
@@ -298,7 +298,7 @@ def test_library_check_shows_the_newest_path_not_the_slowest(slow_answer):
 const slowAnswer = process.argv[2], timers = [];
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const say = { className: "", textContent: "", replaceChildren(...kids) { this.textContent = kids.join(""); } };
-const lib = {}, ctx = { libWho: "", libRoots: [], libCommon: "", libTimer: null, URLSearchParams, S: { config: { settings: {} } }, mainSonarr: () => "Sonarr", icon: () => "", el: () => ({}),
+const lib = {}, ctx = { savedSonarr: (name) => name, libWho: "", libRoots: [], libCommon: "", libTimer: null, URLSearchParams, S: { config: { settings: {} } }, mainSonarr: () => "Sonarr", icon: () => "", el: () => ({}),
   libOf: () => lib, renderLibraryPicks() {}, $: () => say, clearTimeout() {}, setTimeout: (fn) => { timers.push(fn); return 1; },  // the 400 ms debounce, fired by hand
   api: async (path) => {
     if (path.includes("sonarr_root=%2Fmnt%2Ft&")) { await wait(30); if (slowAnswer === "error") throw new Error("Unshacklarr did not answer"); return { ok: false, local_path: "/mnt/t", roots: ["/mnt/old"] }; }
@@ -365,7 +365,7 @@ def test_list_panes_wait_as_long_as_the_server_does_for_sonarr(pane):
 def test_episode_list_waits_as_long_as_the_server_does_for_sonarr():
     shown = node(r"""
 const s = { tvdbId: 1, id: 10, title: "Show" }, waits = [];
-const ctx = { S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
+const ctx = { savedSonarr: (name) => name, S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
   $: () => ({ replaceChildren() {} }), loading: () => null, failed: () => null, updateEpBar() {}, refreshEpBusy() {}, sxxOf: () => "S01E01",
   api: async (path, opts = {}) => { if (/^\/api\/series\/\d+\/episodes/.test(path)) waits.push(opts.wait); return []; }, applyBroadcast() { throw new Error("past the guard"); } };
 vm.createContext(ctx);

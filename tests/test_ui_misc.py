@@ -93,7 +93,7 @@ def test_whats_on_asks_the_sonarr_being_viewed_for_a_series_in_no_main_sonarr(vi
 const [file, viewing] = process.argv.slice(1);
 let sent = null;
 const s = { tvdbId: 1, title: "Show" };  // no id: in no main Sonarr
-const ctx = sandbox({ epSonarr: viewing, current: null, S: { services: ["IV"], config: { series: { 1: {} } }, sonarrsOf: { 1: [{ name: "sonarr-2", id: 20 }, { name: "sonarr-4k", id: 40 }] } },
+const ctx = sandbox({ savedSonarr: (name) => name, epSonarr: viewing, current: null, S: { services: ["IV"], config: { series: { 1: {} } }, sonarrsOf: { 1: [{ name: "sonarr-2", id: 20 }, { name: "sonarr-4k", id: 40 }] } },
   api: async (path, opts) => { sent = JSON.parse(opts.body); return { elsewhere: {}, available: {} }; } });
 vm.runInContext(grab(read(file), /async function askService\b[\s\S]*?\n}\n/), ctx);
 ctx.askService(s).then(() => console.log(JSON.stringify(sent)));

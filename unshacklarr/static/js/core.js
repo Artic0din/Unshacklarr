@@ -292,6 +292,12 @@ let savedUnits = {};
 const configUnits = (c) => Object.fromEntries([
   ...Object.entries(c).filter(([k]) => !["series", "versions", "hidden_series"].includes(k)).map(([k, v]) => [k, JSON.stringify(v)]),
   ...Object.entries(c.series || {}).filter(([, x]) => x.service).map(([k, v]) => [`series:${k}`, JSON.stringify(v)])]);
+// Each other Sonarr's name as the server knows it: a rename reaches the server only at Save, so the requests that
+// name a Sonarr send this one until then. By entry: the Sonarr editors change their entry in place.
+const sonarrSavedName = new WeakMap();
+const sonarrNames = () => (S.config.settings.sonarrs || []).map((i) => [i, i.name]);
+const keepSonarrNames = (names) => names.forEach(([i, name]) => sonarrSavedName.set(i, name));
+const savedSonarr = (name) => { const i = name && (S.config.settings.sonarrs || []).find((o) => o.name === name); return (i && sonarrSavedName.get(i)) || name; };
 function dirty() {  // a change put back as it was hides the bar again
   renderCommands();
   unsaved = configKey(S.config) !== savedConfig;
@@ -672,7 +678,7 @@ async function closeDrawer(fromRoute = false) {
   if (drawerChanged()) {
     const choice = await askUnsaved(current.title);
     if (choice === "save") {
-      try { await save(); } catch (e) { toast(`Could not save: ${e.message}`, true); return keepDrawer(fromRoute); }
+      try { await save(); } catch (e) { toast(e.saved ? e.message : `Could not save: ${e.message}`, true); return keepDrawer(fromRoute); }
     } else if (choice === "discard") discardDrawer();
     else return keepDrawer(fromRoute);
   }

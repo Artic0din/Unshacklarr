@@ -812,9 +812,10 @@ def merge_page_changes(body: dict, current: dict) -> None:
     """A page sends its whole config, but only the parts it changed (body["changed"]) are taken from it; the others
     stay as saved, so a tab opened before another change no longer writes old settings back. A part changed both
     here and elsewhere since the page loaded it is merged key by key; the same key changed both ways is a conflict.
-    A page that sends no "changed" saves everything, as before."""
+    A body without "changed" (an old page script, a client posting its whole copy) is refused: it would write every
+    part back, the series and settings another device changed with them."""
     if not isinstance(body.get("changed"), list):
-        return
+        raise web.HTTPConflict(text="This page is out of date. Reload it, then make your change again.")
     changed, base = {str(u) for u in body.pop("changed")}, body.pop("base", None) or {}
     norm = lambda v: json.loads(json.dumps(v, sort_keys=True, default=str))  # noqa: E731
     now = norm(config_units(current))
@@ -1167,11 +1168,33 @@ async def service_profiles(request):
 
 async def save_config(request):
     body = await json_object(request)
-    previous = read_config()
-    merge_page_changes(body, public_config(previous))
-    real_config(body, previous)  # the secrets the browser only saw masked
+    known = await asyncio.to_thread(known_services)  # waited on first: a save from another tab meanwhile is read below
+    with CONFIG_LOCK:  # read, merged, checked and written at once: nothing saved in between is written over
+        previous = read_config()
+        merge_page_changes(body, public_config(previous))
+        real_config(body, previous)  # the secrets the browser only saw masked
+        config = checked_config(body, previous, known)
+        for key, show in (body.get("series") or {}).items():
+            learned, saved = previous["series"].get(int(key)) or {}, config["series"].get(int(key))
+            if saved is None or (learned.get("service"), str(learned.get("title"))) != (saved.get("service"), str(saved.get("title"))):
+                continue  # another service or page now: what was learnt for the old one is not its
+            # learnt after the page loaded: each field the page did not send at all is kept (it sends "" to clear one)
+            if "release_time" not in show and learned.get("release_time"):
+                saved["release_time"] = learned["release_time"]
+            day = int(show["release_day"] or 0) if "release_day" in show else learned.get("release_day") or 0  # checked
+            if day and (saved.get("release_time") or day < 0):  # the day after means nothing without a time, as checked
+                saved["release_day"] = day
+        write_config(config)
+        with sonarr_sync.held_lock:  # a release held for its episode order: a save may have fixed its numbering
+            sonarr_sync.held_bursts.clear()
+    if config["settings"].get("upgrade_check_new"):  # by mj23au: a series just set up, its files already on disk, checked once
+        upgrade_pending.update(newly_set_up(config["series"], previous.get("series") or {}))
+    return web.json_response(public_config(read_config()))
+
+
+def checked_config(body: dict, previous: dict, known: dict | None) -> dict:
+    """The config a Save writes: the page's, merged and unmasked, each value checked (400 on the first bad one)."""
     dl_specs = options.dl_specs()
-    known = await asyncio.to_thread(known_services)
     ladders = check_ladders(body.get("quality_ladders"))
     series = {}
     for key, show in (body.get("series") or {}).items():
@@ -1287,29 +1310,10 @@ async def save_config(request):
             "events": {k: bool((notifications.get("events") or {}).get(k, True)) for k in EVENTS},
         },
         "tmdb_countries": countries or [sonarr_sync.load_settings(previous)["country"]],
-        "hidden_series": [],  # the stored list, read under the lock below: config.yaml keeps its key order
+        "hidden_series": previous["hidden_series"],  # saved at once by hide_series, never by Save
         "quality_ladders": ladders,
     }
-    with CONFIG_LOCK:  # what changed on the server since the page was loaded, or during the wait on Unshackle above
-        now = read_config()
-        config["auth"] = now["auth"]  # a new password or a revoked API key meanwhile stays
-        config["hidden_series"] = now["hidden_series"]  # saved at once by hide_series, never by Save
-        for key, show in (body.get("series") or {}).items():
-            learned, saved = now["series"].get(int(key)) or {}, series.get(int(key))
-            if saved is None or (learned.get("service"), str(learned.get("title"))) != (saved.get("service"), str(saved.get("title"))):
-                continue  # another service or page now: what was learnt for the old one is not its
-            # learnt after the page loaded: each field the page did not send at all is kept (it sends "" to clear one)
-            if "release_time" not in show and learned.get("release_time"):
-                saved["release_time"] = learned["release_time"]
-            day = int(show["release_day"] or 0) if "release_day" in show else learned.get("release_day") or 0  # checked above
-            if day and (saved.get("release_time") or day < 0):  # the day after means nothing without a time, as above
-                saved["release_day"] = day
-        write_config(config)
-        with sonarr_sync.held_lock:  # a release held for its episode order: a save may have fixed its numbering
-            sonarr_sync.held_bursts.clear()
-    if settings.get("upgrade_check_new"):  # by mj23au: a series just set up, its files already on disk, checked once
-        upgrade_pending.update(newly_set_up(series, previous.get("series") or {}))
-    return web.json_response(public_config(read_config()))
+    return config
 
 
 def newly_set_up(series: dict, was: dict) -> set[int]:
@@ -1460,7 +1464,8 @@ def check_sonarrs(given, saved, main_url: str) -> list[dict]:
             raise web.HTTPBadRequest(text=f"Two Sonarr instances are named {name}")
         if not URL.fullmatch(url) or "@" in urlparse(url).netloc:
             raise web.HTTPBadRequest(text=f"The address of {name} must start with http:// or https://, without a user name")
-        if url in (main_url.rstrip("/"), str(sonarr_sync.load_settings().get("sonarr_url") or "").rstrip("/")) \
+        main = sonarr_sync.load_settings({"settings": {"sonarr_url": main_url}})["sonarr_url"]  # this one, else the environment's
+        if url in (main_url.rstrip("/"), str(main or "").rstrip("/")) \
                 or url in {o["url"] for o in out}:
             raise web.HTTPBadRequest(text=f"{name} has the address of another Sonarr here: each instance has its own")
         old = saved.get(name) or next((o for o in saved.values() if o.get("url") == url), {})
@@ -2981,6 +2986,12 @@ def backup_data(text: str, passphrase: str = "") -> dict:
         raise web.HTTPBadRequest(text="Not an Unshacklarr backup: the file is not valid YAML") from None
     if problem := backup_problem(data):
         raise web.HTTPBadRequest(text=problem)
+    # what a Save refuses (a server or a Sonarr without a name, a series' bad value) would stop the app starting:
+    # refused here, before anything is written. Services by their name only: it may come from another install's
+    restored = {"settings": {}, "auth": {}, "defaults": {}, "service_defaults": {}, "series": {}, "notifications": {},
+                "hidden_series": [], **{k: v for k, v in data.items() if v is not None}, "quality_ladders": sonarr_sync.ladders(data)}
+    restored["settings"] = {k: v for k, v in restored["settings"].items() if not (k in NUMBER_SETTINGS and v in ("", None))}  # the default, as above
+    checked_config(copy.deepcopy(restored), restored, None)
     return data
 
 

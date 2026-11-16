@@ -260,7 +260,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
     // What Upgrades found the service has better, once it checked the series: the page alone only knows the ladder,
     // not the service's tracks (ALL4 has 1080p H.264 only: a step-2 file there is as good as it gets). By mj23au
     // its finds only, and only once a check covered it: a series set up since keeps the ladder's guess
-    api(`/api/upgrades?tvdb=${s.tvdbId}${epSonarr ? `&sonarr=${encodeURIComponent(epSonarr)}` : ""}`).then((u) => {
+    api(`/api/upgrades?tvdb=${s.tvdbId}${epSonarr ? `&sonarr=${encodeURIComponent(savedSonarr(epSonarr))}` : ""}`).then((u) => {
       if (current !== s || !u.scanned) return;
       epUp = new Set((u.items || []).map((i) => i.episodeId));
       if ($("#ep-list")) renderSeason();
@@ -277,7 +277,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
   let eps, keys = null;
   try {
     // as long as the server waits for a busy Sonarr (120 s)
-    eps = await api(inst ? `/api/series/${inst.id}/episodes?sonarr=${encodeURIComponent(inst.name)}` : `/api/series/${s.id}/episodes`, { wait: 130 });
+    eps = await api(inst ? `/api/series/${inst.id}/episodes?sonarr=${encodeURIComponent(savedSonarr(inst.name))}` : `/api/series/${s.id}/episodes`, { wait: 130 });
     if (seq !== epSeq || current !== s) return;  // superseded: no second request to a busy Sonarr for an answer nobody draws
     if (inst && s.id) keys = Object.fromEntries((await api(`/api/series/${s.id}/episodes`, { wait: 130 })).map((e) => [e.id, sxxOf(e)]));
   }
@@ -739,7 +739,7 @@ async function askService(s) {
   try {
     // Each season page can list for 65 s; each other service can search and list, plus its 2 s pause.
     r = await api("/api/probe", { method: "POST", wait: 120 + 65 * Object.keys(conf.season_pages || {}).length + 132 * S.services.length, body: JSON.stringify({ show: conf, seriesId: s.id ?? inst?.id, tvdbId: s.tvdbId, title: s.title,
-      ...(s.id ? {} : { sonarr: inst?.name }) }) });  // in no main Sonarr: its own Sonarr's episodes
+      ...(s.id ? {} : { sonarr: savedSonarr(inst?.name) }) }) });  // in no main Sonarr: its own Sonarr's episodes
     if (current === s) { epElsewhere = r.elsewhere || {}; epElsewhereFresh = true; epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview();
       epTitlesAgree = r.titlesAgree ?? null; renderSeriesLanguage(); }
     if (current === s && r.elsewhere_error) toast(`Availability refreshed, but the search on other services failed: ${r.elsewhere_error}`, true);
@@ -1002,7 +1002,7 @@ async function startDownload(numbering = null) {
   }
   try {
     await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: [...picked], replace, ...(numbering ? { numbering } : {}),
-      ...(epSonarr ? { sonarr: epSonarr } : {}) }) });  // picked in another Sonarr's episodes: its ids, its ladder
+      ...(epSonarr ? { sonarr: savedSonarr(epSonarr) } : {}) }) });  // picked in another Sonarr's episodes: its ids, its ladder
     toast(`Downloading ${COUNT.episode(picked.size)}${epSonarr ? ` for ${epSonarr}` : ""}: follow it in Activity`);
     $("#ep-clear").click();
     const s = current;

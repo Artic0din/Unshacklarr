@@ -43,7 +43,7 @@ def parse(text: str) -> list[dict]:
             continue
         try:
             expires = int(float(fields[4] or 0))
-        except ValueError:
+        except (ValueError, OverflowError):  # "inf" overflows int()
             continue
         cookies.append({"domain": fields[0].lstrip("."), "name": fields[5], "expires": expires})
     return cookies
@@ -112,6 +112,13 @@ def summary(path: Path, now: float | None = None) -> dict:
     }
 
 
+def _listed(path: Path) -> dict:
+    try:
+        return summary(path)
+    except OSError:  # one file it may not read is shown as such, not the whole list lost
+        return {"count": 0, "updated": None, "expires": None, "session": 0, "expired": False, "unreadable": True}
+
+
 def list_all(folder: Path) -> dict[str, list[dict]]:
     """Every service's cookie files: {service: [{profile, …summary}]}."""
     found: dict[str, list[dict]] = {}
@@ -119,10 +126,10 @@ def list_all(folder: Path) -> dict[str, list[dict]]:
         return found
     for entry in sorted(folder.iterdir()):
         if entry.is_file() and entry.suffix == ".txt":
-            found.setdefault(entry.stem, []).append({"profile": "", **summary(entry)})
+            found.setdefault(entry.stem, []).append({"profile": "", **_listed(entry)})
         elif entry.is_dir():
             for f in sorted(entry.glob("*.txt")):
-                found.setdefault(entry.name, []).append({"profile": f.stem, **summary(f)})
+                found.setdefault(entry.name, []).append({"profile": f.stem, **_listed(f)})
     return found
 
 

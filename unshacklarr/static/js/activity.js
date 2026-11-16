@@ -524,7 +524,7 @@ async function showMissing() {
   let r;
   if (missingSonarr && !(S.config.settings.sonarrs || []).some((i) => i.name === missingSonarr)) missingSonarr = "";
   const sonarr = missingSonarr;  // the one this list is for: the buttons send it, whatever the picker says by then
-  const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(sonarr ? { sonarr } : {}) });
+  const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(sonarr ? { sonarr: savedSonarr(sonarr) } : {}) });
   // wait: as long as the server waits for a busy Sonarr (120 s)
   try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`, { wait: 130 }); } catch (e) { return seq === missingSeq && picked_run === "missing" ? $("#cd-main").replaceChildren(failed(e.message, showMissing)) : undefined; }
   if (picked_run !== "missing" || seq !== missingSeq) return;
@@ -535,7 +535,7 @@ async function showMissing() {
     onclick: async (e) => {
       e.target.disabled = true;
       try {
-        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: r.items.map((x) => x.episodeId), ...(sonarr ? { sonarr } : {}) }) });
+        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: r.items.map((x) => x.episodeId), ...(sonarr ? { sonarr: savedSonarr(sonarr) } : {}) }) });
         toast(r.items.length === 1 ? "1 episode queued" : `${r.items.length} episodes queued, one after the other`);
       } catch (err) { e.target.disabled = false; toast(err.message, true); }
     } });
@@ -572,7 +572,7 @@ async function showUpgrades(fresh = true) {
   if (fresh !== false || !upgradeLast) {
     const seq = ++upgradeSeq;
     let got;  // wait: as long as the server waits for a busy Sonarr (120 s)
-    try { got = await api(`/api/upgrades${sonarr ? `?sonarr=${encodeURIComponent(sonarr)}` : ""}`, { wait: 130 }); }
+    try { got = await api(`/api/upgrades${sonarr ? `?sonarr=${encodeURIComponent(savedSonarr(sonarr))}` : ""}`, { wait: 130 }); }
     catch (e) { return seq === upgradeSeq && picked_run === "upgrades" ? $("#cd-main").replaceChildren(failed(e.message, showUpgrades)) : undefined; }
     if (seq !== upgradeSeq) return;
     r = upgradeLast = got;
@@ -583,7 +583,7 @@ async function showUpgrades(fresh = true) {
   // every series, or one from its card (asked afresh); the ticks only choose what is replaced (by mj23au, #18)
   const checkUp = async (button, only = []) => {
     button.disabled = true;
-    try { await api(scan.running ? "/api/upgrades/stop" : "/api/upgrades/check", { method: "POST", body: JSON.stringify({ sonarr, series: only }) }); } catch (err) { toast(err.message, true); }
+    try { await api(scan.running ? "/api/upgrades/stop" : "/api/upgrades/check", { method: "POST", body: JSON.stringify({ sonarr: savedSonarr(sonarr), series: only }) }); } catch (err) { toast(err.message, true); }
     showUpgrades();
   };
   // a stopped check ends the batch it is asking (up to 10 episodes of a series): said, so Stop is seen to work
@@ -593,7 +593,7 @@ async function showUpgrades(fresh = true) {
     textContent: picked.length === 1 ? "Replace it" : `Replace the ${picked.length} selected`, onclick: async (e) => {
       e.target.disabled = true;
       try {
-        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: picked.map((i) => i.episodeId), replace: true, ...(sonarr ? { sonarr } : {}) }) });
+        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: picked.map((i) => i.episodeId), replace: true, ...(sonarr ? { sonarr: savedSonarr(sonarr) } : {}) }) });
         toast(picked.length === 1 ? "1 episode queued, replacing its file" : `${picked.length} episodes queued, replacing their files`);
         picked.forEach((i) => upgradePick.delete(i.episodeId));
         showUpgrades();

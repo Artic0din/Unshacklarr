@@ -8,7 +8,7 @@ import hashlib
 import hmac
 import os
 from datetime import datetime, timezone
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 import requests
 from cryptography.exceptions import InvalidTag
@@ -43,12 +43,20 @@ def decrypt(text: str, passphrase: str) -> str:
 
 
 def webdav_put(url: str, user: str, password: str, name: str, body: bytes) -> None:
-    r = requests.put(f"{url.rstrip('/')}/{quote(name)}", data=body, auth=(user, password) if user else None, timeout=TIMEOUT)
+    target = f"{url.rstrip('/')}/{quote(name)}"
+    # not followed: behind a forward-auth proxy, the login page it leads to answers 200 with nothing stored
+    r = requests.put(target, data=body, auth=(user, password) if user else None, timeout=TIMEOUT, allow_redirects=False)
+    if 300 <= r.status_code < 400:
+        host = urlsplit(urljoin(target, r.headers.get("Location", ""))).hostname or "another address"
+        raise requests.HTTPError(f"The WebDAV server redirected the backup to {host}: nothing was stored. "
+                                 "Use the address it leads to, or let Unshacklarr past the login proxy", response=r)
     if r.status_code in (404, 409):
         raise requests.HTTPError("The folder does not exist on the WebDAV server: create it first", response=r)
     if r.status_code in (401, 403):
         raise requests.HTTPError("The WebDAV server refused the user name or password", response=r)
     r.raise_for_status()
+    if r.status_code not in (200, 201, 204):
+        raise requests.HTTPError(f"The WebDAV server answered HTTP {r.status_code}, not a stored file", response=r)
 
 
 def _sign(key: bytes, text: str) -> bytes:

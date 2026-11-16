@@ -314,6 +314,20 @@ def test_the_extractor_does_not_backtrack_on_a_long_code_literal():
     assert time.monotonic() - start < 1
 
 
+def test_translations_load_where_the_system_encoding_is_not_utf8(tmp_path, monkeypatch):
+    # Windows before Python 3.15 reads a file as cp1252 unless told otherwise; the catalogues are UTF-8
+    import pathlib
+    from unshacklarr import i18n
+    (tmp_path / "ja.json").write_text(json.dumps({"Downloaded: {0}": "東京でダウンロード: {0}"}, ensure_ascii=False), encoding="utf8")
+    read_text = pathlib.Path.read_text
+    monkeypatch.setattr(pathlib.Path, "read_text", lambda self, encoding=None, errors=None, newline=None:
+                        read_text(self, encoding=encoding or "cp1252", errors=errors, newline=newline))
+    monkeypatch.setattr(i18n, "FOLDER", tmp_path)
+    i18n.catalog.cache_clear()
+    assert i18n.tr("Downloaded: Silo", "ja") == "東京でダウンロード: Silo"
+    i18n.catalog.cache_clear()
+
+
 def counted_nouns() -> list[str]:
     """The many-form text of each counted noun of the page (COUNT in core.js): "{0} devices"."""
     block = re.search(r"const COUNT = \{(.*?)\n\};", CORE.read_text(), re.S).group(1)

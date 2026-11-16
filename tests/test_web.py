@@ -1199,6 +1199,19 @@ const promptState = (input) => {
       cookieStatus: find(row, (node) => node.className === "ck-pill bad")?.textContent,
     }));
   }
+  if (scenario === "unreadable_cookie_file") {
+    box.S.authentication = {};
+    box.S.authenticationMethods = { HULU: ["cookies"] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" } };
+    vm.runInContext('servicesCookies = { folder: "/cookies", files: { HULU: [{ profile: "", count: 0, updated: null, expires: null, session: 0, expired: false, unreadable: true }] } }', box);
+    box.renderServices();
+    const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    console.log(JSON.stringify({
+      attention: !!row.dataset.attention,
+      cookies: findAll(row.children[3], (node) => node.textContent && node.className !== "sv-k" && !(node.children || []).some((c) => c.textContent)).map((node) => node.textContent),
+    }));
+  }
   if (scenario === "validated_pairing_without_cookies") {
     box.S.authentication = {
       HULU: {
@@ -1388,6 +1401,14 @@ def test_validated_cookie_only_service_still_reports_a_deleted_cookie_file():
     assert run_authentication_ui("validated_cookie_only_missing") == {
         "attention": True,
         "cookieStatus": "Missing",
+    }
+
+
+def test_an_unreadable_cookie_file_is_shown_as_such():
+    # the server lists a file it can't read instead of failing the whole list; the row says so and asks for attention
+    assert run_authentication_ui("unreadable_cookie_file") == {
+        "attention": True,
+        "cookies": ["HULU.txt", "Unreadable", "Replace", "Delete"],  # its file is there: Replace, not Add
     }
 
 
@@ -2092,6 +2113,7 @@ const core = js("core.js"), options = js("settings-options.js");
 const code = [
   pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(core, /^\/\/ Each other Sonarr's name as the server knows it.*?^const savedSonarr = [^\n]*$/ms),
   pick(options, /^async function save\(\) \{.*?^\}/ms),
   pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
 ].join("\n");
@@ -2103,9 +2125,10 @@ const box = {
   api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
   renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
   boWrong() {}, toast() {}, el: () => ({}), S: null, renderReleaseNext() { box.previews = (box.previews || 0) + 1; },
+  renderSettings() { box.redrawn = (box.redrawn || 0) + 1; },
 };
 vm.createContext(box);
-vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); } };", box);
+vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); }, savedSonarr, keepSonarrNames, sonarrNames };", box);
 const page = box.api_;
 const fresh = () => {
   box.S = { config: { settings: { theme: "dark", backup_remote: "", backup_remote_url: "" }, series: {} } };
@@ -2191,6 +2214,110 @@ const fresh = () => {
   saving = page.save(); release({ series: { 7: { ...show, release_time: "20:00", release_day: 1 } } }); await saving;  // only the day learnt
   out.learntDayShown = bars["#d-release-day"].value === "1" && box.previews === 1;
   box.current = null; box.drawerSnapshot = null;
+
+  // another tab saved the language meanwhile; the server kept both: this page takes it, in the same object (#184)
+  const tabB = () => {
+    box.S = { config: { settings: { theme: "dark", language: "en", debug: false }, series: {} } };
+    page.baseline(box.S.config);
+    vm.runInContext("savedUnits = configUnits(S.config)", box);
+  };
+  tabB(); box.redrawn = 0; let held = box.S.config.settings; held.debug = true; page.dirty();
+  saving = page.save(); release({ settings: { theme: "dark", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
+  out.mergedTaken = box.S.config.settings === held && held.language === "fr" && !page.state().unsaved && bars["#savebar"].hidden
+    && box.redrawn === 1;
+  held.theme = "light"; page.dirty();
+  saving = page.save(); release({}); await saving;
+  out.nextSaveSendsMerged = JSON.parse(box.sentBody).settings.language === "fr";
+  // a Sonarr's editor holds its entry: the key the server keeps (masked as api_key_set) changes that entry, not another
+  box.S = { config: { settings: { sonarrs: [{ name: "4K", url: "http://a" }] }, series: {} } }; page.baseline(box.S.config);
+  vm.runInContext("savedUnits = configUnits(S.config)", box);
+  const entry = box.S.config.settings.sonarrs[0]; entry.api_key = "k"; page.dirty();
+  saving = page.save(); release({ settings: { sonarrs: [{ name: "4K", url: "http://a", api_key_set: true }] } }); await saving;
+  out.listEntryKept = box.S.config.settings.sonarrs[0] === entry && entry.api_key_set === true && !("api_key" in entry)
+    && !page.state().unsaved;
+  tabB(); held = box.S.config.settings; held.debug = true; page.dirty();
+  saving = page.save(); held.language = "de"; page.dirty();  // changed here while the save ran
+  release({ settings: { theme: "dark", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
+  out.editMeanwhileWins = held.language === "de" && page.state().unsaved;
+  saving = page.save(); release({}); await saving;
+  out.editMeanwhileSent = JSON.parse(box.sentBody).changed.includes("settings") && JSON.parse(box.sentBody).settings.language === "de";
+  const seen = { service: "iV", title: "https://example.com/show", since: "2026-11-01T00:00:00+00:00" };
+  box.S = { config: { settings: {}, series: { 7: { ...seen } } } }; page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box);
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };
+  box.S.config.series[7].episode_offset = 2; page.dirty();
+  saving = page.save(); release({ series: { 7: { ...seen, episode_offset: 2, title: "https://example.com/show-2" } } }); await saving;
+  out.seriesMergedAndPanelClean = box.S.config.series[7].title === "https://example.com/show-2" && !page.state().unsaved
+    && JSON.parse(box.drawerSnapshot.conf).title === "https://example.com/show-2";
+  box.current = null; box.drawerSnapshot = null;
+  // another tab moved the series to a new address with its time; this page saved the offset: both are taken
+  box.S = { config: { settings: {}, series: { 7: { ...seen, release_time: "20:00" } } } }; page.baseline(box.S.config);
+  vm.runInContext("savedUnits = configUnits(S.config)", box);
+  box.S.config.series[7].episode_offset = 2; page.dirty();
+  saving = page.save();
+  release({ series: { 7: { ...seen, episode_offset: 2, title: "https://example.com/show-2", release_time: "21:00" } } }); await saving;
+  out.mergedSourceTakesItsTime = box.S.config.series[7].title === "https://example.com/show-2" && box.S.config.series[7].release_time === "21:00"
+    && !page.state().unsaved;
+
+  // a Sonarr renamed on the page: requests name it as the server knows it until the Save is done (#181)
+  box.S = { config: { settings: { sonarrs: [{ name: "4K", url: "http://a" }, { name: "kids", url: "http://b" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.sonarrs[0].name = "UHD"; page.dirty();
+  out.renamedAsSaved = page.savedSonarr("UHD") === "4K" && page.savedSonarr("kids") === "kids" && page.savedSonarr("") === "";
+  saving = page.save(); box.S.config.settings.sonarrs[1].name = "children";  // renamed again while the Save runs: not sent
+  release({}); await saving;
+  out.renameSavedIsUsed = page.savedSonarr("UHD") === "UHD" && page.savedSonarr("children") === "kids";
+  // another tab chose a Sonarr's ladder while this one saved debug and edited that Sonarr's folder: both stay, key by key
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "4K", url: "http://a", downloads: "", quality_ladder: "" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); box.S.config.settings.sonarrs[0].downloads = "/dl";
+  release({ settings: { debug: true, sonarrs: [{ name: "4K", url: "http://a", downloads: "", quality_ladder: "hd" }] } }); await saving;
+  const four = box.S.config.settings.sonarrs[0];
+  out.nestedEditKeepsOthersChange = four.quality_ladder === "hd" && four.downloads === "/dl" && page.state().unsaved;
+  // another tab renamed a Sonarr: each series' settings and libraries name it, so the page asks for a reload instead
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "old", url: "http://a" }] }, series: { 7: { service: "IV", sonarrs: { old: { off: true } } } } },
+    sonarrsOf: { 7: [{ name: "old", id: 3 }] } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; box.S.config.series[7].sonarrs.old.off = false; page.dirty();
+  saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "new", url: "http://a" }] },
+    series: { 7: { service: "IV", sonarrs: { new: { off: true } } } } });
+  const reloadAsked = await saving.then(() => "", (e) => (e.saved ? "saved:" : "") + e.message);  // it did save: said so
+  box.sentBody = null;
+  const second = page.save().then(() => "", (e) => e.message); release({});  // sent today: answered, not left waiting
+  const refused = await second;
+  out.othersRenameAsksReload = reloadAsked.startsWith("saved:Saved.") && reloadAsked.includes("reload") && refused.includes("Reload") && box.sentBody === null
+    && page.state().unsaved && box.S.config.settings.sonarrs[0].name === "old" && box.S.sonarrsOf[7][0].name === "old";
+  // an address edited while the Save runs, to another Sonarr's: the unchanged answer is no rename
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "a", url: "http://a" }, { name: "b", url: "http://b" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); box.S.config.settings.sonarrs[0].url = "http://b";
+  release({ settings: { debug: true, sonarrs: [{ name: "a", url: "http://a" }, { name: "b", url: "http://b" }] } });
+  out.addressEditIsNoRename = await saving.then(() => true, () => false) && !box.S.outOfDate;
+  // one Sonarr removed and another added while the Save runs: each keeps its own saved name
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); box.S.config.settings.sonarrs.splice(0, 1); box.S.config.settings.sonarrs.push({ name: "third", url: "http://c" });
+  release({ settings: { debug: true, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] } }); await saving;
+  out.listEditedMeanwhileKeepsNames = page.savedSonarr("second") === "second" && page.savedSonarr("third") === "third";
+  // another tab changed first's folder while this page removed first and added third: by index, second would get it
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a", downloads: "" }, { name: "second", url: "http://b", downloads: "" }] },
+    versions: { settings: "v1" }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); box.S.config.settings.sonarrs.splice(0, 1); box.S.config.settings.sonarrs.push({ name: "third", url: "http://c", downloads: "" });
+  release({ settings: { debug: true, sonarrs: [{ name: "first", url: "http://a", downloads: "/first" }, { name: "second", url: "http://b", downloads: "" }] },
+    versions: { settings: "v2" } }); await saving;
+  const left = box.S.config.settings.sonarrs;
+  out.listEntriesMatchedByIdentity = left.map((i) => i.name + i.downloads).join() === "second,third" && box.S.config.versions.settings === "v1";
+  // another tab added a Sonarr: the list is taken whole, and its entries still know their saved names
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] } }); await saving;
+  box.S.config.settings.sonarrs[0].name = "renamed";
+  out.takenListKeepsSavedNames = box.S.config.settings.sonarrs.length === 2 && page.savedSonarr("renamed") === "first";
   console.log(JSON.stringify(out));
 })();
 """
@@ -2226,6 +2353,21 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "otherSourceTakesNothing": True,  # moved to another service while the Save ran: the old one's time is not its
         "otherSourceSnapshotTakesNothing": True,  # nor its panel's snapshot, so closing it asks nothing
         "learntDayShown": True,  # a day kept alone shows too, and the next-episode line follows
+        "mergedTaken": True,  # another tab's change the server kept is taken, in the object the editors hold (#184)
+        "listEntryKept": True,  # an open Sonarr editor's entry is updated in place, not replaced
+        "nextSaveSendsMerged": True,  # so a later Save no longer sends the older copy back
+        "editMeanwhileWins": True,  # an edit made while the Save ran is not overwritten by its answer
+        "editMeanwhileSent": True,
+        "seriesMergedAndPanelClean": True,  # a series too, and its open panel does not ask to discard
+        "mergedSourceTakesItsTime": True,  # another tab's new source comes with its release time
+        "renamedAsSaved": True,  # an unsaved rename is not a name the server knows (#181)
+        "renameSavedIsUsed": True,  # once saved, the new name; a rename made while the Save ran still is not
+        "nestedEditKeepsOthersChange": True,  # an edit inside a list entry does not block another tab's change beside it
+        "addressEditIsNoRename": True,  # an address edited during the Save does not block the next one
+        "othersRenameAsksReload": True,  # another tab's Sonarr rename is not followed: reload, and no Save until then
+        "listEditedMeanwhileKeepsNames": True,  # Sonarrs removed or added while the Save ran: no name moves to another
+        "listEntriesMatchedByIdentity": True,  # and no other tab's change lands on another entry: the next Save asks to reload
+        "takenListKeepsSavedNames": True,  # a list taken whole from another tab: its renamed entry is still named as saved
     }
 
 
@@ -3280,6 +3422,14 @@ def test_every_answer_refuses_frames_and_the_api_replaces_only_when_asked(tmp_pa
     assert too_many == 400
 
 
+def as_page_sends(web, body: dict, versions: dict | None = None) -> dict:
+    """A Save as the page sends it: the parts it changed (here, every part it sends) and the versions it loaded them
+    at, by default the config as it is now."""
+    versions = versions or web.public_config(web.read_config())["versions"]
+    units = [f"series:{k}" for k in body.get("series") or {}] + [k for k in body if k != "series"]
+    return {**body, "changed": units, "base": {u: versions.get(u) for u in units}}
+
+
 def test_a_save_refuses_a_start_date_that_is_not_a_date(tmp_path, monkeypatch):
     import asyncio
     from types import SimpleNamespace
@@ -3293,7 +3443,7 @@ def test_a_save_refuses_a_start_date_that_is_not_a_date(tmp_path, monkeypatch):
 
     def save(since):
         async def body():
-            return {"series": {"7": {**show, "since": since}}}
+            return as_page_sends(web, {"series": {"7": {**show, "since": since}}})
         asyncio.run(web.save_config(SimpleNamespace(json=body)))
     with pytest.raises(web.web.HTTPBadRequest) as refused:
         save("soon")
@@ -3322,44 +3472,57 @@ def test_a_save_keeps_what_the_server_changed_since_the_page_loaded(tmp_path, mo
         web.release_learned(8, "21:00", 1)
     monkeypatch.setattr(web, "known_services", unshackle_slow)
 
-    async def body():  # the page's copy, from before both: 8's time was cleared on the page, 7 was not touched
-        return {"series": {"7": dict(show), "8": {**show, "release_time": ""}}}
+    async def body():  # the page's copy, from before both: neither series touched there
+        return as_page_sends(web, {"series": {"7": dict(show), "8": dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=body)))
     saved = web.read_config()
     assert saved["auth"] == new
     assert (saved["series"][7].get("release_time"), saved["series"][7].get("release_day")) == ("21:00", 1)
-    assert "release_time" not in saved["series"][8]  # cleared on the page: cleared
+    assert (saved["series"][8].get("release_time"), saved["series"][8].get("release_day")) == ("21:00", 1)
+    monkeypatch.setattr(web, "known_services", lambda: None)
+    # a time cleared on a page loaded before it was learnt: the same field changed both ways, refused
+    stale = web.unit_versions(web.public_config({**web.read_config(), "series": {7: dict(show), 8: dict(show)}}))
+
+    async def cleared_unseen():
+        return as_page_sends(web, {"series": {"8": {**show, "release_time": ""}}}, stale)
+    with pytest.raises(web.web.HTTPConflict):
+        asyncio.run(web.save_config(SimpleNamespace(json=cleared_unseen)))
+    assert web.read_config()["series"][8]["release_time"] == "21:00"
+
+    async def cleared():  # cleared on a page that showed it: cleared
+        return as_page_sends(web, {"series": {"8": {**show, "release_time": ""}}})
+    asyncio.run(web.save_config(SimpleNamespace(json=cleared)))
+    assert "release_time" not in web.read_config()["series"][8]
     # each field on its own: a day the page sent stays as sent, one it did not send stays as stored
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: {**show, "release_day": -2}}})
-    monkeypatch.setattr(web, "known_services", lambda: None)
 
     async def edits():
-        return {"series": {"7": {**show, "release_day": 0}, "8": dict(show)}}
+        return as_page_sends(web, {"series": {"7": {**show, "release_day": 0}, "8": dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=edits)))
     saved = web.read_config()["series"]
     assert (saved[7].get("release_time"), saved[7].get("release_day")) == ("21:00", None) and saved[8].get("release_day") == -2
 
     async def new_time():
-        return {"series": {"7": {**show, "release_time": "22:00"}, "8": dict(show)}}
+        return as_page_sends(web, {"series": {"7": {**show, "release_time": "22:00"}, "8": dict(show)}})
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=new_time)))
     assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("22:00", 1)
 
     async def new_day():  # the day after, sent alone: the learnt time makes it count
-        return {"series": {"7": {**show, "release_day": 1}, "8": dict(show)}}
+        return as_page_sends(web, {"series": {"7": {**show, "release_day": 1}, "8": dict(show)}})
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00"}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=new_day)))
     assert (web.read_config()["series"][7]["release_time"], web.read_config()["series"][7].get("release_day")) == ("21:00", 1)
 
     async def other_source():  # moved to another service: the old one's learnt time is not its
-        return {"series": {"7": {**show, "service": "7P", "title": "https://7plus.example/show"}, "8": dict(show)}}
+        return as_page_sends(web, {"series": {"7": {**show, "service": "7P", "title": "https://7plus.example/show"}, "8": dict(show)}})
     web.write_config({**web.read_config(), "series": {7: {**show, "release_time": "21:00", "release_day": 1}, 8: dict(show)}})
     asyncio.run(web.save_config(SimpleNamespace(json=other_source)))
     assert "release_time" not in web.read_config()["series"][7] and "release_day" not in web.read_config()["series"][7]
     web.write_config({**web.read_config(), "hidden_series": [7]})  # hidden from the Schedule while the Save ran
 
-    async def stale_hidden():  # the page's list from before
-        return {"series": {"7": dict(show), "8": dict(show)}, "hidden_series": []}
+    async def stale_hidden():  # the page's list from before, sent as changed: a Save still never writes it
+        return as_page_sends(web, {"series": {"7": dict(show), "8": dict(show)}, "hidden_series": []})
     asyncio.run(web.save_config(SimpleNamespace(json=stale_hidden)))
     assert web.read_config()["hidden_series"] == [7]
     with web.CONFIG_LOCK:  # the sync's write waits for a Save's read and write
@@ -3409,7 +3572,8 @@ def test_saving_the_config_as_the_page_got_it_changes_nothing_and_leaks_no_secre
             await client.post("/api/login", json={"password": "password1"}, headers=page)
             replies = []
             for _ in range(2):  # the first Save fills in the defaults a hand-made file lacks; the second must change nothing
-                reply = await client.put("/api/config", json=web.public_config(web.read_config()), headers=page)  # as /api/state gives it
+                public = web.public_config(web.read_config())  # as /api/state gives it, every part sent back
+                reply = await client.put("/api/config", json={**public, "changed": list(public["versions"]), "base": public["versions"]}, headers=page)
                 replies.append((reply.status, await reply.text(), web.read_config()))
             return replies
 
@@ -4364,6 +4528,76 @@ def test_the_settings_are_backed_up_and_restored_but_never_the_password(tmp_path
     assert list(config["series"]) == [222] and config["auth"] == auth  # restored, the password and session kept
     assert "111" in (tmp_path / "config-before-restore.yaml").read_text()  # what it replaced, kept aside
 
+
+
+def test_a_restore_refuses_what_a_save_would_refuse(tmp_path, monkeypatch):
+    # an Unshackle server or a Sonarr without a name was written, then every start raised KeyError on its name
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+    h = {"X-Unshackle": "1"}
+    before = (tmp_path / "config.yaml").read_text()
+    bad = [
+        {"settings": {"backends": [{"url": "http://serve2:8786"}]}},
+        {"settings": {"sonarrs": [{"url": "http://sonarr2:8989"}]}},
+        {"series": {1: {"service": "NF", "title": "https://nf/show", "release_day": 5}}},
+    ]
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            refused = [await client.post("/api/restore", json={"password": "password1", "text": yaml.safe_dump(b)}, headers=h) for b in bad]
+            return [(r.status, await r.text()) for r in refused]
+
+    answers = asyncio.run(go())
+    assert [status for status, _ in answers] == [400] * 3, answers
+    assert "name" in answers[0][1].lower() and "name" in answers[1][1].lower() and "release day" in answers[2][1]
+    assert (tmp_path / "config.yaml").read_text() == before  # nothing written: the app still starts
+
+
+def test_a_restore_takes_a_null_number_setting_as_its_default(tmp_path, monkeypatch):
+    # a hand-edited config may say history_days: null, which the app reads as the default: its backup restores
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])
+    backup = yaml.safe_dump({"settings": {"history_days": None}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            r = await client.post("/api/restore", json={"password": "password1", "text": backup}, headers={"X-Unshackle": "1"})
+            return r.status, await r.text()
+
+    status, text = asyncio.run(go())
+    assert status == 200, text
+
+
+def test_a_restore_checks_other_sonarrs_against_the_backups_own_main_one(tmp_path, monkeypatch):
+    # the backup's main Sonarr replaces this install's: an other Sonarr at this install's main address is fine
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "settings": {"sonarr_url": "http://a:8989", "sonarr_api_key": "ka",
+                                                         "sonarrs": [{"name": "kids", "url": "http://b:8989", "api_key": "kb", "quality_ladder": ""}]}})
+    text = web.backup_text(web.read_config())
+    web.write_config({**web.read_config(), "settings": {"sonarr_url": "http://b:8989", "sonarr_api_key": "kb"}})
+    assert web.backup_data(text)["settings"]["sonarrs"][0]["url"] == "http://b:8989"
+    with pytest.raises(web.web.HTTPBadRequest):  # its own main and other at one address: refused
+        web.backup_data(text.replace("http://a:8989", "http://b:8989"))
 
 def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkeypatch):
     import asyncio
@@ -7290,11 +7524,40 @@ def test_a_page_saves_only_what_it_changed_and_a_clash_is_refused(tmp_path, monk
     body = {**loaded, "series": {"2": {"service": "B", "title": "w"}}, "changed": ["series:2"], "base": {"series:2": versions["series:2"]}}
     with pytest.raises(web.web.HTTPConflict):
         web.merge_page_changes(body, now)
-    # a page that says nothing of its changes saves everything, as before
+    # a page that says nothing of its changes (an old page script, a client posting its whole copy) is told to reload:
+    # it would write every part back, another device's series and settings with them
     body = {**loaded}
-    web.merge_page_changes(body, now)
-    assert body["settings"]["sonarrs"] == [{"name": "4K"}]
+    with pytest.raises(web.web.HTTPConflict) as refused:
+        web.merge_page_changes(body, now)
+    assert "Reload" in refused.value.text
 
+
+
+def test_a_save_merges_against_the_config_as_it_is_when_written(tmp_path, monkeypatch):
+    # another tab's save lands while this one waits on Unshackle: the merge must see it, not the config read before
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "series": {1: {"service": "A", "title": "x"}, 2: {"service": "B", "title": "y"}}})
+    loaded = json.loads(json.dumps(web.public_config(web.read_config())))  # as the page gets it
+
+    def unshackle_slow():  # meanwhile another tab renames series 2's page
+        config = web.read_config()
+        web.write_config({**config, "series": {**config["series"], 2: {**config["series"][2], "title": "z"}}})
+    monkeypatch.setattr(web, "known_services", unshackle_slow)
+
+    async def body():  # this tab changed series 1 only
+        page = {k: v for k, v in loaded.items() if k != "versions"}
+        return {**page, "series": {**page["series"], "1": {**page["series"]["1"], "episode_offset": 2}},
+                "changed": ["series:1"], "base": {"series:1": loaded["versions"]["series:1"]}}
+    asyncio.run(web.save_config(SimpleNamespace(json=body)))
+    saved = web.read_config()["series"]
+    assert saved[2]["title"] == "z", "the other tab's save stays"
+    assert saved[1].get("episode_offset") == 2
 
 def test_settings_edited_by_hand_apply_without_a_restart(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
@@ -7550,7 +7813,7 @@ def test_a_save_lets_a_release_held_for_its_episode_order_be_tried_again(tmp_pat
     web.sonarr_sync.held_bursts[("", 1)] = 0.0
 
     async def body():
-        return {"series": {"7": {**show, "season_map": {"2": 3}}}}
+        return as_page_sends(web, {"series": {"7": {**show, "season_map": {"2": 3}}}})
     asyncio.run(web.save_config(SimpleNamespace(json=body)))
     assert web.sonarr_sync.held_bursts == {}
 

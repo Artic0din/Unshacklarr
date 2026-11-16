@@ -678,6 +678,9 @@ $("#nt-form").onsubmit = (e) => {
 };
 
 async function save() {
+  // The server's words for a page it refuses as out of date: said here too, then every Save refused until a reload.
+  const OUT_OF_DATE = "This page is out of date. Reload it, then make your change again.";
+  if (S.outOfDate) throw new Error(OUT_OF_DATE);
   // Drop series with no service so the file only lists what Unshackle downloads.
   const series = Object.fromEntries(Object.entries(S.config.series).filter(([, c]) => c.service));
   // Saved is what was sent: an edit made while the request ran is not in it and stays unsaved.
@@ -687,7 +690,17 @@ async function save() {
   const units = configUnits(S.config);
   const changed = [...new Set([...Object.keys(units), ...Object.keys(savedUnits)])].filter((u) => units[u] !== savedUnits[u]);
   const unitBase = Object.fromEntries(changed.map((u) => [u, S.config.versions?.[u] ?? null]));
+  const names = sonarrNames();  // as sent: a rename made while the Save runs is not saved yet
+  const sentUrls = names.map(([i]) => i.url);  // and their addresses as sent: one edited meanwhile is no rename
   const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series, changed, base: unitBase }) });
+  // Another tab renamed a Sonarr: each series' settings and libraries on this page are keyed by the old name, so the
+  // page asks for a reload rather than re-key them all. This Save stays saved.
+  const theirSonarrs = Array.isArray(saved?.settings?.sonarrs) ? saved.settings.sonarrs : [];
+  if (names.some(([, name], n) => sentUrls[n] && theirSonarrs.some((o) => o.url === sentUrls[n] && o.name !== name))) {
+    S.outOfDate = true;
+    throw Object.assign(new Error("Saved. Another tab renamed a Sonarr: reload this page before your next change."), { saved: true });
+  }
+  keepSonarrNames(names);
   for (const u of changed) {  // only these are as the server has them now: the others keep the version they were loaded at
     if (saved?.versions?.[u]) (S.config.versions ??= {})[u] = saved.versions[u]; else delete S.config.versions?.[u];
   }
@@ -708,13 +721,55 @@ async function save() {
       if (now?.service && missing(now, k) && (k === "since" || same)) now[k] = conf[k];
     }
   }
+  // The parts sent, as the server merged them with another tab's saves: taken key by key, never over an edit made
+  // while the request ran, so the next save of them does not send this page's older copy back. In place, down to
+  // each Sonarr or server of a list: the open editors hold references into S.config.
+  const alike = (a, b) => stableJSON(a) === stableJSON(b);
+  const plain = (x) => x && typeof x === "object" && !Array.isArray(x);
+  // the same entry of a list: by its address or its name, so one removed and another added is not taken for it
+  const same = (a, b) => alike(a, b) || (plain(a) && plain(b) && ((a.url !== undefined && a.url === b.url) || (a.name !== undefined && a.name === b.name)));
+  const nested = (a, b) => a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b)
+    && (!Array.isArray(a) || (a.length === b.length && a.every((x, n) => same(x, b[n]))));
+  let clash = false;  // a list changed here while the Save ran and elsewhere: the next Save is merged by the server
+  const take = (into, was, now, series = false) => {
+    // moved here while the Save ran: a time the answer has is for the source sent, not this one
+    const moved = series && (into.service !== was.service || into.title !== was.title);
+    let took = false;
+    for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
+      if (alike(now[k], was[k]) || (moved && ["release_time", "release_day"].includes(k))) continue;
+      if (nested(into[k], now[k]) && nested(into[k], was[k]) && nested(now[k], was[k])) { took = take(into[k], was[k], now[k]) || took; continue; }  // each key inside on its own
+      if (!alike(into[k], was[k])) { clash ||= Array.isArray(was[k]) || Array.isArray(into[k]); continue; }  // changed here while the Save ran
+      if (k in now) into[k] = now[k]; else delete into[k];
+      took = true;
+    }
+    return took;
+  };
+  const merged = {};
+  let redraw = false;
+  for (const u of changed) {
+    const id = u.startsWith("series:") ? u.slice("series:".length) : null;
+    const theirs = id ? saved?.series?.[id] : saved?.[u], mine = id ? S.config.series[id] : S.config[u];
+    if (!units[u] || !plain(theirs) || !plain(mine) || (id && !mine.service)) continue;  // stopped meanwhile: stays so
+    merged[u] = [JSON.parse(units[u]), theirs, Boolean(id)];
+    clash = false;
+    if (take(mine, ...merged[u]) && !id) redraw = true;
+    if (clash) { if (unitBase[u]) S.config.versions[u] = unitBase[u]; else delete S.config.versions?.[u]; }  // the version it started from: refused there, a reload
+    if (id) base.series[id] = theirs; else base[u] = theirs;
+    savedUnits[u] = JSON.stringify(alike(mine, theirs) ? mine : theirs);
+  }
+  // the names the server now knows: each entry the page holds now, found by its address (each Sonarr has its own),
+  // the entries of a list taken whole too
+  keepSonarrNames((S.config.settings.sonarrs || []).flatMap((i) => theirSonarrs.filter((o) => i.url && o.url === i.url).map((o) => [i, o.name])));
   savedConfig = stableJSON(base);
+  if (redraw) renderSettings();  // another tab's settings now shown, its Sonarrs and servers too
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
   const open = drawerSnapshot && JSON.parse(drawerSnapshot.conf || "{}");  // its drawer, open since or opened meanwhile
   const sentShow = open && base.series[drawerSnapshot.id];  // and, for a release time, the source it was learnt for
   const added = open && Object.entries(stamped[drawerSnapshot.id] || {}).filter(([k]) => missing(open, k)
     && (k === "since" || (open.service === sentShow?.service && open.title === sentShow?.title)));
   if (added?.length) drawerSnapshot.conf = JSON.stringify({ ...open, ...Object.fromEntries(added) });
+  const panel = drawerSnapshot && merged[`series:${drawerSnapshot.id}`];
+  if (panel) { const snap = JSON.parse(drawerSnapshot.conf); take(snap, ...panel); drawerSnapshot.conf = JSON.stringify(snap); }
   const shown = current && S.config.series[current.tvdbId];  // its editor shows what is saved
   const learnt = stamped[current?.tvdbId];
   if (shown && (learnt?.release_time || learnt?.release_day)) {
@@ -732,7 +787,7 @@ async function save() {
 async function saveHere(button, bar = null) {
   button.disabled = true;
   try { await save(); }
-  catch (e) { button.disabled = false; return toast(`Could not save: ${e.message}`, true); }
+  catch (e) { button.disabled = false; return toast(e.saved ? e.message : `Could not save: ${e.message}`, true); }
   const label = button.innerHTML;
   const shown = bar || button;  // what save() just hid
   shown.hidden = false;

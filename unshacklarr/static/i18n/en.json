@@ -2479,6 +2479,12 @@
  "The URL of {0} cannot start with '-'": [
   "key"
  ],
+ "The WebDAV server answered HTTP {0}, not a stored file": [
+  "r.status_code"
+ ],
+ "The WebDAV server redirected the backup to {0}: nothing was stored. Use the address it leads to, or let Unshacklarr past the login proxy": [
+  "host"
+ ],
  "The WebDAV server refused the user name or password": [],
  "The address has a space in it": [],
  "The address must start with http:// or https://": [],
@@ -2721,6 +2727,7 @@
  "This job is over": [],
  "This job is still going on: stop it first": [],
  "This link may be an episode, not the series.": [],
+ "This page is out of date. Reload it, then make your change again.": [],
  "This series on {0}": [
   "label"
  ],
@@ -2836,6 +2843,7 @@
  "Unshacklarr can't be reached: {0}": [
   "e.message"
  ],
+ "Unshacklarr cannot read this file: check its permissions, or replace it": [],
  "Unshacklarr cannot see Unshackle's Cache folder: mount it and set its path in Settings, Unshackle (CACHE_DIR with Docker)": [],
  "Unshacklarr cannot see Unshackle's Cookies folder: mount it and set its path in Settings, Unshackle (COOKIES_DIR with Docker)": [],
  "Unshacklarr cannot see Unshackle's config: mount its folder (unshackle.yaml, WVDs, PRDs) and set its path in Settings, Unshackle (UNSHACKLE_CONFIG_DIR with Docker)": [],

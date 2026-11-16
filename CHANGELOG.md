@@ -256,6 +256,25 @@ Every change worth knowing, newest first. The format follows
   restart, are tried again as before.
 - **No more false cookie warnings.** Crave's load balancer cookies (a week) and Apple's `utsdc` (an hour) no longer
   count as the date the login ends.
+- **Renaming a Sonarr no longer breaks its pages until Save.** Catch up, Upgrades, the library check and folder
+  browser, and a series' episodes keep using the name the server knows, and switch to the new one once it is saved.
+- **A second Save from an older tab no longer undoes another tab's change.** After a Save, the page takes the
+  settings and series as the server merged them, keeping what you changed while it ran, so its next Save no longer
+  sends its older copy back. When another tab renamed a Sonarr, the page asks you to reload it instead.
+- **A backup a Save would refuse is no longer restored.** One with an Unshackle server or a Sonarr without a name,
+  or a series value out of range, is refused with the reason before anything is written; before, it was written and
+  the app could not start again until `config.yaml` was fixed by hand.
+- **A tab still running the old page after an update is told to reload.** Its Save no longer replaces every
+  setting and series with its old copy, removing those set up on another device: it is refused with a message to
+  reload the page.
+- **Two Saves at nearly the same moment both stay.** A Save now merges its changes with the settings as they are
+  when it writes, so another tab's Save that landed while it waited on Unshackle is no longer written over.
+- **A WebDAV backup sent to a login page is a failed backup.** A redirect (a forward-auth proxy's login) is no
+  longer followed and recorded as sent: it fails with the host it leads to, and only a stored file counts as sent.
+- **One odd cookie file no longer empties the Cookies list.** A cookie dated `inf` is skipped like any other bad
+  date, and a file Unshacklarr cannot read shows as Unreadable while the others still show.
+- **Translated notifications on Windows.** With a language set, notifications no longer fail to load their
+  translations, which are now read as UTF-8 whatever the system's encoding.
 - **A queued episode taken out stays out.** Removed or stopped just as its turn came, it no longer downloaded
   while the history said cancelled.
 - **Downloads at once is kept when a job pauses.** Pausing a job, or its episode ending while it was paused, no

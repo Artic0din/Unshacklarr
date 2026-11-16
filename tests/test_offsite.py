@@ -81,3 +81,32 @@ def test_s3_refuses_a_folder_a_url_would_rewrite(bucket):
     with mock.patch.object(requests, "put", put), pytest.raises(ValueError, match="cannot hold"):
         offsite.s3_put("https://nas.example", bucket, "", "AKID", "secret", "a.enc", b"hello")
     put.assert_not_called()
+
+
+def _webdav(status, location=""):
+    # requests follows a redirect unless told not to: behind forward-auth the login page then answers 200
+    def put(url, data, auth, timeout, allow_redirects=True):
+        if status in (301, 302, 303, 307, 308) and allow_redirects:
+            return mock.Mock(status_code=200, url=location, raise_for_status=lambda: None)
+        return mock.Mock(status_code=status, url=url, headers={"Location": location} if location else {},
+                         raise_for_status=lambda: None)
+    return mock.patch.object(requests, "put", put)
+
+
+@pytest.mark.parametrize("status", [200, 201, 204])
+def test_webdav_takes_a_stored_file_as_sent(status):
+    with _webdav(status):
+        offsite.webdav_put("https://dav.example/backups", "u", "p", "b.enc", b"x")
+
+
+@pytest.mark.parametrize("location", ["https://auth.example/login?rd=x", "/login"])
+def test_a_webdav_redirect_is_a_failed_backup(location):
+    with _webdav(302, location), pytest.raises(requests.HTTPError, match="redirected") as e:
+        offsite.webdav_put("https://user:secret@dav.example/backups", "u", "p", "b.enc", b"x")
+    assert ("auth.example" if location.startswith("https") else "dav.example") in str(e.value)
+    assert "secret" not in str(e.value)
+
+
+def test_a_webdav_answer_that_stored_nothing_is_a_failed_backup():
+    with _webdav(207), pytest.raises(requests.HTTPError, match="207"):
+        offsite.webdav_put("https://dav.example/backups", "u", "p", "b.enc", b"x")

@@ -3,6 +3,7 @@ const ago_days = (ts) => { const d = Math.floor((Date.now() / 1000 - ts) / 86400
 /* Where a cookie file stands: a colour, a word, a sentence for the tooltip. */
 function cookieStatus(f) {
   const left = f.expires ? Math.floor((f.expires * 1000 - Date.now()) / 86400000) : null;
+  if (f.unreadable) return ["bad", "Unreadable", "Unshacklarr cannot read this file: check its permissions, or replace it"];
   if (f.expired) return ["bad", "Expired", "The service will refuse them: replace them with fresh ones"];
   // Session cookies carry no date: how long they sign in is the service's secret
   if (left === null || left < 0) return ["mut", "Session only", "Session cookies have no expiry date: only a failed sign-in shows they are over"];
