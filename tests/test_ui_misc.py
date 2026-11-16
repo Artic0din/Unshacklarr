@@ -353,9 +353,13 @@ ctx.S.config.settings.sonarrs[0].name = "Anime 2";  // an unsaved rename, as the
 ctx.moveSonarrRefs("Anime", "Anime 2");
 const renamed = ctx.S.sonarrsOf[7][0].name, requestWhileRenamed = vm.runInContext('savedSonarr("Anime 2")', ctx);
 ctx.discardChanges();
-console.log(JSON.stringify({ renamed, requestWhileRenamed, libraries: ctx.S.sonarrsOf[7].map((o) => o.name), request: vm.runInContext('savedSonarr("Anime")', ctx) }));
+const request = vm.runInContext('savedSonarr("Anime")', ctx);
+ctx.S.config.settings.sonarrs[0].name = "Anime 3";  // renamed again after the discard, still unsaved
+console.log(JSON.stringify({ renamed, requestWhileRenamed, libraries: ctx.S.sonarrsOf[7].map((o) => o.name), request,
+  requestAfter: vm.runInContext('savedSonarr("Anime 3")', ctx) }));
 """, str(JS / "settings-options.js"), str(JS / "core.js"), str(JS / "quality.js"))
-    assert shown == {"renamed": "Anime 2", "requestWhileRenamed": "Anime", "libraries": ["Anime"], "request": "Anime"}
+    # the restored entry is a new object: requests still name the Sonarr as the server knows it
+    assert shown == {"renamed": "Anime 2", "requestWhileRenamed": "Anime", "libraries": ["Anime"], "request": "Anime", "requestAfter": "Anime"}
 
 
 def test_discard_waits_for_a_save_in_flight():

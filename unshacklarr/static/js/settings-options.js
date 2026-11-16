@@ -816,6 +816,7 @@ function discardChanges() {
   for (const [id, conf] of Object.entries(S.config.series)) if (conf.service && !(id in savedSeries)) delete S.config.series[id];
   Object.assign(S.config.series, savedSeries);
   S.sonarrsOf = JSON.parse(savedSonarrsOf);
+  keepSonarrNames(sonarrNames());  // the restored entries are new objects, under their saved names
   optionsEditor($("#defaults"), S.dlOptions, S.config.defaults);
   renderSettings();
   // drawn when their section opens, not by renderSettings: their handlers hold the objects just replaced
