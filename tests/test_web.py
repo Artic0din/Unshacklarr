@@ -1929,6 +1929,7 @@ vm.runInContext(`
 let runsSeq = 0, runCards = [], runsTimer = null;
 const isLive = (c) => c.outcome === "running";
 const renderConsole = () => drawn.push(runCards.map((c) => c.id));
+${grab("further")}
 ${grab("openActivity")}
 ${src.slice(src.indexOf("let feedReloading"), src.indexOf("function liveTick"))}
 ${grab("liveTick")}

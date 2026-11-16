@@ -26,6 +26,9 @@ function timeLeft(c) {
   return rate > 0 && p < 100 ? duration(((100 - p) / rate) * 1000) : "";
 }
 
+function further(a, b) {  // a is ahead of b in the same step: more tracks done, else more progress
+  return a.step === b.step && ((a.live?.completed_tracks || 0) - (b.live?.completed_tracks || 0) || Number(a.live?.progress || 0) - Number(b.live?.progress || 0)) > 0;
+}
 let runsSeq = 0;
 async function openActivity() {
   const seq = ++runsSeq, asked = Date.now();
@@ -39,9 +42,10 @@ async function openActivity() {
     return;
   }
   if (seq !== runsSeq) return;  // a newer call is on its way: this answer may predate a Stop
-  // a card the live feed drew since the request began is newer than this answer's: the bar must not step back
+  // an answer made before a live message can land after it: the bar must not step back (a card the feed drew since
+  // the request began, further on in the same step, stays; an answer further on than that message is newer)
   const drawn = new Map(runCards.map((c) => [c.id, c]));
-  runCards = cards.map((c) => (isLive(c) && drawn.get(c.id)?.liveAt >= asked ? drawn.get(c.id) : c));
+  runCards = cards.map((c) => { const was = drawn.get(c.id); return isLive(c) && was?.liveAt >= asked && further(was, c) ? was : c; });
   clearTimeout(runsTimer);
   renderConsole();
   api("/api/leftovers").then((r) => { $("#con-left-n").textContent = r.items.length ? `(${r.items.length})` : ""; }).catch(() => {});

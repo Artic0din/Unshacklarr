@@ -13,7 +13,7 @@ PRELUDE = r"""
 const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8");
 const read = (file) => fs.readFileSync(file, "utf8");
-const grab = (name, text = src) => text.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n|const ${name} = [\\s\\S]*?\\n};?\\n|const ${name} = [^\\n]*\\n`))[0];
+const grab = (name, text = src) => text.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n|const ${name} = [^\\n{]*\\n|const ${name} = [\\s\\S]*?\\n};?\\n`))[0];
 """
 
 
@@ -25,7 +25,8 @@ def node(script, *args):
     return json.loads(out.stdout)
 
 
-def test_history_answer_keeps_newer_live_progress():
+@pytest.mark.parametrize("live, answered, shown_progress", [(60, 10, 60), (10, 60, 60)])
+def test_history_answer_keeps_newer_live_progress(live, answered, shown_progress):
     shown = node(r"""
 const card = (progress) => ({ id: "a", outcome: "running", step: "downloading", live: { status: "downloading", progress } });
 let answer;
@@ -33,16 +34,16 @@ const ctx = { runCards: [card(10)], runsTimer: null, liveFeed: null, feedReloadi
   $: () => ({ hidden: false, textContent: "" }), api: (path) => (path === "/api/runs" ? new Promise((resolve) => { answer = resolve; }) : Promise.resolve({ items: [] })),
   renderConsole() {}, followLive() {}, activityLater() {}, failed: () => null, setTimeout: () => 0, clearTimeout() {} };
 vm.createContext(ctx);
-vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
+vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged", "further"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
 (async () => {
   const reload = ctx.openActivity();
-  ctx.liveTick(JSON.stringify([card(60)]));  // drawn while the history answer is on its way
-  answer([card(10), { id: "old", outcome: "downloaded" }]);  // produced before that message
+  ctx.liveTick(JSON.stringify([card(Number(process.argv[2]))]));  // drawn while the history answer is on its way
+  answer([card(Number(process.argv[3])), { id: "old", outcome: "downloaded" }]);  // the 60 case: produced before that message
   await reload;
   console.log(JSON.stringify({ progress: ctx.runCards[0].live.progress, history: ctx.runCards.map((c) => c.id) }));
 })();
-""", str(JS / "activity.js"))
-    assert shown == {"progress": 60, "history": ["a", "old"]}
+""", str(JS / "activity.js"), str(live), str(answered))
+    assert shown == {"progress": shown_progress, "history": ["a", "old"]}
 
 
 def test_history_answer_takes_card_when_no_live_message_came():
@@ -52,7 +53,7 @@ const ctx = { runCards: [card(10)], runsTimer: null, liveFeed: null, feedReloadi
   $: () => ({ hidden: false, textContent: "" }), api: async (path) => (path === "/api/runs" ? [card(30)] : { items: [] }),
   renderConsole() {}, followLive() {}, activityLater() {}, failed: () => null, setTimeout: () => 0, clearTimeout() {} };
 vm.createContext(ctx);
-vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
+vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged", "further"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
 ctx.openActivity().then(() => console.log(JSON.stringify({ progress: ctx.runCards[0].live.progress })));
 """, str(JS / "activity.js"))
     assert shown == {"progress": 30}
