@@ -3222,6 +3222,19 @@ def test_a_question_is_asked_once_kept_in_the_bell_and_done_once_answered(tmp_pa
     run.finish("failed")
 
 
+def test_a_replaced_or_abandoned_question_is_done_in_the_bell(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    monkeypatch.setattr(sync, "notification_urls", lambda settings: [])
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "DSNP"}, "auto")
+    sync.ask_for_input(run, "Enter the code sent to your e-mail")
+    sync.ask_for_input(run, "Wrong code, try again")  # a new question: the old one is no longer waiting
+    first, second = sync.read_inbox()["items"][::-1]
+    assert first["action"].get("done") is True and not second["action"].get("done")
+    run.finish("failed")  # stopped or failed while it asked: nothing waits for an answer
+    assert all(item["action"].get("done") for item in sync.read_inbox()["items"]) and "prompt" not in run.card
+
+
 @responses.activate
 def test_an_episode_in_two_parts_waits_for_both(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)

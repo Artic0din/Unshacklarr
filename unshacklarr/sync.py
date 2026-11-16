@@ -1721,6 +1721,8 @@ class EpisodeRun:
             print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
 
     def finish(self, outcome: str, cause: str = "", detail: str = "", *, auth_failed: bool = False) -> None:
+        if asked := self.card.pop("prompt", None):  # failed or stopped mid-question: nobody can answer it now
+            inbox_resolve(asked["id"])
         self.set_approval(None)
         self.set_authentication(None)
         if getattr(current, "run", None) is self:
@@ -2145,6 +2147,8 @@ def ask_for_input(run: EpisodeRun, prompt: str | None) -> None:
     on the run's card and in the bell, with a field to answer; sent once per question."""
     had = run.card.get("prompt")
     if prompt and prompt != (had or {}).get("text"):
+        if had:
+            inbox_resolve(had["id"])  # replaced ("wrong code, try again"): the old question no longer waits
         service = run.card["service"]
         run.card["prompt"] = {"id": uuid.uuid4().hex[:12], "text": prompt, "service": service, "run": run.id}
         run.say(f"\r\n\x1b[33m{service} asks: {prompt}\x1b[0m")

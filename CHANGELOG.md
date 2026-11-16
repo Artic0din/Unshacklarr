@@ -230,6 +230,7 @@ Every change worth knowing, newest first. The format follows
 - A second Sonarr now gets the same automatic sync as the main one: a series' own broadcast schedule and its early releases (a negative release day) reach it too, so a weekly series Sonarr dates all on its premiere is no longer missed there.
 - A failure whose message merely contains "log in" inside another word ("catalog index", "assign in time") is no longer taken for a sign-in problem, so it no longer tries every fallback profile or says the cookies may have expired.
 - Hiding an approval code no longer hides ordinary words with it: "enter your code ABCD-1234" hides only the code, not every "your" in the history and in error messages, so a download error such as "connection refused" still matches its retry rule.
+- A sign-in question in the bell is now crossed off when the service asks a new one ("wrong code, try again"), and when the download fails or is stopped while it was asking, instead of staying open.
 
 ### Removed
 
