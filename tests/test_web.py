@@ -7431,3 +7431,33 @@ def test_include_sample_is_not_offered_while_joining_and_importing_would_take_it
     # Unshackle puts a sample next to each muxed file, Part.N in its name too: the join would add them to the episode
     from unshacklarr import options
     assert "--include-sample" not in {s["flag"] for s in options.dl_specs()}
+
+
+def test_a_save_lets_a_release_held_for_its_episode_order_be_tried_again(tmp_path, monkeypatch):
+    # A burst held because Sonarr numbers the series in another order: the numbering corrected and saved, the release
+    # watch tries it at its next round instead of waiting out the rest of the burst window
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    show = {"service": "iV", "title": "https://example.com/show", "since": "2026-10-01T00:00:00+00:00"}
+    web.write_config({**web.read_config(), "series": {7: dict(show)}})
+    monkeypatch.setattr(web, "known_services", lambda: None)
+    web.sonarr_sync.held_bursts[("", 1)] = 0.0
+
+    async def body():
+        return {"series": {"7": {**show, "season_map": {"2": 3}}}}
+    asyncio.run(web.save_config(SimpleNamespace(json=body)))
+    assert web.sonarr_sync.held_bursts == {}
+
+
+def test_a_ladder_prefers_an_exact_language_to_an_earlier_base_match():
+    # en-US then fr, with en-GB and fr listed: fr matches exactly, as first_language picks for one part
+    from unshacklarr import sync
+    parts = [[{"language": "en-GB"}, {"language": "fr"}], [{"language": "en-GB"}, {"language": "fr"}]]
+    assert sync.common_language(["en-US", "fr"], parts) == "fr"
+    assert sync.common_language(["en-US"], parts) == "en-US"  # no exact one anywhere: by its base language
+    assert sync.common_language(["de"], parts) is None

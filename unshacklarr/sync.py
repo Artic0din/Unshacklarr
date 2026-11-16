@@ -3782,7 +3782,7 @@ def apply_ladder(
     # its language order picks among the episode's tracks, unless the series or its service ask for languages themselves
     for key, kind, asked in (("a_lang", "audio", ("lang", "a_lang", "require_audio")), ("s_lang", "subtitles", ("s_lang", "require_subs"))):
         # one every part has: a language one part lacks would stop the download of that part
-        common = next((w for w in ladder.get(kind) or [] if all(first_language([w], ep.get(kind) or []) for ep in episodes)), None)
+        common = common_language(ladder.get(kind) or [], [ep.get(kind) or [] for ep in episodes])
         if ladder.get(kind) and not any(request.get(k) for k in asked) and common and (lang := first_language([common], episodes[0].get(kind) or [])):
             request[key] = [lang]
             trace(f"quality ladder {ladder['name']}: {kind} in {lang}")
@@ -3820,6 +3820,17 @@ def note_download_answer(episode_id: int, show: dict, config: dict) -> None:
         seen[str(episode_id)] = {"checked": datetime.now(timezone.utc).isoformat(), "file": None, "item": None,
                                  "groups": ours, "download": True}
         write_atomic(path, json.dumps(seen))
+
+
+def common_language(order: list[str], parts: list[list[dict]]) -> str | None:
+    """The first language of the order every part has a track in: exactly first, then by base language, as
+    first_language goes (en-US, fr with en-GB and fr: fr)."""
+    base = lambda code: code.lower().split("-")[0]  # noqa: E731
+    have = [{str(t["language"]) for t in p if t.get("language") and not t.get("forced")} for p in parts]
+    for same in (lambda a, b: a.lower() == b.lower(), lambda a, b: base(a) == base(b)):
+        if hit := next((w for w in order if all(any(same(h, w) for h in langs) for langs in have)), None):
+            return hit
+    return None
 
 
 def first_language(order: list[str], tracks: list[dict]) -> str | None:
@@ -4497,9 +4508,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
             if (not manual or kind == "burst") and (why := order_changed(show, ep["series"])):
                 if kind == "burst":
                     now_s = time.time()
-                    for stale in [k for k, at in held_bursts.items() if now_s - at > 86400]:  # a day on: long over
-                        del held_bursts[stale]
-                    held_bursts[((instance() or {}).get("name", ""), ep["id"])] = now_s
+                    with held_lock:  # syncs of other Sonarrs note theirs at the same time
+                        for stale in [k for k, at in held_bursts.items() if now_s - at > 86400]:  # a day on: long over
+                            del held_bursts[stale]
+                        held_bursts[((instance() or {}).get("name", ""), ep["id"])] = now_s
                 if first_warning(f"order:{ep['series']['tvdbId']}:{ep['series'].get('seasonType')}"):
                     notify_series(show, settings, "warning", f"Episode order changed: {ep['series']['title']}",
                                   f"{why}. New episodes of this series are not downloaded until you check its numbering in Unshacklarr.")
@@ -4819,6 +4831,7 @@ warned_lock = threading.Lock()
 
 
 held_bursts: dict[tuple[str, int], float] = {}  # (Sonarr, episode) -> when a release burst was held for its order
+held_lock = threading.Lock()
 
 
 def order_changed(show: dict, serie: dict) -> str:

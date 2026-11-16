@@ -1289,6 +1289,8 @@ async def save_config(request):
             if day and (saved.get("release_time") or day < 0):  # the day after means nothing without a time, as above
                 saved["release_day"] = day
         write_config(config)
+        with sonarr_sync.held_lock:  # a release held for its episode order: a save may have fixed its numbering
+            sonarr_sync.held_bursts.clear()
     if settings.get("upgrade_check_new"):  # by mj23au: a series just set up, its files already on disk, checked once
         upgrade_pending.update(newly_set_up(series, previous.get("series") or {}))
     return web.json_response(public_config(read_config()))
