@@ -27,7 +27,7 @@ async function renderServiceDefaults() {
     const levels = all[tag];
     levels.options ??= {}; levels.service_options ??= {};
     const own = el("div", { className: "opts" }), dl = el("div", { className: "opts" });
-    const specs = await loadServiceOptions(tag);
+    const specs = await loadServiceOptions(tag).catch(() => []);  // Unshackle down or the service gone: still drawn, so it can be removed
     optionsEditor(dl, S.dlOptions, levels.options);
     optionsEditor(own, specs, levels.service_options, true);
     const count = Object.keys(levels.options).length + Object.keys(levels.service_options).length + (levels.backend ? 1 : 0) + (levels.ladder ? 1 : 0);
