@@ -317,7 +317,7 @@ function renderJob(j) {
     retryable.length ? el("button", { className: "btn small primary", textContent: `Retry ${retryable.length} failed`, dataset: { fk: "retry" },
       title: st.live ? "Downloads them again, before the episodes still to come" : "Downloads them again, in this job",
       onclick: (e) => retryJob(j, retryable, e.target) }) : "",
-    !st.live ? el("button", { className: "btn small", textContent: "Delete the job", dataset: { fk: "delete" }, title: "Removes every episode of this job from the history",
+    !st.live ? el("button", { className: "btn small danger", textContent: "Delete the job", dataset: { focusKey: `delete:${j.job}`, fk: "delete" }, title: "Removes every episode of this job from the history",
       onclick: (e) => deleteJob(j, e.target) }) : ""].filter(Boolean);
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(first)),
@@ -886,7 +886,7 @@ const ACT_ICONS = {
 function cardActs(c) {
   const live = isLive(c);
   const act = (kind, label, run, extra = "") => {
-    const b = el("button", { type: "button", className: `jact ${extra}`, ariaLabel: label, dataset: { fk: `${label}:${c.id}` }, onclick: (e) => run(c, e.currentTarget) });
+    const b = el("button", { type: "button", className: `jact ${extra}`, ariaLabel: label, dataset: { focusKey: `${kind}:${c.id}`, fk: `${label}:${c.id}` }, onclick: (e) => run(c, e.currentTarget) });
     b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ACT_ICONS[kind]}</svg>`;
     return b;
   };
@@ -909,7 +909,7 @@ function runActs(c) {
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: "btn small primary", textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
     !live ? el("button", { className: "btn small", textContent: "Save diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
       onclick: () => downloadDiagnostic(c) }) : "",
-    !live ? el("button", { className: "btn small", textContent: "Delete", dataset: { fk: "delete" }, onclick: (e) => deleteRun(c, e.target) }) : "",
+    !live ? el("button", { className: "btn small danger", textContent: "Delete", dataset: { focusKey: `delete:${c.id}`, fk: "delete" }, onclick: (e) => deleteRun(c, e.target) }) : "",
   ].filter(Boolean);
 }
 async function downloadDiagnostic(c) {

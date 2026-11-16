@@ -205,10 +205,10 @@ const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8");
 const target = () => { const l = {}; return { l, addEventListener(t, f) { (l[t] ||= []).push(f); }, removeEventListener(t, f) { l[t] = (l[t] || []).filter((x) => x !== f); },
   fire(t, e) { [...(l[t] || [])].forEach((f) => f({ type: t, ...e })); } }; };
-const doc = target(), button = { ...target(), dataset: {}, textContent: "Delete", contains: (n) => n === button };
-const ctx = { document: doc };
+const doc = target(), button = { ...target(), dataset: {}, textContent: "Delete", contains: (n) => n === button, closest: () => null };
+const ctx = { document: doc, $: () => ({}) };
 vm.createContext(ctx);
-vm.runInContext(src.match(/^function confirmClick\(.*?^\}/ms)[0], ctx);
+vm.runInContext(src.match(/^const sureSay.*?^function confirmClick\(.*?^\}/ms)[0], ctx);
 const out = {};
 ctx.confirmClick(button, "Delete RMCBFM.txt?");
 out.asked = button.textContent;
