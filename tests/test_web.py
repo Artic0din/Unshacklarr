@@ -7267,3 +7267,25 @@ box.run().then(() => console.log(JSON.stringify(shown["#svc-defaults"].flatMap(t
     run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     assert "Options of AMZN" in json.loads(run.stdout)
+
+
+def test_a_job_picked_up_again_that_runs_at_once_is_not_kept_for_the_next_start(tmp_path, monkeypatch):
+    # Its worker reaches sync() and takes it out of `restoring` before run_sync returns: it must stay out, or
+    # save_queue keeps the finished job in the file and every later start downloads it again
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import threading
+    import unshacklarr.sync
+    import unshacklarr.web
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync.QUEUE_FILE.write_text(json.dumps({"20261021-121217-33d6d0": {"episodes": [3], "kind": "manual"}}))
+    def run_sync(ids, batch=None, **kw):  # the worker gets its turn before this returns
+        with sync.jobs_lock:
+            sync.restoring.pop(batch, None)
+        t = threading.Thread(target=lambda: None); t.start(); t.join()
+        return t
+    monkeypatch.setattr(web, "run_sync", run_sync)
+    web.resume_queue()
+    assert "20261021-121217-33d6d0" not in sync.restoring
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {}
