@@ -1387,6 +1387,9 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
 .skeleton { aspect-ratio: 2 / 3; border-radius: var(--r-sm); background: var(--panel); }
 .empty { grid-column: 1 / -1; padding: 40px 0; color: var(--muted); max-width: 60ch; }
 .empty b { color: var(--text); display: block; margin-bottom: 4px; }
+.empty .btn { margin-top: 12px; }
+.con-empty .btn, .cdm-empty .btn { margin: 4px 8px 0 0; }
+#ug-series .btn { margin-top: 8px; }
 .poster .meta .miss { color: var(--warn); }
 .poster:focus-visible { outline: none; }
 .poster:focus-visible .art { outline: 2px solid var(--accent); outline-offset: 3px; }  /* apart from the "managed" ring, which sits on the art itself */

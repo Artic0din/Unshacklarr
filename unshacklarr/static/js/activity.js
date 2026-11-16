@@ -143,6 +143,15 @@ function glideBars(root) {
   root.offsetWidth;  // the start widths are laid out before the targets are set
   bars.forEach((b, i) => { b.style.width = targets[i]; barWidths.set(b.dataset.k, targets[i]); });
 }
+/* No download to list: what was asked for named, with a way back to the whole history. */
+function emptyHistory(query, filter) {
+  if (!query && filter === "all") return el("p", { className: "con-empty", textContent: "No download yet. Downloads start from a series, or with Run sync now." });
+  const label = document.querySelector(`#tab-log .con-filters [data-f="${filter}"]`).firstChild.textContent.trim();
+  const text = query && filter !== "all" ? `No download under ${label} matches “${query}”.` : query ? `No download matches “${query}”.` : `No download under ${label}.`;
+  return el("div", { className: "con-empty", role: "status" }, el("p", { textContent: text }),
+    ...(query ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", onclick: () => { $("#con-search").value = ""; renderConsole(); $("#con-search").focus(); } })] : []),
+    ...(filter !== "all" ? [el("button", { type: "button", className: "btn small", textContent: "Show all", onclick: () => { setConFilter("all"); document.querySelector('#tab-log .con-filters [data-f="all"]').focus(); } })] : []));
+}
 function renderConsole(liveOnly = false) {  // liveOnly: a tick of the live feed, the same downloads moving on
   const live = runCards.filter(isLive);
   // A job (episodes picked together) is running while one of its episodes is; the others wait in it, not in the history
@@ -152,14 +161,14 @@ function renderConsole(liveOnly = false) {  // liveOnly: a tick of the live feed
   $("#runs-live").replaceChildren(...(liveItems.length ? liveItems.map(itemRow) : [el("p", { className: "con-empty", textContent: "Nothing is downloading right now." })]));
   glideBars($("#runs-live"));
   if (!liveOnly) {  // the history and its counts: unchanged while the same downloads only move on
-    const q = $("#con-search").value.trim().toLowerCase();
+    const query = $("#con-search").value.trim(), q = query.toLowerCase();
     const groups = { all: () => true, downloaded: (c) => c.outcome === "downloaded", failed: (c) => c.outcome === "failed",
       kept: (c) => c.outcome === "kept" || c.outcome === "import", stopped: (c) => ["stopped", "interrupted", "cancelled"].includes(c.outcome) };
     const searched = runCards.filter((c) => !isLive(c) && (!q || c.series.toLowerCase().includes(q)));
     document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.querySelector("span").textContent = `(${searched.filter(groups[b.dataset.f]).length})`);
     const pastItems = jobsOf(searched.filter(groups[conFilter]).filter((c) => !liveJobs.has(c.batch)));
     $("#runs-history").replaceChildren(...(pastItems.length ? pastItems.slice(0, runsShown).map(itemRow)
-      : [el("p", { className: "con-empty", textContent: q || conFilter !== "all" ? "No download matches." : "No download yet." })]));
+      : [emptyHistory(query, conFilter)]));
     $("#runs-more").hidden = pastItems.length <= runsShown;
   }
   // Activity opened from the menu while a download runs: straight to it, a phone too.
@@ -758,11 +767,12 @@ $("#con-stats").onclick = showStats;
 $("#cd-back").onclick = () => { $("#con").classList.remove("open"); picked_run = null; renderConsole(); };
 let searchTimer = null;  // typed: the history filtered once the typing pauses, not at each key
 $("#con-search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 150); };
-document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.onclick = () => {
-  conFilter = b.dataset.f;
-  document.querySelectorAll("#tab-log .con-filters button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+function setConFilter(f) {
+  conFilter = f;
+  document.querySelectorAll("#tab-log .con-filters button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.f === f));
   renderConsole();
-});
+}
+document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.onclick = () => setConFilter(b.dataset.f));
 const moreRuns = () => { if (!$("#runs-more").hidden) { runsShown += 50; renderConsole(); } };
 $("#runs-more").onclick = moreRuns;
 $("#runs-history").addEventListener("scroll", (e) => { const h = e.target; if (h.scrollTop + h.clientHeight > h.scrollHeight - 300) moreRuns(); }, { passive: true });

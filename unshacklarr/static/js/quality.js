@@ -453,14 +453,17 @@ function upgradeSeries() {
 function renderUpgradeSeries() {
   const box = $("#ug-series");
   if (!box) return;
-  const find = $("#ug-find").value.trim().toLowerCase(), all = upgradeSeries();
+  const typed = $("#ug-find").value.trim(), find = typed.toLowerCase(), all = upgradeSeries();
   const shown = all.filter((s) => !find || s.title.toLowerCase().includes(find));
   box.replaceChildren(...shown.map((s) => el("label", { className: "ug-line" },
     el("input", { type: "checkbox", checked: s.conf.skip_upgrades !== true, onchange: (e) => {
       if (e.target.checked) delete s.conf.skip_upgrades; else s.conf.skip_upgrades = true;
       dirty(); upgradeSay(all);
     } }), el("span", { textContent: s.title }))));
-  if (!shown.length) box.replaceChildren(el("p", { className: "dx-empty", textContent: all.length ? "No series matches." : "No series set up yet." }));
+  if (!shown.length) box.replaceChildren(all.length
+    ? el("div", { role: "status" }, el("p", { className: "dx-empty", textContent: `No series matches “${typed}”.` }),
+        el("button", { type: "button", className: "btn small", textContent: "Clear search", onclick: () => { $("#ug-find").value = ""; renderUpgradeSeries(); $("#ug-find").focus(); } }))
+    : el("p", { className: "dx-empty", textContent: "No series set up yet." }));
   upgradeSay(all);
 }
 function upgradeSay(all) {
