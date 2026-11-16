@@ -6155,8 +6155,8 @@ def sonarr_codes_of_service(tvdb: int, codes: list[str]) -> tuple[dict[str, str]
     eps = [e for e in sonarr_sync.sonarr_get("episode", seriesId=series[0]["id"]) if e["seasonNumber"] > 0 or e.get("episodeNumber")]
     code_of = {e["id"]: f"S{e['seasonNumber']:02}E{e['episodeNumber']:02}" for e in eps}
     hit = read_json(SERVICE_LISTS, {}).get(str(tvdb)) or {}
-    listed = hit.get("available") or {} if hit.get("service") == show.get("service") and hit.get("title") == str(show.get("title")) \
-        and hit.get("v") == SERVICE_LIST_FORMAT else {}
+    # of the series' service, URL and numbering now: a listing kept from before a numbering change maps the old way
+    listed = hit.get("available") or {} if same_listing(hit, show) and hit.get("v") == SERVICE_LIST_FORMAT else {}
     found, missing = {}, []
     for code in codes:
         by_list = {int(i) for i, m in listed.items() if str(m.get("service") or "").split(".")[0] == code

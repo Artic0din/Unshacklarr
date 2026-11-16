@@ -6951,6 +6951,9 @@ def test_the_api_takes_the_services_own_numbering_and_decides_the_audio_upgrade(
            84661: {"id": 84661, "seasonNumber": 17, "episodeNumber": 47, "hasFile": False}}
     show["episode_map"] = {"S17E46": "S04E06", "S17E47": "S04E07"}
     web.write_config({**web.read_config(), "series": {74796: show}})
+    listing = json.loads(web.SERVICE_LISTS.read_text())
+    listing["74796"]["numbering"] = web.listing_numbering(show)  # the listing is of the numbering the series has now
+    web.write_atomic(web.SERVICE_LISTS, json.dumps(listing))
 
     def sonarr_get(path, **p):
         if path == "series":
@@ -6964,6 +6967,11 @@ def test_the_api_takes_the_services_own_numbering_and_decides_the_audio_upgrade(
     monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang: added.extend((i, lang) for i in ids))
     found, missing = web.sonarr_codes_of_service(74796, ["S04E05", "S04E06", "S04E07", "S09E09"])
     assert found == {"S04E05": "S17E45", "S04E06": "S17E46", "S04E07": "S17E47"} and missing == ["S09E09"]
+    # its numbering changed since that listing: the listing's S04E05 = S17E45 no longer holds, only the numbering does
+    web.write_config({**web.read_config(), "series": {74796: {**show, "episode_map": {**show["episode_map"], "S04E05": "S04E05"}}}})
+    found_after, _ = web.sonarr_codes_of_service(74796, ["S04E05"])
+    assert found_after == {"S04E05": "S04E05"}
+    web.write_config({**web.read_config(), "series": {74796: show}})
 
     async def go():
         async with TestClient(TestServer(web.app)) as browser:
