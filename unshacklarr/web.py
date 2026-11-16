@@ -5231,7 +5231,7 @@ async def languages_wait(request):
     picked = [i for i in (await asyncio.to_thread(read_json, LANGUAGES_FILE, {})).get("items") or []
               if i["episodeId"] in ids and i["lacks"] == "preferred"]
     for i in picked:
-        show = config["series"].get(i["tvdbId"]) or {}
+        show = sonarr_sync.season_page(config["series"].get(i["tvdbId"]) or {}, i["season"])  # as check_upgrades asks it
         if not show.get("service"):
             continue
         ep = {"id": i["episodeId"], "seasonNumber": i["season"], "episodeNumber": i["number"], "series": {"tvdbId": i["tvdbId"], "title": i["series"]}}

@@ -7289,3 +7289,24 @@ def test_a_job_picked_up_again_that_runs_at_once_is_not_kept_for_the_next_start(
     assert "20261021-121217-33d6d0" not in sync.restoring
     sync.save_queue()
     assert json.loads(sync.QUEUE_FILE.read_text()) == {}
+
+
+def test_an_episode_watched_from_languages_is_watched_on_its_seasons_own_page(tmp_path, monkeypatch):
+    # A season with its own page (another service, its own numbering): the hourly check resolves season_page and
+    # drops a watch recorded for the main page's service, so it must be recorded as that page asks
+    import asyncio
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    (tmp_path / "config.yaml").write_text("series:\n  1: {service: X, title: a, season_pages: {2: {url: b, service: Y}}}\n")
+    web.write_atomic(web.LANGUAGES_FILE, json.dumps({"items": [
+        {"episodeId": 21, "tvdbId": 1, "series": "Show", "season": 2, "number": 1, "sxxeyy": "S02E01", "lacks": "preferred", "want": "fr"}]}))
+
+    class Request:
+        async def json(self):
+            return {"episodeIds": [21]}
+    asyncio.run(web.languages_wait(Request()))
+    watched = web.read_json(web.sonarr_sync.UPGRADES_FILE, {})["21"]
+    assert (watched["service"], watched["serviceEpisode"]) == ("Y", "S01E01")
