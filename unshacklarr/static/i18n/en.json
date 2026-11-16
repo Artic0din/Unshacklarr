@@ -468,6 +468,7 @@
   "SEL.ids.size"
  ],
  "Changed": [],
+ "Changes discarded": [],
  "Change…": [],
  "Chapters": [],
  "Chapters_": [],
@@ -757,6 +758,7 @@
  "Disable folder creation for TV Shows.": [],
  "Disable the source tag from the output file name and path.": [],
  "Discard": [],
+ "Discard changes": [],
  "Discord": [],
  "Discord, this device and more": [],
  "Dismiss": [],

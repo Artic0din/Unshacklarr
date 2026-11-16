@@ -196,6 +196,8 @@
  "Disable folder creation for TV Shows.": "Не создавать папки для сериалов.",
  "Disable the source tag from the output file name and path.": "Убрать тег источника из имени и пути выходного файла.",
  "Discard": "Отменить изменения",
+ "Discard changes": "Отменить изменения",
+ "Changes discarded": "Изменения отменены",
  "Discord, this device and more": "Discord, это устройство и другое",
  "Do not download audio tracks.": "Не скачивать аудиодорожки.",
  "Do not download chapter markers.": "Не скачивать главы.",

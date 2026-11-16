@@ -79,6 +79,11 @@ Every change worth knowing, newest first. The format follows
   `docker exec`.
 - **Search by any title.** The series search also finds a series by its other titles in Sonarr and its name in files.
 
+**💾 Saving**
+- **Discard unsaved changes.** The bar at the bottom has a Discard changes button next to Save changes: it puts the
+  settings back as last saved, a notification address you removed included, and says "Unsaved changes" to a screen
+  reader when it shows. (#280)
+
 ### Changed
 
 - **Success has its own green, apart from the teal accent.** Healthy status dots, "Downloaded" notifications, valid cookie pills, a working CDM and finished job steps no longer share the teal that marks what is selected or being downloaded. (#280)

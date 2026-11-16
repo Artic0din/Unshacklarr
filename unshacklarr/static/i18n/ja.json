@@ -196,6 +196,8 @@
  "Disable folder creation for TV Shows.": "TV 番組のフォルダを作成しません。",
  "Disable the source tag from the output file name and path.": "出力ファイル名とパスにソースタグを付けません。",
  "Discard": "破棄",
+ "Discard changes": "変更を破棄",
+ "Changes discarded": "変更を破棄しました",
  "Discord, this device and more": "Discord、このデバイスなど",
  "Do not download audio tracks.": "音声トラックをダウンロードしません。",
  "Do not download chapter markers.": "チャプターをダウンロードしません。",
