@@ -4897,6 +4897,11 @@ def retried_replace(ids: list[int], batch: str, instance: str) -> bool:
     return any(card.get("replace") is True for card in last_attempts(ids, batch, instance))
 
 
+def retried_audio(ids: list[int], batch: str, instance: str) -> str:
+    """The audio language a download was asked in (the API's "audio"), which a retry of it asks again; "" for the series' own."""
+    return next((card["audio_override"] for card in last_attempts(ids, batch, instance) if isinstance(card.get("audio_override"), str)), "")
+
+
 def retried_alike(ids: list[int], instance: str) -> tuple[dict | None, bool] | None:
     """The numbering and Replace anyway an API retry repeats: its episodes' own last attempts', None when they
     differ (episodes of different jobs: one's numbering can't stand for another's)."""
@@ -4942,6 +4947,7 @@ async def download(request):
         if numbering is None:
             numbering = await asyncio.to_thread(retried_numbering, ids, batch, inst["name"] if inst else "")
         replace = replace or await asyncio.to_thread(retried_replace, ids, batch, inst["name"] if inst else "")
+    audio = await asyncio.to_thread(retried_audio, ids, batch, inst["name"] if inst else "") if body.get("retry") is True else ""
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     if batch and not inst:  # the job still runs: in its queue (retries next, in order), one download at a time
@@ -4952,7 +4958,7 @@ async def download(request):
         ids = left[::-1] if first else left
     room_for_one_more()
     run_sync(ids, replace=replace, kind="retry" if body.get("retry") is True else "manual", numbering=numbering, batch=batch or None,
-             sonarr=inst["name"] if inst else "")
+             sonarr=inst["name"] if inst else "", **({"audio": audio} if audio else {}))
     return web.json_response({"running": True})
 
 
@@ -6303,6 +6309,8 @@ async def v1_start_download(request):
     audio = str(body.get("audio") or "").strip().lower()
     if audio and not LANGUAGE_TAG.fullmatch(audio):
         raise web.HTTPBadRequest(text='"audio" is one language code, such as "fr"')
+    head, dash, region = audio.partition("-")  # fre as fr, as speaks reads a file's tags: the same language either way
+    audio = sonarr_sync.LANGS.get(head, head) + dash + region
     by_service = body.get("numbering") == "service"
     if body.get("numbering") not in (None, "", "sonarr", "service"):
         raise web.HTTPBadRequest(text='"numbering" is "service" (the service\'s own episode codes) or "sonarr"')

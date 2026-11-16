@@ -7762,7 +7762,33 @@ def test_an_audio_request_asks_every_download_it_starts_in_that_language(tmp_pat
             assert started == [([1, 2, 3], {})]
             bad = await browser.post("/api/v1/downloads", headers=api, json={"episodeIds": [1], "audio": "fr en"})
             assert bad.status == 400 and await bad.text() == '"audio" is one language code, such as "fr"'
+            # a three-letter code is the same language as the file's: French as "fre" finds the French file
+            started.clear()
+            answer = await browser.post("/api/v1/downloads", headers=api, json={"episodeIds": [2], "audio": "fre"})
+            assert await answer.json() == {"queued": 1, "downloaded": 0, "replaced": 1, "audio_added": 0}
+            assert [(ids, k.get("audio"), k.get("replace", False)) for ids, k in started] == [([2], "fr", True)]
     asyncio.run(go())
+
+
+def test_a_retry_keeps_the_audio_language_of_the_attempt_it_retries(monkeypatch):
+    # Asked in French, failed, then retried from Activity once its job was over: the retry asks French again
+    import asyncio
+    from unshacklarr import web
+    cards = [{"episodeId": 5, "audio_override": "fr"}, {"episodeId": 6}]
+    monkeypatch.setattr(web, "cards_on_disk", lambda: cards)
+    monkeypatch.setattr(web.sonarr_sync.RUNS_DIR.__class__, "exists", lambda self: True)
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    monkeypatch.setattr(web, "room_for_one_more", lambda: None)
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append((list(ids), k.get("audio", ""))))
+
+    class Request:
+        def __init__(self, body): self.body = body
+        async def json(self): return self.body
+    for ids, retry in (([5], True), ([6], True), ([5], False)):
+        asyncio.run(web.download(Request({"episodeIds": ids, "retry": retry})))
+    assert started == [([5], "fr"), ([6], ""), ([5], "")]
 
 
 def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
