@@ -121,6 +121,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Focus is easier to see, and the small visual slips are gone.** A text field, the "Other" number pill, the Activity icon buttons and the filter bars now show a clear 2px ring when you reach them; "Open Sonarr", "Sign-in and cookies" and "CDM devices" are drawn in the button colour instead of the browser's link blue; the new remote CDM fields no longer make iOS zoom the page; choice chips have a visible edge; pressed controls scale to 96%; dialogs and menus no longer scroll the page behind them at their ends; a series with no poster, or one that fails to load, shows its initials on the wall; a failed load spans the whole wall, and the loading boxes can be seen and are announced as "Loading series…"; and the country list in setup is as wide as its field. (#280)
 - **Activity and the first-run setup no longer leave you stranded.** On a phone, a running job's bar has Open series
   next to Pause, Options and Stop, and a finished job keeps its Delete; a download waiting for your OTP code or answer
   says "Waiting for your answer" in a chip, with no running pulse or progress bar; a step of the setup scrolls its card
