@@ -6854,6 +6854,8 @@ def main() -> None:
     if any(cleaned.values()):
         counts = ", ".join(f"{name}={count}" for name, count in cleaned.items())
         print(f"Removed retained device-approval data: {counts}", flush=True)
+    if partial := sonarr_sync.remove_partial_merges():
+        print(f"Removed {partial} audio merge(s) cut short by the last stop", flush=True)
     announce_setup_code()
     print(f"Unshacklarr keeps its settings in {sonarr_sync.DATA}", flush=True)
     web.run_app(app, host=os.environ.get("HOST", "0.0.0.0"), port=int(os.environ.get("PORT", "8788")), print=None)

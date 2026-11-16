@@ -3534,21 +3534,23 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             if all(lengths) and abs(lengths[0] - lengths[1]) > 1:  # the same source: the same length within a second
                 raise RuntimeError(f"The {want} audio lasts {lengths[1]:.0f} s and the file {lengths[0]:.0f} s, so the audio was not added")
             joined = out / have.with_suffix(".mkv").name  # mkvmerge always writes Matroska: never under an .mp4 name
+            partial = joined.with_name(joined.name + PARTIAL)
             # the downloads folder is shared: a link planted there must not make mkvmerge write through it (as finalize)
-            if out.is_symlink() or joined.exists() or joined.is_symlink() or any(f.is_symlink() for f in out.rglob("*")):
+            if out.is_symlink() or any(f.exists() or f.is_symlink() for f in (joined, partial)) or any(f.is_symlink() for f in out.rglob("*")):
                 raise RuntimeError(f"The download folder {out.name} holds a link or a file with the same name as the library's file, so the audio was not added")
             run.step("joining")
             mine, theirs = default_flags(mkv_tracks(have), mkv_tracks(got[0]), want)
-            cmd = ["mkvmerge", "-q", "-o", str(joined), *mine, str(have),
+            cmd = ["mkvmerge", "-q", "-o", str(partial), *mine, str(have),
                    "--no-video", "--no-subtitles", "--no-chapters", "--no-attachments", *theirs, str(got[0])]
             try:
                 done = mkv_run(cmd, MKV_WRITE_TIMEOUT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
             except RuntimeError:
-                joined.unlink(missing_ok=True)  # cut short: it would replace the library's file
+                partial.unlink(missing_ok=True)
                 raise
             if done.returncode not in (0, 1):  # 1: warnings only; below 0: killed by a signal
-                joined.unlink(missing_ok=True)  # a cut-short video would be offered under Waiting in downloads and replace the library's
+                partial.unlink(missing_ok=True)
                 raise RuntimeError(f"mkvmerge could not add the audio: {done.stdout.strip()[-300:]}")
+            os.replace(partial, joined)  # whole, or not there: a cut-short video would replace the library's on import
             for f in got:
                 f.unlink(missing_ok=True)
             run.card["size"] = joined.stat().st_size
@@ -4173,6 +4175,27 @@ def leftovers() -> list[dict]:
                       "files": [f.name for f in files], "size": sum(f.stat().st_size for f in files),
                       "since": max(f.stat().st_mtime for f in files)})
     return found
+
+
+PARTIAL = ".part"  # an audio merge is written under this suffix, then renamed: Import never sees one cut short
+
+
+def remove_partial_merges() -> int:
+    """At start: the audio merges a crash or a restart cut short, and the folders left empty by them. How many."""
+    removed = 0
+    for d in sorted(DOWNLOADS.glob("unshackle-*")) if DOWNLOADS.is_dir() else []:
+        if not FOLDER.fullmatch(d.name) or d.is_symlink() or not d.is_dir() or d.name in busy_episodes:
+            continue
+        try:
+            stray = [f for f in d.glob(f"*{PARTIAL}") if f.is_file() and not f.is_symlink()]
+            for f in stray:
+                f.unlink()
+                removed += 1
+            if stray and not any(d.iterdir()):
+                d.rmdir()
+        except OSError as e:
+            print(f"Could not remove a cut-short merge in {d.name}: {e}", file=sys.stderr)
+    return removed
 
 
 def leftover_path(folder: str) -> Path:

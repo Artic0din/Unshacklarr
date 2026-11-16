@@ -4608,7 +4608,7 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
     assert asked[0]["title_id"] == "https://service/season-two" and asked[0]["wanted"] == ["S01E05"]
     assert asked[0]["audio_only"] is True and asked[0]["a_lang"] == ["fr"] and "lang" not in asked[0]
     merge = calls[-1]
-    assert merge[:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / "Show - S02E05.mkv")]
+    assert merge[:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / "Show - S02E05.mkv.part")]
     assert str(library / "Show - S02E05.mkv") in merge and merge[-1].endswith("audio.mka")
     # the French audio is the default one; French subtitles only its forced ones, the full ones off
     lib = merge.index(str(library / "Show - S02E05.mkv"))
@@ -4775,7 +4775,7 @@ def test_the_added_audio_is_written_as_a_matroska_file_whatever_the_library_file
         file.update(path=f"/tv/Show/Season 02/{name}", sceneName="Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264")
         shutil.rmtree(tmp_path / "unshackle-111-S02E05", ignore_errors=True)
         assert sync.add_track(205, "fr") is True
-        assert calls[-1][:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / written)]
+        assert calls[-1][:4] == ["mkvmerge", "-q", "-o", str(tmp_path / "unshackle-111-S02E05" / f"{written}.part")]
         assert imported[-1] == ([written], True)  # the one file, in place of the library's: Sonarr drops the old .mp4
 
 
@@ -6322,3 +6322,51 @@ def test_a_stuck_mkvmerge_or_mkvpropedit_fails_its_step_and_leaves_no_partial_fi
     with pytest.raises(RuntimeError, match="mkvpropedit did not finish"):
         sync.finalize(out, "S02E05", "Show")
     assert limits[-1] == ("mkvpropedit", "-q", sync.MKV_READ_TIMEOUT)
+
+
+def test_an_audio_merge_cut_short_is_never_offered_for_import(tmp_path, monkeypatch):
+    # The merge is written under .part and renamed once whole: a restart midway leaves nothing Import takes for a video
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: {"path": "/tv/Show/Season 02/Show - S02E05.mkv",
+                                                               "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL.AAC2.0.H.264"})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (
+        Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True), (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"fr")))
+    folder = tmp_path / "unshackle-111-S02E05"
+    while_merging = []
+
+    def tools(cmd, **_):
+        if cmd[:2] == ["mkvmerge", "-J"]:
+            tracks = [{"id": 0, "type": "audio", "properties": {"language": "eng"}}]
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"container": {"properties": {"duration": 2_400_000_000_000}}, "tracks": tracks}))
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"half")
+        while_merging.append((sorted(f.name for f in folder.iterdir()), sync.leftovers()))
+        raise KeyboardInterrupt  # the container stopped midway: nothing after this line runs, no clean-up
+    imported = []
+    monkeypatch.setattr(sync.subprocess, "run", tools)
+    monkeypatch.setattr(sync, "import_episode", lambda e, out, replace=False: imported.append(out))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync.shutil, "rmtree", lambda *a, **k: None)  # a killed process cleans nothing up
+    with pytest.raises(KeyboardInterrupt):
+        sync.add_track(205, "fr")
+    assert while_merging == [(["Show - S02E05.mkv.part", "audio.mka"], [])]  # no video in sight while it runs
+    assert sync.leftovers() == [] and imported == []  # after the stop, nothing waits in downloads to replace the file
+    busy = tmp_path / "unshackle-111-S02E06"
+    busy.mkdir()
+    (busy / "Show - S02E06.mkv.part").write_bytes(b"merging")
+    gone = tmp_path / "unshackle-111-S02E07"
+    gone.mkdir()
+    (gone / "Show - S02E07.mkv.part").write_bytes(b"half")
+    with sync.episode_lock(busy):  # a merge going on is never touched
+        assert sync.remove_partial_merges() == 2
+    assert sorted(f.name for f in folder.iterdir()) == ["audio.mka"]
+    assert not gone.exists()  # left empty: removed with it
+    assert (busy / "Show - S02E06.mkv.part").exists()
