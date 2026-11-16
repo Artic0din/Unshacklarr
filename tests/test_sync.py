@@ -6405,3 +6405,19 @@ def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_pa
     sync.batch_syncs.pop("B")  # the job's own sync gone: one more sync of it is then the last
     sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
     assert "B" not in sync.job_options
+
+
+def test_a_held_summary_waiting_on_an_address_is_not_pushed_to_devices_again(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    pushed = []
+    monkeypatch.setattr(sync.PUSH, "send", lambda title, message: pushed.append(title) or True)
+    up = [False]
+    monkeypatch.setattr(sync, "send_to", lambda *a, **k: None if up[0] else "503 Service Unavailable")
+    settings = {"targets": [{"url": "ntfy://ok", "levels": ["success", "warning", "error"]}]}
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    assert sync.send_held(settings) is False and sync.send_held(settings) is False  # the address is down: retried
+    assert len(pushed) == 1  # the devices have it already
+    up[0] = True
+    assert sync.send_held(settings) is True and len(pushed) == 1
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    assert sync.send_held(settings) is True and len(pushed) == 2  # the next night's summary is new, even if the same

@@ -501,11 +501,11 @@ def note_sent(level: str, title: str, to: list[dict]) -> None:
             print(f"Sent notifications not written: {e}", file=sys.stderr)
 
 
-def deliver(settings: dict, level: str, title: str, message: str, details: dict | None = None) -> bool:
-    """Out to this device and to each address that takes this level; what each said is kept."""
+def deliver(settings: dict, level: str, title: str, message: str, details: dict | None = None, push: bool = True) -> bool:
+    """Out to this device (unless it has it already) and to each address that takes this level; what each said is kept."""
     to = []
     try:
-        if PUSH.send(title, message):
+        if push and PUSH.send(title, message):
             to.append({"app": "This device", "ok": True})
     except Exception as e:
         print(f"Push notification not sent: {e}", file=sys.stderr)
@@ -584,8 +584,12 @@ def notify(settings: dict, level: str, title: str, message: str, action: dict | 
     return deliver(settings, level, title, message, details)
 
 
+held_pushed: list | None = None  # the summary the devices already have, while an address still fails to take it
+
+
 def send_held(settings: dict) -> bool:
     """The quiet hours are over: what came meanwhile, in one message."""
+    global held_pushed
     if in_quiet_hours(settings):
         return False
     held = read_json(HELD_FILE, [])
@@ -595,9 +599,12 @@ def send_held(settings: dict) -> bool:
     lines = [f"{'✓' if h['level'] == 'success' else '!' if h['level'] == 'warning' else '✗'} {h['title']}" for h in held[:30]]
     more = f"\n…and {len(held) - 30} more" if len(held) > 30 else ""
     title = f"During the quiet hours: {len(held)} message{'s' if len(held) > 1 else ''}"
-    delivered = deliver(settings, worst, i18n.tr_lines(title, SETTINGS.get("language", "en")), "\n".join(lines) + more)
+    delivered = deliver(settings, worst, i18n.tr_lines(title, SETTINGS.get("language", "en")), "\n".join(lines) + more,
+                        push=held != held_pushed)
+    held_pushed = held
     takes = any(worst in (ALL_LEVELS if t.get("levels") is None else t["levels"]) for t in notification_targets(settings))
     if delivered or not takes:  # sent, or no address takes it: else kept, tried again next minute
+        held_pushed = None
         with sent_lock:
             current = read_json(HELD_FILE, [])
             rest = current[len(held):] if current[:len(held)] == held else current  # what came while it was going out stays
