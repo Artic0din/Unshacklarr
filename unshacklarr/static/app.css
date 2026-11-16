@@ -1411,19 +1411,20 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   /* a service that is down or has an update says so in words here too, not by the dot's colour alone */
   .health button:is([data-state=warn], [data-state=down]) span:not(.dot) { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
   #sync { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
-  #sync span { display: none; }
+  /* the label and "Last sync …" stay in the accessibility tree (the button is described by them), only out of sight */
+  #sync .sync-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .update-pill span { display: none; } .update-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
 }
-@media (min-width: 701px) and (max-width: 1040px) { header { gap: var(--sp-3); padding-inline: var(--sp-4); } }
-@media (min-width: 701px) and (max-width: 940px) {
-  nav .ico { display: none; }
+@media (max-width: 1240px) and (prefers-reduced-motion: reduce) { #sync.spin { box-shadow: inset 0 0 0 2px var(--accent); } }  /* running, without the spin */
+@media (min-width: 701px) and (max-width: 1100px) { header { gap: var(--sp-3); padding-inline: var(--sp-4); } }  /* with the update pill too, the row needs about 995 px */
+@media (min-width: 701px) and (max-width: 1240px) {
   /* a status with words in it takes a row of its own, as on a phone, rather than push the buttons off the first */
   header:has(.health :is([data-state=warn], [data-state=down])) .health { order: 10; flex-basis: 100%; margin-left: 0; }
   header:has(.health :is([data-state=warn], [data-state=down])) #bell { margin-left: auto; }
 }
-@media (min-width: 701px) and (max-width: 840px) {
-  .brand span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  nav button { padding-inline: 8px; }
-}
+@media (min-width: 701px) and (max-width: 1040px) { .brand span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+@media (min-width: 701px) and (max-width: 940px) { nav .ico { display: none; } }
+@media (min-width: 701px) and (max-width: 840px) { nav button { padding-inline: 8px; } }
 /* Phones: a native-app shell. Tabs move to a bottom bar, the series page goes full screen,
    touch targets are 44 px and fields 16 px (iOS zooms into anything smaller). */
 @media (max-width: 700px) {
@@ -1433,12 +1434,10 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
     padding: calc(10px + env(safe-area-inset-top)) 16px 10px; gap: 8px; flex-wrap: nowrap; }
   header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; } .brand a { min-width: 0; }
   .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .last-sync { display: none; }
   /* ...on a row of its own under the title, so the header's buttons stay on screen */
   header:has(.health :is([data-state=warn], [data-state=down])) { flex-wrap: wrap; }
   header:has(.health :is([data-state=warn], [data-state=down])) .health { order: 10; flex-basis: 100%; margin-left: 0; }
   .inbox-x { width: 44px; height: 44px; }
-  .update-pill span { display: none; } .update-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
   .health button { padding: 12px 8px; }
   #sync { width: 44px; height: 44px; }
   #bell { width: 44px; height: 44px; }

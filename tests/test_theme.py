@@ -179,14 +179,40 @@ def css_at(width):
     return "\n".join(out)
 
 
-@pytest.mark.parametrize("width", [701, 800, 1024, 1130])
+@pytest.mark.parametrize("width", [701, 800, 1024, 1130, 1240])
 def test_a_tablet_header_gives_up_its_words_to_stay_on_one_row(width):
     # the nav, the status buttons and the sync button together need more than a tablet has: it wrapped to two rows
     rules = css_at(width)
-    assert "#sync span { display: none; }" in rules  # the sync button as an icon, named by its aria-label
+    assert re.search(r"#sync \.sync-text \{ position: absolute", rules)  # the sync button as an icon, named by its aria-label
     assert re.search(r"\.health span:not\(\.dot\) \{ position: absolute", rules)  # the status buttons as dots, named for a screen reader
+    assert re.search(r"\.update-pill span \{ display: none; \}", rules)  # the update pill as an icon, named by its aria-label
     assert 'id="sync" aria-label="Run sync now"' in (STATIC / "index.html").read_text()
 
 
+@pytest.mark.parametrize("width", [701, 941, 1024, 1041, 1130, 1240])
+def test_a_status_with_words_takes_its_own_row_wherever_the_words_cannot_fit(width):
+    # "Unreachable" and "Update available" need about 130 px each: at 941 one pushed the sync button alone onto a second row
+    assert re.search(r"\.health \{ order: 10; flex-basis: 100%", css_at(width))
+    assert "#bell { margin-left: auto; }" in css_at(width)
+
+
+@pytest.mark.parametrize("width", [941, 1041, 1100])
+def test_the_header_with_an_update_pill_is_tight_enough_for_one_row(width):
+    # brand, version, nav, dots, pill, bell and sync need about 995 px with the tablet gap, and about 905 with the name out of sight
+    assert "gap: var(--sp-3)" in css_at(width)
+    assert (width > 1040) or ".brand span { position: absolute" in css_at(width)
+
+
+def test_a_compact_sync_button_keeps_its_last_sync_time_for_assistive_tech():
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    assert "#sync span { display: none; }" not in css  # display: none dropped "Last sync …" and "Sync running…" from the tree
+    assert 'aria-describedby="last-sync"' in (STATIC / "index.html").read_text()
+    for width in (701, 1024, 600):  # the phone too: nothing hides the time with display: none
+        assert not re.search(r"\.last-sync \{ display: none; \}", css_at(width))
+    assert re.search(r"\(prefers-reduced-motion: reduce\) \{ #sync\.spin \{ box-shadow", css)  # still running when nothing spins
+
+
 def test_a_wide_desktop_header_keeps_its_words():
-    assert "#sync span" not in css_at(1441) and ".health span:not(.dot)" not in css_at(1441)
+    wide = css_at(1441)
+    assert "#sync .sync-text" not in wide and ".health span:not(.dot)" not in wide and ".update-pill span" not in wide
+    assert ".health { order: 10" not in wide
