@@ -4337,6 +4337,37 @@ def test_the_settings_are_backed_up_and_restored_but_never_the_password(tmp_path
     assert "111" in (tmp_path / "config-before-restore.yaml").read_text()  # what it replaced, kept aside
 
 
+
+def test_a_restore_refuses_what_a_save_would_refuse(tmp_path, monkeypatch):
+    # an Unshackle server or a Sonarr without a name was written, then every start raised KeyError on its name
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+    h = {"X-Unshackle": "1"}
+    before = (tmp_path / "config.yaml").read_text()
+    bad = [
+        {"settings": {"backends": [{"url": "http://serve2:8786"}]}},
+        {"settings": {"sonarrs": [{"url": "http://sonarr2:8989"}]}},
+        {"series": {1: {"service": "NF", "title": "https://nf/show", "release_day": 5}}},
+    ]
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            refused = [await client.post("/api/restore", json={"password": "password1", "text": yaml.safe_dump(b)}, headers=h) for b in bad]
+            return [(r.status, await r.text()) for r in refused]
+
+    answers = asyncio.run(go())
+    assert [status for status, _ in answers] == [400] * 3, answers
+    assert "name" in answers[0][1].lower() and "name" in answers[1][1].lower() and "release day" in answers[2][1]
+    assert (tmp_path / "config.yaml").read_text() == before  # nothing written: the app still starts
+
 def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkeypatch):
     import asyncio
     import yaml
