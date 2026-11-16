@@ -248,6 +248,21 @@ Every change worth knowing, newest first. The format follows
   restart, are tried again as before.
 - **No more false cookie warnings.** Crave's load balancer cookies (a week) and Apple's `utsdc` (an hour) no longer
   count as the date the login ends.
+- **A queued episode taken out stays out.** Removed or stopped just as its turn came, it no longer downloaded
+  while the history said cancelled.
+- **Downloads at once is kept when a job pauses.** Pausing a job, or its episode ending while it was paused, no
+  longer let one more download run than the limit.
+- **A run whose end could not be saved ends anyway.** On a full disk it no longer showed as running, with Delete
+  refused, until a restart.
+- **Saving Settings no longer sends a download to the wrong server.** One starting during the save could find
+  no Unshackle or Sonarr of its own and use the main ones.
+- **Mux progress with two downloads muxing at once.** Each shows its own again, instead of none, or another
+  client's.
+- **A job's output shows its last episode.** It no longer closed just before that episode's log began.
+- **Delete and Import in Waiting in downloads leave a running download alone.** On a folder a new download has
+  just started into, they now say it is downloading instead of deleting or importing it.
+- **Stop stops.** Pressed between two tries, during a fallback try, or on a job's second or later episode before
+  its download began, the episode was downloaded and imported anyway; it now ends as stopped.
 
 **🆕 Sonarr 5, on this branch until it is out of beta**
 - **Languages.** Your files without your audio languages, read from Sonarr 5's own tracks: watch them for the

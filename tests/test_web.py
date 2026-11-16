@@ -7557,6 +7557,145 @@ def test_a_queued_jobs_own_season_map_is_read_back_as_the_sync_reads_it(tmp_path
     assert kept["20261021-121218-44d6d0"] == damaged["20261021-121218-44d6d0"]
 
 
+def test_a_queued_episode_taken_out_is_never_handed_to_the_job_loop_as_well(tmp_path, monkeypatch):
+    # the job loop reaches the episode between the card leaving the queue and its "taken out" mark: it must still see
+    # the mark, whichever of the cross, the API's stop or Stop job took it out
+    import threading
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    monkeypatch.setattr(sync, "cancel_queued", lambda card: None)
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    seen, turns = [], []
+
+    class Racy(dict):
+        def pop(self, key, *default):
+            card = super().pop(key, *default)
+
+            def loop_turn():  # the job loop's turn for that episode, as it takes it
+                with sync.jobs_lock:
+                    seen.append(key in sync.unqueued)
+                    sync.unqueued.discard(key)
+            turns.append(threading.Thread(target=loop_turn))
+            turns[-1].start()
+            turns[-1].join(0.3)
+            return card
+    batch = "20261116-120000-abcdef"
+    monkeypatch.setattr(sync, "waiting", Racy({n: {"batch": batch, "tvdbId": 1, "sxxeyy": f"S02E0{n - 200}"} for n in (205, 206, 207)}))
+    asyncio.run(web.unqueue(SimpleNamespace(match_info={"episode_id": "205"})))
+    asyncio.run(web.v1_stop(SimpleNamespace(match_info={"run_id": "waiting-206"})))
+    asyncio.run(web.stop_job(SimpleNamespace(match_info={"batch": batch})))
+    for t in turns:
+        t.join(5)
+    assert seen == [True, True, True] and not sync.waiting and not sync.unqueued
+
+
+@pytest.mark.parametrize("ends", ["after", "during"])
+def test_a_jobs_terminal_waits_for_the_episode_that_left_the_queue_but_has_no_log_yet(tmp_path, monkeypatch, ends):
+    # the job's last episode is out of the queue and its run not yet made: the terminal is not done, it shows it,
+    # even when the job ends between the terminal's read of the cards and its look at the job
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    run_id, batch = "20261116-000000-123456-1-S01E02", "20261116-000000-abcdef"
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.log").write_bytes(b"last episode\n")
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"ended": "now"}))
+    monkeypatch.setitem(sync.running_jobs, batch, {"episodes": [], "stubs": {}})
+    calls = []
+
+    def run_cards():
+        calls.append(1)
+        if len(calls) == 1:
+            if ends == "during":  # read before its card was written, the job over before the terminal looks
+                sync.running_jobs.pop(batch, None)
+            return []  # in between: nothing queued, nothing started
+        sync.running_jobs.pop(batch, None)
+        return [{"id": run_id, "batch": batch, "series": "Show", "sxxeyy": "S01E02", "outcome": "downloaded"}]
+    monkeypatch.setattr(web, "run_cards", run_cards)
+
+    class Socket:
+        closed = False
+
+        def __init__(self):
+            self.sent = []
+
+        async def prepare(self, request):
+            pass
+
+        async def send_bytes(self, data):
+            self.sent.append(data)
+
+        async def close(self):
+            self.closed = True
+    socket = Socket()
+    monkeypatch.setattr(web.web, "WebSocketResponse", lambda **kwargs: socket)
+    request = SimpleNamespace(headers={"Origin": "http://localhost"}, host="localhost", query={"batch": batch})
+    asyncio.run(web.terminal(request))
+    assert b"last episode\n" in socket.sent and socket.closed
+
+
+@pytest.mark.parametrize("action", ["delete", "import"])
+def test_a_waiting_folder_a_new_download_now_uses_is_neither_deleted_nor_imported(tmp_path, monkeypatch, action):
+    # Sonarr emptied the folder and a new download started into it: a click on the list shown before refuses
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    folder = "unshackle-111-S02E05"
+    monkeypatch.setattr(sync, "DOWNLOADS", tmp_path)
+    (tmp_path / folder).mkdir()
+    (tmp_path / folder / "Show.S02E05.mkv").write_bytes(b"x")
+    imported = []
+    monkeypatch.setattr(sync, "import_leftover", lambda f: imported.append(f))
+
+    class Request:
+        match_info = {"action": action}
+
+        async def json(self):
+            return {"folder": folder}
+    with sync.episode_lock(tmp_path / folder):  # the new download
+        with pytest.raises(web.web.HTTPConflict):
+            asyncio.run(web.leftover_action(Request()))
+    assert (tmp_path / folder / "Show.S02E05.mkv").exists() and not imported
+    asyncio.run(web.leftover_action(Request()))  # done downloading: it goes
+    assert imported == [folder] if action == "import" else not (tmp_path / folder).exists()
+
+
+def test_stop_ignores_the_job_of_a_try_that_ended_and_still_stops_the_run(tmp_path, monkeypatch):
+    # between two tries the card still names the last try's job, over on serve: that one is not cancelled, the run is
+    # marked stopped instead, which its next try sees
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    run_id = "20261116-000000-123456-1-S01E02"
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "old", "live": {"status": "failed"}}))
+    monkeypatch.setattr(sync.EpisodeRun, "active", {run_id})
+    cancelled = []
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", lambda job_id: cancelled.append(job_id))
+    request = SimpleNamespace(match_info={"run_id": run_id})
+    assert json.loads(asyncio.run(web.stop_run(request)).text) == {"stopping": True}
+    assert cancelled == [] and run_id in sync.stop_waiting
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "live", "live": {"status": "downloading"}}))
+    asyncio.run(web.stop_run(request))  # a job going on: cancelled as before
+    assert cancelled == ["live"]
+
+
+def test_stop_is_done_when_the_job_loop_already_cancelled_the_job_but_not_when_serve_still_runs_it(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    run_id = "20261116-000000-123456-1-S01E02"
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "live", "live": {"status": "downloading"}}))
+    monkeypatch.setattr(sync.EpisodeRun, "active", {run_id})
+
+    def refused(job_id):
+        raise sync.UnshackleError("no such job")
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", refused)
+    request = SimpleNamespace(match_info={"run_id": run_id})
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "cancelled"})  # the job loop got there first
+    assert json.loads(asyncio.run(web.stop_run(request)).text) == {"stopping": True}
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "downloading"})  # still going: Stop failed
+    with pytest.raises(web.web.HTTPBadGateway):
+        asyncio.run(web.stop_run(request))
+
+
 def test_a_post_without_the_x_unshackle_header_is_refused_before_it_runs(tmp_path, monkeypatch):
     from aiohttp.test_utils import TestClient, TestServer
 

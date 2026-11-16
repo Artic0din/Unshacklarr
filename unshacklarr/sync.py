@@ -245,7 +245,7 @@ def load_settings(config: dict | None = None) -> dict:
 
 def apply_settings(settings: dict) -> None:
     """Set the module's working values; the web page calls it again after a save."""
-    global SETTINGS, SONARR, HEADERS, DOWNLOADS, LOCAL, LATE_AFTER, AUTO_DAYS, RUNS_KEEP, RUNS_MAX_DAYS, DEBUG
+    global SETTINGS, SONARR, HEADERS, DOWNLOADS, LOCAL, LATE_AFTER, AUTO_DAYS, RUNS_KEEP, RUNS_MAX_DAYS, DEBUG, BACKENDS, SONARRS
     SETTINGS = settings
     DEBUG = settings.get("debug") in (True, "true", "on", 1)
     SONARR = str(settings["sonarr_url"]).rstrip("/")
@@ -259,22 +259,24 @@ def apply_settings(settings: dict) -> None:
     AUTO_DAYS = float(settings["auto_days"])
     RUNS_KEEP, RUNS_MAX_DAYS = int(settings["history_keep"]), int(settings["history_days"])
     UNSHACKLE.configure(settings)
-    BACKENDS.clear()
+    # built aside, then swapped in at once: a download starting meanwhile finds its server and its Sonarr, never none
+    backends: dict[str, Unshackle] = {}
     for b in settings.get("backends") or []:
         other = Unshackle(DATA)
         other.name = b["name"]
         # its downloads folder empty: as the main serve sees it (both mount it alike), not as Unshacklarr does
         other.configure({"unshackle_mode": "remote", "unshackle_url": b.get("url"), "unshackle_api_key": b.get("api_key"),
                          "unshackle_downloads": b.get("downloads") or settings.get("unshackle_downloads")})
-        BACKENDS[b["name"]] = other
-    SONARRS.clear()
+        backends[b["name"]] = other
+    sonarrs: dict[str, dict] = {}
     for i in settings.get("sonarrs") or []:
-        SONARRS[i["name"]] = {"name": i["name"], "url": str(i.get("url") or "").rstrip("/"), "api_key": str(i.get("api_key") or ""),
+        sonarrs[i["name"]] = {"name": i["name"], "url": str(i.get("url") or "").rstrip("/"), "api_key": str(i.get("api_key") or ""),
                               "downloads": str(i.get("downloads") or ""), "quality_ladder": str(i.get("quality_ladder") or ""),
                               "download_only": i.get("download_only"),
                               # its library, for Add audio track; both empty: the main Sonarr's
                               "library_sonarr_root": str(i.get("library_sonarr_root") or ""),
                               "library_local_root": str(i.get("library_local_root") or "")}
+    BACKENDS, SONARRS = backends, sonarrs
 
 
 BACKENDS: dict[str, Unshackle] = {}  # the other unshackle serve, by name
@@ -718,8 +720,9 @@ def pause_job(batch: str, pause: bool) -> None:
         for card in list(waiting.values()):
             if card.get("batch") == batch:
                 card["paused"] = pause
-    if pause and batch not in slot_active:  # paused between episodes: its slot goes to the next in line now (else
-        release_job(batch)                   # when its episode ends); resumed, it asks again at the end of the line (#10)
+    with slots:  # checked and let go in one step: an episode of it starting in between keeps its slot
+        if pause and batch not in slot_active:  # paused between episodes: its slot goes to the next in line now (else
+            release_job(batch)                   # when its episode ends); resumed, it asks again at the end of the line (#10)
 
 
 def job_episodes(episodes: list, batch: str | None):
@@ -774,6 +777,16 @@ def add_to_job(batch: str, ep: dict, show: dict, replace: bool = False, first: b
             job["episodes"].append(ep)
         waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, "manual", batch, replace), "paused": batch in paused_jobs}
         return True
+
+
+def take_out(episode_id: int) -> dict | None:
+    """A queued episode out of its job's queue, its card returned (None: it has started). One step under the lock:
+    the job loop, taking its turn, sees it still queued or taken out, never the card gone without the mark."""
+    with jobs_lock:
+        card = waiting.pop(episode_id, None)
+        if card is not None:
+            unqueued.add(episode_id)
+    return card
 
 
 def cancel_queued(card: dict) -> None:
@@ -1833,21 +1846,25 @@ class EpisodeRun:
         if outcome == "downloaded":  # a new file: Upgrades' find for it is done with (by mj23au)
             drop_upgrade_find(self.card.get("instance", ""), self.card.get("tvdbId"), self.card.get("sxxeyy"))
         self.fold_checks()
-        self.save()
         try:
-            for validated_service, result in validations.items():
-                record_authentication_observation(
-                    validated_service, result["backend"], "validated", result["observed_at"]
-                )
-            for failed_service, result in attempt_failures.items():
-                record_authentication_observation(
-                    failed_service, result["backend"], "needs_user_action", result["observed_at"]
-                )
-        except OSError as error:
-            print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
-        # Only once its end is on disk: the page, told a run ended, reads the history at once; read between the two, a
-        # card without an end that no run follows was "interrupted", and stayed so on the page (by mj23au, #17)
-        EpisodeRun.active.discard(self.id)
+            self.save()
+            try:
+                for validated_service, result in validations.items():
+                    record_authentication_observation(
+                        validated_service, result["backend"], "validated", result["observed_at"]
+                    )
+                for failed_service, result in attempt_failures.items():
+                    record_authentication_observation(
+                        failed_service, result["backend"], "needs_user_action", result["observed_at"]
+                    )
+            except OSError as error:
+                print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
+        finally:
+            # Only once its end is on disk: the page, told a run ended, reads the history at once; read between the two, a
+            # card without an end that no run follows was "interrupted", and stayed so on the page (by mj23au, #17).
+            # Its end not written (a full disk): no longer running all the same, or it stays so until a restart
+            EpisodeRun.active.discard(self.id)
+            stop_waiting.discard(self.id)  # a Stop nothing was left to stop: gone with the run
         prune_runs()
 
     def take_over_failures(self, batch: str | None = None, automatic: bool = False) -> None:
@@ -2298,19 +2315,19 @@ def download_slot(server: str, run: EpisodeRun | None = None):
     try:
         yield
     finally:
-        with slots:
+        batch = run.card.get("batch") if run else None
+        with slots:  # one step: another episode of the job starting in between keeps the slot it takes
             if slot_active.get(job, 0) > 1:
                 slot_active[job] -= 1
             else:
                 slot_active.pop(job, None)
                 slots.notify_all()  # its slots are idle now: a wait of its own elsewhere gives them back
-        batch = run.card.get("batch") if run else None
-        # on its own (or the sync's), or its job paused: the slot goes with it; held around it (a run between its
-        # tries, run_job_retrying): kept till that ends
-        if job not in slot_active and (not batch or batch in paused_jobs):
-            release_job(job)
-        elif job not in slot_active:  # held around it still (between tries): nothing to lend yet
-            with slots:  # a retry waits: the job lends its slot between two episodes, and keeps its place in line
+            # on its own (or the sync's), or its job paused: the slot goes with it; held around it (a run between its
+            # tries, run_job_retrying): kept till that ends
+            if job not in slot_active and (not batch or batch in paused_jobs):
+                release_job(job)
+            elif job not in slot_active:  # held around it still (between tries): nothing to lend yet
+                # a retry waits: the job lends its slot between two episodes, and keeps its place in line
                 line = slot_line.setdefault(server, [])
                 if any(job_order.get(j, 0) < 0 for j in line):
                     release_job(job, keep_place=True)
@@ -2423,22 +2440,26 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
     before, work = task_folders(root), None
     asked = payload.get("vcodec") or []  # one codec asked: the video's, until the file says which came
     codec = CODEC_NAMES.get(str(asked[0]).replace(".", "").lower(), str(asked[0])) if len(asked) == 1 else ""
+    followed = bool(job_id)  # a job already on serve, followed again: its folder was there before (job_id is set below)
     if job_id:
         trace(f"unshackle serve{f' {backend.name}' if backend.name else ''} still has job {job_id}: followed again")
         if run:
             run.card.pop("unconfirmed_job", None)  # confirmed: it answers again
     else:
+        if run and run.id in stop_waiting:  # Stop pressed before it reached serve: between two tries, a later episode
+            stop_waiting.discard(run.id)    # of a job (its slot already held), a fallback try
+            raise JobFailed("Stopped before it started", "cancelled")
         job_id = backend.download(payload)
         trace(f"unshackle serve{f' {backend.name}' if backend.name else ''} took it as job {job_id}")
-    if run:  # what Activity's Stop button cancels
-        run.card["job_id"] = job_id
+    if run:  # what Activity's Stop button cancels; the figures, this job's from now (an ended try's: not cancelled)
+        run.card["job_id"], run.card["live"] = job_id, {}
         run.save()
     last_status, line, saved = None, "", ""
     seen: dict[str, float] = {}  # serve lists only the tracks downloading now: keep the others
     timed: dict[str, list] = {}  # each track's [first seen, done]: how long it took
     labels: dict[str, str] = {}  # a track's key (its part and its place, or its label from an older serve): its label
     titles: list[str] = []
-    misses, since, hinted, quiet_count = 0, time.monotonic(), False, 0
+    misses, since, hinted, quiet_count, stop_asked = 0, time.monotonic(), False, 0, False
     secret_approval_fragments: set[str] = set()
     while True:
         try:
@@ -2464,6 +2485,13 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             time.sleep(max(poll, 5))
             continue
         status = job.get("status")
+        if run and not stop_asked and status not in TERMINAL and run.id in stop_waiting:
+            # Stop pressed as it was handed to serve, before the card named its job: cancelled from here
+            try:
+                backend.cancel(job_id)
+                stop_asked = True
+            except UnshackleError as e:  # asked again at the next look: it ends there if Activity's Stop got in first
+                trace(f"cancelling job {job_id}: {no_credentials(e)}")
         if run and "authentication" in job:
             run.set_authentication(job.get("authentication"))
         snapshot_approval = approval_from_job(job)
@@ -2476,8 +2504,8 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             if str(job.get("phase") or "").startswith("mux"):
                 run.card.setdefault("mux_from", datetime.now(timezone.utc).isoformat())
                 if root and work is None:  # the folder that appeared with this download (or the one muxing, followed again)
-                    new = [f for f in task_folders(root) - (before if not job_id else set()) if f not in work_claimed]
-                    if job_id:
+                    new = [f for f in task_folders(root) - (set() if followed else before) if f not in work_claimed]
+                    if followed:
                         new = [f for f in new if mux_progress(f)]
                     if len(new) == 1:
                         work = new[0]
