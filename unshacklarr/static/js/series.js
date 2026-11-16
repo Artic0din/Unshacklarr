@@ -291,7 +291,8 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
   renderReleaseNext();  // Timing says when the next one is tried
   renderBroadcast();
   const numbers = Object.keys(epSeasons).map(Number).sort((a, b) => (a === 0) - (b === 0) || b - a);  // newest first, specials last
-  if (!numbers.length) return box.replaceChildren(el("p", { className: "muted", textContent: "Sonarr lists no episode for this series." }));
+  if (!numbers.length) return box.replaceChildren(el("p", { className: "muted", textContent: "Sonarr lists no episode for this series." }),
+    el("button", { type: "button", className: "btn small", textContent: "Refresh", onclick: () => loadEpisodes(s) }));
   if (!(keep && numbers.includes(epSeason))) epSeason = numbers[0];  // the newest; seasons with gaps stand out in the strip
   box.replaceChildren(
     sonarrSwitch(s),
@@ -816,7 +817,7 @@ function renderSeason() {
   if ($("#ep-avail")) {
     const onService = list.filter((e) => state(e) === "miss" && epAvail?.[e.id]).length;
     $("#ep-avail").textContent = `Missing, available on ${seasonSvc(epSeason)} (${onService})`;
-    $("#ep-avail").disabled = !onService;
+    $("#ep-avail").hidden = !onService;
   }
   const named = current.seasonTitles?.[epSeason];  // its name in Sonarr, when it has one
   const q = epQualities[epSeason], missing = list.filter((e) => state(e) === "miss").length;

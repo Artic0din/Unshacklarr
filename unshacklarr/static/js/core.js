@@ -218,7 +218,7 @@ const ICON_PATHS = {
   check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', alert: '<path d="M12 6v8M12 18h.01"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>', chevronLeft: '<path d="m15 6-6 6 6 6"/>',
   arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
-  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
+  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>', pause: '<path d="M9 6v12M15 6v12"/>',
 };
 function icon(name, className = "", label = "") {
   const holder = document.createElement("template");
@@ -230,6 +230,7 @@ function icon(name, className = "", label = "") {
 /* A counted noun, one whole text for one and one for many: a language writes its own plural from either, no suffix glued on. */
 const COUNT = {
   episode: (n) => n === 1 ? "1 episode" : `${n} episodes`,
+  notification: (n) => n === 1 ? "1 notification" : `${n} notifications`,
   missingEpisode: (n) => n === 1 ? "1 missing episode" : `${n} missing episodes`,
   upgrade: (n) => n === 1 ? "1 upgrade" : `${n} upgrades`,
   download: (n) => n === 1 ? "1 download" : `${n} downloads`,
@@ -246,22 +247,49 @@ const COUNT = {
 };
 /* Two clicks for what cannot be undone: the first turns the label into the question, naming the action and what it is done to;
    the second does it. No timer takes the question back while it is being read: leaving the button, a press anywhere else
-   (Safari does not focus a clicked button, so it never blurs), or Escape does. */
+   (Safari does not focus a clicked button, so it never blurs), or Escape does (and only the question: the window around it stays).
+   The question is also spoken, in a live region: a screen reader does not announce a label that changes under its focus.
+   A window opened as a modal makes everything outside it inert, so the region is the one inside the window the button is in. */
+const sureSay = (button, text) => { (button.closest("dialog")?.querySelector(".sure-say") ?? $("#sure-say")).textContent = text; };
+function confirmCancel(button, label = button) {  // the question taken back: the label as it was
+  if (button.dataset.sure !== "1") return;
+  delete button.dataset.sure; label.textContent = button.dataset.was; sureSay(button, "");
+}
 function confirmClick(button, question, label = button) {
-  if (button.dataset.sure === "1") { label.textContent = button.dataset.was; delete button.dataset.sure; return true; }
+  if (button.dataset.sure === "1") { confirmCancel(button, label); return true; }
   button.dataset.sure = "1"; button.dataset.was = label.textContent;
   label.textContent = question;
+  sureSay(button, question);
   const cancel = (e) => {
     if (e.type === "keydown" && e.key !== "Escape") return;
     if (e.type === "pointerdown" && button.contains(e.target)) return;  // the second click on the button itself
-    button.removeEventListener("blur", cancel); button.removeEventListener("keydown", cancel);
-    document.removeEventListener("pointerdown", cancel, true);
+    button.removeEventListener("blur", cancel);
+    document.removeEventListener("keydown", cancel, true); document.removeEventListener("pointerdown", cancel, true);
     if (button.dataset.sure !== "1") return;
-    delete button.dataset.sure; label.textContent = button.dataset.was;
+    if (e.type === "keydown") { e.preventDefault(); e.stopPropagation(); }  // not also the window it sits in
+    confirmCancel(button, label);
   };
-  button.addEventListener("blur", cancel); button.addEventListener("keydown", cancel);
-  document.addEventListener("pointerdown", cancel, true);
+  button.addEventListener("blur", cancel);
+  document.addEventListener("keydown", cancel, true); document.addEventListener("pointerdown", cancel, true);
   return false;
+}
+/* The same question in a window, Cancel first, for what needs a sentence, has no label to turn into one, or sits where the page
+   redraws its buttons (a job's, a status's: a question in the label would vanish with the redraw); true if confirmed.
+   Cancelled, focus goes back to the button it came from: if the page redrew it meanwhile, to its new copy, found by data-focus-key. */
+function askToConfirm(title, text, verb, trigger = null) {
+  const dialog = $("#confirm-dialog");
+  $("#confirm-title").textContent = title;
+  $("#confirm-text").textContent = text;
+  $("#confirm-go").textContent = verb;
+  dialog.returnValue = "cancel";
+  dialog.showModal();
+  return new Promise((done) => dialog.addEventListener("close", () => {
+    const key = trigger?.dataset.focusKey;
+    if (dialog.returnValue !== "go" && key && !trigger.isConnected) {
+      [...document.querySelectorAll(`[data-focus-key="${CSS.escape(key)}"]`)].find((b) => b.getClientRects().length)?.focus();
+    }
+    done(dialog.returnValue === "go");
+  }, { once: true }));
 }
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */
 const slowHint = (svc) => setTimeout(() => toast(`${svc} is slow to answer. It may be waiting for you to sign in: look at Unshackle's log.`, false, ["OK", () => {}]), 20000);
@@ -461,8 +489,14 @@ const SEL = { on: false, ids: new Set() };  // the series picked to change toget
 const usesService = (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || {}).some((page) => page.service === tag);
 // The names a series is searched by: Sonarr's title, its other titles there, its name in file names
 const seriesNames = (s) => [s.title, ...(s.altTitles || []), S.config.series[s.tvdbId]?.file_name || ""];
+/* Every filter of the wall back to nothing (the sort stays: it hides no series). */
+function clearWallFilters(draw = true) {  // draw: false when the caller sets a filter of its own and draws once after
+  $("#search").value = ""; $("#f-service").value = ""; $("#f-library").value = ""; $("#f-missing").checked = false; $("#f-monitored").checked = false;
+  document.querySelectorAll("#tab-series .seg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.managed === ""));
+  if (draw) renderWall();
+}
 function renderWall() {
-  const q = $("#search").value.trim().toLowerCase();
+  const query = $("#search").value.trim(), q = query.toLowerCase();
   const svc = $("#f-service").value, lib = $("#f-library").value;
   const libsOf = (s) => S.sonarrsOf?.[s.tvdbId] || [];
   const on = (s) => Boolean(S.config.series[s.tvdbId]?.service);
@@ -529,7 +563,9 @@ function renderWall() {
   const empty = managed0
     ? el("div", { className: "empty" }, el("b", { textContent: "No series is downloading yet." }),
         "Open a series under All, pick a service or one of the links found on TMDB, then save.")
-    : el("div", { className: "empty" }, el("b", { textContent: "No series match these filters." }), "Clear the search or pick another filter.");
+    : el("div", { className: "empty", role: "status" },
+        el("b", { textContent: query ? `No series match “${query}”.` : "No series match these filters." }), "Clear the search or pick another filter.",
+        el("button", { type: "button", className: "btn small", textContent: "Clear filters", onclick: () => { clearWallFilters(); $("#search").focus(); } }));
   $("#wall").removeAttribute("aria-busy");
   keepFocus($("#wall"), () => $("#wall").replaceChildren(...(cards.length ? cards : [empty])));
 }
@@ -540,17 +576,14 @@ async function loadServiceOptions(tag) {
   return serviceOptions[tag];
 }
 
+const BACK_NAME = { schedule: "Back to the schedule", log: "Back to Activity", settings: "Back to Settings", yaml: "Back to unshackle.yaml" };
 async function openDrawer(s, tab, fromRoute = false) {
   current = s;
   $("#d-probe-out").replaceChildren();
   $("#d-probe").removeAttribute("aria-disabled");  // a test of the series left behind may still be asking
+  $("#d-back").setAttribute("aria-label", BACK_NAME[currentTab] || "Back to all series");  // a phone's Back returns to the page it was opened from
   $("#d-url").placeholder = "URL or ID of the series";  // a Crave suggestion changes it for one series only
   showReleaseSeen(s);
-  const sick = S.config.series[s.tvdbId]?.service && S.health[s.tvdbId];
-  $("#d-sick").hidden = !sick;
-  if (sick) $("#d-sick").replaceChildren(el("b", { textContent: `Its last ${sick.failing} downloads failed` }),
-    el("span", { textContent: sick.cause || "See the history in Activity for why." }),
-    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }));
   $("#d-probe-state").textContent = "Asks the service which episodes it has. Nothing is downloaded.";
   drawerPushed = !fromRoute;
   if (!fromRoute) { drawerTab = tab || "episodes"; navigate(true); }  // back will close it
@@ -621,7 +654,7 @@ function renderSeriesState() {
   renderSeriesLanguage();  // its service picked or changed since the page opened: said then too
   const sick = conf.service && S.health[current.tvdbId];
   const [cls, text] = !conf.service ? ["", "Not downloading"]
-    : sick ? ["down", `Its downloads from ${svcName(conf.service)} fail`]
+    : sick ? ["down", `Its last ${sick.failing} downloads from ${svcName(conf.service)} failed`]
     : !conf.title && !conf.programmes ? ["warn", `On ${svcName(conf.service)}: its series URL is missing`]
     : conf.programmes ? ["ok", `Downloaded from ${svcName(conf.service)}, each episode its own programme`]
     : ["ok", `Downloaded from ${svcName(conf.service)}`];
@@ -631,6 +664,7 @@ function renderSeriesState() {
   // What failed, and where to mend it: the service's row in Settings, Services
   $("#ds-fix").hidden = !sick;
   $("#ds-fix").replaceChildren(...(sick ? [el("span", { textContent: sick.cause || "See the history in Activity for why." }),
+    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }),
     el("button", { type: "button", className: "btn small", textContent: `Check ${svcName(conf.service)} in Settings › Services`, onclick: () => openServiceRow(conf.service) })] : []));
 }
 /* Service options only show for a service that has some; "stop" only for a managed series. */

@@ -12,7 +12,7 @@ const speedLog = {};  // run id -> [[time, progress]], for the time left
 
 function duration(ms) {
   const s = Math.round(ms / 1000);
-  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")}` : `${Math.floor(s / 3600)} h ${String(Math.round(s / 60) % 60).padStart(2, "0")}`;
+  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s` : `${Math.floor(s / 3600)} h ${String(Math.round(s / 60) % 60).padStart(2, "0")} min`;
 }
 const posterOf = (c) => { const s = S.series.find((x) => x.tvdbId === c.tvdbId); return posterSrc(s?.poster, s?.title || c.series); };
 const isLive = (c) => c.outcome === "running";
@@ -143,6 +143,15 @@ function glideBars(root) {
   root.offsetWidth;  // the start widths are laid out before the targets are set
   bars.forEach((b, i) => { b.style.width = targets[i]; barWidths.set(b.dataset.k, targets[i]); });
 }
+/* No download to list: what was asked for named, with a way back to the whole history. */
+function emptyHistory(query, filter) {
+  if (!query && filter === "all") return el("p", { className: "con-empty", textContent: "No download yet. Downloads start from a series, or with Run sync now." });
+  const label = document.querySelector(`#tab-log .con-filters [data-f="${filter}"]`).firstChild.textContent.trim();
+  const text = query && filter !== "all" ? `No download under ${label} matches “${query}”.` : query ? `No download matches “${query}”.` : `No download under ${label}.`;
+  return el("div", { className: "con-empty", role: "status" }, el("p", { textContent: text }),
+    ...(query ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", dataset: { fk: "empty-clear" }, onclick: () => { $("#con-search").value = ""; renderConsole(); $("#con-search").focus(); } })] : []),
+    ...(filter !== "all" ? [el("button", { type: "button", className: "btn small", textContent: "Show all", dataset: { fk: "empty-all" }, onclick: () => { setConFilter("all"); document.querySelector('#tab-log .con-filters [data-f="all"]').focus(); } })] : []));
+}
 /* Each tick redraws the lists and the detail: the control in use is found again by its data-fk. */
 function renderConsole(liveOnly = false) { keepFocus($("#con"), () => drawConsole(liveOnly)); }
 function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same downloads moving on
@@ -154,14 +163,14 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
   $("#runs-live").replaceChildren(...(liveItems.length ? liveItems.map(itemRow) : [el("p", { className: "con-empty", textContent: "Nothing is downloading right now." })]));
   glideBars($("#runs-live"));
   if (!liveOnly) {  // the history and its counts: unchanged while the same downloads only move on
-    const q = $("#con-search").value.trim().toLowerCase();
+    const query = $("#con-search").value.trim(), q = query.toLowerCase();
     const groups = { all: () => true, downloaded: (c) => c.outcome === "downloaded", failed: (c) => c.outcome === "failed",
       kept: (c) => c.outcome === "kept" || c.outcome === "import", stopped: (c) => ["stopped", "interrupted", "cancelled"].includes(c.outcome) };
     const searched = runCards.filter((c) => !isLive(c) && (!q || c.series.toLowerCase().includes(q)));
     document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.querySelector("span").textContent = `(${searched.filter(groups[b.dataset.f]).length})`);
     const pastItems = jobsOf(searched.filter(groups[conFilter]).filter((c) => !liveJobs.has(c.batch)));
     $("#runs-history").replaceChildren(...(pastItems.length ? pastItems.slice(0, runsShown).map(itemRow)
-      : [el("p", { className: "con-empty", textContent: q || conFilter !== "all" ? "No download matches." : "No download yet." })]));
+      : [emptyHistory(query, conFilter)]));
     $("#runs-more").hidden = pastItems.length <= runsShown;
   }
   // Activity opened from the menu while a download runs: straight to it, a phone too.
@@ -317,7 +326,7 @@ function renderJob(j) {
     retryable.length ? el("button", { className: "btn small primary", textContent: `Retry ${retryable.length} failed`, dataset: { fk: "retry" },
       title: st.live ? "Downloads them again, before the episodes still to come" : "Downloads them again, in this job",
       onclick: (e) => retryJob(j, retryable, e.target) }) : "",
-    !st.live ? el("button", { className: "btn small", textContent: "Delete the job", dataset: { fk: "delete" }, title: "Removes every episode of this job from the history",
+    !st.live ? el("button", { className: "btn small danger", textContent: "Delete the job", dataset: { focusKey: `delete:${j.job}`, fk: "delete" }, title: "Removes every episode of this job from the history",
       onclick: (e) => deleteJob(j, e.target) }) : ""].filter(Boolean);
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(first)),
@@ -326,7 +335,7 @@ function renderJob(j) {
       el("small", { className: "line2" }, el("b", { textContent: svcName(first.service) }), `${KIND[first.kind] || first.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
   // each count shows or hides its episodes: a job of 200 episodes, its failed ones alone in sight
-  const counts = el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused", textContent: "⏸ Paused: the next episode waits" })] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
+  const counts = el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused" }, icon("pause", "inl"), "Paused: the next episode waits")] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
     ["queued", "Queued", ""], ["failed", "Failed", "err"], ["stopped", "Stopped", ""], ["cancelled", "Cancelled", ""]]
     .filter(([k]) => st.n[k]).map(([k, label, cls]) => el("button", { type: "button", className: `${cls}${jobHidden.has(k) ? " off" : ""}`, ariaPressed: String(!jobHidden.has(k)), dataset: { fk: `count:${k}` },
       title: jobHidden.has(k) ? "Show these episodes" : "Hide these episodes", onclick: () => { jobHidden.has(k) ? jobHidden.delete(k) : jobHidden.add(k); renderConsole(); } },
@@ -754,10 +763,10 @@ async function showStats() {
     el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Stats" }),
       el("small", { className: "line1", textContent: st.since ? `From the history kept since ${day(new Date(st.since))}` : "Nothing in the history yet" }))),
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
-      ["Kept by Sonarr", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
+      ["Kept", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
       .map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v })))),
     el("div", { style: "display:grid;gap:8px" }, weeks, el("div", { className: "legend", ariaHidden: "true" }, el("span", {}, el("i", { className: "ok", style: "background:var(--ok)" }), "Downloaded"),
-      el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept by Sonarr"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
+      el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
     perWeek,
     st.services.length ? el("div", { className: "svc-scroll" }, table) : ""));
 }
@@ -769,11 +778,12 @@ $("#cd-back").onclick = () => {
 };
 let searchTimer = null;  // typed: the history filtered once the typing pauses, not at each key
 $("#con-search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 150); };
-document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.onclick = () => {
-  conFilter = b.dataset.f;
-  document.querySelectorAll("#tab-log .con-filters button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+function setConFilter(f) {
+  conFilter = f;
+  document.querySelectorAll("#tab-log .con-filters button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.f === f));
   renderConsole();
-});
+}
+document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.onclick = () => setConFilter(b.dataset.f));
 const moreRuns = () => { if (!$("#runs-more").hidden) { runsShown += 50; renderConsole(); } };
 $("#runs-more").onclick = moreRuns;
 $("#runs-history").addEventListener("scroll", (e) => { const h = e.target; if (h.scrollTop + h.clientHeight > h.scrollHeight - 300) moreRuns(); }, { passive: true });
@@ -886,7 +896,7 @@ const ACT_ICONS = {
 function cardActs(c) {
   const live = isLive(c);
   const act = (kind, label, run, extra = "") => {
-    const b = el("button", { type: "button", className: `jact ${extra}`, ariaLabel: label, dataset: { fk: `${label}:${c.id}` }, onclick: (e) => run(c, e.currentTarget) });
+    const b = el("button", { type: "button", className: `jact ${extra}`, ariaLabel: label, dataset: { focusKey: `${kind}:${c.id}`, fk: `${label}:${c.id}` }, onclick: (e) => run(c, e.currentTarget) });
     b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ACT_ICONS[kind]}</svg>`;
     return b;
   };
@@ -907,9 +917,9 @@ function runActs(c) {
     live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
     !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: "btn small primary", textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
-    !live ? el("button", { className: "btn small", textContent: "Diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
+    !live ? el("button", { className: "btn small", textContent: "Save diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
       onclick: () => downloadDiagnostic(c) }) : "",
-    !live ? el("button", { className: "btn small", textContent: "Delete", dataset: { fk: "delete" }, onclick: (e) => deleteRun(c, e.target) }) : "",
+    !live ? el("button", { className: "btn small danger", textContent: "Delete", dataset: { focusKey: `delete:${c.id}`, fk: "delete" }, onclick: (e) => deleteRun(c, e.target) }) : "",
   ].filter(Boolean);
 }
 async function downloadDiagnostic(c) {
@@ -919,7 +929,7 @@ async function downloadDiagnostic(c) {
     const a = el("a", { href: URL.createObjectURL(await r.blob()), download: `unshacklarr-diagnostic-${c.id}.md` });
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
-    toast("Diagnostic downloaded: check it, then attach it to the issue");
+    toast("Diagnostic saved: check it, then attach it to the issue");
   } catch (e) { toast(e.message, true); }
 }
 /* A track as serve names it ("Part 1 · audio fr 2.0"): an icon for its kind, the kind, then what it is in chips. */
@@ -986,7 +996,7 @@ function runBody(c) {
         el("span", { className: `bar${pct == null ? " busy" : ""}` }, el("i", { style: `width:${pct ?? 100}%`, dataset: { k: `mux:${c.id}` } }))));
     }
   } else {
-    const note = { downloaded: ["ok", "Downloaded"], failed: ["err", "Failed"], kept: ["warn", "Sonarr kept its own file"], import: ["warn", "Downloaded, import needed"],
+    const note = { downloaded: ["ok", "Downloaded"], failed: ["err", "Failed"], kept: ["warn", "Kept: Sonarr's own file was not replaced"], import: ["warn", "Downloaded, import needed"],
       stopped: ["mut", "Stopped"], interrupted: ["mut", "Interrupted: Unshacklarr stopped during it"],
       unavailable: ["mut", c.notOn ? `${outcomeOf(c)}: nothing to download` : "Not out yet: nothing to download"] }[c.outcome] || ["mut", c.outcome];
     if (c.outcome === "downloaded") {  // all went well: one quiet line, not a block

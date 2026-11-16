@@ -7,7 +7,7 @@ const selBar = el("div", { className: "sel-bar", id: "sel-bar", hidden: true },
     renderWall(); renderSel();
   } }),
   el("button", { type: "button", className: "btn small", textContent: "Clear", onclick: () => { SEL.ids.clear(); renderWall(); renderSel(); } }),
-  el("button", { type: "button", className: "btn small primary", id: "sel-edit", textContent: "Edit…", onclick: () => openSel() }));
+  el("button", { type: "button", className: "btn small primary", id: "sel-edit", textContent: "Change…", onclick: () => openSel() }));
 $("#wall").after(selBar);
 function renderSel() {
   $("#sel-toggle").setAttribute("aria-pressed", String(SEL.on));

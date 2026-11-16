@@ -58,23 +58,22 @@ function showLogin() {
   };
   pw.focus();
 }
-/* A country, searched by its name (in the page's language) with its flag; its two-letter code is what is kept,
+/* A country, searched by its name (in the page's language); its two-letter code is what is kept,
    in `real` (hidden), whose input event the page listens to as before. Ten at a time, the rest by scrolling. */
 const COUNTRIES = "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW";
-const flagOf = (code) => String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
 const plain = (text) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 function countryPicker(real) {
   const names = new Intl.DisplayNames([LOCALE, "en"], { type: "region" });
-  return listPicker(real, COUNTRIES.split(" ").map((code) => ({ code, name: names.of(code) || code, flag: flagOf(code), small: code }))
+  return listPicker(real, COUNTRIES.split(" ").map((code) => ({ code, name: names.of(code) || code, small: code }))
     .sort((a, b) => a.name.localeCompare(b.name, LOCALE)), { placeholder: "Search a country", none: "No country matches" });
 }
 /* The time zone, picked the same way: its name, its offset from UTC now. */
 function zonePicker(real) {
   const offset = (z) => new Date().toLocaleString("en", { timeZone: z, timeZoneName: "shortOffset" }).split(" ").pop().replace("GMT", "UTC");
-  return listPicker(real, ZONES.map((code) => ({ code, name: code.replaceAll("_", " "), flag: "", small: offset(code) })),
+  return listPicker(real, ZONES.map((code) => ({ code, name: code.replaceAll("_", " "), small: offset(code) })),
     { placeholder: "Search a city or a region", none: "No time zone matches", exact: true });
 }
-/* A searchable list in place of a hidden input: the items are {code, name, flag, small}, the input keeps the code. */
+/* A searchable list in place of a hidden input: the items are {code, name, small}, the input keeps the code. */
 let pickerIds = 0;
 function listPicker(real, all, { placeholder, none, exact = false }) {
   real.type = "hidden";
@@ -85,7 +84,7 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
   input.setAttribute("aria-controls", list.id);
   let shown = [], active = -1;
   const current = () => all.find((c) => c.code === (exact ? String(real.value || "") : String(real.value || "").toUpperCase()));
-  const sync = () => { const c = current(); input.value = c ? (c.flag ? `${c.flag}  ${c.name}` : c.name) : real.value || ""; };
+  const sync = () => { const c = current(); input.value = c ? c.name : real.value || ""; };
   const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); };
   const draw = (query) => {
     const q = plain(query.trim());
@@ -93,7 +92,7 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
     shown.sort((a, b) => (plain(b.name).startsWith(q) || b.code.toLowerCase() === q) - (plain(a.name).startsWith(q) || a.code.toLowerCase() === q));
     active = shown.length ? Math.max(0, shown.findIndex((c) => c.code === current()?.code)) : -1;
     list.replaceChildren(...shown.map((c, i) => el("li", { id: `${list.id}-${i}`, role: "option", className: i === active ? "on" : "", ariaSelected: String(i === active),
-      onmousedown: (e) => { e.preventDefault(); pick(c); } }, ...(c.flag ? [el("span", { className: "flag", textContent: c.flag })] : []), el("span", { textContent: c.name }), el("small", { textContent: c.small }))));
+      onmousedown: (e) => { e.preventDefault(); pick(c); } }, el("span", { textContent: c.name }), el("small", { textContent: c.small }))));
     if (!shown.length) list.append(el("li", { className: "cp-none", textContent: none }));
     list.style.top = `${input.offsetTop + input.offsetHeight + 4}px`;  // right under the input, over its help
     list.hidden = false;
@@ -376,11 +375,11 @@ function showSetup(found) {
     progress.firstChild.textContent = "Done";
     progress.querySelector("b").style.width = "100%";
     const code = f.country.value.toUpperCase();
-    const c = /^[A-Z]{2}$/.test(code) ? { flag: flagOf(code), name: new Intl.DisplayNames([LOCALE, "en"], { type: "region" }).of(code) } : null;
+    const country = /^[A-Z]{2}$/.test(code) ? new Intl.DisplayNames([LOCALE, "en"], { type: "region" }).of(code) : null;
     panel.replaceChildren(el("div", { className: "wiz-step wz-done fwd" }, ico("check", "wz-done-ico"),
       el("h2", { textContent: "Unshacklarr is set up" }),
       el("p", { className: "lead", textContent: "Pick a service for your series in Series: Unshacklarr takes it from there." }),
-      el("ul", { className: "wz-sum" }, ...[oks[1], oks[2], `${c ? `${c.flag} ${c.name}` : f.country.value} · ${f.timezone.value.replaceAll("_", " ")}`]
+      el("ul", { className: "wz-sum" }, ...[oks[1], oks[2], `${country || f.country.value} · ${f.timezone.value.replaceAll("_", " ")}`]
         .filter(Boolean).map((t) => el("li", {}, ico("check", ""), el("span", { textContent: t })))),
       signInCheck()));
     note.replaceChildren();

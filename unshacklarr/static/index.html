@@ -31,7 +31,7 @@
   </div>
 </div>
 <header>
-  <h1 class="brand"><a href="#/series" id="home" aria-label="Unshacklarr, back to the series"><svg class="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+  <h1 class="brand"><a href="#/schedule" id="home" aria-label="Unshacklarr, schedule"><svg class="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
   <circle cx="32" cy="32" r="31" fill="#26a69a"/><circle cx="32" cy="32" r="27.6" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.4"/><path d="M25 25.5v-5a7 7 0 0 1 14 0" fill="none" stroke="#fff" stroke-width="4.4" stroke-linecap="round"/><rect x="13" y="25" width="38" height="24" rx="5" fill="#fff"/><path d="M32 29.5v10M27.3 35 32 39.7l4.7-4.7" fill="none" stroke="#1b7a71" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M25 53.5h14" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/>
 </svg><span>Unshacklarr</span></a></h1>
   <button class="version-chip" id="version" type="button" title="What's new in each version" hidden></button>
@@ -84,7 +84,7 @@
   <section id="tab-schedule">
     <div class="sched-head">
       <p id="next-sync" class="muted"><span class="loading"><span class="spinner" aria-hidden="true"></span>Loading the schedule…</span></p>
-      <button class="btn small" id="sched-refresh">Refresh</button>
+      <button class="btn small" id="sched-refresh">Reload calendar</button>
     </div>
     <div id="sched-late" hidden>
       <div class="late-banner"><b id="late-n"></b><span id="late-sum"></span><button class="btn small" id="late-toggle" aria-expanded="false">Show</button></div>
@@ -105,7 +105,6 @@
         <button class="hidden-btn" id="hidden-open" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a17.6 17.6 0 0 1-2.2 3.3M6.6 6.6C3.6 8.6 2 12 2 12s3 8 10 8a10 10 0 0 0 5.4-1.6M14.1 14.1a3 3 0 0 1-4.2-4.2M2 2l20 20"/></svg><span></span></button>
       </div>
     </div>
-    <p class="muted sched-sub">Unshackle tries its series at their release time, or at the first sync after airing. Add any other series in one tap, or hide the ones you don't follow.</p>
     <div class="cal-nav">
       <button class="btn small" id="cal-prev" aria-label="Previous week"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
       <h3 id="cal-range" aria-live="polite"></h3>
@@ -346,7 +345,7 @@
           <div class="sx-grid">
             <div class="field"><label for="dx-audio">Accepted audio languages</label><input id="dx-audio" type="text" data-set="audio_accept" placeholder="Example: fr, en" spellcheck="false"><small>The episode must have at least one of them. It is checked before the download, then on the file. orig is each series' original language, as Sonarr gives it. Empty: the first language of --a-lang or --lang. A series can set its own.</small></div>
             <div class="field"><label for="dx-prefer">Upgrade the audio to</label><input id="dx-prefer" type="text" data-set="audio_prefer" placeholder="Example: fr" spellcheck="false"><small>One language. An episode downloaded in another accepted language (for example English with French subtitles) is downloaded again when the service has this one. Empty: never.</small></div>
-            <div class="field"><label for="dx-upgrade-days">Wait for it</label><div class="unit-input"><input id="dx-upgrade-days" type="number" data-set="upgrade_days" data-num min="1" max="365" step="1" inputmode="numeric"><span>days</span></div><small>After the download, the service is checked once a day for this many days. Nothing is downloaded until that language is there. After that, the episode keeps the audio it has.</small></div>
+            <div class="field"><label for="dx-upgrade-days">Wait for the audio, in days</label><div class="unit-input"><input id="dx-upgrade-days" type="number" data-set="upgrade_days" data-num min="1" max="365" step="1" inputmode="numeric"><span>days</span></div><small>After the download, the service is checked once a day for this many days. Nothing is downloaded until that language is there. After that, the episode keeps the audio it has.</small></div>
             <div class="field"><label for="dx-subs">Required subtitle languages</label><input id="dx-subs" type="text" data-set="subs_accept" placeholder="Example: fr" spellcheck="false"><small>The episode must have full subtitles in at least one of them. Forced subtitles (only a few lines) do not count. Empty: not checked. A series can set its own.</small></div>
           </div>
           <div class="up-mode">
@@ -668,7 +667,6 @@
 
     <section class="card sx-card" id="ds-source">
       <div class="sx-head"><div><h3>Source</h3></div></div>
-      <div class="d-sick" id="d-sick" hidden></div>
       <div class="field ds-tmdb">
         <div class="field-head"><span>Found on TMDB</span><small id="d-checked"></small>
           <button class="btn small" id="d-refresh" title="Look it up on TMDB again">Refresh</button></div>
@@ -897,6 +895,7 @@
   </div>
 </aside>
 <div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="sr-only sure-say" id="sure-say" role="status"></div>
 <dialog class="modal" id="signin-dlg" aria-labelledby="signin-title">
   <form method="dialog">
     <h2 id="signin-title">Service approval</h2>
@@ -905,8 +904,9 @@
   </form>
 </dialog>
 <dialog class="modal wide" id="inbox-dialog" aria-labelledby="inbox-title">
+  <div class="sr-only sure-say" role="status"></div>
   <div class="inbox-head"><div><h2 id="inbox-title" tabindex="-1" autofocus>Notifications</h2><small id="inbox-summary"></small></div>
-    <button class="inbox-clear" id="inbox-clear" type="button" title="Clear the notifications already seen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>Clear</button>
+    <button class="inbox-clear" id="inbox-clear" type="button" title="Clear every notification except those waiting for you"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>Clear</span></button>
     <button class="inbox-x" id="inbox-full" type="button" aria-label="Open the whole list" title="Open the whole list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
     <button class="inbox-x" id="inbox-close" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="inbox-filters" id="inbox-filters" role="group" aria-label="Show"></div>
@@ -980,7 +980,7 @@
       <div class="field"><label for="sel-fallback">Fallback profiles</label><input type="text" id="sel-fallback" placeholder="Unchanged" spellcheck="false"></div>
     </div>
     <div class="field"><span>Download options</span><div class="opts" id="sel-options"></div><small>Added to each series' own options. An option a series already has is replaced.</small></div>
-    <div class="modal-actions"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="apply" id="sel-apply">Apply</button></div>
+    <div class="modal-actions"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="apply" id="sel-apply">Change</button></div>
   </form>
 </dialog>
 <dialog class="modal wide" id="jobopts-dialog" aria-labelledby="jobopts-title">
@@ -1000,6 +1000,16 @@
     <div class="url-find-out folder-list" id="folder-list"></div>
     <p class="status-err" id="folder-err" role="alert"></p>
     <div class="modal-actions"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="use" id="folder-use">Use this folder</button></div>
+  </form>
+</dialog>
+<dialog class="modal" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+  <form method="dialog">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-text"></p>
+    <div class="modal-actions">
+      <button class="btn" value="cancel" autofocus>Cancel</button>
+      <button class="btn danger" value="go" id="confirm-go"></button>
+    </div>
   </form>
 </dialog>
 <dialog class="modal" id="unsaved-dialog" aria-labelledby="unsaved-title">
