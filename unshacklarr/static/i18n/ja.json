@@ -360,6 +360,7 @@
  "Line {0}, column {1}{2}": "{0} 行、{1} 列{2}",
  "Ask {0} which episodes of this series it has, and mark them in the list": "このシリーズのどのエピソードがあるかを {0} に問い合わせ、一覧に印を付けます",
  "Loading episodes from Sonarr…": "Sonarr からエピソードを読み込み中…",
+ "Loading series…": "シリーズを読み込み中…",
  "Loading the month…": "月を読み込み中…",
  "Loading the schedule…": "スケジュールを読み込み中…",
  "Local": "ローカル",

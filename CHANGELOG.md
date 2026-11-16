@@ -121,6 +121,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Tabbing to a control no longer leaves it hidden behind a bar.** The page, and a series' slide-out, now stop the focused control short of the header, the tab bar, the save bar, the select bar, the download bar at the bottom of a job and the series' settings shortcuts, instead of leaving it under them. The last row of Settings also clears the save bar at the end of the page. (#280)
+- **Focus is easier to see, and the small visual slips are gone.** A text field, the "Other" number pill, the Activity icon buttons and the filter bars now show a clear 2px ring when you reach them; "Open Sonarr", "Sign-in and cookies" and "CDM devices" are drawn in the button colour instead of the browser's link blue; the new remote CDM fields no longer make iOS zoom the page; choice chips have a visible edge; pressed controls scale to 96%; dialogs and menus no longer scroll the page behind them at their ends; a series with no poster, or one that fails to load, shows its initials on the wall; a failed load spans the whole wall, and the loading boxes can be seen and are announced as "Loading series…"; and the country list in setup is as wide as its field. (#280)
 - **Escape, focus and page titles now follow where you are.** Escape in a series with unsaved changes opens the "unsaved
   changes" question and leaves it open (it was cancelled by the same key press). Closing a series opened from a Schedule
   card returns to that card even after the Schedule redrew. The browser tab's title names the page, the series or the
