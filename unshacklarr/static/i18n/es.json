@@ -2389,5 +2389,7 @@
  "{0} session rejected": "Sesión de {0} rechazada",
  "{0} timed out": "{0}: tiempo de espera agotado",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} siguió ocupado durante {1} horas: el límite de peticiones de esta clave sigue alcanzado, se abandona la descarga",
- "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve siguió ocupado durante {0} horas: el límite de peticiones de esta clave sigue alcanzado, se abandona la descarga"
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve siguió ocupado durante {0} horas: el límite de peticiones de esta clave sigue alcanzado, se abandona la descarga",
+ "Update available": "Actualización disponible",
+ "Waiting": "En espera"
 }

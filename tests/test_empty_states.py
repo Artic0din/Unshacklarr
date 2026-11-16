@@ -15,7 +15,7 @@ const read = (file) => fs.readFileSync(file, "utf8");
 const any = new Proxy(function () {}, { get: (_, k) => (k === Symbol.toPrimitive ? () => "" : k === "then" ? undefined : any), apply: () => any, construct: () => any, set: () => true });
 const el = (tag, props = {}, ...kids) => ({ tag, ...props, kids });
 function sandbox(named = {}) {
-  const own = { el, structuredClone, ...named };
+  const own = { el, structuredClone, keepFocus: (box, draw) => draw(), ...named };  // keepFocus: the redraw itself, its focus restore is tested elsewhere
   return vm.createContext(new Proxy(own, { has: () => true, get: (t, k) => (k in t ? t[k] : k in globalThis ? globalThis[k] : any), set: (t, k, v) => ((t[k] = v), true) }));
 }
 const grab = (src, re) => { const m = src.match(re); if (!m) throw Error(`not in the source: ${re}`); return m[0]; };
