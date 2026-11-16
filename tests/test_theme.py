@@ -125,3 +125,13 @@ def test_text_is_never_faded_with_opacity(selector):
     faded = [sel.strip() for sel, body in rules if re.search(r"(?<![\w-])opacity\s*:\s*0?\.\d", body)
              and any(name.strip().split(":hover")[0].split(":focus-within")[0] == selector for name in sel.split(","))]
     assert not faded
+
+def test_reduced_motion_also_stills_what_before_and_after_draw():
+    """`*` matches elements only: a looping ::before (the running step's shimmer) kept moving."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)  # a commented-out rule does nothing
+    moving = [sel.strip() for sel, body in re.findall(r"([^{}]*::(?:before|after)[^{}]*)\{([^{}]*)\}", css)
+              if re.search(r"animation:\s*(?!none)[\w-]+", body)]
+    assert moving, "no animated ::before/::after left to check"
+    stilled = [{part.strip() for part in sel.split(",")} for sel in
+               re.findall(r"@media \(prefers-reduced-motion: reduce\) \{ ([^{]+)\{[^}]*animation: none !important", css)]
+    assert any({"*", "::before", "::after"} <= parts for parts in stilled), moving
