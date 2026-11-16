@@ -2395,6 +2395,8 @@
  "{0} timed out": "{0} がタイムアウトしました",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} が {1} 時間混み合ったままです：このキーのリクエスト上限にまだ達しているため、ダウンロードを中止しました",
  "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve が {0} 時間混み合ったままです：このキーのリクエスト上限にまだ達しているため、ダウンロードを中止しました",
+ "Update available": "アップデートあり",
+ "Waiting": "待機中",
  "An audio track add stopped midway in this folder: it holds audio only, not a video to import": "このフォルダーで音声トラックの追加が途中で止まりました: 音声のみで、取り込める動画がありません",
  "Saved. Another tab renamed a Sonarr: reload this page before your next change.": "保存しました。別のタブで Sonarr の名前が変更されました: 次の変更の前にこのページを再読み込みしてください。",
  "The file with the {0} audio could not be renamed: {1}": "{0}の音声が入ったファイルの名前を変更できませんでした: {1}",

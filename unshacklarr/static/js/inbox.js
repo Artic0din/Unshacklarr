@@ -89,7 +89,7 @@ function renderInbox(animate = false) {
   let n = 0;
   const empty = el("div", { className: "inbox-empty" });
   empty.innerHTML = `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${INBOX_ICONS.info}<path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><p>All quiet. Downloads, failures and anything that waits for you show up here.</p>`;
-  keepPromptFocus(() => $("#inbox-list").replaceChildren(
+  keepFocus($("#inbox-list"), () => $("#inbox-list").replaceChildren(
     ...(waiting.length ? [el("div", { className: "inbox-sub", textContent: "Waiting for you" }),
       ...waiting.map((i) => (i.action.kind === "input" ? promptBox(i.action) : audioBox(i.action)))] : []),
     ...days.flatMap((d) => [el("div", { className: "inbox-sub", textContent: d.label }), ...d.groups.map((g) => inboxRow(g, n++))]),

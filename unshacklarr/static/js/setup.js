@@ -358,7 +358,8 @@ function showSetup(found) {
     back.hidden = at === 0;
     const last = at === steps.length - 1;
     next.replaceChildren(last ? "Finish the setup" : "Next", el("span", { className: "arr", ariaHidden: "true" }, icon(last ? "check" : "arrow")));
-    panel.querySelector("input, select")?.focus({ preventScroll: true });
+    const control = [...panel.querySelectorAll("input, select")].find((x) => x.getClientRects().length);  // not a hidden select
+    if (control) control.focus({ preventScroll: true }); else focusHeading(panel.querySelector("h2"));
     keep();
   }
   /* The end: what was checked, and the way in */

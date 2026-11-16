@@ -2423,6 +2423,8 @@
  "{0} timed out": "{0}: délai dépassé",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} est resté occupé pendant {1} heures : la limite de requêtes de cette clé est toujours atteinte, le téléchargement est abandonné",
  "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve est resté occupé pendant {0} heures : la limite de requêtes de cette clé est toujours atteinte, le téléchargement est abandonné",
+ "Update available": "Mise à jour disponible",
+ "Waiting": "En attente",
  "An audio track add stopped midway in this folder: it holds audio only, not a video to import": "L'ajout d'une piste audio s'est arrêté en cours de route dans ce dossier: il ne contient que de l'audio, pas de vidéo à importer",
  "Saved. Another tab renamed a Sonarr: reload this page before your next change.": "Enregistré. Un autre onglet a renommé un Sonarr: rechargez cette page avant votre prochaine modification.",
  "The file with the {0} audio could not be renamed: {1}": "Le fichier avec l'audio {0} n'a pas pu être renommé: {1}",

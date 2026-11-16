@@ -285,7 +285,6 @@
  "An answer is reused until it is older than this, unless the file changed.": [],
  "An app password is safer than your account's password.": [],
  "An app password is safer than your account's password. Leave empty to keep the saved one.": [],
- "An audio track add stopped midway in this folder: it holds audio only, not a video to import": [],
  "An e-mail address, like you@gmail.com": [],
  "An episode is downloaded and handed to Sonarr": [],
  "An episode is late, a replacement kept the old file, or a code must be entered": [],
@@ -405,13 +404,9 @@
  "Average": [],
  "Average time": [],
  "Back": [],
- "Back to Activity": [],
- "Back to Settings": [],
  "Back to all series": [],
  "Back to the downloads": [],
  "Back to the file": [],
- "Back to the schedule": [],
- "Back to unshackle.yaml": [],
  "Back up automatically every": [],
  "Backblaze B2, Cloudflare R2, Wasabi, Scaleway, OVH, AWS or MinIO.": [],
  "Backup sent: {0}": [
@@ -744,7 +739,6 @@
  "Device type": [],
  "Devices": [],
  "Devices (CDM)": [],
- "Diagnostic saved: check it, then attach it to the issue": [],
  "Disable folder creation for TV Shows.": [],
  "Disable the source tag from the output file name and path.": [],
  "Discard": [],
@@ -1144,10 +1138,6 @@
   "sick.failing",
   "sick.cause ? `: ${sick.cause}` : \"\""
  ],
- "Its last {0} downloads from {1} failed": [
-  "sick.failing",
-  "svcName(conf.service)"
- ],
  "Its log needs serve: dashboard: key: in unshackle.yaml (Unshackle after 6.0.0)": [],
  "Its log, last lines": [],
  "Its path on Sonarr's side, e.g. inside Sonarr's container.": [],
@@ -1202,7 +1192,6 @@
   "w['want']",
   "w['label']"
  ],
- "Kept: Sonarr's own file was not replaced": [],
  "Kind": [],
  "Korean": [],
  "L1, L2, ChromeCDM (Widevine) or SL2, SL3 (PlayReady)": [],
@@ -1484,7 +1473,7 @@
  ],
  "No {0} audio in the download (it has {1}): not imported": [
   "' or '.join(accepted)",
-  "', '.join(sorted(langs)) or 'no language tag'"
+  "', '.join(sorted(langs))"
  ],
  "No {0} audio on {1} yet (it has {2})": [
   "langs",
@@ -1771,7 +1760,6 @@
  "Paused for {0}: choose a quality ladder in Settings, Sonarr.": [
   "paused.join(\", \")"
  ],
- "Paused: the next episode waits": [],
  "Per episode": [],
  "Per service": [],
  "Pick a country in the list": [],
@@ -1856,7 +1844,6 @@
   "ep['series']['title']"
  ],
  "Release to reload": [],
- "Reload calendar": [],
  "Reload services": [],
  "Reloading…": [],
  "Remote": [],
@@ -1960,7 +1947,6 @@
  "Save": [],
  "Save and test": [],
  "Save changes": [],
- "Save diagnostic": [],
  "Save or discard your changes first": [],
  "Save your changes first: the download reads the saved settings.": [],
  "Save your changes first: the sync reads the saved settings.": [],
@@ -1968,7 +1954,6 @@
  "Saved (leave empty to keep it)": [],
  "Saved backups": [],
  "Saved under remote_cdm in unshackle.yaml. A service then uses it by its name.": [],
- "Saved. Another tab renamed a Sonarr: reload this page before your next change.": [],
  "Saved. The serve section changed: restart Unshackle for it to apply": [],
  "Saved: leave empty to keep it": [],
  "Saved: the next download uses it": [],
@@ -2151,7 +2136,7 @@
  "Sign-in and cookies": [],
  "Sign-in cancelled": [],
  "Sign-in failed on {0}: {1}": [
-  "asked_from['service']",
+  "show['service']",
   "label"
  ],
  "Sign-in failed · {0}": [
@@ -2543,10 +2528,6 @@
  "The file did not arrive whole: pick it again": [],
  "The file holds your API keys and notification addresses: keep it private.": [],
  "The file it becomes": [],
- "The file with the {0} audio could not be renamed: {1}": [
-  "want",
-  "e"
- ],
  "The file's average bitrate: Sonarr has none for its video": [],
  "The files are in {0}": [
   "seen_by('sonarr_downloads', out)"
@@ -2669,9 +2650,6 @@
  "The service will refuse them: replace them with fresh ones": [],
  "The sign-in check could not reach Unshackle.": [],
  "The sign-ins could not be checked.": [],
- "The start date of {0} must be a date, like 2026-10-01": [
-  "key"
- ],
  "The terminal could not load: reload the page.": [],
  "The two passwords differ; nothing changed.": [],
  "The whole episode is downloaded again and replaces the existing file.": [],
@@ -2710,7 +2688,6 @@
   "want"
  ],
  "Then add the file here with Add.": [],
- "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": [],
  "These settings were changed elsewhere since this page was loaded. Reload the page, then make your change again.": [],
  "These {0} episodes are": [
   "onDisk"
@@ -2888,7 +2865,6 @@
  "Unshacklarr · Today at {0}": [
   "now"
  ],
- "Unshacklarr, schedule": [],
  "Unshackle": [],
  "Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): allow it in Settings, Unshackle": [],
  "Unshackle address": [],
@@ -2925,6 +2901,7 @@
   "data.unshackle_error"
  ],
  "Up": [],
+ "Update available": [],
  "Update {0}": [
   "data.update.version"
  ],
@@ -2991,7 +2968,7 @@
  "Wait for 2 parts": [],
  "Wait for 3 parts": [],
  "Wait for 4 parts": [],
- "Wait for the audio, in days": [],
+ "Waiting": [],
  "Waiting for Sonarr": [],
  "Waiting for a slot": [],
  "Waiting for you": [],
@@ -3699,10 +3676,6 @@
  "{0} did not answer like unshackle serve (no JSON): is the address right?": [
   "url"
  ],
- "{0} did not finish within {1}: is the downloads folder reachable?": [
-  "cmd[0]",
-  "human_time(timeout)"
- ],
  "{0} did not load in unshackle serve: its startup log says why": [
   "tag"
  ],
@@ -3785,10 +3758,6 @@
  ],
  "{0} h ago": [
   "Math.round(min / 60)"
- ],
- "{0} h {1} min": [
-  "Math.floor(min / 60)",
-  "String(min % 60).padStart(2, \"0\")"
  ],
  "{0} had already started: stop it from its card": [
   "c.sxxeyy"
@@ -3956,10 +3925,6 @@
  "{0} min ago": [
   "min"
  ],
- "{0} min {1} s": [
-  "Math.floor(s / 60)",
-  "String(s % 60).padStart(2, \"0\")"
- ],
  "{0} missing": [
   "missing"
  ],
@@ -4105,7 +4070,7 @@
   "to.path[:-len(path)]"
  ],
  "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services.": [
-  "asked_from['service']"
+  "show['service']"
  ],
  "{0} refused it: {1}": [
   "s['endpoint'].split('/')[2]",
@@ -4467,7 +4432,7 @@
  ],
  "{0}: {1} refused the sign-in, trying the profile {2}": [
   "label",
-  "asked_from['service']",
+  "show['service']",
   "profile"
  ],
  "{0}: {1}, not downloaded": [
@@ -4529,5 +4494,42 @@
  "● Connected{0}": [
   "st.version ? ` · Sonarr ${st.version}` : \"\""
  ],
- "⚠ No CDM for this service": []
+ "⚠ No CDM for this service": [],
+ "An audio track add stopped midway in this folder: it holds audio only, not a video to import": [],
+ "Back to Activity": [],
+ "Back to Settings": [],
+ "Back to the schedule": [],
+ "Back to unshackle.yaml": [],
+ "Diagnostic saved: check it, then attach it to the issue": [],
+ "Its last {0} downloads from {1} failed": [
+  "sick.failing",
+  "svcName(conf.service)"
+ ],
+ "Kept: Sonarr's own file was not replaced": [],
+ "Paused: the next episode waits": [],
+ "Reload calendar": [],
+ "Save diagnostic": [],
+ "Saved. Another tab renamed a Sonarr: reload this page before your next change.": [],
+ "The file with the {0} audio could not be renamed: {1}": [
+  "want",
+  "e"
+ ],
+ "The start date of {0} must be a date, like 2026-10-01": [
+  "key"
+ ],
+ "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": [],
+ "Unshacklarr, schedule": [],
+ "Wait for the audio, in days": [],
+ "{0} did not finish within {1}: is the downloads folder reachable?": [
+  "cmd[0]",
+  "human_time(timeout)"
+ ],
+ "{0} h {1} min": [
+  "Math.floor(min / 60)",
+  "String(min % 60).padStart(2, \"0\")"
+ ],
+ "{0} min {1} s": [
+  "Math.floor(s / 60)",
+  "String(s % 60).padStart(2, \"0\")"
+ ]
 }

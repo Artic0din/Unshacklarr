@@ -1,4 +1,5 @@
 """The light and dark looks: every text and edge colour readable on what it sits on, in both."""
+import math
 import re
 import shutil
 import subprocess
@@ -37,10 +38,10 @@ def contrast(a, b):
 
 TEXT = [("text", "bg"), ("text", "panel"), ("text", "well"), ("text", "field-bg"), ("text", "accent-tint"),
         ("muted", "bg"), ("muted", "panel"), ("muted", "well"), ("accent", "bg"), ("accent", "panel"), ("accent", "accent-tint"),
-        ("accent-ink", "accent"), ("ok", "panel"), ("warn", "bg"), ("warn", "panel"), ("warn-ink", "warn"), ("warn", "warn-tint"),
+        ("accent-ink", "accent"), ("ok", "panel"), ("ok", "bg"), ("ok", "well"), ("ok", "ok-tint"), ("accent-ink", "ok"), ("warn", "bg"), ("warn", "panel"), ("warn-ink", "warn"), ("warn", "warn-tint"),
         ("err", "err-tint"), ("muted", "well"),
         ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg")]
-EDGES = [("field-line", "field-bg"), ("field-line", "panel")]
+EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
 
 
 @pytest.mark.parametrize("theme", ["dark", "light"])
@@ -49,6 +50,43 @@ def test_every_text_and_field_edge_meets_its_contrast(theme):
     low = [f"{a} on {b}: {contrast(tokens[a], tokens[b]):.2f}" for pairs, need in ((TEXT, 4.5), (EDGES, 3))
            for a, b in pairs if contrast(tokens[a], tokens[b]) < need]
     assert not low
+
+
+def blend(top, under, share):
+    return "#" + "".join(f"{round(int(top[i:i + 2], 16) * share + int(under[i:i + 2], 16) * (1 - share)):02x}" for i in (1, 3, 5))
+
+
+def hue(hex_colour):
+    """OKLCH hue in degrees (Ottosson's OKLab)."""
+    r, g, b = [((c / 12.92) if c <= .04045 else ((c + .055) / 1.055) ** 2.4) for c in (int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5))]
+    l, m, s = (x ** (1 / 3) for x in (.4122214708 * r + .5363325363 * g + .0514459929 * b,
+                                      .2119034982 * r + .6806995451 * g + .1073969566 * b,
+                                      .0883024619 * r + .2817188376 * g + .6299787005 * b))
+    return math.degrees(math.atan2(.0259040371 * l + .7827717662 * m - .8086757660 * s,
+                                   1.9779984951 * l - 2.4285922050 * m + .4505937099 * s)) % 360
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_success_is_a_green_apart_from_the_teal_accent(theme):
+    tokens = DARK if theme == "dark" else LIGHT
+    gap = abs(hue(tokens["ok"]) - hue(tokens["accent"]))
+    assert min(gap, 360 - gap) >= 15  # one hue cannot mean both "selected" and "healthy"
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_ok_text_on_its_own_tint_is_readable(theme):
+    tokens = DARK if theme == "dark" else LIGHT
+    # the pills, notes and rows tint their ground with up to 14% of --ok
+    low = [f"{ground}: {contrast(tokens['ok'], blend(tokens['ok'], tokens[ground], .14)):.2f}" for ground in ("bg", "panel", "well")
+           if contrast(tokens["ok"], blend(tokens["ok"], tokens[ground], .14)) < 4.5]
+    assert not low
+
+
+@pytest.mark.parametrize("badge", [".ck-pill.ok", ".sched-st.ok", ".chip.disk", ".chip.o-downloaded"])
+def test_a_done_or_healthy_badge_is_green_not_the_accent(badge):
+    rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", CSS, flags=re.S))
+    last = [body for sel, body in rules if badge in [name.strip() for name in sel.split(",")]][-1]  # the later rule wins
+    assert "var(--ok-tint)" in last and "var(--accent" not in last
 
 
 def test_the_light_look_sets_every_colour_and_follows_the_system_too():
@@ -113,6 +151,34 @@ def test_no_later_rule_reshapes_a_tag():
             and any(name in [s.strip() for s in sel.split(",")] for name in names)]
     assert not late  # the shared shape is the last word for every tag
 
+
+def rule(selector):
+    """The bodies of every rule whose selector list holds exactly this selector."""
+    found = [body for names, body in re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", CSS, flags=re.S))
+             if selector in [n.strip() for n in re.split(r",(?![^()]*\))", names)]]
+    assert found, f"no rule for {selector}"
+    return " ".join(found)
+
+
+def test_a_toggle_pill_has_an_edge_you_can_see_and_a_tick_when_on():
+    assert "var(--field-line)" in rule(".pill")  # off: an edge at 3:1, not the faint divider
+    on = rule(".pill:has(input:checked)::before")
+    assert "clip-path" in on and rule("#sel-toggle[aria-pressed=\"true\"]::before").count("clip-path") == 1  # the Select toggle's tick
+
+
+def test_the_active_country_option_has_an_accent_bar_not_only_a_tint():
+    assert "inset 3px 0 0 var(--accent)" in rule(".cp-list li.on")
+
+
+def test_a_failed_or_stopped_step_has_a_mark_and_the_word_is_there_for_everyone():
+    assert "\\2715" in rule(".steps .fail :is(.l, .s)::before") and "\\25A0" in rule(".steps .halt :is(.l, .s)::before")
+    assert "clip" in rule(".sr-only")
+
+
+def test_a_phone_widens_the_header_only_for_a_service_with_something_to_say():
+    phone = CSS[CSS.index("@media (max-width: 700px) {"):]
+    assert "small:not(:empty)" not in phone  # "Checking…" is brief: it must not make the header jump on every load
+    assert "[data-state=warn], [data-state=down]" in phone
 
 FADED_TEXT = [".sched-card.other", ".cal-cell.out", ".inbox-filters b", ".seg button span", ".toolbar .pill span", ".con-filters button span",
               ".job-counts button.off", ".tools span.optional-missing", ".oneoff-preview .file", ".wall.selecting .poster:not(.picked)"]
