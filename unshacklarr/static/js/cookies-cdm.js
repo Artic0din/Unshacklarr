@@ -317,7 +317,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
     ...(folded ? [el("button", { type: "button", className: "cdm-more-btn", textContent: `Show ${COUNT.moreDevice(folded)}, not in use`, onclick: () => { cdmShowUnused = true; renderCdm(); } })] : []));
   // Typing keeps the search box itself (a new one would put the cursor at the end and break an input method's composition): only what it filters is drawn again
   if (typing && $("#cdm-devices")) { $("#cdm-devices").replaceWith(devices); $("#cdm-test-all").replaceWith(testAll); return; }
-  $("#cdm-list").replaceChildren(
+  keepFocus($("#cdm-list"), () => $("#cdm-list").replaceChildren(
     cdmCard('<svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h6M4 17h10"/><path d="m15 9 4 3-4 3"/></svg>', "Which device each service uses",
       "Click a service to move it to another device. A change applies to the next download.", null, services),
     cdmCard('<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>', "Devices",
@@ -328,7 +328,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
       devices),
     cdmCard('<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>', "Remote CDMs",
       "A device on a server: pywidevine serve, a PlayReady API, Decrypt Labs. Saved in unshackle.yaml.", plus,
-      ...(data.remote.length ? [el("div", { className: "cdm-devs" }, ...data.remote.map(remoteRow))] : [])));
+      ...(data.remote.length ? [el("div", { className: "cdm-devs" }, ...data.remote.map(remoteRow))] : []))));
 }
 /* A remote CDM: a device on a server, named in unshackle.yaml's remote_cdm; changed from the page, its secret never shown. */
 function remoteRow(r) {
