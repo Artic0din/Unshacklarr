@@ -190,7 +190,13 @@ def unshackle_python(command: str) -> tuple[str, Path]:
     with script.open("rb") as f:
         first = f.readline(512)
     if first.startswith(b"#!") and b"python" in first:
-        return first[2:].decode(errors="replace").strip().split()[0], folder
+        words = first[2:].decode(errors="replace").strip().split()
+        if Path(words[0]).name == "env":  # #!/usr/bin/env python3: the Python env would find, not env itself
+            named = next((w for w in words[1:] if not w.startswith("-")), "")
+            if resolved := shutil.which(named):
+                return resolved, folder
+        else:
+            return words[0], folder
     for name in ("python.exe", "python3", "python"):  # a Windows .exe launcher, or an odd shebang
         if (script.parent / name).exists():
             return str(script.parent / name), folder

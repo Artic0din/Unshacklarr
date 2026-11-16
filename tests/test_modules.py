@@ -834,3 +834,23 @@ def test_a_busy_answer_always_asks_for_a_wait(tmp_path, header, seconds):
     with pytest.raises(UnshackleError) as caught:
         backend.call("GET", "/api/download/jobs/j1")
     assert caught.value.retry_after == seconds  # 0 would read as "no wait asked": a miss, then a cancelled download
+
+
+@pytest.mark.parametrize("shebang", ["#!/usr/bin/env python3", "#!/usr/bin/env -S python3 -u"])
+def test_a_launcher_that_asks_env_for_python_runs_that_python(tmp_path, shebang):
+    import shutil
+    import sys
+    from unshacklarr.backend import unshackle_python
+    here = tmp_path / "bin"
+    here.mkdir()
+    (here / "python3").symlink_to(sys.executable)
+    command = here / "unshackle"
+    command.write_text(f"{shebang}\n")
+    command.chmod(0o755)
+    path = os.environ["PATH"]
+    os.environ["PATH"] = f"{here}{os.pathsep}{path}"
+    try:
+        python, _ = unshackle_python(str(command))
+        assert python == shutil.which("python3")  # the interpreter env would find, not env itself
+    finally:
+        os.environ["PATH"] = path
