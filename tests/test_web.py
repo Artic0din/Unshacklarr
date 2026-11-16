@@ -2041,7 +2041,7 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), options = js("settings-options.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(options, /^async function save\(\) \{.*?^\}/ms),
   pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
@@ -2068,6 +2068,12 @@ const fresh = () => {
   fresh(); box.S.config.settings.theme = "light"; page.dirty();
   let saving = page.save(); release(); await saving;
   out.plainSaveHides = bars["#savebar"].hidden && bars["#d-save"].hidden;
+  fresh(); box.S.config.settings.theme = "sepia"; page.dirty();  // a change the save before did not send
+  saving = page.save(); release({ versions: { settings: "v2" } }); await saving;  // the server's new fingerprints
+  out.newVersionsStaySaved = bars["#savebar"].hidden && !page.state().unsaved;
+  fresh(); box.S.config.hidden_series = [7]; box.S.config.settings.theme = "teal"; page.dirty();  // hidden at once by /api/hidden
+  saving = page.save(); release(); await saving;
+  out.hiddenListNotSentAsChanged = !JSON.parse(box.sentBody).changed.includes("hidden_series");
 
   fresh(); box.S.config.settings.theme = "light"; page.dirty();
   saving = page.save(); box.S.config.settings.theme = "blue"; page.dirty(); release(); await saving;
@@ -2156,6 +2162,8 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == {
         "plainSaveHides": True,  # nothing changed meanwhile: the bar goes as before
+        "newVersionsStaySaved": True,  # the fingerprints a save answers with are no edit
+        "hiddenListNotSentAsChanged": True,  # hiding saves at once, never through Save: no clash with another tab's
         "editDuringSaveKeepsBar": True,  # it was never sent
         "revertToSentHides": True,  # back to what was sent is saved
         "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
@@ -2179,7 +2187,7 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), series = js("series.js"), schedule = js("schedule.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(core, /^let drawerSnapshot = null;$/m), pick(core, /^const drawerChanged = .*$/m),
   pick(series, /^let oneOff = null;.*?(?=^\$\("#d-join"\))/ms),
@@ -2831,7 +2839,9 @@ def test_a_country_title_finds_its_episode_and_a_number_saying_another_finds_not
     monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "RMCP", "cli_params": []}]})
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {})
     monkeypatch.setattr(web, "tmdb_key", lambda: "")
-    found = web.probe_series({"service": "RMCP", "title": "x"}, 1)["available"]
+    probed = web.probe_series({"service": "RMCP", "title": "x"}, 1)
+    assert probed["titlesAgree"] is True  # the same language: nothing offered
+    found = probed["available"]
     assert found[13] == {"service": "S17E02", "name": "Mali", "match": "title", "same": True}  # same title, whatever the number
     assert found[11]["service"] == "S01E01"  # "Japon" both sides
     assert found[32]["service"] == "S03E02"  # no title to say otherwise: its number
@@ -3018,6 +3028,9 @@ def test_tvdbs_own_titles_in_your_language_match_a_service_that_numbers_nothing(
     assert web.usable_title("E2025 Catherine Deneuve") == "catherine deneuve" and web.usable_title("Episode 3") == ""
     # Ranma 1/2's S03E01 on TMDB before its translations: no title "de" to contradict Netflix's
     assert web.usable_title("修行DEディナー") == "" and web.usable_title("Ранма") == ""
+    assert web.usable_title("TBC") == "" and web.usable_title("TBA") == ""
+    assert web.usable_title("PAGE 14 Donjon") == "donjon" and web.same_title(web.usable_title("PAGE 14 Donjon"), web.usable_title("Donjon"))  # Black Clover
+    assert web.usable_title("Chapitre 3 La fuite") == "la fuite" and web.usable_title("Page 7") == "page 7"  # nothing after it: kept  # Cat's Eyes S02E08: "TBC" until its title comes
     assert web.usable_title("Été à Tokyo") == "ete a tokyo" and web.usable_title("Ranma ½") != ""
 
 
@@ -3387,6 +3400,7 @@ def test_the_api_takes_a_download_s_own_proxy_and_refuses_a_malformed_one(tmp_pa
     ok, region, bad = asyncio.run(go())
     assert ok == region == 200 and bad == [400] * 6
     assert started == [([5], {"proxy": "nordvpn:fr"}), ([6], {"proxy": "protonvpn:us:ny"}), ([8], {})]  # empty: the series' own
+    assert all(web.PROXY_OVERRIDE.fullmatch(p) for p in ("nordvpn:fr@187.14.108.15", "nordvpn:ca@-datacamp"))  # a network or IP
 
 
 def test_the_api_takes_a_download_s_own_codec_and_height_and_refuses_others(tmp_path, monkeypatch):
@@ -4103,7 +4117,7 @@ def test_accepted_audio_languages_are_language_codes(tmp_path, monkeypatch):
     importlib.reload(unshacklarr.sync)
     web = importlib.reload(unshacklarr.web)
     assert web.check_audio_accept(" FR,en-US  de ", "x") == "fr, en-us, de" and web.check_audio_accept(None, "x") == ""
-    for bad in ("orig", "fr;en", "français", "e"):
+    for bad in ("all", "fr;en", "français", "e"):  # orig is taken: the series' original language (Sonarr's)
         try:
             web.check_audio_accept(bad, "x")
             raise AssertionError(f"expected {bad!r} to be refused")
@@ -4763,7 +4777,7 @@ def test_upgrades_find_the_files_a_service_has_on_an_earlier_step(tmp_path, monk
     web = importlib.reload(unshacklarr.web)
     sync = web.sonarr_sync
     assert web.ladder_track({"resolution": "1920x800", "videoCodec": "x265", "videoDynamicRangeType": "DV HDR10"}) == \
-        {"height": 800, "width": 1920, "codec": "HEVC", "range": "DV", "layers": ["DV", "HDR10"]}
+        {"height": 800, "width": 1920, "codec": "HEVC", "range": "DV", "layers": ["DV", "HDR10"], "bitrate": 0}
     assert web.ladder_track({"resolution": "1280x720", "videoCodec": "h264", "videoDynamicRangeType": ""})["range"] == "SDR"
     hevc_first = {"name": "HEVC first", "steps": [{"codec": "HEVC", "range": "SDR", "min": 1080, "max": 1080},
                                                   {"codec": "AVC", "range": "SDR", "min": 1080, "max": 1080}]}
@@ -6238,8 +6252,10 @@ def test_words_alike_in_two_languages_do_not_make_a_service_speak_ours(tmp_path,
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {})
     monkeypatch.setattr(web, "tmdb_key", lambda: "")
     monkeypatch.setattr(web, "tvdb_titles", lambda tvdb: {})
-    found = web.probe_series({"service": "DSNP", "title": "x"}, 1)["available"]
+    probed = web.probe_series({"service": "DSNP", "title": "x"}, 1)
+    found = probed["available"]
     assert found[102] == {"service": "S01E02", "name": "Aménagements"}  # by its number: no longer "not on Disney+"
+    assert probed["titlesAgree"] is False  # the page then offers Sonarr's titles in French
     assert len(found) == 23
 
 
@@ -6318,6 +6334,7 @@ def test_a_download_keeps_the_services_best_as_its_upgrades_answer(tmp_path, mon
     monkeypatch.setattr(sync, "read_file", lambda: config)
     monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None, backend=None: [{"video": [{"height": 1080, "codec": "AVC", "range": "SDR"}]}])
     request = {"service": "X", "title_id": "t", "wanted": ["S01E01"]}
+    assert sync.apply_ladder(config["series"][1], config, {**request, "remote": True}) == 2  # --remote lists its tracks too
     assert sync.apply_ladder(config["series"][1], config, request) == 2  # the service's best now: step 2
     sync.note_download_answer(11, config["series"][1], config)
     seen = web.read_json(web.upgrades_seen_file(), {})["11"]
@@ -6341,7 +6358,7 @@ def test_a_download_keeps_the_services_best_as_its_upgrades_answer(tmp_path, mon
                         [{**e, "episodeFile": by_id().get(e["episodeFileId"])} for e in eps])
     monkeypatch.setattr(sync, "download_request", lambda show, config, wanted, out: {"service": "X", "title_id": "t", "wanted": [wanted]})
     asked = []
-    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None: asked.append(request["wanted"]) or
+    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None, backend=None: asked.append(request["wanted"]) or
                         [{"title": {"season": 1, "number": int(w[-2:])}, "video": [{"height": 1080, "codec": "AVC", "range": "SDR"}]} for w in request["wanted"]])
     monkeypatch.setattr(web, "UPGRADE_PAUSE", 0)
     web.scan_upgrades()
@@ -6352,7 +6369,7 @@ def test_a_download_keeps_the_services_best_as_its_upgrades_answer(tmp_path, mon
     # an episode the service leaves out of its answer is kept as such, not asked at every check
     files.append({"id": 72, "mediaInfo": {"resolution": "1920x1080", "videoCodec": "h264"}, "dateAdded": "2020-01-01T00:00:00Z"})
     eps.append({"id": 13, "seasonNumber": 1, "episodeNumber": 3, "hasFile": True, "episodeFileId": 72})
-    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None: asked.append(request["wanted"]) or [])
+    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None, backend=None: asked.append(request["wanted"]) or [])
     web.scan_upgrades()
     assert asked[-1] == ["S01E03"] and web.read_json(web.upgrades_seen_file(), {})["13"]["absent"]
     web.scan_upgrades()
@@ -6760,3 +6777,710 @@ def test_a_renamed_sonarr_keeps_the_proxy_passwords_its_series_set_for_it(tmp_pa
         with pytest.raises(web.web.HTTPBadRequest) as asked:  # ambiguous: asked again
             web.real_config(back, web.read_config())
         assert asked.value.text.startswith("Type the proxy's credentials"), change
+
+
+def test_clear_cache_empties_one_service_only(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    cache = tmp_path / "Cache"
+    for f in ("NF/ESN.json", "NF/MSL/msl.json", "DSNP/tokens.json"):
+        (cache / f).parent.mkdir(parents=True, exist_ok=True)
+        (cache / f).write_text("x" * 10)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(cache)
+    jobs = []
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "NF"}, {"tag": "DSNP"}])
+    monkeypatch.setattr(web.UNSHACKLE, "jobs", lambda: jobs)
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            async def post(tag):
+                r = await client.post(f"/api/unshackle/cache/{tag}/clear", headers={"X-Unshackle": "1"})
+                return r.status, (await r.json() if r.status == 200 else None)
+            out = [(await post("XX"))[0]]
+            jobs.append({"service": "NF", "status": "downloading"})
+            out.append((await post("NF"))[0])
+            out.append((cache / "NF" / "ESN.json").exists())
+            jobs.clear()
+            out.append(await post("NF"))
+            return out
+
+    assert asyncio.run(go()) == [404, 409, True, (200, {"freed_bytes": 20})]
+    assert list((cache / "NF").iterdir()) == [] and (cache / "DSNP" / "tokens.json").exists()
+
+
+def test_an_empty_listing_is_told_only_once_episodes_are_out(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    now = datetime(2026, 10, 5, 18, tzinfo=timezone.utc)
+    series = {1: {"service": "ATV", "title": "a", "release_time": "20:00"}, 2: {"service": "ATV", "title": "b", "release_time": "20:00"}}
+    config = {"auth": {"password": "x"}, "series": series, "notifications": {}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", timezone.utc)
+    ep = lambda i, tvdb, n: {"id": i, "seasonNumber": 1, "episodeNumber": n, "airDateUtc": "2026-10-05T19:00:00Z", "hasFile": False,
+                             "series": {"tvdbId": tvdb, "title": f"Show{tvdb}"}}
+    monkeypatch.setattr(web, "calendar_episodes", lambda config, start, end: [ep(1, 1, 1), ep(2, 2, 4)])
+    monkeypatch.setattr(web.sonarr_sync, "no_cdm", lambda tag, config=None: "")
+    monkeypatch.setattr(web, "list_titles", lambda show: [])
+    monkeypatch.setattr(web.sonarr_sync, "notify", lambda *a, **k: None)
+    assert web.precheck(now) == ["Not ready for its release: Show2 S01E04"]  # Show1 S01E01: nothing can be listed yet
+
+
+def test_languages_lists_files_without_an_accepted_or_the_preferred_audio(tmp_path, monkeypatch):
+    # Sonarr 5 reads each file's tracks: the library is checked without opening a file
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync = web.sonarr_sync
+    (tmp_path / "config.yaml").write_text("settings: {audio_accept: 'fr,en', audio_prefer: fr}\nseries:\n  1: {service: X, title: a}\n")
+    monkeypatch.setattr(sync, "sonarr_series", lambda wanted: {1: {"id": 7, "tvdbId": 1, "title": "Show"}})
+    eps = [{"id": 11, "seasonNumber": 1, "episodeNumber": 1, "hasFile": True, "episodeFileId": 101},
+           {"id": 12, "seasonNumber": 1, "episodeNumber": 2, "hasFile": True, "episodeFileId": 102},
+           {"id": 13, "seasonNumber": 1, "episodeNumber": 3, "hasFile": True, "episodeFileId": 103},
+           {"id": 14, "seasonNumber": 1, "episodeNumber": 4, "hasFile": True, "episodeFileId": 104}]
+    track = lambda *langs: {"audioStreams": [{"language": l} for l in langs], "subtitleStreams": [{"language": "fre", "forced": True}]}
+    files = [{"id": 101, "relativePath": "S1/a.mkv", "mediaInfo": track("fre", "eng")},  # fine
+             {"id": 102, "relativePath": "S1/b.mkv", "mediaInfo": track("eng")},  # English only: not the preferred French
+             {"id": 103, "relativePath": "S1/c.mkv", "mediaInfo": track("ger")},  # none accepted
+             {"id": 104, "relativePath": "S1/d.mkv", "mediaInfo": track("und")}]  # untagged: says nothing
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: eps)
+    monkeypatch.setattr(sync, "sonarr_v5_get", lambda path, **p: files)
+    web.scan_languages()
+    found = {i["episodeId"]: i for i in web.read_json(web.LANGUAGES_FILE, {})["items"]}
+    assert set(found) == {12, 13}
+    assert found[12]["lacks"] == "preferred" and found[12]["want"] == "fr" and found[12]["audio"] == ["en"] and found[12]["forced"] == ["fr"]
+    assert found[13]["lacks"] == "accepted" and found[13]["audio"] == ["de"]
+    # a double episode: one file, two episodes of Sonarr's, each listed
+    eps.append({"id": 15, "seasonNumber": 1, "episodeNumber": 5, "hasFile": True, "episodeFileId": 102})
+    web.scan_languages()
+    assert {i["episodeId"] for i in web.read_json(web.LANGUAGES_FILE, {})["items"]} == {12, 13, 15}
+
+
+def test_a_series_titles_are_asked_of_sonarr_in_your_language(monkeypatch):
+    # Sonarr 5: the series' metadata language set to the one where you watch (French for France); Sonarr refreshes it
+    from unshacklarr import web
+    sync = web.sonarr_sync
+    monkeypatch.setitem(sync.SETTINGS, "country", "FR")
+    assert web.metadata_language() == "French"
+    serie = {"id": 974, "tvdbId": 447183, "title": "Shifting Gears", "language": {"id": 1, "name": "English"}}
+    assert web.series_entry({**serie, "images": [], "originalLanguage": {"id": 2, "name": "French"}})["originalLanguage"] == "French"
+    assert web.series_entry({**serie, "images": []})["language"] == "English"
+    monkeypatch.setattr(sync, "sonarr_series", lambda wanted: {447183: serie})
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: [{"id": 1, "name": "English"}, {"id": 2, "name": "French"}] if path == "language" else dict(serie))
+    put = []
+
+    class Answer:
+        def raise_for_status(self): pass
+    monkeypatch.setattr(web.requests, "put", lambda url, json=None, **k: put.append((url, json)) or Answer())
+    web.set_series_language(447183, "French")
+    assert put[0][0].endswith("/api/v3/series/974") and put[0][1]["language"] == {"id": 2, "name": "French"}
+    assert serie["language"]["name"] == "French"  # the library kept here says so too
+
+
+def test_one_series_is_asked_again_with_its_new_title(monkeypatch):
+    # After its titles were asked in French, the page asks the series again: its title in French too
+    import asyncio, json
+    from unshacklarr import web
+    sync = web.sonarr_sync
+    fresh = {"id": 974, "tvdbId": 447183, "title": "Famille en Réparation", "images": [], "language": {"id": 2, "name": "French"}}
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: fresh if path == "series/974" else {})
+    monkeypatch.setitem(sync._series_by_tvdb, "", (0.0, {447183: {"id": 974, "tvdbId": 447183, "title": "Shifting Gears"}}))
+
+    class Request:
+        match_info = {"series_id": "974"}
+    shown = json.loads(asyncio.run(web.series_fresh(Request())).body)
+    assert shown["title"] == "Famille en Réparation" and shown["language"] == "French"
+    assert sync._series_by_tvdb[""][1][447183]["title"] == "Famille en Réparation"  # the sync's labels follow
+
+
+def test_a_ladder_picks_the_video_over_the_bitrate_options(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    sync = importlib.reload(unshacklarr.sync)
+    ladder = {"name": "L", "steps": [{"codec": "HEVC", "range": "DV", "min": 2160, "max": 0},
+                                     {"codec": "HEVC", "range": "SDR", "min": 1080, "max": 1080, "max_kbps": 6000}]}
+    config = {"quality_ladders": [ladder], "settings": {}}
+    show = {"service": "ATV", "title": "t", "ladder": "L"}
+    tracks = [{"height": 1080, "codec": "HEVC", "range": "SDR", "bitrate": b} for b in (5100, 5900, 9000)]
+    monkeypatch.setattr(sync, "list_tracks", lambda show, config, request, ladder=None, backend=None: [{"video": tracks}])
+    request = {"service": "ATV", "title_id": "t", "wanted": ["S01E01"], "quality": [1080], "vbitrate_range": "5000-5200"}
+    assert sync.apply_ladder(show, config, request) == 2  # no 4K: the 1080p step, 9000 kbps over its cap
+    assert request["vbitrate_range"] == "0-6000" and request["quality"] == [1080]
+    tracks.append({"height": 2160, "codec": "HEVC", "range": "DV", "bitrate": 16000})
+    request = {"service": "ATV", "title_id": "t", "wanted": ["S01E01"], "vbitrate_range": "5000-5200"}
+    assert sync.apply_ladder(show, config, request) == 1 and "vbitrate_range" not in request  # 4K: the options' cap would keep it out
+    assert sync.step_label(ladder["steps"][1]) == "1080p HEVC SDR up to 6000 kbps"
+
+
+def test_orig_is_taken_in_the_accepted_audio_only():
+    from unshacklarr import web
+    assert web.check_audio_accept("orig, fr", "x") == "orig, fr"
+    assert _raises(lambda: web.check_audio_accept("orig", "x", "subtitles"))
+    assert _raises(lambda: web.check_audio_accept("all", "x"))
+
+
+def test_the_api_takes_the_services_own_numbering_and_decides_the_audio_upgrade(tmp_path, monkeypatch):
+    # Disney-Watch sends Disney+'s S04E05 ("Te défendre"), Bleach's S17E45 in Sonarr; Sonarr's own S04E05 is another
+    # episode. "numbering": "service" finds S17E45 by the series' last listing; "audio": "fr" lets Unshacklarr decide:
+    # no file, a download; a file with French, the service's again; a file without, the audio upgrade setting
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    show = {"service": "DSNP", "title": "https://dsnp/bleach"}
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}, "series": {74796: show}})
+    web.write_atomic(web.SERVICE_LISTS, json.dumps({"74796": {"service": "DSNP", "title": "https://dsnp/bleach", "v": 2, "available": {
+        "84659": {"service": "S04E05", "name": "TE DÉFENDRE", "match": "title", "same": True},
+        "84700": {"service": "S04E06", "name": "X", "match": "title"}}}}))  # a close title only: not taken
+    eps = {45063: {"id": 45063, "seasonNumber": 4, "episodeNumber": 5, "hasFile": False},
+           84659: {"id": 84659, "seasonNumber": 17, "episodeNumber": 45, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "jpn"}}},
+           84660: {"id": 84660, "seasonNumber": 17, "episodeNumber": 46, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "jpn/fre"}}},
+           84661: {"id": 84661, "seasonNumber": 17, "episodeNumber": 47, "hasFile": False}}
+    show["episode_map"] = {"S17E46": "S04E06", "S17E47": "S04E07"}
+    web.write_config({**web.read_config(), "series": {74796: show}})
+    listing = json.loads(web.SERVICE_LISTS.read_text())
+    listing["74796"]["numbering"] = web.listing_numbering(show)  # the listing is of the numbering the series has now
+    web.write_atomic(web.SERVICE_LISTS, json.dumps(listing))
+
+    def sonarr_get(path, **p):
+        if path == "series":
+            return [{"id": 9}]
+        if "episodeIds" in p:
+            return [eps[i] for i in p["episodeIds"]]
+        return list(eps.values())
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", sonarr_get)
+    started, added = [], []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append((ids, k.get("replace", False), k.get("kind"))))
+    monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang: added.extend((i, lang) for i in ids))
+    found, missing = web.sonarr_codes_of_service(74796, ["S04E05", "S04E06", "S04E07", "S09E09"])
+    assert found == {"S04E05": "S17E45", "S04E06": "S17E46", "S04E07": "S17E47"} and missing == ["S09E09"]
+    # its numbering changed since that listing: the listing's S04E05 = S17E45 no longer holds, only the numbering does
+    web.write_config({**web.read_config(), "series": {74796: {**show, "episode_map": {**show["episode_map"], "S04E05": "S04E05"}}}})
+    found_after, _ = web.sonarr_codes_of_service(74796, ["S04E05"])
+    assert found_after == {"S04E05": "S04E05"}
+    web.write_config({**web.read_config(), "series": {74796: show}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as browser:
+            page = {"X-Unshackle": "1"}
+            await browser.post("/api/login", json={"password": "password1"}, headers=page)
+            key = (await (await browser.post("/api/api-key/new", json={"password": "password1"}, headers=page)).json())["key"]
+            api = {"X-Api-Key": key}
+            r = await browser.post("/api/v1/downloads", headers=api, json={"tvdbId": 74796, "episodes": ["S04E05", "S04E06", "S04E07"],
+                                                                           "numbering": "service", "audio": "fr"})
+            assert r.status == 200 and (await r.json())["queued"] == 3
+            r = await browser.post("/api/v1/downloads", headers=api, json={"tvdbId": 74796, "episodes": ["S09E09"], "numbering": "service"})
+            assert r.status == 404 and "DSNP's S09E09" in await r.text()  # the code it was sent, as the service numbers it
+            assert (await browser.post("/api/v1/downloads", headers=api, json={"tvdbId": 74796, "episodes": ["S04E05"], "audio": "français"})).status == 400
+            assert ([84661], False, None) in started and ([84660], True, None) in started  # no file: a download; French already: again
+            assert ([84659], True, "upgrade") in started  # no French: the whole episode again (upgrade_mode redownload)
+            assert not any(45063 in ids for ids, *_ in started)  # Sonarr's own S04E05 is never touched
+            monkeypatch.setitem(web.sonarr_sync.SETTINGS, "upgrade_mode", "add_track")
+            started.clear()
+            await browser.post("/api/v1/downloads", headers=api, json={"tvdbId": 74796, "episodes": ["S04E05"], "numbering": "service", "audio": "fr"})
+            assert added == [(84659, "fr")] and not started  # the French track added to the file it has
+    asyncio.run(go())
+
+
+def test_a_job_over_is_deleted_whole_and_one_going_on_is_not(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    batch = "20261016-234210-000001"
+    for n, outcome in enumerate(["failed", "stopped", "cancelled"], 1):
+        rid = f"20261016-2342{n:02}-000001-1-S01E0{n}"
+        (web.sonarr_sync.RUNS_DIR / f"{rid}.json").write_text(json.dumps({"id": rid, "batch": batch, "tvdbId": 1, "sxxeyy": f"S01E0{n}",
+                                                                         "outcome": outcome, "started": "t", "ended": "t"}))
+    other = "20261016-234300-000001-2-S01E01"
+    (web.sonarr_sync.RUNS_DIR / f"{other}.json").write_text(json.dumps({"id": other, "tvdbId": 2, "sxxeyy": "S01E01", "outcome": "downloaded", "started": "t", "ended": "t"}))
+    web.cards_read = (0, [])
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as browser:
+            page = {"X-Unshackle": "1"}
+            await browser.post("/api/login", json={"password": "password1"}, headers=page)
+            web.sonarr_sync.waiting[99] = {"batch": batch}  # one of it still queued: not deleted
+            assert (await browser.delete(f"/api/jobs/{batch}", headers=page)).status == 409
+            web.sonarr_sync.waiting.pop(99)
+            r = await browser.delete(f"/api/jobs/{batch}", headers=page)
+            assert (r.status, (await r.json())["deleted"]) == (200, 3)
+            assert (await browser.delete(f"/api/jobs/{batch}", headers=page)).status == 404
+    asyncio.run(go())
+    assert [p.stem for p in web.sonarr_sync.RUNS_DIR.glob("*.json")] == [other]  # another download kept
+
+
+def test_a_jobs_queue_is_kept_on_disk_and_picked_up_after_a_restart(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    eps = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "series": {"title": "Smallville", "tvdbId": 1}} for n in (1, 2, 3, 4)]
+    job = {"episodes": eps, "stubs": {}, "closed": False, "replace": False, "kind": "manual", "sonarr": "", "proxy": "", "video": None, "numbering": None}
+    for ep in eps[2:]:  # 1 done, 2 downloading, 3 and 4 queued
+        sync.waiting[ep["id"]] = job["stubs"][ep["id"]] = sync.queued_card(ep, {"service": "NF"}, "manual", "20261018-194616-f77846")
+    sync.running_jobs["20261018-194616-f77846"] = job
+    sync.paused_jobs.add("20261018-194616-f77846")
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"20261018-194616-f77846": {"episodes": [3, 4], "paused": True, "kind": "manual"}}
+
+    sync.running_jobs.clear(); sync.waiting.clear(); sync.paused_jobs.clear()  # a restart
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: started.append((ids, kw["batch"], kw["kind"])))
+    assert web.resume_queue() == 2
+    assert started == [([3, 4], "20261018-194616-f77846", "manual")] and "20261018-194616-f77846" in sync.paused_jobs  # still paused
+
+
+def test_a_job_has_its_own_options_for_the_episodes_still_to_come(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    batch = "20261018-194616-f77846"
+    monkeypatch.setattr(web, "known_services", lambda: None)  # serve down: the service's options checked by their shape
+
+    class Req:
+        def __init__(self, method, body=None): self.method, self.match_info, self._body = method, {"batch": batch}, body
+        async def json(self): return self._body
+
+    run = lambda req: json.loads(asyncio.run(web.job_options(req)).text)
+    assert _raises(lambda: asyncio.run(web.job_options(Req("POST", {"options": {}}))), web.web.HTTPConflict)  # no such job running
+    sync.running_jobs[batch] = {"episodes": [], "stubs": {}, "closed": False}
+    body = {"service": "AMZN", "options": {"--quality": "720", "--no-subs": False}, "service_options": {"-B": True}}
+    assert run(Req("POST", body)) == {"options": {"--quality": "720", "--no-subs": False}, "service_options": {"-B": True}}
+    got = run(Req("GET"))
+    assert {k: got[k] for k in ("options", "service_options")} == {"options": body["options"], "service_options": body["service_options"]}
+    assert got["base"] == {"options": {}, "service_options": {}}  # no episode known here: nothing under it
+    assert _raises(lambda: asyncio.run(web.job_options(Req("POST", {"options": {"--quality": "high"}}))), web.web.HTTPBadRequest)
+
+    show = {"service": "AMZN", "options": {"--quality": "1080", "--no-subs": True}, "service_options": {"--atmos": True}}
+    mixed = sync.with_job_options(show, batch)
+    assert mixed["options"] == {"--quality": "720", "--no-subs": False} and mixed["service_options"] == {"--atmos": True, "-B": True}
+    assert sync.with_job_options(show, None) is show and show["options"]["--quality"] == "1080"  # the series unchanged
+
+
+def test_a_jobs_proxy_credentials_are_never_sent_back_to_the_page(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    batch = "20261018-194616-f77846"
+    monkeypatch.setattr(web, "known_services", lambda: None)
+    sync.running_jobs[batch] = {"episodes": [], "stubs": {}, "closed": False}
+
+    class Req:
+        def __init__(self, method, body=None): self.method, self.match_info, self._body = method, {"batch": batch}, body
+        async def json(self): return self._body
+
+    run = lambda req: json.loads(asyncio.run(web.job_options(req)).text)
+    shown = run(Req("POST", {"options": {"--proxy": "http://user:secret@host:8080"}}))
+    assert "secret" not in json.dumps(shown) and "secret" not in json.dumps(run(Req("GET")))
+    run(Req("POST", {"options": shown["options"]}))  # sent back masked, as the dialog does: the saved one is kept
+    assert sync.job_options[batch]["options"]["--proxy"] == "http://user:secret@host:8080"
+
+
+def test_a_job_that_could_not_be_picked_up_again_is_kept_for_the_next_start(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import threading
+    import unshacklarr.sync
+    import unshacklarr.web
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    entry = {"episodes": [3, 3, 4], "paused": True, "kind": "manual", "replace": True}  # a retried episode twice
+    sync.QUEUE_FILE.write_text(json.dumps({"20261021-121217-33d6d0": entry}))
+    asked = []
+    def run_sync(ids, **kw):  # Sonarr down: the job never starts
+        asked.append(ids)
+        t = threading.Thread(target=lambda: None); t.start(); t.join()
+        return t
+    monkeypatch.setattr(web, "run_sync", run_sync)
+    web.resume_queue()
+    assert asked == [[3, 4]]  # each episode once
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"20261021-121217-33d6d0": entry}  # not written empty: kept
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **kw: [{"id": i, "seriesId": 1, "seasonNumber": 1, "episodeNumber": i} for i in kw["episodeIds"]])
+    assert [e["id"] for e in sync.chosen_episodes([5, 5, 6])] == [5, 6]
+
+
+def test_a_jobs_dialog_starts_from_the_options_its_episodes_have(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = {"defaults": {"--quality": "1080", "--vcodec": "H.264"}, "service_defaults": {"NF": {"options": {"--proxy": "nordvpn:fr"}, "service_options": {}}},
+              "series": {331753: {"service": "NF", "title": "x", "options": {"--vcodec": "H.265"}, "service_options": {"--server-identity": True}}}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    sync.running_jobs["20261021-121217-33d6d0"] = {"episodes": [{"id": 1, "series": {"tvdbId": 331753}}], "stubs": {}, "closed": False}
+    assert web.job_base_options("20261021-121217-33d6d0") == {"options": {"--quality": "1080", "--vcodec": "H.265", "--proxy": "nordvpn:fr"},
+                                                             "service_options": {"--server-identity": True}}
+    assert web.job_base_options("20261021-000000-aaaaaa") == {}  # over: nothing to start from
+
+
+def test_series_on_remote_are_told_when_unshackle_cannot_run_it(tmp_path, monkeypatch):
+    # 6.0.0 has no remote_services in /api/config: the services whose series use --remote are named; none after 6.0.0
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = {"defaults": {}, "service_defaults": {"NF": {"options": {"--remote": True}, "service_options": {}}},
+              "series": {"1": {"service": "NF", "title": "x"}, "2": {"service": "MAX", "title": "y"}}}
+    monkeypatch.setattr(web.UNSHACKLE, "config", lambda: {"dl": {}})
+    assert web.remote_unsupported(config) == ["NF"]
+    monkeypatch.setattr(web.UNSHACKLE, "config", lambda: {"dl": {}, "remote_services": ["box"]})
+    assert web.remote_unsupported(config) == []
+
+
+def test_a_page_saves_only_what_it_changed_and_a_clash_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    loaded = {"settings": {"sonarrs": [{"name": "4K"}], "language": "en"}, "defaults": {},
+              "series": {1: {"service": "A", "title": "x"}, 2: {"service": "B", "title": "y"}}}
+    versions = web.unit_versions(loaded)
+    # meanwhile another tab took the 4K Sonarr out and changed series 2; the server learned a release time for series 1
+    now = {"settings": {"sonarrs": [], "language": "en"}, "defaults": {},
+           "series": {1: {"service": "A", "title": "x", "release_time": "21:00"}, 2: {"service": "B", "title": "z"}}}
+    # this old tab changed series 1 only, and sends its old settings with it
+    body = {**loaded, "series": {"1": {"service": "A", "title": "x", "episode_offset": 2}, "2": {"service": "B", "title": "y"}},
+            "changed": ["series:1"], "base": {"series:1": versions["series:1"]}}
+    web.merge_page_changes(body, now)
+    assert body["settings"]["sonarrs"] == [], "the other tab's settings stay"
+    assert body["series"]["2"]["title"] == "z", "the other tab's series stays"
+    assert body["series"]["1"] == {"service": "A", "title": "x", "episode_offset": 2, "release_time": "21:00"}, "merged key by key"
+    # moved to another source on this page: the time learnt for the old one is not its
+    for moved in ({"service": "A", "title": "x2"}, {"service": "C", "title": "x"}):
+        body = {**loaded, "series": {"1": moved, "2": {"service": "B", "title": "y"}},
+                "changed": ["series:1"], "base": {"series:1": versions["series:1"]}}
+        web.merge_page_changes(body, now)
+        assert body["series"]["1"] == moved, moved
+    # another tab moved it and set its time; this old tab changed something else: both stay
+    moved = {"settings": loaded["settings"], "defaults": {}, "series": {
+        1: {"service": "A", "title": "x2", "release_time": "21:00", "release_day": -3}, 2: {"service": "B", "title": "y"}}}
+    body = {**loaded, "series": {"1": {"service": "A", "title": "x", "episode_offset": 2}, "2": {"service": "B", "title": "y"}},
+            "changed": ["series:1"], "base": {"series:1": versions["series:1"]}}
+    web.merge_page_changes(body, moved)
+    assert body["series"]["1"] == {"service": "A", "title": "x2", "release_time": "21:00", "release_day": -3, "episode_offset": 2}
+    # the same key changed both ways: refused
+    body = {**loaded, "series": {"2": {"service": "B", "title": "w"}}, "changed": ["series:2"], "base": {"series:2": versions["series:2"]}}
+    with pytest.raises(web.web.HTTPConflict):
+        web.merge_page_changes(body, now)
+    # a page that says nothing of its changes saves everything, as before
+    body = {**loaded}
+    web.merge_page_changes(body, now)
+    assert body["settings"]["sonarrs"] == [{"name": "4K"}]
+
+
+def test_settings_edited_by_hand_apply_without_a_restart(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({"settings": {"sonarrs": [{"name": "4K", "url": "http://x"}]}})
+    web.read_config()
+    assert "4K" in web.sonarr_sync.SONARRS
+    import os, time
+    web.SERIES_FILE.write_text("settings:\n  sonarrs: []\n", encoding="utf8")
+    os.utime(web.SERIES_FILE, ns=(time.time_ns() + 10**9,) * 2)
+    web.read_config()
+    assert "4K" not in web.sonarr_sync.SONARRS, "the Sonarr taken out of the file is gone"
+
+
+def test_a_series_other_titles_reach_the_page_for_the_search():
+    from unshacklarr import web
+    s = {"id": 1, "tvdbId": 2, "title": "Money Heist", "alternateTitles": [{"title": "La casa de papel"}, {"title": "Money Heist"}]}
+    assert web.series_entry(s)["altTitles"] == ["La casa de papel"]
+    assert "altTitles" not in web.series_entry({**s, "alternateTitles": []})
+
+
+def test_a_series_service_options_for_another_sonarr_are_checked_and_a_removed_sonarr_is_dropped(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    body = {"settings": {"sonarrs": [{"name": "4K"}]}}
+    got = web.check_series_sonarrs({"4K": {"service_options": {"--profile-name": "uhd"}}, "Gone": {"off": True}}, body, [], "x", None)
+    assert got == {"4K": {"service_options": {"--profile-name": "uhd"}}}
+    shown = web.public_config({**web.read_config(), "series": {1: {"service": "A", "sonarrs": {"4K": {"service_options": {"--proxy": "http://u:secret@h"}}}}}})
+    assert "secret" not in json.dumps(shown["series"])
+
+
+def test_files_unshackle_cannot_write_are_listed(tmp_path, monkeypatch):
+    import os
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    cookies_dir, cache = tmp_path / "Cookies", tmp_path / "cache"
+    (cookies_dir / "AMZN").mkdir(parents=True)
+    (cache / "AMZN").mkdir(parents=True)
+    (cookies_dir / "AMZN" / "default.txt").write_text("x")
+    locked = cache / "AMZN" / "titles_1.json"
+    locked.write_text("{}")
+    locked.chmod(0o444)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(cache)
+    if os.access(locked, os.W_OK):  # root writes anything: nothing to see
+        return
+    assert web.unwritable_files(cookies_dir) == [str(locked)]
+
+
+def test_a_service_whose_options_are_not_listed_still_offers_its_options_editor(tmp_path):
+    # A remote server's service: Unshackle lists none of its options, so the first flag is typed by hand (AMZN's -B)
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+    import pytest
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    harness = tmp_path / "harness.js"
+    harness.write_text(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[2] + "/js/settings-options.js", "utf8");
+const code = src.match(/^async function renderServiceDefaults\(\) \{.*?^\}/ms)[0];
+const node = (tag, props, ...kids) => ({ tag, ...(props || {}), kids: kids.flat().filter(Boolean) });
+const shown = {};
+const box = {
+  S: { config: { service_defaults: { AMZN: {} }, settings: {} }, dlOptions: [], services: ["AMZN"] },
+  el: node, field: (label, input) => node("field", { textContent: label }, input), svcName: (t) => t,
+  COUNT: { option: (n) => `${n} options` }, loadServiceOptions: async () => [], optionsEditor() {},
+  ladderChips: () => node("chips"), ladderClash() {}, ladderNamed() {}, renderCommands() {}, dirty() {}, api() {}, toast() {},
+  $: (sel) => ({ replaceChildren: (...kids) => { shown[sel] = kids; } }),
+};
+vm.createContext(box);
+vm.runInContext(code + "\nthis.run = renderServiceDefaults;", box);
+const texts = (n) => [n.textContent || "", ...(n.kids || []).flatMap(texts)];
+box.run().then(() => console.log(JSON.stringify(shown["#svc-defaults"].flatMap(texts).filter(Boolean))));
+""")
+    static = Path(__file__).parents[1] / "unshacklarr" / "static"
+    run = subprocess.run(["node", str(harness), str(static)], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert "Options of AMZN" in json.loads(run.stdout)
+
+
+def test_a_job_picked_up_again_that_runs_at_once_is_not_kept_for_the_next_start(tmp_path, monkeypatch):
+    # Its worker reaches sync() and takes it out of `restoring` before run_sync returns: it must stay out, or
+    # save_queue keeps the finished job in the file and every later start downloads it again
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import threading
+    import unshacklarr.sync
+    import unshacklarr.web
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync.QUEUE_FILE.write_text(json.dumps({"20261021-121217-33d6d0": {"episodes": [3], "kind": "manual"}}))
+    def run_sync(ids, batch=None, **kw):  # the worker gets its turn before this returns
+        with sync.jobs_lock:
+            sync.restoring.pop(batch, None)
+        t = threading.Thread(target=lambda: None); t.start(); t.join()
+        return t
+    monkeypatch.setattr(web, "run_sync", run_sync)
+    web.resume_queue()
+    assert "20261021-121217-33d6d0" not in sync.restoring
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {}
+
+
+def test_an_episode_watched_from_languages_is_watched_on_its_seasons_own_page(tmp_path, monkeypatch):
+    # A season with its own page (another service, its own numbering): the hourly check resolves season_page and
+    # drops a watch recorded for the main page's service, so it must be recorded as that page asks
+    import asyncio
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    (tmp_path / "config.yaml").write_text("series:\n  1: {service: X, title: a, season_pages: {2: {url: b, service: Y}}}\n")
+    web.write_atomic(web.LANGUAGES_FILE, json.dumps({"items": [
+        {"episodeId": 21, "tvdbId": 1, "series": "Show", "season": 2, "number": 1, "sxxeyy": "S02E01", "lacks": "preferred", "want": "fr"}]}))
+
+    class Request:
+        async def json(self):
+            return {"episodeIds": [21]}
+    asyncio.run(web.languages_wait(Request()))
+    watched = web.read_json(web.sonarr_sync.UPGRADES_FILE, {})["21"]
+    assert (watched["service"], watched["serviceEpisode"]) == ("Y", "S01E01")
+
+
+def test_an_audio_request_for_many_episodes_starts_one_download_not_one_each(tmp_path, monkeypatch):
+    # The API takes 100 episodes at a time: the ones whose file lacks the language go in one job, as a plain
+    # request's do, not 100 syncs (each a thread, past ASKED_AT_ONCE); the track added goes one after the other too
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    eps = [{"id": i, "seasonNumber": 1, "episodeNumber": i, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "jpn"}}}
+           for i in range(1, 31)]
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **p: [e for e in eps if e["id"] in p.get("episodeIds", [])])
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    started, added = [], []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append(list(ids)))
+    monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang: added.append(list(ids)))
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as browser:
+            page = {"X-Unshackle": "1"}
+            await browser.post("/api/login", json={"password": "password1"}, headers=page)
+            key = (await (await browser.post("/api/api-key/new", json={"password": "password1"}, headers=page)).json())["key"]
+            body = {"episodeIds": [e["id"] for e in eps], "audio": "fr"}
+            assert (await browser.post("/api/v1/downloads", headers={"X-Api-Key": key}, json=body)).status == 200
+            assert started == [list(range(1, 31))]
+            monkeypatch.setitem(web.sonarr_sync.SETTINGS, "upgrade_mode", "add_track")
+            started.clear()
+            assert (await browser.post("/api/v1/downloads", headers={"X-Api-Key": key}, json=body)).status == 200
+            assert added == [list(range(1, 31))] and not started
+    asyncio.run(go())
+
+
+def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
+    # Added at the end, they go in as picked; retries go in next, each before the one after it, so last first
+    import asyncio
+    from unshacklarr import web
+    queue = []
+
+    async def join(batch, episode_id, replace=False, sonarr="", first=False):
+        queue.insert(0, episode_id) if first else queue.append(episode_id)  # as add_to_job puts it in the queue
+        return True
+    monkeypatch.setattr(web, "join_job", join)
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    monkeypatch.setattr(web, "retried_numbering", lambda ids, batch: None)
+    monkeypatch.setattr(web, "retried_replace", lambda ids, batch: False)
+
+    class Request:
+        def __init__(self, body): self.body = body
+        async def json(self): return self.body
+    for retry in (False, True):
+        queue.clear()
+        asyncio.run(web.download(Request({"episodeIds": [1, 2, 3], "batch": "20261012-070357-6b5682", "retry": retry})))
+        assert queue == [1, 2, 3], retry
+
+
+def test_the_unwritable_files_check_stops_walking_at_its_limit(monkeypatch):
+    # A huge cache is never listed whole: the walk ends with the check, not after reading the entire tree
+    from pathlib import Path
+    from unshacklarr import web
+
+    class Huge:
+        def is_dir(self): return True
+        def __fspath__(self): return "/nowhere"
+        def __hash__(self): return 1
+        def __eq__(self, other): return other is self
+        def rglob(self, pattern):
+            for n in range(25):
+                yield Path(f"/nowhere/{n}")  # not writable: each one found
+            raise RuntimeError("walked past the limit")
+    monkeypatch.setattr(web, "cache_folder", lambda: (_ for _ in ()).throw(web.UnshackleError("no serve")))
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", "")
+    assert len(web.unwritable_files(Huge(), most=20)) == 20
+
+
+def test_a_library_file_over_a_steps_bitrate_cap_does_not_fit_that_step():
+    # A 9000 kbps 1080p HEVC file and a first step capped at 6000 kbps: outside it, so Upgrades still looks for one
+    from unshacklarr import web
+    track = web.ladder_track({"resolution": "1920x1080", "videoCodec": "x265", "videoBitrate": 9_000_000, "videoDynamicRangeType": ""})
+    assert track["bitrate"] == 9000
+    capped = {"codec": "", "range": "", "min": 1080, "max_kbps": 6000}
+    assert not web.sonarr_sync.fits(capped, track)
+    assert web.sonarr_sync.fits({**capped, "max_kbps": 10000}, track)
+    assert web.ladder_track({"resolution": "1920x1080", "videoCodec": "x265"})["bitrate"] == 0  # none known: no cap applies
+
+
+def test_a_files_regional_audio_tag_is_kept_for_the_language_scan():
+    # pt-PT is not pt-BR: cut to a plain pt it would count as maybe Brazilian, and the file would be left out of Languages
+    from unshacklarr import web
+    audio, _ = web.file_languages({"mediaInfo": {"audioStreams": [{"language": "pt-PT"}, {"language": "eng"}]}})
+    assert audio == ["pt-pt", "en"]
+    assert not web.sonarr_sync.speaks(audio[:1], ["pt-br"]) and web.sonarr_sync.speaks(audio[:1], ["pt"])
+    audio, _ = web.file_languages({"mediaInfo": {"audioStreams": [{"language": "eng-US"}, {"language": "fre"}]}})
+    assert audio == ["en-us", "fr"] and web.sonarr_sync.speaks(audio[:1], ["en"])  # a three-letter code with its region
+
+
+def test_include_sample_is_not_offered_while_joining_and_importing_would_take_its_samples():
+    # Unshackle puts a sample next to each muxed file, Part.N in its name too: the join would add them to the episode
+    from unshacklarr import options
+    assert "--include-sample" not in {s["flag"] for s in options.dl_specs()}
+
+
+def test_a_save_lets_a_release_held_for_its_episode_order_be_tried_again(tmp_path, monkeypatch):
+    # A burst held because Sonarr numbers the series in another order: the numbering corrected and saved, the release
+    # watch tries it at its next round instead of waiting out the rest of the burst window
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    show = {"service": "iV", "title": "https://example.com/show", "since": "2026-10-01T00:00:00+00:00"}
+    web.write_config({**web.read_config(), "series": {7: dict(show)}})
+    monkeypatch.setattr(web, "known_services", lambda: None)
+    web.sonarr_sync.held_bursts[("", 1)] = 0.0
+
+    async def body():
+        return {"series": {"7": {**show, "season_map": {"2": 3}}}}
+    asyncio.run(web.save_config(SimpleNamespace(json=body)))
+    assert web.sonarr_sync.held_bursts == {}
+
+
+def test_a_ladder_prefers_an_exact_language_to_an_earlier_base_match():
+    # en-US then fr, with en-GB and fr listed: fr matches exactly, as first_language picks for one part
+    from unshacklarr import sync
+    parts = [[{"language": "en-GB"}, {"language": "fr"}], [{"language": "en-GB"}, {"language": "fr"}]]
+    assert sync.common_language(["en-US", "fr"], parts) == "fr"
+    assert sync.common_language(["en-US"], parts) == "en-US"  # no exact one anywhere: by its base language
+    assert sync.common_language(["de"], parts) is None
+
+
+def test_a_queued_jobs_own_season_map_is_read_back_as_the_sync_reads_it(tmp_path, monkeypatch):
+    # JSON turns the map's season numbers into text; passed on as is, service_episode would not find season 2
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync.QUEUE_FILE.write_text(json.dumps({"20261021-121217-33d6d0": {"episodes": [3], "kind": "manual", "numbering": {"season_map": {2: 1}}}}))
+    got = {}
+    monkeypatch.setattr(web, "run_sync", lambda ids, numbering=None, **kw: got.update(numbering=numbering))
+    web.resume_queue()
+    assert sync.service_episode({"service": "X", **got["numbering"]}, 2, 5) == "S01E05"
+    # a damaged numbering: not downloaded, and still in the file after the next save
+    got.clear()
+    damaged = {"20261021-121218-44d6d0": {"episodes": [4], "kind": "manual", "numbering": {"episode_offset": "x"}}}
+    sync.QUEUE_FILE.write_text(json.dumps(damaged))
+    web.resume_queue()
+    assert got == {}
+    sync.save_queue()
+    kept = json.loads(sync.QUEUE_FILE.read_text())
+    assert kept["20261021-121218-44d6d0"] == damaged["20261021-121218-44d6d0"]

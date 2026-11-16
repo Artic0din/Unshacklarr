@@ -14,6 +14,7 @@ from unshacklarr.backend import Unshackle, UnshackleError
 from unshacklarr.cdm import CdmError, NO_CDM, add, choose, delete, folders, read, remote_delete, remote_save, state
 from unshacklarr.cookies import CookieError, list_all, normalise, parse, save
 from unshacklarr.files import PRIVATE, no_credentials, shared_or_private, write_atomic
+import time
 
 
 def test_container_sources_are_immutable_and_identifiable():
@@ -593,7 +594,7 @@ def test_a_service_that_failed_to_load_is_refused_before_the_job_others_go_on(tm
         backend.download({"service": "AMZN"})
     assert not any(call.request.method == "POST" for call in responses.calls)
     assert backend.download({"service": "BINGE"}) == "queued"
-    assert backend.download({"service": "AMZN", "remote": True}) == "queued"
+    assert backend.download({"service": "AMZN", "remote": "box"}) == "queued"
 
     responses.replace(responses.GET, "http://backend:8786/api/services",
                       json={"services": [{"tag": "AMZN"}], "load_errors": []})
@@ -673,26 +674,122 @@ def test_remote_services_are_asked_on_a_host_up_for_less_than_ten_minutes(tmp_pa
     backend = Unshackle(tmp_path)
     asked = []
     monkeypatch.setattr(backend_module.time, "monotonic", lambda: 100.0)
-    monkeypatch.setattr(backend, "call", lambda method, path, **kw: asked.append(path) or {"servers": [{"name": "nas"}]})
-    assert backend.remote_services() == [{"name": "nas"}]
-    assert backend.remote_services() == [{"name": "nas"}] and asked == ["/api/remote/services"]  # then kept 10 minutes
+    monkeypatch.setattr(backend, "config", lambda: {"remote_services": ["nas"]})
+    monkeypatch.setattr(backend, "call", lambda method, path, **kw: asked.append((path, kw.get("params"))) or {"services": [{"tag": "NF"}]})
+    assert backend.remote_services() == [{"name": "nas", "services": [{"tag": "NF"}]}]
+    assert backend.remote_services() == [{"name": "nas", "services": [{"tag": "NF"}]}]
+    assert asked == [("/api/services", {"remote": "nas"})]  # then kept 10 minutes
 
 
 def test_remote_services_not_answered_are_asked_again_after_a_minute(tmp_path, monkeypatch):
     # serve still starting after a reboot: its failure is kept a minute, not the 10 minutes of an answer
     from unshacklarr import backend as backend_module
     backend = Unshackle(tmp_path)
-    clock, answers = [100.0], [UnshackleError("unshackle serve is unreachable"), {"servers": [{"name": "nas"}]}]
+    clock, answers = [100.0], [UnshackleError("unshackle serve is unreachable"), {"remote_services": ["nas"]}]
     monkeypatch.setattr(backend_module.time, "monotonic", lambda: clock[0])
 
-    def call(method, path, **kw):
+    def config():
         answer = answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
         return answer
-    monkeypatch.setattr(backend, "call", call)
+    monkeypatch.setattr(backend, "config", config)
+    monkeypatch.setattr(backend, "call", lambda method, path, **kw: {"services": [{"tag": "NF"}]})
     assert backend.remote_services() == []
     clock[0] = 159.0
     assert backend.remote_services() == [] and len(answers) == 1  # within the minute: not asked again
     clock[0] = 161.0
-    assert backend.remote_services() == [{"name": "nas"}] and not answers
+    assert backend.remote_services() == [{"name": "nas", "services": [{"tag": "NF"}]}] and not answers
+
+
+@responses.activate
+def test_a_service_login_serve_could_not_finish_is_not_called_a_refused_key(tmp_path):
+    # by mj23au (#25): serve answers 401 for two things: a wrong key ({"status": 401, "message": "Secret Key is Invalid."})
+    # and a service whose login failed (AUTH_FAILED, with an error_code). The second was shown as "refused the API key"
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
+    responses.post("http://backend:8786/api/search", status=401, json={"status": "error", "error_code": "AUTH_FAILED",
+                   "message": "Authentication failed: This login needs the user, and only a download job or a remote session can reach the user"})
+    responses.get("http://backend:8786/api/services", status=401, json={"status": 401, "message": "Secret Key is Invalid."})
+    try:
+        backend.call("POST", "/api/search", json={"service": "X", "query": "q"})
+        raise AssertionError("login failed")
+    except UnshackleError as e:
+        assert "This login needs the user" in str(e) and "API key" not in str(e)
+    try:
+        backend.call("GET", "/api/services")
+        raise AssertionError("key refused")
+    except UnshackleError as e:
+        assert "rejected the internal API key" in str(e)  # the fork's wording (#151)
+
+
+def test_load_balancer_and_short_technical_cookies_say_nothing_of_the_login(tmp_path):
+    # Crave's AWSALBTG lasts a week, Apple's utsdc an hour, whatever the login: a file of session cookies stays undated
+    from unshacklarr import cookies
+    soon = int(time.time()) + 3600
+    path = tmp_path / "c.txt"
+    path.write_text(f"# Netscape HTTP Cookie File\n.bellmedia.ca\tTRUE\t/\tTRUE\t{soon}\tAWSALBTG\tx\n"
+                    f".apple.com\tTRUE\t/\tTRUE\t{soon}\tutsdc\tx\n.apple.com\tTRUE\t/\tTRUE\t0\tmyacinfo\tx\n")
+    assert cookies.summary(path)["expires"] is None
+
+
+@responses.activate
+def test_a_remote_servers_services_come_from_unshackles_own_api(tmp_path):
+    # After 6.0.0: the names in /api/config, each server's services in /api/services?remote=; 6.0.0 has neither
+    from responses import matchers
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
+    responses.get("http://backend:8786/api/config", json={"config": {"dl": {}, "remote_services": ["community", "down"]}})
+    nf = {"tag": "NF", "remote": "community", "cli_params": []}
+    responses.get("http://backend:8786/api/services", match=[matchers.query_param_matcher({"remote": "community"})], json={"services": [nf]})
+    responses.get("http://backend:8786/api/services", match=[matchers.query_param_matcher({"remote": "down"})], status=503, json={})
+    assert backend.remote_services() == [{"name": "community", "services": [nf]}]  # the server down left out
+
+    old = Unshackle(tmp_path)
+    old.configure({"unshackle_url": "http://old:8786", "unshackle_api_key": "test-api-secret"})
+    responses.get("http://old:8786/api/config", json={"config": {"dl": {}}})
+    assert old.remote_services() == []  # 6.0.0: no names, nothing asked
+
+
+@responses.activate
+def test_remote_names_its_server_as_serve_takes_it(tmp_path):
+    # dl's --remote [--server X] goes to serve as remote: "X"; the one server of remote_services when none is named
+    import json
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
+    responses.get("http://backend:8786/api/config", json={"config": {"remote_services": ["community"]}})
+    responses.post("http://backend:8786/api/download", json={"job_id": "j"})
+    backend.download({"service": "NF", "remote": True})
+    backend.download({"service": "NF", "remote": True, "server": "other"})
+    sent = [json.loads(c.request.body) for c in responses.calls if c.request.method == "POST"]
+    assert sent == [{"service": "NF", "remote": "community"}, {"service": "NF", "remote": "other"}]
+    responses.post("http://backend:8786/api/list-titles", json={"titles": []})  # a listing goes through it too
+    backend.call("POST", "/api/list-titles", json={"service": "NF", "title_id": "1", "remote": True})
+    assert json.loads(responses.calls[-1].request.body)["remote"] == "community"
+
+    responses.replace(responses.GET, "http://backend:8786/api/config", json={"config": {"remote_services": ["a", "b"]}})
+    backend._config = (0.0, {})
+    with pytest.raises(UnshackleError, match="--server"):
+        backend.download({"service": "NF", "remote": True})
+
+
+@responses.activate
+def test_serves_passing_errors_say_their_code_and_a_restart_waits_for_its_downloads(tmp_path, monkeypatch):
+    # After 6.0.0 serve answers a network hitch with 424 and drains before a restart: both worth another try
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
+    responses.post("http://backend:8786/api/list-titles", status=424, json={"error_code": "NETWORK_ERROR", "message": "Connection lost"})
+    with pytest.raises(UnshackleError, match=r"Connection lost \(NETWORK_ERROR\)"):
+        backend.call("POST", "/api/list-titles", json={"service": "NF", "title_id": "1"})
+
+    responses.get("http://backend:8786/api/dashboard/status", json={"errors": {"NF": {"SERVICE_ERROR": 2}}})
+    assert backend.dashboard("") is None and backend.dashboard("dash-key") == {"errors": {"NF": {"SERVICE_ERROR": 2}}}
+    assert responses.calls[-1].request.headers["X-Secret-Key"] == "dash-key"  # the dashboard's own key, not the API's
+
+    monkeypatch.setattr(Unshackle, "mode", property(lambda self: "local"))  # serve run by Unshacklarr: restarted by it
+    monkeypatch.setattr(backend, "endpoint", lambda: ("http://backend:8786", "test-api-secret"))
+    responses.post("http://backend:8786/api/dashboard/drain", json={"jobs": {"downloading": 1}, "sessions": 0, "draining": True})
+    responses.delete("http://backend:8786/api/dashboard/drain", json={"draining": False})
+    with pytest.raises(UnshackleError, match="still downloading"):
+        backend.restart("dash-key")
+    assert responses.calls[-1].request.method == "DELETE"  # the drain called off: it takes new work again

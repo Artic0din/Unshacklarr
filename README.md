@@ -13,7 +13,7 @@
   <img alt="Version 1.5.0" src="https://img.shields.io/badge/version-1.5.0-26a69a">
   <img alt="License GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776ab">
-  <img alt="Sonarr v3 and v4" src="https://img.shields.io/badge/sonarr-v3%20%7C%20v4-35c5f4">
+  <img alt="Sonarr v5" src="https://img.shields.io/badge/sonarr-v5-35c5f4">
   <img alt="Unshackle 5.4 to 6" src="https://img.shields.io/badge/unshackle-5.4%20%7C%206-e0559b">
   <img alt="9 languages" src="https://img.shields.io/badge/languages-9-8a63d2">
 </p>
@@ -75,7 +75,7 @@ flowchart LR
   </tr>
   <tr>
     <td valign="top">🧩 <b>Episodes in parts</b><br>Joined into one file, or kept apart when Sonarr counts each part, and never imported half when a series waits for all of them.</td>
-    <td valign="top">🍪 <b>Cookies and CDMs</b><br>Unshackle's cookie files with their expiry, its Widevine and PlayReady devices with a test license, and the device of each service.</td>
+    <td valign="top">🍪 <b>Cookies and CDMs</b><br>Unshackle's cookie files with their expiry, its Widevine and PlayReady devices, and the device of each service.</td>
   </tr>
   <tr>
     <td valign="top">🔔 <b>Notifications</b><br>Discord, Telegram, ntfy, Pushover, e-mail and <a href="https://github.com/caronc/apprise#supported-notifications">100 more</a>, each address with the messages you tick for it, and quiet hours.</td>
@@ -84,6 +84,10 @@ flowchart LR
   <tr>
     <td valign="top">📚 <b>More than one Sonarr</b><br>A 4K library beside the 1080p one: each Sonarr with its own quality ladder, its copy downloaded at the same release time and imported into it.</td>
     <td valign="top">⬆️ <b>Upgrades</b><br>The files your quality ladder says could be better, checked against the service by themselves every week, and replaced when you tick them.</td>
+  </tr>
+  <tr>
+    <td valign="top">📦 <b>Long jobs</b><br>A whole series in one job, steered while it runs: its options changed for the episodes still to come, failed ones retried first, its output a tap away, and its queue kept across a restart.</td>
+    <td valign="top">🌐 <b>Proxies that hold</b><br>A proxy that fails is tried again on another server of the provider, a job keeps the NordVPN server that worked, and pauses rather than failing every episode left.</td>
   </tr>
   <tr>
     <td valign="top">📱 <b>On a phone</b><br>An installable app with a tab bar, live progress and push notifications, once the page is served over HTTPS.</td>
@@ -105,7 +109,7 @@ flowchart LR
     <td width="50%" valign="top"><img src="docs/screenshots/schedule.webp" alt="The Schedule: the coming episodes by day and the time each is tried"><br>📅 <b>Schedule</b>: the coming episodes by day, when each is tried, the late ones in one banner.</td>
   </tr>
   <tr>
-    <td valign="top"><img src="docs/screenshots/activity.webp" alt="Activity: a finished job, its time, size and episodes"><br>📈 <b>Activity</b>: downloads live, track by track and through the mux, then their history and stats per week and per service.</td>
+    <td valign="top"><img src="docs/screenshots/activity.webp" alt="Activity: an episode downloading track by track, its speed and time left, and the bar at the bottom that opens its output"><br>📈 <b>Activity</b>: downloads live, track by track and through the mux, the output one tap away, then their history and stats per week and per service.</td>
     <td valign="top" align="center"><img src="docs/screenshots/mobile-series.webp" width="31%" alt="The Series page on a phone"> <img src="docs/screenshots/mobile-schedule.webp" width="31%" alt="The Schedule on a phone"> <img src="docs/screenshots/mobile-settings.webp" width="31%" alt="Settings on a phone, as a list of sections"><br>📱 <b>On a phone</b>: the same app, with a tab bar.</td>
   </tr>
 </table>
@@ -117,14 +121,16 @@ flowchart LR
 You need:
 
 - ⬇️ **Unshackle** 5.4.0 or later, 6.0 included, set up with its services, cookies and CDMs;
-- 📡 **Sonarr** v4, or v3;
+- 📡 **Sonarr** 5;
 - 🎞️ **MKVToolNix** (`mkvmerge`, `mkvpropedit`), which Unshackle needs too; the Docker image has it.
 
 > [!NOTE]
-> A few extras need what Unshackle itself does not have yet: describing, testing and reprovisioning
-> CDM devices, downloading through a remote server (`--remote`), a TV login's link and code, and
-> Unshackle's own log, live in Activity. Without them, everything else works. Answering a service's
-> question during a download (a code sent by e-mail) needs Unshackle 6.0 or later.
+> Answering a service's question during a download (a code sent by e-mail) needs Unshackle 6.0 or later;
+> downloading through a remote server (`--remote`) and answering its login questions need a version after 6.0.0.
+> With a version after 6.0.0, a `serve: dashboard: key:` in `unshackle.yaml` (any long random string) also gives
+> Settings › Unshackle its log, errors by service and remote sessions, and a restart that waits for the downloads.
+> Settings › Unshackle › *Supports* says which of these your Unshackle allows; a series set to `--remote` on an
+> Unshackle that cannot run it is told in the bell.
 >
 > **Unshackle 6** lets an API key use the proxies of `unshackle.yaml` (a country code such as `au`, or a
 > provider) only once it is allowed. Run by Unshacklarr on the same computer, its key always is; with
@@ -374,9 +380,6 @@ download. Unshacklarr must see those files:
   `UNSHACKLE_CONFIG_DIR`, as `docker-compose.example.yml` does;
 - a `serve` on **another machine** with no shared folder keeps them to itself.
 
-Describing, testing and reprovisioning devices goes through `unshackle serve`, which has the DRM
-libraries.
-
 **One device for a series or a service** (Unshackle 6): the `--cdm` option, its value picked among the devices
 above, overrides the `cdm:` section for those downloads. Unshackle takes it only once `unshackle.yaml` allows it:
 
@@ -524,26 +527,14 @@ Every change, version by version: **[CHANGELOG.md](CHANGELOG.md)**. Settings sho
 running.
 
 > [!TIP]
-> **Coming next, for Sonarr 5:** Sonarr 5 is still in beta, so what Unshacklarr does with it waits in the
-> [`dev-sonarr-v5`](https://github.com/OwnzZzZ/Unshacklarr/tree/dev-sonarr-v5) branch until Sonarr 5 is released.
-> That branch has everything in this version, plus:
+> **Sonarr 5:** what Unshacklarr does with Sonarr 5 is part of this version:
 >
 > - **Languages** (Activity): your files without your audio languages, read from Sonarr 5's own tracks. Watch them
->   for the preferred audio, or download them again.
+>   for the preferred audio, or download them again. It needs Sonarr 5.
 > - **Titles in your language:** a series whose titles Sonarr gives in English offers, on its page, to have them in
 >   yours, so that its episodes match the service's better.
 > - **Episode order:** a series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering. When that
 >   order changes after the numbering was set, new episodes wait until you confirm the numbering.
->
-> It is made for Sonarr 5 and has no ready-made image. To try it, build one and use it in place of
-> `ghcr.io/ownzzzz/unshacklarr` in `docker-compose.yml`:
->
-> ```bash
-> docker build -t unshacklarr:sonarr-v5 https://github.com/OwnzZzZ/Unshacklarr.git#dev-sonarr-v5
-> ```
->
-> Without Docker: `uv tool install git+https://github.com/OwnzZzZ/Unshacklarr.git@dev-sonarr-v5`. Tell us on the
-> [Discord](https://discord.gg/5HmNgaGASy) or in an issue how it goes.
 
 <details>
 <summary><b>🛠️ Development, translations and releases</b></summary>

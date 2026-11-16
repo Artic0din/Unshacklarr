@@ -147,6 +147,7 @@ class UnshackleError(Exception):
 
 
 # Unshackle 6 serves its proxies (a country code, a provider) only to a key allowed to (server_proxy)
+PASSING = ("NETWORK_ERROR", "SERVICE_UNAVAILABLE", "SERVER_DRAINING")  # serve's error codes worth another try
 PROXY_REFUSED = re.compile(r"does not resolve country codes into proxies|in a different region from yours", re.IGNORECASE)
 PROXY_HINT = ("Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): "
               "allow it in Settings, Unshackle")
@@ -294,17 +295,17 @@ class Local:
             python, folder = unshackle_python(command)
             ask = ("from unshackle.core.config import config, config_path; d = config.directories\n"
                    "print(config_path or ''); print(d.cookies.resolve()); print(d.wvds.resolve()); print(d.prds.resolve());"
-                   " print(d.temp.resolve())")
+                   " print(d.temp.resolve()); print(d.cache.resolve())")
             try:
                 out = subprocess.run([python, "-c", ask], cwd=folder, capture_output=True, text=True, timeout=60)
             except subprocess.TimeoutExpired as e:
                 raise UnshackleError(f"unshackle did not answer within 60 s when asked where its files are ({python})") from e
             except OSError as e:
                 raise UnshackleError(f"Could not ask unshackle where its files are with {python}: {e}") from e
-            lines = out.stdout.strip().splitlines()[-5:]
-            if out.returncode or len(lines) != 5:
+            lines = out.stdout.strip().splitlines()[-6:]
+            if out.returncode or len(lines) != 6:
                 raise UnshackleError(f"Could not ask unshackle where its files are: {out.stderr.strip()[-300:]}")
-            self._paths = (command, dict(zip(("config", "cookies", "wvds", "prds", "temp"), map(Path, lines))))
+            self._paths = (command, dict(zip(("config", "cookies", "wvds", "prds", "temp", "cache"), map(Path, lines))))
         return self._paths[1]
 
     def cookies_dir(self, command: str) -> Path:
@@ -410,11 +411,13 @@ class Unshackle:
             return url, key
         return self.local.endpoint(str(self.settings.get("unshackle_command") or ""))
 
-    def call(self, method: str, path: str, **kwargs):
+    def call(self, method: str, path: str, secret: str | None = None, **kwargs):
+        if path in ("/api/search", "/api/list-titles", "/api/list-tracks") and isinstance(kwargs.get("json"), dict):
+            kwargs["json"] = self.relayed(kwargs["json"])
         url, key = self.endpoint()
         timeout = kwargs.pop("timeout", (5, 60))
         try:
-            r = requests.request(method, f"{url}{path}", headers={"X-Secret-Key": key}, timeout=timeout,  # a server down: 5 s, not 60
+            r = requests.request(method, f"{url}{path}", headers={"X-Secret-Key": secret or key}, timeout=timeout,  # a server down: 5 s, not 60
                                  allow_redirects=False, **kwargs)  # the key is sent only where it was configured
         except requests.RequestException as e:
             raise UnshackleError(no_credentials(f"unshackle serve is unreachable at {url}: {e}")) from e
@@ -434,6 +437,8 @@ class Unshackle:
         if not r.ok:
             payload, message, service = response_error(r)
             provider_auth_failed = payload.get("error_code") == "AUTH_FAILED"
+            if (code := str(payload.get("error_code") or "")) in PASSING:  # after 6.0.0: a network or service hitch (424),
+                message = f"{message.strip()[:480]} ({code})"               # or serve draining before a restart (409)
             if r.status_code == 401:
                 if provider_auth_failed:
                     message = f"{message}. Check this service's sign-in/session in Unshackle."
@@ -465,13 +470,20 @@ class Unshackle:
 
     def remote_services(self) -> list[dict]:
         """The servers of Unshackle's remote_services and the services each offers (for --remote), kept
-        10 minutes; none when this Unshackle cannot tell (no such route, or unreachable), asked again after a minute."""
+        10 minutes: their names in /api/config and each one's /api/services?remote= (Unshackle after 6.0.0); none when
+        this Unshackle cannot tell (unreachable, say), asked again after a minute."""
         until, servers = self._remote  # until when the answer holds: 0.0 at first, so asked at once whatever the uptime
         if time.monotonic() >= until:
+            servers, keep = [], 600
             try:
-                servers, keep = self.call("GET", "/api/remote/services").get("servers") or [], 600
+                names = self.config().get("remote_services")
             except UnshackleError:  # serve still starting after a reboot, say: not kept the full 10 minutes
-                servers, keep = [], 60
+                names, keep = None, 60
+            for name in names if isinstance(names, list) else []:
+                try:
+                    servers.append({"name": name, "services": self.call("GET", "/api/services", params={"remote": name}).get("services") or []})
+                except UnshackleError:
+                    keep = 60  # that server down: the others' options still shown, and it is asked again soon
             self._remote = (time.monotonic() + keep, servers)
         return servers
 
@@ -486,11 +498,37 @@ class Unshackle:
     def jobs(self) -> list[dict]:
         return self.call("GET", "/api/download/jobs")["jobs"]
 
-    def restart(self) -> None:
+    def restart(self, dashboard_key: str = "") -> None:
         if self.mode == "remote":
             raise UnshackleError("A remote unshackle serve is restarted where it runs")
+        try:  # after 6.0.0, with serve.dashboard.key: no new work while it checks, never a download cut off by the restart
+            status = self.call("POST", "/api/dashboard/drain", secret=dashboard_key) if dashboard_key else None
+        except UnshackleError:
+            status = None  # 6.0.0, or not running: restarted as before
+        if status:
+            busy = sum(int((status.get("jobs") or {}).get(s) or 0) for s in ("downloading", "queued")) + int(status.get("sessions") or 0)
+            if busy:
+                try:
+                    self.call("DELETE", "/api/dashboard/drain", secret=dashboard_key)
+                except UnshackleError:
+                    pass
+                raise UnshackleError("Unshackle is still downloading: restart it once it is done")
         self.local.restart(str(self.settings.get("unshackle_command") or ""))
         self.configure(self.settings)  # a restarted serve reads unshackle.yaml afresh: so does the copy kept 10 minutes
+
+    def dashboard(self, dashboard_key: str, what: str = "status", **params) -> dict | None:
+        """/api/dashboard/<what>: its stats, log, remote sessions (after 6.0.0, with serve.dashboard.key);
+        None when it cannot tell."""
+        if not dashboard_key:
+            return None
+        try:
+            return self.call("GET", f"/api/dashboard/{what}", secret=dashboard_key, params=params or None)
+        except UnshackleError:
+            return None
+
+    def remote_logins(self) -> list[dict]:
+        """The logins a remote server waits on (an OTP, a PIN) while a listing goes through it (after 6.0.0)."""
+        return self.call("GET", "/api/remote/logins").get("logins") or []
 
     def dl_config(self) -> dict:
         """The `dl:` section of its unshackle.yaml (secrets redacted), kept 10 minutes."""
@@ -508,7 +546,21 @@ class Unshackle:
             self._config = (time.monotonic(), config)
         return config
 
+    def relayed(self, payload: dict) -> dict:
+        """dl's --remote [--server X] as serve takes it: the server's name in "remote", the one of remote_services
+        when none is named. A download, a search and a listing all go through that server."""
+        if payload.get("remote") is not True:
+            return payload
+        names = self.config().get("remote_services")
+        names = names if isinstance(names, list) else []
+        server = payload.get("server") or (names[0] if len(names) == 1 else None)
+        if not server:
+            raise UnshackleError("--remote needs --server: name one of remote_services in unshackle.yaml" if names
+                                 else "--remote needs a server in remote_services of unshackle.yaml (and Unshackle after 6.0.0)")
+        return {**{k: v for k, v in payload.items() if k != "server"}, "remote": server}
+
     def download(self, payload: dict) -> str:
+        payload = self.relayed(payload)
         if not payload.get("remote"):
             # A service that failed to import is in serve's load_errors (Unshackle after 5.4.0; none before): told
             # now, not once the job fails. Asked afresh each time, not the cached list: serve may have restarted.
