@@ -4699,6 +4699,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     run.observe_authentication(use["service"], backend.name, "validated")
 
                 missed = None  # its own service has it in none of the languages accepted: the fallback's turn
+                asked_from = show  # the service last asked, its own or its fallback: a sign-in retry asks it again
                 error = cause = None  # this episode's own: the login-fallback check below must never see the last one's
                 error_code = ""
                 try:
@@ -4745,7 +4746,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     else:
                         run.say(f"{label}: not on {show['service']}, trying {alt['service']} as {alt_sxxeyy}")
                     run.card.update(service=alt["service"], serviceEpisode=alt_sxxeyy, fallback=show["service"])
-                    service_sxxeyy = alt_sxxeyy
+                    service_sxxeyy, asked_from = alt_sxxeyy, alt
                     ask(alt_sxxeyy, use=alt)
                     missed = None
                   elif missed:
@@ -4774,10 +4775,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 # Its login refused and nothing came: the series' fallback profiles, in their order, until one logs in
                 stopped = waits = False
                 authentication_failed = error_code == "AUTH_FAILED"
-                for profile in fallback_profiles(show, config) if error and login_failure(cause or "") and not PROXY_DOWN.search(cause or "") and not videos_in(out) else []:
-                    run.say(f"{label}: {show['service']} refused the sign-in, trying the profile {profile}")
+                for profile in fallback_profiles(asked_from, config) if error and login_failure(cause or "") and not PROXY_DOWN.search(cause or "") and not videos_in(out) else []:
+                    run.say(f"{label}: {asked_from['service']} refused the sign-in, trying the profile {profile}")
                     try:
-                        ask(service_sxxeyy, profile)
+                        ask(service_sxxeyy, profile, use=asked_from)
                         error = cause = None
                         error_code = ""
                         authentication_failed = False
@@ -4839,8 +4840,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{hint}\n{cause[:1200]}", batch=batch, details=episode_details(ep, show)))
                             run.finish("failed", cause, hint)
                         elif login_failure(cause):
-                            hint = f"{show['service']} refused Unshackle: its cookies may have expired. Update them in Settings › Services."
-                            tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Sign-in failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
+                            hint = f"{asked_from['service']} refused Unshackle: its cookies may have expired. Update them in Settings › Services."
+                            tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Sign-in failed on {asked_from['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
                             run.finish("failed", cause, hint, auth_failed=authentication_failed)
                         else:
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe history in Activity has Unshackle's full output.", batch=batch, details=episode_details(ep, show)))

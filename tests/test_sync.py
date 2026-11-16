@@ -3820,7 +3820,7 @@ def test_classified_login_failure_survives_later_fallback_transport_failure(tmp_
 
 
 @pytest.mark.parametrize("profile_succeeds", [False, True])
-def test_fallback_authentication_keeps_its_identity_across_primary_profile_retries(
+def test_fallback_authentication_keeps_its_identity_across_its_profile_retries(
     tmp_path, monkeypatch, profile_succeeds
 ):
     sync = load(tmp_path, monkeypatch)
@@ -3842,9 +3842,9 @@ def test_fallback_authentication_keeps_its_identity_across_primary_profile_retri
     def download(payload, run=None):
         service, profile = payload["service"], payload.get("profile") or "default"
         tried.append((service, profile))
-        if service == "RTLP" and profile == "default":
+        if service == "RTLP":
             return []
-        if service == "MLT":
+        if profile == "default":
             raise sync.JobFailed("authentication failed", cause="401 Unauthorized", error_code="AUTH_FAILED")
         if not profile_succeeds:
             raise sync.JobFailed("network failed", cause="network failed")
@@ -3865,12 +3865,14 @@ def test_fallback_authentication_keeps_its_identity_across_primary_profile_retri
     sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
 
     card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
-    assert tried == [("RTLP", "default"), ("MLT", "default"), ("RTLP", "alt")]
-    assert card["auth_failure_backends"] == {"MLT": "fallback"}
+    assert tried == [("RTLP", "default"), ("MLT", "default"), ("MLT", "alt")]  # retried on the service that refused
     observations = sync.read_authentication_observations()
-    assert observations["fallback"]["MLT"]["state"] == "needs_user_action"
+    assert observations["primary"]["RTLP"]["state"] == "validated"
     if profile_succeeds:
-        assert observations["primary"]["RTLP"]["state"] == "validated"
+        assert observations["fallback"]["MLT"]["state"] == "validated" and card["outcome"] == "downloaded"
+    else:
+        assert card["auth_failure_backends"] == {"MLT": "fallback"}
+        assert observations["fallback"]["MLT"]["state"] == "needs_user_action"
 
 
 def test_an_episode_without_full_subtitles_in_a_required_language_waits(tmp_path, monkeypatch):
@@ -6493,3 +6495,45 @@ def test_a_saved_file_that_cannot_be_read_is_never_written_over(tmp_path, monkey
     path.unlink()
     write()
     assert path.exists()  # a missing file is still an empty one, started with the new item
+
+
+def test_a_sign_in_refused_on_the_fallback_service_is_retried_there_with_its_own_number(tmp_path, monkeypatch):
+    # The fallback's S02E05 is Sonarr's S01E05: asked of the series' own service, S02E05 is another episode
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111].update(fallback={"service": "MLT", "title": "https://mlt/show", "season_map": {1: 2}},
+                                 fallback_profiles="alt")
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "download_request", lambda show, config, wanted, out, backend=None: {
+        "service": show["service"], "title_id": show["title"], "wanted": [wanted], "output_dir": str(out)})
+    asked, refused = [], {"default", "alt"}
+
+    def download(payload, run=None):
+        profile = payload.get("profile") or "default"
+        asked.append((payload["service"], payload["wanted"][0], profile))
+        if payload["service"] == "RTLP":
+            return  # not on its own service
+        if profile in refused:
+            raise sync.UnshackleError("unshackle serve: 401 Unauthorized: your session has expired")
+        out = Path(payload["output_dir"])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "Show.S02E05.mkv").write_bytes(b"x")
+
+    told = []
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, *a, **k: told.append(title))
+    imported = []
+    monkeypatch.setattr(sync, "import_episode", lambda ep, out, replace=False: imported.append(ep["id"]))
+    for name in ("finalize", "check_audio"):
+        monkeypatch.setattr(sync, name, lambda *a, **k: 1)
+    sync.sync(config, {}, [episode(111, 1, 5)], manual=True, kind="manual")
+    assert asked == [("RTLP", "S01E05", "default"), ("MLT", "S02E05", "default"), ("MLT", "S02E05", "alt")]
+    assert told == ["Sign-in failed on MLT: Show S01E05"] and imported == []  # the service that refused, named
+
+    refused.discard("alt")
+    asked.clear()
+    shutil.rmtree(tmp_path / "runs")
+    sync.sync(config, {}, [episode(111, 1, 5)], manual=True, kind="manual")
+    assert asked[-1] == ("MLT", "S02E05", "alt") and imported == [105]
+    card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
+    assert card["service"] == "MLT" and card["profile"] == "alt" and card["outcome"] == "downloaded"

@@ -108,6 +108,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- A sign-in refused on a series' fallback service no longer downloads the wrong episode: the other profiles are tried on that same service with its own episode number, instead of asking the series' own service for the fallback's number, and the failure names the service that refused.
 - A saved file that could not be read for a moment (a network share dropping out) is no longer written over with only the newest item: the bell, the sent log, the messages held for the quiet hours, the warnings already given and the sign-in records now skip that write and keep what they had.
 - A full or read-only disk during the quiet hours no longer stops the rest of a job: a message that cannot be kept for later is sent at once instead.
 - An episode folder left without a video (an import that went through after Unshacklarr stopped waiting, or a crash) no longer turns "add the audio track" into a whole new download that replaces the library's file: the folder is cleared and the track is added.
