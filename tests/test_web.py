@@ -5858,8 +5858,11 @@ def test_a_job_serve_never_confirmed_stopped_is_asked_about_first(monkeypatch):
         def job(self, job_id):
             if status["s"] is None:
                 raise UnshackleError("unshackle serve is unreachable at http://serve:8786: Read timed out")
-            if status["s"] == "gone":
-                raise UnshackleError("unshackle serve: Job not found")
+            if status["s"] in ("gone", "busy"):
+                error = UnshackleError("unshackle serve: Job not found" if status["s"] == "gone" else
+                                       "unshackle serve is busy: its limit of requests for this key is reached")
+                error.status = 404 if status["s"] == "gone" else 429
+                raise error
             return {"status": status["s"]}
     monkeypatch.setattr(web.sonarr_sync, "backend_named", lambda name: Serve())
     assert "still downloading" in web.still_on_serve([5])
@@ -5867,6 +5870,8 @@ def test_a_job_serve_never_confirmed_stopped_is_asked_about_first(monkeypatch):
     assert "finished after all" in web.still_on_serve([5])
     status["s"] = None
     assert "doesn't answer" in web.still_on_serve([5])
+    status["s"] = "busy"
+    assert "doesn't answer" in web.still_on_serve([5])  # busy says nothing of it: only a 404 means it's gone
     status["s"] = "failed"
     assert web.still_on_serve([5]) is None  # it ended there: a new download is fine
     status["s"] = "gone"
