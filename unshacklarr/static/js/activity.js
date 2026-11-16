@@ -12,7 +12,7 @@ const speedLog = {};  // run id -> [[time, progress]], for the time left
 
 function duration(ms) {
   const s = Math.round(ms / 1000);
-  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")}` : `${Math.floor(s / 3600)} h ${String(Math.round(s / 60) % 60).padStart(2, "0")}`;
+  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s` : `${Math.floor(s / 3600)} h ${String(Math.round(s / 60) % 60).padStart(2, "0")} min`;
 }
 const posterOf = (c) => { const s = S.series.find((x) => x.tvdbId === c.tvdbId); return posterSrc(s?.poster, s?.title || c.series); };
 const isLive = (c) => c.outcome === "running";
@@ -143,7 +143,18 @@ function glideBars(root) {
   root.offsetWidth;  // the start widths are laid out before the targets are set
   bars.forEach((b, i) => { b.style.width = targets[i]; barWidths.set(b.dataset.k, targets[i]); });
 }
-function renderConsole(liveOnly = false) {  // liveOnly: a tick of the live feed, the same downloads moving on
+/* No download to list: what was asked for named, with a way back to the whole history. */
+function emptyHistory(query, filter) {
+  if (!query && filter === "all") return el("p", { className: "con-empty", textContent: "No download yet. Downloads start from a series, or with Run sync now." });
+  const label = document.querySelector(`#tab-log .con-filters [data-f="${filter}"]`).firstChild.textContent.trim();
+  const text = query && filter !== "all" ? `No download under ${label} matches “${query}”.` : query ? `No download matches “${query}”.` : `No download under ${label}.`;
+  return el("div", { className: "con-empty", role: "status" }, el("p", { textContent: text }),
+    ...(query ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", dataset: { fk: "empty-clear" }, onclick: () => { $("#con-search").value = ""; renderConsole(); $("#con-search").focus(); } })] : []),
+    ...(filter !== "all" ? [el("button", { type: "button", className: "btn small", textContent: "Show all", dataset: { fk: "empty-all" }, onclick: () => { setConFilter("all"); document.querySelector('#tab-log .con-filters [data-f="all"]').focus(); } })] : []));
+}
+/* Each tick redraws the lists and the detail: the control in use is found again by its data-fk. */
+function renderConsole(liveOnly = false) { keepFocus($("#con"), () => drawConsole(liveOnly)); }
+function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same downloads moving on
   const live = runCards.filter(isLive);
   // A job (episodes picked together) is running while one of its episodes is; the others wait in it, not in the history
   const liveJobs = new Set(live.map((c) => c.batch).filter(Boolean));
@@ -152,14 +163,14 @@ function renderConsole(liveOnly = false) {  // liveOnly: a tick of the live feed
   $("#runs-live").replaceChildren(...(liveItems.length ? liveItems.map(itemRow) : [el("p", { className: "con-empty", textContent: "Nothing is downloading right now." })]));
   glideBars($("#runs-live"));
   if (!liveOnly) {  // the history and its counts: unchanged while the same downloads only move on
-    const q = $("#con-search").value.trim().toLowerCase();
+    const query = $("#con-search").value.trim(), q = query.toLowerCase();
     const groups = { all: () => true, downloaded: (c) => c.outcome === "downloaded", failed: (c) => c.outcome === "failed",
       kept: (c) => c.outcome === "kept" || c.outcome === "import", stopped: (c) => ["stopped", "interrupted", "cancelled"].includes(c.outcome) };
     const searched = runCards.filter((c) => !isLive(c) && (!q || c.series.toLowerCase().includes(q)));
     document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.querySelector("span").textContent = `(${searched.filter(groups[b.dataset.f]).length})`);
     const pastItems = jobsOf(searched.filter(groups[conFilter]).filter((c) => !liveJobs.has(c.batch)));
     $("#runs-history").replaceChildren(...(pastItems.length ? pastItems.slice(0, runsShown).map(itemRow)
-      : [el("p", { className: "con-empty", textContent: q || conFilter !== "all" ? "No download matches." : "No download yet." })]));
+      : [emptyHistory(query, conFilter)]));
     $("#runs-more").hidden = pastItems.length <= runsShown;
   }
   // Activity opened from the menu while a download runs: straight to it, a phone too.
@@ -241,7 +252,7 @@ function jobState(j) {
 function jobRow(j) {
   const first = j.cards[0], st = jobState(j), key = `job:${j.job}`;
   const series = new Set(j.cards.map((c) => c.series)).size > 1 ? "Several series" : first.series;
-  return el("button", { className: "crow job" + (key === picked_run ? " sel" : "") + hovering(`row:${key}`), dataset: { hk: `row:${key}` }, onclick: () => pickRun(key) },
+  return el("button", { className: "crow job" + (key === picked_run ? " sel" : "") + hovering(`row:${key}`), dataset: { hk: `row:${key}`, fk: `row:${key}` }, onclick: () => pickRun(key) },
     thumb(`row:${key}`, posterOf(first)),
     el("span", {}, el("b", {}, el("span", { textContent: series }), el("em", { textContent: `${j.cards.length} episodes` })),
       el("small", { textContent: (st.live ? st.words : [...st.words, ...jobTotals(j)]).join(" · ") }),
@@ -304,18 +315,18 @@ function renderJob(j) {
   const retryable = j.cards.filter((c) => c.episodeId && ["failed", "stopped", "interrupted"].includes(c.outcome));  // not the cancelled ones: taken out on purpose
   const title = new Set(j.cards.map((c) => c.series)).size > 1 ? `${j.cards.length} episodes` : `${first.series} · ${j.cards.length} episodes`;
   $("#cd-top-title").textContent = title;
-  const acts = [series ? el("button", { className: "btn small", textContent: "Open series", onclick: () => openDrawer(series) }) : "",
-    st.live && st.n.queued ? el("button", { className: `btn small${st.paused ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause",
+  const acts = [series ? el("button", { className: "btn small", textContent: "Open series", dataset: { fk: "open" }, onclick: () => openDrawer(series) }) : "",
+    st.live && st.n.queued ? el("button", { className: `btn small${st.paused ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause", dataset: { fk: "pause" },
       title: st.paused ? "The next episode starts" : "The current download finishes; the next one waits",
       onclick: (e) => pauseJob(j, !st.paused, e.target) }) : "",
-    st.live && st.n.queued ? el("button", { className: "btn small", textContent: "Options", title: "Download options for the episodes still to come in this job",
+    st.live && st.n.queued ? el("button", { className: "btn small", textContent: "Options", dataset: { fk: "options" }, title: "Download options for the episodes still to come in this job",
       onclick: () => openJobOptions(j) }) : "",
-    st.live ? el("button", { className: "btn small danger", textContent: "Stop the job", title: "Stops the current download. The queued episodes don't start",
+    st.live ? el("button", { className: "btn small danger", textContent: "Stop the job", dataset: { fk: "stop" }, title: "Stops the current download. The queued episodes don't start",
       onclick: (e) => stopJob(j, e.target) }) : "",
-    retryable.length ? el("button", { className: "btn small primary", textContent: `Retry ${retryable.length} failed`,
+    retryable.length ? el("button", { className: "btn small primary", textContent: `Retry ${retryable.length} failed`, dataset: { fk: "retry" },
       title: st.live ? "Downloads them again, before the episodes still to come" : "Downloads them again, in this job",
       onclick: (e) => retryJob(j, retryable, e.target) }) : "",
-    !st.live ? el("button", { className: "btn small", textContent: "Delete the job", title: "Removes every episode of this job from the history",
+    !st.live ? el("button", { className: "btn small danger", textContent: "Delete the job", dataset: { focusKey: `delete:${j.job}`, fk: "delete" }, title: "Removes every episode of this job from the history",
       onclick: (e) => deleteJob(j, e.target) }) : ""].filter(Boolean);
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(first)),
@@ -324,9 +335,9 @@ function renderJob(j) {
       el("small", { className: "line2" }, el("b", { textContent: svcName(first.service) }), `${KIND[first.kind] || first.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
   // each count shows or hides its episodes: a job of 200 episodes, its failed ones alone in sight
-  const counts = el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused", textContent: "⏸ Paused: the next episode waits" })] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
+  const counts = el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused" }, icon("pause", "inl"), "Paused: the next episode waits")] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
     ["queued", "Queued", ""], ["failed", "Failed", "err"], ["stopped", "Stopped", ""], ["cancelled", "Cancelled", ""]]
-    .filter(([k]) => st.n[k]).map(([k, label, cls]) => el("button", { type: "button", className: `${cls}${jobHidden.has(k) ? " off" : ""}`, ariaPressed: String(!jobHidden.has(k)),
+    .filter(([k]) => st.n[k]).map(([k, label, cls]) => el("button", { type: "button", className: `${cls}${jobHidden.has(k) ? " off" : ""}`, ariaPressed: String(!jobHidden.has(k)), dataset: { fk: `count:${k}` },
       title: jobHidden.has(k) ? "Show these episodes" : "Hide these episodes", onclick: () => { jobHidden.has(k) ? jobHidden.delete(k) : jobHidden.add(k); renderConsole(); } },
       el("b", { textContent: st.n[k] }), label)));
   const overall = el("div", { className: "job-sum" }, counts,
@@ -335,6 +346,7 @@ function renderJob(j) {
   const followed = j.cards.find((c) => c.id === following);
   const next = followed && !isDownloading(followed) && !isQueued(followed) && j.cards.find(isDownloading);
   if (next) { openCards.delete(followed.id); openCards.add(next.id); following = next.id; }
+  const tookLine = (c, live) => !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "";
   const shown = j.cards.filter((c) => !jobHidden.has(cardKind(c)));
   const cards = shown.map((c) => {
     // a card that doesn't move (done, queued, folded) is the same element as at the last draw: a job of 200 episodes
@@ -357,7 +369,7 @@ function renderJob(j) {
         ...[...(afterTracks(c) ? [[ICON_CLOCK, muxLeft(c) ? `${afterTracks(c)} · ${muxLeft(c)} left` : `${afterTracks(c)} · ${since(c.mux_from || c.tracks_in)}`]] : [[ICON_SPEED, speedOf(c)], [ICON_CLOCK, timeLeft(c) && `${timeLeft(c)} left`]]), [ICON_GLOBE, proxyOf(c), "extra"], [ICON_FILM, videoOf(c), "extra"],
           [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${svcName(c.service)}`, "extra"]]
           .filter(([, t]) => t).map(([svg, t, extra]) => { const chip = metaChip(svg, t); if (extra) chip.classList.add(extra); return chip; }))
-      : el("small", { textContent: !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "" });
+      : el("small", { textContent: tookLine(c, live), title: tookLine(c, live) });  // ellipsised when narrow: the whole line on hover
     const open = openCards.has(c.id) && !c.waiting;
     const acts = open ? cardActs(c) : [];
     const fold = () => {
@@ -369,15 +381,15 @@ function renderJob(j) {
       el("div", { className: "jhead" }, el("b", { className: "ep", textContent: c.sxxeyy }),
         el("div", { className: "mid" }, el("small", { textContent: `Cancelled ${time(new Date(c.ended))}` })),
         el("span", { className: "jstate", textContent: "Cancelled" }),
-        el("button", { type: "button", className: "jx again", title: "Queue it again", ariaLabel: `Queue ${c.sxxeyy} again`, onclick: () => requeue(c) }, "↺")));
+        el("button", { type: "button", className: "jx again", dataset: { fk: `again:${c.id}` }, title: "Queue it again", ariaLabel: `Queue ${c.sxxeyy} again`, onclick: () => requeue(c) }, "↺")));
     if (c.waiting) return el("li", { className: "jcard queued" },  // not started: nothing to unfold, but it can be cancelled
       el("div", { className: "jhead" }, el("b", { className: "ep", textContent: c.sxxeyy }),
         el("div", { className: "mid" }, el("div", { className: "steps mini", ariaHidden: "true" }, ...stepStates(c).filter((x) => x !== "skip").map(() => el("span")))),
         el("span", { className: "jstate", textContent: "Queued" }),
-        el("button", { type: "button", className: "jx", title: "Cancel", ariaLabel: `Cancel ${c.sxxeyy}`,
+        el("button", { type: "button", className: "jx", dataset: { fk: `cancel:${c.id}` }, title: "Cancel", ariaLabel: `Cancel ${c.sxxeyy}`,
           onclick: () => unqueue(c) }, icon("x"))));
     return el("li", { className: `jcard ${tone}${open ? " open" : ""}${hovering(`card:${c.id}`)}`, dataset: { hk: `card:${c.id}` } },
-      el("div", { className: "jrow" }, el("button", { type: "button", className: "jhead", ariaExpanded: String(open), onclick: fold },
+      el("div", { className: "jrow" }, el("button", { type: "button", className: "jhead", ariaExpanded: String(open), dataset: { fk: `card:${c.id}` }, onclick: fold },
         el("b", { className: "ep", textContent: c.sxxeyy }),
         el("div", { className: "mid" },
           el("div", { className: "steps mini", ariaHidden: "true" }, ...stepStates(c).filter((x) => x !== "skip")
@@ -397,8 +409,8 @@ function renderJob(j) {
   cards.forEach((li, i) => { if (list.children[i] !== li) list.insertBefore(li, list.children[i] || null); });
   while (list.children.length > cards.length) list.lastChild.remove();
   const sum = st.live ? overall : el("div", { style: "display:grid;gap:12px" }, jobDone(j, st), counts), box = list.parentElement;
-  keepPromptFocus(() => box?.isConnected ? (box.children[0].replaceWith(head), box.children[1].replaceWith(sum))  // the list stays where it is
-    : $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, head, sum, list)));
+  if (box?.isConnected) { box.children[0].replaceWith(head); box.children[1].replaceWith(sum); }  // the list stays where it is
+  else $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, head, sum, list));
   glideBars($("#cd-main"));
   $("#cd-raw").hidden = false;
   if ($("#cd-raw").open && termFor !== `job:${j.job}`) streamJob(j.job);
@@ -444,7 +456,7 @@ function listRow(c) {
     : `${day(started)} ${time(started)}${c.ended ? ` · ${duration(new Date(c.ended) - started)}` : ""}`;
   const side = isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
     : el("span", { className: `chip o-${c.outcome}`, textContent: outcomeOf(c) });
-  const row = el("button", { className: "crow" + (c.id === picked_run ? " sel" : "") + hovering(`row:${c.id}`), dataset: { hk: `row:${c.id}` }, onclick: () => pickRun(c.id) },
+  const row = el("button", { className: "crow" + (c.id === picked_run ? " sel" : "") + hovering(`row:${c.id}`), dataset: { hk: `row:${c.id}`, fk: `row:${c.id}` }, onclick: () => pickRun(c.id) },
     thumb(`row:${c.id}`, posterOf(c)),
     el("span", {}, el("b", {}, el("span", { textContent: c.series }), el("em", { textContent: c.sxxeyy })),
       el("small", { textContent: c.attempts > 1 ? `${sub} · attempt ${c.attempts}` : sub }),
@@ -456,7 +468,7 @@ function pickRun(id) {
   picked_run = id;
   $("#con").classList.add("open");
   renderConsole();
-  if (innerWidth < 700) scrollTo({ top: 0 });
+  if (innerWidth < 700) { scrollTo({ top: 0 }); focusHeading($("#cd-top-title")); }  // the list is out of sight: the keyboard goes with the view
 }
 /* Waiting in downloads: folders Sonarr did not take, with why, imported anyway or deleted. */
 async function showLeftovers() {
@@ -752,22 +764,27 @@ async function showStats() {
     el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Stats" }),
       el("small", { className: "line1", textContent: st.since ? `From the history kept since ${day(new Date(st.since))}` : "Nothing in the history yet" }))),
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
-      ["Kept by Sonarr", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
+      ["Kept", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
       .map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v })))),
     el("div", { style: "display:grid;gap:8px" }, weeks, el("div", { className: "legend", ariaHidden: "true" }, el("span", {}, el("i", { className: "ok", style: "background:var(--ok)" }), "Downloaded"),
-      el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept by Sonarr"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
+      el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
     perWeek,
     st.services.length ? el("div", { className: "svc-scroll" }, table) : ""));
 }
 $("#con-stats").onclick = showStats;
-$("#cd-back").onclick = () => { $("#con").classList.remove("open"); picked_run = null; renderConsole(); };
+$("#cd-back").onclick = () => {
+  const from = picked_run;
+  $("#con").classList.remove("open"); picked_run = null; renderConsole();
+  ($(`[data-fk="row:${from}"]`) || document.getElementById(`con-${from}`))?.focus({ preventScroll: true });  // the row it came from
+};
 let searchTimer = null;  // typed: the history filtered once the typing pauses, not at each key
 $("#con-search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 150); };
-document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.onclick = () => {
-  conFilter = b.dataset.f;
-  document.querySelectorAll("#tab-log .con-filters button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+function setConFilter(f) {
+  conFilter = f;
+  document.querySelectorAll("#tab-log .con-filters button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.f === f));
   renderConsole();
-});
+}
+document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.onclick = () => setConFilter(b.dataset.f));
 const moreRuns = () => { if (!$("#runs-more").hidden) { runsShown += 50; renderConsole(); } };
 $("#runs-more").onclick = moreRuns;
 $("#runs-history").addEventListener("scroll", (e) => { const h = e.target; if (h.scrollTop + h.clientHeight > h.scrollHeight - 300) moreRuns(); }, { passive: true });
@@ -793,7 +810,7 @@ function stepStates(c) {
 function renderDetail(c) {
   const series = S.series.find((x) => x.tvdbId === c.tvdbId);
   const started = new Date(c.started);
-  const acts = [series ? el("button", { className: "btn small", textContent: "Open series", onclick: () => openDrawer(series) }) : "", ...runActs(c)].filter(Boolean);
+  const acts = [series ? el("button", { className: "btn small", textContent: "Open series", dataset: { fk: "open" }, onclick: () => openDrawer(series) }) : "", ...runActs(c)].filter(Boolean);
   const onService = c.serviceEpisode && c.serviceEpisode !== c.sxxeyy ? `, as ${c.serviceEpisode}` : "";
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(c)),
     el("div", {}, el("h3", { textContent: `${c.series} ${c.sxxeyy}` }),
@@ -803,7 +820,7 @@ function renderDetail(c) {
   $("#cd-top-title").textContent = `${c.series} ${c.sxxeyy}`;
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const parts = [head, ...runBody(c)];
-  keepPromptFocus(() => $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, ...parts)));
+  $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, ...parts));
   glideBars($("#cd-main"));
   $("#cd-raw").hidden = !!c.waiting;  // not started: no output yet
   if ($("#cd-raw").open && !c.waiting && termFor !== c.id) streamRun(c);
@@ -880,7 +897,7 @@ const ACT_ICONS = {
 function cardActs(c) {
   const live = isLive(c);
   const act = (kind, label, run, extra = "") => {
-    const b = el("button", { type: "button", className: `jact ${extra}`, ariaLabel: label, onclick: (e) => run(c, e.currentTarget) });
+    const b = el("button", { type: "button", className: `jact ${extra}`, ariaLabel: label, dataset: { focusKey: `${kind}:${c.id}`, fk: `${label}:${c.id}` }, onclick: (e) => run(c, e.currentTarget) });
     b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ACT_ICONS[kind]}</svg>`;
     return b;
   };
@@ -898,12 +915,12 @@ function runActs(c) {
   const live = isLive(c);
   return [
     setupButton(c),
-    live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", onclick: (e) => stopRun(c, e.target) }) : "",
-    !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", onclick: (e) => importKept(c, e.target) }) : "",
-    !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: "btn small primary", textContent: "Retry", onclick: (e) => retryRun(c, e.target) }) : "",
-    !live ? el("button", { className: "btn small", textContent: "Diagnostic", title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
+    live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
+    !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
+    !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: "btn small primary", textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
+    !live ? el("button", { className: "btn small", textContent: "Save diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
       onclick: () => downloadDiagnostic(c) }) : "",
-    !live ? el("button", { className: "btn small", textContent: "Delete", onclick: (e) => deleteRun(c, e.target) }) : "",
+    !live ? el("button", { className: "btn small danger", textContent: "Delete", dataset: { focusKey: `delete:${c.id}`, fk: "delete" }, onclick: (e) => deleteRun(c, e.target) }) : "",
   ].filter(Boolean);
 }
 async function downloadDiagnostic(c) {
@@ -913,7 +930,7 @@ async function downloadDiagnostic(c) {
     const a = el("a", { href: URL.createObjectURL(await r.blob()), download: `unshacklarr-diagnostic-${c.id}.md` });
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
-    toast("Diagnostic downloaded: check it, then attach it to the issue");
+    toast("Diagnostic saved: check it, then attach it to the issue");
   } catch (e) { toast(e.message, true); }
 }
 /* A track as serve names it ("Part 1 · audio fr 2.0"): an icon for its kind, the kind, then what it is in chips. */
@@ -980,7 +997,7 @@ function runBody(c) {
         el("span", { className: `bar${pct == null ? " busy" : ""}` }, el("i", { style: `width:${pct ?? 100}%`, dataset: { k: `mux:${c.id}` } }))));
     }
   } else {
-    const note = { downloaded: ["ok", "Downloaded"], failed: ["err", "Failed"], kept: ["warn", "Sonarr kept its own file"], import: ["warn", "Downloaded, import needed"],
+    const note = { downloaded: ["ok", "Downloaded"], failed: ["err", "Failed"], kept: ["warn", "Kept: Sonarr's own file was not replaced"], import: ["warn", "Downloaded, import needed"],
       stopped: ["mut", "Stopped"], interrupted: ["mut", "Interrupted: Unshacklarr stopped during it"],
       unavailable: ["mut", c.notOn ? `${outcomeOf(c)}: nothing to download` : "Not out yet: nothing to download"] }[c.outcome] || ["mut", c.outcome];
     if (c.outcome === "downloaded") {  // all went well: one quiet line, not a block
@@ -1031,7 +1048,7 @@ document.addEventListener("pointerdown", (e) => { if (setupPop && !setupPop.cont
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSetup(); });
 function setupButton(c, className = "jact") {
   if (!c.setup) return "";
-  const b = el("button", { type: "button", className: `${className} setup-btn`, ariaLabel: "How it runs", dataset: { run: c.id },
+  const b = el("button", { type: "button", className: `${className} setup-btn`, ariaLabel: "How it runs", dataset: { run: c.id, fk: `setup:${c.id}` },
     onclick: (e) => { e.stopPropagation(); openSetup(c, e.currentTarget); } });
   b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
   return b;
@@ -1157,7 +1174,7 @@ async function stopRun(c, button) {
 const promptDrafts = {};  // what was typed, kept across the page's redraws
 function promptBox(p) {
   const field = el("input", { type: "text", autocomplete: "one-time-code", inputMode: /code|pin/i.test(p.text) ? "numeric" : "text",
-    ariaLabel: p.text, placeholder: "Your answer", value: promptDrafts[p.id] || "", spellcheck: false, dataset: { promptId: p.id } });
+    ariaLabel: p.text, placeholder: "Your answer", value: promptDrafts[p.id] || "", spellcheck: false, dataset: { fk: `prompt:${p.id}` } });
   field.oninput = () => { promptDrafts[p.id] = field.value; };
   const send = el("button", { className: "btn primary", type: "submit", textContent: "Send" });
   const form = el("form", { className: "act-row", onsubmit: async (e) => {
@@ -1173,11 +1190,4 @@ function promptBox(p) {
   } }, field, send);
   return el("div", { className: "act-box", role: "status" },
     el("b", { textContent: `${svcName(p.service)} asks` }), el("span", { className: "q", textContent: p.text }), form);
-}
-/* A redraw rebuilds the answer field: the one being typed in keeps its focus and caret. */
-function keepPromptFocus(draw) {
-  const was = document.activeElement?.dataset?.promptId, at = document.activeElement?.selectionStart;
-  draw();
-  const field = was && document.querySelector(`input[data-prompt-id="${was}"]`);
-  if (field) { field.focus(); field.setSelectionRange(at ?? field.value.length, at ?? field.value.length); }
 }

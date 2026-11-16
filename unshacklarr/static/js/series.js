@@ -88,13 +88,13 @@ function renderBroadcast() {
   $("#d-bc-every").value = plan.every;
   $("#d-bc-per").value = String(plan.per_evening || 1);
   $("#d-bc-days").hidden = plan.every === "daily";
-  $("#d-bc-days").replaceChildren(...DAY_NAMES.map((name, i) => el("button", { type: "button", textContent: name,
+  keepFocus($("#d-bc-days"), () => $("#d-bc-days").replaceChildren(...DAY_NAMES.map((name, i) => el("button", { type: "button", textContent: name,
     ariaPressed: String((plan.days || []).includes(i)), onclick: () => {
       const days = new Set(plan.days || []);
       days.has(i) ? days.delete(i) : days.add(i);
       plan.days = [...days].sort();
       changedBroadcast();
-    } })));
+    } }))));
   // the month: from the first evening's, one at a time
   bcMonth ??= new Date(`${plan.start}T00:00`);
   const first = new Date(bcMonth.getFullYear(), bcMonth.getMonth(), 1), today = isoDay(new Date());
@@ -114,11 +114,11 @@ function renderBroadcast() {
       } }, String(d.getDate()), ...(n ? [el("b", { textContent: n > 1 || changed ? String(n) : "" })] : [])));
   }
   const move = (step) => { bcMonth = new Date(bcMonth.getFullYear(), bcMonth.getMonth() + step, 1); renderBroadcast(); };
-  $("#d-bc-cal").replaceChildren(
+  keepFocus($("#d-bc-cal"), () => $("#d-bc-cal").replaceChildren(
     el("div", { className: "bc-cal-head" }, el("button", { type: "button", ariaLabel: "Previous month", onclick: () => move(-1) }, icon("chevronLeft")),
       el("span", { textContent: first.toLocaleDateString(LOCALE, { month: "long", year: "numeric" }) }),
       el("button", { type: "button", ariaLabel: "Next month", onclick: () => move(1) }, icon("chevron"))),
-    el("div", { className: "bc-cal-grid" }, ...DAY_NAMES.map((n) => el("small", { textContent: n.slice(0, 2) })), ...cells));
+    el("div", { className: "bc-cal-grid" }, ...DAY_NAMES.map((n) => el("small", { textContent: n.slice(0, 2) })), ...cells)));
   // what it gives: the episodes around now, dated
   const dates = broadcastDates(plan, eps), dated = eps.filter((e) => dates.has(e.id));
   const from = Math.max(0, dated.findIndex((e) => dates.get(e.id) > Date.now() - 86400000) - 2);
@@ -291,7 +291,8 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
   renderReleaseNext();  // Timing says when the next one is tried
   renderBroadcast();
   const numbers = Object.keys(epSeasons).map(Number).sort((a, b) => (a === 0) - (b === 0) || b - a);  // newest first, specials last
-  if (!numbers.length) return box.replaceChildren(el("p", { className: "muted", textContent: "Sonarr lists no episode for this series." }));
+  if (!numbers.length) return box.replaceChildren(el("p", { className: "muted", textContent: "Sonarr lists no episode for this series." }),
+    el("button", { type: "button", className: "btn small", textContent: "Refresh", onclick: () => loadEpisodes(s) }));
   if (!(keep && numbers.includes(epSeason))) epSeason = numbers[0];  // the newest; seasons with gaps stand out in the strip
   box.replaceChildren(
     sonarrSwitch(s),
@@ -816,7 +817,7 @@ function renderSeason() {
   if ($("#ep-avail")) {
     const onService = list.filter((e) => state(e) === "miss" && epAvail?.[e.id]).length;
     $("#ep-avail").textContent = `Missing, available on ${seasonSvc(epSeason)} (${onService})`;
-    $("#ep-avail").disabled = !onService;
+    $("#ep-avail").hidden = !onService;
   }
   const named = current.seasonTitles?.[epSeason];  // its name in Sonarr, when it has one
   const q = epQualities[epSeason], missing = list.filter((e) => state(e) === "miss").length;
@@ -1050,14 +1051,19 @@ $(".ds-nav").onclick = (e) => {
 };
 // the card in view lights its shortcut
 let dsPicked = null;  // the shortcut clicked: lit until the person scrolls on their own
-function dsLight() {  // the card in view: the last one whose top went under the bar
+function dsLight() {  // the card in view: the last one whose top went under what is pinned
   if ($("#dt-settings").hidden) return;  // the episodes scrolling, or the drawer closed: nothing to light
-  const links = [...document.querySelectorAll(".ds-nav a[data-to]")], bar = $(".ds-nav").getBoundingClientRect().bottom + 24;
+  const nav = $(".ds-nav"), links = [...nav.querySelectorAll("a[data-to]")];
+  const pinned = (box) => (getComputedStyle(box).position === "sticky" ? box.getBoundingClientRect().bottom : 0);  // a bar that scrolled away covers nothing
+  const bar = Math.max(pinned($(".d-head")), pinned(nav)) + 24;
   let on = dsPicked || links[0]?.dataset.to;
   if (!dsPicked) for (const a of links) if ($(`#${a.dataset.to}`)?.getBoundingClientRect().top <= bar) on = a.dataset.to;
   links.forEach((a) => {
     const lit = a.dataset.to === on;
-    if (lit && a.getAttribute("aria-current") !== "true") a.scrollIntoView({ block: "nearest", inline: "nearest" });  // a phone's bar scrolls sideways
+    if (lit && a.getAttribute("aria-current") !== "true") {  // a phone's bar scrolls sideways: its own scroll only, never the page's or the drawer's
+      const at = a.getBoundingClientRect(), box = nav.getBoundingClientRect();
+      nav.scrollLeft += at.left < box.left ? at.left - box.left : Math.max(0, at.right - box.right);
+    }
     a.setAttribute("aria-current", String(lit));
   });
 }

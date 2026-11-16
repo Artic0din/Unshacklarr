@@ -5066,7 +5066,7 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
     assert imported == []
     card = next(json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))
     assert card["outcome"] == "failed"
-    assert {"stuck": "mkvmerge did not finish within 1 h 00", "rename": "could not be renamed: [Errno 13] Permission denied"}.get(
+    assert {"stuck": "mkvmerge did not finish within 1 h 00 min", "rename": "could not be renamed: [Errno 13] Permission denied"}.get(
         code, "mkvmerge could not add the audio: Error: disk full") in card["cause"]
     assert sync.leftovers() == []
     assert (library / "Show - S02E05.mkv").read_bytes() == b"video"
@@ -6816,13 +6816,13 @@ def test_a_stuck_mkvmerge_or_mkvpropedit_fails_its_step_and_leaves_no_partial_fi
         raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
 
     monkeypatch.setattr(sync.subprocess, "run", stuck)
-    with pytest.raises(RuntimeError, match="mkvmerge did not finish within 1 h 00"):
+    with pytest.raises(RuntimeError, match="mkvmerge did not finish within 1 h 00 min"):
         sync.finalize(out, "S02E05", "Show")
     assert sorted(f.name for f in out.iterdir()) == ["Show.S02E05.Part.1.mkv", "Show.S02E05.Part.2.mkv"]  # no joined file
     assert limits == [("mkvmerge", "-q", sync.MKV_WRITE_TIMEOUT)]
     (out / "Show.S02E05.Part.2.mkv").unlink()
     (out / "Show.S02E05.Part.1.mkv").rename(out / "Show.S02E05.mkv")
-    with pytest.raises(RuntimeError, match="did not finish within 2 min 00"):  # a probe that times out is not "no tracks"
+    with pytest.raises(RuntimeError, match="did not finish within 2 min 00 s"):  # a probe that times out is not "no tracks"
         sync.audio_languages(out / "Show.S02E05.mkv")
     monkeypatch.setattr(sync, "mkvmerge_info", lambda path: {})
     with pytest.raises(RuntimeError, match="mkvpropedit did not finish"):

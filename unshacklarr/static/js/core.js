@@ -82,7 +82,7 @@ function langCorner() {
     onclick: () => open(menu.hidden) }, el("span", { textContent: LANGS[LANG] }), el("span", { className: "caret", ariaHidden: "true" }));
   const corner = el("div", { className: "lang-corner", translate: "no" }, button, menu);
   document.addEventListener("click", (e) => { if (!corner.contains(e.target)) open(false); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") open(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { open(false); button.focus(); } });
   return corner;
 }
 let T = null, TP = [];  // exact texts; patterns, the most specific first
@@ -186,13 +186,13 @@ let current = null;
 async function responseError(response) {
   const detail = (await response.text()).trim();
   const reason = response.statusText ? `: ${response.statusText}` : "";
-  const context = tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`);
   const safeDetail = detail && !/^\s*</.test(detail) ? detail
     .replace(/\/\/[^:/@\s]*:[^/@\s]+@/g, "//***@")
     .replace(/([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret)=)[^&#\s]+/gi, "$1***")
     .replace(/\b(Authorization:\s*(?:Bearer|Basic)\s+|(?:X-Api-Key|X-Secret-Key|Api-Key):\s*)\S+|\b((?:Set-)?Cookie:)\s*[^\r\n]+/gi,
       (_, authorization, cookie) => `${(authorization || cookie).trimEnd()} ***`) : "";
-  const error = new Error(safeDetail ? `${context}\n${tr(safeDetail)}` : context);
+  // the cause alone when the server gives one: leading with "answered HTTP 403" pushes it out of a narrow field
+  const error = new Error(safeDetail ? tr(safeDetail) : tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`));
   error.detail = safeDetail;
   return error;
 }
@@ -218,7 +218,7 @@ const ICON_PATHS = {
   check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', alert: '<path d="M12 6v8M12 18h.01"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>', chevronLeft: '<path d="m15 6-6 6 6 6"/>',
   arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
-  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
+  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>', pause: '<path d="M9 6v12M15 6v12"/>',
 };
 function icon(name, className = "", label = "") {
   const holder = document.createElement("template");
@@ -230,6 +230,7 @@ function icon(name, className = "", label = "") {
 /* A counted noun, one whole text for one and one for many: a language writes its own plural from either, no suffix glued on. */
 const COUNT = {
   episode: (n) => n === 1 ? "1 episode" : `${n} episodes`,
+  notification: (n) => n === 1 ? "1 notification" : `${n} notifications`,
   missingEpisode: (n) => n === 1 ? "1 missing episode" : `${n} missing episodes`,
   upgrade: (n) => n === 1 ? "1 upgrade" : `${n} upgrades`,
   download: (n) => n === 1 ? "1 download" : `${n} downloads`,
@@ -246,22 +247,49 @@ const COUNT = {
 };
 /* Two clicks for what cannot be undone: the first turns the label into the question, naming the action and what it is done to;
    the second does it. No timer takes the question back while it is being read: leaving the button, a press anywhere else
-   (Safari does not focus a clicked button, so it never blurs), or Escape does. */
+   (Safari does not focus a clicked button, so it never blurs), or Escape does (and only the question: the window around it stays).
+   The question is also spoken, in a live region: a screen reader does not announce a label that changes under its focus.
+   A window opened as a modal makes everything outside it inert, so the region is the one inside the window the button is in. */
+const sureSay = (button, text) => { (button.closest("dialog")?.querySelector(".sure-say") ?? $("#sure-say")).textContent = text; };
+function confirmCancel(button, label = button) {  // the question taken back: the label as it was
+  if (button.dataset.sure !== "1") return;
+  delete button.dataset.sure; label.textContent = button.dataset.was; sureSay(button, "");
+}
 function confirmClick(button, question, label = button) {
-  if (button.dataset.sure === "1") { label.textContent = button.dataset.was; delete button.dataset.sure; return true; }
+  if (button.dataset.sure === "1") { confirmCancel(button, label); return true; }
   button.dataset.sure = "1"; button.dataset.was = label.textContent;
   label.textContent = question;
+  sureSay(button, question);
   const cancel = (e) => {
     if (e.type === "keydown" && e.key !== "Escape") return;
     if (e.type === "pointerdown" && button.contains(e.target)) return;  // the second click on the button itself
-    button.removeEventListener("blur", cancel); button.removeEventListener("keydown", cancel);
-    document.removeEventListener("pointerdown", cancel, true);
+    button.removeEventListener("blur", cancel);
+    document.removeEventListener("keydown", cancel, true); document.removeEventListener("pointerdown", cancel, true);
     if (button.dataset.sure !== "1") return;
-    delete button.dataset.sure; label.textContent = button.dataset.was;
+    if (e.type === "keydown") { e.preventDefault(); e.stopPropagation(); }  // not also the window it sits in
+    confirmCancel(button, label);
   };
-  button.addEventListener("blur", cancel); button.addEventListener("keydown", cancel);
-  document.addEventListener("pointerdown", cancel, true);
+  button.addEventListener("blur", cancel);
+  document.addEventListener("keydown", cancel, true); document.addEventListener("pointerdown", cancel, true);
   return false;
+}
+/* The same question in a window, Cancel first, for what needs a sentence, has no label to turn into one, or sits where the page
+   redraws its buttons (a job's, a status's: a question in the label would vanish with the redraw); true if confirmed.
+   Cancelled, focus goes back to the button it came from: if the page redrew it meanwhile, to its new copy, found by data-focus-key. */
+function askToConfirm(title, text, verb, trigger = null) {
+  const dialog = $("#confirm-dialog");
+  $("#confirm-title").textContent = title;
+  $("#confirm-text").textContent = text;
+  $("#confirm-go").textContent = verb;
+  dialog.returnValue = "cancel";
+  dialog.showModal();
+  return new Promise((done) => dialog.addEventListener("close", () => {
+    const key = trigger?.dataset.focusKey;
+    if (dialog.returnValue !== "go" && key && !trigger.isConnected) {
+      [...document.querySelectorAll(`[data-focus-key="${CSS.escape(key)}"]`)].find((b) => b.getClientRects().length)?.focus();
+    }
+    done(dialog.returnValue === "go");
+  }, { once: true }));
 }
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */
 const slowHint = (svc) => setTimeout(() => toast(`${svc} is slow to answer. It may be waiting for you to sign in: look at Unshackle's log.`, false, ["OK", () => {}]), 20000);
@@ -331,6 +359,30 @@ function el(tag, { dataset, ...props } = {}, ...children) {
   e.append(...children);
   return e;
 }
+/* A redraw replaces the control in use, and the keyboard falls to the top of the page. Draw inside this: the control
+   in the same place of the new ones takes the focus back (one in a list that reorders carries a data-fk, to be found
+   by it; a field keeps its caret or selected range). The box is what the draw rebuilds. */
+const CONTROLS = "a[href], button, input:not([type=hidden]), select, textarea, summary, [tabindex]";
+function keepFocus(box, draw) {
+  const was = document.activeElement;
+  if (!box?.contains(was)) return draw();
+  const key = was.dataset.fk, at = [...box.querySelectorAll(CONTROLS)].indexOf(was);
+  const { selectionStart: from, selectionEnd: to, selectionDirection: direction } = was;
+  draw();
+  const held = document.activeElement;
+  if (held && held !== document.body) return;  // the focus stayed, or the draw put it somewhere on purpose
+  const now = [...box.querySelectorAll(CONTROLS)];  // a control moved in the list is blurred but is the same element
+  const next = was.isConnected ? was : key ? now.filter((n) => n.dataset.fk === key).find((n) => n.getClientRects().length) : now[Math.min(at, now.length - 1)];
+  if (!next || next.disabled) return;
+  next.focus({ preventScroll: true });
+  if (typeof from === "number") next.setSelectionRange?.(from, to, direction);
+}
+/* A view swapped in: the keyboard goes to its heading, which is made focusable without joining the Tab order. */
+function focusHeading(heading) {
+  if (!heading) return;
+  heading.tabIndex = -1;
+  heading.focus({ preventScroll: true });
+}
 
 /* One row per option already set, plus a picker listing every other option the CLI knows. */
 function optionsEditor(root, specs, values, anyFlag = false) {  // anyFlag: a service's own options, any flag as written too
@@ -353,7 +405,7 @@ function optionsEditor(root, specs, values, anyFlag = false) {  // anyFlag: a se
       el("code", { title: spec.help }, flag),
       input,
       el("button", { className: "rm", title: "Remove", ariaLabel: `Remove ${flag}`,
-        onclick: () => { delete values[flag]; dirty(); optionsEditor(root, specs, values, anyFlag); } }, icon("x"))));
+        onclick: () => { delete values[flag]; dirty(); keepFocus(root, () => optionsEditor(root, specs, values, anyFlag)); } }, icon("x"))));
   }
   const free = specs.filter((s) => !(s.flag in values)).sort((a, b) => a.flag.localeCompare(b.flag));
   if (!specs.length && !Object.keys(values).length) root.append(el("small", { className: "muted", textContent: "None." }));
@@ -437,8 +489,14 @@ const SEL = { on: false, ids: new Set() };  // the series picked to change toget
 const usesService = (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || {}).some((page) => page.service === tag);
 // The names a series is searched by: Sonarr's title, its other titles there, its name in file names
 const seriesNames = (s) => [s.title, ...(s.altTitles || []), S.config.series[s.tvdbId]?.file_name || ""];
+/* Every filter of the wall back to nothing (the sort stays: it hides no series). */
+function clearWallFilters(draw = true) {  // draw: false when the caller sets a filter of its own and draws once after
+  $("#search").value = ""; $("#f-service").value = ""; $("#f-library").value = ""; $("#f-missing").checked = false; $("#f-monitored").checked = false;
+  document.querySelectorAll("#tab-series .seg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.managed === ""));
+  if (draw) renderWall();
+}
 function renderWall() {
-  const q = $("#search").value.trim().toLowerCase();
+  const query = $("#search").value.trim(), q = query.toLowerCase();
   const svc = $("#f-service").value, lib = $("#f-library").value;
   const libsOf = (s) => S.sonarrsOf?.[s.tvdbId] || [];
   const on = (s) => Boolean(S.config.series[s.tvdbId]?.service);
@@ -476,7 +534,7 @@ function renderWall() {
       const conf = S.config.series[s.tvdbId];
       const art = el("span", { className: "art" });
       if (s.poster) art.append(el("img", { src: s.poster, alt: "", loading: "lazy", decoding: "async" }));
-      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service) }));
+      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service), title: svcName(conf.service) }));
       if (libsOf(s).length) {  // the Sonarr libraries it is in, by their names; one switched off for it dimmed (by mj23au, #10)
         const off = (name, main) => Boolean(conf?.service) && Boolean(main ? conf.main_off : conf.sonarrs?.[name]?.off);
         art.append(el("span", { className: "lib" }, ...[...(s.id ? [[mainSonarr(), true]] : []), ...libsOf(s).map((o) => [o.name, false])]
@@ -498,15 +556,18 @@ function renderWall() {
         el("span", { className: "meta" }, `${s.year ?? ""}`,
           ...(s.missing ? [" · ", el("span", { className: "miss", textContent: `${s.missing} missing` })] : [])));
       card.dataset.tvdb = s.tvdbId;
+      card.dataset.fk = s.tvdbId;
       return card;
     });
   const managed0 = document.querySelector("#tab-series .seg [aria-pressed=true]").dataset.managed === "*" && !counts["*"];
   const empty = managed0
     ? el("div", { className: "empty" }, el("b", { textContent: "No series is downloading yet." }),
         "Open a series under All, pick a service or one of the links found on TMDB, then save.")
-    : el("div", { className: "empty" }, el("b", { textContent: "No series match these filters." }), "Clear the search or pick another filter.");
+    : el("div", { className: "empty", role: "status" },
+        el("b", { textContent: query ? `No series match “${query}”.` : "No series match these filters." }), "Clear the search or pick another filter.",
+        el("button", { type: "button", className: "btn small", textContent: "Clear filters", onclick: () => { clearWallFilters(); $("#search").focus(); } }));
   $("#wall").removeAttribute("aria-busy");
-  $("#wall").replaceChildren(...(cards.length ? cards : [empty]));
+  keepFocus($("#wall"), () => $("#wall").replaceChildren(...(cards.length ? cards : [empty])));
 }
 
 async function loadServiceOptions(tag) {
@@ -515,17 +576,14 @@ async function loadServiceOptions(tag) {
   return serviceOptions[tag];
 }
 
+const BACK_NAME = { schedule: "Back to the schedule", log: "Back to Activity", settings: "Back to Settings", yaml: "Back to unshackle.yaml" };
 async function openDrawer(s, tab, fromRoute = false) {
   current = s;
   $("#d-probe-out").replaceChildren();
   $("#d-probe").removeAttribute("aria-disabled");  // a test of the series left behind may still be asking
+  $("#d-back").setAttribute("aria-label", BACK_NAME[currentTab] || "Back to all series");  // a phone's Back returns to the page it was opened from
   $("#d-url").placeholder = "URL or ID of the series";  // a Crave suggestion changes it for one series only
   showReleaseSeen(s);
-  const sick = S.config.series[s.tvdbId]?.service && S.health[s.tvdbId];
-  $("#d-sick").hidden = !sick;
-  if (sick) $("#d-sick").replaceChildren(el("b", { textContent: `Its last ${sick.failing} downloads failed` }),
-    el("span", { textContent: sick.cause || "See the history in Activity for why." }),
-    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }));
   $("#d-probe-state").textContent = "Asks the service which episodes it has. Nothing is downloaded.";
   drawerPushed = !fromRoute;
   if (!fromRoute) { drawerTab = tab || "episodes"; navigate(true); }  // back will close it
@@ -596,7 +654,7 @@ function renderSeriesState() {
   renderSeriesLanguage();  // its service picked or changed since the page opened: said then too
   const sick = conf.service && S.health[current.tvdbId];
   const [cls, text] = !conf.service ? ["", "Not downloading"]
-    : sick ? ["down", `Its downloads from ${svcName(conf.service)} fail`]
+    : sick ? ["down", `Its last ${sick.failing} downloads from ${svcName(conf.service)} failed`]
     : !conf.title && !conf.programmes ? ["warn", `On ${svcName(conf.service)}: its series URL is missing`]
     : conf.programmes ? ["ok", `Downloaded from ${svcName(conf.service)}, each episode its own programme`]
     : ["ok", `Downloaded from ${svcName(conf.service)}`];
@@ -606,6 +664,7 @@ function renderSeriesState() {
   // What failed, and where to mend it: the service's row in Settings, Services
   $("#ds-fix").hidden = !sick;
   $("#ds-fix").replaceChildren(...(sick ? [el("span", { textContent: sick.cause || "See the history in Activity for why." }),
+    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }),
     el("button", { type: "button", className: "btn small", textContent: `Check ${svcName(conf.service)} in Settings › Services`, onclick: () => openServiceRow(conf.service) })] : []));
 }
 /* Service options only show for a service that has some; "stop" only for a managed series. */
@@ -711,6 +770,20 @@ function failed(text, retry) {
   return el("div", { className: "failed", role: "alert" }, el("span", { textContent: text }),
     retry ? el("button", { className: "btn small", textContent: "Try again", onclick: retry }) : "");
 }
+/* A field's mistake: red, flagged to assistive technology, and tied to the message that says it. An id the field
+   already describes itself by (its help) stays. */
+let messageIds = 0;
+function describedBy(input, message, on) {
+  message.id ||= `message-${++messageIds}`;
+  const ids = (input.getAttribute("aria-describedby") || "").split(" ").filter((id) => id && id !== message.id);
+  if (on) ids.push(message.id);
+  if (ids.length) input.setAttribute("aria-describedby", ids.join(" ")); else input.removeAttribute("aria-describedby");
+}
+function markInvalid(input, message, on = true) {
+  input.classList.toggle("bad", on);
+  if (on) input.setAttribute("aria-invalid", "true"); else input.removeAttribute("aria-invalid");
+  if (message) describedBy(input, message, on);
+}
 
 /* The series' channel may have a catch-up service here, picked and looked up on by its name. */
 function networkButton(s, tag) {
@@ -805,6 +878,7 @@ $("#d-stop").onclick = async () => {
   renderCheck(current, true);
   await renderServiceOptions(conf);
   renderWall();
+  $("#d-service").focus();  // its own button is gone: the service it no longer has
   toast(`${current.title} will no longer be downloaded once you save`);
 };
 /* The service a link is on, from the services' sites (www.canalplus.com: CanalPlus); null for none known. */

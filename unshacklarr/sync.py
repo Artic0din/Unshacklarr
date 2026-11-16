@@ -383,7 +383,7 @@ def discord_payload(level: str, title: str, message: str, details: dict | None =
 
 def human_time(seconds: float) -> str:
     seconds = round(seconds)
-    return f"{seconds} s" if seconds < 60 else f"{seconds // 60} min {seconds % 60:02}" if seconds < 3600 else f"{seconds // 3600} h {seconds % 3600 // 60:02}"
+    return f"{seconds} s" if seconds < 60 else f"{seconds // 60} min {seconds % 60:02} s" if seconds < 3600 else f"{seconds // 3600} h {seconds % 3600 // 60:02} min"
 
 
 def episode_details(ep: dict, show: dict, run: "EpisodeRun | None" = None) -> dict:

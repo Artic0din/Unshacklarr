@@ -100,7 +100,8 @@ function renderUnshackleStatus(st) {
     el("button", { className: "btn small", textContent: "View log", onclick: showServeLog }),
   ] : dashboard ? [el("button", { className: "btn small", textContent: "View log", onclick: showServeLog })] : []));
   const missing = (st.tools || []).filter((t) => !t.installed && t.required);
-  const maint = (action, label, why, className = "btn small") => el("button", { className, textContent: label, title: why, onclick: async (e) => {
+  const maint = (action, label, why, className = "btn small", ask = "") => el("button", { className, textContent: label, title: why, onclick: async (e) => {
+    if (ask && !await askToConfirm(...ask)) return;
     e.target.disabled = true;
     try {
       const r = await api(`/api/unshackle/maintenance/${action}`, { method: "POST" });
@@ -140,7 +141,8 @@ function renderUnshackleStatus(st) {
     el("div", { className: "st-sect" }, el("b", { textContent: "Maintenance" }),
       el("div", { className: "st-maint" },
         maint("refresh-services", "Reload services", "After adding or updating a service in its services folder"),
-        maint("clear-temp", "Delete partial downloads", "Deletes the leftovers of interrupted downloads"),
+        maint("clear-temp", "Delete partial downloads", "Deletes the leftovers of interrupted downloads", "btn small danger",
+          ["Delete the partial downloads?", "The leftovers of interrupted downloads are deleted and cannot be brought back.", "Delete partial downloads"]),
         clearCache(),
         maint("clear-finished", "Clear finished", "Forgets the finished downloads Unshackle lists"))),
     // the commands name the bundled compose's container: shown only for its address (http://unshackle:8786)

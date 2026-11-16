@@ -280,6 +280,81 @@ console.log(JSON.stringify({ listRedrawn: after.some(([sel]) => sel === "#cdm-li
     assert seen == {"listRedrawn": False, "shown": True, "hidden": True}
 
 
+def test_a_duration_names_the_unit_of_each_part():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const ctx = sandbox();
+vm.runInContext(grab(src, /^function duration\(.*?^\}/ms) + "\nthis.duration = duration;", ctx);
+console.log(JSON.stringify([25000, 144000, 3900000].map((ms) => ctx.duration(ms))));
+""", str(JS / "activity.js"))
+    assert shown == ["25 s", "2 min 24 s", "1 h 05 min"]
+
+
+def test_the_server_names_the_unit_of_each_part_of_a_duration_too():
+    from unshacklarr import sync
+    assert [sync.human_time(s) for s in (25, 144, 3900)] == ["25 s", "2 min 24 s", "1 h 05 min"]
+
+
+def test_the_logo_goes_to_the_schedule_and_is_named_from_its_text():
+    import re
+    page = (STATIC / "index.html").read_text()
+    link = re.search(r'<a href="([^"]+)" id="home" aria-label="([^"]+)"', page)
+    assert link and link.group(1) == "#/schedule"  # the app opens on the schedule
+    assert link.group(2).startswith("Unshacklarr")  # the visible name starts the accessible one (and the narrowest phones hide the text)
+
+
+def test_a_failing_series_says_so_once_with_its_fix():
+    page = (STATIC / "index.html").read_text()
+    assert 'id="d-sick"' not in page and "#d-sick" not in (JS / "core.js").read_text()
+    shown = node(r"""
+const src = read(process.argv[1]);
+const box = { classList: { remove() {}, add() {} } }, fix = { hidden: true, kids: [] }, text = { textContent: "" };
+const sels = { "#ds-state": box, "#ds-state-text": text, "#ds-fix": { ...fix, set hidden(v) { fix.hidden = v; }, replaceChildren: (...k) => { fix.kids = k; } } };
+const ctx = sandbox({ $: (sel) => sels[sel] || any, current: { tvdbId: 7 }, svcName: (s) => s, renderSeriesLanguage() {}, openServiceRow() {},
+  S: { config: { series: { 7: { service: "HULU", title: "x" } } }, health: { 7: { failing: 3, cause: "Session expired" } } } });
+vm.runInContext(grab(src, /function renderSeriesState\b[\s\S]*?\n}\n/) + "\nthis.renderSeriesState = renderSeriesState;", ctx);
+ctx.renderSeriesState();
+console.log(JSON.stringify({ state: text.textContent, fix: fix.kids.map((k) => k.textContent) }));
+""", str(JS / "core.js"))
+    assert shown == {"state": "Its last 3 downloads from HULU failed", "fix": [
+        "Session expired", "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services.",
+        "Check HULU in Settings › Services"]}
+
+
+def test_an_empty_choice_of_episodes_is_hidden_not_greyed():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const out = {};
+for (const onService of [0, 2]) {
+  const pick = { hidden: false, disabled: false, textContent: "" };
+  const list = [{ id: 1 }, { id: 2 }];
+  const ctx = sandbox({ $: (sel) => (sel === "#ep-avail" ? pick : any), list, state: () => (onService ? "miss" : "disk"), epAvail: { 1: 1, 2: 1 }, seasonSvc: () => "HULU", epSeason: 1 });
+  vm.runInContext(grab(src, /if \(\$\("#ep-avail"\)\) \{[\s\S]*?\n  \}\n/), ctx);
+  out[onService] = pick.hidden;
+}
+console.log(JSON.stringify(out));
+""", str(JS / "series.js"))
+    assert shown == {"0": True, "2": False}
+
+
+def test_a_phones_back_button_is_named_for_the_page_it_returns_to():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const ctx = sandbox();
+vm.runInContext(grab(src, /^const BACK_NAME = .*$/m) + "\nthis.BACK_NAME = BACK_NAME;", ctx);
+console.log(JSON.stringify([ctx.BACK_NAME.schedule, ctx.BACK_NAME.log, ctx.BACK_NAME.yaml, ctx.BACK_NAME.series ?? null]));
+""", str(JS / "core.js"))
+    assert shown == ["Back to the schedule", "Back to Activity", "Back to unshackle.yaml", None]  # the editor too, from Notifications or a deep link  # the series wall is the default: "Back to all series"
+    assert 'BACK_NAME[currentTab] || "Back to all series"' in (JS / "core.js").read_text()
+
+
+def test_the_page_draws_no_emoji():
+    import re
+    emoji = re.compile("[\U0001F000-\U0001FFFF⏩-⏿]")  # flags are regional-indicator pairs: both in this range
+    found = [f"{path.name}:{n}" for path in JS.glob("*.js")
+             for n, line in enumerate(path.read_text().splitlines(), 1) if emoji.search(line)]
+    assert not found
+
 # A tiny stand-in for the DOM a pop-up touches: nodes that keep what is set on them and a shared "focused" node.
 POP_DOM = r"""
 let active = null;
@@ -466,7 +541,7 @@ ctx.showStats().then(() => {
 def test_the_quality_ladder_chips_say_which_is_chosen_and_the_edit_link_stays_outside_them():
     shown = node(r"""
 const made = (tag, props = {}, ...kids) => ({ tag, ...props, kids, replaceChildren(...k) { this.kids = k; } });
-const ctx = sandbox({ el: made, ladders: () => [{ name: "UHD" }, { name: "HD" }] });
+const ctx = sandbox({ el: made, ladders: () => [{ name: "UHD" }, { name: "HD" }], keepFocus: (box, draw) => draw() });
 vm.runInContext(grab(read(process.argv[1]), /^function ladderChips\(.*?^\}/ms), ctx);
 const picked = [];
 const root = ctx.ladderChips("HD", "UHD", (v) => picked.push(v));

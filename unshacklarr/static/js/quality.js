@@ -59,9 +59,9 @@ function ladderChips(value, inherited, onchange) {
   const def = inherited && ladders().some((l) => l.name === inherited) ? inherited : "off";
   let now = !value || !ladders().some((l) => l.name === value) && value !== "off" ? def : value;
   const box = el("div", { className: "ax-seg", role: "group", ariaLabel: "Quality ladder" });
-  const paint = () => box.replaceChildren(...[["off", "Off"], ...ladders().map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
+  const paint = () => keepFocus(box, () => box.replaceChildren(...[["off", "Off"], ...ladders().map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
     type: "button", ariaPressed: String(now === v), onclick: () => { now = v; paint(); onchange(v === def ? "" : v); } },
-    el("span", { textContent: label }), ...(v === def ? [el("small", { className: "chip-default", textContent: "default" })] : []))));
+    el("span", { textContent: label }), ...(v === def ? [el("small", { className: "chip-default", textContent: "default" })] : [])))));
   paint();
   return el("div", { className: "ladder-pick" }, box, el("a", { className: "ax-edit", href: "#/settings/quality", textContent: "Edit ladders" }));
 }
@@ -89,9 +89,9 @@ function ladderLine(code, lad) {
    default; picking it follows that level again, any other is the series' own. */
 function defaultChips(box, choices, own, inherited, pick) {
   const now = own ?? inherited;
-  box.replaceChildren(...choices.map(([v, label]) => el("button", { type: "button", ariaPressed: String(now === v),
+  keepFocus(box, () => box.replaceChildren(...choices.map(([v, label]) => el("button", { type: "button", ariaPressed: String(now === v),
     onclick: () => pick(v === inherited ? undefined : v) },
-    el("span", { textContent: label }), ...(v === inherited ? [el("small", { className: "chip-default", textContent: "default" })] : []))));
+    el("span", { textContent: label }), ...(v === inherited ? [el("small", { className: "chip-default", textContent: "default" })] : [])))));
 }
 
 function renderQuality() {
@@ -117,7 +117,7 @@ function ladderCard(lad) {
     oninput: (e) => {
       const v = e.target.value.trim(), why = !v ? "Give it a name" : v === "off" ? "Off is reserved: it means no ladder"
         : list.some((o) => o !== lad && o.name === v) ? "Another ladder has this name" : "";
-      e.target.classList.toggle("bad", !!why);
+      markInvalid(e.target, say, !!why);
       say.classList.toggle("bad", !!why);
       say.textContent = why || (use.length ? `Used by ${use.join(", ")}` : "Not used yet: pick it above, for a service or a series");
       if (why) return;
@@ -148,7 +148,7 @@ function ladderCard(lad) {
     const input = el("input", { type: "text", spellcheck: false, value: (lad[kind] || []).join(", "), placeholder: "Example: en-AU, en", oninput: (e) => {
       const codes = e.target.value.split(/[\s,]+/).filter(Boolean);
       const bad = codes.find((c) => !/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i.test(c) || ["orig", "all", "best"].includes(c.toLowerCase()));
-      e.target.classList.toggle("bad", !!bad);
+      markInvalid(e.target, e.target.nextElementSibling, !!bad);
       e.target.nextElementSibling.classList.toggle("bad", !!bad);
       e.target.nextElementSibling.textContent = bad ? `${bad} is not a language code like fr or en-AU` : help;
       if (bad) return;
@@ -242,7 +242,7 @@ function backendBlock(b) {
   const list = S.config.settings.backends;
   const state = el("span", { className: "ub-state", dataset: { server: b.name || "" } });
   const check = (input, why) => {
-    input.classList.toggle("bad", !!why);
+    markInvalid(input, input.nextElementSibling, !!why);
     input.nextElementSibling.classList.toggle("bad", !!why);
     input.nextElementSibling.textContent = why || input.dataset.help;
   };
@@ -320,7 +320,7 @@ function sonarrBlock(i) {
   const list = S.config.settings.sonarrs;
   const state = el("span", { className: "ub-state", dataset: { sonarr: i.name || "" } });
   const check = (input, why) => {
-    input.classList.toggle("bad", !!why);
+    markInvalid(input, input.nextElementSibling, !!why);
     input.nextElementSibling.classList.toggle("bad", !!why);
     input.nextElementSibling.textContent = why || input.dataset.help;
   };
@@ -347,7 +347,7 @@ function sonarrBlock(i) {
   ladder.value = i.quality_ladder || "";
   const showChoice = () => {
     const unset = !i.quality_ladder;
-    ladder.classList.toggle("bad", unset);
+    markInvalid(ladder, ladder.nextElementSibling, unset);
     ladder.nextElementSibling?.classList.toggle("bad", unset);
     if (ladder.nextElementSibling) ladder.nextElementSibling.textContent = unset
       ? "Choose one: nothing is downloaded for this Sonarr until you do."
@@ -452,14 +452,17 @@ function upgradeSeries() {
 function renderUpgradeSeries() {
   const box = $("#ug-series");
   if (!box) return;
-  const find = $("#ug-find").value.trim().toLowerCase(), all = upgradeSeries();
+  const typed = $("#ug-find").value.trim(), find = typed.toLowerCase(), all = upgradeSeries();
   const shown = all.filter((s) => !find || s.title.toLowerCase().includes(find));
   box.replaceChildren(...shown.map((s) => el("label", { className: "ug-line" },
     el("input", { type: "checkbox", checked: s.conf.skip_upgrades !== true, onchange: (e) => {
       if (e.target.checked) delete s.conf.skip_upgrades; else s.conf.skip_upgrades = true;
       dirty(); upgradeSay(all);
     } }), el("span", { textContent: s.title }))));
-  if (!shown.length) box.replaceChildren(el("p", { className: "dx-empty", textContent: all.length ? "No series matches." : "No series set up yet." }));
+  if (!shown.length) box.replaceChildren(all.length
+    ? el("div", { role: "status" }, el("p", { className: "dx-empty", textContent: `No series matches “${typed}”.` }),
+        el("button", { type: "button", className: "btn small", textContent: "Clear search", onclick: () => { $("#ug-find").value = ""; renderUpgradeSeries(); $("#ug-find").focus(); } }))
+    : el("p", { className: "dx-empty", textContent: "No series set up yet." }));
   upgradeSay(all);
 }
 function upgradeSay(all) {
@@ -489,7 +492,7 @@ async function renderUpgradeGroups(fetch = true) {
   $("#ug-other").checked = on;
   if (fetch || !ugGroups) {
     box.replaceChildren(el("small", { className: "muted", textContent: "Looking up your release group…" }));
-    try { ugGroups = await api("/api/upgrades/groups"); } catch (e) { box.replaceChildren(el("small", { className: "bad", textContent: `Could not look it up: ${e.message}` })); return; }
+    try { ugGroups = await api("/api/upgrades/groups"); } catch (e) { box.replaceChildren(failed(`Could not look it up: ${e.message}`, () => renderUpgradeGroups())); return; }
   }
   const name = Object.fromEntries(S.series.map((s) => [s.tvdbId, s.title])), { groups, none } = ugGroups;
   const all = groups.length + (none.length ? 1 : 0) > 1;
@@ -591,7 +594,10 @@ function checkLibrary() {
     const say = $("#dx-lib-check"), who = libWho || mainSonarr();
     say.className = "lib-check"; say.textContent = "Looking for one of your episode files…";
     let r;
-    try { r = await api(`/api/library/check?${q}`); } catch (e) { if (seq === libSeq) say.textContent = e.message; return; }
+    try { r = await api(`/api/library/check?${q}`); } catch (e) {
+      if (seq === libSeq) { say.className = "lib-check err"; say.replaceChildren(e.message, " ", el("button", { type: "button", className: "btn small", textContent: "Try again", onclick: checkLibrary })); }
+      return;
+    }
     if (seq !== libSeq || (savedSonarr(libWho) || "") !== (q.get("sonarr") || "")) return;  // a newer check, or another Sonarr picked meanwhile
     libRoots = r.roots || []; libCommon = r.common || ""; renderLibraryPicks();
     if (r.ok === true) { say.className = "lib-check ok"; say.replaceChildren(icon("check", "inl"), `Unshacklarr reads ${who}'s library: ${r.local_path}`); }
@@ -649,9 +655,9 @@ function renderLearnWindow() {
     : "Off. Release times are only suggested on each series page.";
   $("#ax-window-bursts").checked = set.download_window_bursts === true;
   const from = $("#ax-from").value, to = $("#ax-to").value, half = !from !== !to;
-  [$("#ax-from"), $("#ax-to")].forEach((x) => x.classList.toggle("bad", half && !x.value));
-  $("#ax-window-say").className = half ? "rt-who status-err" : "rt-who";
-  $("#ax-window-say").textContent = half ? "Set both a start and an end time, or neither."
+  [$("#ax-from"), $("#ax-to")].forEach((x) => markInvalid(x, $("#ax-window-err"), half && !x.value));
+  $("#ax-window-err").textContent = half ? "Set both a start and an end time, or neither." : "";  // beside the To field
+  $("#ax-window-say").textContent = half ? ""
     : from ? (set.download_window_bursts ? `Automatic and release-time downloads only run from ${from} to ${to}.`
       : `Automatic downloads only run from ${from} to ${to}. Release-time downloads are not affected.`)
       : "No limit: downloads run at any time.";
@@ -673,8 +679,8 @@ function fillFallback(conf) {
 }
 function checkFallback(conf) {
   const alt = conf.fallback || {}, half = !alt.service !== !alt.title;
-  $("#d-fb-url").classList.toggle("bad", half && !alt.title);
-  $("#d-fb-service").classList.toggle("bad", half && !alt.service);
+  markInvalid($("#d-fb-url"), $("#d-fb-say"), half && !alt.title);
+  markInvalid($("#d-fb-service"), $("#d-fb-say"), half && !alt.service);
   $("#d-fb-say").className = half ? "status-err" : "";
   $("#d-fb-say").textContent = half ? "Set both the service and the series URL, or neither."
     : "If this service numbers episodes differently, set its numbering in config.yaml.";
