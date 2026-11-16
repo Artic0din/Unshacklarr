@@ -691,6 +691,7 @@ async function save() {
   const changed = [...new Set([...Object.keys(units), ...Object.keys(savedUnits)])].filter((u) => units[u] !== savedUnits[u]);
   const unitBase = Object.fromEntries(changed.map((u) => [u, S.config.versions?.[u] ?? null]));
   const names = sonarrNames();  // as sent: a rename made while the Save runs is not saved yet
+  const sentLibraries = JSON.stringify(S.sonarrsOf);  // under those names
   const sentUrls = names.map(([i]) => i.url);  // and their addresses as sent: one edited meanwhile is no rename
   const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series, changed, base: unitBase }) });
   // Another tab renamed a Sonarr: each series' settings and libraries on this page are keyed by the old name, so the
@@ -761,6 +762,7 @@ async function save() {
   // the entries of a list taken whole too
   keepSonarrNames((S.config.settings.sonarrs || []).flatMap((i) => theirSonarrs.filter((o) => i.url && o.url === i.url).map((o) => [i, o.name])));
   savedConfig = stableJSON(base);
+  savedSonarrsOf = sentLibraries;
   if (redraw) renderSettings();  // another tab's settings now shown, its Sonarrs and servers too
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
   const open = drawerSnapshot && JSON.parse(drawerSnapshot.conf || "{}");  // its drawer, open since or opened meanwhile
@@ -786,8 +788,10 @@ async function save() {
    leaves as before, unless something was changed meanwhile. */
 async function saveHere(button, bar = null) {
   button.disabled = true;
+  $("#discard").disabled = true;  // a discard now would say so while the request still saves what it sent
   try { await save(); }
-  catch (e) { button.disabled = false; return toast(e.saved ? e.message : `Could not save: ${e.message}`, true); }
+  catch (e) { button.disabled = false; $("#discard").disabled = false; return toast(e.saved ? e.message : `Could not save: ${e.message}`, true); }
+  $("#discard").disabled = false;
   const label = button.innerHTML;
   const shown = bar || button;  // what save() just hid
   shown.hidden = false;
@@ -811,8 +815,13 @@ function discardChanges() {
   Object.assign(S.config, savedRest);
   for (const [id, conf] of Object.entries(S.config.series)) if (conf.service && !(id in savedSeries)) delete S.config.series[id];
   Object.assign(S.config.series, savedSeries);
+  S.sonarrsOf = JSON.parse(savedSonarrsOf);
   optionsEditor($("#defaults"), S.dlOptions, S.config.defaults);
   renderSettings();
+  // drawn when their section opens, not by renderSettings: their handlers hold the objects just replaced
+  renderUpgradeSeries();
+  renderUpgradeGroups(false);
+  renderInterface();
   renderServiceFilter();
   renderWall();
   dirty();

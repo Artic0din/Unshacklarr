@@ -293,7 +293,7 @@ config.series[1].title = "Edited"; config.series[2] = { service: "STAN", title: 
 config.series[3] = { title: "No service: not part of a save" };
 config.extra = true;
 const calls = [];
-const ctx = sandbox({ S: { config, dlOptions: [] }, savedConfig: JSON.stringify(saved), $: (sel) => sel,
+const ctx = sandbox({ S: { config, dlOptions: [] }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "{}", $: (sel) => sel,
   optionsEditor: (...a) => calls.push("options"), renderSettings: () => calls.push("settings"), renderServiceFilter: () => calls.push("filter"),
   renderWall: () => calls.push("wall"), dirty: () => calls.push("dirty"), toast: (t) => calls.push(t) });
 vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
@@ -307,6 +307,69 @@ console.log(JSON.stringify({ config, calls }));
     assert config["series"] == {"1": {"service": "BINGE", "title": "Kept"}, "3": {"title": "No service: not part of a save"}}
     assert config["versions"] == {"settings": "7"} and config["hidden_series"] == [9]  # not changes of a save: left as they are
     assert shown["calls"] == ["options", "settings", "filter", "wall", "dirty", "Changes discarded"]
+
+
+def test_discard_draws_the_controls_settings_does_not_so_a_later_toggle_still_counts():
+    shown = node(r"""
+const saved = { settings: { upgrade_other_groups: false, upgrade_check_new: false, spoiler_free: false }, series: { 1: { service: "BINGE", title: "A" } } };
+const config = JSON.parse(JSON.stringify(saved));
+config.series[1].skip_upgrades = true;
+Object.assign(config.settings, { upgrade_other_groups: true, upgrade_check_new: true, spoiler_free: true });
+const nodes = {};
+const $ = (sel) => (nodes[sel] ??= { value: "", checked: false, hidden: false, disabled: false, className: "", textContent: "", replaceChildren(...k) { this.kids = k; },
+  querySelector: () => ({ textContent: "" }), querySelectorAll: () => [], setAttribute() {} });
+const ctx = sandbox({ S: { config, dlOptions: [], series: [] }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "{}", $, dirty() {}, toast() {},
+  optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, themeChoice: () => "", LANGS: {}, LANG: "en" });
+const quality = read(process.argv[2]), options = read(process.argv[1]);
+vm.runInContext("let ugGroups = { groups: [], none: [] };", ctx);
+for (const re of [/function upgradeSeries\b[\s\S]*?\n}\n/, /function renderUpgradeSeries\b[\s\S]*?\n}\n/, /function upgradeSay\b[\s\S]*?\n}\n/, /async function renderUpgradeGroups\b[\s\S]*?\n}\n/])
+  vm.runInContext(grab(quality, re), ctx);
+for (const re of [/function renderInterface\b[\s\S]*?\n}\n/, /function discardChanges\b[\s\S]*?\n}\n/]) vm.runInContext(grab(options, re), ctx);
+const box = () => nodes["#ug-series"].kids[0].kids[0];  // the one series' checkbox, as drawn now
+ctx.renderUpgradeSeries();
+const before = box().checked;
+ctx.discardChanges();
+const after = box();
+after.onchange({ target: { checked: false } });  // ticked off again after the discard
+console.log(JSON.stringify({ before, after: after.checked, skip: ctx.S.config.series[1].skip_upgrades, other: nodes["#ug-other"].checked,
+  fresh: nodes["#ug-new"].checked, spoiler: nodes["#rg-spoiler"].checked }));
+""", str(JS / "settings-options.js"), str(JS / "quality.js"))
+    # the box shows the series ticked again, and the next toggle reaches the live config, not an object the discard replaced
+    assert shown == {"before": False, "after": True, "skip": True, "other": False, "fresh": False, "spoiler": False}
+
+
+def test_discard_puts_the_libraries_a_renamed_sonarr_moved_back_under_its_saved_name():
+    shown = node(r"""
+const saved = { settings: { sonarrs: [{ name: "Anime", url: "http://a" }] }, series: {} };
+const config = JSON.parse(JSON.stringify(saved));
+const ctx = sandbox({ S: { config, dlOptions: [], sonarrsOf: { 7: [{ name: "Anime", id: 1 }] } }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "", $: (sel) => sel,
+  optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, dirty() {}, toast() {}, renderUpgradeSeries() {}, renderUpgradeGroups() {}, renderInterface() {} });
+vm.runInContext(grab(read(process.argv[2]), /const sonarrSavedName = new WeakMap\(\);[\s\S]*?const savedSonarr = .*\n/), ctx);
+vm.runInContext(grab(read(process.argv[3]), /function moveSonarrRefs\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
+ctx.savedSonarrsOf = JSON.stringify(ctx.S.sonarrsOf);
+vm.runInContext("keepSonarrNames(sonarrNames())", ctx);
+ctx.S.config.settings.sonarrs[0].name = "Anime 2";  // an unsaved rename, as the Sonarr editor does it
+ctx.moveSonarrRefs("Anime", "Anime 2");
+const renamed = ctx.S.sonarrsOf[7][0].name, requestWhileRenamed = vm.runInContext('savedSonarr("Anime 2")', ctx);
+ctx.discardChanges();
+console.log(JSON.stringify({ renamed, requestWhileRenamed, libraries: ctx.S.sonarrsOf[7].map((o) => o.name), request: vm.runInContext('savedSonarr("Anime")', ctx) }));
+""", str(JS / "settings-options.js"), str(JS / "core.js"), str(JS / "quality.js"))
+    assert shown == {"renamed": "Anime 2", "requestWhileRenamed": "Anime", "libraries": ["Anime"], "request": "Anime"}
+
+
+def test_discard_waits_for_a_save_in_flight():
+    shown = node(r"""
+const nodes = {}, $ = (sel) => (nodes[sel] ??= { disabled: false, hidden: false, classList: { add() {}, remove() {} }, replaceChildren() {} });
+let release, during;
+const ctx = sandbox({ $, save: () => new Promise((resolve) => { release = resolve; }), toast() {}, icon: () => "", unsaved: false, setTimeout() {} });
+vm.runInContext(grab(read(process.argv[1]), /async function saveHere\b[\s\S]*?\n}\n/), ctx);
+const done = ctx.saveHere($("#save"), $("#savebar"));
+during = nodes["#discard"].disabled;
+release();
+done.then(() => console.log(JSON.stringify({ during, after: nodes["#discard"].disabled })));
+""", str(JS / "settings-options.js"))
+    assert shown == {"during": True, "after": False}
 
 
 def test_the_save_bar_offers_discard_and_announces_itself():

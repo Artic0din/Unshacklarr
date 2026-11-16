@@ -485,6 +485,7 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     const data = asked || await api("/api/state", { wait: 130 });
     S = { series: data.series, config: data.config, services: data.services, serviceNames: data.service_names || {}, authentication: data.authentication || {}, authenticationMethods: data.authentication_methods || {}, authenticationSetups: data.authentication_setups || [], authenticationLive: [], metadataLanguage: data.metadata_language || "", dlOptions: data.dl_options, health: data.health || {}, cdm: data.cdm || {}, domains: data.service_domains || {}, builtinLadders: data.builtin_ladders || [], networkServices: data.network_services || {}, backups: data.backups || null, news: data.news || {}, update: data.update || null, version: data.version, instances: data.instances || {}, sonarrsOf: data.sonarrs_of || {} };
     savedConfig = configKey(S.config);
+    savedSonarrsOf = JSON.stringify(S.sonarrsOf);
     savedUnits = configUnits(S.config);
     keepSonarrNames(sonarrNames());
     // a test build of a branch shows its branch and commit, not the release it started from
