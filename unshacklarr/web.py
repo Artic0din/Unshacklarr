@@ -5095,7 +5095,7 @@ def scan_upgrades_in(inst: dict | None, name: str, only: set | None = None) -> b
                         seen[str(e["id"])] = {"checked": now.isoformat(), "file": e.get("episodeFileId"), "item": None,
                                               "groups": track.get("ours", ""), "absent": True}  # again once due (by mj23au)
                         continue
-                    item = upgrade_item(serie, ladder, e, track, step, sonarr_sync.climb(ladder, parts))
+                    item = upgrade_item(serie, ladder, e, track, step, sonarr_sync.climb(ladder, parts, bool(request.get("generate_dv"))))
                     seen[str(e["id"])] = {"checked": now.isoformat(), "file": e.get("episodeFileId"), "item": item, "groups": track.get("ours", "")}
                     if item:
                         found.append(item)

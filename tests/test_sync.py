@@ -6537,3 +6537,31 @@ def test_a_sign_in_refused_on_the_fallback_service_is_retried_there_with_its_own
     assert asked[-1] == ("MLT", "S02E05", "alt") and imported == [105]
     card = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())
     assert card["service"] == "MLT" and card["profile"] == "alt" and card["outcome"] == "downloaded"
+
+
+def test_generate_dv_lets_hdr10_plus_alone_fill_a_hybrid_step(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    ladder = {"name": "Hybrid", "steps": [{"codec": "", "range": "HYBRID", "min": 2160, "max": 0},
+                                          {"codec": "", "range": "SDR", "min": 1080, "max": 1080}]}
+    hdr10p = {"height": 2160, "codec": "HEVC", "range": "HDR10P", "bitrate": 15000}
+    hdr10 = {"height": 2160, "codec": "HEVC", "range": "HDR10", "bitrate": 20000}
+    dv = {"height": 2160, "codec": "HEVC", "range": "DV", "bitrate": 16000}
+    sdr = {"height": 1080, "codec": "AVC", "range": "SDR"}
+    part = lambda *tracks: {"video": list(tracks)}
+    assert sync.climb(ladder, [part(hdr10p, sdr)], generate_dv=True) == (1, hdr10p)  # its DV made from the HDR10+
+    assert sync.climb(ladder, [part(hdr10p, sdr)]) == (2, sdr)  # without the option, as before: the next step
+    assert sync.climb(ladder, [part(hdr10p, hdr10, sdr)], generate_dv=True) == (1, hdr10p)  # never the plain HDR10 for it
+    assert sync.climb(ladder, [part(hdr10, sdr)], generate_dv=True) == (2, sdr)  # plain HDR10 has nothing to make DV from
+    for generate_dv in (False, True):  # a native DV and an HDR base: the step, with the option or not
+        assert sync.climb(ladder, [part(dv, hdr10, sdr)], generate_dv)[0] == 1
+    assert sync.climb(ladder, [part(hdr10p, sdr), part(hdr10, sdr)], generate_dv=True) == (2, sdr)  # every part must have it
+
+    config = sync.read_file()
+    config["quality_ladders"] = [ladder]
+    config["series"][111].update(ladder="Hybrid", options={"--generate-dv": True})
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, json=None, **_: {"episodes": [{"video": [hdr10p, sdr]}]})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    downloads = []
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload))
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+    assert [(d["quality"], d["range"], d.get("generate_dv")) for d in downloads] == [([2160], ["HYBRID"], True)]

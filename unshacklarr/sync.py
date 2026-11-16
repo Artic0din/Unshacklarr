@@ -3733,12 +3733,19 @@ def fits(step: dict, track: dict) -> bool:
             and (not step.get("max_kbps") or int(track.get("bitrate") or 0) <= int(step["max_kbps"])))
 
 
-def climb(ladder: dict, episodes: list[dict]) -> tuple[int, dict] | None:
-    """The first step every part of the episode has a track for, and its best track there (height, then bitrate)."""
+def climb(ladder: dict, episodes: list[dict], generate_dv: bool = False) -> tuple[int, dict] | None:
+    """The first step every part of the episode has a track for, and its best track there (height, then bitrate).
+    generate_dv (--generate-dv): Unshackle makes the Dolby Vision from HDR10+, so HDR10+ alone fills a Hybrid step."""
+    def hybrid(tracks: list[dict]) -> list[dict]:  # a part has it with both a DV track and an HDR10 one
+        ranges = {t.get("range") for t in tracks}
+        if "DV" in ranges and set(HDR_BASES) & ranges:
+            return tracks
+        return [t for t in tracks if t.get("range") == "HDR10P"] if generate_dv else []
+
     for number, step in enumerate(ladder["steps"], 1):
         found = [[t for t in ep.get("video") or [] if fits(step, t)] for ep in episodes]
-        if step.get("range") == "HYBRID":  # a part has it only with both a DV track and an HDR10 one
-            found = [f if {"DV"} & {t.get("range") for t in f} and set(HDR_BASES) & {t.get("range") for t in f} else [] for f in found]
+        if step.get("range") == "HYBRID":
+            found = [hybrid(f) for f in found]
         if found and all(found):
             return number, max(found[0], key=lambda t: (eq_height(t), int(t.get("bitrate") or 0)))
     return None
@@ -3782,7 +3789,7 @@ def apply_ladder(
     episodes = list_tracks(show, config, request, ladder, backend)
     if not episodes:  # ponytail: not on the service (yet): the download finds nothing either, and says so as usual
         return None
-    found, blind = climb(ladder, episodes), None
+    found, blind = climb(ladder, episodes, bool(request.get("generate_dv"))), None
     if not found and ladder.get("blind"):  # "Try unlisted codecs": the first step whose codec the listing has none of
         listed = {t.get("codec") for ep in episodes for t in ep.get("video") or []}
         blind = next(((i, st) for i, st in enumerate(ladder["steps"], 1) if st.get("codec") and st["codec"] not in listed), None)
