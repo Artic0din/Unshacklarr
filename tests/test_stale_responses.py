@@ -285,3 +285,18 @@ vm.runInContext(`document.addEventListener("visibilitychange", ${read(jsDir + "/
 })();
 """, str(JS / "attempts.js"), str(JS))
     assert shown == ["run=1"]
+
+
+@pytest.mark.parametrize("view, key", [("week", "2026-11-09+7"), ("month", "2026-10-26+42")])
+@pytest.mark.parametrize("loaded", [False, True])
+def test_logos_redraw_the_schedule_only_once_its_range_has_loaded(view, key, loaded):
+    shown = node(r"""
+const [view, key, loaded] = [process.argv[2], process.argv[3], process.argv[4] === "true"];
+const redraws = [];
+const ctx = { networksById: {}, S: { series: [{ tvdbId: 1, tmdbId: 7 }] }, api: async () => ({ 7: { providers: [] } }), renderCalendar: () => redraws.push(1),
+  cal: { date: "2026-11-09", month: "2026-11-01", fetched: new Set(loaded ? [key] : []) }, schedView: () => view, isoDay: (d) => d, weekStartOf: (d) => (d === "2026-11-01" ? "2026-10-26" : d) };
+vm.createContext(ctx);
+vm.runInContext(grab("fetchNetworks"), ctx);
+ctx.fetchNetworks([{ tvdbId: 1 }]).then(() => console.log(JSON.stringify({ redraws: redraws.length, logos: Object.keys(ctx.networksById) })));
+""", str(JS / "schedule.js"), view, key, str(loaded).lower())
+    assert shown == {"redraws": 1 if loaded else 0, "logos": ["7"]}

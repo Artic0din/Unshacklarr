@@ -230,6 +230,7 @@ Every change worth knowing, newest first. The format follows
 - Opening another series while "Test this series" is still asking no longer shows the first series' result in it (or lets Apply write its season map there), and the Test button is no longer stuck waiting for the first series' answer. (#217)
 - The library-path check in Settings no longer shows an old result ("Not found here" for `/mnt/t` after you typed `/mnt/tv`): only the newest check's answer is drawn. (#246)
 - Hiding the browser tab with the serve log open and coming back no longer replaces the log with the output of a run opened earlier. (#242)
+- The Schedule no longer shows seven empty "Nothing that day." columns when a late logo download finishes while a new week or month is still loading: the spinner stays until the shows arrive. (#244)
 
 ### Removed
 
