@@ -393,3 +393,90 @@ console.log(JSON.stringify({ rowTag: row.tag, rowRole: row.role ?? null, rowTab:
   menu: [menu.tag, menu.className.includes("cdm-pop-btn")], nested: buttonsIn(summary).length, unfolds: cdmOpen.has("alpha") }));
 """, str(JS / "cookies-cdm.js"))
     assert seen == {"rowTag": "div", "rowRole": None, "rowTab": None, "summary": ["button", "button", "false"], "menu": ["button", True], "nested": 0, "unfolds": True}
+
+def test_the_header_says_an_update_or_a_check_in_words_not_by_the_dot_alone():
+    shown = node(r"""
+const buttons = Object.fromEntries(["unshackle", "sonarr"].map((n) => [n, { dataset: {}, title: "", dot: { className: "" }, small: { textContent: "" },
+  querySelector(sel) { return sel === ".dot" ? this.dot : this.small; } }]));
+const ctx = sandbox({ S: {}, document: { querySelector: (sel) => buttons[sel.match(/data-health=(\w+)/)[1]] }, unshackleDetails: null });
+vm.runInContext(grab(read(process.argv[1]), /^function renderHealth\(.*?^\}/ms), ctx);
+const say = (h) => { ctx.renderHealth(h); return ["unshackle", "sonarr"].map((n) => [buttons[n].small.textContent, buttons[n].dataset.state, buttons[n].dot.className.trim()]); };
+console.log(JSON.stringify({
+  running: say({ unshackle: { ok: true, version: "4.0.0" }, sonarr: { ok: true } }),
+  update: say({ unshackle: { ok: true, version: "4.0.0", latest: "4.1.0" }, sonarr: { ok: true } }),
+  unreachable: say({ unshackle: { ok: false }, sonarr: { ok: false } }),
+  checking: say({ unshackle: { ok: null }, sonarr: {} }),
+}));
+""", str(JS / "schedule.js"))
+    assert shown == {
+        "running": [["", "ok", "dot ok"], ["", "ok", "dot ok"]],
+        "update": [["Update available", "warn", "dot warn"], ["", "ok", "dot ok"]],
+        "unreachable": [["Unreachable", "down", "dot down"], ["Unreachable", "down", "dot down"]],
+        "checking": [["Checking…", "wait", "dot"], ["Checking…", "wait", "dot"]],
+    }
+
+
+def test_each_download_step_says_its_state_and_the_current_one_is_marked():
+    shown = node(r"""
+const ctx = sandbox({ afterTracks: () => false });
+const src = read(process.argv[1]);
+for (const re of [/^const OUTCOME = [^\n]*\n/m, /^const STEPS = [^\n]*\n/m, /^const STEPS_SHORT = [^\n]*\n/m, /^const STEP_STATE = [^\n]*\n/m,
+  /^function stepStates\(.*?^\}/ms, /^function stepList\(.*?^\}/ms]) vm.runInContext(grab(src, re), ctx);
+const read_ = (c) => ctx.stepList(c).kids.map((s) => [s.className, s.ariaCurrent ?? null, s.kids[2].textContent]);
+console.log(JSON.stringify({
+  running: read_({ step: "downloading", outcome: "running", parts: 1 }),
+  failed: read_({ step: "renaming", outcome: "failed", parts: 1 }),
+  stopped: read_({ step: "downloading", outcome: "stopped", parts: 1 }),
+  interrupted: read_({ step: "downloading", outcome: "interrupted", parts: 1 }),
+  unavailable: read_({ step: "searching", outcome: "unavailable", parts: 1 }),
+  kept: read_({ step: "done", outcome: "kept", parts: 1 }),
+}));
+""", str(JS / "activity.js"))
+    assert shown["running"] == [["done", None, "Done"], ["now", "step", "Running"], ["", None, "Waiting"], ["", None, "Waiting"], ["", None, "Waiting"]]
+    assert [row[2] for row in shown["failed"]] == ["Done", "Done", "Done", "Failed", "Waiting"]
+    assert [row[1] for row in shown["failed"]].count("step") == 1
+    assert shown["stopped"][1] == ["halt", "step", "Stopped"]
+    assert ["halt", "step", "Interrupted"] in shown["interrupted"]  # a halt says why, not always "Stopped"
+    assert ["halt", "step", "Not out yet"] in shown["unavailable"]
+    assert shown["kept"][-1] == ["warn", None, "Kept"]  # the outcome's own word, not a colour
+
+
+def test_the_weekly_bars_come_with_their_numbers_as_a_table():
+    shown = node(r"""
+const weeks = [{ start: "2026-11-02", downloaded: 5, kept: 2, failed: 1 }, { start: "2026-11-09", downloaded: 0, kept: 0, failed: 0 }];
+const find = (n, pred, out = []) => { if (n && typeof n === "object") { if (pred(n)) out.push(n); (n.kids || []).forEach((k) => find(k, pred, out)); } return out; };
+let main = null;
+const ctx = sandbox({ LOCALE: "en", picked_run: "stats", api: async () => ({ month: {}, weeks, services: [], since: null }), svcName: String,
+  $: (sel) => (sel === "#cd-main" ? { replaceChildren: (...k) => { main = k; } } : { classList: { add() {} }, replaceChildren() {}, hidden: false, textContent: "" }),
+  document: { querySelectorAll: () => [] }, day: String, ago: String, duration: String, failed: any, renderDock() {} });
+vm.runInContext(grab(read(process.argv[1]), /^async function showStats\(.*?^\}/ms), ctx);
+ctx.showStats().then(() => {
+  const page = { kids: main };
+  const chart = find(page, (n) => n.className === "weeks")[0];
+  const table = find(page, (n) => n.tag === "table")[0];
+  const rows = find(table, (n) => n.tag === "tr").map((r) => r.kids.map((c) => c.textContent));
+  console.log(JSON.stringify({ chartHidden: chart.ariaHidden, chartRole: chart.role ?? null, caption: find(table, (n) => n.tag === "caption")[0].textContent, rows }));
+});
+""", str(JS / "activity.js"))
+    assert shown["chartHidden"] == "true" and shown["chartRole"] is None  # the bars are the picture; the table has the data
+    assert shown["caption"] == "Downloads per week, the last 8 weeks"
+    assert shown["rows"] == [["Week", "Downloaded", "Failed", "Kept"], ["Nov 2", 5, 1, 2], ["Nov 9", 0, 0, 0]]
+
+
+def test_the_quality_ladder_chips_say_which_is_chosen_and_the_edit_link_stays_outside_them():
+    shown = node(r"""
+const made = (tag, props = {}, ...kids) => ({ tag, ...props, kids, replaceChildren(...k) { this.kids = k; } });
+const ctx = sandbox({ el: made, ladders: () => [{ name: "UHD" }, { name: "HD" }] });
+vm.runInContext(grab(read(process.argv[1]), /^function ladderChips\(.*?^\}/ms), ctx);
+const picked = [];
+const root = ctx.ladderChips("HD", "UHD", (v) => picked.push(v));
+const group = root.kids[0], state = () => group.kids.map((b) => [b.kids[0].textContent, b.ariaPressed, b.role ?? null, b.ariaChecked ?? null]);
+const before = state();
+group.kids[0].onclick();  // Off
+console.log(JSON.stringify({ root: [root.className, root.kids.map((k) => k.tag)], group: [group.role, group.ariaLabel], before, after: state(), picked }));
+""", str(JS / "quality.js"))
+    assert shown["root"] == ["ladder-pick", ["div", "a"]]  # the link is beside the group, not one of its chips
+    assert shown["group"] == ["group", "Quality ladder"]
+    assert shown["before"] == [["Off", "false", None, None], ["UHD", "false", None, None], ["HD", "true", None, None]]
+    assert shown["after"][0][1] == "true" and shown["after"][2][1] == "false"
+    assert shown["picked"] == ["off"]
