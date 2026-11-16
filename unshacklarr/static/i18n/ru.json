@@ -1902,7 +1902,6 @@
  "Import it from Activity, Waiting in downloads ({0}).": "Импортируйте его в «Активность», «Ожидает в загрузках» ({0}).",
  "Import needed": "Нужен импорт",
  "Import needed: {0}": "Нужен импорт: {0}",
- "No Sonarr named {0}": "Нет Sonarr с именем {0}",
  "Sonarr refused the import ({0}): asked again ({1} of {2})": "Sonarr отклонил импорт ({0}): запрошен снова ({1} из {2})",
  "A library folder is almost full": "Папка библиотеки почти заполнена",
  "Less than {0} GB free in {1}: nothing is downloaded for its series. Make room, or lower the room kept free in Settings, Unshackle, Folders.": "Свободно меньше {0} ГБ в {1}: для её сериалов ничего не скачивается. Освободите место или уменьшите резерв в Settings, Unshackle, Folders.",
@@ -2465,5 +2464,11 @@
  "{0} session rejected": "Сессия отклонена: {0}",
  "{0} timed out": "Тайм-аут: {0}",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} был занят {1} часа: лимит запросов для этого ключа всё ещё достигнут, загрузка прекращена",
- "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve был занят {0} часа: лимит запросов для этого ключа всё ещё достигнут, загрузка прекращена"
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve был занят {0} часа: лимит запросов для этого ключа всё ещё достигнут, загрузка прекращена",
+ "An audio track add stopped midway in this folder: it holds audio only, not a video to import": "Добавление звуковой дорожки в этой папке прервалось на полпути: в ней только звук, а не видео для импорта",
+ "Saved. Another tab renamed a Sonarr: reload this page before your next change.": "Сохранено. В другой вкладке переименовали Sonarr: перезагрузите страницу перед следующим изменением.",
+ "The file with the {0} audio could not be renamed: {1}": "Не удалось переименовать файл со звуком {0}: {1}",
+ "The start date of {0} must be a date, like 2026-10-01": "Дата начала для {0} должна быть датой, например 2026-10-01",
+ "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": "Эти эпизоды в последний раз пробовали с другой нумерацией, другим «Всё равно заменить» или другим языком звука: повторите их по отдельности",
+ "{0} did not finish within {1}: is the downloads folder reachable?": "{0} не завершилась за {1}: доступна ли папка загрузок?"
 }

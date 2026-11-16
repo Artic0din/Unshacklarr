@@ -285,6 +285,7 @@
  "An answer is reused until it is older than this, unless the file changed.": [],
  "An app password is safer than your account's password.": [],
  "An app password is safer than your account's password. Leave empty to keep the saved one.": [],
+ "An audio track add stopped midway in this folder: it holds audio only, not a video to import": [],
  "An e-mail address, like you@gmail.com": [],
  "An episode is downloaded and handed to Sonarr": [],
  "An episode is late, a replacement kept the old file, or a code must be entered": [],
@@ -1397,9 +1398,6 @@
   "tag"
  ],
  "No DRM, nothing to decrypt": [],
- "No Sonarr named {0}": [
-  "body['sonarr']"
- ],
  "No Sonarr named {0} in Settings, Sonarr": [
   "name"
  ],
@@ -1486,7 +1484,7 @@
  ],
  "No {0} audio in the download (it has {1}): not imported": [
   "' or '.join(accepted)",
-  "', '.join(sorted(langs))"
+  "', '.join(sorted(langs)) or 'no language tag'"
  ],
  "No {0} audio on {1} yet (it has {2})": [
   "langs",
@@ -1967,6 +1965,7 @@
  "Saved (leave empty to keep it)": [],
  "Saved backups": [],
  "Saved under remote_cdm in unshackle.yaml. A service then uses it by its name.": [],
+ "Saved. Another tab renamed a Sonarr: reload this page before your next change.": [],
  "Saved. The serve section changed: restart Unshackle for it to apply": [],
  "Saved: leave empty to keep it": [],
  "Saved: the next download uses it": [],
@@ -2149,7 +2148,7 @@
  "Sign-in and cookies": [],
  "Sign-in cancelled": [],
  "Sign-in failed on {0}: {1}": [
-  "show['service']",
+  "asked_from['service']",
   "label"
  ],
  "Sign-in failed · {0}": [
@@ -2542,6 +2541,10 @@
  "The file did not arrive whole: pick it again": [],
  "The file holds your API keys and notification addresses: keep it private.": [],
  "The file it becomes": [],
+ "The file with the {0} audio could not be renamed: {1}": [
+  "want",
+  "e"
+ ],
  "The file's average bitrate: Sonarr has none for its video": [],
  "The files are in {0}": [
   "seen_by('sonarr_downloads', out)"
@@ -2664,6 +2667,9 @@
  "The service will refuse them: replace them with fresh ones": [],
  "The sign-in check could not reach Unshackle.": [],
  "The sign-ins could not be checked.": [],
+ "The start date of {0} must be a date, like 2026-10-01": [
+  "key"
+ ],
  "The terminal could not load: reload the page.": [],
  "The two passwords differ; nothing changed.": [],
  "The whole episode is downloaded again and replaces the existing file.": [],
@@ -2702,6 +2708,7 @@
   "want"
  ],
  "Then add the file here with Add.": [],
+ "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": [],
  "These settings were changed elsewhere since this page was loaded. Reload the page, then make your change again.": [],
  "These {0} episodes are": [
   "onDisk"
@@ -3691,6 +3698,10 @@
  "{0} did not answer like unshackle serve (no JSON): is the address right?": [
   "url"
  ],
+ "{0} did not finish within {1}: is the downloads folder reachable?": [
+  "cmd[0]",
+  "human_time(timeout)"
+ ],
  "{0} did not load in unshackle serve: its startup log says why": [
   "tag"
  ],
@@ -4089,7 +4100,7 @@
   "to.path[:-len(path)]"
  ],
  "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services.": [
-  "show['service']"
+  "asked_from['service']"
  ],
  "{0} refused it: {1}": [
   "s['endpoint'].split('/')[2]",
@@ -4451,7 +4462,7 @@
  ],
  "{0}: {1} refused the sign-in, trying the profile {2}": [
   "label",
-  "show['service']",
+  "asked_from['service']",
   "profile"
  ],
  "{0}: {1}, not downloaded": [

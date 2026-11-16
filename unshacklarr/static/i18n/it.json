@@ -1889,7 +1889,6 @@
  "Import it from Activity, Waiting in downloads ({0}).": "Importalo da Attività, In attesa nei download ({0}).",
  "Import needed": "Importazione da fare",
  "Import needed: {0}": "Importazione da fare: {0}",
- "No Sonarr named {0}": "Nessun Sonarr di nome {0}",
  "Sonarr refused the import ({0}): asked again ({1} of {2})": "Sonarr ha rifiutato l'importazione ({0}): richiesta di nuovo ({1} di {2})",
  "A library folder is almost full": "Una cartella della libreria è quasi piena",
  "Less than {0} GB free in {1}: nothing is downloaded for its series. Make room, or lower the room kept free in Settings, Unshackle, Folders.": "Meno di {0} GB liberi in {1}: non si scarica nulla per le sue serie. Libera spazio o riduci lo spazio riservato in Settings, Unshackle, Folders.",
@@ -2402,5 +2401,11 @@
  "{0} session rejected": "Sessione {0} rifiutata",
  "{0} timed out": "{0}: tempo scaduto",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} è rimasto occupato per {1} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato",
- "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve è rimasto occupato per {0} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato"
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve è rimasto occupato per {0} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato",
+ "An audio track add stopped midway in this folder: it holds audio only, not a video to import": "L'aggiunta di una traccia audio si è interrotta a metà in questa cartella: contiene solo audio, non un video da importare",
+ "Saved. Another tab renamed a Sonarr: reload this page before your next change.": "Salvato. Un'altra scheda ha rinominato un Sonarr: ricarica questa pagina prima della prossima modifica.",
+ "The file with the {0} audio could not be renamed: {1}": "Impossibile rinominare il file con l'audio {0}: {1}",
+ "The start date of {0} must be a date, like 2026-10-01": "La data di inizio di {0} deve essere una data, come 2026-10-01",
+ "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": "Questi episodi sono stati provati l'ultima volta con un'altra numerazione, un altro Sostituisci comunque o un'altra lingua audio: riprovali separatamente",
+ "{0} did not finish within {1}: is the downloads folder reachable?": "{0} non ha finito entro {1}: la cartella dei download è raggiungibile?"
 }

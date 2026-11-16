@@ -1886,7 +1886,6 @@
  "Import it from Activity, Waiting in downloads ({0}).": "Importe-o em Atividade, Aguardando nos downloads ({0}).",
  "Import needed": "Falta importar",
  "Import needed: {0}": "Falta importar: {0}",
- "No Sonarr named {0}": "Nenhum Sonarr chamado {0}",
  "Sonarr refused the import ({0}): asked again ({1} of {2})": "O Sonarr recusou a importação ({0}): pedida de novo ({1} de {2})",
  "A library folder is almost full": "Uma pasta da biblioteca está quase cheia",
  "Less than {0} GB free in {1}: nothing is downloaded for its series. Make room, or lower the room kept free in Settings, Unshackle, Folders.": "Menos de {0} GB livres em {1}: nada é baixado para suas séries. Libere espaço ou reduza o espaço reservado em Settings, Unshackle, Folders.",
@@ -2432,5 +2431,11 @@
  "{0} session rejected": "Sessão de {0} rejeitada",
  "{0} timed out": "{0}: tempo esgotado",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} ficou ocupado por {1} horas: o limite de requisições desta chave continua atingido, o download foi abandonado",
- "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve ficou ocupado por {0} horas: o limite de requisições desta chave continua atingido, o download foi abandonado"
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve ficou ocupado por {0} horas: o limite de requisições desta chave continua atingido, o download foi abandonado",
+ "An audio track add stopped midway in this folder: it holds audio only, not a video to import": "A adição de uma faixa de áudio parou no meio nesta pasta: ela contém só áudio, não um vídeo para importar",
+ "Saved. Another tab renamed a Sonarr: reload this page before your next change.": "Salvo. Outra aba renomeou um Sonarr: recarregue esta página antes da próxima alteração.",
+ "The file with the {0} audio could not be renamed: {1}": "Não foi possível renomear o arquivo com o áudio {0}: {1}",
+ "The start date of {0} must be a date, like 2026-10-01": "A data de início de {0} deve ser uma data, como 2026-10-01",
+ "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": "Estes episódios foram tentados por último com outra numeração, outro Substituir mesmo assim ou outro idioma de áudio: tente-os separadamente",
+ "{0} did not finish within {1}: is the downloads folder reachable?": "{0} não terminou em {1}: a pasta de downloads está acessível?"
 }

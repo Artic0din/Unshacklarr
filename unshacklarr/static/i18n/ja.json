@@ -1894,7 +1894,6 @@
  "Import it from Activity, Waiting in downloads ({0}).": "アクティビティの「ダウンロードで待機中」からインポートしてください（{0}）。",
  "Import needed": "インポートが必要",
  "Import needed: {0}": "インポートが必要：{0}",
- "No Sonarr named {0}": "{0} という名前の Sonarr はありません",
  "Sonarr refused the import ({0}): asked again ({1} of {2})": "Sonarr がインポートを拒否しました（{0}）：再要求（{2} 回中 {1} 回目）",
  "A library folder is almost full": "ライブラリフォルダーがほぼいっぱいです",
  "Less than {0} GB free in {1}: nothing is downloaded for its series. Make room, or lower the room kept free in Settings, Unshackle, Folders.": "{1} の空きが {0} GB 未満です：そのシリーズは何もダウンロードされません。空きを作るか、Settings、Unshackle、Folders で確保する空きを減らしてください。",
@@ -2407,5 +2406,11 @@
  "{0} session rejected": "{0} のセッションが拒否されました",
  "{0} timed out": "{0} がタイムアウトしました",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} が {1} 時間混み合ったままです：このキーのリクエスト上限にまだ達しているため、ダウンロードを中止しました",
- "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve が {0} 時間混み合ったままです：このキーのリクエスト上限にまだ達しているため、ダウンロードを中止しました"
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve が {0} 時間混み合ったままです：このキーのリクエスト上限にまだ達しているため、ダウンロードを中止しました",
+ "An audio track add stopped midway in this folder: it holds audio only, not a video to import": "このフォルダーで音声トラックの追加が途中で止まりました: 音声のみで、取り込める動画がありません",
+ "Saved. Another tab renamed a Sonarr: reload this page before your next change.": "保存しました。別のタブで Sonarr の名前が変更されました: 次の変更の前にこのページを再読み込みしてください。",
+ "The file with the {0} audio could not be renamed: {1}": "{0}の音声が入ったファイルの名前を変更できませんでした: {1}",
+ "The start date of {0} must be a date, like 2026-10-01": "{0}の開始日は 2026-10-01 のような日付にしてください",
+ "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": "これらのエピソードは前回、異なる番号設定、「それでも置き換え」、または音声言語で試されました: 別々にやり直してください",
+ "{0} did not finish within {1}: is the downloads folder reachable?": "{0}が{1}以内に終了しませんでした: ダウンロードフォルダーにアクセスできますか?"
 }
