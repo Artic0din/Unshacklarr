@@ -741,10 +741,10 @@ async function save() {
     if (id) base.series[id] = theirs; else base[u] = theirs;
     savedUnits[u] = JSON.stringify(alike(mine, theirs) ? mine : theirs);
   }
-  // the names the server now knows, another tab's rename among them: entry by entry as sent, when the list kept its length
-  const theirSonarrs = saved?.settings?.sonarrs;
-  if (merged.settings && Array.isArray(theirSonarrs) && theirSonarrs.length === names.length)
-    keepSonarrNames(names.map(([i], n) => [i, theirSonarrs[n].name]));
+  // the names the server now knows, another tab's rename among them: each entry the page holds now, found by its
+  // address (each Sonarr has its own), the entries of a list taken whole too
+  const theirSonarrs = Array.isArray(saved?.settings?.sonarrs) ? saved.settings.sonarrs : [];
+  keepSonarrNames((S.config.settings.sonarrs || []).flatMap((i) => theirSonarrs.filter((o) => i.url && o.url === i.url).map((o) => [i, o.name])));
   savedConfig = stableJSON(base);
   if (redraw) renderSettings();  // another tab's settings now shown, its Sonarrs and servers too
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;

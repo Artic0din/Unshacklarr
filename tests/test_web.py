@@ -2243,6 +2243,13 @@ const fresh = () => {
     versions: { settings: "v2" } }); await saving;
   const left = box.S.config.settings.sonarrs;
   out.listEntriesMatchedByIdentity = left.map((i) => i.name + i.downloads).join() === "second,third" && box.S.config.versions.settings === "v1";
+  // another tab added a Sonarr: the list is taken whole, and its entries still know their saved names
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] } }); await saving;
+  box.S.config.settings.sonarrs[0].name = "renamed";
+  out.takenListKeepsSavedNames = box.S.config.settings.sonarrs.length === 2 && page.savedSonarr("renamed") === "first";
   console.log(JSON.stringify(out));
 })();
 """
@@ -2291,6 +2298,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "mergedRenameIsSavedName": True,  # a rename another tab saved is the name the server knows
         "listEditedMeanwhileKeepsNames": True,  # Sonarrs removed or added while the Save ran: no name moves to another
         "listEntriesMatchedByIdentity": True,  # and no other tab's change lands on another entry: the next Save asks to reload
+        "takenListKeepsSavedNames": True,  # a list taken whole from another tab: its renamed entry is still named as saved
     }
 
 
