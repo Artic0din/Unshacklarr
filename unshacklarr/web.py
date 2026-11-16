@@ -4902,10 +4902,10 @@ def retried_audio(ids: list[int], batch: str, instance: str) -> str:
     return next((card["audio_override"] for card in last_attempts(ids, batch, instance) if isinstance(card.get("audio_override"), str)), "")
 
 
-def retried_alike(ids: list[int], instance: str) -> tuple[dict | None, bool] | None:
-    """The numbering and Replace anyway an API retry repeats: its episodes' own last attempts', None when they
-    differ (episodes of different jobs: one's numbering can't stand for another's)."""
-    picks = [(retried_numbering([i], "", instance), retried_replace([i], "", instance)) for i in ids]
+def retried_alike(ids: list[int], instance: str) -> tuple[dict | None, bool, str] | None:
+    """The numbering, Replace anyway and audio language an API retry repeats: its episodes' own last attempts',
+    None when they differ (episodes of different jobs: one's numbering can't stand for another's)."""
+    picks = [(retried_numbering([i], "", instance), retried_replace([i], "", instance), retried_audio([i], "", instance)) for i in ids]
     return picks[0] if all(p == picks[0] for p in picks) else None
 
 
@@ -6341,8 +6341,8 @@ async def v1_start_download(request):
     numbering = None
     if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries: as the page's Retry
         if not (alike := await asyncio.to_thread(retried_alike, ids, inst["name"] if inst else "")):
-            raise web.HTTPBadRequest(text="These episodes were last tried with different numbering or Replace anyway: retry them apart")
-        numbering, replace = alike[0], replace or alike[1]
+            raise web.HTTPBadRequest(text="These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart")
+        numbering, replace, audio = alike[0], replace or alike[1], audio or alike[2]
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     room_for_one_more()

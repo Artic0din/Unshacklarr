@@ -8572,6 +8572,41 @@ def test_an_api_retry_of_episodes_tried_differently_is_refused(tmp_path, monkeyp
     statuses, asked = api_retries(tmp_path, monkeypatch, cards, {"episodeIds": [70, 71]}, {"episodeIds": [71, 72]})
     assert (statuses, asked) == ([400, 200], [([71, 72], None, True)])
 
+def test_an_api_retry_repeats_the_audio_language_of_the_attempt_it_retries(tmp_path, monkeypatch):
+    # A French replacement stopped, retried by the API without "audio": French again, replacing only with it;
+    # episodes last tried in different languages are refused together, as for numbering
+    import asyncio
+    import hashlib
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1",
+                                                    "api_key": hashlib.sha256(b"key").hexdigest()}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    for run_id, episode, extra in (("20261003-093229-000001-442345-S02E01", 70, {"replace": True, "audio_override": "fr"}),
+                                   ("20261003-093000-000001-442345-S02E02", 71, {"replace": True, "audio_override": "de"})):
+        card = {"id": run_id, "episodeId": episode, "tvdbId": 442345, "sxxeyy": run_id[-6:], "outcome": "stopped",
+                "started": "2026-10-03T09:32:29+00:00", "ended": "2026-10-03T09:33:00+00:00", **extra}
+        (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    asked = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("audio"), kw.get("replace", False))))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **kw: [
+        {"id": 70, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "eng"}}}])
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as script:
+            key = {web.API_KEY_HEADER: "key"}
+            return [(await script.post("/api/v1/downloads", json={"episodeIds": ids, "retry": True}, headers=key)).status
+                    for ids in ([70], [70, 71])]
+
+    assert asyncio.run(go()) == [200, 400]
+    assert asked == [([70], "fr", True)]
+
+
 def test_a_single_download_is_not_a_sync_running(tmp_path, monkeypatch):
     import asyncio
     import threading
