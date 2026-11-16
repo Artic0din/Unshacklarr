@@ -110,3 +110,29 @@ vm.runInContext(grab(read(file), new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\
 try { ctx[name](); console.log("false"); } catch (e) { console.log("true"); }
 """, str(JS / file), name)
     assert threw is False
+
+
+# The save bar stays up for the "Saved" tick (1.6 s) after a save: only unsaved changes make Download and Sync wait
+@pytest.mark.parametrize("unsaved,goes", [(False, True), (True, False)])
+def test_download_goes_while_the_save_bar_shows_saved(unsaved, goes):
+    calls = node(r"""
+const calls = [];
+const ctx = sandbox({ unsaved: process.argv[2] === "true", current: { tvdbId: 1 }, S: { config: { series: { 1: { service: "BINGE", title: "Show" } } } },
+  epSeasons: {}, picked: new Set([1]), epSonarr: "", $: (sel) => (sel === "#savebar" ? { hidden: false } : any),
+  api: async (path) => { calls.push(path); return {}; }, toast() {} });
+vm.runInContext(grab(read(process.argv[1]), /async function startDownload\b[\s\S]*?\n}\n/), ctx);
+ctx.startDownload().then(() => console.log(JSON.stringify(calls)));
+""", str(JS / "series.js"), str(unsaved).lower())
+    assert calls == (["/api/download"] if goes else [])
+
+
+@pytest.mark.parametrize("unsaved,goes", [(False, True), (True, False)])
+def test_sync_goes_while_the_save_bar_shows_saved(unsaved, goes):
+    calls = node(r"""
+const calls = [], sync = {};
+const ctx = sandbox({ unsaved: process.argv[2] === "true", $: (sel) => (sel === "#savebar" ? { hidden: false } : sel === "#sync" ? sync : any),
+  api: async (path) => { calls.push(path); return {}; }, toast() {}, showTab() {} });
+vm.runInContext(grab(read(process.argv[1]), /\$\("#sync"\)\.onclick = async [\s\S]*?\n};\n/), ctx);
+sync.onclick().then(() => console.log(JSON.stringify(calls)));
+""", str(JS / "attempts.js"), str(unsaved).lower())
+    assert calls == (["/api/sync"] if goes else [])
