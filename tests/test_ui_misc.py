@@ -187,3 +187,18 @@ Promise.resolve(eval(call)).then(() => {
 });
 """, str(JS / file), pattern, call)
     assert seen == {"before": [], "delays": [30000], "after": ["blob:file"]}
+
+
+@pytest.mark.parametrize("navigates,opened", [(True, []), (False, ["/#/inbox"])])
+def test_tapping_a_notification_opens_the_bell_even_for_a_window_the_worker_cannot_navigate(navigates, opened):
+    seen = node(r"""
+const handlers = {}, opened = [];
+const win = { url: "https://app.example/", focus() { return Promise.resolve(this); }, navigate: async () => { if (process.argv[2] !== "true") throw new TypeError("not controlled"); } };
+const self = { location: { origin: "https://app.example" }, addEventListener: (type, fn) => (handlers[type] = fn),
+  clients: { matchAll: async () => [win], openWindow: async (url) => { opened.push(url); }, claim() {} }, registration: {}, skipWaiting() {} };
+vm.runInNewContext(read(process.argv[1]), { self, URL, Promise });
+let waiting;
+handlers.notificationclick({ notification: { close() {}, data: { url: "/#/inbox" } }, waitUntil: (p) => (waiting = p) });
+waiting.then(() => console.log(JSON.stringify(opened)), (e) => console.log(JSON.stringify("rejected: " + e.message)));
+""", str(STATIC / "sw.js"), str(navigates).lower())
+    assert seen == opened

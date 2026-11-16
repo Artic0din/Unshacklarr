@@ -231,6 +231,7 @@ Reloading on Settings, Automation or Interface no longer throws, so the installe
 Download and Sync no longer say "Save your changes first" for 1.6 seconds after a Save: they only wait when something is really unsaved.
 The account password you type to download or restore a backup is now cleared from the form afterwards.
 Backup and diagnostic downloads no longer fail on Safari: the file is kept for 30 seconds after the click instead of being released at once.
+Tapping a push notification now opens the bell even when the app's window cannot be navigated: it opens a new window on it.
 
 ### Removed
 
