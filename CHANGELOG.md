@@ -121,6 +121,12 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Activity and the first-run setup no longer leave you stranded.** On a phone, a running job's bar has Open series
+  next to Pause, Options and Stop, and a finished job keeps its Delete; a download waiting for your OTP code or answer
+  says "Waiting for your answer" in a chip, with no running pulse or progress bar; a step of the setup scrolls its card
+  to the top and puts the keyboard on its heading; the Sonarr and Unshackle API key say "Found in the environment" in
+  their help, where the placeholder was cut off; and switching language in the setup asks first, since it clears the
+  password and keys. (#280)
 - **Nothing is cut off or piled on top of anything else on a narrow screen.** At 320 px (or 400% zoom), a run's buttons
   wrap to a second line instead of losing "Delete", a running card's speed and time left sit on a row under the episode
   (and a finished card's line carries its whole text as a tooltip), the series filter takes a second row instead of

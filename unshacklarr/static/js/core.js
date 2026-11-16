@@ -67,8 +67,11 @@ function setTheme(choice) {
 applyTheme(themeChoice());
 matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", () => applyTheme(themeChoice()));
 async function setLang(lang) {
+  const draft = setupDraft?.();
+  // the password and the keys are never kept (not in the tab either): the person chooses to lose them
+  if (draft?.secrets && !await askToConfirm("Switch the language?", "Switching language reloads the page: your password and keys are cleared.", "Switch language")) return;
   try { localStorage.setItem("lang", lang); } catch {}
-  try { if (setupDraft) sessionStorage.setItem("setup-draft", JSON.stringify(setupDraft())); } catch {}  // the first run goes on where it was
+  try { if (draft) sessionStorage.setItem("setup-draft", JSON.stringify(draft)); } catch {}  // the first run goes on where it was
   await api("/api/language", { method: "POST", body: JSON.stringify({ language: lang }) }).catch(() => {});  // the notifications' too; before logging in, nothing to tell
   location.reload();
 }
