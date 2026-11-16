@@ -108,6 +108,17 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- The episode list and a running download's track list now draw on iPhones before iOS 17.4, where "What's on…?" results and the live track list used to stop the page drawing.
+- "What's on…?" for a series that is in no main Sonarr now asks the Sonarr you are viewing (for example 4K), not always the first, so its badges match that library's episodes.
+- Reloading on Settings, Automation or Interface no longer throws, so the installed app keeps pull-to-reload on those pages.
+- Download and Sync no longer say "Save your changes first" for 1.6 seconds after a Save: they only wait when something is really unsaved.
+- The account password you type to download or restore a backup is now cleared from the form afterwards.
+- Backup and diagnostic downloads no longer fail on Safari: the file is kept for 30 seconds after the click instead of being released at once.
+- Tapping a push notification now opens the bell even when the app's window cannot be navigated: it opens a new window on it.
+- Activity no longer grows in memory while its tab stays open: what the page keeps per download (time left, bar widths, posters, unfolded tracks) is dropped once the download leaves the list.
+- Typing in the series search no longer redraws every poster on each key: the wall updates once you pause for 150 ms, so large libraries stay smooth.
+- "Change and download…" no longer shows "Pick a service and its URL first" on a series that only has season pages.
+- Typing in the device search (Settings, CDM) no longer jumps the cursor to the end or breaks Japanese and Chinese input: the box stays, and only the list under it is redrawn.
 - A release day from 8 to 13 days before airing can now be picked (the list skipped them), instead of a suggested one saving as "the day it airs".
 - Settings, Per service no longer stays blank when one service's options cannot be loaded (Unshackle down, or a service it no longer has): the list shows, and the stale entry can be removed.
 - The example Docker Compose file now builds Unshackle from this repository's Dockerfile at the reviewed commit and pulls this repository's image, instead of upstream's, which ignored the commit pin; that commit now includes official Unshackle's latest development work.
@@ -225,16 +236,6 @@ Every change worth knowing, newest first. The format follows
   yours: its episodes then match the service's better.
 - **Episode order.** A series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering; when that
   order changes, its new episodes wait until you confirm the numbering.
-The episode list and a running download's track list now draw on iPhones before iOS 17.4, where "What's on…?" results and the live track list used to stop the page drawing.
-"What's on…?" for a series that is in no main Sonarr now asks the Sonarr you are viewing (for example 4K), not always the first, so its badges match that library's episodes.
-Reloading on Settings, Automation or Interface no longer throws, so the installed app keeps pull-to-reload on those pages.
-Download and Sync no longer say "Save your changes first" for 1.6 seconds after a Save: they only wait when something is really unsaved.
-The account password you type to download or restore a backup is now cleared from the form afterwards.
-Backup and diagnostic downloads no longer fail on Safari: the file is kept for 30 seconds after the click instead of being released at once.
-Tapping a push notification now opens the bell even when the app's window cannot be navigated: it opens a new window on it.
-Activity no longer grows in memory while its tab stays open: what the page keeps per download (time left, bar widths, posters, unfolded tracks) is dropped once the download leaves the list.
-Typing in the series search no longer redraws every poster on each key: the wall updates once you pause for 150 ms, so large libraries stay smooth.
-"Change and download…" no longer shows "Pick a service and its URL first" on a series that only has season pages.
 
 ### Removed
 

@@ -252,3 +252,29 @@ node_.onclick();
 console.log(JSON.stringify(asked));
 """, str(JS / "series.js"), title or "")
     assert asked == asks
+
+
+def test_typing_in_the_device_search_keeps_the_search_box_and_redraws_only_the_list():
+    seen = node(r"""
+const src = read(process.argv[1]);
+const nodes = {}, replaced = [];
+const $ = (sel) => (nodes[sel] ??= { value: "", hidden: false, textContent: "", focus() {}, select() {}, classList: { toggle() {} },
+  querySelector: () => ({ textContent: "" }), replaceChildren: (...kids) => replaced.push([sel, JSON.stringify(kids)]), replaceWith: (n) => replaced.push([sel, JSON.stringify(n)]) });
+const device = (name, kind) => ({ name, kind, used_by: [], info: {} });
+const ctx = sandbox({ $, cdmData: { folder: "/cdm", devices: [device("alpha", "Widevine"), device("beta", "PlayReady")], remote: [], services: [], map: {} },
+  cdmFilter: "all", cdmQuery: "", cdmTesting: false, cdmShowUnused: true, cdmRunning: new Set(), cdmOpen: new Set(), S: { config: { series: {}, settings: {} } },
+  COUNT: { device: String, problem: String, moreDevice: String }, svcName: String, cdmShort: (d) => d.name });
+for (const name of ["cdmTitle", "cdmStatus"]) vm.runInContext(grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`)), ctx);
+vm.runInContext(grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/), ctx);
+vm.runInContext(grab(src, /function renderCdm\b[\s\S]*?\n}\n/), ctx);
+let box = null;  // the search input, caught as it is made
+const made = ctx.el;
+ctx.el = (tag, props, ...kids) => { const n = made(tag, props, ...kids); if (props?.className === "con-search") box = n; return n; };
+ctx.renderCdm();
+replaced.length = 0;
+ctx.cdmQuery = "alpha"; box.value = "alpha";
+box.oninput();
+const after = replaced.map(([sel, json]) => [sel, /alpha\.wvd/.test(json), /beta\.prd/.test(json)]);
+console.log(JSON.stringify({ listRedrawn: after.some(([sel]) => sel === "#cdm-list"), shown: after.filter(([, a]) => a).length > 0, hidden: after.every(([, , b]) => !b) }));
+""", str(JS / "cookies-cdm.js"))
+    assert seen == {"listRedrawn": False, "shown": True, "hidden": True}
