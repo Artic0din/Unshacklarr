@@ -335,7 +335,11 @@ class Local:
             self.failed = None  # asked for: tried now, not refused for the minute
             self.__dict__.pop("_paths", None)  # unshackle.yaml's directories: may have changed: asked again
             self.stop()
-            self.start(command)
+            try:
+                self.start(command)
+            except UnshackleError as e:
+                self.failed = (command, time.monotonic(), e)  # the callers waiting on this lock are told, not made to start again
+                raise
 
     def stop(self) -> None:
         if self.process and self.process.poll() is None:

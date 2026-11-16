@@ -881,6 +881,24 @@ def test_a_restart_makes_unshackle_say_again_where_its_folders_are(tmp_path, mon
     assert local.cookies_dir("unshackle") == Path("/new/cookies")  # sign-ins are looked for where it keeps them now
 
 
+def test_a_restart_that_fails_is_not_started_again_by_the_callers_waiting_on_it(tmp_path, monkeypatch):
+    import unshacklarr.backend as backend
+
+    starts = []
+
+    def failing_start(self, command):
+        starts.append(command)
+        raise UnshackleError("unshackle serve did not answer within 90 s: no output")
+
+    monkeypatch.setattr(backend.Local, "start", failing_start)
+    local = backend.Local(tmp_path / "serve.log")
+    with pytest.raises(UnshackleError, match="did not answer within 90 s"):
+        local.restart("unshackle")
+    with pytest.raises(UnshackleError, match="did not answer within 90 s"):
+        local.endpoint("unshackle")  # a caller that waited for the restart, or the next page load
+    assert starts == ["unshackle"]
+
+
 def test_a_failed_start_cleared_by_another_thread_mid_check_still_says_why(tmp_path):
     import unshacklarr.backend as backend
     local = backend.Local(tmp_path / "serve.log")
