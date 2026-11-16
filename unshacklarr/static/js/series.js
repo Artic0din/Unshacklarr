@@ -1036,7 +1036,11 @@ async function startDownload(numbering = null) {
 }
 $("#backdrop").onclick = () => closeDrawer();
 $("#d-back").onclick = () => closeDrawer();
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) closeDrawer(); });  // a dialog's Escape closes it alone
+document.addEventListener("keydown", (e) => {  // a dialog's Escape closes it alone
+  if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
+  if ($("#drawer").classList.contains("open")) e.preventDefault();  // "unsaved changes" opens in this keydown: left alone, the same Escape would cancel it
+  closeDrawer();
+});
 
 /* Settings' shortcuts: straight to a card, opened if folded, the page's address left as it is. */
 $(".ds-nav").onclick = (e) => {

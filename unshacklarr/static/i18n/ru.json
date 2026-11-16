@@ -2511,5 +2511,9 @@
  "Unshacklarr, schedule": "Unshacklarr, расписание",
  "Wait for the audio, in days": "Ждать аудио, в днях",
  "{0} min {1} s": "{0} мин {1} с",
- "{0} h {1} min": "{0} ч {1} мин"
+ "{0} h {1} min": "{0} ч {1} мин",
+ "Esc, then Tab, leaves the editor.": "Esc, затем Tab: выход из редактора.",
+ "Results on {0}: {1}": "Результаты на {0}: {1}",
+ "Settings: {0} · Unshacklarr": "Настройки: {0} · Unshacklarr",
+ "{0} · Unshacklarr": "{0} · Unshacklarr"
 }
