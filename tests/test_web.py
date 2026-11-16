@@ -2226,6 +2226,13 @@ const fresh = () => {
   const four = box.S.config.settings.sonarrs[0];
   out.nestedEditKeepsOthersRename = four.name === "UHD" && four.downloads === "/dl" && page.state().unsaved;
   out.mergedRenameIsSavedName = page.savedSonarr("UHD") === "UHD";
+  // the libraries each series is in follow another tab's rename too: the series page finds its Sonarr by them
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "4K", url: "http://a" }] }, series: {} }, sonarrsOf: { 7: [{ name: "4K", id: 3 }] } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "UHD", url: "http://a" }] } }); await saving;
+  out.mergedRenameReachesLibraries = box.S.sonarrsOf[7][0].name === "UHD" && box.S.sonarrsOf[7][0].id === 3
+    && page.savedSonarr(box.S.sonarrsOf[7][0].name) === "UHD";
   // one Sonarr removed and another added while the Save runs: each keeps its own saved name
   box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] }, series: {} } };
   page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
@@ -2296,6 +2303,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "renameSavedIsUsed": True,  # once saved, the new name; a rename made while the Save ran still is not
         "nestedEditKeepsOthersRename": True,  # an edit inside a list entry does not block another tab's change beside it
         "mergedRenameIsSavedName": True,  # a rename another tab saved is the name the server knows
+        "mergedRenameReachesLibraries": True,  # and the series' libraries follow it, so episode requests name it
         "listEditedMeanwhileKeepsNames": True,  # Sonarrs removed or added while the Save ran: no name moves to another
         "listEntriesMatchedByIdentity": True,  # and no other tab's change lands on another entry: the next Save asks to reload
         "takenListKeepsSavedNames": True,  # a list taken whole from another tab: its renamed entry is still named as saved

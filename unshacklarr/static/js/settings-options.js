@@ -745,6 +745,10 @@ async function save() {
   // address (each Sonarr has its own), the entries of a list taken whole too
   const theirSonarrs = Array.isArray(saved?.settings?.sonarrs) ? saved.settings.sonarrs : [];
   keepSonarrNames((S.config.settings.sonarrs || []).flatMap((i) => theirSonarrs.filter((o) => i.url && o.url === i.url).map((o) => [i, o.name])));
+  // another tab's rename taken here: the libraries each series is in follow it, as a rename made here does (at once)
+  const renamed = new Map(names.filter(([i, sent]) => i.name !== sent && sonarrSavedName.get(i) === i.name).map(([i, sent]) => [sent, i.name]));
+  if (renamed.size) for (const [tvdb, libs] of Object.entries(S.sonarrsOf || {}))
+    S.sonarrsOf[tvdb] = libs.map((o) => renamed.has(o.name) ? { ...o, name: renamed.get(o.name) } : o);
   savedConfig = stableJSON(base);
   if (redraw) renderSettings();  // another tab's settings now shown, its Sonarrs and servers too
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
