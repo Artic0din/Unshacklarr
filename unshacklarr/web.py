@@ -3218,6 +3218,8 @@ async def unshackle_maintenance(request):
         raise web.HTTPBadGateway(text=no_credentials(e))
     if action == "refresh-services":
         UNSHACKLE.configure(sonarr_sync.SETTINGS)  # forget the services it listed before
+    if action == "clear-cache":
+        await asyncio.to_thread(sonarr_sync.record_authentication_clear)
     return web.json_response(result)
 
 
@@ -3239,14 +3241,21 @@ def clear_service_cache(tag: str) -> int:
     if any(j.get("service") == tag and j.get("status") in ("queued", "downloading") for j in UNSHACKLE.jobs()):
         raise web.HTTPConflict(text=f"A {tag} download is running: clear its cache once it is done")
     folder = cache_folder() / tag
-    freed = 0
-    for item in folder.iterdir() if folder.is_dir() else []:
-        if item.is_dir() and not item.is_symlink():
-            freed += sum(f.stat().st_size for f in item.rglob("*") if f.is_file())
-            shutil.rmtree(item)
-        else:
-            freed += item.lstat().st_size
-            item.unlink()
+    freed, deleting, done = 0, False, False
+    try:
+        for item in folder.iterdir() if folder.is_dir() else []:
+            if item.is_dir() and not item.is_symlink():
+                freed += sum(f.stat().st_size for f in item.rglob("*") if f.is_file())
+                deleting = True
+                shutil.rmtree(item)
+            else:
+                freed += item.lstat().st_size
+                deleting = True
+                item.unlink()
+        done = True
+    finally:  # even a part deleted is no longer evidence of a sign-in; nothing deleted leaves it as it was
+        if done or deleting:
+            sonarr_sync.record_authentication_clear(tag)
     return freed
 
 
@@ -3291,15 +3300,24 @@ async def stop_run(request):
     job_id = card.get("job_id")
     if run_id not in sonarr_sync.EpisodeRun.active:
         raise web.HTTPConflict(text="This download is not running")
-    if not job_id:  # waiting for a free slot (Downloads at once): it ends there instead of starting
-        with sonarr_sync.slots:
-            sonarr_sync.stop_waiting.add(run_id)
-            sonarr_sync.slots.notify_all()
+    # marked whatever it does now: it ends where it waits for a slot, or before its next download reaches serve
+    # (between two tries, a later episode of its job, a fallback try)
+    with sonarr_sync.slots:
+        sonarr_sync.stop_waiting.add(run_id)
+        sonarr_sync.slots.notify_all()
+    if not job_id or (card.get("live") or {}).get("status") in sonarr_sync.TERMINAL:  # no job, or an ended try's
         return web.json_response({"stopping": True})
+    backend = sonarr_sync.backend_named(card.get("backend"))
     try:
-        await asyncio.to_thread(sonarr_sync.backend_named(card.get("backend")).cancel, job_id)
+        await asyncio.to_thread(backend.cancel, job_id)
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=no_credentials(e))
+        # the run's own job loop sees the mark too and may have cancelled it first: that is a stop done
+        try:
+            cancelled = (await asyncio.to_thread(backend.job, job_id)).get("status") in sonarr_sync.TERMINAL
+        except UnshackleError:
+            cancelled = False
+        if not cancelled:
+            raise web.HTTPBadGateway(text=no_credentials(e))
     return web.json_response({"stopping": True})
 
 
@@ -3312,9 +3330,8 @@ async def stop_job(request):
         raise web.HTTPBadRequest(text="Unknown job")
     sonarr_sync.pause_job(batch, False)  # a paused job stops too: its loop wakes to skip what was cancelled
     for episode_id, card in list(sonarr_sync.waiting.items()):
-        if card.get("batch") == batch and sonarr_sync.waiting.pop(episode_id, None):
-            sonarr_sync.unqueued.add(episode_id)
-            await asyncio.to_thread(sonarr_sync.cancel_queued, card)
+        if card.get("batch") == batch and (taken := sonarr_sync.take_out(episode_id)):
+            await asyncio.to_thread(sonarr_sync.cancel_queued, taken)
     cancelled = 0
     for c in await asyncio.to_thread(run_cards):
         if c.get("batch") == batch and c["outcome"] == "running" and c.get("job_id") and c.get("step") in ("queued", "downloading"):
@@ -3329,10 +3346,9 @@ async def stop_job(request):
 async def unqueue(request):
     """Take an episode out of its job's queue: it is skipped when its turn comes."""
     episode_id = int(request.match_info["episode_id"])
-    card = sonarr_sync.waiting.pop(episode_id, None)
+    card = sonarr_sync.take_out(episode_id)
     if card is None:
         raise web.HTTPConflict(text="This episode has already started")
-    sonarr_sync.unqueued.add(episode_id)
     await asyncio.to_thread(sonarr_sync.cancel_queued, card)
     return web.json_response({"unqueued": episode_id})
 
@@ -4778,14 +4794,25 @@ async def list_leftovers(_):
 async def leftover_action(request):
     body = await json_object(request)
     folder = str(body.get("folder") or "")
-    try:
+    delete = request.match_info["action"] == "delete"
+
+    def act() -> bool:
+        """False: a download uses the folder now (Sonarr emptied it, a new one started into it): left alone."""
         path = sonarr_sync.leftover_path(folder)
-        if request.match_info["action"] == "delete":
-            await asyncio.to_thread(sonarr_sync.shutil.rmtree, path, True)
-        else:
-            await asyncio.to_thread(sonarr_sync.import_leftover, folder)
+        with sonarr_sync.episode_lock(path) as mine:
+            if not mine:
+                return False
+            if delete:
+                sonarr_sync.shutil.rmtree(path, True)
+            else:
+                sonarr_sync.import_leftover(folder)
+        return True
+    try:
+        done = await asyncio.to_thread(act)
     except (RuntimeError, requests.RequestException) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
+    if not done:
+        raise web.HTTPConflict(text="This episode is downloading now: try again once it is done")
     return web.json_response({"done": True})
 
 
@@ -5687,6 +5714,7 @@ def authentication_status(
         for service in [*(main_services or []), *services]
     }
     observations = sonarr_sync.read_authentication_observations()
+    clears = sonarr_sync.read_authentication_clears()
     identities = {(service["tag"], str(service.get("backend") or "")) for service in services}
     successes_by_identity = collections.defaultdict(list)
     explicit_successes_by_identity = collections.defaultdict(list)
@@ -5718,11 +5746,16 @@ def authentication_status(
     for tag, backend in sorted(identities):
         methods = service_methods.get((tag, backend))
         stored = (observations.get(backend) or {}).get(tag) or {}
+        cleared = max((clears.get(backend) or {}).get(tag, ""), (clears.get(backend) or {}).get(sonarr_sync.ALL_SERVICES, ""))
+        if stored.get("observed_at", "") <= cleared:
+            stored = {}
+        elif (stored.get("validated_at") or "") <= cleared:
+            stored = {**stored, "validated_at": None}
         status = {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None}
-        successes = successes_by_identity[tag, backend]
-        failures = failures_by_identity[tag, backend]
+        successes = [at for at in successes_by_identity[tag, backend] if at > cleared]
+        failures = [at for at in failures_by_identity[tag, backend] if at > cleared]
         if methods is None and not stored and not failures:
-            successes = explicit_successes_by_identity[tag, backend]
+            successes = [at for at in explicit_successes_by_identity[tag, backend] if at > cleared]
         if methods == []:
             status.update(state="anonymous", needs_user_action=False)
         elif methods is not None or stored or successes or failures:
@@ -5941,6 +5974,7 @@ async def terminal(request):
         if run_id:
             await send_log(ws, run_id)
         sent: set[str] = set()
+        over = False  # the job seen ended: one more read, its last card may have come since the one before
         while batch and not ws.closed:
             cards = sorted((c for c in await asyncio.to_thread(run_cards) if c.get("batch") == batch and not c.get("waiting") and c["outcome"] != "cancelled"), key=lambda c: c["id"])
             todo = [c for c in cards if c["id"] not in sent]
@@ -5949,8 +5983,10 @@ async def terminal(request):
                 await ws.send_bytes(f"\r\n\x1b[1;36m━━━ {c['series']} {c['sxxeyy']} ━━━\x1b[0m\r\n".encode())
                 await send_log(ws, c["id"])
                 sent.add(c["id"])
-            elif any(w.get("batch") == batch for w in list(sonarr_sync.waiting.values())):
-                await asyncio.sleep(0.5)  # the next one has not started yet
+            elif batch in sonarr_sync.running_jobs or any(w.get("batch") == batch for w in list(sonarr_sync.waiting.values())):
+                await asyncio.sleep(0.5)  # the next one has not started yet (out of the queue, its log not yet made)
+            elif not over:
+                over = True
             else:
                 break
         await ws.close()
@@ -6322,10 +6358,9 @@ async def v1_start_download(request):
 async def v1_stop(request):
     """Stop a download: one running is cancelled, one still queued leaves the queue."""
     if m := re.fullmatch(r"waiting-(\d+)", request.match_info["run_id"]):
-        card = sonarr_sync.waiting.pop(int(m[1]), None)
+        card = sonarr_sync.take_out(int(m[1]))
         if card is None:
             raise web.HTTPConflict(text="This download has already started")
-        sonarr_sync.unqueued.add(int(m[1]))
         await asyncio.to_thread(sonarr_sync.cancel_queued, card)
         return web.json_response({"stopping": True})
     return await stop_run(request)

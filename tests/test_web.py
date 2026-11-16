@@ -7785,6 +7785,145 @@ def test_a_queued_jobs_own_season_map_is_read_back_as_the_sync_reads_it(tmp_path
     assert kept["20261021-121218-44d6d0"] == damaged["20261021-121218-44d6d0"]
 
 
+def test_a_queued_episode_taken_out_is_never_handed_to_the_job_loop_as_well(tmp_path, monkeypatch):
+    # the job loop reaches the episode between the card leaving the queue and its "taken out" mark: it must still see
+    # the mark, whichever of the cross, the API's stop or Stop job took it out
+    import threading
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    monkeypatch.setattr(sync, "cancel_queued", lambda card: None)
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    seen, turns = [], []
+
+    class Racy(dict):
+        def pop(self, key, *default):
+            card = super().pop(key, *default)
+
+            def loop_turn():  # the job loop's turn for that episode, as it takes it
+                with sync.jobs_lock:
+                    seen.append(key in sync.unqueued)
+                    sync.unqueued.discard(key)
+            turns.append(threading.Thread(target=loop_turn))
+            turns[-1].start()
+            turns[-1].join(0.3)
+            return card
+    batch = "20261116-120000-abcdef"
+    monkeypatch.setattr(sync, "waiting", Racy({n: {"batch": batch, "tvdbId": 1, "sxxeyy": f"S02E0{n - 200}"} for n in (205, 206, 207)}))
+    asyncio.run(web.unqueue(SimpleNamespace(match_info={"episode_id": "205"})))
+    asyncio.run(web.v1_stop(SimpleNamespace(match_info={"run_id": "waiting-206"})))
+    asyncio.run(web.stop_job(SimpleNamespace(match_info={"batch": batch})))
+    for t in turns:
+        t.join(5)
+    assert seen == [True, True, True] and not sync.waiting and not sync.unqueued
+
+
+@pytest.mark.parametrize("ends", ["after", "during"])
+def test_a_jobs_terminal_waits_for_the_episode_that_left_the_queue_but_has_no_log_yet(tmp_path, monkeypatch, ends):
+    # the job's last episode is out of the queue and its run not yet made: the terminal is not done, it shows it,
+    # even when the job ends between the terminal's read of the cards and its look at the job
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    run_id, batch = "20261116-000000-123456-1-S01E02", "20261116-000000-abcdef"
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.log").write_bytes(b"last episode\n")
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"ended": "now"}))
+    monkeypatch.setitem(sync.running_jobs, batch, {"episodes": [], "stubs": {}})
+    calls = []
+
+    def run_cards():
+        calls.append(1)
+        if len(calls) == 1:
+            if ends == "during":  # read before its card was written, the job over before the terminal looks
+                sync.running_jobs.pop(batch, None)
+            return []  # in between: nothing queued, nothing started
+        sync.running_jobs.pop(batch, None)
+        return [{"id": run_id, "batch": batch, "series": "Show", "sxxeyy": "S01E02", "outcome": "downloaded"}]
+    monkeypatch.setattr(web, "run_cards", run_cards)
+
+    class Socket:
+        closed = False
+
+        def __init__(self):
+            self.sent = []
+
+        async def prepare(self, request):
+            pass
+
+        async def send_bytes(self, data):
+            self.sent.append(data)
+
+        async def close(self):
+            self.closed = True
+    socket = Socket()
+    monkeypatch.setattr(web.web, "WebSocketResponse", lambda **kwargs: socket)
+    request = SimpleNamespace(headers={"Origin": "http://localhost"}, host="localhost", query={"batch": batch})
+    asyncio.run(web.terminal(request))
+    assert b"last episode\n" in socket.sent and socket.closed
+
+
+@pytest.mark.parametrize("action", ["delete", "import"])
+def test_a_waiting_folder_a_new_download_now_uses_is_neither_deleted_nor_imported(tmp_path, monkeypatch, action):
+    # Sonarr emptied the folder and a new download started into it: a click on the list shown before refuses
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    folder = "unshackle-111-S02E05"
+    monkeypatch.setattr(sync, "DOWNLOADS", tmp_path)
+    (tmp_path / folder).mkdir()
+    (tmp_path / folder / "Show.S02E05.mkv").write_bytes(b"x")
+    imported = []
+    monkeypatch.setattr(sync, "import_leftover", lambda f: imported.append(f))
+
+    class Request:
+        match_info = {"action": action}
+
+        async def json(self):
+            return {"folder": folder}
+    with sync.episode_lock(tmp_path / folder):  # the new download
+        with pytest.raises(web.web.HTTPConflict):
+            asyncio.run(web.leftover_action(Request()))
+    assert (tmp_path / folder / "Show.S02E05.mkv").exists() and not imported
+    asyncio.run(web.leftover_action(Request()))  # done downloading: it goes
+    assert imported == [folder] if action == "import" else not (tmp_path / folder).exists()
+
+
+def test_stop_ignores_the_job_of_a_try_that_ended_and_still_stops_the_run(tmp_path, monkeypatch):
+    # between two tries the card still names the last try's job, over on serve: that one is not cancelled, the run is
+    # marked stopped instead, which its next try sees
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    run_id = "20261116-000000-123456-1-S01E02"
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "old", "live": {"status": "failed"}}))
+    monkeypatch.setattr(sync.EpisodeRun, "active", {run_id})
+    cancelled = []
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", lambda job_id: cancelled.append(job_id))
+    request = SimpleNamespace(match_info={"run_id": run_id})
+    assert json.loads(asyncio.run(web.stop_run(request)).text) == {"stopping": True}
+    assert cancelled == [] and run_id in sync.stop_waiting
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "live", "live": {"status": "downloading"}}))
+    asyncio.run(web.stop_run(request))  # a job going on: cancelled as before
+    assert cancelled == ["live"]
+
+
+def test_stop_is_done_when_the_job_loop_already_cancelled_the_job_but_not_when_serve_still_runs_it(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    run_id = "20261116-000000-123456-1-S01E02"
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "live", "live": {"status": "downloading"}}))
+    monkeypatch.setattr(sync.EpisodeRun, "active", {run_id})
+
+    def refused(job_id):
+        raise sync.UnshackleError("no such job")
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", refused)
+    request = SimpleNamespace(match_info={"run_id": run_id})
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "cancelled"})  # the job loop got there first
+    assert json.loads(asyncio.run(web.stop_run(request)).text) == {"stopping": True}
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "downloading"})  # still going: Stop failed
+    with pytest.raises(web.web.HTTPBadGateway):
+        asyncio.run(web.stop_run(request))
+
+
 def test_a_post_without_the_x_unshackle_header_is_refused_before_it_runs(tmp_path, monkeypatch):
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -7906,6 +8045,144 @@ def test_the_page_fits_and_ranks_tracks_on_a_ladder_as_the_server_does(tmp_path,
     assert len(reached) >= 5  # the cases reach most steps, not one
 
 
+def seed_confirmed_sign_ins(web):
+    """PAIRED and OTHER confirmed on the main server, PAIRED on the server "vpn", all before any clear."""
+    confirmed = {"state": "validated", "observed_at": "2026-11-14T02:00:00+00:00", "validated_at": "2026-11-14T02:00:00+00:00"}
+    web.sonarr_sync.write_atomic(web.sonarr_sync.AUTHENTICATION_FILE, json.dumps(
+        {"": {"PAIRED": confirmed, "OTHER": confirmed}, "vpn": {"PAIRED": confirmed}}))
+    card = {"service": "PAIRED", "outcome": "downloaded", "ended": "2026-11-14T04:00:00+00:00"}  # a run card says so too
+    services = [{"tag": "PAIRED", "auth_methods": ["pairing"]}, {"tag": "OTHER", "auth_methods": ["cookies"]}]
+    return [card], services
+
+
+def test_a_cleared_cache_leaves_no_sign_in_confirmed(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    states = lambda: {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states() == {"PAIRED": "validated", "OTHER": "validated", "PAIRED@vpn": "validated"}
+
+    web.sonarr_sync.record_authentication_clear()  # every service of the main server
+
+    status = web.authentication_status(cards, services)
+    assert states() == {"PAIRED": "unknown", "OTHER": "unknown", "PAIRED@vpn": "validated"}  # the other server is not cleared
+    assert status["PAIRED"]["validated_at"] is None and status["PAIRED"]["observed_at"] is None
+
+    newer = [{"service": "PAIRED", "outcome": "downloaded", "ended": "2999-01-01T00:00:00+00:00"}]
+    assert {k: s["state"] for k, s in web.authentication_status(newer, services).items()}["PAIRED"] == "validated"  # a sign-in after it
+    assert {k: s["state"] for k, s in web.authentication_status(newer, services).items()}["OTHER"] == "unknown"
+
+
+def test_clearing_one_service_unconfirms_only_that_service(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+
+    web.sonarr_sync.record_authentication_clear("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states == {"PAIRED": "unknown", "OTHER": "validated", "PAIRED@vpn": "validated"}
+
+
+def test_a_failed_clear_leaves_the_sign_ins_as_they_were(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    answers = [web.UnshackleError("no answer"), {"cleared": True}]
+
+    def call(method, path, **kw):
+        if isinstance(answers[0], Exception):
+            raise answers.pop(0)
+        return answers.pop(0)
+
+    monkeypatch.setattr(web.UNSHACKLE, "call", call)
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            post = lambda: client.post("/api/unshackle/maintenance/clear-cache", headers={"X-Unshackle": "1"})
+            failed = (await post()).status
+            after_failure = web.authentication_status(cards, services)["PAIRED"]["state"]
+            return failed, after_failure, (await post()).status, web.authentication_status(cards, services)["PAIRED"]["state"]
+
+    assert asyncio.run(go()) == (502, "validated", 200, "unknown")
+
+
+def test_recording_a_cache_clear_does_not_block_the_event_loop(tmp_path, monkeypatch):
+    import threading
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    ran_on = []
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **kw: {"cleared": True})
+    monkeypatch.setattr(web.sonarr_sync, "record_authentication_clear", lambda *a, **kw: ran_on.append(threading.current_thread()))
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            loop_thread = threading.current_thread()
+            status = (await client.post("/api/unshackle/maintenance/clear-cache", headers={"X-Unshackle": "1"})).status
+            return status, loop_thread
+
+    status, loop_thread = asyncio.run(go())
+    assert status == 200 and ran_on and ran_on[0] is not loop_thread  # its lock and fsync would stall every request
+
+
+def test_clearing_one_services_cache_folder_unconfirms_it(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(tmp_path / "Cache")
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "PAIRED"}, {"tag": "OTHER"}])
+    monkeypatch.setattr(web.UNSHACKLE, "jobs", lambda: [])
+
+    web.clear_service_cache("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states == {"PAIRED": "unknown", "OTHER": "validated", "PAIRED@vpn": "validated"}
+
+
+def test_a_cache_clear_that_fails_partway_still_unconfirms_the_service(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(tmp_path / "Cache")
+    (tmp_path / "Cache" / "PAIRED").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Cache" / "PAIRED" / "a").write_text("x")
+    (tmp_path / "Cache" / "PAIRED" / "b").write_text("x")
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "PAIRED"}, {"tag": "OTHER"}])
+    monkeypatch.setattr(web.UNSHACKLE, "jobs", lambda: [])
+    from pathlib import Path
+    real_unlink, calls = Path.unlink, []
+
+    def unlink(self, *a, **k):
+        calls.append(self)
+        if len(calls) > 1:
+            raise PermissionError("locked")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(Path, "unlink", unlink)
+
+    with pytest.raises(PermissionError):
+        web.clear_service_cache("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states["PAIRED"] == "unknown"  # part of its sign-in was deleted: no longer evidence
+
+
+def test_a_cache_clear_that_fails_before_deleting_anything_keeps_the_sign_in(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    cards, services = seed_confirmed_sign_ins(web)
+    web.sonarr_sync.SETTINGS["cache_dir"] = str(tmp_path / "Cache")
+    (tmp_path / "Cache" / "PAIRED").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "Cache" / "PAIRED" / "a").write_text("x")
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "PAIRED"}, {"tag": "OTHER"}])
+    monkeypatch.setattr(web.UNSHACKLE, "jobs", lambda: [])
+    from pathlib import Path
+
+    def lstat(self):
+        raise PermissionError("cannot look")
+    monkeypatch.setattr(Path, "lstat", lstat)
+
+    with pytest.raises(PermissionError):
+        web.clear_service_cache("PAIRED")
+
+    states = {key: status["state"] for key, status in web.authentication_status(cards, services).items()}
+    assert states["PAIRED"] == "validated"  # nothing was deleted
 def test_a_non_ascii_setup_code_or_session_signature_is_refused_not_a_500(tmp_path, monkeypatch):
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer

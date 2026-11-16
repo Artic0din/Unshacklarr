@@ -82,12 +82,23 @@ function langCorner() {
   return corner;
 }
 let T = null, TP = [];  // exact texts; patterns, the most specific first
+const PLURALS = new Intl.PluralRules(LANG);
+/* A text is one string, or one string per plural category of the language ({ one, few, many, other }): the number picks it. */
+function plural(to, n) { return typeof to === "string" ? to : to[PLURALS.select(n)] ?? to.other; }
+function templates(texts) {
+  return Object.entries(texts).filter(([k]) => /\{\d+\}/.test(k)).map(([k, to]) => {
+    const parts = k.split(/\{\d+\}/);
+    const re = new RegExp("^" + parts.map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("(.*?)") + "$", "s");  // a hole may be empty: a plural's "s"
+    const letters = parts.join("").replace(/[^\p{L}]/gu, "").length;
+    return { re, to, joined: parts.join("").includes(" · "), anchor: parts.reduce((a, b) => (b.length > a.length ? b : a), ""), weight: parts.join("").length, weak: letters < 10 && parts.filter((x) => x.trim()).length < 2 };
+  }).filter((p) => /\p{L}/u.test(p.anchor)).sort((a, b) => b.weight - a.weight);
+}
 const translated = new Set();  // texts already in the language: not taken for English again
 const trSeen = new Map();  // key -> its translation, or null: a series' title is tried against the patterns once
 function tr(text, depth = 0) {
   const key = text.replace(/\s+/g, " ").trim();
   if (!T || !key) return text;
-  let out = T[key];
+  let out = T[key] === undefined ? undefined : plural(T[key], NaN);
   if (out === undefined && depth === 0 && trSeen.has(key)) out = trSeen.get(key) ?? undefined;
   else if (out === undefined && depth === 0) {
     out = trFind(key, depth);
@@ -98,22 +109,24 @@ function tr(text, depth = 0) {
   return out === undefined ? text : text.match(/^\s*/)[0] + out + text.match(/\s*$/)[0];
 }
 function trFind(key, depth) {
-  let out;
-  if (key.includes(" · ")) {  // pieces joined by " · ": each its own text
+  let out = trTemplate(key, depth, true);  // a template that has the " · " itself ("Sign-in failed · {0}"): before pieces are split
+  if (out === undefined && key.includes(" · ")) {  // pieces joined by " · ": each its own text
     const parts = key.split(" · "), done = parts.map((x) => tr(x, depth + 1));
     if (done.some((x, i) => x !== parts[i])) out = done.join(" · ");
   }
-  if (out === undefined && depth < 3 && key.length <= 300) {  // a long text (a log line) is no template: their lazy groups
-    for (const p of TP) {                                       // backtrack for seconds on it
-      if (!key.includes(p.anchor)) continue;
-      const m = p.re.exec(key);
-      // a template with little text of its own ("{0} ago", "{0} of {1}") takes short fillers only, not a whole sentence
-      // ... and only numbers, or texts it has a translation for: "5 min ago", not "Set up Unshacklarr in a few steps"
-      if (m && p.weak && m.slice(1).some((x) => x.length > 24 || !(/\d/.test(x) || T[x.trim()] !== undefined || !x.trim()))) continue;
-      if (m) { out = p.to.replace(/\{(\d+)\}/g, (_, i) => tr(m[+i + 1] ?? "", depth + 1)); break; }
-    }
+  return out ?? trTemplate(key, depth, false);
+}
+function trTemplate(key, depth, joined) {
+  if (depth >= 3 || key.length > 300) return undefined;  // a long text (a log line) is no template: their lazy groups backtrack for seconds on it
+  for (const p of TP) {
+    if (p.joined !== joined || !key.includes(p.anchor)) continue;
+    const m = p.re.exec(key);
+    // a template with little text of its own ("{0} ago", "{0} of {1}") takes short fillers only, not a whole sentence
+    // ... and only numbers, or texts it has a translation for: "5 min ago", not "Set up Unshacklarr in a few steps"
+    if (m && p.weak && m.slice(1).some((x) => x.length > 24 || !(/\d/.test(x) || T[x.trim()] !== undefined || !x.trim()))) continue;
+    if (m) return plural(p.to, +m[1]).replace(/\{(\d+)\}/g, (_, i) => tr(m[+i + 1] ?? "", depth + 1));
   }
-  return out;
+  return undefined;
 }
 const I18N_SKIP = ".term, .cm-editor, pre, code, textarea, script, style, [translate=no]", I18N_ATTRS = ["placeholder", "title", "aria-label", "data-tip"];
 function trText(node) {
@@ -146,12 +159,7 @@ const i18nReady = (async () => {  // awaited before the first screen; English if
   try {
     if (LANG === "en") return;
     T = await (await fetch(`/i18n/${LANG}.json`, { cache: "no-cache" })).json();
-    TP = Object.entries(T).filter(([k]) => /\{\d+\}/.test(k)).map(([k, to]) => {
-      const parts = k.split(/\{\d+\}/);
-      const re = new RegExp("^" + parts.map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("(.*?)") + "$", "s");  // a hole may be empty: a plural's "s"
-      const letters = parts.join("").replace(/[^\p{L}]/gu, "").length;
-      return { re, to, anchor: parts.reduce((a, b) => (b.length > a.length ? b : a), ""), weight: parts.join("").length, weak: letters < 10 && parts.filter((x) => x.trim()).length < 2 };
-    }).filter((p) => /\p{L}/u.test(p.anchor)).sort((a, b) => b.weight - a.weight);
+    TP = templates(T);
     trTree(document.body);
     new MutationObserver((changes) => {
       for (const c of changes) {
