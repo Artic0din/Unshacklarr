@@ -2464,5 +2464,5 @@
  "{0} session expired": "Сессия истекла: {0}",
  "{0} session rejected": "Сессия отклонена: {0}",
  "{0} timed out": "Тайм-аут: {0}",
- "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve был занят {0} часа: лимит запросов для этого ключа всё ещё достигнут, загрузка прекращена"
+ "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} был занят {1} часа: лимит запросов для этого ключа всё ещё достигнут, загрузка прекращена"
 }

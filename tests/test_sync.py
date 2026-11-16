@@ -5415,7 +5415,7 @@ def test_a_serve_busy_for_two_hours_gives_the_download_up_and_frees_its_slot(tmp
     cancelled = []
 
     class Serve:
-        name = ""
+        name = "nas"
         def download(self, payload): return "j1"
         def job(self, job_id): raise serve_error("unshackle serve is busy: its limit of requests for this key is reached",
                                                  429, retry_after=3600)
@@ -5424,11 +5424,11 @@ def test_a_serve_busy_for_two_hours_gives_the_download_up_and_frees_its_slot(tmp
     monkeypatch.setattr(sync, "backend_named", lambda name=None: Serve())
     run = sync.EpisodeRun({"id": 5, "seriesId": 1, "series": {"title": "Show", "tvdbId": 111}, "seasonNumber": 1,
                            "episodeNumber": 5}, {"service": "X"}, "manual")
-    with pytest.raises(sync.JobFailed, match="stayed busy for 2 hours") as failed:
+    with pytest.raises(sync.JobFailed, match="^unshackle serve nas stayed busy for 2 hours") as failed:
         sync.run_job_retrying({"service": "X"}, run, sleep=clock.sleep)
     assert clock.now == sync.BUSY_GIVE_UP  # 120 s apart at most: given up at the first look past 2 hours, not tried again
     assert cancelled == ["j1"] and failed.value.status == "failed"
-    assert run.id not in sync.slot_jobs.get("", [])  # the next download in line gets the slot
+    assert run.id not in sync.slot_jobs.get("nas", [])  # the next download in line gets the slot
 
 
 def test_a_serve_busy_less_than_two_hours_at_a_time_keeps_the_download(tmp_path, monkeypatch):

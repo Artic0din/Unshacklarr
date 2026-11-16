@@ -2485,7 +2485,8 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
                 busy_since = time.monotonic() if busy_since is None else busy_since
                 if time.monotonic() - busy_since >= BUSY_GIVE_UP:  # timed, not counted: an hourly limit gets through
                     give_up()
-                    raise JobFailed(f"unshackle serve stayed busy for {BUSY_GIVE_UP // 3600} hours: its limit of "
+                    raise JobFailed(f"unshackle serve{f' {backend.name}' if backend.name else ''} stayed busy for "
+                                    f"{BUSY_GIVE_UP // 3600} hours: its limit of "
                                     "requests for this key is still reached, the download is given up") from e
                 time.sleep(min(e.retry_after, 120))
                 continue
