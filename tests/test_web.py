@@ -4557,6 +4557,29 @@ def test_a_restore_refuses_what_a_save_would_refuse(tmp_path, monkeypatch):
     assert (tmp_path / "config.yaml").read_text() == before  # nothing written: the app still starts
 
 
+def test_a_restore_takes_a_null_number_setting_as_its_default(tmp_path, monkeypatch):
+    # a hand-edited config may say history_days: null, which the app reads as the default: its backup restores
+    import asyncio
+    import yaml
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])
+    backup = yaml.safe_dump({"settings": {"history_days": None}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            r = await client.post("/api/restore", json={"password": "password1", "text": backup}, headers={"X-Unshackle": "1"})
+            return r.status, await r.text()
+
+    status, text = asyncio.run(go())
+    assert status == 200, text
+
+
 def test_a_restore_checks_other_sonarrs_against_the_backups_own_main_one(tmp_path, monkeypatch):
     # the backup's main Sonarr replaces this install's: an other Sonarr at this install's main address is fine
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))

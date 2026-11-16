@@ -2984,7 +2984,7 @@ def backup_data(text: str, passphrase: str = "") -> dict:
     # refused here, before anything is written. Services by their name only: it may come from another install's
     restored = {"settings": {}, "auth": {}, "defaults": {}, "service_defaults": {}, "series": {}, "notifications": {},
                 "hidden_series": [], **{k: v for k, v in data.items() if v is not None}, "quality_ladders": sonarr_sync.ladders(data)}
-    restored["settings"] = {k: v for k, v in restored["settings"].items() if not (k in NUMBER_SETTINGS and v == "")}  # the default, as above
+    restored["settings"] = {k: v for k, v in restored["settings"].items() if not (k in NUMBER_SETTINGS and v in ("", None))}  # the default, as above
     checked_config(copy.deepcopy(restored), restored, None)
     return data
 
