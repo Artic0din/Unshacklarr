@@ -424,7 +424,7 @@ async function backupFile(name) {
     const r = await api("/api/backups/download", { method: "POST", body: JSON.stringify({ password: $("#bk-pass").value, name }) });
     const a = el("a", { href: URL.createObjectURL(new Blob([r.text], { type: "text/yaml" })), download: r.name });
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
     bkSay(`${r.name} downloaded`, false);
     $("#bk-pass").value = "";  // typed to get the file, not kept
   } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
@@ -438,7 +438,7 @@ $("#bk-save").onclick = async () => {
     const r = await api("/api/backup", { method: "POST", body: JSON.stringify({ password: $("#bk-pass").value }) });
     const a = el("a", { href: URL.createObjectURL(new Blob([r.text], { type: "text/yaml" })), download: r.name });
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
     bkSay(`${r.name} downloaded`, false);
     $("#bk-pass").value = "";  // typed to get the file, not kept
   } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }

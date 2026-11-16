@@ -875,7 +875,7 @@ async function downloadDiagnostic(c) {
     if (!r.ok) throw await responseError(r);
     const a = el("a", { href: URL.createObjectURL(await r.blob()), download: `unshacklarr-diagnostic-${c.id}.md` });
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
     toast("Diagnostic downloaded: check it, then attach it to the issue");
   } catch (e) { toast(e.message, true); }
 }

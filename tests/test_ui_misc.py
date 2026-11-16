@@ -160,3 +160,30 @@ vm.runInContext(grab(read(file), new RegExp(pattern)), ctx);
 Promise.resolve(eval(call)).then(() => console.log(JSON.stringify($("#bk-pass").value)));
 """, str(JS / "settings-options.js"), pattern, call, str(fails).lower())
     assert left == ("secret" if fails else "")
+
+
+DOWNLOAD_ENTRY = {
+    "backup file": ("settings-options.js", BACKUP_ENTRY["download"]),
+    "backup": ("settings-options.js", BACKUP_ENTRY["save"]),
+    "diagnostic": ("activity.js", ("async function downloadDiagnostic\\b[\\s\\S]*?\\n}\\n", 'ctx.downloadDiagnostic({ id: "r1" })')),
+}
+
+
+@pytest.mark.parametrize("entry", DOWNLOAD_ENTRY)
+def test_a_download_keeps_its_file_for_30_seconds_for_safari(entry):
+    file, (pattern, call) = DOWNLOAD_ENTRY[entry]
+    seen = node(r"""
+const [file, pattern, call] = process.argv.slice(1);
+const nodes = {}, revoked = [], timers = [];
+const $ = (sel) => (nodes[sel] ??= { value: "pw", hidden: false, focus() {}, select() {}, replaceChildren() {}, click() {} });
+const ctx = sandbox({ $, el: (tag, props) => ({ ...props, click() {} }), bkPassword: () => true, bkSay() {}, toast() {}, errorDetail: (e) => e.message,
+  URL: { createObjectURL: () => "blob:file", revokeObjectURL: (u) => revoked.push(u) }, setTimeout: (fn, ms) => timers.push([fn, ms]),
+  fetch: async () => ({ ok: true, blob: async () => ({}) }), api: async () => ({ text: "yaml", name: "b.yaml" }) });
+vm.runInContext(grab(read(file), new RegExp(pattern)), ctx);
+Promise.resolve(eval(call)).then(() => {
+  const before = [...revoked];
+  timers.forEach(([fn]) => fn());
+  console.log(JSON.stringify({ before, delays: timers.map(([, ms]) => ms), after: revoked }));
+});
+""", str(JS / file), pattern, call)
+    assert seen == {"before": [], "delays": [30000], "after": ["blob:file"]}
