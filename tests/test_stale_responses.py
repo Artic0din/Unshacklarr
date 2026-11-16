@@ -34,7 +34,7 @@ const ctx = { runCards: [card(10)], runsTimer: null, liveFeed: null, feedReloadi
   $: () => ({ hidden: false, textContent: "" }), api: (path) => (path === "/api/runs" ? new Promise((resolve) => { answer = resolve; }) : Promise.resolve({ items: [] })),
   renderConsole() {}, followLive() {}, activityLater() {}, failed: () => null, setTimeout: () => 0, clearTimeout() {} };
 vm.createContext(ctx);
-vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged", "further"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
+vm.runInContext("let runsSeq = 0; const speedLog = {}, muxLog = {}, barWidths = new Map(), thumbs = new Map(), tracksOpen = new Set();" + ["isLive", "feedChanged", "further", "forgetGoneRuns"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
 (async () => {
   const reload = ctx.openActivity();
   ctx.liveTick(JSON.stringify([card(Number(process.argv[2]))]));  // drawn while the history answer is on its way
@@ -53,7 +53,7 @@ const ctx = { runCards: [card(10)], runsTimer: null, liveFeed: null, feedReloadi
   $: () => ({ hidden: false, textContent: "" }), api: async (path) => (path === "/api/runs" ? [card(30)] : { items: [] }),
   renderConsole() {}, followLive() {}, activityLater() {}, failed: () => null, setTimeout: () => 0, clearTimeout() {} };
 vm.createContext(ctx);
-vm.runInContext("let runsSeq = 0;" + ["isLive", "feedChanged", "further"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
+vm.runInContext("let runsSeq = 0; const speedLog = {}, muxLog = {}, barWidths = new Map(), thumbs = new Map(), tracksOpen = new Set();" + ["isLive", "feedChanged", "further", "forgetGoneRuns"].map((n) => grab(n)).join("") + grab("openActivity") + grab("liveTick"), ctx);
 ctx.openActivity().then(() => console.log(JSON.stringify({ progress: ctx.runCards[0].live.progress })));
 """, str(JS / "activity.js"))
     assert shown == {"progress": 30}
