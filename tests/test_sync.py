@@ -6386,6 +6386,28 @@ def test_an_audio_merge_cut_short_is_never_offered_for_import(tmp_path, monkeypa
     assert (busy / "Show - S02E06.mkv.part").exists()
 
 
+def test_removing_cut_short_merges_never_deletes_through_a_folder_swapped_for_a_link(tmp_path, monkeypatch):
+    # another writer of the shared folder swaps an episode folder for a link between the start-up clean-up's look and its delete
+    sync = load(tmp_path, monkeypatch)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "Show - S02E05.mkv.part").write_bytes(b"keep me")
+    folder = tmp_path / "unshackle-111-S02E05"
+    folder.mkdir()
+    (folder / "Show - S02E05.mkv.part").write_bytes(b"half")
+    real_is_file = Path.is_file
+
+    def is_file(self):
+        answer = real_is_file(self)
+        if self.parent == folder and not folder.is_symlink():  # looked at, then swapped
+            shutil.rmtree(folder)
+            folder.symlink_to(elsewhere, target_is_directory=True)
+        return answer
+    monkeypatch.setattr(Path, "is_file", is_file)
+    sync.remove_partial_merges()
+    assert (elsewhere / "Show - S02E05.mkv.part").read_bytes() == b"keep me"
+
+
 def test_an_empty_episode_folder_does_not_turn_adding_the_audio_into_a_whole_download(tmp_path, monkeypatch):
     # A folder left without a video (an import done after its poll gave up) is in the way of nothing, as in the sync
     sync = load(tmp_path, monkeypatch)

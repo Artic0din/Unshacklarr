@@ -4204,9 +4204,10 @@ def remove_partial_merges() -> int:
             continue
         try:
             stray = [f for f in d.glob(f"*{PARTIAL}") if f.is_file() and not f.is_symlink()]
-            for f in stray:
-                f.unlink()
-                removed += 1
+            left = unlink_inside(d, stray)  # the folder may be swapped for a link after these checks
+            removed += len(stray) - len(left)
+            if left:
+                print(f"Could not remove a cut-short merge in {d.name}: {', '.join(f.name for f in left)}", file=sys.stderr)
             if stray and not any(d.iterdir()):
                 d.rmdir()
         except OSError as e:
