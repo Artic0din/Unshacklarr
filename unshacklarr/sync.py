@@ -1801,6 +1801,7 @@ class EpisodeRun:
             # card without an end that no run follows was "interrupted", and stayed so on the page (by mj23au, #17).
             # Its end not written (a full disk): no longer running all the same, or it stays so until a restart
             EpisodeRun.active.discard(self.id)
+            stop_waiting.discard(self.id)  # a Stop nothing was left to stop: gone with the run
         prune_runs()
 
     def take_over_failures(self, batch: str | None = None, automatic: bool = False) -> None:
@@ -2380,17 +2381,20 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
         if run:
             run.card.pop("unconfirmed_job", None)  # confirmed: it answers again
     else:
+        if run and run.id in stop_waiting:  # Stop pressed before it reached serve: between two tries, a later episode
+            stop_waiting.discard(run.id)    # of a job (its slot already held), a fallback try
+            raise JobFailed("Stopped before it started", "cancelled")
         job_id = backend.download(payload)
         trace(f"unshackle serve{f' {backend.name}' if backend.name else ''} took it as job {job_id}")
-    if run:  # what Activity's Stop button cancels
-        run.card["job_id"] = job_id
+    if run:  # what Activity's Stop button cancels; the figures, this job's from now (an ended try's: not cancelled)
+        run.card["job_id"], run.card["live"] = job_id, {}
         run.save()
     last_status, line, saved = None, "", ""
     seen: dict[str, float] = {}  # serve lists only the tracks downloading now: keep the others
     timed: dict[str, list] = {}  # each track's [first seen, done]: how long it took
     labels: dict[str, str] = {}  # a track's key (its part and its place, or its label from an older serve): its label
     titles: list[str] = []
-    misses, since, hinted, quiet_count = 0, time.monotonic(), False, 0
+    misses, since, hinted, quiet_count, stop_asked = 0, time.monotonic(), False, 0, False
     secret_approval_fragments: set[str] = set()
     while True:
         try:
@@ -2416,6 +2420,13 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
             time.sleep(max(poll, 5))
             continue
         status = job.get("status")
+        if run and not stop_asked and status not in TERMINAL and run.id in stop_waiting:
+            # Stop pressed as it was handed to serve, before the card named its job: cancelled from here
+            stop_asked = True
+            try:
+                backend.cancel(job_id)
+            except UnshackleError as e:  # Activity's Stop may have cancelled it already: said, not a failure
+                trace(f"cancelling job {job_id}: {no_credentials(e)}")
         if run and "authentication" in job:
             run.set_authentication(job.get("authentication"))
         snapshot_approval = approval_from_job(job)

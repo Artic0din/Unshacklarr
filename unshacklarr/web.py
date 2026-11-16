@@ -3266,10 +3266,12 @@ async def stop_run(request):
     job_id = card.get("job_id")
     if run_id not in sonarr_sync.EpisodeRun.active:
         raise web.HTTPConflict(text="This download is not running")
-    if not job_id:  # waiting for a free slot (Downloads at once): it ends there instead of starting
-        with sonarr_sync.slots:
-            sonarr_sync.stop_waiting.add(run_id)
-            sonarr_sync.slots.notify_all()
+    # marked whatever it does now: it ends where it waits for a slot, or before its next download reaches serve
+    # (between two tries, a later episode of its job, a fallback try)
+    with sonarr_sync.slots:
+        sonarr_sync.stop_waiting.add(run_id)
+        sonarr_sync.slots.notify_all()
+    if not job_id or (card.get("live") or {}).get("status") in sonarr_sync.TERMINAL:  # no job, or an ended try's
         return web.json_response({"stopping": True})
     try:
         await asyncio.to_thread(sonarr_sync.backend_named(card.get("backend")).cancel, job_id)

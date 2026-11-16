@@ -7585,3 +7585,22 @@ def test_a_waiting_folder_a_new_download_now_uses_is_neither_deleted_nor_importe
     assert (tmp_path / folder / "Show.S02E05.mkv").exists() and not imported
     asyncio.run(web.leftover_action(Request()))  # done downloading: it goes
     assert imported == [folder] if action == "import" else not (tmp_path / folder).exists()
+
+
+def test_stop_ignores_the_job_of_a_try_that_ended_and_still_stops_the_run(tmp_path, monkeypatch):
+    # between two tries the card still names the last try's job, over on serve: that one is not cancelled, the run is
+    # marked stopped instead, which its next try sees
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    run_id = "20261116-000000-123456-1-S01E02"
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "old", "live": {"status": "failed"}}))
+    monkeypatch.setattr(sync.EpisodeRun, "active", {run_id})
+    cancelled = []
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", lambda job_id: cancelled.append(job_id))
+    request = SimpleNamespace(match_info={"run_id": run_id})
+    assert json.loads(asyncio.run(web.stop_run(request)).text) == {"stopping": True}
+    assert cancelled == [] and run_id in sync.stop_waiting
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "job_id": "live", "live": {"status": "downloading"}}))
+    asyncio.run(web.stop_run(request))  # a job going on: cancelled as before
+    assert cancelled == ["live"]

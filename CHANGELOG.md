@@ -228,6 +228,8 @@ Every change worth knowing, newest first. The format follows
 - **A job's output shows its last episode.** It no longer closed just before that episode's log began.
 - **Delete and Import in Waiting in downloads leave a running download alone.** On a folder a new download has
   just started into, they now say it is downloading instead of deleting or importing it.
+- **Stop stops.** Pressed between two tries, during a fallback try, or on a job's second or later episode before
+  its download began, the episode was downloaded and imported anyway; it now ends as stopped.
 
 **🆕 Sonarr 5, on this branch until it is out of beta**
 - **Languages.** Your files without your audio languages, read from Sonarr 5's own tracks: watch them for the

@@ -5743,7 +5743,7 @@ def test_a_retry_follows_the_job_serve_never_confirmed_stopped_instead_of_downlo
     monkeypatch.setattr(sync.time, "sleep", lambda s: None)
 
     class Run:
-        card = {"step": "queued"}
+        id, card = "r1", {"step": "queued"}
         def save(self): pass
         def say(self, text): pass
         def raw(self, data): pass
@@ -6396,3 +6396,49 @@ def test_two_downloads_muxing_at_once_each_measure_their_own_folder(tmp_path, mo
     sync.run_job({}, run, poll=0)
     assert mux[-1] == {"done": 400, "total": 1000} and other not in sync.work_claimed
     run.finish("downloaded")
+
+
+def test_stop_between_two_tries_or_before_a_later_episode_hands_nothing_more_to_serve(tmp_path, monkeypatch):
+    # Stop pressed while the run waits to try again, or while a later episode of the job (its slot already held) is
+    # still being checked: no new download is handed to serve, it ends as stopped, and its mark goes with it
+    sync = load(tmp_path, monkeypatch)
+    sync.SETTINGS["downloads_at_once"] = 1
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05", "J")
+    handed = []
+
+    def download(payload):
+        handed.append(payload)
+        raise sync.UnshackleError("unshackle serve: HTTP 502: bad gateway")
+    monkeypatch.setattr(sync.UNSHACKLE, "download", download)
+    stop = lambda seconds: sync.stop_waiting.add(run.id)  # pressed during the wait
+    with pytest.raises(sync.JobFailed) as stopped:
+        sync.run_job_retrying({}, run, sleep=stop)
+    assert stopped.value.status == "cancelled" and len(handed) == 1
+    with sync.slots:
+        sync.slot_jobs[""] = ["J"]  # the job holds its slot: the next episode never waits for one
+    sync.stop_waiting.add(run.id)
+    with pytest.raises(sync.JobFailed) as stopped:
+        sync.run_job({}, run)
+    assert stopped.value.status == "cancelled" and len(handed) == 1
+    sync.stop_waiting.add(run.id)  # pressed once nothing was left to stop: gone with the run
+    run.finish("downloaded")
+    assert run.id not in sync.stop_waiting
+
+
+def test_stop_pressed_as_the_download_was_handed_to_serve_cancels_it(tmp_path, monkeypatch):
+    # the job was not yet on the card when Stop read it: the download, followed, cancels it itself
+    sync = load(tmp_path, monkeypatch)
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "RMCP"}, "manual", "S02E05")
+    cancelled = []
+
+    def download(payload):
+        sync.stop_waiting.add(run.id)  # just after the last look
+        return "job1"
+    monkeypatch.setattr(sync.UNSHACKLE, "download", download)
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", lambda job_id: cancelled.append(job_id))
+    polls = iter([{"status": "downloading"}] * 20 + [{"status": "completed", "output_files": []}])  # unstopped: it ends
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "cancelled"} if cancelled else next(polls))
+    with pytest.raises(sync.JobFailed) as stopped:
+        sync.run_job({}, run, poll=0)
+    assert stopped.value.status == "cancelled" and cancelled == ["job1"]
+    run.finish("stopped")
