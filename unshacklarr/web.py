@@ -233,7 +233,7 @@ def with_network_service(providers: list[dict], network: str, logos: dict[str, d
     """The schedule's services plus, first, the series' network's own installed catch-up service (Nine Network:
     9Now), as the series page offers it. Its logo is the TMDB provider whose site is that service's (brand_logos)."""
     installed = set(domains.values())
-    tag = next((t for t in network_services(network) if t in installed), None)
+    tag = service_for_network(network, installed)
     if not tag:
         return providers
     # its sites' names: the site's own (abc for iview.abc.net.au) only whole, since ABC News shares it; the host's
