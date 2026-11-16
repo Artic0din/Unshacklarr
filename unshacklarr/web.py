@@ -5180,9 +5180,9 @@ def scan_languages() -> None:
             if language_scan["stop"]:
                 break
             show, language_scan["series"] = shows[tvdb], serie["title"]
-            accepted, prefer = sonarr_sync.accepted_audio(show, config, serie), sonarr_sync.preferred_audio(show, config)  # orig: its own
             try:
-                if accepted or prefer:
+                pages = [show, *(sonarr_sync.season_page(show, int(n)) for n in show.get("season_pages") or {})]
+                if any(sonarr_sync.accepted_audio(s, config, serie) or sonarr_sync.preferred_audio(s, config) for s in pages):
                     episodes: dict[int, list[dict]] = {}  # a file holding two episodes (a double) is each one's
                     for e in sonarr_sync.sonarr_get("episode", seriesId=serie["id"]):
                         if e.get("hasFile"):
@@ -5191,11 +5191,13 @@ def scan_languages() -> None:
                         audio, forced = file_languages(f)
                         if not audio:
                             continue  # untagged tracks say nothing either way
-                        lacks = "accepted" if accepted and not sonarr_sync.speaks(audio, accepted) else \
-                            "preferred" if prefer and not sonarr_sync.speaks(audio, [prefer]) else ""
-                        if not lacks:
-                            continue
                         for e in episodes.get(f.get("id")) or []:
+                            own = sonarr_sync.season_page(show, e["seasonNumber"])  # a season on a page of its own downloads from there
+                            accepted, prefer = sonarr_sync.accepted_audio(own, config, serie), sonarr_sync.preferred_audio(own, config)  # orig: its own
+                            lacks = "accepted" if accepted and not sonarr_sync.speaks(audio, accepted) else \
+                                "preferred" if prefer and not sonarr_sync.speaks(audio, [prefer]) else ""
+                            if not lacks:
+                                continue
                             found.append({"tvdbId": tvdb, "series": serie["title"], "episodeId": e["id"],
                                           "season": e["seasonNumber"], "number": e["episodeNumber"],
                                           "sxxeyy": f"S{e['seasonNumber']:02}E{e['episodeNumber']:02}",

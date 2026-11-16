@@ -6866,6 +6866,36 @@ def test_languages_lists_files_without_an_accepted_or_the_preferred_audio(tmp_pa
     assert {i["episodeId"] for i in web.read_json(web.LANGUAGES_FILE, {})["items"]} == {12, 13, 15}
 
 
+def test_languages_judges_a_season_on_another_service_by_that_services_audio(tmp_path, monkeypatch):
+    # Season 2 has a page of its own on Y, whose downloads are English: its English files are right, not missing French
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    sync = web.sonarr_sync
+    (tmp_path / "config.yaml").write_text(
+        "service_defaults: {X: {options: {--a-lang: fr}}, Y: {options: {--a-lang: en}}}\n"
+        "series:\n  1: {service: X, title: a, season_pages: {2: {url: 'https://y/season-two', service: Y}}}\n")
+    monkeypatch.setattr(sync, "sonarr_series", lambda wanted: {1: {"id": 7, "tvdbId": 1, "title": "Show"}})
+    eps = [{"id": 11, "seasonNumber": 1, "episodeNumber": 1, "hasFile": True, "episodeFileId": 101},
+           {"id": 12, "seasonNumber": 1, "episodeNumber": 2, "hasFile": True, "episodeFileId": 102},
+           {"id": 21, "seasonNumber": 2, "episodeNumber": 1, "hasFile": True, "episodeFileId": 201},
+           {"id": 22, "seasonNumber": 2, "episodeNumber": 2, "hasFile": True, "episodeFileId": 202}]
+    track = lambda *langs: {"audioStreams": [{"language": l} for l in langs]}
+    files = [{"id": 101, "relativePath": "S1/a.mkv", "mediaInfo": track("fre")},  # season 1, X: French, right
+             {"id": 102, "relativePath": "S1/b.mkv", "mediaInfo": track("eng")},  # season 1, X: lacks its French
+             {"id": 201, "relativePath": "S2/a.mkv", "mediaInfo": track("eng")},  # season 2, Y: English, right
+             {"id": 202, "relativePath": "S2/b.mkv", "mediaInfo": track("ger")}]  # season 2, Y: lacks its English
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: eps)
+    monkeypatch.setattr(sync, "sonarr_v5_get", lambda path, **p: files)
+    web.scan_languages()
+    found = {i["episodeId"]: i for i in web.read_json(web.LANGUAGES_FILE, {})["items"]}
+    assert set(found) == {12, 22}
+    assert found[12]["lacks"] == "accepted" and found[12]["want"] == "fr"
+    assert found[22]["lacks"] == "accepted" and found[22]["want"] == "en"
+
+
 def test_a_series_titles_are_asked_of_sonarr_in_your_language(monkeypatch):
     # Sonarr 5: the series' metadata language set to the one where you watch (French for France); Sonarr refreshes it
     from unshacklarr import web
