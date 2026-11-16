@@ -141,3 +141,25 @@ def test_a_phone_widens_the_header_only_for_a_service_with_something_to_say():
     phone = CSS[CSS.index("@media (max-width: 700px) {"):]
     assert "small:not(:empty)" not in phone  # "Checking…" is brief: it must not make the header jump on every load
     assert "[data-state=warn], [data-state=down]" in phone
+
+FADED_TEXT = [".sched-card.other", ".cal-cell.out", ".inbox-filters b", ".seg button span", ".toolbar .pill span", ".con-filters button span",
+              ".job-counts button.off", ".tools span.optional-missing", ".oneoff-preview .file", ".wall.selecting .poster:not(.picked)"]
+
+
+@pytest.mark.parametrize("selector", FADED_TEXT)
+def test_text_is_never_faded_with_opacity(selector):
+    # opacity composites the text with what is behind it, below 4.5:1 (WCAG 1.4.3); a quieter look takes a colour token instead
+    rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", CSS, flags=re.S))
+    faded = [sel.strip() for sel, body in rules if re.search(r"(?<![\w-])opacity\s*:\s*0?\.\d", body)
+             and any(name.strip().split(":hover")[0].split(":focus-within")[0] == selector for name in sel.split(","))]
+    assert not faded
+
+def test_reduced_motion_also_stills_what_before_and_after_draw():
+    """`*` matches elements only: a looping ::before (the running step's shimmer) kept moving."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)  # a commented-out rule does nothing
+    moving = [sel.strip() for sel, body in re.findall(r"([^{}]*::(?:before|after)[^{}]*)\{([^{}]*)\}", css)
+              if re.search(r"animation:\s*(?!none)[\w-]+", body)]
+    assert moving, "no animated ::before/::after left to check"
+    stilled = [{part.strip() for part in sel.split(",")} for sel in
+               re.findall(r"@media \(prefers-reduced-motion: reduce\) \{ ([^{]+)\{[^}]*animation: none !important", css)]
+    assert any({"*", "::before", "::after"} <= parts for parts in stilled), moving
