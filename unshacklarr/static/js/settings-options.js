@@ -682,7 +682,9 @@ async function save() {
   const units = configUnits(S.config);
   const changed = [...new Set([...Object.keys(units), ...Object.keys(savedUnits)])].filter((u) => units[u] !== savedUnits[u]);
   const unitBase = Object.fromEntries(changed.map((u) => [u, S.config.versions?.[u] ?? null]));
+  const names = sonarrNames();  // as sent: a rename made while the Save runs is not saved yet
   const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series, changed, base: unitBase }) });
+  keepSonarrNames(names);
   for (const u of changed) {  // only these are as the server has them now: the others keep the version they were loaded at
     if (saved?.versions?.[u]) (S.config.versions ??= {})[u] = saved.versions[u]; else delete S.config.versions?.[u];
   }

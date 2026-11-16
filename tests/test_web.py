@@ -2064,6 +2064,7 @@ const core = js("core.js"), options = js("settings-options.js");
 const code = [
   pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
+  pick(core, /^\/\/ Each other Sonarr's name as the server knows it.*?^const savedSonarr = [^\n]*$/ms),
   pick(options, /^async function save\(\) \{.*?^\}/ms),
   pick(options, /^\$\("#bo-send"\)\.onclick = async \(e\) => \{.*?^\};/ms),
 ].join("\n");
@@ -2078,7 +2079,7 @@ const box = {
   renderSettings() { box.redrawn = (box.redrawn || 0) + 1; },
 };
 vm.createContext(box);
-vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); } };", box);
+vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); }, savedSonarr, keepSonarrNames, sonarrNames };", box);
 const page = box.api_;
 const fresh = () => {
   box.S = { config: { settings: { theme: "dark", backup_remote: "", backup_remote_url: "" }, series: {} } };
@@ -2199,6 +2200,15 @@ const fresh = () => {
   out.seriesMergedAndPanelClean = box.S.config.series[7].title === "https://example.com/show-2" && !page.state().unsaved
     && JSON.parse(box.drawerSnapshot.conf).title === "https://example.com/show-2";
   box.current = null; box.drawerSnapshot = null;
+
+  // a Sonarr renamed on the page: requests name it as the server knows it until the Save is done (#181)
+  box.S = { config: { settings: { sonarrs: [{ name: "4K", url: "http://a" }, { name: "kids", url: "http://b" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.sonarrs[0].name = "UHD"; page.dirty();
+  out.renamedAsSaved = page.savedSonarr("UHD") === "4K" && page.savedSonarr("kids") === "kids" && page.savedSonarr("") === "";
+  saving = page.save(); box.S.config.settings.sonarrs[1].name = "children";  // renamed again while the Save runs: not sent
+  release({}); await saving;
+  out.renameSavedIsUsed = page.savedSonarr("UHD") === "UHD" && page.savedSonarr("children") === "kids";
   console.log(JSON.stringify(out));
 })();
 """
@@ -2240,6 +2250,8 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "editMeanwhileWins": True,  # an edit made while the Save ran is not overwritten by its answer
         "editMeanwhileSent": True,
         "seriesMergedAndPanelClean": True,  # a series too, and its open panel does not ask to discard
+        "renamedAsSaved": True,  # an unsaved rename is not a name the server knows (#181)
+        "renameSavedIsUsed": True,  # once saved, the new name; a rename made while the Save ran still is not
     }
 
 

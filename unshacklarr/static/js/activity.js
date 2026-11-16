@@ -501,7 +501,7 @@ async function showMissing() {
   $("#cd-main").replaceChildren(loading("Asking Sonarr what your series miss…"));
   let r;
   if (missingSonarr && !(S.config.settings.sonarrs || []).some((i) => i.name === missingSonarr)) missingSonarr = "";
-  const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(missingSonarr ? { sonarr: missingSonarr } : {}) });
+  const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(missingSonarr ? { sonarr: savedSonarr(missingSonarr) } : {}) });
   try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`); } catch (e) { return $("#cd-main").replaceChildren(failed(e.message, showMissing)); }
   if (picked_run !== "missing") return;
   const ages = el("div", { className: "ax-seg", role: "group", ariaLabel: "Aired within" }, ...[[7, "7 days"], [30, "30 days"], [90, "90 days"], [0, "All"]].map(([d, label]) =>
@@ -511,7 +511,7 @@ async function showMissing() {
     onclick: async (e) => {
       e.target.disabled = true;
       try {
-        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: r.items.map((x) => x.episodeId), ...(missingSonarr ? { sonarr: missingSonarr } : {}) }) });
+        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: r.items.map((x) => x.episodeId), ...(missingSonarr ? { sonarr: savedSonarr(missingSonarr) } : {}) }) });
         toast(r.items.length === 1 ? "1 episode queued" : `${r.items.length} episodes queued, one after the other`);
       } catch (err) { e.target.disabled = false; toast(err.message, true); }
     } });
@@ -545,14 +545,14 @@ async function showUpgrades(fresh = true) {
   let r;
   if (upgradeSonarr && !(S.config.settings.sonarrs || []).some((i) => i.name === upgradeSonarr)) upgradeSonarr = "";
   if (fresh !== false || !upgradeLast) {
-    try { r = upgradeLast = await api(`/api/upgrades${upgradeSonarr ? `?sonarr=${encodeURIComponent(upgradeSonarr)}` : ""}`); } catch (e) { return $("#cd-main").replaceChildren(failed(e.message, showUpgrades)); }
+    try { r = upgradeLast = await api(`/api/upgrades${upgradeSonarr ? `?sonarr=${encodeURIComponent(savedSonarr(upgradeSonarr))}` : ""}`); } catch (e) { return $("#cd-main").replaceChildren(failed(e.message, showUpgrades)); }
   } else r = upgradeLast;
   if (picked_run !== "upgrades") return;
   const scan = r.scan, free = r.items.filter((i) => !i.running), picked = free.filter((i) => upgradePick.has(i.episodeId));
   // every series, or one from its card (asked afresh); the ticks only choose what is replaced (by mj23au, #18)
   const checkUp = async (button, only = []) => {
     button.disabled = true;
-    try { await api(scan.running ? "/api/upgrades/stop" : "/api/upgrades/check", { method: "POST", body: JSON.stringify({ sonarr: upgradeSonarr, series: only }) }); } catch (err) { toast(err.message, true); }
+    try { await api(scan.running ? "/api/upgrades/stop" : "/api/upgrades/check", { method: "POST", body: JSON.stringify({ sonarr: savedSonarr(upgradeSonarr), series: only }) }); } catch (err) { toast(err.message, true); }
     showUpgrades();
   };
   // a stopped check ends the batch it is asking (up to 10 episodes of a series): said, so Stop is seen to work
@@ -562,7 +562,7 @@ async function showUpgrades(fresh = true) {
     textContent: picked.length === 1 ? "Replace it" : `Replace the ${picked.length} selected`, onclick: async (e) => {
       e.target.disabled = true;
       try {
-        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: picked.map((i) => i.episodeId), replace: true, ...(upgradeSonarr ? { sonarr: upgradeSonarr } : {}) }) });
+        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: picked.map((i) => i.episodeId), replace: true, ...(upgradeSonarr ? { sonarr: savedSonarr(upgradeSonarr) } : {}) }) });
         toast(picked.length === 1 ? "1 episode queued, replacing its file" : `${picked.length} episodes queued, replacing their files`);
         picked.forEach((i) => upgradePick.delete(i.episodeId));
         showUpgrades();

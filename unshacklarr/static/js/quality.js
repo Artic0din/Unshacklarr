@@ -587,12 +587,12 @@ function checkLibrary() {
   clearTimeout(libTimer);
   libTimer = setTimeout(async () => {
     const lib = libOf(), main = S.config.settings, own = lib.library_sonarr_root || lib.library_local_root ? lib : main;
-    const q = new URLSearchParams({ sonarr_root: own.library_sonarr_root || "", local_root: own.library_local_root || "", ...(libWho ? { sonarr: libWho } : {}) });
+    const q = new URLSearchParams({ sonarr_root: own.library_sonarr_root || "", local_root: own.library_local_root || "", ...(libWho ? { sonarr: savedSonarr(libWho) } : {}) });
     const say = $("#dx-lib-check"), who = libWho || mainSonarr();
     say.className = "lib-check"; say.textContent = "Looking for one of your episode files…";
     let r;
     try { r = await api(`/api/library/check?${q}`); } catch (e) { say.textContent = e.message; return; }
-    if ((libWho || "") !== (q.get("sonarr") || "")) return;  // another Sonarr picked meanwhile
+    if (savedSonarr(libWho) !== (q.get("sonarr") || "")) return;  // another Sonarr picked meanwhile
     libRoots = r.roots || []; libCommon = r.common || ""; renderLibraryPicks();
     if (r.ok === true) { say.className = "lib-check ok"; say.replaceChildren(icon("check", "inl"), `Unshacklarr reads ${who}'s library: ${r.local_path}`); }
     else if (r.ok === false && r.guess) {  // found elsewhere in the container: both folders, one click
@@ -613,7 +613,7 @@ function openFolders(side, start, use) {
   const load = async (path) => {
     $("#folder-err").textContent = "";
     let r;
-    try { r = await api(`/api/library/browse?${new URLSearchParams({ side, path, ...(libWho && side === "sonarr" ? { sonarr: libWho } : {}) })}`); }
+    try { r = await api(`/api/library/browse?${new URLSearchParams({ side, path, ...(libWho && side === "sonarr" ? { sonarr: savedSonarr(libWho) } : {}) })}`); }
     catch (e) { $("#folder-err").textContent = e.message; if (path) return load(""); return; }  // a folder that isn't there: from the top
     here = r.path || "/";
     $("#folder-path").textContent = here;

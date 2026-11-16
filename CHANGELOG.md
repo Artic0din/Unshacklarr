@@ -215,6 +215,8 @@ Every change worth knowing, newest first. The format follows
   restart, are tried again as before.
 - **No more false cookie warnings.** Crave's load balancer cookies (a week) and Apple's `utsdc` (an hour) no longer
   count as the date the login ends.
+- **Renaming a Sonarr no longer breaks its pages until Save.** Catch up, Upgrades, the library check and folder
+  browser, and a series' episodes keep using the name the server knows, and switch to the new one once it is saved.
 - **A second Save from an older tab no longer undoes another tab's change.** After a Save, the page takes the
   settings and series as the server merged them, keeping what you changed while it ran, so its next Save no longer
   sends its older copy back.
