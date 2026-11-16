@@ -7646,3 +7646,31 @@ def test_a_non_ascii_setup_code_or_session_signature_is_refused_not_a_500(tmp_pa
             return before, answer.status, (await answer.json())["logged_in"]
 
     assert asyncio.run(go()) == ([403, 403, 403], 200, False)
+
+
+def test_someone_the_reverse_proxy_signed_in_can_use_the_test_buttons(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "sonarr_status", lambda url, key: "4.0")
+    monkeypatch.setattr(web, "check_unshackle", lambda settings: 3)
+    headers = {"X-Unshackle": "1", "Remote-User": "alice"}
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:  # the test client connects from 127.0.0.1
+            async def tests():
+                sonarr = await client.post("/api/sonarr/test", json={"sonarr_url": "http://sonarr:8989", "sonarr_api_key": "k"}, headers=headers)
+                unshackle = await client.post("/api/unshackle/test", json={"unshackle_mode": "local"}, headers=headers)
+                return sonarr.status, unshackle.status
+
+            web.sonarr_sync.SETTINGS.update(proxy_auth_header="Remote-User", proxy_auth_from="127.0.0.1/32")
+            before = await tests()  # not set up: the proxy's word is no setup code
+            web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+            web.sonarr_sync.SETTINGS.update(proxy_auth_header="Remote-User", proxy_auth_from="127.0.0.1/32")
+            return before, await tests()
+
+    assert asyncio.run(go()) == ((403, 403), (200, 200))

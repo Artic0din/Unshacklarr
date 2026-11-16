@@ -6476,7 +6476,10 @@ def stored_key_for(url: str, what: str = "sonarr") -> str:
 
 
 def trusted(request, body: dict) -> bool:
-    return logged_in(request, read_config()["auth"]) or setup_code_ok(body)
+    """Signed in, as password_required accepts it, or holding the setup code. The proxy counts only once a
+    password exists: the setup comes first, whatever the proxy says."""
+    auth = read_config()["auth"]
+    return logged_in(request, auth) or bool(auth.get("password") and proxy_user(request)) or setup_code_ok(body)
 
 
 async def test_sonarr(request):
