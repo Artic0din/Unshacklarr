@@ -285,11 +285,11 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   };
   const row = (d) => {
     const [tone, word, why] = cdmRunning.has(d.name) ? ["run", "Testing…", "Asking the test server for a license"] : cdmStatus(d);
-    const menu = el("button", { type: "button", className: "jact cdm-pop-btn", dataset: { key: `dev:${d.name}` }, title: "Actions", ariaLabel: `Actions for ${cdmTitle(d)}`, onclick: (e) => actions(d, e.currentTarget) });
+    const menu = el("button", { type: "button", className: "jact cdm-pop-btn", dataset: { key: `dev:${d.name}`, fk: `menu:${d.kind}:${d.name}` }, title: "Actions", ariaLabel: `Actions for ${cdmTitle(d)}`, onclick: (e) => actions(d, e.currentTarget) });
     menu.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
     const lvl = d.info?.level || d.level;
     const fold = () => { cdmOpen.has(d.name) ? cdmOpen.delete(d.name) : cdmOpen.add(d.name); renderCdm(); };
-    return el("div", { className: `cdm-dev t-${tone}${cdmOpen.has(d.name) ? " open" : ""}${cdmJust.has(d.name) ? " just" : ""}`, tabIndex: 0, role: "button",
+    return el("div", { className: `cdm-dev t-${tone}${cdmOpen.has(d.name) ? " open" : ""}${cdmJust.has(d.name) ? " just" : ""}`, tabIndex: 0, role: "button", dataset: { fk: `row:${d.kind}:${d.name}` },
       ariaExpanded: String(cdmOpen.has(d.name)),
       // the row unfolds its details; not its buttons, nor a click in the details (their text can be selected)
       onclick: (e) => { if (!e.target.closest("button, .cdm-more") && !getSelection().toString()) fold(); },

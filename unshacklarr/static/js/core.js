@@ -333,12 +333,13 @@ function el(tag, { dataset, ...props } = {}, ...children) {
 }
 /* A redraw replaces the control in use, and the keyboard falls to the top of the page. Draw inside this: the control
    in the same place of the new ones takes the focus back (one in a list that reorders carries a data-fk, to be found
-   by it; a field keeps its caret). The box is what the draw rebuilds. */
+   by it; a field keeps its caret or selected range). The box is what the draw rebuilds. */
 const CONTROLS = "a[href], button, input:not([type=hidden]), select, textarea, summary, [tabindex]";
 function keepFocus(box, draw) {
   const was = document.activeElement;
   if (!box?.contains(was)) return draw();
-  const key = was.dataset.fk, at = [...box.querySelectorAll(CONTROLS)].indexOf(was), caret = was.selectionStart;
+  const key = was.dataset.fk, at = [...box.querySelectorAll(CONTROLS)].indexOf(was);
+  const { selectionStart: from, selectionEnd: to, selectionDirection: direction } = was;
   draw();
   const held = document.activeElement;
   if (held && held !== document.body) return;  // the focus stayed, or the draw put it somewhere on purpose
@@ -346,7 +347,7 @@ function keepFocus(box, draw) {
   const next = was.isConnected ? was : key ? now.filter((n) => n.dataset.fk === key).find((n) => n.getClientRects().length) : now[Math.min(at, now.length - 1)];
   if (!next || next.disabled) return;
   next.focus({ preventScroll: true });
-  if (typeof caret === "number") next.setSelectionRange?.(caret, caret);
+  if (typeof from === "number") next.setSelectionRange?.(from, to, direction);
 }
 /* A view swapped in: the keyboard goes to its heading, which is made focusable without joining the Tab order. */
 function focusHeading(heading) {

@@ -13,7 +13,7 @@ const fs = require("fs"), vm = require("vm"), path = require("path");
 const read = (file) => fs.readFileSync(path.join(process.argv[1], file), "utf8");
 const fn = (src, name) => src.match(new RegExp(`^(async )?function ${name}\\b.*?^\\}`, "ms"))[0];
 const line = (src, name) => src.match(new RegExp(`^(const|let) ${name} = .*$`, "m"))[0];
-const core = read("core.js"), activity = read("activity.js"), schedule = read("schedule.js"), navigation = read("navigation.js"), quality = read("quality.js");
+const core = read("core.js"), cdm = read("cookies-cdm.js"), activity = read("activity.js"), schedule = read("schedule.js"), navigation = read("navigation.js"), quality = read("quality.js");
 
 let root;
 const doc = { activeElement: null, listeners: {}, body: null, addEventListener(type, f) { (this.listeners[type] ||= []).push(f); },
@@ -36,7 +36,7 @@ class Node {
   focus() { this.focusCalls++; if (this.isConnected && !this.disabled) doc.activeElement = this; }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k] ?? null; }
-  setSelectionRange(a, b) { this.selected = [a, b]; }
+  setSelectionRange(a, b, direction) { this.selected = [a, b, direction]; }
   scrollIntoView() {}
 }
 root = new Node("body"); doc.body = root; doc.activeElement = root;
@@ -100,15 +100,48 @@ if (scenario === "helper") {
   out.gone = doc.activeElement === root;
 
   const field = () => ctx.el("input", { type: "text", value: "answer", dataset: { fk: "prompt:1" } });
-  const first = field(); first.selectionStart = 3;
+  const first = field(); Object.assign(first, { selectionStart: 3, selectionEnd: 3, selectionDirection: "none" });
   box.replaceChildren(first); first.focus();
   const second = field();
   ctx.keepFocus(box, () => box.replaceChildren(second));
   out.caret = [doc.activeElement === second, second.selected];
 
+  const marked = field(); Object.assign(marked, { selectionStart: 2, selectionEnd: 5, selectionDirection: "backward" });  // typing replaces it
+  box.replaceChildren(marked); marked.focus();
+  const redrawn = field();
+  ctx.keepFocus(box, () => box.replaceChildren(redrawn));
+  out.range = [doc.activeElement === redrawn, redrawn.selected];
+
   const heading = ctx.el("h2", { textContent: "Title" }); root.append(heading);
   ctx.focusHeading(heading); ctx.focusHeading(null);
   out.heading = [doc.activeElement === heading, heading.tabIndex];
+}
+
+if (scenario === "cdm") {  // a device's test result reorders the list: the focus stays on the device it was on
+  const nodes = {};
+  const at = (sel) => nodes[sel] ||= page();
+  const state = page(); state.querySelector = () => ({});
+  Object.assign(ctx, { Date, Intl, Math, Set, Object, Map, LOCALE: "en-GB", S: { config: { series: {}, settings: {} } }, tr: String, ago: () => "now", svcName: String,
+    hideTip() {}, onTop() {}, COUNT: new Proxy({}, { get: () => (n) => `${n}` }), api: async () => ({}), toast() {}, confirmClick: () => true,
+    $: (sel) => sel === "#cdm-state" ? state : sel === "#cdm-devices" ? null : at(sel) });
+  run([40, 41, 42, 109, 110].map((n) => cdm.split("\n")[n - 1]).join("\n") + "\n" + cdm.match(/^const cdmCard = [\s\S]*?\.\.\.body\);$/m)[0] + "\n"
+    + ["cdmTitle", "cdmStatus", "cdmShort", "renderCdm"].map((n) => fn(cdm, n)).join("\n"));
+  const device = (name) => ({ name, kind: "Widevine", folder: false, used_by: ["Netflix"], info: null, test: null, level: "L3" });
+  run("cdmData = " + JSON.stringify({ folder: "/cdm", map: {}, services: [], remote: [], devices: [device("alpha"), device("bravo")] }));
+  ctx.renderCdm();
+  const list = at("#cdm-list");
+  const rows = () => [...list.walk()].filter((n) => n.dataset.fk?.startsWith("row:")).map((n) => n.dataset.fk.split(":")[2]);
+  const label = (n) => n?.ariaLabel ?? n?.dataset.fk;
+  const menu = (who) => find(list, (n) => n.ariaLabel === `Actions for ${who}`);
+  out.before = rows();
+  menu("alpha").focus();
+  run("cdmData.devices[1].test = { ok: false, error: 'refused', at: 1 }");  // bravo fails its test, so it sorts ahead of alpha
+  ctx.renderCdm();
+  out.menu = [rows(), label(doc.activeElement), doc.activeElement === menu("alpha")];
+  menu("alpha").parent.focus();  // the row itself is a control too
+  run("cdmData.devices[1].test = null");  // and back again
+  ctx.renderCdm();
+  out.row = [rows(), label(doc.activeElement)];
 }
 
 if (scenario === "chips") {  // a slide-out's chips are rebuilt at each pick
@@ -247,8 +280,17 @@ def test_a_redraw_gives_the_focus_back_to_the_same_control():
         "outside": [True, True, 0],
         "visibleCopy": True,
         "gone": True,
-        "caret": [True, [3, 3]],
+        "caret": [True, [3, 3, "none"]],
+        "range": [True, [2, 5, "backward"]],
         "heading": [True, -1],
+    }
+
+
+def test_a_device_keeps_the_focus_when_a_test_result_reorders_the_devices():
+    assert run_scenario("cdm") == {
+        "before": ["alpha", "bravo"],
+        "menu": [["bravo", "alpha"], "Actions for alpha", True],
+        "row": [["alpha", "bravo"], "row:Widevine:alpha"],
     }
 
 
