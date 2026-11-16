@@ -6459,11 +6459,11 @@ def test_a_job_queued_with_an_empty_numbering_keeps_it_across_a_restart(tmp_path
     # numbering {} sets the series' season maps and offsets aside; dropped from queue.json, they would apply again
     sync = load(tmp_path, monkeypatch)
     stub = object()
-    monkeypatch.setitem(sync.running_jobs, "J", {"episodes": [{"id": 5}], "stubs": {5: stub}, "numbering": {}, "kind": "manual"})
+    monkeypatch.setitem(sync.batch_jobs, "J", [{"episodes": [{"id": 5}], "stubs": {5: stub}, "numbering": {}, "kind": "manual"}])
     monkeypatch.setitem(sync.waiting, 5, stub)
-    assert sync.queue_snapshot()["J"]["numbering"] == {}
-    monkeypatch.setitem(sync.running_jobs, "J", {"episodes": [{"id": 5}], "stubs": {5: stub}, "kind": "manual"})
-    assert "numbering" not in sync.queue_snapshot()["J"]  # none given: the series' own, as before
+    assert sync.queue_snapshot()["J"][0]["numbering"] == {}
+    monkeypatch.setitem(sync.batch_jobs, "J", [{"episodes": [{"id": 5}], "stubs": {5: stub}, "kind": "manual"}])
+    assert "numbering" not in sync.queue_snapshot()["J"][0]  # none given: the series' own, as before
 
 
 def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_path, monkeypatch):
@@ -6471,10 +6471,14 @@ def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_pa
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: 0)
     sync.job_options["B"] = {"options": {"--a-lang": ["fr"]}}
-    sync.batch_syncs["B"] = 1  # the job's own sync, still running
+    sync.batch_jobs["B"] = [{"episodes": [], "stubs": {}}]  # the job's own sync, still running
     sync.sync(sync.read_file(), {}, [], manual=True, kind="retry", batch="B")
     assert sync.job_options.get("B") == {"options": {"--a-lang": ["fr"]}}
-    sync.batch_syncs.pop("B")  # the job's own sync gone: one more sync of it is then the last
+    sync.batch_jobs.pop("B")  # the job's own sync gone: one more sync of it is then the last
+    sync.restoring[("B", 1)] = (None, {"episodes": [5]})  # unless a sync of it picked up after a restart has yet to start
+    sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
+    assert sync.job_options.get("B") == {"options": {"--a-lang": ["fr"]}}
+    sync.restoring.clear()
     sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
     assert "B" not in sync.job_options
 
