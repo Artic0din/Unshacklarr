@@ -5170,15 +5170,19 @@ def scan_languages() -> None:
             accepted, prefer = sonarr_sync.accepted_audio(show, config, serie), sonarr_sync.preferred_audio(show, config)  # orig: its own
             try:
                 if accepted or prefer:
-                    episodes = {e["episodeFileId"]: e for e in sonarr_sync.sonarr_get("episode", seriesId=serie["id"]) if e.get("hasFile")}
+                    episodes: dict[int, list[dict]] = {}  # a file holding two episodes (a double) is each one's
+                    for e in sonarr_sync.sonarr_get("episode", seriesId=serie["id"]):
+                        if e.get("hasFile"):
+                            episodes.setdefault(e["episodeFileId"], []).append(e)
                     for f in sonarr_sync.sonarr_v5_get("episodefile", seriesId=serie["id"]):
-                        e = episodes.get(f.get("id"))
                         audio, forced = file_languages(f)
-                        if not e or not audio:
+                        if not audio:
                             continue  # untagged tracks say nothing either way
                         lacks = "accepted" if accepted and not sonarr_sync.speaks(audio, accepted) else \
                             "preferred" if prefer and not sonarr_sync.speaks(audio, [prefer]) else ""
-                        if lacks:
+                        if not lacks:
+                            continue
+                        for e in episodes.get(f.get("id")) or []:
                             found.append({"tvdbId": tvdb, "series": serie["title"], "episodeId": e["id"],
                                           "season": e["seasonNumber"], "number": e["episodeNumber"],
                                           "sxxeyy": f"S{e['seasonNumber']:02}E{e['episodeNumber']:02}",

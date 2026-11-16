@@ -6856,6 +6856,10 @@ def test_languages_lists_files_without_an_accepted_or_the_preferred_audio(tmp_pa
     assert set(found) == {12, 13}
     assert found[12]["lacks"] == "preferred" and found[12]["want"] == "fr" and found[12]["audio"] == ["en"] and found[12]["forced"] == ["fr"]
     assert found[13]["lacks"] == "accepted" and found[13]["audio"] == ["de"]
+    # a double episode: one file, two episodes of Sonarr's, each listed
+    eps.append({"id": 15, "seasonNumber": 1, "episodeNumber": 5, "hasFile": True, "episodeFileId": 102})
+    web.scan_languages()
+    assert {i["episodeId"] for i in web.read_json(web.LANGUAGES_FILE, {})["items"]} == {12, 13, 15}
 
 
 def test_a_series_titles_are_asked_of_sonarr_in_your_language(monkeypatch):
