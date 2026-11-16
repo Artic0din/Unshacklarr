@@ -104,7 +104,7 @@ async function openInbox(mode = "full") {
   dialog.classList.toggle("menu", mode === "menu");
   const bell = $("#bell").getBoundingClientRect();  // the menu hangs from the bell
   dialog.style.top = mode === "menu" ? `${bell.bottom + 8}px` : "";
-  dialog.style.right = mode === "menu" && !phone() ? `${Math.max(8, innerWidth - bell.right)}px` : "";
+  dialog.style.right = mode === "menu" && !phoneLayout() ? `${Math.max(8, innerWidth - bell.right)}px` : "";
   if (!dialog.open) mode === "menu" ? dialog.show() : dialog.showModal();
   if (!inboxData) $("#inbox-list").replaceChildren(loading("Reading the notifications…"));
   inboxFilter = "all";
