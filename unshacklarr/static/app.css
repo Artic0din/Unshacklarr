@@ -367,7 +367,7 @@ body.drawer-open .savebar { display: none; }
 .res.odd { background: none; box-shadow: inset 0 0 0 1.5px var(--warn); color: var(--warn); }
 .ep time { color: var(--muted); font-size: var(--fs-sub); font-variant-numeric: tabular-nums; }
 .chip { font-size: var(--fs-footnote); padding: 1px 7px; border-radius: var(--r-md); border: 1px solid currentColor; white-space: nowrap; }
-.chip.disk { color: var(--ok); } .chip.miss { color: var(--warn); } .chip.soon { color: var(--muted); }
+.chip.disk { color: var(--ok); } .chip.miss, .chip.ask { color: var(--warn); } .chip.soon { color: var(--muted); }
 .ep-bar { flex: none; z-index: 3; display: flex; gap: 10px; align-items: center; padding: 12px 24px;
   background: var(--panel); border-top: 1px solid var(--accent); box-shadow: 0 -1px 0 var(--line), var(--sh-md); }
 #oneoff-dialog { max-height: 90dvh; overflow-y: auto; }
@@ -733,6 +733,7 @@ input[type=checkbox].switch:checked { background: var(--accent); } input[type=ch
 .wiz-step { display: grid; gap: var(--gap-field); } .wiz-step .field { margin: 0; }
 .wiz-step .wiz-group, .wiz-step .only-local, .wiz-step .only-remote { display: contents; }  /* wrappers: their fields keep the step's rhythm */
 .wiz-step [data-mode=local] > .only-remote, .wiz-step [data-mode=remote] > .only-local { display: none; } .wiz-step .field small { font-size: var(--fs-sub); } .wiz-step h2 { margin: 0; font-size: var(--fs-title3); } .wiz-step .lead { margin: calc(var(--gap-label) - var(--gap-field)) 0 4px; color: var(--muted); font-size: var(--fs-callout); }
+.env-found { display: block; } .env-found[hidden] { display: none; }
 .wiz-step.fwd { animation: wiz-in-r .28s ease-out; } .wiz-step.bwd { animation: wiz-in-l .28s ease-out; }
 @keyframes wiz-in-r { from { opacity: 0; transform: translateX(24px); } } @keyframes wiz-in-l { from { opacity: 0; transform: translateX(-24px); } }
 .wiz-note:empty { display: none; }
@@ -758,7 +759,7 @@ input.bad { border-color: var(--err); } .field small.bad { color: var(--err); } 
 .gate-card .card { margin: 0; }
 .gate-card .btn.primary { width: 100%; min-height: 46px; font-size: var(--fs-headline); }
 .gate-card input[type=password], .gate-card input[type=text], .gate-card input[type=url] { background: var(--field-bg); }
-body.gated > :not(.gate):not(.toasts) { display: none !important; }
+body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !important; }  /* setup asks through the confirm dialog too */
 /* Settings: sections in a side menu, one at a time, as label | control rows. */
 .set-layout { display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 32px; align-items: start; }  /* the whole width, as the other pages: no empty band on the right */
 .set-nav { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 2px; min-height: calc(100dvh - 109px); }  /* the version at the bottom */
@@ -837,6 +838,7 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
   border-radius: var(--r-md); padding: 10px 12px 10px 18px; display: flex; gap: 14px; align-items: center; z-index: 20;
   box-shadow: var(--sh-md); }
 .savebar[hidden] { display: none; }
+.savebar-actions { display: flex; gap: 8px; }
 .btn.primary.saved, .btn.primary.saved:disabled { background: var(--ok); border-color: var(--ok); color: var(--accent-ink); opacity: 1; }
 .toasts { position: fixed; top: auto; left: auto; margin: 0; border: 0; padding: 0; background: none; overflow: visible; color: inherit;  /* a popover: none of its defaults */
   right: 24px; bottom: 84px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 30; pointer-events: none; }
@@ -916,6 +918,7 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .crow b em { flex: none; font: 600 var(--fs-footnote) ui-monospace, SFMono-Regular, Menlo, monospace; font-style: normal; color: var(--accent); }
 .crow small { display: block; font-size: var(--fs-footnote); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .crow .bar { display: block; margin-top: 5px; height: 4px; }
+.crow .chip.ask { white-space: normal; max-width: 7.5em; text-align: center; }  /* two short lines, not a row with no room for the series */
 .stats-ico { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .stats-ico svg { width: 17px; height: 17px; }
 .left-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
@@ -1593,10 +1596,14 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .cd-stats div:nth-child(4) { display: none; }
   .cd-foot { display: flex; flex-wrap: wrap; gap: 10px; }
   .cd-foot .btn { flex: 1; min-height: 44px; }
-  .dock { bottom: calc(76px + env(safe-area-inset-bottom)); padding: 8px 8px 8px 10px; gap: 8px; }
+  .dock { bottom: calc(76px + env(safe-area-inset-bottom)); padding: 8px 8px 8px 10px; gap: 8px; flex-wrap: wrap; row-gap: 8px; }
+  .dock .d-mid, .dock .d-l1 { min-width: max-content; }  /* the episode and its percent whole (the line is hidden here) */
+  .dock:has(.d-acts > :nth-child(4)) .d-mid { flex-basis: 100%; }  /* four buttons or more: on a row of their own, under it */
   .dock .d-ico, .dock .d-l1 span { display: none; }
   .dock .d-acts button { width: 32px; height: 32px; }
-  .con-detail.docked-acts .cd-foot { display: none; }  /* the bar has the job's actions */
+  .con-detail.docked-acts .cd-foot { display: none; }  /* the bar has the job's actions; only Delete, which it has no button for, stays */
+  .con-detail.docked-acts .cd-foot:has([data-fk="delete"]) { display: flex; }
+  .con-detail.docked-acts .cd-foot .btn:not([data-fk="delete"]) { display: none; }
   .dock.open > .cd-raw .term { height: calc(100dvh - 330px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .cd-tracks .t { grid-template-columns: 1fr auto; } .cd-tracks .t .bar { grid-column: 1 / -1; grid-row: 2; }
   .cd-raw .term { height: 60dvh; min-height: 280px; }
@@ -1606,7 +1613,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   #inbox-dialog.menu { inset: 60px 8px auto 8px; width: auto; border-radius: var(--r-lg); padding-bottom: 8px; }
   .modal-actions { flex-direction: column-reverse; }
   .modal-actions .btn { width: 100%; }
-  .savebar { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); justify-content: space-between; }
+  .savebar { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); justify-content: space-between; flex-wrap: wrap; }
   body.drawer-open .savebar { display: none; }
   /* Notices drop in under the head, as on iOS, instead of floating over the page's bottom. */
   .toasts { left: 12px; right: 12px; top: calc(72px + env(safe-area-inset-top)); bottom: auto; align-items: center; }
@@ -2022,7 +2029,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .ep-on, .ep-on.other, .new-badge, .new-dot, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest, .rg-chip, .sched-st.try,
 .news-list .new .news-kind, .news-list .improved .news-kind { color: var(--accent); background: var(--accent-tint); }
 .ck-pill.ok, .sched-st.ok, .chip.disk, .chip.o-downloaded { color: var(--ok); background: var(--ok-tint); }  /* done and healthy: green, apart from the teal that means selected or managed */
-.ep-up, .ck-pill.warn, .sched-st.wait, .chip.miss, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
+.ep-up, .ck-pill.warn, .sched-st.wait, .chip.miss, .chip.ask, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
 .ck-pill.bad, .sched-st.late, .rg-chip.bad, .chip.o-failed, .news-list .security .news-kind { color: var(--err); background: var(--err-tint); }
 .ax-seg button[aria-pressed=true] .chip-default { color: var(--accent-ink); background: var(--accent); }  /* filled, to stand out on the picked button's tint */
 

@@ -468,6 +468,7 @@
   "SEL.ids.size"
  ],
  "Changed": [],
+ "Changes discarded": [],
  "Change…": [],
  "Chapters": [],
  "Chapters_": [],
@@ -757,6 +758,7 @@
  "Disable folder creation for TV Shows.": [],
  "Disable the source tag from the output file name and path.": [],
  "Discard": [],
+ "Discard changes": [],
  "Discord": [],
  "Discord, this device and more": [],
  "Dismiss": [],
@@ -2425,7 +2427,10 @@
   "st.caps.length"
  ],
  "Swedish": [],
+ "Switch language": [],
+ "Switch the language?": [],
  "Switched off": [],
+ "Switching language reloads the page: your password and keys are cleared.": [],
  "Sync running…": [],
  "Syncs, release times, retries": [],
  "System": [],
@@ -3022,6 +3027,7 @@
  "Waiting for Sonarr": [],
  "Waiting for a slot": [],
  "Waiting for you": [],
+ "Waiting for your answer": [],
  "Waiting for {0} approval": [
   "method"
  ],
@@ -4286,9 +4292,6 @@
   "svcName(j.service)"
  ],
  "{0} · waiting for a slot": [
-  "svcName(c.service)"
- ],
- "{0} · waiting for your answer": [
   "svcName(c.service)"
  ],
  "{0} · waiting {1} · {2}": [

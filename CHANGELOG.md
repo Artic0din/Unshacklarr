@@ -79,6 +79,11 @@ Every change worth knowing, newest first. The format follows
   `docker exec`.
 - **Search by any title.** The series search also finds a series by its other titles in Sonarr and its name in files.
 
+**💾 Saving**
+- **Discard unsaved changes.** The bar at the bottom has a Discard changes button next to Save changes: it puts the
+  settings back as last saved, a notification address you removed included, and says "Unsaved changes" to a screen
+  reader when it shows. (#280)
+
 ### Changed
 
 - **Success has its own green, apart from the teal accent.** Healthy status dots, "Downloaded" notifications, valid cookie pills, a working CDM and finished job steps no longer share the teal that marks what is selected or being downloaded. (#280)
@@ -128,6 +133,12 @@ Every change worth knowing, newest first. The format follows
   card returns to that card even after the Schedule redrew. The browser tab's title names the page, the series or the
   Settings section (and the setup step), in your language. The unshackle.yaml editor says "Esc, then Tab, leaves the
   editor", and "Find it on" a service says whether its results are open and how many it found. (#280)
+- **Activity and the first-run setup no longer leave you stranded.** On a phone, a running job's bar has Open series
+  next to Pause, Options and Stop, and a finished job keeps its Delete; a download waiting for your OTP code or answer
+  says "Waiting for your answer" in a chip, with no running pulse or progress bar; a step of the setup scrolls its card
+  to the top and puts the keyboard on its heading; the Sonarr and Unshackle API key say "Found in the environment" in
+  their help, where the placeholder was cut off; and switching language in the setup asks first, since it clears the
+  password and keys. (#280)
 - **Nothing is cut off or piled on top of anything else on a narrow screen.** At 320 px (or 400% zoom), a run's buttons
   wrap to a second line instead of losing "Delete", a running card's speed and time left sit on a row under the episode
   (and a finished card's line carries its whole text as a tooltip), the series filter takes a second row instead of
