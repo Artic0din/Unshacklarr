@@ -182,7 +182,7 @@ SETTINGS_DEFAULTS = {
     "backup_remote_region": "",  # S3: its region (empty: us-east-1; Cloudflare R2: auto)
     "backup_passphrase": "",     # what encrypts the backups sent away, and decrypts them for a restore
     "proxy_auth_header": "",     # a reverse proxy's login: this header names the user (Remote-User), believed only
-    "proxy_auth_from": "",       # from these addresses (172.18.0.0/16, 10.0.0.5): the proxy's own; both, or none
+    "proxy_auth_from": "",       # from these addresses (172.18.0.0/16, 10.0.0.5): the proxy's own, also whose X-Real-IP is believed
     "min_free_gb": 0,            # nothing is downloaded while the downloads folder has less room (GB); 0: never checked
     "audio_accept": "",          # a download must have one of these audio languages ("fr, en"); empty: the first asked for
     "audio_prefer": "",          # the audio language to upgrade to: an episode without it is got again once it comes

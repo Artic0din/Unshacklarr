@@ -1400,7 +1400,7 @@
  "The proxy's addresses": "代理的地址",
  "The reverse proxy's header is a name like Remote-User": "反向代理的请求头是类似 Remote-User 的名称",
  "For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.": "适用于 Authelia、Authentik 或其他代理已经让你登录的情况。代理会在请求头中传递你的用户名，Unshacklarr 打开时就不再要求输入自己的密码。",
- "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header is trusted only from there, since anyone else could send it.": "代理连接时所用的地址，按 Unshacklarr 所见（即其容器所在网络）。只信任来自这些地址的请求头，因为其他任何人都可能发送它。",
+ "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.": "代理连接时所用的地址，按 Unshacklarr 所见（即其容器所在网络）。只信任来自这些地址的请求头和 X-Real-IP，因为其他任何人都可能发送它们。",
  "none": "无",
  "the settings": "设置",
  "{0} is not an address or a range like 172.18.0.0/16": "{0} 不是地址，也不是 172.18.0.0/16 这样的地址段",
