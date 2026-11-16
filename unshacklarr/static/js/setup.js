@@ -449,8 +449,13 @@ function showSetup(found) {
 }
 let setupDraft = null;  // what setLang keeps for the page to come back to, on the first run
 
-$("#lang-row").append(...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", className: "rg-lang", ariaPressed: String(k === LANG),
-  onclick: () => { if (k !== LANG) setLang(k); } }, el("b", { textContent: name }))));
+$("#lang-select").append(...Object.entries(LANGS).map(([k, name]) => el("option", { value: k, textContent: name, selected: k === LANG })));
+// the page reloads in the new language: on a pick with the pointer, Enter or leaving the box, never on each arrow key
+let langKeyed = false;
+const pickLang = () => { langKeyed = false; if ($("#lang-select").value !== LANG) setLang($("#lang-select").value); };
+$("#lang-select").onkeydown = (e) => { if (e.key === "Enter") pickLang(); else if (e.key.length === 1 || /^(Arrow|Home|End|Page)/.test(e.key)) langKeyed = true; };
+$("#lang-select").onchange = () => { if (!langKeyed) pickLang(); };
+$("#lang-select").onblur = () => { if (langKeyed) pickLang(); };
 settingsCountry = countryPicker($("[data-set=country]"));
 settingsZone = zonePicker($("#tz-select"));
 for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#tz-select"), settingsZone]]) {

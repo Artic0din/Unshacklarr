@@ -96,6 +96,7 @@ function openTerm() {
   fitTerminal();
   term.reset();
   termSocket?.close();
+  termSocket = null;  // a closed one left here would be taken for a live stream and resumed
   return true;
 }
 function streamRun(c) { streamTerm(c.id, `run=${encodeURIComponent(c.id)}`); }
@@ -120,7 +121,7 @@ function fitTerminal() {
   }
 }
 $("#sync").onclick = async () => {
-  if (!$("#savebar").hidden) return toast("Save your changes first: the sync reads the saved settings.", true);
+  if (unsaved) return toast("Save your changes first: the sync reads the saved settings.", true);
   try { await api("/api/sync", { method: "POST" }); showTab("log"); }
   catch (e) { toast(e.message, true); }
 };

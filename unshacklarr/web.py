@@ -258,7 +258,8 @@ def service_for_network(network: str, installed: set[str]) -> str | None:
     """The installed service a network's catch-up is on (BBC One: iP)."""
     return next((t for t in network_services(network) if t in installed), None)
 
-sync_threads: list[threading.Thread] = []
+sync_threads: list[threading.Thread] = []  # every run_sync still going, for the cap on threads
+whole_syncs: list[threading.Thread] = []  # the ones of every missing episode: "a sync is running"
 last_sync: datetime | None = None
 
 
@@ -660,16 +661,22 @@ MASK = "•••"  # what stands for a secret the browser never gets
 OPTION_LEVELS = ("options", "service_options")
 
 
+# Webhook paths that name the app, not a secret; any other path may be one (an ntfy topic is the whole secret)
+PLAIN_WEBHOOK_PATHS = {"discord.com": "api/webhooks/", "discordapp.com": "api/webhooks/", "hooks.slack.com": "services/"}
+
+
 def masked_url(url: str) -> str:
-    """A notification address as the browser gets it: its app still shows (scheme, host, first plain path
-    words), its tokens never do. Its #ref finds the real one again on save and test."""
+    """A notification address as the browser gets it: its app still shows (scheme, host, and a known webhook
+    path), its tokens never do. Its #ref finds the real one again on save and test."""
     ref = hashlib.sha256(url.encode()).hexdigest()[:10]
     scheme, sep, rest = url.partition("://")
     keep = ""
     if sep and scheme.lower() in ("http", "https"):
         host, _, path = rest.partition("/")
-        words = [w for w in path.split("/")[:2] if re.fullmatch(r"[a-z]{2,15}", w)]
-        keep = host.rpartition("@")[2] + "/" + "".join(w + "/" for w in words)
+        host = host.rpartition("@")[2]
+        name = host.partition(":")[0].lower()
+        plain = next((p for h, p in PLAIN_WEBHOOK_PATHS.items() if (name == h or name.endswith("." + h)) and path.startswith(p)), "")
+        keep = host + "/" + plain
     return f"{scheme}://{keep}{MASK}#{ref}" if sep else f"{MASK}#{ref}"
 
 
@@ -1202,7 +1209,12 @@ def checked_config(body: dict, previous: dict, known: dict | None) -> dict:
             given = str(show.get("sonarr_order") or "")
             series[int(key)]["sonarr_order"] = given if re.fullmatch(r"[a-z]{1,24}", given) else known_order(int(key))
         # The automatic sync only takes episodes aired from here on: see sonarr_sync.wanted_automatically.
-        series[int(key)]["since"] = str(show.get("since") or datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        since = str(show.get("since") or datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        try:
+            sonarr_sync.parse_time(since)
+        except ValueError:
+            raise web.HTTPBadRequest(text=f"The start date of {key} must be a date, like 2026-10-01") from None
+        series[int(key)]["since"] = since
         try:  # the day the service publishes, from the day it airs: 1 after, -N days before (up to two weeks)
             day = int(show.get("release_day") or 0)
         except (TypeError, ValueError):
@@ -2982,9 +2994,10 @@ async def restore(request):
     body = await json_object(request)
     await reauth(request, str(body.get("password") or ""))
     data = await asyncio.to_thread(backup_data, str(body.get("text") or ""), str(body.get("passphrase") or ""))
-    current = read_config()
-    write_atomic(BEFORE_RESTORE, backup_text(current), PRIVATE)
-    write_config({**{k: data[k] for k in BACKUP_KEYS if data.get(k) is not None}, "auth": current["auth"]})
+    with CONFIG_LOCK:  # a sync's write in between would put the old settings back
+        current = read_config()
+        write_atomic(BEFORE_RESTORE, backup_text(current), PRIVATE)
+        write_config({**{k: data[k] for k in BACKUP_KEYS if data.get(k) is not None}, "auth": current["auth"]})
     return web.json_response({"series": len(data.get("series") or {})})
 
 
@@ -3047,9 +3060,10 @@ async def backup_offsite(request):
     another place), then a backup sent there at once to test it."""
     body = await json_object(request)
     await reauth(request, str(body.get("password") or ""))
-    config = read_config()
-    config["settings"] = {**config["settings"], **check_offsite(body.get("settings") or {}, sonarr_sync.load_settings(config))}
-    write_config(config)
+    with CONFIG_LOCK:
+        config = read_config()
+        config["settings"] = {**config["settings"], **check_offsite(body.get("settings") or {}, sonarr_sync.load_settings(config))}
+        write_config(config)
     sent = {}
     if config["settings"]["backup_remote"]:
         name = f"unshacklarr-{datetime.now(sonarr_sync.LOCAL):%Y-%m-%d-%H%M}.yaml"
@@ -3747,8 +3761,9 @@ async def networks(request):
 
 
 def running() -> bool:
-    sync_threads[:] = [t for t in sync_threads if t.is_alive()]
-    return bool(sync_threads)
+    """A sync of every missing episode going; a download asked by hand, by the API, a retry or an upgrade is not one."""
+    whole_syncs[:] = [t for t in whole_syncs if t.is_alive()]
+    return bool(whole_syncs)
 
 
 ASKED_AT_ONCE = 20  # downloads asked by hand or by the API and not over yet: each is a thread
@@ -3756,7 +3771,8 @@ ASKED_AT_ONCE = 20  # downloads asked by hand or by the API and not over yet: ea
 
 def room_for_one_more() -> None:
     """Refuse a download asked on top of too many still going: a thread each, a client in a loop would pile them up."""
-    if running() and len(sync_threads) >= ASKED_AT_ONCE:
+    sync_threads[:] = [t for t in sync_threads if t.is_alive()]
+    if len(sync_threads) >= ASKED_AT_ONCE:
         raise web.HTTPTooManyRequests(text="Too many downloads requested at once: wait for some to finish")
 
 
@@ -3776,6 +3792,8 @@ def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: 
     thread = threading.Thread(target=work, daemon=True)
     thread.start()
     sync_threads.append(thread)
+    if episode_ids is None:
+        whole_syncs.append(thread)
     return thread
 
 
@@ -4817,30 +4835,38 @@ async def push_test(request):
     return web.json_response({"sent": sent})
 
 
-def last_attempts(ids: list[int], batch: str):
-    """The cards of the episodes' last attempts, newest first: each episode's last one decides."""
+def last_attempts(ids: list[int], batch: str, instance: str):
+    """The cards of the episodes' last attempts in that Sonarr ("" the main one; its episode ids are its own),
+    newest first: each episode's last one decides."""
     if not sonarr_sync.RUNS_DIR.exists():
         return
     seen = set()
     for card in cards_on_disk():
         episode = card.get("episodeId")
-        if episode not in ids or episode in seen or (batch and card.get("batch") != batch):
+        if episode not in ids or episode in seen or card.get("instance", "") != instance or (batch and card.get("batch") != batch):
             continue
         seen.add(episode)
         yield card
 
 
-def retried_numbering(ids: list[int], batch: str) -> dict | None:
+def retried_numbering(ids: list[int], batch: str, instance: str) -> dict | None:
     """The numbering a download was given for itself (from the page: by title, or set for it), which a retry
     of it repeats; None when its last attempt used the series' own. The episodes of one retry come from one
     job, given one numbering: the first found stands for them all."""
-    return next((card["numbering"] for card in last_attempts(ids, batch) if card.get("numbering") is not None), None)
+    return next((card["numbering"] for card in last_attempts(ids, batch, instance) if card.get("numbering") is not None), None)
 
 
-def retried_replace(ids: list[int], batch: str) -> bool:
+def retried_replace(ids: list[int], batch: str, instance: str) -> bool:
     """Whether the attempts a retry repeats were picked with Replace anyway: the retry replaces too (an attempt
     the library kept the same file for is otherwise kept again)."""
-    return any(card.get("replace") is True for card in last_attempts(ids, batch))
+    return any(card.get("replace") is True for card in last_attempts(ids, batch, instance))
+
+
+def retried_alike(ids: list[int], instance: str) -> tuple[dict | None, bool] | None:
+    """The numbering and Replace anyway an API retry repeats: its episodes' own last attempts', None when they
+    differ (episodes of different jobs: one's numbering can't stand for another's)."""
+    picks = [(retried_numbering([i], "", instance), retried_replace([i], "", instance)) for i in ids]
+    return picks[0] if all(p == picks[0] for p in picks) else None
 
 
 def cdm_refusal(ids: list[int]) -> str:
@@ -4879,8 +4905,8 @@ async def download(request):
         raise web.HTTPBadRequest(text=why)
     if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries
         if numbering is None:
-            numbering = await asyncio.to_thread(retried_numbering, ids, batch)
-        replace = replace or await asyncio.to_thread(retried_replace, ids, batch)
+            numbering = await asyncio.to_thread(retried_numbering, ids, batch, inst["name"] if inst else "")
+        replace = replace or await asyncio.to_thread(retried_replace, ids, batch, inst["name"] if inst else "")
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     if batch and not inst:  # the job still runs: in its queue (retries next, in order), one download at a time
@@ -5463,7 +5489,7 @@ async def watch_upgrade_checks():
 async def missing(request):
     """Activity's catch-up: what missing_of_managed finds, aired within ?days= when given, in ?sonarr= when given."""
     days = request.query.get("days", "")
-    if days and not days.isdigit():
+    if days and not (days.isascii() and days.isdigit()):
         raise web.HTTPBadRequest(text="days is a number of days")
     inst = sonarr_named(request.query.get("sonarr", ""))
     try:
@@ -6003,7 +6029,12 @@ def logged_in(request, auth: dict) -> bool:
         return False
     _, signed, signature = session
     expected = hmac.new(auth["secret"].encode(), signed.encode(), "sha256").hexdigest()
-    return hmac.compare_digest(signature, expected) and signature not in read_json(LOGGED_OUT_FILE, {})
+    return hmac.compare_digest(signature.encode(), expected.encode()) and signature not in read_json(LOGGED_OUT_FILE, {})
+
+
+def setup_code_ok(body: dict) -> bool:
+    """Bytes compared: compare_digest raises on non-ASCII text, which would be a 500 instead of a wrong code."""
+    return hmac.compare_digest(str(body.get("setup_code") or "").strip().encode(), SETUP_CODE.encode())
 
 
 LOGGED_OUT_FILE = sonarr_sync.DATA / "logged_out.json"  # sessions closed before their end: {signature: expires}
@@ -6100,14 +6131,15 @@ async def api_key_action(request):
     again: a session left open somewhere must not be enough to mint lasting access."""
     if request.match_info["action"] == "new":
         await reauth(request, str((await json_object(request)).get("password") or ""))
-    config = read_config()
-    for k in ("api_key", "api_key_created"):
-        config["auth"].pop(k, None)
-    key = None
-    if request.match_info["action"] == "new":
-        key = secrets.token_urlsafe(32)
-        config["auth"].update(api_key=hashlib.sha256(key.encode()).hexdigest(), api_key_created=datetime.now(timezone.utc).isoformat())
-    write_config(config)
+    with CONFIG_LOCK:  # a sync's write in between would bring a revoked key back
+        config = read_config()
+        for k in ("api_key", "api_key_created"):
+            config["auth"].pop(k, None)
+        key = None
+        if request.match_info["action"] == "new":
+            key = secrets.token_urlsafe(32)
+            config["auth"].update(api_key=hashlib.sha256(key.encode()).hexdigest(), api_key_created=datetime.now(timezone.utc).isoformat())
+        write_config(config)
     return web.json_response({"key": key, "created": config["auth"].get("api_key_created")})
 
 
@@ -6257,11 +6289,17 @@ async def v1_start_download(request):
         raise web.HTTPBadRequest(text="At most 100 episodes at a time")
     if why := await asyncio.to_thread(on_sonarr, inst, cdm_refusal, ids):
         raise web.HTTPBadRequest(text=why)
+    numbering = None
+    if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries: as the page's Retry
+        if not (alike := await asyncio.to_thread(retried_alike, ids, inst["name"] if inst else "")):
+            raise web.HTTPBadRequest(text="These episodes were last tried with different numbering or Replace anyway: retry them apart")
+        numbering, replace = alike[0], replace or alike[1]
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     room_for_one_more()
     common = {**({"kind": "retry"} if body.get("retry") is True else {}), **({"sonarr": inst["name"]} if inst else {}),
-              **({"proxy": proxy} if proxy else {}), **({"video": video} if video else {})}
+              **({"proxy": proxy} if proxy else {}), **({"video": video} if video else {}),
+              **({"numbering": numbering} if numbering is not None else {})}
     if not audio:
         run_sync(ids, **common, **({"replace": True} if replace else {}))
         return web.json_response({"queued": len(ids)})
@@ -6420,7 +6458,7 @@ async def setup_restore(request):
     if config["auth"].get("password"):
         raise web.HTTPForbidden(text="Already set up")
     body = await json_object(request)
-    if not hmac.compare_digest(str(body.get("setup_code") or "").strip(), SETUP_CODE):
+    if not setup_code_ok(body):
         raise web.HTTPForbidden(text="Wrong setup code: Unshacklarr prints it when it starts (docker logs unshacklarr)")
     password = str(body.get("password") or "")
     if len(password) < 8:
@@ -6482,7 +6520,10 @@ def stored_key_for(url: str, what: str = "sonarr") -> str:
 
 
 def trusted(request, body: dict) -> bool:
-    return logged_in(request, read_config()["auth"]) or hmac.compare_digest(str(body.get("setup_code") or "").strip(), SETUP_CODE)
+    """Signed in, as password_required accepts it, or holding the setup code. The proxy counts only once a
+    password exists: the setup comes first, whatever the proxy says."""
+    auth = read_config()["auth"]
+    return logged_in(request, auth) or bool(auth.get("password") and proxy_user(request)) or setup_code_ok(body)
 
 
 async def test_sonarr(request):
@@ -6504,18 +6545,14 @@ async def test_sonarr(request):
 
 def check_unshackle(settings: dict) -> int:
     """Reach Unshackle with these settings (starting a local serve if need be): its service
-    count, its EXAMPLE left out."""
+    count, its EXAMPLE left out. A connection of its own, so downloads and syncs on the saved one never meet the test."""
     from unshacklarr.backend import Unshackle
-    probe = UNSHACKLE if settings.get("unshackle_mode", "local") != "remote" else Unshackle(sonarr_sync.DATA)
-    if probe is UNSHACKLE and sonarr_sync.EpisodeRun.active and \
-            settings.get("unshackle_command", "") != str(sonarr_sync.SETTINGS.get("unshackle_command") or ""):
-        raise UnshackleError("Downloads are using the current command: test another one when they are done")
+    probe = Unshackle(sonarr_sync.DATA)
     probe.configure({**sonarr_sync.SETTINGS, **settings})
     try:
         return sum(s["tag"] != "EXAMPLE" for s in probe.services())
     finally:
-        if probe is UNSHACKLE:
-            UNSHACKLE.configure(sonarr_sync.SETTINGS)  # the saved settings again, until a save
+        probe.stop()  # a local serve started for the test only
 
 
 async def test_unshackle(request):
@@ -6553,7 +6590,7 @@ async def setup(request):
     if config["auth"].get("password"):
         raise web.HTTPForbidden(text="Already set up")
     body = await json_object(request)
-    if not hmac.compare_digest(str(body.get("setup_code") or "").strip(), SETUP_CODE):
+    if not setup_code_ok(body):
         raise web.HTTPForbidden(text="Wrong setup code: Unshacklarr prints it when it starts (docker logs unshacklarr)")
     password = str(body.get("password") or "")
     if len(password) < 8:
@@ -6586,9 +6623,10 @@ async def set_language(request):
     lang = str((await json_object(request)).get("language") or "")
     if lang not in i18n.languages():
         raise web.HTTPBadRequest(text=f"No translation for {lang!r}")
-    config = read_config()
-    config.setdefault("settings", {})["language"] = lang
-    write_config(config)
+    with CONFIG_LOCK:
+        config = read_config()
+        config.setdefault("settings", {})["language"] = lang
+        write_config(config)
     return web.json_response({"ok": True})
 
 
@@ -6598,22 +6636,25 @@ async def change_password(request):
         await reauth(request, str(body.get("current") or ""))  # login's limit on tries
     except web.HTTPForbidden:
         raise web.HTTPForbidden(text="The current password is wrong") from None  # not 401: the page reads that as a lost session
-    config = read_config()
     new = str(body.get("new") or "")
     if len(new) < 8:
         raise web.HTTPBadRequest(text="Password must be at least 8 characters")
-    # A new secret too: every other open session is logged out. The API key stays.
-    config["auth"].update(password=hash_password(new), secret=secrets.token_hex(32), changed=datetime.now(timezone.utc).isoformat())
-    write_config(config)
+    hashed = hash_password(new)  # scrypt before the lock: the sync's writes do not wait for it
+    with CONFIG_LOCK:  # a sync's write in between would bring the old password back
+        config = read_config()
+        # A new secret too: every other open session is logged out. The API key stays.
+        config["auth"].update(password=hashed, secret=secrets.token_hex(32), changed=datetime.now(timezone.utc).isoformat())
+        write_config(config)
     await asyncio.to_thread(sonarr_sync.PUSH.unsubscribe_all)  # a device added by someone else stops listening too
     return with_session(request, web.json_response({"ok": True}), config["auth"])
 
 
 async def logout_others(request):
     """A new session secret, the password kept: every device but this one logs in again."""
-    config = read_config()
-    config["auth"] = {**config["auth"], "secret": secrets.token_hex(32)}
-    write_config(config)
+    with CONFIG_LOCK:
+        config = read_config()
+        config["auth"] = {**config["auth"], "secret": secrets.token_hex(32)}
+        write_config(config)
     await asyncio.to_thread(sonarr_sync.PUSH.unsubscribe_all)  # their push notifications too: turn them on again on yours
     return with_session(request, web.json_response({"ok": True}), config["auth"])
 
@@ -6843,9 +6884,11 @@ def reset_password(password: str) -> None:
     Every open session is logged out; settings and series stay as they are."""
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters")
-    config = read_config()
-    config["auth"].update(password=hash_password(password), secret=secrets.token_hex(32), changed=datetime.now(timezone.utc).isoformat())
-    write_config(config)
+    hashed = hash_password(password)
+    with CONFIG_LOCK:  # as the server's own writes: only within this process
+        config = read_config()
+        config["auth"].update(password=hashed, secret=secrets.token_hex(32), changed=datetime.now(timezone.utc).isoformat())
+        write_config(config)
     sonarr_sync.PUSH.unsubscribe_all()
 
 

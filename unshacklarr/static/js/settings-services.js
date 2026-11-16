@@ -197,12 +197,14 @@ async function showServeLog() {
     el("small", { textContent: "Its log, last lines" }))));
   $("#cd-raw").hidden = false;
   $("#cd-raw").open = true;
-  if (openTerm()) { termFor = "serve"; term.write(log.replaceAll("\n", "\r\n")); }
+  if (openTerm()) { termFor = "serve"; termQuery = ""; term.write(log.replaceAll("\n", "\r\n")); }
   document.querySelectorAll(".crow").forEach((r) => r.classList.remove("sel"));
 }
 
 /* Suggest services: every series without a service, airing ones first, with what TMDB finds for it, added at once. */
+let bulkRun = 0;  // the newest opening: the workers of an earlier one stop, and what they still await is dropped
 async function openBulk() {
+  const run = ++bulkRun;
   const todo = S.series.filter((s) => !S.config.series[s.tvdbId]?.service && s.monitored
     && !S.config.hidden_series.includes(s.tvdbId) && s.tmdbId)
     .sort((a, b) => (a.status === "ended") - (b.status === "ended"));  // ended ones too, after the airing ones
@@ -225,11 +227,13 @@ async function openBulk() {
     let links;
     try { links = (await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}`, { wait: 120 })).links; }
     catch {  // TMDB refuses bursts now and then: say so, and let it be asked again
+      if (run !== bulkRun) return;
       li.querySelector(".opts").replaceChildren(el("span", { className: "none", textContent: "TMDB did not answer" }),
         el("button", { type: "button", className: "btn small", textContent: "Retry", onclick: () => one(s, li) }));
       $("#bulk-progress").textContent = `Checked ${++done} of ${todo.length}`;
       return;
     }
+    if (run !== bulkRun) return;
     // other_title: another title of the series' service (its specials): never the series itself
     const usable = links.filter((l) => !l.needs_series_url && !l.episode && !l.other_title && S.services.includes(l.service));
     const name = `pick-${s.tvdbId}`;
@@ -244,7 +248,7 @@ async function openBulk() {
     pickCount();
   };
   const queue = todo.map((s, i) => [s, rows[i]]);  // two at a time (each asks TMDB per country); cached a week after
-  await Promise.all(Array.from({ length: 2 }, async () => { while (queue.length) { const [s, li] = queue.shift(); if ($("#bulk-dialog").open) await one(s, li); } }));
+  await Promise.all(Array.from({ length: 2 }, async () => { while (queue.length && run === bulkRun) { const [s, li] = queue.shift(); if ($("#bulk-dialog").open) await one(s, li); } }));
 }
 $("#bulk-open").onclick = openBulk;
 $("#bulk-form").onsubmit = async (e) => {
@@ -285,18 +289,21 @@ async function showReleaseSeen(s) {
 }
 
 /* Test this series: the service's episodes, the next ones against Sonarr, a season map if needed. */
+let probeSeq = 0;  // the newest test: reopening the same series reuses its object, so `current === s` alone cannot tell the tests apart
 $("#d-probe").onclick = async () => {
   if ($("#d-probe").ariaDisabled === "true") return;  // aria-disabled, not disabled: the button keeps the focus while it asks
-  const conf = S.config.series[current.tvdbId];
+  const s = current, conf = S.config.series[s.tvdbId];
   const out = $("#d-probe-out"), state = $("#d-probe-state");
   if (!conf?.service || !conf.title) { state.textContent = "Pick a service and its URL first."; return; }
+  const seq = ++probeSeq, mine = () => seq === probeSeq && current === s;
   $("#d-probe").setAttribute("aria-disabled", "true");
   state.replaceChildren(loading("Asking the service… (up to a minute)"));
   out.replaceChildren();
   const slow = slowHint(svcName(conf.service));
   try {
     const r = await api("/api/probe", { method: "POST", wait: 120,
-      body: JSON.stringify({ show: conf, seriesId: current.id, title: current.title }) });
+      body: JSON.stringify({ show: conf, seriesId: s.id, title: s.title }) });
+    if (!mine()) return;  // another series, or this one tested again, meanwhile: the answer is not the open test's
     state.textContent = "";
     const seasons = r.seasons.map((x) => `S${x.season} (${x.episodes})`).join(", ");
     const rows = r.checks.map((c) => el("div", { className: "probe-row" },
@@ -324,8 +331,8 @@ $("#d-probe").onclick = async () => {
     out.replaceChildren(el("div", { className: "probe-out" },
       el("div", { className: "head" }, "Found ", el("b", { textContent: r.series || "the series" }), `: ${r.count} episodes${seasons ? ` · ${seasons}` : ""}`),
       ...single, ...apply, ...rows));
-  } catch (e) { state.replaceChildren(failed(e.message)); }
-  finally { $("#d-probe").removeAttribute("aria-disabled"); clearTimeout(slow); }
+  } catch (e) { if (mine()) state.replaceChildren(failed(e.message)); }
+  finally { if (mine()) $("#d-probe").removeAttribute("aria-disabled"); clearTimeout(slow); }  // another series' button is its own
 };
 
 /* This device's notifications (Web Push): allowed here, sent by the server through the browser's push service. */

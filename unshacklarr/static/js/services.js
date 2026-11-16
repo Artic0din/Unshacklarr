@@ -84,7 +84,7 @@ function signInCheck() {
   return box;
 }
 
-const SERVICE_COLUMNS = ["Service", "Sign-in", "Cookies", "Sign-in methods", "Used by", "Actions"];
+const SERVICE_COLUMNS = ["Service", "Sign-in methods", "Sign-in", "Cookies", "Used by", "Actions"];
 let servicesCookies = null;  // /api/cookies: the files of Unshackle's own cookies folder, by service
 let servicesDrawn = "";      // what the table was drawn from: a refresh that changes nothing leaves it (and the focus) alone
 let servicesAsked = "";      // the cookie file whose deletion is being confirmed: "SERVICE/profile"
@@ -171,11 +171,12 @@ function renderServices() {
     if (!m.cookieFiles.length) {
       if (m.cookieless) return [el("span", { className: "muted", textContent: "Not needed" })];
       const both = m.methods === null || m.methods.includes("credentials");
-      return [el("span", { className: `ck-pill${m.missing ? " bad" : ""}`, textContent: m.missing ? "Missing" : "No cookie file" }),
-        ...(m.missing ? [el("small", { textContent: both ? "Downloads will fail unless you add a cookie file, or set its username and password in unshackle.yaml."
-          : "Downloads will fail unless you add a cookie file." })] : []),
-        el("div", { className: "sv-ctl" }, el("button", { className: `btn small${m.missing ? " primary" : ""}`, textContent: "Add cookies", ariaLabel: `Add cookies for ${svcName(m.service)}`,
-          onclick: () => openCookieDialog(m.service, "default", true) }))];
+      const pill = el("span", { className: `ck-pill${m.missing ? " bad" : ""}`, textContent: m.missing ? "Missing" : "No cookie file" });
+      return [el("div", { className: "sv-file" },
+        el("div", { className: "sv-file-top" }, m.missing ? hoverTip(pill, () => [both ? "Downloads will fail unless you add a cookie file, or set its username and password in unshackle.yaml."
+          : "Downloads will fail unless you add a cookie file."]) : pill),
+        el("div", { className: "sv-ctl" }, el("button", { className: `btn small${m.missing ? " primary" : ""}`, textContent: "Add", ariaLabel: `Add cookies for ${svcName(m.service)}`,
+          onclick: () => openCookieDialog(m.service, "default", true) })))];
     }
     return m.cookieFiles.map((f) => {
       const [cls, word, why] = f.st, file = f.profile ? `${f.profile}.txt` : `${m.service}.txt`, ask = `${m.service}/${f.profile}`;
@@ -197,18 +198,17 @@ function renderServices() {
         ...(f.unreadable ? [] : [el("small", { textContent: [f.count === 1 ? "1 cookie" : `${f.count} cookies`, `updated ${ago_days(f.updated)}`].join(" · ") })]),
         ...(servicesAsked === ask ? [sure] : [el("div", { className: "sv-ctl" },
           el("button", { className: `btn small${cls === "bad" || cls === "warn" ? " primary" : ""}`, textContent: "Replace", ariaLabel: `Replace ${file}`, onclick: () => openCookieDialog(m.service, f.profile) }), del)]));
-    }).concat(el("div", { className: "sv-ctl" }, el("button", { className: "btn small", textContent: "Add cookies", ariaLabel: `Add cookies for ${svcName(m.service)}`,
-      onclick: () => openCookieDialog(m.service, "", true) })));  // another profile (an account of its own)
+    });
   };
 
   const methodsCell = (m) => m.methods === null ? [el("span", { className: "muted", textContent: "—" })]
-    : m.methods.length ? [el("small", { textContent: "Supports" }), el("div", { className: "sv-chips" }, ...m.methods.map((x) => el("span", { className: "sv-chip", textContent: AUTH_METHOD_NAMES[x] || x })))]
+    : m.methods.length ? [el("div", { className: "sv-chips" }, ...m.methods.map((x) => el("span", { className: "sv-chip", textContent: AUTH_METHOD_NAMES[x] || x })))]
     : m.anonymous ? [el("span", { textContent: "No sign-in required" })]
     : [el("span", { className: "muted", textContent: "—" })];  // listed without methods (its server unreachable): not known
   const usedCell = (m) => [el("span", { className: m.used === null ? "muted" : "", textContent: m.used === null ? "—" : m.used === 0 ? "No series" : m.used === 1 ? "1 series" : `${m.used} series` })];
   const actionCell = (m) => m.used ? [el("button", { className: "btn small", textContent: "Show series", onclick: () => showSeriesOf(m.service) })] : [];
 
-  const cells = [signInCell, cookieCell, methodsCell, usedCell, actionCell];
+  const cells = [methodsCell, signInCell, cookieCell, usedCell, actionCell];
   const table = el("table", { className: "sv-table" },
     el("thead", {}, el("tr", {}, ...SERVICE_COLUMNS.map((name) => el("th", { scope: "col", textContent: name })))),
     el("tbody", {}, ...models.map((m) => el("tr", { className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, id: `sv-${m.service}${m.backend ? `@${m.backend}` : ""}` },

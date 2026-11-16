@@ -814,3 +814,121 @@ def test_serves_passing_errors_say_their_code_and_a_restart_waits_for_its_downlo
     with pytest.raises(UnshackleError, match="still downloading"):
         backend.restart("dash-key")
     assert responses.calls[-1].request.method == "DELETE"  # the drain called off: it takes new work again
+
+
+def test_a_local_serve_that_failed_to_start_is_not_started_again_for_a_minute(tmp_path, monkeypatch):
+    import unshacklarr.backend as backend
+
+    starts, now = [], [1000.0]
+
+    def failing_start(self, command):
+        starts.append(command)
+        raise UnshackleError("unshackle serve did not answer within 90 s: no output")
+
+    monkeypatch.setattr(backend.Local, "start", failing_start)
+    monkeypatch.setattr(backend.time, "monotonic", lambda: now[0])
+    local = backend.Local(tmp_path / "serve.log")
+    for _ in range(3):
+        with pytest.raises(UnshackleError, match="did not answer within 90 s"):
+            local.endpoint("unshackle")
+    assert starts == ["unshackle"]  # the second and third caller were told, not made to wait for another start
+    with pytest.raises(UnshackleError):
+        local.endpoint("other-unshackle")
+    assert starts == ["unshackle", "other-unshackle"]  # another command is another try
+    now[0] += 61
+    with pytest.raises(UnshackleError):
+        local.endpoint("other-unshackle")
+    assert starts == ["unshackle", "other-unshackle", "other-unshackle"]  # a minute later it is tried again
+
+    other = Unshackle(tmp_path)  # a save of the settings clears the memory of a failed start
+    other.local.failed = ("unshackle", now[0], UnshackleError("x"))
+    other.configure({})
+    assert other.local.failed is None
+
+
+@responses.activate
+@pytest.mark.parametrize("header, seconds", [("0", 1), ("7", 7), (None, 60), ("soon", 60)])
+def test_a_busy_answer_always_asks_for_a_wait(tmp_path, header, seconds):
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-key"})
+    responses.get("http://backend:8786/api/download/jobs/j1", status=429, headers={"Retry-After": header} if header else {})
+    with pytest.raises(UnshackleError) as caught:
+        backend.call("GET", "/api/download/jobs/j1")
+    assert caught.value.retry_after == seconds  # 0 would read as "no wait asked": a miss, then a cancelled download
+
+
+@pytest.mark.parametrize("shebang", ["#!/usr/bin/env python3", "#!/usr/bin/env -S python3 -u"])
+def test_a_launcher_that_asks_env_for_python_runs_that_python(tmp_path, shebang):
+    import shutil
+    import sys
+    from unshacklarr.backend import unshackle_python
+    here = tmp_path / "bin"
+    here.mkdir()
+    (here / "python3").symlink_to(sys.executable)
+    command = here / "unshackle"
+    command.write_text(f"{shebang}\n")
+    command.chmod(0o755)
+    path = os.environ["PATH"]
+    os.environ["PATH"] = f"{here}{os.pathsep}{path}"
+    try:
+        python, _ = unshackle_python(str(command))
+        assert python == shutil.which("python3")  # the interpreter env would find, not env itself
+    finally:
+        os.environ["PATH"] = path
+
+
+def test_a_restart_makes_unshackle_say_again_where_its_folders_are(tmp_path, monkeypatch):
+    import sys
+    import types
+    import unshacklarr.backend as backend
+
+    folders = [f"/old/{n}" for n in ("config.yaml", "cookies", "wvds", "prds", "temp", "cache")]
+    asked = []
+
+    def run(argv, **kwargs):
+        asked.append(list(folders))
+        return types.SimpleNamespace(stdout="\n".join(folders), stderr="", returncode=0)
+
+    monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
+    monkeypatch.setattr(backend.subprocess, "run", run)
+    monkeypatch.setattr(backend.Local, "start", lambda self, command: None)
+    local = backend.Local(tmp_path / "serve.log")
+    assert local.cookies_dir("unshackle") == Path("/old/cookies")
+    local.paths("unshackle")
+    assert len(asked) == 1  # asked once while it runs
+
+    folders[:] = [f.replace("/old/", "/new/") for f in folders]  # directories: changed in unshackle.yaml
+    local.restart("unshackle")
+    assert local.cookies_dir("unshackle") == Path("/new/cookies")  # sign-ins are looked for where it keeps them now
+
+
+def test_a_restart_that_fails_is_not_started_again_by_the_callers_waiting_on_it(tmp_path, monkeypatch):
+    import unshacklarr.backend as backend
+
+    starts = []
+
+    def failing_start(self, command):
+        starts.append(command)
+        raise UnshackleError("unshackle serve did not answer within 90 s: no output")
+
+    monkeypatch.setattr(backend.Local, "start", failing_start)
+    local = backend.Local(tmp_path / "serve.log")
+    with pytest.raises(UnshackleError, match="did not answer within 90 s"):
+        local.restart("unshackle")
+    with pytest.raises(UnshackleError, match="did not answer within 90 s"):
+        local.endpoint("unshackle")  # a caller that waited for the restart, or the next page load
+    assert starts == ["unshackle"]
+
+
+def test_a_failed_start_cleared_by_another_thread_mid_check_still_says_why(tmp_path):
+    import unshacklarr.backend as backend
+    local = backend.Local(tmp_path / "serve.log")
+
+    class Clearing(tuple):  # a restart or a save clears the memory as soon as it is first read
+        def __getitem__(self, index):
+            local.failed = None
+            return super().__getitem__(index)
+
+    local.failed = Clearing(("unshackle", time.monotonic(), UnshackleError("did not start")))
+    with pytest.raises(UnshackleError, match="did not start"):
+        local.recent_failure("unshackle")

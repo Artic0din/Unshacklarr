@@ -77,6 +77,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Buttons, dropdowns, search boxes and filters share two heights everywhere (36px in toolbars and forms, 30px in rows and cards), dropdowns look the same in Safari, plain buttons have a visible edge, cards and rows that need attention are framed in their colour instead of a bar on the left, Settings uses the whole width, Interface and Region cards sit side by side with a Language dropdown, the Services table reads Service, Sign-in methods, Sign-in, Cookies, Used by, Actions with each cookie file on one line and Add only when there is none, notifications are two-line rows, and the job bar at the bottom of Activity is readable in the light look.
 - The page takes the Molt look: warm neutrals with one teal for the main action, shared shadows and spacing, one badge style whose colour says what it means, and a light theme; Settings › Interface › Appearance picks System, Light or Dark for this browser.
 - Services are named, not coded (RMC BFM Play, not RMCBFM), a series is "Downloading" or "Not downloading" everywhere, every sign-in says "Sign in", two-click confirmations name what they delete and stay until you leave the button, and counts such as "1 episode" and "2 episodes" are whole texts a translation can phrase its own way.
 - Press feedback on buttons, tabs and pills, hover colours only where a pointer can hover, a plain wizard (the normal Next button, a solid panel, no overshoot), tick, chevron and arrow icons drawn as icons instead of text glyphs, language names without flags, and reduced motion keeps short opacity cross-fades.
@@ -108,6 +109,35 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- The episode list and a running download's track list now draw on iPhones before iOS 17.4, where "What's on…?" results and the live track list used to stop the page drawing.
+- "What's on…?" for a series that is in no main Sonarr now asks the Sonarr you are viewing (for example 4K), not always the first, so its badges match that library's episodes.
+- Reloading on Settings, Automation or Interface no longer throws, so the installed app keeps pull-to-reload on those pages.
+- Download and Sync no longer say "Save your changes first" for 1.6 seconds after a Save: they only wait when something is really unsaved.
+- The account password you type to download or restore a backup is now cleared from the form afterwards.
+- Backup and diagnostic downloads no longer fail on Safari: the file is kept for 30 seconds after the click instead of being released at once.
+- Tapping a push notification now opens the bell even when the app's window cannot be navigated: it opens a new window on it.
+- Activity no longer grows in memory while its tab stays open: what the page keeps per download (time left, bar widths, posters, unfolded tracks) is dropped once the download leaves the list.
+- Typing in the series search no longer redraws every poster on each key: the wall updates once you pause for 150 ms, so large libraries stay smooth.
+- "Change and download…" no longer shows "Pick a service and its URL first" on a series that only has season pages.
+- Typing in the device search (Settings, CDM) no longer jumps the cursor to the end or breaks Japanese and Chinese input: the box stays, and only the list under it is redrawn.
+- A release day from 8 to 13 days before airing can now be picked (the list skipped them), instead of a suggested one saving as "the day it airs".
+- Settings, Per service no longer stays blank when one service's options cannot be loaded (Unshackle down, or a service it no longer has): the list shows, and the stale entry can be removed.
+- The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
+- The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
+- Run sync now (`POST /api/sync` and `/api/v1/sync`) now starts while a single download, a retry or an upgrade is going, and only a sync of every missing episode counts as "a sync running" on Settings and in `/api/v1/status`.
+- A retry through the API (`"retry": true` on `POST /api/v1/downloads`) now repeats its last attempt's numbering and Replace anyway, as the page's Retry does, instead of asking for the series' numbering and keeping the file.
+- Changing the password, the API key or the page's language, logging out other devices, restoring a backup and saving where backups are sent now wait for a sync's settings write, so a revoked key or an old password can no longer come back when both happen at once.
+- The README's reverse proxy section now says to pass on the original Host, without which Activity's live output is refused as cross-origin behind plain Nginx.
+- A notification address over https, such as an ntfy topic at `https://ntfy.sh/familyalerts`, now reaches the page with everything after its host hidden; only Discord's and Slack's webhook paths still show.
+- Activity's catch-up with a superscript digit as its number of days (`/api/missing?days=²`) now answers that days is a number instead of a server error.
+- Someone signed in through the reverse proxy can now use the Test buttons for Sonarr and Unshackle, instead of being told to enter the setup code first.
+- A setup code or session cookie with an accented character is now refused as wrong instead of failing with a server error that kept the page from loading.
+- **Test Unshackle** with an edited local command no longer points the downloads and syncs running at the same moment at the test command, and no longer refuses to run while a download is going.
+- Restarting Unshackle from the page now makes Unshacklarr look again at where it keeps its cookies, devices and config, so a changed `directories:` no longer leaves sign-ins looking expired until Unshacklarr restarts.
+- A local Unshackle whose launcher starts with `#!/usr/bin/env python3` now starts, instead of failing with "illegal option".
+- A busy or failing Unshackle no longer lets a retry start a second download into the folder the first may still be writing: a job counts as gone only when Unshackle says there is no such job.
+- A busy Unshackle that answers "try again in 0 seconds" no longer makes Unshacklarr cancel the running download; it waits a second and asks again.
+- A local Unshackle that will not start is now said once for a minute, instead of every page load and sync waiting 90 seconds to start it again.
 - The example Docker Compose file now builds Unshackle from this repository's Dockerfile at the reviewed commit and pulls this repository's image, instead of upstream's, which ignored the commit pin; that commit now includes official Unshackle's latest development work.
 - The `--remote` servers' options now show in the first 10 minutes after the machine starts, instead of being missing until then.
 - Renaming or removing a Sonarr in Settings no longer makes every later Save fail with "no Sonarr named …": a rename keeps each series' own settings for it (such as switched off), and a removal drops them.
@@ -242,6 +272,24 @@ Every change worth knowing, newest first. The format follows
   yours: its episodes then match the service's better.
 - **Episode order.** A series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering; when that
   order changes, its new episodes wait until you confirm the numbering.
+- Activity's progress bar no longer steps back for a moment when the history is reloaded: a download the live feed has just drawn keeps its newer progress. (#133)
+- Switching quickly between a series' libraries (main and 4K) no longer leaves the other library's episodes on screen: the slower answer is dropped, so Download no longer sends one library's episodes to the other. (#193)
+- A download of a series in one library (main or 4K) no longer greys out and marks the same episodes as downloading in the series' other library. (#245)
+- Catch up and Upgrades no longer show a slower, older answer under the filter or Sonarr you picked last, and their Download and Replace buttons send the Sonarr their list was fetched for, not the one the picker has moved to. (#194)
+- Opening another series while "Test this series" is still asking no longer shows the first series' result in it (or lets Apply write its season map there), and the Test button is no longer stuck waiting for the first series' answer. (#217)
+- The library-path check in Settings no longer shows an old result ("Not found here" for `/mnt/t` after you typed `/mnt/tv`): only the newest check's answer is drawn. (#246)
+- Hiding the browser tab with the serve log open and coming back no longer replaces the log with the output of a run opened earlier. (#242)
+- The Schedule no longer shows seven empty "Nothing that day." columns when a late logo download finishes while a new week or month is still loading: the spinner stays until the shows arrive. (#244)
+- Closing and quickly reopening "Suggest services" no longer leaves the first run's workers asking TMDB alongside the new ones or overwriting the progress count. (#254)
+- Episodes, Catch up and Upgrades no longer say Sonarr "did not answer" when it takes between 30 seconds and 2 minutes: they wait as long as the Schedule and the server do, and the series search on a service waits 70 seconds instead of 30. (#222)
+- An episode that aired just after midnight on 1 January is no longer refused as a year too early: the programme's year is now Sonarr's own air date, or the UTC time converted to your time zone.
+- One series with an unreadable start date no longer stops the automatic sync of every series after it, nor makes the missing list fail: Save now refuses a start date that is not a date, and one already stored that way counts as no start date.
+- A second Sonarr now gets the same automatic sync as the main one: a series' own broadcast schedule and its early releases (a negative release day) reach it too, so a weekly series Sonarr dates all on its premiere is no longer missed there.
+- A failure whose message merely contains "log in" inside another word ("catalog index", "assign in time") is no longer taken for a sign-in problem, so it no longer tries every fallback profile or says the cookies may have expired.
+- Hiding an approval code no longer hides ordinary words with it: "enter your code ABCD-1234" hides only the code, not every "your" in the history and in error messages, so a download error such as "connection refused" still matches its retry rule.
+- A sign-in question in the bell is now crossed off when the service asks a new one ("wrong code, try again"), and when the download fails or is stopped while it was asking, instead of staying open.
+- Quiet hours typed by hand without quotes (`from: 23:00`, which the settings file reads as a number) no longer break every notification and the check that sends the held summary; a time that cannot be read now means no quiet hours.
+- The summary of messages held during the quiet hours is no longer lost when every address fails as they end: it is kept and tried again the next minute, and messages that arrived while it was going out are kept too.
 
 ### Removed
 
