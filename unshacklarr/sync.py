@@ -4292,7 +4292,7 @@ def leftovers() -> list[dict]:
     for d in sorted(DOWNLOADS.glob("unshackle-*")) if DOWNLOADS.is_dir() else []:
         m = FOLDER.fullmatch(d.name)
         files = videos_in(d) if m and d.is_dir() and not d.is_symlink() else []  # a link named like ours: not ours
-        if not files or d.name in busy_episodes:
+        if not files or d.name in busy_episodes or (d / AUDIO_ADD).exists():  # an audio add cut short: its audio is no video
             continue
         found.append({"folder": d.name, "instance": m.group(1) or "", "tvdbId": int(m.group(2)), "sxxeyy": f"S{int(m.group(3)):02}E{int(m.group(4)):02}",
                       "files": [f.name for f in files], "size": sum(f.stat().st_size for f in files),
@@ -4338,6 +4338,8 @@ def leftover_path(folder: str) -> Path:
 def import_leftover(folder: str) -> None:
     """Hand a waiting folder to Sonarr for good, replacing its file whatever the quality."""
     out = leftover_path(folder)
+    if (out / AUDIO_ADD).exists():
+        raise RuntimeError("An audio track add stopped midway in this folder: it holds audio only, not a video to import")
     m = FOLDER.fullmatch(folder)
     if m.group(1) and m.group(1) not in SONARRS:
         raise RuntimeError(f"The Sonarr named {m.group(1)} is no longer in Settings, Sonarr")

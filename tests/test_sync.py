@@ -7091,3 +7091,17 @@ def test_the_audio_add_mark_stays_while_its_audio_could_not_be_removed(tmp_path,
     monkeypatch.setattr(sync, "unlink_inside", real)
     sync.remove_partial_merges()  # the next start, the file deletable again: all gone
     assert not out.exists()
+
+
+def test_a_folder_an_audio_add_left_marked_is_never_offered_or_imported(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    out = sync.DOWNLOADS / "unshackle-111-S02E05"
+    out.mkdir(parents=True)
+    (out / "audio.mkv").write_bytes(b"fr")  # cleanup could not delete it: the mark stayed
+    (out / sync.AUDIO_ADD).touch()
+    imported = []
+    monkeypatch.setattr(sync, "import_into_sonarr", lambda *a: imported.append(a))
+    assert sync.leftovers() == []
+    with pytest.raises(RuntimeError):
+        sync.import_leftover("unshackle-111-S02E05")
+    assert imported == []
