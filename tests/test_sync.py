@@ -6209,3 +6209,19 @@ def test_a_job_that_lent_its_slot_on_one_server_downloads_its_next_episode_on_an
         assert sync.slot_jobs["Y"] == ["job1"]
     assert sync.slot_line["X"] == ["job1"] and "job1" not in sync.lent  # the other sync still waits
     sync.release_job("job1")
+
+
+def test_a_release_burst_holds_a_series_whose_episode_order_changed(tmp_path, monkeypatch):
+    # The burst at the release time names its episode, as a click does, but nobody asked for it: like the regular
+    # sync, it waits for the numbering to be checked rather than downloading what the old numbering now points at
+    sync = load(tmp_path, monkeypatch)
+    serie = {"tvdbId": 7, "title": "Show", "seasonType": "netflix", "seasonTypes": []}
+    show = {"service": "NF", "title": "https://example.com/show", "season_map": {"2": 3}, "sonarr_order": "official"}
+    ep = {"id": 1, "seasonNumber": 2, "episodeNumber": 1, "series": serie}
+    reached = []
+    monkeypatch.setattr(sync, "season_page", lambda show, season: reached.append(season) or show)
+    monkeypatch.setattr(sync, "notify_series", lambda *a, **k: True)
+    sync.run_episodes({"series": {7: show}}, {}, [ep], manual=True, replace=False, kind="burst")
+    assert reached == [], "held, as the regular sync holds it"
+    sync.run_episodes({"series": {7: show}}, {}, [ep], manual=True, replace=False, kind="manual")
+    assert reached == [2], "picked by hand: asked for, so tried"

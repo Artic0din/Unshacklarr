@@ -4492,7 +4492,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 continue  # separate programmes need no series URL: each episode finds its own
             if not manual and not wanted_automatically(show, ep, datetime.now(timezone.utc)):
                 continue
-            if not manual and (why := order_changed(show, ep["series"])):  # its numbering may now name other episodes
+            # its numbering may now name other episodes: held unless picked by hand (a release burst is automatic)
+            if (not manual or kind == "burst") and (why := order_changed(show, ep["series"])):
                 if first_warning(f"order:{ep['series']['tvdbId']}:{ep['series'].get('seasonType')}"):
                     notify_series(show, settings, "warning", f"Episode order changed: {ep['series']['title']}",
                                   f"{why}. New episodes of this series are not downloaded until you check its numbering in Unshacklarr.")
