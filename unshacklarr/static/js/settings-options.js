@@ -716,7 +716,8 @@ async function save() {
     && (!Array.isArray(a) || (a.length === b.length && a.every((x, n) => same(x, b[n]))));
   let clash = false;  // a list changed here while the Save ran and elsewhere: the next Save is merged by the server
   const take = (into, was, now, series = false) => {
-    const moved = series && (into.service !== now.service || into.title !== now.title);  // a time learnt for another source is not its
+    // moved here while the Save ran: a time the answer has is for the source sent, not this one
+    const moved = series && (into.service !== was.service || into.title !== was.title);
     let took = false;
     for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
       if (alike(now[k], was[k]) || (moved && ["release_time", "release_day"].includes(k))) continue;

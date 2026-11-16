@@ -2200,6 +2200,14 @@ const fresh = () => {
   out.seriesMergedAndPanelClean = box.S.config.series[7].title === "https://example.com/show-2" && !page.state().unsaved
     && JSON.parse(box.drawerSnapshot.conf).title === "https://example.com/show-2";
   box.current = null; box.drawerSnapshot = null;
+  // another tab moved the series to a new address with its time; this page saved the offset: both are taken
+  box.S = { config: { settings: {}, series: { 7: { ...seen, release_time: "20:00" } } } }; page.baseline(box.S.config);
+  vm.runInContext("savedUnits = configUnits(S.config)", box);
+  box.S.config.series[7].episode_offset = 2; page.dirty();
+  saving = page.save();
+  release({ series: { 7: { ...seen, episode_offset: 2, title: "https://example.com/show-2", release_time: "21:00" } } }); await saving;
+  out.mergedSourceTakesItsTime = box.S.config.series[7].title === "https://example.com/show-2" && box.S.config.series[7].release_time === "21:00"
+    && !page.state().unsaved;
 
   // a Sonarr renamed on the page: requests name it as the server knows it until the Save is done (#181)
   box.S = { config: { settings: { sonarrs: [{ name: "4K", url: "http://a" }, { name: "kids", url: "http://b" }] }, series: {} } };
@@ -2276,6 +2284,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "editMeanwhileWins": True,  # an edit made while the Save ran is not overwritten by its answer
         "editMeanwhileSent": True,
         "seriesMergedAndPanelClean": True,  # a series too, and its open panel does not ask to discard
+        "mergedSourceTakesItsTime": True,  # another tab's new source comes with its release time
         "renamedAsSaved": True,  # an unsaved rename is not a name the server knows (#181)
         "renameSavedIsUsed": True,  # once saved, the new name; a rename made while the Save ran still is not
         "nestedEditKeepsOthersRename": True,  # an edit inside a list entry does not block another tab's change beside it
