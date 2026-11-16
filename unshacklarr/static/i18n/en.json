@@ -405,9 +405,12 @@
  "Average": [],
  "Average time": [],
  "Back": [],
+ "Back to Activity": [],
+ "Back to Settings": [],
  "Back to all series": [],
  "Back to the downloads": [],
  "Back to the file": [],
+ "Back to the schedule": [],
  "Back up automatically every": [],
  "Backblaze B2, Cloudflare R2, Wasabi, Scaleway, OVH, AWS or MinIO.": [],
  "Backup sent: {0}": [
@@ -740,8 +743,7 @@
  "Device type": [],
  "Devices": [],
  "Devices (CDM)": [],
- "Diagnostic": [],
- "Diagnostic downloaded: check it, then attach it to the issue": [],
+ "Diagnostic saved: check it, then attach it to the issue": [],
  "Disable folder creation for TV Shows.": [],
  "Disable the source tag from the output file name and path.": [],
  "Discard": [],
@@ -855,7 +857,6 @@
  "Edit": [],
  "Edit ladders": [],
  "Edit unshackle.yaml": [],
- "Edit…": [],
  "Empty: keyxtractor.decryptlabs.com": [],
  "Empty: nothing is sent.": [],
  "Empty: the URL above, if your browser can open it.": [],
@@ -1137,16 +1138,14 @@
  "Italiano": [],
  "Its address, API key, and TMDB": [],
  "Its address: http(s)://…": [],
- "Its downloads from {0} fail": [
-  "svcName(conf.service)"
- ],
  "Its downloads will fail: replace them in Settings › Services.": [],
- "Its last {0} downloads failed": [
-  "sick.failing"
- ],
  "Its last {0} downloads failed{1}": [
   "sick.failing",
   "sick.cause ? `: ${sick.cause}` : \"\""
+ ],
+ "Its last {0} downloads from {1} failed": [
+  "sick.failing",
+  "svcName(conf.service)"
  ],
  "Its log needs serve: dashboard: key: in unshackle.yaml (Unshackle after 6.0.0)": [],
  "Its log, last lines": [],
@@ -1194,7 +1193,6 @@
   "COUNT.day(days)"
  ],
  "Kept": [],
- "Kept by Sonarr": [],
  "Kept the existing file: {0}": [
   "label"
  ],
@@ -1203,6 +1201,7 @@
   "w['want']",
   "w['label']"
  ],
+ "Kept: Sonarr's own file was not replaced": [],
  "Kind": [],
  "Korean": [],
  "L1, L2, ChromeCDM (Widevine) or SL2, SL3 (PlayReady)": [],
@@ -1771,6 +1770,7 @@
  "Paused for {0}: choose a quality ladder in Settings, Sonarr.": [
   "paused.join(\", \")"
  ],
+ "Paused: the next episode waits": [],
  "Per episode": [],
  "Per service": [],
  "Pick a country in the list": [],
@@ -1855,6 +1855,7 @@
   "ep['series']['title']"
  ],
  "Release to reload": [],
+ "Reload calendar": [],
  "Reload services": [],
  "Reloading…": [],
  "Remote": [],
@@ -1958,6 +1959,7 @@
  "Save": [],
  "Save and test": [],
  "Save changes": [],
+ "Save diagnostic": [],
  "Save or discard your changes first": [],
  "Save your changes first: the download reads the saved settings.": [],
  "Save your changes first: the sync reads the saved settings.": [],
@@ -2234,7 +2236,6 @@
   "current.title",
   "want"
  ],
- "Sonarr kept its own file": [],
  "Sonarr lists no episode for this series.": [],
  "Sonarr name": [],
  "Sonarr now numbers this series in {0}, but the numbering below was set for {1}. New episodes of this series are not downloaded until you check the numbering and confirm it.": [
@@ -2886,7 +2887,7 @@
  "Unshacklarr · Today at {0}": [
   "now"
  ],
- "Unshacklarr, back to the series": [],
+ "Unshacklarr, schedule": [],
  "Unshackle": [],
  "Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): allow it in Settings, Unshackle": [],
  "Unshackle address": [],
@@ -2915,7 +2916,6 @@
  "Unshackle runs": [],
  "Unshackle server": [],
  "Unshackle tries at that time, then every 30 s for 10 min. Empty: only the regular syncs (every 2 h).": [],
- "Unshackle tries its series at their release time, or at the first sync after airing. Add any other series in one tap, or hide the ones you don't follow.": [],
  "Unshackle {0}": [
   "name"
  ],
@@ -2990,7 +2990,7 @@
  "Wait for 2 parts": [],
  "Wait for 3 parts": [],
  "Wait for 4 parts": [],
- "Wait for it": [],
+ "Wait for the audio, in days": [],
  "Waiting for Sonarr": [],
  "Waiting for a slot": [],
  "Waiting for you": [],
@@ -3785,6 +3785,10 @@
  "{0} h ago": [
   "Math.round(min / 60)"
  ],
+ "{0} h {1} min": [
+  "Math.floor(min / 60)",
+  "String(min % 60).padStart(2, \"0\")"
+ ],
  "{0} had already started: stop it from its card": [
   "c.sxxeyy"
  ],
@@ -3951,7 +3955,7 @@
  "{0} min ago": [
   "min"
  ],
- "{0} min {1}": [
+ "{0} min {1} s": [
   "Math.floor(s / 60)",
   "String(s % 60).padStart(2, \"0\")"
  ],
@@ -4521,7 +4525,6 @@
  "≤ {0} kbps": [
   "st.max_kbps"
  ],
- "⏸ Paused: the next episode waits": [],
  "● Connected{0}": [
   "st.version ? ` · Sonarr ${st.version}` : \"\""
  ],
