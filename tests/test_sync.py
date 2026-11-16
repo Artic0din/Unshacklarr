@@ -3734,6 +3734,7 @@ def test_an_episode_in_none_of_the_accepted_languages_waits_undownloaded(tmp_pat
     sync = load(tmp_path, monkeypatch)
     assert sync.speaks({"en-US"}, ["fr", "en"]) and sync.speaks({"fre"}, ["fr"]) and not sync.speaks({"fr-FR"}, ["fr-CA"])
     assert sync.speaks({"fr"}, ["fr-ca"])  # --a-lang fr-CA: the file's plain French tag may be it, as before
+    assert sync.speaks({"fre-CA"}, ["fr-ca"]) and not sync.speaks({"fre-FR"}, ["fr-ca"])  # a three-letter tag with a region
     config = sync.read_file()
     assert sync.accepted_audio(config["series"][111], {**config, "settings": {"audio_accept": "fr, en"}}) == ["fr", "en"]
     config["series"][111]["audio_accept"] = "fr,en"
@@ -4147,6 +4148,20 @@ def test_a_download_asked_in_one_audio_language_replaces_a_file_only_in_it(tmp_p
     assert card["outcome"] == "failed" and "No fr audio in the download (it has en)" in card["cause"]
     sync.sync(config, {}, [episode(111, 2, 6)], manual=True, kind="manual", audio="fr")
     assert imported == [episode(111, 2, 6)["id"]]
+
+
+def test_a_download_asked_in_one_audio_language_keeps_it_on_an_attempt_the_service_lacks_it_for(tmp_path, monkeypatch):
+    # The API's "audio": "fr" replacing a file, French not on the service yet: the attempt still saves "fr",
+    # so a Retry of it asks French again and does not replace the file in the series' English
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111].update(options={"--a-lang": "en"}, audio_accept="en")
+    monkeypatch.setattr(sync, "tracks_on_service", lambda show, config, request, backend=None: {"audio": {"en"}, "subtitles": set()})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual", audio="fr", replace=True)
+    [card] = [json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json")]
+    assert card["outcome"] == "unavailable" and card.get("audio_override") == "fr" and card.get("replace") is True
 
 
 def test_a_download_asked_in_one_audio_language_replaces_a_file_only_with_proof_of_it(tmp_path, monkeypatch):

@@ -3741,7 +3741,7 @@ def accepted_subs(show: dict, config: dict) -> list[str]:
 def speaks(tags, accepted: list[str]) -> bool:
     """Whether a track language among `tags` is one accepted: fr takes fr-FR and fr-CA; fr-CA takes fr-CA, and a
     plain fr too (a file's tag says no region: it may be it), never fr-FR."""
-    have = {LANGS.get(t.lower(), t.lower()) for t in tags if t}
+    have = {LANGS.get(head, head) + dash + region for t in tags if t for head, dash, region in [t.lower().partition("-")]}
     return any(a == h or (a.split("-")[0] == h.split("-")[0] and ("-" not in a or "-" not in h)) for a in accepted for h in have)
 
 
@@ -4818,6 +4818,11 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     backend = backend_for(use["service"], config)
                     run.card["backend"] = backend.name
                     try:
+                        # saved before anything below can end the attempt: a Retry of it asks the same again
+                        if use.get("asked_video"):
+                            run.card["video_override"] = use["asked_video"]
+                        if use.get("asked_audio"):
+                            run.card["audio_override"] = use["asked_audio"]
                         request = download_request(use, config, wanted, out, backend)
                         if profile:  # a fallback profile, its login refused with the series' own
                             request["profile"] = profile
@@ -4827,10 +4832,6 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                             for kind, accepted in wanted_langs.items():
                                 if accepted and not speaks(tracks[kind], accepted):
                                     raise Missing(kind, accepted, tracks[kind])
-                        if use.get("asked_video"):
-                            run.card["video_override"] = use["asked_video"]
-                        if use.get("asked_audio"):
-                            run.card["audio_override"] = use["asked_audio"]
                         if (
                             apply_ladder(use, config, request, backend)
                             and use is show
