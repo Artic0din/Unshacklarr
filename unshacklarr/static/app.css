@@ -520,7 +520,7 @@ input[type=checkbox].switch::after { content: ""; position: absolute; top: 3px; 
 input[type=checkbox].switch:checked { background: var(--accent); } input[type=checkbox].switch:checked::after { transform: translateX(16px); } input[type=checkbox].switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sx-id p a { color: var(--accent); text-underline-offset: 2px; }
 /* Interface and Region: short cards side by side, the page's head across the top */
-.sx-tiles { grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); }
+.sx.sx-tiles { grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); }  /* .sx sets one column: tiles beat it */
 .sx-tiles > .sx-hero { grid-column: 1 / -1; }
 .sx-tiles .sx-grid { grid-template-columns: minmax(0, 1fr); } .sx-tiles .sx-grid .field:only-child { max-width: none; }  /* a card is one column wide: its fields stack */
 .sx-tiles .sx-head { align-items: center; flex-wrap: wrap; } .sx-tiles .sx-head > :is(.seg, .sx-pick, .switch) { flex: none; }

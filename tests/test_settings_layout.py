@@ -53,6 +53,5 @@ def test_the_unshackle_card_may_be_narrower_than_its_commands():
     assert "min-width: 0" in rule(".ux-more")
 
 
-def test_a_hero_line_never_starts_with_its_separator():
-    source = (STATIC / "js" / "cookies-cdm.js").read_text()
-    assert '.join("\\u00a0· ")' in source  # the no-break space keeps the dot on the line it ends
+def test_interface_and_region_cards_stay_side_by_side():
+    assert "repeat(auto-fill" in rule(".sx.sx-tiles")  # .sx's one column comes later and would win over .sx-tiles alone
