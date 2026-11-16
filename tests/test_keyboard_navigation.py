@@ -143,3 +143,22 @@ def test_the_yaml_editor_says_how_to_leave_it():
     page = (STATIC / "index.html").read_text()
     foot = re.search(r'<div class="uy-foot" id="uy-foot".*?</div>', page)
     assert foot and "Esc, then Tab, leaves the editor." in foot.group(0)
+
+
+def test_the_title_follows_the_phone_settings_list_and_a_series_without_a_title():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const doc = { title: "Settings: Sonarr · Unshacklarr", body: { classList: { contains: () => false } }, querySelector: () => null, querySelectorAll: () => [] };
+const ctx = sandbox({
+  document: doc, tr: (text) => text, currentTab: "settings", current: null, settingsList: false, settingsSec: "sonarr",
+  phoneLayout: () => true, inSettingsSec: () => false, leaveNews() {}, closeDetails() {}, navigate() {},
+  $: (sel) => ({ textContent: "Sonarr", classList: { toggle() {} } }),
+});
+vm.runInContext([/^const PAGE_NAME = .*$/m, /^function updateTitle\(\) \{.*?^\}/ms, /^function showSettingsList\(on\) \{.*?^\}/ms, /^function showTab\(.*?^\}/ms]
+  .map((re) => grab(src, re)).join("\n"), ctx);
+ctx.showTab("settings");  // Settings tapped on a phone while a section was open: its list
+const out = { list: doc.title };
+for (const title of [undefined, "", "  "]) { ctx.current = { title }; ctx.currentTab = "series"; ctx.updateTitle(); out[JSON.stringify(title ?? null)] = doc.title; }
+console.log(JSON.stringify(out));
+""", str(JS / "navigation.js"))
+    assert shown == {"list": "Settings · Unshacklarr", "null": "Series · Unshacklarr", '""': "Series · Unshacklarr", '"  "': "Series · Unshacklarr"}

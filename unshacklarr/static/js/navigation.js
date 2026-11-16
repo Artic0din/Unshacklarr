@@ -67,7 +67,7 @@ const PAGE_NAME = { schedule: "Schedule", series: "Series", log: "Activity", set
 function updateTitle() {
   if (document.body.classList.contains("gated")) return;  // the sign-in and the setup name themselves
   const section = currentTab === "settings" && !settingsList && $(`.set-nav [data-sec="${settingsSec}"] span`)?.textContent;
-  document.title = current ? tr(`${current.title} · Unshacklarr`)
+  document.title = current?.title?.trim() ? tr(`${current.title} · Unshacklarr`)
     : section ? tr(`Settings: ${section} · Unshacklarr`) : tr(`${PAGE_NAME[currentTab]} · Unshacklarr`);
 }
 let routed = false;
@@ -110,9 +110,9 @@ function showTab(name, fromRoute = false, quiet = false) {
   }
   if (name !== currentTab && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);
   currentTab = name;
-  updateTitle();
   closeDetails(false);  // the Schedule's popover belongs to its card
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
+  updateTitle();  // after the list is chosen: a phone's Settings tab names the list, not the section it left
   document.querySelectorAll("nav button").forEach((b) => {
     if (b.dataset.tab === (name === "yaml" ? "settings" : name)) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
