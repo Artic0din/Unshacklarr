@@ -4431,6 +4431,22 @@ def test_a_restore_refuses_a_number_setting_a_save_would_refuse(tmp_path, monkey
     import unshacklarr.web
     importlib.reload(unshacklarr.sync)
     web = importlib.reload(unshacklarr.web)
+
+def test_a_restore_checks_other_sonarrs_against_the_backups_own_main_one(tmp_path, monkeypatch):
+    # the backup's main Sonarr replaces this install's: an other Sonarr at this install's main address is fine
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "settings": {"sonarr_url": "http://a:8989", "sonarr_api_key": "ka",
+                                                         "sonarrs": [{"name": "kids", "url": "http://b:8989", "api_key": "kb", "quality_ladder": ""}]}})
+    text = web.backup_text(web.read_config())
+    web.write_config({**web.read_config(), "settings": {"sonarr_url": "http://b:8989", "sonarr_api_key": "kb"}})
+    assert web.backup_data(text)["settings"]["sonarrs"][0]["url"] == "http://b:8989"
+    with pytest.raises(web.web.HTTPBadRequest):  # its own main and other at one address: refused
+        web.backup_data(text.replace("http://a:8989", "http://b:8989"))
+
     web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"},
                       "settings": {"history_keep": 50}})
     web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test

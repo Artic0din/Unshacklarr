@@ -1443,7 +1443,8 @@ def check_sonarrs(given, saved, main_url: str) -> list[dict]:
             raise web.HTTPBadRequest(text=f"Two Sonarr instances are named {name}")
         if not URL.fullmatch(url) or "@" in urlparse(url).netloc:
             raise web.HTTPBadRequest(text=f"The address of {name} must start with http:// or https://, without a user name")
-        if url in (main_url.rstrip("/"), str(sonarr_sync.load_settings().get("sonarr_url") or "").rstrip("/")) \
+        main = sonarr_sync.load_settings({"settings": {"sonarr_url": main_url}})["sonarr_url"]  # this one, else the environment's
+        if url in (main_url.rstrip("/"), str(main or "").rstrip("/")) \
                 or url in {o["url"] for o in out}:
             raise web.HTTPBadRequest(text=f"{name} has the address of another Sonarr here: each instance has its own")
         old = saved.get(name) or next((o for o in saved.values() if o.get("url") == url), {})
