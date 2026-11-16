@@ -114,6 +114,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **The keyboard no longer loses its place when a list redraws or a view changes.** Activity's live buttons, the Select mode of the series wall, the quality, broadcast and calendar buttons of a series, Notifications' Sends, the CDM devices and Schedule's month days keep their focus when they are redrawn, instead of Tab starting again at the top of the page. A phone's Settings section and Activity download open on their heading and Back returns to the item it came from, the Setup steps focus their first visible field (or heading), Escape on the language menu returns to its button, a series opened from Schedule's popover returns to its card on Escape, and the picked day of the month says it is pressed. (#280)
 - **The device menus and the setup pop-up work from the keyboard.** In Settings, CDM, the ⋯ menus (Test, Reprovision,
   Delete), the Change picker and a service's device menu, and in Activity the ⓘ that shows how a download runs, now
   take focus when they open, keep Tab and the arrow keys inside, and give focus back to their button on Escape or

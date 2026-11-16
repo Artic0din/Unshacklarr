@@ -59,9 +59,9 @@ function ladderChips(value, inherited, onchange) {
   const def = inherited && ladders().some((l) => l.name === inherited) ? inherited : "off";
   let now = !value || !ladders().some((l) => l.name === value) && value !== "off" ? def : value;
   const box = el("div", { className: "ax-seg", role: "group", ariaLabel: "Quality ladder" });
-  const paint = () => box.replaceChildren(...[["off", "Off"], ...ladders().map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
+  const paint = () => keepFocus(box, () => box.replaceChildren(...[["off", "Off"], ...ladders().map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
     type: "button", ariaPressed: String(now === v), onclick: () => { now = v; paint(); onchange(v === def ? "" : v); } },
-    el("span", { textContent: label }), ...(v === def ? [el("small", { className: "chip-default", textContent: "default" })] : []))));
+    el("span", { textContent: label }), ...(v === def ? [el("small", { className: "chip-default", textContent: "default" })] : [])))));
   paint();
   return el("div", { className: "ladder-pick" }, box, el("a", { className: "ax-edit", href: "#/settings/quality", textContent: "Edit ladders" }));
 }
@@ -89,9 +89,9 @@ function ladderLine(code, lad) {
    default; picking it follows that level again, any other is the series' own. */
 function defaultChips(box, choices, own, inherited, pick) {
   const now = own ?? inherited;
-  box.replaceChildren(...choices.map(([v, label]) => el("button", { type: "button", ariaPressed: String(now === v),
+  keepFocus(box, () => box.replaceChildren(...choices.map(([v, label]) => el("button", { type: "button", ariaPressed: String(now === v),
     onclick: () => pick(v === inherited ? undefined : v) },
-    el("span", { textContent: label }), ...(v === inherited ? [el("small", { className: "chip-default", textContent: "default" })] : []))));
+    el("span", { textContent: label }), ...(v === inherited ? [el("small", { className: "chip-default", textContent: "default" })] : [])))));
 }
 
 function renderQuality() {

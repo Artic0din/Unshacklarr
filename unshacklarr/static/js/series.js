@@ -88,13 +88,13 @@ function renderBroadcast() {
   $("#d-bc-every").value = plan.every;
   $("#d-bc-per").value = String(plan.per_evening || 1);
   $("#d-bc-days").hidden = plan.every === "daily";
-  $("#d-bc-days").replaceChildren(...DAY_NAMES.map((name, i) => el("button", { type: "button", textContent: name,
+  keepFocus($("#d-bc-days"), () => $("#d-bc-days").replaceChildren(...DAY_NAMES.map((name, i) => el("button", { type: "button", textContent: name,
     ariaPressed: String((plan.days || []).includes(i)), onclick: () => {
       const days = new Set(plan.days || []);
       days.has(i) ? days.delete(i) : days.add(i);
       plan.days = [...days].sort();
       changedBroadcast();
-    } })));
+    } }))));
   // the month: from the first evening's, one at a time
   bcMonth ??= new Date(`${plan.start}T00:00`);
   const first = new Date(bcMonth.getFullYear(), bcMonth.getMonth(), 1), today = isoDay(new Date());
@@ -114,11 +114,11 @@ function renderBroadcast() {
       } }, String(d.getDate()), ...(n ? [el("b", { textContent: n > 1 || changed ? String(n) : "" })] : [])));
   }
   const move = (step) => { bcMonth = new Date(bcMonth.getFullYear(), bcMonth.getMonth() + step, 1); renderBroadcast(); };
-  $("#d-bc-cal").replaceChildren(
+  keepFocus($("#d-bc-cal"), () => $("#d-bc-cal").replaceChildren(
     el("div", { className: "bc-cal-head" }, el("button", { type: "button", ariaLabel: "Previous month", onclick: () => move(-1) }, icon("chevronLeft")),
       el("span", { textContent: first.toLocaleDateString(LOCALE, { month: "long", year: "numeric" }) }),
       el("button", { type: "button", ariaLabel: "Next month", onclick: () => move(1) }, icon("chevron"))),
-    el("div", { className: "bc-cal-grid" }, ...DAY_NAMES.map((n) => el("small", { textContent: n.slice(0, 2) })), ...cells));
+    el("div", { className: "bc-cal-grid" }, ...DAY_NAMES.map((n) => el("small", { textContent: n.slice(0, 2) })), ...cells)));
   // what it gives: the episodes around now, dated
   const dates = broadcastDates(plan, eps), dated = eps.filter((e) => dates.has(e.id));
   const from = Math.max(0, dated.findIndex((e) => dates.get(e.id) > Date.now() - 86400000) - 2);

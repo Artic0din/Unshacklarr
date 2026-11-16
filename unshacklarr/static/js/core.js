@@ -82,7 +82,7 @@ function langCorner() {
     onclick: () => open(menu.hidden) }, el("span", { textContent: LANGS[LANG] }), el("span", { className: "caret", ariaHidden: "true" }));
   const corner = el("div", { className: "lang-corner", translate: "no" }, button, menu);
   document.addEventListener("click", (e) => { if (!corner.contains(e.target)) open(false); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") open(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { open(false); button.focus(); } });
   return corner;
 }
 let T = null, TP = [];  // exact texts; patterns, the most specific first
@@ -331,6 +331,30 @@ function el(tag, { dataset, ...props } = {}, ...children) {
   e.append(...children);
   return e;
 }
+/* A redraw replaces the control in use, and the keyboard falls to the top of the page. Draw inside this: the control
+   in the same place of the new ones takes the focus back (one in a list that reorders carries a data-fk, to be found
+   by it; a field keeps its caret or selected range). The box is what the draw rebuilds. */
+const CONTROLS = "a[href], button, input:not([type=hidden]), select, textarea, summary, [tabindex]";
+function keepFocus(box, draw) {
+  const was = document.activeElement;
+  if (!box?.contains(was)) return draw();
+  const key = was.dataset.fk, at = [...box.querySelectorAll(CONTROLS)].indexOf(was);
+  const { selectionStart: from, selectionEnd: to, selectionDirection: direction } = was;
+  draw();
+  const held = document.activeElement;
+  if (held && held !== document.body) return;  // the focus stayed, or the draw put it somewhere on purpose
+  const now = [...box.querySelectorAll(CONTROLS)];  // a control moved in the list is blurred but is the same element
+  const next = was.isConnected ? was : key ? now.filter((n) => n.dataset.fk === key).find((n) => n.getClientRects().length) : now[Math.min(at, now.length - 1)];
+  if (!next || next.disabled) return;
+  next.focus({ preventScroll: true });
+  if (typeof from === "number") next.setSelectionRange?.(from, to, direction);
+}
+/* A view swapped in: the keyboard goes to its heading, which is made focusable without joining the Tab order. */
+function focusHeading(heading) {
+  if (!heading) return;
+  heading.tabIndex = -1;
+  heading.focus({ preventScroll: true });
+}
 
 /* One row per option already set, plus a picker listing every other option the CLI knows. */
 function optionsEditor(root, specs, values, anyFlag = false) {  // anyFlag: a service's own options, any flag as written too
@@ -353,7 +377,7 @@ function optionsEditor(root, specs, values, anyFlag = false) {  // anyFlag: a se
       el("code", { title: spec.help }, flag),
       input,
       el("button", { className: "rm", title: "Remove", ariaLabel: `Remove ${flag}`,
-        onclick: () => { delete values[flag]; dirty(); optionsEditor(root, specs, values, anyFlag); } }, icon("x"))));
+        onclick: () => { delete values[flag]; dirty(); keepFocus(root, () => optionsEditor(root, specs, values, anyFlag)); } }, icon("x"))));
   }
   const free = specs.filter((s) => !(s.flag in values)).sort((a, b) => a.flag.localeCompare(b.flag));
   if (!specs.length && !Object.keys(values).length) root.append(el("small", { className: "muted", textContent: "None." }));
@@ -498,6 +522,7 @@ function renderWall() {
         el("span", { className: "meta" }, `${s.year ?? ""}`,
           ...(s.missing ? [" · ", el("span", { className: "miss", textContent: `${s.missing} missing` })] : [])));
       card.dataset.tvdb = s.tvdbId;
+      card.dataset.fk = s.tvdbId;
       return card;
     });
   const managed0 = document.querySelector("#tab-series .seg [aria-pressed=true]").dataset.managed === "*" && !counts["*"];
@@ -506,7 +531,7 @@ function renderWall() {
         "Open a series under All, pick a service or one of the links found on TMDB, then save.")
     : el("div", { className: "empty" }, el("b", { textContent: "No series match these filters." }), "Clear the search or pick another filter.");
   $("#wall").removeAttribute("aria-busy");
-  $("#wall").replaceChildren(...(cards.length ? cards : [empty]));
+  keepFocus($("#wall"), () => $("#wall").replaceChildren(...(cards.length ? cards : [empty])));
 }
 
 async function loadServiceOptions(tag) {
@@ -805,6 +830,7 @@ $("#d-stop").onclick = async () => {
   renderCheck(current, true);
   await renderServiceOptions(conf);
   renderWall();
+  $("#d-service").focus();  // its own button is gone: the service it no longer has
   toast(`${current.title} will no longer be downloaded once you save`);
 };
 /* The service a link is on, from the services' sites (www.canalplus.com: CanalPlus); null for none known. */

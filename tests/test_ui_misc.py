@@ -466,7 +466,7 @@ ctx.showStats().then(() => {
 def test_the_quality_ladder_chips_say_which_is_chosen_and_the_edit_link_stays_outside_them():
     shown = node(r"""
 const made = (tag, props = {}, ...kids) => ({ tag, ...props, kids, replaceChildren(...k) { this.kids = k; } });
-const ctx = sandbox({ el: made, ladders: () => [{ name: "UHD" }, { name: "HD" }] });
+const ctx = sandbox({ el: made, ladders: () => [{ name: "UHD" }, { name: "HD" }], keepFocus: (box, draw) => draw() });
 vm.runInContext(grab(read(process.argv[1]), /^function ladderChips\(.*?^\}/ms), ctx);
 const picked = [];
 const root = ctx.ladderChips("HD", "UHD", (v) => picked.push(v));
