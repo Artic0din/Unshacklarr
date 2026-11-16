@@ -4015,17 +4015,18 @@ def audio_languages(path: Path, kind: str = "audio") -> set[str]:
     return found
 
 
-def check_audio(out: Path, accepted: list[str]) -> None:
+def check_audio(out: Path, accepted: list[str], proof: bool = False) -> None:
     """Refuse a download with none of the accepted audio languages: a VO-only file in the library is
-    worse than no file (best_available lets unshackle take what there is)."""
+    worse than no file (best_available lets unshackle take what there is). With proof (a file replaced for
+    a language asked), a download must show one: untagged or not an MKV, it is refused too."""
     if not accepted:
         trace("audio: no language asked for, not checked")
         return
-    for f in out.rglob("*.mkv"):
-        langs = audio_languages(f)
+    for f in videos_in(out) if proof else out.rglob("*.mkv"):
+        langs = audio_languages(f) if f.suffix.lower() == ".mkv" else set()
         trace(f"audio of {f.name}: {', '.join(sorted(langs)) or 'no language tag'} (accepted: {', '.join(accepted)})")
-        if langs and not speaks(langs, accepted):  # a file without language tags says nothing either way
-            raise RuntimeError(f"No {' or '.join(accepted)} audio in the download (it has {', '.join(sorted(langs))}): not imported")
+        if (langs or proof) and not speaks(langs, accepted):  # a file without language tags says nothing either way
+            raise RuntimeError(f"No {' or '.join(accepted)} audio in the download (it has {', '.join(sorted(langs)) or 'no language tag'}): not imported")
 
 
 def check_subs(out: Path, accepted: list[str]) -> None:
@@ -4599,7 +4600,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 on_step,
                 bool(show.get("programmes")),
             )
-            check_audio(out, accepted_audio(show, config, ep.get("series")))
+            check_audio(out, accepted_audio(show, config, ep.get("series")), replace and bool(show.get("asked_audio") and ep.get("hasFile")))
             check_subs(out, accepted_subs(show, config))
             lacking = lacks_preferred(out, show, config)  # read now: Sonarr moves the file away
             run.card["size"] = sum(f.stat().st_size for f in videos_in(out))  # for the job's sum

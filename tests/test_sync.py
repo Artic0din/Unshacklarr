@@ -4092,7 +4092,7 @@ def test_a_download_asked_in_one_audio_language_asks_it_first_and_accepts_it(tmp
     for name in ("finalize", "import_episode"):
         monkeypatch.setattr(sync, name, lambda *a, **k: None)
     downloads, accepted, queued = [], [], []
-    monkeypatch.setattr(sync, "check_audio", lambda out, langs: accepted.append(langs))
+    monkeypatch.setattr(sync, "check_audio", lambda out, langs, *a: accepted.append(langs))
 
     def download(payload, run=None):
         downloads.append(payload)
@@ -4147,6 +4147,35 @@ def test_a_download_asked_in_one_audio_language_replaces_a_file_only_in_it(tmp_p
     assert card["outcome"] == "failed" and "No fr audio in the download (it has en)" in card["cause"]
     sync.sync(config, {}, [episode(111, 2, 6)], manual=True, kind="manual", audio="fr")
     assert imported == [episode(111, 2, 6)["id"]]
+
+
+def test_a_download_asked_in_one_audio_language_replaces_a_file_only_with_proof_of_it(tmp_path, monkeypatch):
+    # The API's "audio": "fr" replacing a file: a download with no French tag (none at all, or not an MKV) is refused,
+    # the file kept; for an episode with no file an untagged download is still imported, as before
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    monkeypatch.setattr(sync, "tracks_on_service", lambda show, config, request, backend=None: {"audio": {"fr"}, "subtitles": set()})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "finalize", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "audio_languages", lambda f: set())
+    imported, name = [], ["Show.mkv"]
+    monkeypatch.setattr(sync, "import_episode", lambda ep, out, replace=False: imported.append(ep["id"]))
+
+    def download(payload, run=None):
+        out = Path(payload["output_dir"])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / name[0]).touch()
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    for number, name[0] in ((5, "Show.mkv"), (6, "Show.mp4")):
+        sync.sync(config, {}, [{**episode(111, 2, number), "hasFile": True, "episodeFileId": 9}], manual=True, kind="manual",
+                  audio="fr", replace=True)
+    assert imported == []
+    causes = [json.loads(p.read_text())["cause"] for p in (tmp_path / "runs").glob("*.json")]
+    assert len(causes) == 2 and all("No fr audio in the download (it has no language tag)" in c for c in causes)
+    name[0] = "Show.mkv"
+    sync.sync(config, {}, [episode(111, 2, 7)], manual=True, kind="manual", audio="fr", replace=True)
+    assert imported == [episode(111, 2, 7)["id"]]
 
 
 @responses.activate
