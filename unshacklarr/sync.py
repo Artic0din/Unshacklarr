@@ -4528,7 +4528,8 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
         series = {k: {**show, "asked_video": video} for k, show in series.items()}
         config = {**config, "series": series}
     if audio:  # this download's own audio language, asked first and accepted (download_request, accepted_audio)
-        series = {k: {**show, "asked_audio": audio} for k, show in series.items()}
+        # replacing a file, only that language is accepted: the series' own after it would put its file back
+        series = {k: {**show, "asked_audio": audio, **({"audio_accept": audio} if replace else {})} for k, show in series.items()}
         config = {**config, "series": series}
     episodes = list(episodes)
     if kind in ("auto", "burst"):  # switched off for this Sonarr: none of its new episodes

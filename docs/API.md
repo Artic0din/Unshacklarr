@@ -117,8 +117,9 @@ from the file Sonarr has: no file, the episode is downloaded; a file that has it
 its place; a file without it gets it as Settings, Download options, *Audio upgrade* says: the track added to the file
 (asked about in the bell first when the file is not from the series' service), or the whole episode again. Each
 episode downloaded asks for that language first, the series' own audio languages after it as fallbacks (`--a-lang en`
-becomes `fr,en`), and its file is accepted with that language even when the series accepts only others; the series'
-settings stay as they are. `"replace"` is then not needed. The answer counts each: `{"queued": 3, "downloaded": 1, "replaced": 1, "audio_added": 1}`. Send
+becomes `fr,en`), and its file is accepted with that language even when the series accepts only others. An episode
+that already has a file is replaced only by a file with that language: without it the download fails and the file stays.
+The series' settings stay as they are. `"replace"` is then not needed. The answer counts each: `{"queued": 3, "downloaded": 1, "replaced": 1, "audio_added": 1}`. Send
 it only when audio in that language has come, not French subtitles alone.
 
 ### `GET /api/v1/downloads?limit=50`

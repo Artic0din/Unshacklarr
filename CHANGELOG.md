@@ -109,7 +109,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
-- An API download request with `"audio"` now asks the service for that language first, with the series' own audio languages after it, and accepts the file in it, instead of downloading the series' usual language again and counting it as an audio upgrade. (#187)
+- An API download request with `"audio"` now asks the service for that language first, with the series' own audio languages after it, and accepts the file in it (an episode that has a file is replaced only by one in that language), instead of downloading the series' usual language again and counting it as an audio upgrade. (#187)
 - With `--generate-dv` on, an episode with HDR10+ and no Dolby Vision now fits a quality ladder's Hybrid step, in downloads and in Upgrades, instead of failing with "None of the quality ladder's steps" or taking a lower step.
 - Activity › Languages now judges a season listed on another service by that service's audio languages, as its downloads do, instead of listing its correct files as missing the main service's language.
 - A sign-in refused on a series' fallback service no longer downloads the wrong episode: the other profiles are tried on that same service with its own episode number, instead of asking the series' own service for the fallback's number, and the failure names the service that refused.

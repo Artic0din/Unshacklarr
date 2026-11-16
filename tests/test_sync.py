@@ -4122,6 +4122,33 @@ def test_a_download_asked_in_one_audio_language_asks_it_first_and_accepts_it(tmp
     assert sync.waiting[episode(111, 2, 8)["id"]]["audio_override"] == "fr"
 
 
+def test_a_download_asked_in_one_audio_language_replaces_a_file_only_in_it(tmp_path, monkeypatch):
+    # The API's "audio": "fr" for an episode that has a file: an English-only download is refused, the file kept;
+    # for one with no file the series' English is still a fallback and imported
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111].update(options={"--a-lang": "en"}, audio_accept="en")
+    monkeypatch.setattr(sync, "tracks_on_service", lambda show, config, request, backend=None: {"audio": {"fr", "en"}, "subtitles": set()})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "finalize", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "audio_languages", lambda f: {"en"})
+    imported = []
+    monkeypatch.setattr(sync, "import_episode", lambda ep, out, replace=False: imported.append(ep["id"]))
+
+    def download(payload, run=None):
+        out = Path(payload["output_dir"])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "Show.mkv").touch()
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual", audio="fr", replace=True)
+    assert imported == []
+    [card] = [json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json")]
+    assert card["outcome"] == "failed" and "No fr audio in the download (it has en)" in card["cause"]
+    sync.sync(config, {}, [episode(111, 2, 6)], manual=True, kind="manual", audio="fr")
+    assert imported == [episode(111, 2, 6)["id"]]
+
+
 @responses.activate
 def test_a_download_only_series_is_downloaded_never_imported_nor_cleaned(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
