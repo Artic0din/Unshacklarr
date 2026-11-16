@@ -197,7 +197,7 @@ Unshackle you already have.
 4. **Create the folders it mounts**, so that Docker does not create them owned by root:
 
    ```bash
-   mkdir -p data unshackle-data "$(grep ^DOWNLOADS_DIR= .env | cut -d= -f2)"
+   mkdir -p data unshackle-data/temp "$(grep ^DOWNLOADS_DIR= .env | cut -d= -f2)"
    ```
 
 5. **Reach Sonarr**: if it runs in another compose project, uncomment the `networks:` lines of
