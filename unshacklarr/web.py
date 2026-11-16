@@ -2259,9 +2259,10 @@ def add_or_download(episode_id: int, want: str, anyway: bool = False) -> None:
     run_sync([episode_id], replace=True, kind="upgrade")
 
 
-def add_audio_soon(episode_id: int, lang: str) -> None:
-    """The audio added to the episode's file in the background (add_or_download: the whole episode when it can't)."""
-    threading.Thread(target=add_or_download, args=(episode_id, lang), daemon=True).start()
+def add_audio_soon(episode_ids: list[int], lang: str) -> None:
+    """The audio added to the episodes' files in the background, one after the other (add_or_download: the whole
+    episode when it can't)."""
+    threading.Thread(target=lambda: [add_or_download(i, lang) for i in episode_ids], daemon=True).start()
 
 
 async def confirm_audio(request):
@@ -6244,11 +6245,11 @@ async def v1_start_download(request):
         run_sync(fresh, **common)
     if again:
         run_sync(again, **common, replace=True)
-    for i in lacking:  # the audio upgrade setting: the track added to the file, or the episode again
+    if lacking:  # the audio upgrade setting: the track added to each file, or the episodes again, in one job
         if sonarr_sync.SETTINGS.get("upgrade_mode") == "add_track" and not inst and not common.get("video") and not proxy:
-            add_audio_soon(i, audio)
+            add_audio_soon(lacking, audio)
         else:
-            run_sync([i], **common, replace=True, **({} if body.get("retry") is True else {"kind": "upgrade"}))
+            run_sync(lacking, **common, replace=True, **({} if body.get("retry") is True else {"kind": "upgrade"}))
     return web.json_response({"queued": len(ids), "downloaded": len(fresh), "replaced": len(again), "audio_added": len(lacking)})
 
 

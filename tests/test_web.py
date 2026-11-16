@@ -6953,7 +6953,7 @@ def test_the_api_takes_the_services_own_numbering_and_decides_the_audio_upgrade(
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", sonarr_get)
     started, added = [], []
     monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append((ids, k.get("replace", False), k.get("kind"))))
-    monkeypatch.setattr(web, "add_audio_soon", lambda i, lang: added.append((i, lang)))
+    monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang: added.extend((i, lang) for i in ids))
     found, missing = web.sonarr_codes_of_service(74796, ["S04E05", "S04E06", "S04E07", "S09E09"])
     assert found == {"S04E05": "S17E45", "S04E06": "S17E46", "S04E07": "S17E47"} and missing == ["S09E09"]
 
@@ -7310,3 +7310,38 @@ def test_an_episode_watched_from_languages_is_watched_on_its_seasons_own_page(tm
     asyncio.run(web.languages_wait(Request()))
     watched = web.read_json(web.sonarr_sync.UPGRADES_FILE, {})["21"]
     assert (watched["service"], watched["serviceEpisode"]) == ("Y", "S01E01")
+
+
+def test_an_audio_request_for_many_episodes_starts_one_download_not_one_each(tmp_path, monkeypatch):
+    # The API takes 100 episodes at a time: the ones whose file lacks the language go in one job, as a plain
+    # request's do, not 100 syncs (each a thread, past ASKED_AT_ONCE); the track added goes one after the other too
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    eps = [{"id": i, "seasonNumber": 1, "episodeNumber": i, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "jpn"}}}
+           for i in range(1, 31)]
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **p: [e for e in eps if e["id"] in p.get("episodeIds", [])])
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    started, added = [], []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append(list(ids)))
+    monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang: added.append(list(ids)))
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as browser:
+            page = {"X-Unshackle": "1"}
+            await browser.post("/api/login", json={"password": "password1"}, headers=page)
+            key = (await (await browser.post("/api/api-key/new", json={"password": "password1"}, headers=page)).json())["key"]
+            body = {"episodeIds": [e["id"] for e in eps], "audio": "fr"}
+            assert (await browser.post("/api/v1/downloads", headers={"X-Api-Key": key}, json=body)).status == 200
+            assert started == [list(range(1, 31))]
+            monkeypatch.setitem(web.sonarr_sync.SETTINGS, "upgrade_mode", "add_track")
+            started.clear()
+            assert (await browser.post("/api/v1/downloads", headers={"X-Api-Key": key}, json=body)).status == 200
+            assert added == [list(range(1, 31))] and not started
+    asyncio.run(go())
