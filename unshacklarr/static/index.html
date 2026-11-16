@@ -78,7 +78,7 @@
       <button class="btn small" id="bulk-open" title="Services for your series, found on TMDB">Suggest services</button>
       <button class="btn small" id="sel-toggle" type="button" aria-pressed="false">Select</button>
     </div>
-    <div class="wall" id="wall" aria-busy="true"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+    <div class="wall" id="wall" aria-busy="true"><span class="sr-only" role="status">Loading series…</span><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
   </section>
 
   <section id="tab-schedule">
@@ -1087,9 +1087,12 @@
 <div class="sched-pop" id="sched-pop" role="dialog" aria-labelledby="sched-det-h" tabindex="-1" hidden></div>
 <dialog class="modal" id="sched-dlg" aria-labelledby="sched-det-h"></dialog>
 
-<div class="savebar" id="savebar" hidden>
+<div class="savebar" id="savebar" role="status" hidden>
   <span>Unsaved changes</span>
-  <button class="btn primary" id="save">Save changes</button>
+  <span class="savebar-actions">
+    <button class="btn" id="discard">Discard changes</button>
+    <button class="btn primary" id="save">Save changes</button>
+  </span>
 </div>
 
 <script src="/js/core.js"></script>

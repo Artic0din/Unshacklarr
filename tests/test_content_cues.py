@@ -8,11 +8,11 @@ CUT_OFF = re.compile(r"text-overflow\s*:\s*ellipsis|white-space\s*:\s*nowrap")
 
 
 def rule(selector):
-    """The declarations of the one rule whose selector list holds `selector` exactly."""
-    for names, body in re.findall(r"([^{}]+)\{([^{}]*)\}", CSS):
-        if selector in [name.strip() for name in names.split(",")]:
-            return body
-    raise AssertionError(f"no rule for {selector}")
+    """The declarations of every rule whose selector list holds `selector` exactly, joined."""
+    bodies = [body for names, body in re.findall(r"([^{}]+)\{([^{}]*)\}", CSS)
+              if selector in [name.strip() for name in names.split(",")]]
+    assert bodies, f"no rule for {selector}"
+    return " ".join(bodies)
 
 
 def test_the_country_list_shows_part_of_the_next_row_so_it_reads_as_scrollable():

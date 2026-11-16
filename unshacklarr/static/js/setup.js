@@ -145,25 +145,27 @@ function showSetup(found) {
     password: input({ type: "password", autocomplete: "new-password", minLength: 8, required: true }),
     confirm: input({ type: "password", autocomplete: "new-password", required: true }),
     sonarr_url: input({ type: "url", value: found.sonarr_url, placeholder: "http://sonarr:8989", required: true }),
-    sonarr_api_key: apiKey({
-      placeholder: found.sonarr_api_key_set ? "Found in the environment for the URL above. Leave empty to use it" : "" }),
+    sonarr_api_key: apiKey(),
     sonarr_downloads: input({ value: found.sonarr_downloads, placeholder: "/downloads", required: true }),
     unshackle_mode: el("select", {}, el("option", { value: "local", textContent: "Local" }), el("option", { value: "remote", textContent: "Remote" })),
     unshackle_command: input({ value: found.unshackle_command, placeholder: "unshackle", spellcheck: false }),
     unshackle_url: input({ type: "url", value: found.unshackle_url, placeholder: "http://unshackle:8786", required: true }),
-    unshackle_api_key: apiKey({
-      placeholder: found.unshackle_api_key_set ? "Found in the environment for the address above. Leave empty to use it" : "" }),
+    unshackle_api_key: apiKey(),
     downloads: input({ value: found.downloads, placeholder: "In Unshacklarr's settings folder", spellcheck: false }),
     unshackle_downloads: input({ value: found.unshackle_downloads, placeholder: "Same path", spellcheck: false }),
     country: input({ value: found.country }),
     timezone: el("select", {}, ...(Intl.supportedValuesOf?.("timeZone") || ["UTC"]).map((z) => el("option", { value: z, textContent: z.replaceAll("_", " ") }))),
     tmdb_api_key: apiKey({ placeholder: "Optional" }),
   };
+  // A key the environment already has: said in the field's help, where a placeholder would be cut off
+  const keyFound = (text, known) => el("span", { className: "env-found", hidden: !known, textContent: text });
+  const sonarrKeyFound = keyFound("Found in the environment for the URL above. Leave empty to use it", found.sonarr_api_key_set);
+  const unshackleKeyFound = keyFound("Found in the environment for the address above. Leave empty to use it", found.unshackle_api_key_set);
   const SECRET = ["password", "confirm", "sonarr_api_key", "unshackle_api_key", "tmdb_api_key"];
   f.unshackle_mode.value = found.unshackle_mode || "local";
   f.timezone.value = found.timezone !== "UTC" ? found.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;
   for (const [k, v] of Object.entries(draft.values || {})) if (f[k] && !SECRET.includes(k)) f[k].value = v;
-  setupDraft = () => ({ step: at, reached, values: Object.fromEntries(Object.entries(f).filter(([k]) => !SECRET.includes(k)).map(([k, x]) => [k, x.value])) });
+  setupDraft = () => ({ step: at, reached, secrets: SECRET.some((k) => f[k].value), values: Object.fromEntries(Object.entries(f).filter(([k]) => !SECRET.includes(k)).map(([k, x]) => [k, x.value])) });
   const keep = () => { try { sessionStorage.setItem("setup-draft", JSON.stringify(setupDraft())); } catch {} };
 
   // The password: its strength, and the second one the same
@@ -212,7 +214,7 @@ function showSetup(found) {
     el("div", { className: "field" }, el("label", { textContent: "Unshackle runs" }), tiles, f.unshackle_mode),
     el("div", { className: "only-local" }, field(optional("Unshackle command"), f.unshackle_command, "Empty: unshackle from the PATH. Otherwise its full path, e.g. the .venv/bin/unshackle of a git clone.")),
     el("div", { className: "only-remote" }, field("Unshackle address", f.unshackle_url),
-      field("API key", f.unshackle_api_key, ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml."])),
+      field("API key", f.unshackle_api_key, ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml.", unshackleKeyFound])),
     field(optional("Downloads folder"), f.downloads, "Where episodes land before Sonarr imports them, as Unshacklarr sees it."),
     el("div", { className: "only-remote" }, field(optional("Downloads folder, as Unshackle sees it"), f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
   const showMode = () => {
@@ -302,8 +304,8 @@ function showSetup(found) {
         for (const k of ["sonarr_url", "sonarr_downloads", "unshackle_command", "unshackle_url", "downloads", "unshackle_downloads"]) {
           if (!f[k].value && more[k]) f[k].value = more[k];
         }
-        if (more.sonarr_api_key_set) f.sonarr_api_key.placeholder = "Found in the environment for the URL above. Leave empty to use it";
-        if (more.unshackle_api_key_set) f.unshackle_api_key.placeholder = "Found in the environment for the address above. Leave empty to use it";
+        if (more.sonarr_api_key_set) sonarrKeyFound.hidden = false;
+        if (more.unshackle_api_key_set) unshackleKeyFound.hidden = false;
       } },
     { name: "Unshackle", icon: "unshackle", title: "Connect Unshackle", sub: "What downloads the episodes",
       body: [uPanel], fields: () => f.unshackle_mode.value === "local" ? [f.unshackle_command] : [f.unshackle_url, f.unshackle_api_key],
@@ -318,7 +320,7 @@ function showSetup(found) {
       }, checking: "Testing… (a first start of Unshackle takes a few seconds)" },
     { name: "Sonarr", icon: "sonarr", title: "Connect Sonarr", sub: "Your library",
       body: [field("Sonarr URL", f.sonarr_url),
-        field("API key", f.sonarr_api_key, "In Sonarr: Settings, General."),
+        field("API key", f.sonarr_api_key, ["In Sonarr: Settings, General.", sonarrKeyFound]),
         field("Downloads folder, as Sonarr sees it", f.sonarr_downloads, "Its path on Sonarr's side, e.g. inside Sonarr's container."),
         field(optional("TMDB API key"), f.tmdb_api_key, tmdbHint())],
       fields: () => [f.sonarr_url, f.sonarr_api_key],
@@ -353,7 +355,7 @@ function showSetup(found) {
   function go(to, forward = to > at) {
     at = Math.max(0, Math.min(to, steps.length - 1));
     reached = Math.max(reached, at);
-    const s = steps[at];
+    const s = steps[at], moved = !!panel.firstChild;  // not the first draw: a step the person moved to
     drawRail(at);
     progress.firstChild.textContent = `Step ${at + 1} of ${steps.length}`;
     progress.querySelector("b").style.width = `${(at + 1) / steps.length * 100}%`;
@@ -364,8 +366,11 @@ function showSetup(found) {
     back.hidden = at === 0;
     const last = at === steps.length - 1;
     next.replaceChildren(last ? "Finish the setup" : "Next", el("span", { className: "arr", ariaHidden: "true" }, icon(last ? "check" : "arrow")));
-    const control = [...panel.querySelectorAll("input, select")].find((x) => x.getClientRects().length);  // not a hidden select
-    if (control) control.focus({ preventScroll: true }); else focusHeading(panel.querySelector("h2"));
+    if (moved) { panel.closest(".wz").scrollIntoView({ block: "start" }); focusHeading(panel.querySelector("h2")); }  // a step the page was scrolled down on
+    else {
+      const control = [...panel.querySelectorAll("input, select")].find((x) => x.getClientRects().length);  // not a hidden select
+      if (control) control.focus({ preventScroll: true }); else focusHeading(panel.querySelector("h2"));
+    }
     keep();
   }
   /* The end: what was checked, and the way in */
@@ -498,6 +503,7 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     const data = asked || await api("/api/state", { wait: 130 });
     S = { series: data.series, config: data.config, services: data.services, serviceNames: data.service_names || {}, authentication: data.authentication || {}, authenticationMethods: data.authentication_methods || {}, authenticationSetups: data.authentication_setups || [], authenticationLive: [], metadataLanguage: data.metadata_language || "", dlOptions: data.dl_options, health: data.health || {}, cdm: data.cdm || {}, domains: data.service_domains || {}, builtinLadders: data.builtin_ladders || [], networkServices: data.network_services || {}, backups: data.backups || null, news: data.news || {}, update: data.update || null, version: data.version, instances: data.instances || {}, sonarrsOf: data.sonarrs_of || {} };
     savedConfig = configKey(S.config);
+    savedSonarrsOf = JSON.stringify(S.sonarrsOf);
     savedUnits = configUnits(S.config);
     keepSonarrNames(sonarrNames());
     // a test build of a branch shows its branch and commit, not the release it started from

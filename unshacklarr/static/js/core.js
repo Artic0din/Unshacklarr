@@ -67,8 +67,11 @@ function setTheme(choice) {
 applyTheme(themeChoice());
 matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", () => applyTheme(themeChoice()));
 async function setLang(lang) {
+  const draft = setupDraft?.();
+  // the password and the keys are never kept (not in the tab either): the person chooses to lose them
+  if (draft?.secrets && !await askToConfirm("Switch the language?", "Switching language reloads the page: your password and keys are cleared.", "Switch language")) return;
   try { localStorage.setItem("lang", lang); } catch {}
-  try { if (setupDraft) sessionStorage.setItem("setup-draft", JSON.stringify(setupDraft())); } catch {}  // the first run goes on where it was
+  try { if (draft) sessionStorage.setItem("setup-draft", JSON.stringify(draft)); } catch {}  // the first run goes on where it was
   await api("/api/language", { method: "POST", body: JSON.stringify({ language: lang }) }).catch(() => {});  // the notifications' too; before logging in, nothing to tell
   location.reload();
 }
@@ -313,6 +316,7 @@ function toast(msg, err = false, action = null) {  // action: [label, onclick], 
 
 let unsaved = false;
 let savedConfig = "";  // the settings as last loaded or saved: a discard that brings them back clears the bar
+let savedSonarrsOf = "";  // the libraries each series is in, as last loaded or saved: a rename moves them in S.sonarrsOf
 // what a save sends: a series opened without a service is not part of it
 // keys in order: a field cleared and typed again comes back last, and is still the same settings
 const stableJSON = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
@@ -537,7 +541,7 @@ function renderWall() {
   const cards = shown.map((s) => {
       const conf = S.config.series[s.tvdbId];
       const art = el("span", { className: "art" });
-      if (s.poster) art.append(el("img", { src: s.poster, alt: "", loading: "lazy", decoding: "async" }));
+      art.append(el("img", { src: posterSrc(s.poster, s.title), alt: "", loading: "lazy", decoding: "async", onerror: posterFail(s.title) }));
       if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service), title: svcName(conf.service) }));
       if (libsOf(s).length) {  // the Sonarr libraries it is in, by their names; one switched off for it dimmed (by mj23au, #10)
         const off = (name, main) => Boolean(conf?.service) && Boolean(main ? conf.main_off : conf.sonarrs?.[name]?.off);
