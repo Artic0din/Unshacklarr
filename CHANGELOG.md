@@ -109,6 +109,14 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- With `--generate-dv` on, an episode with HDR10+ and no Dolby Vision now fits a quality ladder's Hybrid step, in downloads and in Upgrades, instead of failing with "None of the quality ladder's steps" or taking a lower step.
+- Activity › Languages now judges a season listed on another service by that service's audio languages, as its downloads do, instead of listing its correct files as missing the main service's language.
+- A sign-in refused on a series' fallback service no longer downloads the wrong episode: the other profiles are tried on that same service with its own episode number, instead of asking the series' own service for the fallback's number, and the failure names the service that refused.
+- A saved file that could not be read for a moment (a network share dropping out) is no longer written over with only the newest item: the bell, the sent log, the messages held for the quiet hours, the warnings already given and the sign-in records now skip that write and keep what they had.
+- A full or read-only disk during the quiet hours no longer stops the rest of a job: a message that cannot be kept for later is sent at once instead.
+- An episode folder left without a video (an import that went through after Unshacklarr stopped waiting, or a crash) no longer turns "add the audio track" into a whole new download that replaces the library's file: the folder is cleared and the track is added.
+- Adding an audio track can no longer leave a cut-off file that Import puts over the library's good one: the merge is written as `.mkv.part` and renamed only once it is whole, and what a restart midway leaves (the `.part` and the audio downloaded for it, which can be an `.mkv`) is removed when Unshacklarr starts.
+- A stuck `mkvmerge` or `mkvpropedit` (on a stalled network share, for example) no longer holds every later sync at "A sync is already running" until a restart: reading a file now gives up after 2 minutes and a join or an audio merge after an hour, that episode fails with the reason, and no cut-off file is left behind for import.
 - The episode list and a running download's track list now draw on iPhones before iOS 17.4, where "What's on…?" results and the live track list used to stop the page drawing.
 - "What's on…?" for a series that is in no main Sonarr now asks the Sonarr you are viewing (for example 4K), not always the first, so its badges match that library's episodes.
 - Reloading on Settings, Automation or Interface no longer throws, so the installed app keeps pull-to-reload on those pages.

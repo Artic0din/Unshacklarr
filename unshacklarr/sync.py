@@ -401,14 +401,14 @@ def notification_urls(settings: dict) -> list[str]:
     return urls or ([settings["discord_webhook"]] if settings.get("discord_webhook") else [])
 
 
-def read_inbox() -> dict:
-    return read_json(INBOX_FILE, {"read_at": None, "items": []})
+def read_inbox(strict: bool = False) -> dict:
+    return read_json(INBOX_FILE, {"read_at": None, "items": []}, strict)
 
 
 def change_inbox(change) -> dict:
     """Read, change and write the inbox under its lock; what was written."""
     with inbox_lock:
-        inbox = read_inbox()
+        inbox = read_inbox(strict=True)
         change(inbox)
         too_old = (datetime.now(timezone.utc) - timedelta(days=INBOX_DAYS)).isoformat()
         inbox["items"] = [i for i in inbox["items"] if i["at"] >= too_old][:INBOX_KEEP]
@@ -506,8 +506,9 @@ def send_to(url: str, level: str, title: str, message: str, details: dict | None
 
 def note_sent(level: str, title: str, to: list[dict]) -> None:
     with sent_lock:
-        log = [{"at": datetime.now(timezone.utc).isoformat(), "level": level, "title": title, "to": to}, *read_json(SENT_FILE, [])][:SENT_KEEP]
         try:
+            log = [{"at": datetime.now(timezone.utc).isoformat(), "level": level, "title": title, "to": to},
+                   *read_json(SENT_FILE, [], strict=True)][:SENT_KEEP]
             write_atomic(SENT_FILE, json.dumps(log))
         except OSError as e:
             print(f"Sent notifications not written: {e}", file=sys.stderr)
@@ -594,9 +595,12 @@ def notify(settings: dict, level: str, title: str, message: str, action: dict | 
     title, message = i18n.tr_lines(title, lang), i18n.tr_lines(message, lang)
     if in_quiet_hours(settings):  # kept for the end of the quiet hours; a question waiting for you goes at once
         if not action:
-            with sent_lock:
-                write_atomic(HELD_FILE, json.dumps([*read_json(HELD_FILE, []), {"level": level, "title": title}]))
-            return False
+            try:
+                with sent_lock:
+                    write_atomic(HELD_FILE, json.dumps([*read_json(HELD_FILE, [], strict=True), {"level": level, "title": title}]))
+                return False
+            except OSError as e:  # a full disk: sent now rather than lost, and never the job stopped for it
+                print(f"Quiet hours: could not hold a message, sending it now: {no_credentials(e)}", file=sys.stderr)
     return deliver(settings, level, title, message, details)
 
 
@@ -622,9 +626,13 @@ def send_held(settings: dict) -> bool:
         held_pushed = held
     takes = any(worst in (ALL_LEVELS if t.get("levels") is None else t["levels"]) for t in notification_targets(settings))
     if delivered or not takes:  # sent, or no address takes it: else kept, tried again next minute
-        held_pushed = None
         with sent_lock:
-            current = read_json(HELD_FILE, [])
+            try:
+                current = read_json(HELD_FILE, [], strict=True)
+            except OSError as e:  # unreadable for a moment: kept, and the devices not pushed it again next minute
+                print(f"Quiet hours: could not read the held messages back: {no_credentials(e)}", file=sys.stderr)
+                return delivered
+            held_pushed = None
             rest = current[len(held):] if current[:len(held)] == held else current  # what came while it was going out stays
             if rest:
                 write_atomic(HELD_FILE, json.dumps(rest))
@@ -869,9 +877,9 @@ def carry_authentication_failures(target: dict, source: dict) -> None:
             target_backends[service] = source_backends.get(service, "")
 
 
-def read_authentication_observations() -> dict[str, dict[str, dict]]:
+def read_authentication_observations(strict: bool = False) -> dict[str, dict[str, dict]]:
     """Latest redacted authentication result by backend and service."""
-    stored = read_json(AUTHENTICATION_FILE, {})
+    stored = read_json(AUTHENTICATION_FILE, {}, strict)
     if not isinstance(stored, dict):
         return {}
     observations = {}
@@ -931,7 +939,7 @@ def record_authentication_observations(observations_to_record: list[tuple[str, s
     if not observations_to_record:
         return
     with authentication_lock:
-        observations = read_authentication_observations()
+        observations = read_authentication_observations(strict=True)
         changed = False
         for service, backend, state, observed_at in observations_to_record:
             backend_observations = observations.setdefault(backend, {})
@@ -973,7 +981,7 @@ def record_authentication_observation(
     ):
         return
     with authentication_lock:
-        observations = read_authentication_observations()
+        observations = read_authentication_observations(strict=True)
         current = (observations.get(backend) or {}).get(service)
         if not current or current.get("observed_at") != observed_at:
             return
@@ -1087,8 +1095,8 @@ def _safe_authentication_record(session, *, active: bool) -> dict | None:
     return safe
 
 
-def _read_authentication_checkpoint() -> tuple[dict[str, dict], dict[str, dict]]:
-    stored = read_json(AUTHENTICATION_SESSIONS_FILE, {})
+def _read_authentication_checkpoint(strict: bool = False) -> tuple[dict[str, dict], dict[str, dict]]:
+    stored = read_json(AUTHENTICATION_SESSIONS_FILE, {}, strict)
     if not isinstance(stored, dict):
         return {}, {}
     sessions = {}
@@ -1137,7 +1145,7 @@ def _authentication_setup_session(key: str) -> dict | None:
 
 def _checkpoint_authentication_setup(key: str, session: dict) -> bool:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = sessions.get(key)
         if not current or current["session_id"] != session["session_id"]:
             return False
@@ -1156,7 +1164,7 @@ def _retain_authentication_setup_error(key: str, session: dict) -> None:
 
 def _remove_authentication_setup(key: str, session_id: str) -> None:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = sessions.get(key)
         if current and current["session_id"] == session_id:
             sessions.pop(key)
@@ -1165,7 +1173,7 @@ def _remove_authentication_setup(key: str, session_id: str) -> None:
 
 def _orphan_authentication_setup(key: str, session: dict) -> bool:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = sessions.get(key)
         if not current or current["session_id"] != session["session_id"]:
             return False
@@ -1187,7 +1195,7 @@ def _orphan_authentication_setup(key: str, session: dict) -> bool:
 
 def _checkpoint_authentication_cleanup(cleanup_id: str, cleanup: dict) -> bool:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = cleanups.get(cleanup_id)
         if not current or current["session_id"] != cleanup["session_id"]:
             return False
@@ -1199,7 +1207,7 @@ def _checkpoint_authentication_cleanup(cleanup_id: str, cleanup: dict) -> bool:
 
 def _remove_authentication_cleanup(cleanup_id: str, session_id: str) -> None:
     with authentication_sessions_lock:
-        sessions, cleanups = _read_authentication_checkpoint()
+        sessions, cleanups = _read_authentication_checkpoint(strict=True)
         current = cleanups.get(cleanup_id)
         if current and current["session_id"] == session_id:
             cleanups.pop(cleanup_id)
@@ -1527,7 +1535,7 @@ def start_authentication_setup(service: str, backend: str = "") -> dict:
         }
         try:
             with authentication_sessions_lock:
-                sessions, cleanups = _read_authentication_checkpoint()
+                sessions, cleanups = _read_authentication_checkpoint(strict=True)
                 sessions[key] = session
                 _write_authentication_checkpoint(sessions, cleanups)
         except BaseException:
@@ -2704,6 +2712,17 @@ def retrying(payload: dict, run: EpisodeRun | None, sleep) -> list[str]:
 
 PART = re.compile(r"\.Part\.(\d+)", re.IGNORECASE)
 VIDEO = (".mkv", ".mp4")
+MKV_READ_TIMEOUT = 120  # mkvmerge -J and mkvpropedit read or edit a header only: longer is a stalled share
+MKV_WRITE_TIMEOUT = 3600  # a join or an audio merge copies the whole episode
+
+
+def mkv_run(cmd: list[str], timeout: int, **kwargs) -> subprocess.CompletedProcess:
+    """mkvmerge or mkvpropedit with a time limit: one stuck on a stalled share fails its step, instead of holding
+    the sync (and every later one, told "already running") for good."""
+    try:
+        return subprocess.run(cmd, timeout=timeout, **kwargs)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"{cmd[0]} did not finish within {human_time(timeout)}: is the downloads folder reachable?") from None
 
 
 # a file that is gone, or a link where a folder was: nothing to delete, and nothing deleted through it
@@ -3356,7 +3375,11 @@ def finalize(out: Path, sxxeyy: str, name: str, join_parts: bool = True, episode
         cmd = ["mkvmerge", "-q", "-o", str(joined), str(first)]
         for _, f in parts[1:]:
             cmd += ["+", str(f)]  # "+" appends: part 2 plays after part 1
-        run = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+        try:
+            run = mkv_run(cmd, MKV_WRITE_TIMEOUT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+        except RuntimeError:
+            joined.unlink(missing_ok=True)  # cut short: never offered for import
+            raise
         # 1 means warnings only, but not that one: "can probably not be appended correctly" is a file that may
         # stop playing where the parts meet. The parts are kept for a look, nothing is imported.
         if run.returncode > 1 or (run.returncode == 1 and "append" in run.stdout.lower()):
@@ -3378,7 +3401,7 @@ def finalize(out: Path, sxxeyy: str, name: str, join_parts: bool = True, episode
         if not match:  # Britains.Forgotten.Girls.2026.1080p...mkv: BBC.Documentaries.S2026E14.Britains.Forgotten...
             trace(f"renamed {f.name} to {dots(name)}.{sxxeyy}.{f.name}")
             f = f.rename(f.with_name(f"{dots(name)}.{sxxeyy}.{f.name}"))
-            subprocess.run(["mkvpropedit", "-q", str(f), "--edit", "info", "--set", f"title={name} {sxxeyy} {title}".strip()], check=True)
+            mkv_run(["mkvpropedit", "-q", str(f), "--edit", "info", "--set", f"title={name} {sxxeyy} {title}".strip()], MKV_READ_TIMEOUT, check=True)
             continue
         episode = title[m.end():].strip() if (m := TITLE_SXXEYY.search(title)) else ""
         rest = f.name[match.end():]
@@ -3388,8 +3411,9 @@ def finalize(out: Path, sxxeyy: str, name: str, join_parts: bool = True, episode
             episode = ""
         trace(f"renamed {f.name} to {dots(name)}.{sxxeyy}{rest}")
         f = f.rename(f.with_name(f"{dots(name)}.{sxxeyy}{rest}"))
-        subprocess.run(
+        mkv_run(
             ["mkvpropedit", "-q", str(f), "--edit", "info", "--set", f"title={name} {sxxeyy} {episode}".strip()],
+            MKV_READ_TIMEOUT,
             check=True,
         )
     return max(len(parts), 1)
@@ -3595,12 +3619,15 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
     service_sxxeyy = service_episode(show, ep["seasonNumber"], ep["episodeNumber"]) or sxxeyy
     label = f"{ep['series']['title']} {sxxeyy}"
     with episode_lock(out) as mine:
-        if not mine or out.exists():
+        if not mine or out.is_symlink() or videos_in(out):  # a download waits there for Sonarr, or a link: never written through
             return False
+        shutil.rmtree(out, ignore_errors=True)  # left without a video (an import done after its poll gave up, a crash): nothing to keep
         run = EpisodeRun(ep, show, "upgrade", service_sxxeyy)
         got: list[Path] = []
         try:
             run.say(f"{label}: adding the {want} audio from {show['service']} to the file it has")
+            out.mkdir(parents=True, exist_ok=True)
+            (out / AUDIO_ADD).touch()  # until the joined file is whole: what a stop leaves here is cleared at the next start
             backend = backend_for(show["service"], config)
             run.card["backend"] = backend.name
             request = download_request(show, config, service_sxxeyy, out, backend)
@@ -3618,19 +3645,30 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             if all(lengths) and abs(lengths[0] - lengths[1]) > 1:  # the same source: the same length within a second
                 raise RuntimeError(f"The {want} audio lasts {lengths[1]:.0f} s and the file {lengths[0]:.0f} s, so the audio was not added")
             joined = out / have.with_suffix(".mkv").name  # mkvmerge always writes Matroska: never under an .mp4 name
+            partial = joined.with_name(joined.name + PARTIAL)
             # the downloads folder is shared: a link planted there must not make mkvmerge write through it (as finalize)
-            if out.is_symlink() or joined.exists() or joined.is_symlink() or any(f.is_symlink() for f in out.rglob("*")):
+            if out.is_symlink() or any(f.exists() or f.is_symlink() for f in (joined, partial)) or any(f.is_symlink() for f in out.rglob("*")):
                 raise RuntimeError(f"The download folder {out.name} holds a link or a file with the same name as the library's file, so the audio was not added")
             run.step("joining")
             mine, theirs = default_flags(mkv_tracks(have), mkv_tracks(got[0]), want)
-            cmd = ["mkvmerge", "-q", "-o", str(joined), *mine, str(have),
+            cmd = ["mkvmerge", "-q", "-o", str(partial), *mine, str(have),
                    "--no-video", "--no-subtitles", "--no-chapters", "--no-attachments", *theirs, str(got[0])]
-            done = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+            try:
+                done = mkv_run(cmd, MKV_WRITE_TIMEOUT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+            except RuntimeError:
+                partial.unlink(missing_ok=True)
+                raise
             if done.returncode not in (0, 1):  # 1: warnings only; below 0: killed by a signal
-                joined.unlink(missing_ok=True)  # a cut-short video would be offered under Waiting in downloads and replace the library's
+                partial.unlink(missing_ok=True)
                 raise RuntimeError(f"mkvmerge could not add the audio: {done.stdout.strip()[-300:]}")
+            try:
+                os.replace(partial, joined)  # whole, or not there: a cut-short video would replace the library's on import
+            except OSError as e:  # the failure's own clean-up below: an audio-only .mkv must not wait for import
+                partial.unlink(missing_ok=True)
+                raise RuntimeError(f"The file with the {want} audio could not be renamed: {e}") from None
             for f in got:
                 f.unlink(missing_ok=True)
+            (out / AUDIO_ADD).unlink(missing_ok=True)  # the joined file is whole: it may wait for import
             run.card["size"] = joined.stat().st_size
             run.step("importing")
             import_episode(ep, out, replace=True)
@@ -3806,12 +3844,19 @@ def fits(step: dict, track: dict) -> bool:
             and (not step.get("max_kbps") or int(track.get("bitrate") or 0) <= int(step["max_kbps"])))
 
 
-def climb(ladder: dict, episodes: list[dict]) -> tuple[int, dict] | None:
-    """The first step every part of the episode has a track for, and its best track there (height, then bitrate)."""
+def climb(ladder: dict, episodes: list[dict], generate_dv: bool = False) -> tuple[int, dict] | None:
+    """The first step every part of the episode has a track for, and its best track there (height, then bitrate).
+    generate_dv (--generate-dv): Unshackle makes the Dolby Vision from HDR10+, so HDR10+ alone fills a Hybrid step."""
+    def hybrid(tracks: list[dict]) -> list[dict]:  # a part has it with both a DV track and an HDR10 one
+        ranges = {t.get("range") for t in tracks}
+        if "DV" in ranges and set(HDR_BASES) & ranges:
+            return tracks
+        return [t for t in tracks if t.get("range") == "HDR10P"] if generate_dv else []
+
     for number, step in enumerate(ladder["steps"], 1):
         found = [[t for t in ep.get("video") or [] if fits(step, t)] for ep in episodes]
-        if step.get("range") == "HYBRID":  # a part has it only with both a DV track and an HDR10 one
-            found = [f if {"DV"} & {t.get("range") for t in f} and set(HDR_BASES) & {t.get("range") for t in f} else [] for f in found]
+        if step.get("range") == "HYBRID":
+            found = [hybrid(f) for f in found]
         if found and all(found):
             return number, max(found[0], key=lambda t: (eq_height(t), int(t.get("bitrate") or 0)))
     return None
@@ -3855,7 +3900,7 @@ def apply_ladder(
     episodes = list_tracks(show, config, request, ladder, backend)
     if not episodes:  # ponytail: not on the service (yet): the download finds nothing either, and says so as usual
         return None
-    found, blind = climb(ladder, episodes), None
+    found, blind = climb(ladder, episodes, bool(request.get("generate_dv"))), None
     if not found and ladder.get("blind"):  # "Try unlisted codecs": the first step whose codec the listing has none of
         listed = {t.get("codec") for ep in episodes for t in ep.get("video") or []}
         blind = next(((i, st) for i, st in enumerate(ladder["steps"], 1) if st.get("codec") and st["codec"] not in listed), None)
@@ -3948,8 +3993,8 @@ def first_language(order: list[str], tracks: list[dict]) -> str | None:
 
 
 def mkvmerge_info(path: Path) -> dict:
-    """What `mkvmerge -J` says of a file ({} when it can't tell)."""
-    info = subprocess.run(["mkvmerge", "-J", str(path)], stdout=subprocess.PIPE, text=True)
+    """What `mkvmerge -J` says of a file ({} when it can't tell; a timeout raises, never read as no tracks)."""
+    info = mkv_run(["mkvmerge", "-J", str(path)], MKV_READ_TIMEOUT, stdout=subprocess.PIPE, text=True)
     return json.loads(info.stdout or "{}")
 
 
@@ -4247,12 +4292,41 @@ def leftovers() -> list[dict]:
     for d in sorted(DOWNLOADS.glob("unshackle-*")) if DOWNLOADS.is_dir() else []:
         m = FOLDER.fullmatch(d.name)
         files = videos_in(d) if m and d.is_dir() and not d.is_symlink() else []  # a link named like ours: not ours
-        if not files or d.name in busy_episodes:
+        if not files or d.name in busy_episodes or (d / AUDIO_ADD).exists():  # an audio add cut short: its audio is no video
             continue
         found.append({"folder": d.name, "instance": m.group(1) or "", "tvdbId": int(m.group(2)), "sxxeyy": f"S{int(m.group(3)):02}E{int(m.group(4)):02}",
                       "files": [f.name for f in files], "size": sum(f.stat().st_size for f in files),
                       "since": max(f.stat().st_mtime for f in files)})
     return found
+
+
+PARTIAL = ".part"  # an audio merge is written under this suffix, then renamed: Import never sees one cut short
+AUDIO_ADD = ".audio-add"  # in an episode folder while an audio add works there: its audio alone may be an .mkv
+
+
+def remove_partial_merges() -> int:
+    """At start: the audio merges a crash or a restart cut short, and the folders left empty by them. How many folders."""
+    removed = 0
+    for d in sorted(DOWNLOADS.glob("unshackle-*")) if DOWNLOADS.is_dir() else []:
+        if not FOLDER.fullmatch(d.name) or d.is_symlink() or not d.is_dir() or d.name in busy_episodes:
+            continue
+        try:
+            stray = [f for f in d.glob(f"*{PARTIAL}") if f.is_file() and not f.is_symlink()]
+            mark = d / AUDIO_ADD
+            if mark.is_file():  # an audio add stopped midway: its audio alone must not wait for import as a video
+                stray = [f for f in d.rglob("*") if (f.is_symlink() or not f.is_dir()) and f != mark]
+            left = unlink_inside(d, stray)  # the folder may be swapped for a link after these checks
+            if mark.is_file() and not left:  # the mark goes only once nothing it guards is left
+                left = unlink_inside(d, [mark])
+                stray.append(mark)
+            removed += len(left) < len(stray)
+            if left:
+                print(f"Could not remove a cut-short merge in {d.name}: {', '.join(f.name for f in left)}", file=sys.stderr)
+            if stray and not any(d.iterdir()):
+                d.rmdir()
+        except OSError as e:
+            print(f"Could not remove a cut-short merge in {d.name}: {e}", file=sys.stderr)
+    return removed
 
 
 def leftover_path(folder: str) -> Path:
@@ -4264,6 +4338,8 @@ def leftover_path(folder: str) -> Path:
 def import_leftover(folder: str) -> None:
     """Hand a waiting folder to Sonarr for good, replacing its file whatever the quality."""
     out = leftover_path(folder)
+    if (out / AUDIO_ADD).exists():
+        raise RuntimeError("An audio track add stopped midway in this folder: it holds audio only, not a video to import")
     m = FOLDER.fullmatch(folder)
     if m.group(1) and m.group(1) not in SONARRS:
         raise RuntimeError(f"The Sonarr named {m.group(1)} is no longer in Settings, Sonarr")
@@ -4757,6 +4833,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     run.observe_authentication(use["service"], backend.name, "validated")
 
                 missed = None  # its own service has it in none of the languages accepted: the fallback's turn
+                asked_from = show  # the service last asked, its own or its fallback: a sign-in retry asks it again
                 error = cause = None  # this episode's own: the login-fallback check below must never see the last one's
                 error_code = ""
                 try:
@@ -4803,7 +4880,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     else:
                         run.say(f"{label}: not on {show['service']}, trying {alt['service']} as {alt_sxxeyy}")
                     run.card.update(service=alt["service"], serviceEpisode=alt_sxxeyy, fallback=show["service"])
-                    service_sxxeyy = alt_sxxeyy
+                    service_sxxeyy, asked_from = alt_sxxeyy, alt
                     ask(alt_sxxeyy, use=alt)
                     missed = None
                   elif missed:
@@ -4832,10 +4909,10 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 # Its login refused and nothing came: the series' fallback profiles, in their order, until one logs in
                 stopped = waits = False
                 authentication_failed = error_code == "AUTH_FAILED"
-                for profile in fallback_profiles(show, config) if error and login_failure(cause or "") and not PROXY_DOWN.search(cause or "") and not videos_in(out) else []:
-                    run.say(f"{label}: {show['service']} refused the sign-in, trying the profile {profile}")
+                for profile in fallback_profiles(asked_from, config) if error and login_failure(cause or "") and not PROXY_DOWN.search(cause or "") and not videos_in(out) else []:
+                    run.say(f"{label}: {asked_from['service']} refused the sign-in, trying the profile {profile}")
                     try:
-                        ask(service_sxxeyy, profile)
+                        ask(service_sxxeyy, profile, use=asked_from)
                         error = cause = None
                         error_code = ""
                         authentication_failed = False
@@ -4897,8 +4974,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{hint}\n{cause[:1200]}", batch=batch, details=episode_details(ep, show)))
                             run.finish("failed", cause, hint)
                         elif login_failure(cause):
-                            hint = f"{show['service']} refused Unshackle: its cookies may have expired. Update them in Settings › Services."
-                            tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Sign-in failed on {show['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
+                            hint = f"{asked_from['service']} refused Unshackle: its cookies may have expired. Update them in Settings › Services."
+                            tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Sign-in failed on {asked_from['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
                             run.finish("failed", cause, hint, auth_failed=authentication_failed)
                         else:
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{cause[:1500]}\nThe history in Activity has Unshackle's full output.", batch=batch, details=episode_details(ep, show)))
@@ -4959,7 +5036,11 @@ def order_changed(show: dict, serie: dict) -> str:
 def first_warning(key: str) -> bool:
     """True the first time an episode is late, and noted at once: runs side by side, or one cut off, never warn twice."""
     with warned_lock:
-        warned = set(read_json(WARNED_FILE, []))
+        try:
+            warned = set(read_json(WARNED_FILE, [], strict=True))
+        except OSError as e:  # never known as given: it waits for the next sync rather than the list written over
+            print(f"Warnings already given not read: {e}", file=sys.stderr)
+            return False
         if key in warned:
             return False
         write_atomic(WARNED_FILE, json.dumps(sorted(warned | {key})))
