@@ -2287,6 +2287,13 @@ const fresh = () => {
   const refused = await second;
   out.othersRenameAsksReload = reloadAsked.startsWith("saved:Saved.") && reloadAsked.includes("reload") && refused.includes("Reload") && box.sentBody === null
     && page.state().unsaved && box.S.config.settings.sonarrs[0].name === "old" && box.S.sonarrsOf[7][0].name === "old";
+  // an address edited while the Save runs, to another Sonarr's: the unchanged answer is no rename
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "a", url: "http://a" }, { name: "b", url: "http://b" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); box.S.config.settings.sonarrs[0].url = "http://b";
+  release({ settings: { debug: true, sonarrs: [{ name: "a", url: "http://a" }, { name: "b", url: "http://b" }] } });
+  out.addressEditIsNoRename = await saving.then(() => true, () => false) && !box.S.outOfDate;
   // one Sonarr removed and another added while the Save runs: each keeps its own saved name
   box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] }, series: {} } };
   page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
@@ -2356,6 +2363,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "renamedAsSaved": True,  # an unsaved rename is not a name the server knows (#181)
         "renameSavedIsUsed": True,  # once saved, the new name; a rename made while the Save ran still is not
         "nestedEditKeepsOthersChange": True,  # an edit inside a list entry does not block another tab's change beside it
+        "addressEditIsNoRename": True,  # an address edited during the Save does not block the next one
         "othersRenameAsksReload": True,  # another tab's Sonarr rename is not followed: reload, and no Save until then
         "listEditedMeanwhileKeepsNames": True,  # Sonarrs removed or added while the Save ran: no name moves to another
         "listEntriesMatchedByIdentity": True,  # and no other tab's change lands on another entry: the next Save asks to reload

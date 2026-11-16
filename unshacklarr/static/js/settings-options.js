@@ -691,11 +691,12 @@ async function save() {
   const changed = [...new Set([...Object.keys(units), ...Object.keys(savedUnits)])].filter((u) => units[u] !== savedUnits[u]);
   const unitBase = Object.fromEntries(changed.map((u) => [u, S.config.versions?.[u] ?? null]));
   const names = sonarrNames();  // as sent: a rename made while the Save runs is not saved yet
+  const sentUrls = names.map(([i]) => i.url);  // and their addresses as sent: one edited meanwhile is no rename
   const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series, changed, base: unitBase }) });
   // Another tab renamed a Sonarr: each series' settings and libraries on this page are keyed by the old name, so the
   // page asks for a reload rather than re-key them all. This Save stays saved.
   const theirSonarrs = Array.isArray(saved?.settings?.sonarrs) ? saved.settings.sonarrs : [];
-  if (names.some(([i, name]) => i.url && theirSonarrs.some((o) => o.url === i.url && o.name !== name))) {
+  if (names.some(([, name], n) => sentUrls[n] && theirSonarrs.some((o) => o.url === sentUrls[n] && o.name !== name))) {
     S.outOfDate = true;
     throw Object.assign(new Error("Saved. Another tab renamed a Sonarr: reload this page before your next change."), { saved: true });
   }
