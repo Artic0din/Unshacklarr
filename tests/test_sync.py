@@ -2893,6 +2893,18 @@ def test_current_and_legacy_approval_payloads_share_the_transient_contract(tmp_p
     assert "this" not in sync.approval_fragments(fallback_job, sync.approval_from_job(fallback_job))
 
 
+def test_redacting_an_approval_keeps_ordinary_words(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    entered = sync.approval_fragments({}, {"message": "enter your code ABCD-1234"})
+    assert "ABCD-1234" in entered and "your" not in entered
+    assert "expires" not in sync.approval_fragments({}, {"message": "Your code expires soon"})
+    assert "this" not in sync.approval_fragments({}, {"message": "Use  this device"})
+    padded = sync.approval_fragments({}, {"message": "Link a device\n   \n\t\nUse code ABCD-1234"})
+    assert all(len(fragment.strip()) >= 4 and fragment == fragment.strip() for fragment in padded)  # no blank line
+    assert sync.without_approval("connection refused: check your network, ABCD-1234", entered) == (
+        "connection refused: check your network, [approval removed]")
+
+
 def test_terminal_first_job_snapshot_cannot_retain_approval(tmp_path, monkeypatch):
     import contextlib
 
