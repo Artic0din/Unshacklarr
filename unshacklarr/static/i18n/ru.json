@@ -361,6 +361,7 @@
  "Line {0}, column {1}{2}": "Строка {0}, столбец {1}{2}",
  "Ask {0} which episodes of this series it has, and mark them in the list": "Спросить у {0}, какие эпизоды этого сериала у него есть, и отметить их в списке",
  "Loading episodes from Sonarr…": "Загрузка эпизодов из Sonarr…",
+ "Loading series…": "Загрузка сериалов…",
  "Loading the month…": "Загрузка месяца…",
  "Loading the schedule…": "Загрузка расписания…",
  "Local": "Локально",

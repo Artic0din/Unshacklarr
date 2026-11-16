@@ -201,3 +201,155 @@ def test_reduced_motion_also_stills_what_before_and_after_draw():
     stilled = [{part.strip() for part in sel.split(",")} for sel in
                re.findall(r"@media \(prefers-reduced-motion: reduce\) \{ ([^{]+)\{[^}]*animation: none !important", css)]
     assert any({"*", "::before", "::after"} <= parts for parts in stilled), moving
+
+
+def rules_of(selector, *, within=None):
+    """The declarations of every rule whose selector list names `selector` exactly (a media query's rules too)."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    return [body for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+            if selector in [part.strip() for part in sel.split(",")]]
+
+
+def test_a_link_drawn_as_a_button_takes_the_buttons_colour_not_the_browsers_link_blue():
+    assert any(re.search(r"(?<![\w-])color:\s*inherit", body) for body in rules_of(".btn"))
+    assert any("text-decoration: none" in body for body in rules_of("a.btn"))
+
+
+def test_a_text_fields_focus_is_a_2px_ring_on_every_field_rule():
+    """The old 1px accent edge plus a 16% halo was 2.4:1 (dark) and 1.6:1 (light) against the resting edge."""
+    focus = [".remote-form input:focus", ".remote-form select:focus", "input[type=time]:focus:not(.bad)"]
+    for selector in focus:
+        assert any("outline: 2px solid var(--accent)" in body for body in rules_of(selector)), selector
+    general = [body for body in rules_of("textarea):focus:not(.bad)") + rules_of(":is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], select, textarea):focus:not(.bad)")]
+    assert any("outline: 2px solid var(--accent)" in body for body in general)
+    for selector in (".card input:focus", ".remote-form input:focus"):
+        assert not any("outline: none" in body or "box-shadow" in body for body in rules_of(selector)), selector
+
+
+def test_the_other_pill_carries_a_ring_because_its_input_has_no_edge():
+    assert any("outline: 2px solid var(--accent)" in body for body in rules_of(".rt-custom:focus-within"))
+    assert any("outline: none !important" in body for body in rules_of(".rt-custom input"))  # not a second ring inside the pill
+
+
+@pytest.mark.parametrize("selector", [".jx.again:focus-visible", ".jx:focus-visible", ".jact.primary:focus-visible", ".jact.danger:focus-visible"])
+def test_an_activity_icon_button_keeps_the_page_focus_ring(selector):
+    bodies = rules_of(selector)
+    assert bodies and not any("outline" in body for body in bodies)  # the global :focus-visible ring shows
+
+
+@pytest.mark.parametrize("selector", [".jx.again:hover", ".jx:hover", ".jact.primary:hover", ".jact.danger:hover"])
+def test_an_activity_icon_button_keeps_its_ring_while_hovered_and_focused(selector):
+    bodies = rules_of(selector)
+    assert bodies and not any("outline" in body for body in bodies)  # hover must not take the ring off a focused button
+
+
+def test_the_segmented_controls_ring_is_drawn_inside_its_scroller():
+    assert any(re.search(r"outline-offset:\s*-2px", body) for body in rules_of(".seg button:focus-visible"))
+
+
+def test_the_selected_filters_ring_contrasts_with_its_accent_fill():
+    assert any("outline-color: var(--accent-ink)" in body for body in rules_of('.seg button[aria-pressed="true"]:focus-visible'))
+    pairs = re.findall(r"--accent: (#[0-9a-f]{6}); --accent-ink: (#[0-9a-f]{6});", CSS)
+    assert len(pairs) >= 2 and len(set(pairs)) >= 2  # a dark and a light look
+
+    def luminance(hex_colour):
+        channels = [int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b = [c / 12.92 if c <= .03928 else ((c + .055) / 1.055) ** 2.4 for c in channels]
+        return .2126 * r + .7152 * g + .0722 * b
+
+    for fill, ring in set(pairs):
+        light, dark = sorted((luminance(fill), luminance(ring)), reverse=True)
+        assert (light + .05) / (dark + .05) >= 3, (fill, ring)
+
+
+def test_a_choice_chips_edge_is_a_field_edge():
+    assert any("border: 1.5px solid var(--field-line)" in body for body in rules_of(".ax-seg button"))
+
+
+def test_a_pressed_control_scales_to_96_percent():
+    pressed = [body for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", CSS) if ".btn:active" in sel]
+    assert pressed and all("scale(.96)" in body for body in pressed)
+
+
+def test_remote_cdm_fields_are_16px_on_a_phone_so_ios_does_not_zoom():
+    assert re.search(r"@media \(max-width: 700px\) \{ \.remote-form input, \.remote-form select \{ font-size: 16px; \} \}", CSS)
+
+
+def test_every_dialog_or_menu_scroller_stays_put_at_its_end():
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    contained = {part.strip() for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css) if "overscroll-behavior: contain" in body for part in sel.split(",")}
+    panes = {".con-list", ".con-detail", ".ug-list"}  # parts of a page, not a dialog or a menu: at their end the page scrolls on
+    scrollers = {part.strip() for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+                 if re.search(r"(?<![\w-])overflow(?:-y)?:\s*(?:auto|scroll)", body) for part in sel.split(",")}
+    assert scrollers - contained - panes == set()
+    assert {".modal", ".news-rels"} <= contained
+    assert not panes & contained
+
+
+def test_the_series_load_error_spans_the_whole_wall_like_the_empty_message():
+    assert any("grid-column: 1 / -1" in body for body in rules_of(".failed")) and any("grid-column: 1 / -1" in body for body in rules_of(".empty"))
+
+
+def test_the_loading_boxes_show_on_the_page_ground_and_the_wall_says_it_is_loading():
+    assert any("background: var(--well)" in body for body in rules_of(".skeleton"))
+    page = (STATIC / "index.html").read_text()
+    wall = re.search(r'<div class="wall" id="wall" aria-busy="true">(.*?)<div class="skeleton">', page, flags=re.S).group(1)
+    assert 'role="status"' in wall and "Loading series…" in wall
+
+
+def test_the_country_list_is_no_wider_than_its_input():
+    assert any("max-width: 420px" in body and ".wz-main .cp-list" in sel
+               for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", CSS))
+    assert re.search(r"\.wz-main \.cp-input, \.wz-main \.cp-list, \.wz-tiles,[^{}]*\{ max-width: none; \}", CSS)  # a phone: the full width of both
+
+def css_at(width):
+    """The text of every @media block whose min-width / max-width conditions hold at `width` px."""
+    css, out = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S), []
+    for match in re.finditer(r"@media ([^{]+)\{", css):
+        depth, end = 1, match.end()
+        while depth:
+            depth += {"{": 1, "}": -1}.get(css[end], 0)
+            end += 1
+        conditions = re.findall(r"\((min|max)-width:\s*(\d+)px\)", match.group(1))
+        if conditions and all((width >= int(px)) if kind == "min" else (width <= int(px)) for kind, px in conditions):
+            out.append(css[match.end():end - 1])
+    return "\n".join(out)
+
+
+@pytest.mark.parametrize("width", [701, 800, 1024, 1130, 1240])
+def test_a_tablet_header_gives_up_its_words_to_stay_on_one_row(width):
+    # the nav, the status buttons and the sync button together need more than a tablet has: it wrapped to two rows
+    rules = css_at(width)
+    assert re.search(r"#sync \.sync-text \{ position: absolute", rules)  # the sync button as an icon, named by its aria-label
+    assert re.search(r"\.health span:not\(\.dot\) \{ position: absolute", rules)  # the status buttons as dots, named for a screen reader
+    assert re.search(r"\.update-pill span \{ display: none; \}", rules)  # the update pill as an icon, named by its aria-label
+    assert 'id="sync" aria-label="Run sync now"' in (STATIC / "index.html").read_text()
+
+
+@pytest.mark.parametrize("width", [701, 941, 1024, 1041, 1130, 1240])
+def test_a_status_with_words_takes_its_own_row_wherever_the_words_cannot_fit(width):
+    # "Unreachable" and "Update available" need about 130 px each: at 941 one pushed the sync button alone onto a second row
+    assert re.search(r"\.health \{ order: 10; flex-basis: 100%", css_at(width))
+    assert "#bell { margin-left: auto; }" in css_at(width)
+
+
+@pytest.mark.parametrize("width", [941, 1041, 1100])
+def test_the_header_with_an_update_pill_is_tight_enough_for_one_row(width):
+    # brand, version, nav, dots, pill, bell and sync need about 995 px with the tablet gap, and about 905 with the name out of sight
+    assert "gap: var(--sp-3)" in css_at(width)
+    assert (width > 1040) or ".brand span { position: absolute" in css_at(width)
+
+
+def test_a_compact_sync_button_keeps_its_last_sync_time_for_assistive_tech():
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    assert "#sync span { display: none; }" not in css  # display: none dropped "Last sync …" and "Sync running…" from the tree
+    assert 'aria-describedby="last-sync"' in (STATIC / "index.html").read_text()
+    for width in (701, 1024, 600):  # the phone too: nothing hides the time with display: none
+        assert not re.search(r"\.last-sync \{ display: none; \}", css_at(width))
+    assert re.search(r"\(prefers-reduced-motion: reduce\) \{ #sync\.spin \{ box-shadow", css)  # still running when nothing spins
+
+
+def test_a_wide_desktop_header_keeps_its_words():
+    wide = css_at(1441)
+    assert "#sync .sync-text" not in wide and ".health span:not(.dot)" not in wide and ".update-pill span" not in wide
+    assert ".health { order: 10" not in wide

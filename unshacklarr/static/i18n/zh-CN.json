@@ -361,6 +361,7 @@
  "Line {0}, column {1}{2}": "第 {0} 行，第 {1} 列{2}",
  "Ask {0} which episodes of this series it has, and mark them in the list": "向 {0} 查询此剧集有哪些单集，并在列表中标注",
  "Loading episodes from Sonarr…": "正在从 Sonarr 加载单集…",
+ "Loading series…": "正在加载剧集…",
  "Loading the month…": "正在加载本月…",
  "Loading the schedule…": "正在加载日程…",
  "Local": "本地",
