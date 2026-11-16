@@ -5396,6 +5396,64 @@ def test_a_cancel_serve_did_not_accept_leaves_the_job_unconfirmed(tmp_path, monk
     assert ("unconfirmed_job" in run.card) is marked
 
 
+class BusyClock:
+    """time for sync alone: a sleep moves the clock on at once, and a wait that never ends fails instead of hanging."""
+    def __init__(self): self.now = 0.0
+    def monotonic(self): return self.now
+    def sleep(self, seconds):
+        self.now += seconds
+        assert self.now < 10 * 3600, "still following a job serve only answers busy to"
+
+
+def test_a_serve_busy_for_two_hours_gives_the_download_up_and_frees_its_slot(tmp_path, monkeypatch):
+    # #227: an hourly limit (Retry-After 3600) waited through, but a serve that never stops answering 429 no longer
+    # holds the job's slot until Unshacklarr restarts
+    sync = load(tmp_path, monkeypatch)
+    clock = BusyClock()
+    monkeypatch.setattr(sync, "time", clock)
+    monkeypatch.setitem(sync.SETTINGS, "downloads_at_once", 1)
+    cancelled = []
+
+    class Serve:
+        name = ""
+        def download(self, payload): return "j1"
+        def job(self, job_id): raise serve_error("unshackle serve is busy: its limit of requests for this key is reached",
+                                                 429, retry_after=3600)
+        def cancel(self, job_id): cancelled.append(job_id)
+
+    monkeypatch.setattr(sync, "backend_named", lambda name=None: Serve())
+    run = sync.EpisodeRun({"id": 5, "seriesId": 1, "series": {"title": "Show", "tvdbId": 111}, "seasonNumber": 1,
+                           "episodeNumber": 5}, {"service": "X"}, "manual")
+    with pytest.raises(sync.JobFailed, match="stayed busy for 2 hours") as failed:
+        sync.run_job_retrying({"service": "X"}, run, sleep=clock.sleep)
+    assert clock.now == sync.BUSY_GIVE_UP  # 120 s apart at most: given up at the first look past 2 hours, not tried again
+    assert cancelled == ["j1"] and failed.value.status == "failed"
+    assert run.id not in sync.slot_jobs.get("", [])  # the next download in line gets the slot
+
+
+def test_a_serve_busy_less_than_two_hours_at_a_time_keeps_the_download(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    clock = BusyClock()
+    monkeypatch.setattr(sync, "time", clock)
+    busy = serve_error("unshackle serve is busy: its limit of requests for this key is reached", 429, retry_after=60)
+    answers = iter([busy] * 119 + [{"status": "downloading", "progress": 50}] + [busy] * 119
+                   + [{"status": "completed", "output_files": ["/x/Show.S01E05.mkv"]}])
+
+    class Serve:
+        name = ""
+        def download(self, payload): return "j1"
+        def job(self, job_id):
+            answer = next(answers)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+        def cancel(self, job_id): raise AssertionError("a download serve still moves on is not cancelled")
+
+    # 1 h 59 busy, a status, 1 h 59 busy again: each answer starts the 2 hours over
+    assert sync.follow_job(Serve(), {"service": "X"}, None, 0) == ["/x/Show.S01E05.mkv"]
+    assert clock.now > sync.BUSY_GIVE_UP
+
+
 def test_downloads_waiting_for_a_slot_go_in_the_order_they_came(tmp_path, monkeypatch):
     # By mj23au (#10): a slot that frees up goes to the one waiting longest, not to whoever checks first
     import threading, time

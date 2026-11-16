@@ -148,6 +148,7 @@ Every change worth knowing, newest first. The format follows
 - A local Unshackle whose launcher starts with `#!/usr/bin/env python3` now starts, instead of failing with "illegal option".
 - A busy or failing Unshackle no longer lets a retry start a second download into the folder the first may still be writing: a job counts as gone only when Unshackle says there is no such job.
 - A busy Unshackle that answers "try again in 0 seconds" no longer makes Unshacklarr cancel the running download; it waits a second and asks again.
+- An Unshackle that answers nothing but "busy" for 2 hours no longer holds its download slot forever: the download is given up with a message saying the server stayed busy, and the next one in line starts. Any other answer starts the 2 hours over, so an hourly limit is still waited through.
 - A local Unshackle that will not start is now said once for a minute, instead of every page load and sync waiting 90 seconds to start it again.
 - The example Docker Compose file now builds Unshackle from this repository's Dockerfile at the reviewed commit and pulls this repository's image, instead of upstream's, which ignored the commit pin; that commit now includes official Unshackle's latest development work.
 - The `--remote` servers' options now show in the first 10 minutes after the machine starts, instead of being missing until then.

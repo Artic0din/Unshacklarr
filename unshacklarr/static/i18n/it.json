@@ -2400,5 +2400,6 @@
  "{0} session available": "Sessione {0} disponibile",
  "{0} session expired": "Sessione {0} scaduta",
  "{0} session rejected": "Sessione {0} rifiutata",
- "{0} timed out": "{0}: tempo scaduto"
+ "{0} timed out": "{0}: tempo scaduto",
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve è rimasto occupato per {0} ore: il limite di richieste di questa chiave è ancora raggiunto, il download viene abbandonato"
 }

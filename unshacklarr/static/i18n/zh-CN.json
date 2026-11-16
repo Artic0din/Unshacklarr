@@ -2410,5 +2410,6 @@
  "{0} session available": "{0} 会话可用",
  "{0} session expired": "{0} 会话已过期",
  "{0} session rejected": "{0} 会话被拒绝",
- "{0} timed out": "{0} 超时"
+ "{0} timed out": "{0} 超时",
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve 已持续忙碌 {0} 小时：此密钥的请求次数仍已达上限，已放弃此次下载"
 }
