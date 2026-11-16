@@ -48,6 +48,7 @@ class Fake {
   addEventListener(type, fn) { (this.listeners ??= []).push([type, fn]); }
   fire(type, event) { (this.listeners || []).filter(([t]) => t === type).forEach(([, fn]) => fn(event)); }
   focus() { this.focused = true; }
+  getClientRects() { return this.hidden || this.type === "hidden" ? [] : [{}]; }  // drawn, unless hidden
   get firstChild() { return this.kids[0]; }
   get lastChild() { return this.kids.at(-1); }
   get textContent() { return this.text ?? this.kids.map((k) => k?.textContent ?? k).join(""); }

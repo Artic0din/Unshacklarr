@@ -143,7 +143,9 @@ function glideBars(root) {
   root.offsetWidth;  // the start widths are laid out before the targets are set
   bars.forEach((b, i) => { b.style.width = targets[i]; barWidths.set(b.dataset.k, targets[i]); });
 }
-function renderConsole(liveOnly = false) {  // liveOnly: a tick of the live feed, the same downloads moving on
+/* Each tick redraws the lists and the detail: the control in use is found again by its data-fk. */
+function renderConsole(liveOnly = false) { keepFocus($("#con"), () => drawConsole(liveOnly)); }
+function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same downloads moving on
   const live = runCards.filter(isLive);
   // A job (episodes picked together) is running while one of its episodes is; the others wait in it, not in the history
   const liveJobs = new Set(live.map((c) => c.batch).filter(Boolean));
@@ -241,7 +243,7 @@ function jobState(j) {
 function jobRow(j) {
   const first = j.cards[0], st = jobState(j), key = `job:${j.job}`;
   const series = new Set(j.cards.map((c) => c.series)).size > 1 ? "Several series" : first.series;
-  return el("button", { className: "crow job" + (key === picked_run ? " sel" : "") + hovering(`row:${key}`), dataset: { hk: `row:${key}` }, onclick: () => pickRun(key) },
+  return el("button", { className: "crow job" + (key === picked_run ? " sel" : "") + hovering(`row:${key}`), dataset: { hk: `row:${key}`, fk: `row:${key}` }, onclick: () => pickRun(key) },
     thumb(`row:${key}`, posterOf(first)),
     el("span", {}, el("b", {}, el("span", { textContent: series }), el("em", { textContent: `${j.cards.length} episodes` })),
       el("small", { textContent: (st.live ? st.words : [...st.words, ...jobTotals(j)]).join(" · ") }),
@@ -304,18 +306,18 @@ function renderJob(j) {
   const retryable = j.cards.filter((c) => c.episodeId && ["failed", "stopped", "interrupted"].includes(c.outcome));  // not the cancelled ones: taken out on purpose
   const title = new Set(j.cards.map((c) => c.series)).size > 1 ? `${j.cards.length} episodes` : `${first.series} · ${j.cards.length} episodes`;
   $("#cd-top-title").textContent = title;
-  const acts = [series ? el("button", { className: "btn small", textContent: "Open series", onclick: () => openDrawer(series) }) : "",
-    st.live && st.n.queued ? el("button", { className: `btn small${st.paused ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause",
+  const acts = [series ? el("button", { className: "btn small", textContent: "Open series", dataset: { fk: "open" }, onclick: () => openDrawer(series) }) : "",
+    st.live && st.n.queued ? el("button", { className: `btn small${st.paused ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause", dataset: { fk: "pause" },
       title: st.paused ? "The next episode starts" : "The current download finishes; the next one waits",
       onclick: (e) => pauseJob(j, !st.paused, e.target) }) : "",
-    st.live && st.n.queued ? el("button", { className: "btn small", textContent: "Options", title: "Download options for the episodes still to come in this job",
+    st.live && st.n.queued ? el("button", { className: "btn small", textContent: "Options", dataset: { fk: "options" }, title: "Download options for the episodes still to come in this job",
       onclick: () => openJobOptions(j) }) : "",
-    st.live ? el("button", { className: "btn small danger", textContent: "Stop the job", title: "Stops the current download. The queued episodes don't start",
+    st.live ? el("button", { className: "btn small danger", textContent: "Stop the job", dataset: { fk: "stop" }, title: "Stops the current download. The queued episodes don't start",
       onclick: (e) => stopJob(j, e.target) }) : "",
-    retryable.length ? el("button", { className: "btn small primary", textContent: `Retry ${retryable.length} failed`,
+    retryable.length ? el("button", { className: "btn small primary", textContent: `Retry ${retryable.length} failed`, dataset: { fk: "retry" },
       title: st.live ? "Downloads them again, before the episodes still to come" : "Downloads them again, in this job",
       onclick: (e) => retryJob(j, retryable, e.target) }) : "",
-    !st.live ? el("button", { className: "btn small", textContent: "Delete the job", title: "Removes every episode of this job from the history",
+    !st.live ? el("button", { className: "btn small", textContent: "Delete the job", dataset: { fk: "delete" }, title: "Removes every episode of this job from the history",
       onclick: (e) => deleteJob(j, e.target) }) : ""].filter(Boolean);
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(first)),
@@ -326,7 +328,7 @@ function renderJob(j) {
   // each count shows or hides its episodes: a job of 200 episodes, its failed ones alone in sight
   const counts = el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused", textContent: "⏸ Paused: the next episode waits" })] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
     ["queued", "Queued", ""], ["failed", "Failed", "err"], ["stopped", "Stopped", ""], ["cancelled", "Cancelled", ""]]
-    .filter(([k]) => st.n[k]).map(([k, label, cls]) => el("button", { type: "button", className: `${cls}${jobHidden.has(k) ? " off" : ""}`, ariaPressed: String(!jobHidden.has(k)),
+    .filter(([k]) => st.n[k]).map(([k, label, cls]) => el("button", { type: "button", className: `${cls}${jobHidden.has(k) ? " off" : ""}`, ariaPressed: String(!jobHidden.has(k)), dataset: { fk: `count:${k}` },
       title: jobHidden.has(k) ? "Show these episodes" : "Hide these episodes", onclick: () => { jobHidden.has(k) ? jobHidden.delete(k) : jobHidden.add(k); renderConsole(); } },
       el("b", { textContent: st.n[k] }), label)));
   const overall = el("div", { className: "job-sum" }, counts,
@@ -369,15 +371,15 @@ function renderJob(j) {
       el("div", { className: "jhead" }, el("b", { className: "ep", textContent: c.sxxeyy }),
         el("div", { className: "mid" }, el("small", { textContent: `Cancelled ${time(new Date(c.ended))}` })),
         el("span", { className: "jstate", textContent: "Cancelled" }),
-        el("button", { type: "button", className: "jx again", title: "Queue it again", ariaLabel: `Queue ${c.sxxeyy} again`, onclick: () => requeue(c) }, "↺")));
+        el("button", { type: "button", className: "jx again", dataset: { fk: `again:${c.id}` }, title: "Queue it again", ariaLabel: `Queue ${c.sxxeyy} again`, onclick: () => requeue(c) }, "↺")));
     if (c.waiting) return el("li", { className: "jcard queued" },  // not started: nothing to unfold, but it can be cancelled
       el("div", { className: "jhead" }, el("b", { className: "ep", textContent: c.sxxeyy }),
         el("div", { className: "mid" }, el("div", { className: "steps mini", ariaHidden: "true" }, ...stepStates(c).filter((x) => x !== "skip").map(() => el("span")))),
         el("span", { className: "jstate", textContent: "Queued" }),
-        el("button", { type: "button", className: "jx", title: "Cancel", ariaLabel: `Cancel ${c.sxxeyy}`,
+        el("button", { type: "button", className: "jx", dataset: { fk: `cancel:${c.id}` }, title: "Cancel", ariaLabel: `Cancel ${c.sxxeyy}`,
           onclick: () => unqueue(c) }, icon("x"))));
     return el("li", { className: `jcard ${tone}${open ? " open" : ""}${hovering(`card:${c.id}`)}`, dataset: { hk: `card:${c.id}` } },
-      el("div", { className: "jrow" }, el("button", { type: "button", className: "jhead", ariaExpanded: String(open), onclick: fold },
+      el("div", { className: "jrow" }, el("button", { type: "button", className: "jhead", ariaExpanded: String(open), dataset: { fk: `card:${c.id}` }, onclick: fold },
         el("b", { className: "ep", textContent: c.sxxeyy }),
         el("div", { className: "mid" },
           el("div", { className: "steps mini", ariaHidden: "true" }, ...stepStates(c).filter((x) => x !== "skip")
@@ -397,8 +399,8 @@ function renderJob(j) {
   cards.forEach((li, i) => { if (list.children[i] !== li) list.insertBefore(li, list.children[i] || null); });
   while (list.children.length > cards.length) list.lastChild.remove();
   const sum = st.live ? overall : el("div", { style: "display:grid;gap:12px" }, jobDone(j, st), counts), box = list.parentElement;
-  keepPromptFocus(() => box?.isConnected ? (box.children[0].replaceWith(head), box.children[1].replaceWith(sum))  // the list stays where it is
-    : $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, head, sum, list)));
+  if (box?.isConnected) { box.children[0].replaceWith(head); box.children[1].replaceWith(sum); }  // the list stays where it is
+  else $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, head, sum, list));
   glideBars($("#cd-main"));
   $("#cd-raw").hidden = false;
   if ($("#cd-raw").open && termFor !== `job:${j.job}`) streamJob(j.job);
@@ -444,7 +446,7 @@ function listRow(c) {
     : `${day(started)} ${time(started)}${c.ended ? ` · ${duration(new Date(c.ended) - started)}` : ""}`;
   const side = isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
     : el("span", { className: `chip o-${c.outcome}`, textContent: outcomeOf(c) });
-  const row = el("button", { className: "crow" + (c.id === picked_run ? " sel" : "") + hovering(`row:${c.id}`), dataset: { hk: `row:${c.id}` }, onclick: () => pickRun(c.id) },
+  const row = el("button", { className: "crow" + (c.id === picked_run ? " sel" : "") + hovering(`row:${c.id}`), dataset: { hk: `row:${c.id}`, fk: `row:${c.id}` }, onclick: () => pickRun(c.id) },
     thumb(`row:${c.id}`, posterOf(c)),
     el("span", {}, el("b", {}, el("span", { textContent: c.series }), el("em", { textContent: c.sxxeyy })),
       el("small", { textContent: c.attempts > 1 ? `${sub} · attempt ${c.attempts}` : sub }),
@@ -456,7 +458,7 @@ function pickRun(id) {
   picked_run = id;
   $("#con").classList.add("open");
   renderConsole();
-  if (innerWidth < 700) scrollTo({ top: 0 });
+  if (innerWidth < 700) { scrollTo({ top: 0 }); focusHeading($("#cd-top-title")); }  // the list is out of sight: the keyboard goes with the view
 }
 /* Waiting in downloads: folders Sonarr did not take, with why, imported anyway or deleted. */
 async function showLeftovers() {
@@ -733,12 +735,16 @@ async function showStats() {
   if (picked_run !== "stats") return;  // another pane was picked while this answer was on its way
   const m = st.month, fmt = (v, unit = "") => v === null || v === undefined ? "–" : `${v}${unit}`;
   const max = Math.max(1, ...st.weeks.map((w) => w.downloaded + w.failed + w.kept));
-  const weeks = el("div", { className: "weeks", role: "img", ariaLabel: "Downloads per week, the last 8 weeks" }, ...st.weeks.map((w) => {
+  const weekOf = (w) => new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
+  const weeks = el("div", { className: "weeks", ariaHidden: "true" }, ...st.weeks.map((w) => {  // drawn for the eye: the table under it has the numbers
     const n = w.downloaded + w.failed + w.kept, h = (k) => `height:${(w[k] / max) * 130}px`;
-    return el("div", { className: "w", title: `Week of ${new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
+    return el("div", { className: "w", title: `Week of ${weekOf(w)}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
       el("span", { className: "stack" }, el("i", { className: "ok", style: h("downloaded") }), el("i", { className: "kp", style: h("kept") }), el("i", { className: "ko", style: h("failed") })),
-      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) })));
+      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: weekOf(w) })));
   }));
+  const perWeek = el("table", { className: "svc-table" }, el("caption", { className: "sr-only", textContent: "Downloads per week, the last 8 weeks" }),
+    el("thead", {}, el("tr", {}, ...["Week", "Downloaded", "Failed", "Kept"].map((t) => el("th", { textContent: t })))),
+    el("tbody", {}, ...st.weeks.map((w) => el("tr", {}, el("th", { scope: "row", textContent: weekOf(w) }), el("td", { textContent: w.downloaded }), el("td", { textContent: w.failed }), el("td", { textContent: w.kept })))));
   const table = el("table", { className: "svc-table" }, el("thead", {}, el("tr", {}, ...["Service", "Downloaded", "Failed", "Kept", "Success", "Last success", "Average"].map((t) => el("th", { textContent: t })))),
     el("tbody", {}, ...st.services.map((v) => el("tr", {}, el("td", {}, el("b", { textContent: svcName(v.service) })), el("td", { textContent: v.downloaded }),
       el("td", { className: v.failed ? "bad" : "", textContent: v.failed }), el("td", { textContent: v.kept }),
@@ -750,12 +756,17 @@ async function showStats() {
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
       ["Kept by Sonarr", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
       .map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v })))),
-    el("div", { style: "display:grid;gap:8px" }, weeks, el("div", { className: "legend" }, el("span", {}, el("i", { className: "ok", style: "background:var(--ok)" }), "Downloaded"),
+    el("div", { style: "display:grid;gap:8px" }, weeks, el("div", { className: "legend", ariaHidden: "true" }, el("span", {}, el("i", { className: "ok", style: "background:var(--ok)" }), "Downloaded"),
       el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept by Sonarr"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
+    perWeek,
     st.services.length ? el("div", { className: "svc-scroll" }, table) : ""));
 }
 $("#con-stats").onclick = showStats;
-$("#cd-back").onclick = () => { $("#con").classList.remove("open"); picked_run = null; renderConsole(); };
+$("#cd-back").onclick = () => {
+  const from = picked_run;
+  $("#con").classList.remove("open"); picked_run = null; renderConsole();
+  ($(`[data-fk="row:${from}"]`) || document.getElementById(`con-${from}`))?.focus({ preventScroll: true });  // the row it came from
+};
 let searchTimer = null;  // typed: the history filtered once the typing pauses, not at each key
 $("#con-search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 150); };
 document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.onclick = () => {
@@ -772,6 +783,7 @@ addEventListener("scroll", () => {  // a phone: the list is the page
 
 const STEPS = ["Queued", "Downloading", "Decrypting and muxing", "Joining parts", "Renaming", "Sonarr import"];
 const STEPS_SHORT = ["Queued", "Download", "Mux", "Join", "Rename", "Import"];
+const STEP_STATE = { done: "Done", now: "Running", fail: "Failed", halt: "Stopped", "": "Waiting" };  // each step's state in words (warn: the outcome's own), the bar's colour aside
 function stepStates(c) {
   const at = c.step === "downloading" && afterTracks(c) ? 2  // every track in: serve makes the file
     : { queued: 0, downloading: 1, joining: 3, finishing: 3, renaming: 4, importing: 5, done: 6 }[c.step] ?? 0;
@@ -787,7 +799,7 @@ function stepStates(c) {
 function renderDetail(c) {
   const series = S.series.find((x) => x.tvdbId === c.tvdbId);
   const started = new Date(c.started);
-  const acts = [series ? el("button", { className: "btn small", textContent: "Open series", onclick: () => openDrawer(series) }) : "", ...runActs(c)].filter(Boolean);
+  const acts = [series ? el("button", { className: "btn small", textContent: "Open series", dataset: { fk: "open" }, onclick: () => openDrawer(series) }) : "", ...runActs(c)].filter(Boolean);
   const onService = c.serviceEpisode && c.serviceEpisode !== c.sxxeyy ? `, as ${c.serviceEpisode}` : "";
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(c)),
     el("div", {}, el("h3", { textContent: `${c.series} ${c.sxxeyy}` }),
@@ -797,7 +809,7 @@ function renderDetail(c) {
   $("#cd-top-title").textContent = `${c.series} ${c.sxxeyy}`;
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const parts = [head, ...runBody(c)];
-  keepPromptFocus(() => $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, ...parts)));
+  $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, ...parts));
   glideBars($("#cd-main"));
   $("#cd-raw").hidden = !!c.waiting;  // not started: no output yet
   if ($("#cd-raw").open && !c.waiting && termFor !== c.id) streamRun(c);
@@ -874,7 +886,7 @@ const ACT_ICONS = {
 function cardActs(c) {
   const live = isLive(c);
   const act = (kind, label, run, extra = "") => {
-    const b = el("button", { type: "button", className: `jact ${extra}`, ariaLabel: label, onclick: (e) => run(c, e.currentTarget) });
+    const b = el("button", { type: "button", className: `jact ${extra}`, ariaLabel: label, dataset: { fk: `${label}:${c.id}` }, onclick: (e) => run(c, e.currentTarget) });
     b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ACT_ICONS[kind]}</svg>`;
     return b;
   };
@@ -892,12 +904,12 @@ function runActs(c) {
   const live = isLive(c);
   return [
     setupButton(c),
-    live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", onclick: (e) => stopRun(c, e.target) }) : "",
-    !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", onclick: (e) => importKept(c, e.target) }) : "",
-    !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: "btn small primary", textContent: "Retry", onclick: (e) => retryRun(c, e.target) }) : "",
-    !live ? el("button", { className: "btn small", textContent: "Diagnostic", title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
+    live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
+    !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
+    !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: "btn small primary", textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
+    !live ? el("button", { className: "btn small", textContent: "Diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
       onclick: () => downloadDiagnostic(c) }) : "",
-    !live ? el("button", { className: "btn small", textContent: "Delete", onclick: (e) => deleteRun(c, e.target) }) : "",
+    !live ? el("button", { className: "btn small", textContent: "Delete", dataset: { fk: "delete" }, onclick: (e) => deleteRun(c, e.target) }) : "",
   ].filter(Boolean);
 }
 async function downloadDiagnostic(c) {
@@ -943,13 +955,18 @@ function trackDone(t) {
   return span;
 }
 const tracksOpen = new Set();  // attempts whose downloaded tracks were unfolded: they stay so as it moves on
+/* An attempt's steps, each with its state in words and the current one marked, so no state rests on a colour. */
+function stepList(c) {
+  return el("div", { className: "steps", role: "list", ariaLabel: "Steps" },
+    ...stepStates(c).flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms`, ...(["now", "fail", "halt"].includes(st) ? { ariaCurrent: "step" } : {}) },
+      el("span", { className: "l", textContent: STEPS[i] }),
+      el("span", { className: "s", textContent: STEPS_SHORT[i] }),
+      el("span", { className: "sr-only", textContent: st === "halt" ? OUTCOME[c.outcome] || STEP_STATE.halt : STEP_STATE[st] || OUTCOME[c.outcome] }))]));  // halted: why, in the outcome's own word
+}
 /* An attempt's steps, what waits for you, its figures or its end, and its tracks: in its own view and in a job's card. */
 function runBody(c) {
   const started = new Date(c.started), live = isLive(c);
-  const steps = el("div", { className: "steps", role: "list", ariaLabel: "Steps" },
-    ...stepStates(c).flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms` },
-      el("span", { className: "l", textContent: STEPS[i] }),
-      el("span", { className: "s", textContent: STEPS_SHORT[i] }))]));
+  const steps = stepList(c);
   const parts = [steps];
   if (live && c.prompt) parts.push(promptBox(c.prompt));
   if (live) {
@@ -1015,12 +1032,12 @@ function runBody(c) {
 /* How a download runs, out of the way: an ⓘ opening a small menu (where, proxy, CDM, the episode on the service,
    the attempt, and the same as a command to copy). Closed by a click elsewhere or Escape. */
 let setupPop = null;
-const closeSetup = () => { setupPop?.remove(); setupPop = null; };
+const closeSetup = () => { if (!setupPop) return; const pop = setupPop; setupPop = null; popClose(pop); pop.remove(); };
 document.addEventListener("pointerdown", (e) => { if (setupPop && !setupPop.contains(e.target) && !e.target.closest?.(".setup-btn")) closeSetup(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSetup(); });
 function setupButton(c, className = "jact") {
   if (!c.setup) return "";
-  const b = el("button", { type: "button", className: `${className} setup-btn`, ariaLabel: "How it runs",
+  const b = el("button", { type: "button", className: `${className} setup-btn`, ariaLabel: "How it runs", dataset: { run: c.id, fk: `setup:${c.id}` },
     onclick: (e) => { e.stopPropagation(); openSetup(c, e.currentTarget); } });
   b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
   return b;
@@ -1036,6 +1053,7 @@ function openSetup(c, at) {
   const r = at.getBoundingClientRect(), p = setupPop.getBoundingClientRect();
   setupPop.style.left = `${Math.min(Math.max(8, r.right - p.width), innerWidth - p.width - 8)}px`;
   setupPop.style.top = `${r.bottom + 8 + p.height > innerHeight - 8 ? Math.max(8, r.top - p.height - 8) : r.bottom + 8}px`;
+  popOpen(setupPop, at, "How it runs", () => [...document.querySelectorAll(`.setup-btn[data-run="${CSS.escape(c.id)}"]`)].find((b) => b.getClientRects().length));
 }
 function setupBox(c) {
   const rows = [["Runs on", c.setup.via], ["On the service", c.serviceEpisode !== c.sxxeyy && c.serviceEpisode],
@@ -1145,7 +1163,7 @@ async function stopRun(c, button) {
 const promptDrafts = {};  // what was typed, kept across the page's redraws
 function promptBox(p) {
   const field = el("input", { type: "text", autocomplete: "one-time-code", inputMode: /code|pin/i.test(p.text) ? "numeric" : "text",
-    ariaLabel: p.text, placeholder: "Your answer", value: promptDrafts[p.id] || "", spellcheck: false, dataset: { promptId: p.id } });
+    ariaLabel: p.text, placeholder: "Your answer", value: promptDrafts[p.id] || "", spellcheck: false, dataset: { fk: `prompt:${p.id}` } });
   field.oninput = () => { promptDrafts[p.id] = field.value; };
   const send = el("button", { className: "btn primary", type: "submit", textContent: "Send" });
   const form = el("form", { className: "act-row", onsubmit: async (e) => {
@@ -1161,11 +1179,4 @@ function promptBox(p) {
   } }, field, send);
   return el("div", { className: "act-box", role: "status" },
     el("b", { textContent: `${svcName(p.service)} asks` }), el("span", { className: "q", textContent: p.text }), form);
-}
-/* A redraw rebuilds the answer field: the one being typed in keeps its focus and caret. */
-function keepPromptFocus(draw) {
-  const was = document.activeElement?.dataset?.promptId, at = document.activeElement?.selectionStart;
-  draw();
-  const field = was && document.querySelector(`input[data-prompt-id="${was}"]`);
-  if (field) { field.focus(); field.setSelectionRange(at ?? field.value.length, at ?? field.value.length); }
 }

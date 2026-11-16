@@ -560,7 +560,7 @@ const BUILDERS = {
 let ntApp = "Discord";
 function renderTargets() {
   const targets = S.config.notifications.targets;
-  $("#nt-targets").replaceChildren(...(targets.length ? targets.map((t, i) => {
+  keepFocus($("#nt-targets"), () => $("#nt-targets").replaceChildren(...(targets.length ? targets.map((t, i) => {
     const tested = ntTested.get(t.url);
     const chips = Object.entries(LEVEL_NAMES).map(([lv, name]) => el("button", { type: "button", role: "checkbox", className: `nt-pick ${lv}`,
       ariaChecked: String(t.levels.includes(lv)), onclick: () => {
@@ -575,7 +575,7 @@ function renderTargets() {
         ...(tested && tested !== "…" ? [el("em", { className: tested.ok ? "ok" : "bad" }, icon(tested.ok ? "check" : "x", "inl"), tested.ok ? "Delivered" : tested.error)] : [])),
       el("span", { className: "nt-chips", role: "group", ariaLabel: `What ${appOf(t.url)} gets` }, el("small", { textContent: "Sends" }), ...chips),
       el("span", { className: "btns" }, test, remove));
-  }) : [el("p", { className: "muted cdm-empty", textContent: "No address yet: add Discord, Telegram, ntfy or another." })]));
+  }) : [el("p", { className: "muted cdm-empty", textContent: "No address yet: add Discord, Telegram, ntfy or another." })])));
 }
 async function testTargets(urls) {
   urls.forEach((u) => ntTested.set(u, "…"));
