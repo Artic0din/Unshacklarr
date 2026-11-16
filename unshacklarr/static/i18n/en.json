@@ -754,8 +754,6 @@
  "Device type": [],
  "Devices": [],
  "Devices (CDM)": [],
- "Diagnostic": [],
- "Diagnostic downloaded: check it, then attach it to the issue": [],
  "Disable folder creation for TV Shows.": [],
  "Disable the source tag from the output file name and path.": [],
  "Discard": [],
@@ -869,7 +867,6 @@
  "Edit": [],
  "Edit ladders": [],
  "Edit unshackle.yaml": [],
- "Edit…": [],
  "Empty: keyxtractor.decryptlabs.com": [],
  "Empty: nothing is sent.": [],
  "Empty: the URL above, if your browser can open it.": [],
@@ -1152,13 +1149,7 @@
  "Italiano": [],
  "Its address, API key, and TMDB": [],
  "Its address: http(s)://…": [],
- "Its downloads from {0} fail": [
-  "svcName(conf.service)"
- ],
  "Its downloads will fail: replace them in Settings › Services.": [],
- "Its last {0} downloads failed": [
-  "sick.failing"
- ],
  "Its last {0} downloads failed{1}": [
   "sick.failing",
   "sick.cause ? `: ${sick.cause}` : \"\""
@@ -1209,7 +1200,6 @@
   "COUNT.day(days)"
  ],
  "Kept": [],
- "Kept by Sonarr": [],
  "Kept the existing file: {0}": [
   "label"
  ],
@@ -1413,9 +1403,6 @@
   "tag"
  ],
  "No DRM, nothing to decrypt": [],
- "No Sonarr named {0}": [
-  "body['sonarr']"
- ],
  "No Sonarr named {0} in Settings, Sonarr": [
   "name"
  ],
@@ -2280,7 +2267,6 @@
   "current.title",
   "want"
  ],
- "Sonarr kept its own file": [],
  "Sonarr lists no episode for this series.": [],
  "Sonarr name": [],
  "Sonarr now numbers this series in {0}, but the numbering below was set for {1}. New episodes of this series are not downloaded until you check the numbering and confirm it.": [
@@ -2927,7 +2913,6 @@
  "Unshacklarr · Today at {0}": [
   "now"
  ],
- "Unshacklarr, back to the series": [],
  "Unshackle": [],
  "Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): allow it in Settings, Unshackle": [],
  "Unshackle address": [],
@@ -2956,7 +2941,6 @@
  "Unshackle runs": [],
  "Unshackle server": [],
  "Unshackle tries at that time, then every 30 s for 10 min. Empty: only the regular syncs (every 2 h).": [],
- "Unshackle tries its series at their release time, or at the first sync after airing. Add any other series in one tap, or hide the ones you don't follow.": [],
  "Unshackle {0}": [
   "name"
  ],
@@ -3032,7 +3016,6 @@
  "Wait for 2 parts": [],
  "Wait for 3 parts": [],
  "Wait for 4 parts": [],
- "Wait for it": [],
  "Waiting": [],
  "Waiting for Sonarr": [],
  "Waiting for a slot": [],
@@ -3990,10 +3973,6 @@
  "{0} min ago": [
   "min"
  ],
- "{0} min {1}": [
-  "Math.floor(s / 60)",
-  "String(s % 60).padStart(2, \"0\")"
- ],
  "{0} missing": [
   "missing"
  ],
@@ -4563,9 +4542,45 @@
  "≤ {0} kbps": [
   "st.max_kbps"
  ],
- "⏸ Paused: the next episode waits": [],
  "● Connected{0}": [
   "st.version ? ` · Sonarr ${st.version}` : \"\""
  ],
- "⚠ No CDM for this service": []
+ "⚠ No CDM for this service": [],
+ "An audio track add stopped midway in this folder: it holds audio only, not a video to import": [],
+ "Back to Activity": [],
+ "Back to Settings": [],
+ "Back to the schedule": [],
+ "Back to unshackle.yaml": [],
+ "Diagnostic saved: check it, then attach it to the issue": [],
+ "Its last {0} downloads from {1} failed": [
+  "sick.failing",
+  "svcName(conf.service)"
+ ],
+ "Kept: Sonarr's own file was not replaced": [],
+ "Paused: the next episode waits": [],
+ "Reload calendar": [],
+ "Save diagnostic": [],
+ "Saved. Another tab renamed a Sonarr: reload this page before your next change.": [],
+ "The file with the {0} audio could not be renamed: {1}": [
+  "want",
+  "e"
+ ],
+ "The start date of {0} must be a date, like 2026-10-01": [
+  "key"
+ ],
+ "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": [],
+ "Unshacklarr, schedule": [],
+ "Wait for the audio, in days": [],
+ "{0} did not finish within {1}: is the downloads folder reachable?": [
+  "cmd[0]",
+  "human_time(timeout)"
+ ],
+ "{0} h {1} min": [
+  "Math.floor(min / 60)",
+  "String(min % 60).padStart(2, \"0\")"
+ ],
+ "{0} min {1} s": [
+  "Math.floor(s / 60)",
+  "String(s % 60).padStart(2, \"0\")"
+ ]
 }

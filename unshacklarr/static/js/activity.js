@@ -12,7 +12,7 @@ const speedLog = {};  // run id -> [[time, progress]], for the time left
 
 function duration(ms) {
   const s = Math.round(ms / 1000);
-  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")}` : `${Math.floor(s / 3600)} h ${String(Math.round(s / 60) % 60).padStart(2, "0")}`;
+  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s` : `${Math.floor(s / 3600)} h ${String(Math.round(s / 60) % 60).padStart(2, "0")} min`;
 }
 const posterOf = (c) => { const s = S.series.find((x) => x.tvdbId === c.tvdbId); return posterSrc(s?.poster, s?.title || c.series); };
 const isLive = (c) => c.outcome === "running";
@@ -335,7 +335,7 @@ function renderJob(j) {
       el("small", { className: "line2" }, el("b", { textContent: svcName(first.service) }), `${KIND[first.kind] || first.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
   // each count shows or hides its episodes: a job of 200 episodes, its failed ones alone in sight
-  const counts = el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused", textContent: "⏸ Paused: the next episode waits" })] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
+  const counts = el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused" }, icon("pause", "inl"), "Paused: the next episode waits")] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
     ["queued", "Queued", ""], ["failed", "Failed", "err"], ["stopped", "Stopped", ""], ["cancelled", "Cancelled", ""]]
     .filter(([k]) => st.n[k]).map(([k, label, cls]) => el("button", { type: "button", className: `${cls}${jobHidden.has(k) ? " off" : ""}`, ariaPressed: String(!jobHidden.has(k)), dataset: { fk: `count:${k}` },
       title: jobHidden.has(k) ? "Show these episodes" : "Hide these episodes", onclick: () => { jobHidden.has(k) ? jobHidden.delete(k) : jobHidden.add(k); renderConsole(); } },
@@ -763,10 +763,10 @@ async function showStats() {
     el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Stats" }),
       el("small", { className: "line1", textContent: st.since ? `From the history kept since ${day(new Date(st.since))}` : "Nothing in the history yet" }))),
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
-      ["Kept by Sonarr", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
+      ["Kept", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
       .map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v })))),
     el("div", { style: "display:grid;gap:8px" }, weeks, el("div", { className: "legend", ariaHidden: "true" }, el("span", {}, el("i", { className: "ok", style: "background:var(--ok)" }), "Downloaded"),
-      el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept by Sonarr"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
+      el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
     perWeek,
     st.services.length ? el("div", { className: "svc-scroll" }, table) : ""));
 }
@@ -917,7 +917,7 @@ function runActs(c) {
     live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
     !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: "btn small primary", textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
-    !live ? el("button", { className: "btn small", textContent: "Diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
+    !live ? el("button", { className: "btn small", textContent: "Save diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
       onclick: () => downloadDiagnostic(c) }) : "",
     !live ? el("button", { className: "btn small danger", textContent: "Delete", dataset: { focusKey: `delete:${c.id}`, fk: "delete" }, onclick: (e) => deleteRun(c, e.target) }) : "",
   ].filter(Boolean);
@@ -929,7 +929,7 @@ async function downloadDiagnostic(c) {
     const a = el("a", { href: URL.createObjectURL(await r.blob()), download: `unshacklarr-diagnostic-${c.id}.md` });
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
-    toast("Diagnostic downloaded: check it, then attach it to the issue");
+    toast("Diagnostic saved: check it, then attach it to the issue");
   } catch (e) { toast(e.message, true); }
 }
 /* A track as serve names it ("Part 1 · audio fr 2.0"): an icon for its kind, the kind, then what it is in chips. */
@@ -996,7 +996,7 @@ function runBody(c) {
         el("span", { className: `bar${pct == null ? " busy" : ""}` }, el("i", { style: `width:${pct ?? 100}%`, dataset: { k: `mux:${c.id}` } }))));
     }
   } else {
-    const note = { downloaded: ["ok", "Downloaded"], failed: ["err", "Failed"], kept: ["warn", "Sonarr kept its own file"], import: ["warn", "Downloaded, import needed"],
+    const note = { downloaded: ["ok", "Downloaded"], failed: ["err", "Failed"], kept: ["warn", "Kept: Sonarr's own file was not replaced"], import: ["warn", "Downloaded, import needed"],
       stopped: ["mut", "Stopped"], interrupted: ["mut", "Interrupted: Unshacklarr stopped during it"],
       unavailable: ["mut", c.notOn ? `${outcomeOf(c)}: nothing to download` : "Not out yet: nothing to download"] }[c.outcome] || ["mut", c.outcome];
     if (c.outcome === "downloaded") {  // all went well: one quiet line, not a block

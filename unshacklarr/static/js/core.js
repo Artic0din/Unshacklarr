@@ -218,7 +218,7 @@ const ICON_PATHS = {
   check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', alert: '<path d="M12 6v8M12 18h.01"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>', chevronLeft: '<path d="m15 6-6 6 6 6"/>',
   arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
-  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
+  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>', pause: '<path d="M9 6v12M15 6v12"/>',
 };
 function icon(name, className = "", label = "") {
   const holder = document.createElement("template");
@@ -576,17 +576,14 @@ async function loadServiceOptions(tag) {
   return serviceOptions[tag];
 }
 
+const BACK_NAME = { schedule: "Back to the schedule", log: "Back to Activity", settings: "Back to Settings", yaml: "Back to unshackle.yaml" };
 async function openDrawer(s, tab, fromRoute = false) {
   current = s;
   $("#d-probe-out").replaceChildren();
   $("#d-probe").removeAttribute("aria-disabled");  // a test of the series left behind may still be asking
+  $("#d-back").setAttribute("aria-label", BACK_NAME[currentTab] || "Back to all series");  // a phone's Back returns to the page it was opened from
   $("#d-url").placeholder = "URL or ID of the series";  // a Crave suggestion changes it for one series only
   showReleaseSeen(s);
-  const sick = S.config.series[s.tvdbId]?.service && S.health[s.tvdbId];
-  $("#d-sick").hidden = !sick;
-  if (sick) $("#d-sick").replaceChildren(el("b", { textContent: `Its last ${sick.failing} downloads failed` }),
-    el("span", { textContent: sick.cause || "See the history in Activity for why." }),
-    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }));
   $("#d-probe-state").textContent = "Asks the service which episodes it has. Nothing is downloaded.";
   drawerPushed = !fromRoute;
   if (!fromRoute) { drawerTab = tab || "episodes"; navigate(true); }  // back will close it
@@ -657,7 +654,7 @@ function renderSeriesState() {
   renderSeriesLanguage();  // its service picked or changed since the page opened: said then too
   const sick = conf.service && S.health[current.tvdbId];
   const [cls, text] = !conf.service ? ["", "Not downloading"]
-    : sick ? ["down", `Its downloads from ${svcName(conf.service)} fail`]
+    : sick ? ["down", `Its last ${sick.failing} downloads from ${svcName(conf.service)} failed`]
     : !conf.title && !conf.programmes ? ["warn", `On ${svcName(conf.service)}: its series URL is missing`]
     : conf.programmes ? ["ok", `Downloaded from ${svcName(conf.service)}, each episode its own programme`]
     : ["ok", `Downloaded from ${svcName(conf.service)}`];
@@ -667,6 +664,7 @@ function renderSeriesState() {
   // What failed, and where to mend it: the service's row in Settings, Services
   $("#ds-fix").hidden = !sick;
   $("#ds-fix").replaceChildren(...(sick ? [el("span", { textContent: sick.cause || "See the history in Activity for why." }),
+    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }),
     el("button", { type: "button", className: "btn small", textContent: `Check ${svcName(conf.service)} in Settings › Services`, onclick: () => openServiceRow(conf.service) })] : []));
 }
 /* Service options only show for a service that has some; "stop" only for a managed series. */
