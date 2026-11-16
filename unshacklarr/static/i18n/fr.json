@@ -1341,6 +1341,7 @@
  "Asked again before a key is made.": "Redemandé avant de créer une clé.",
  "Asked again: the old key stops working.": "Redemandé: l'ancienne clé ne marchera plus.",
  "Type your password first": "Tapez d'abord votre mot de passe",
+ "Enter your current password": "Tapez votre mot de passe actuel",
  "1 of these {0} episodes is already on disk": "1 de ces {0} épisodes est déjà sur le disque",
  "1 series has a release time: {0}": "1 série a une heure de sortie: {0}",
  "1 episode has another number on {0}: Download takes care of it": "1 épisode a un autre numéro sur {0}: Télécharger s'en occupe",

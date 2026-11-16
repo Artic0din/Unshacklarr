@@ -426,7 +426,7 @@ body.drawer-open .savebar { display: none; }
 .modal::backdrop { background: var(--scrim); }
 .modal h2 { margin: 0 0 8px; font-size: var(--fs-title3); }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; } .modal-head .inbox-x { flex: none; margin: -4px -6px 0 0; }
-.modal p { margin: 0 0 18px; color: var(--muted); }
+.modal p { margin: 0 0 18px; color: var(--muted); } .modal p.status-err { color: var(--err); } .modal p.status-warn { color: var(--warn); }  /* the class alone loses to .modal p */
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .svc-block { border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px; margin-bottom: 12px; background: var(--bg); }
 .svc-block-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -796,6 +796,7 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .field { margin: var(--gap-field) 0; }
 .field > span, .field > label { display: block; font-weight: 600; margin-bottom: var(--gap-label); }
 .field small { display: block; color: var(--muted); margin-top: var(--gap-help); }
+.field label .optional { color: var(--muted); font-weight: 400; }
 
 .opts { display: grid; gap: 8px; }
 .opt { display: grid; grid-template-columns: 170px 1fr auto; gap: 8px; align-items: center; }
@@ -1873,7 +1874,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); box-shadow: 0 0 
   .version-chip.has-new { font-size: 0; } .version-chip.has-new b { margin-left: 0; }  /* new options: only their count, the label has the version */
 }
 #news-title:focus { outline: none; }  /* focused on opening for screen readers; not a control */
-.field small.status-err { color: var(--err); }
+.field small.status-err { color: var(--err); } .field small.status-err:empty { display: none; }
 #bo-say { margin-bottom: 14px; }
 /* every choice the same height, its "default" tag inside it on one line */
 .ax-seg button { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding-block: 0; line-height: 1.2; }

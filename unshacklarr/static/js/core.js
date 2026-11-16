@@ -186,13 +186,13 @@ let current = null;
 async function responseError(response) {
   const detail = (await response.text()).trim();
   const reason = response.statusText ? `: ${response.statusText}` : "";
-  const context = tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`);
   const safeDetail = detail && !/^\s*</.test(detail) ? detail
     .replace(/\/\/[^:/@\s]*:[^/@\s]+@/g, "//***@")
     .replace(/([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret)=)[^&#\s]+/gi, "$1***")
     .replace(/\b(Authorization:\s*(?:Bearer|Basic)\s+|(?:X-Api-Key|X-Secret-Key|Api-Key):\s*)\S+|\b((?:Set-)?Cookie:)\s*[^\r\n]+/gi,
       (_, authorization, cookie) => `${(authorization || cookie).trimEnd()} ***`) : "";
-  const error = new Error(safeDetail ? `${context}\n${tr(safeDetail)}` : context);
+  // the cause alone when the server gives one: leading with "answered HTTP 403" pushes it out of a narrow field
+  const error = new Error(safeDetail ? tr(safeDetail) : tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`));
   error.detail = safeDetail;
   return error;
 }
@@ -769,6 +769,20 @@ function loading(text) {
 function failed(text, retry) {
   return el("div", { className: "failed", role: "alert" }, el("span", { textContent: text }),
     retry ? el("button", { className: "btn small", textContent: "Try again", onclick: retry }) : "");
+}
+/* A field's mistake: red, flagged to assistive technology, and tied to the message that says it. An id the field
+   already describes itself by (its help) stays. */
+let messageIds = 0;
+function describedBy(input, message, on) {
+  message.id ||= `message-${++messageIds}`;
+  const ids = (input.getAttribute("aria-describedby") || "").split(" ").filter((id) => id && id !== message.id);
+  if (on) ids.push(message.id);
+  if (ids.length) input.setAttribute("aria-describedby", ids.join(" ")); else input.removeAttribute("aria-describedby");
+}
+function markInvalid(input, message, on = true) {
+  input.classList.toggle("bad", on);
+  if (on) input.setAttribute("aria-invalid", "true"); else input.removeAttribute("aria-invalid");
+  if (message) describedBy(input, message, on);
 }
 
 /* The series' channel may have a catch-up service here, picked and looked up on by its name. */

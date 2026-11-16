@@ -1633,7 +1633,7 @@ def test_the_page_script_parses(tmp_path):
     assert check.returncode == 0, check.stderr
 
 
-def test_browser_response_errors_keep_context_and_use_translations():
+def test_browser_response_errors_lead_with_the_cause_and_use_translations():
     import shutil
     import subprocess
     from pathlib import Path
@@ -1658,11 +1658,11 @@ Promise.all([responseError(response("Wrong password: try again")), responseError
     assert run.returncode == 0, run.stderr
     result = json.loads(run.stdout)
     context = "Unshacklarr answered HTTP 503: Service Unavailable. Try again."
-    assert result["plain"] == {"message": f"translated: {context}\ntranslated: Wrong password: try again",
-                               "detail": "Wrong password: try again"}
+    # the server's own words alone: "answered HTTP 503" ahead of them pushes the cause out of a narrow field
+    assert result["plain"] == {"message": "translated: Wrong password: try again", "detail": "Wrong password: try again"}
     assert result["html"] == {"message": f"translated: {context}", "detail": ""}
     assert result["control"] == "Wrong password: try again"
-    assert result["translated"] == [context, "Wrong password: try again", context]
+    assert result["translated"] == ["Wrong password: try again", context]
 
 
 def test_browser_response_errors_redact_sensitive_detail():

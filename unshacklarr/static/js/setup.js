@@ -35,12 +35,15 @@ document.addEventListener("input", (e) => {
   }
 });
 
-/* A field: its name (a label: a click on it goes to the input), the input, and help that stays text to select. */
+/* A field: its name (a label: a click on it goes to the input), the input, and help that stays text to select
+   and is what the input is described by. */
 let fieldIds = 0;
+const optional = (label) => [label, " ", el("span", { className: "optional", textContent: "Optional" })];
 function field(label, input, help, ...more) {
   input.id ||= `field-${++fieldIds}`;
-  return el("div", { className: "field" }, el("label", { htmlFor: input.id, textContent: label }), input, ...more,
-    help ? lineBySentence(el("small", {}, ...[help].flat())) : "");
+  const note = help ? lineBySentence(el("small", {}, ...[help].flat())) : "";
+  if (note) { note.id = `${input.id}-help`; describedBy(input, note, true); }
+  return el("div", { className: "field" }, el("label", { htmlFor: input.id }, ...[label].flat()), input, ...more, note);
 }
 function showLogin() {
   if (!$("#gate").hidden) return;
@@ -99,7 +102,7 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
   };
   const pick = (c) => {
     real.value = c.code;
-    input.classList.remove("bad");
+    markInvalid(input, null, false);  // the box marked wrong is this one, not the hidden input the event comes from
     real.dispatchEvent(new Event("input", { bubbles: true }));
     sync();
     close();
@@ -138,16 +141,16 @@ function showSetup(found) {
   // An API key is no password: password managers (Bitwarden, Vaultwarden, 1Password, LastPass) leave it alone
   const apiKey = (props) => input({ type: "password", autocomplete: "off", spellcheck: false, dataset: { bwignore: "", "1pIgnore": "", lpignore: "true" }, ...props });
   const f = {
-    setup_code: input({ autocomplete: "off", spellcheck: false }),
-    password: input({ type: "password", autocomplete: "new-password", minLength: 8 }),
-    confirm: input({ type: "password", autocomplete: "new-password" }),
-    sonarr_url: input({ type: "url", value: found.sonarr_url, placeholder: "http://sonarr:8989" }),
+    setup_code: input({ autocomplete: "off", spellcheck: false, required: true }),
+    password: input({ type: "password", autocomplete: "new-password", minLength: 8, required: true }),
+    confirm: input({ type: "password", autocomplete: "new-password", required: true }),
+    sonarr_url: input({ type: "url", value: found.sonarr_url, placeholder: "http://sonarr:8989", required: true }),
     sonarr_api_key: apiKey({
       placeholder: found.sonarr_api_key_set ? "Found in the environment for the URL above. Leave empty to use it" : "" }),
-    sonarr_downloads: input({ value: found.sonarr_downloads, placeholder: "/downloads" }),
+    sonarr_downloads: input({ value: found.sonarr_downloads, placeholder: "/downloads", required: true }),
     unshackle_mode: el("select", {}, el("option", { value: "local", textContent: "Local" }), el("option", { value: "remote", textContent: "Remote" })),
     unshackle_command: input({ value: found.unshackle_command, placeholder: "unshackle", spellcheck: false }),
-    unshackle_url: input({ type: "url", value: found.unshackle_url, placeholder: "http://unshackle:8786" }),
+    unshackle_url: input({ type: "url", value: found.unshackle_url, placeholder: "http://unshackle:8786", required: true }),
     unshackle_api_key: apiKey({
       placeholder: found.unshackle_api_key_set ? "Found in the environment for the address above. Leave empty to use it" : "" }),
     downloads: input({ value: found.downloads, placeholder: "In Unshacklarr's settings folder", spellcheck: false }),
@@ -165,14 +168,16 @@ function showSetup(found) {
 
   // The password: its strength, and the second one the same
   const meter = el("div", { className: "pw-meter", dataset: { score: "0" } }, el("i"), el("i"), el("i"), el("i"), el("span"));
-  const match = el("small", { className: "pw-match" });
+  // a region exists before it is filled, or what it says is not read out (the meter itself is not displayed until a password is typed)
+  const strength = el("div", { role: "status" }, meter);
+  const match = el("small", { className: "pw-match", role: "status" });
   const pwLive = () => {
     const pw = f.password.value, again = f.confirm.value, score = pwStrength(pw);
     meter.dataset.score = score;
     meter.lastChild.textContent = ["", pw.length < 8 ? "Too short" : "Weak", "Fair", "Good", "Strong"][score];
     const same = again && again === pw, typing = again && !same && pw.startsWith(again);
     f.confirm.classList.toggle("good", !!same);
-    f.confirm.classList.toggle("bad", !!again && !same && !typing);
+    markInvalid(f.confirm, match, !!again && !same && !typing);
     match.className = `pw-match ${!again || typing ? "" : same ? "good" : "bad"}`;
     match.replaceChildren(...(!again || typing ? [] : same ? [icon("check", "inl"), "Passwords match"] : ["Passwords do not match"]));
   };
@@ -200,15 +205,16 @@ function showSetup(found) {
   const tiles = el("div", { className: "wz-tiles", role: "group", ariaLabel: "Unshackle runs" },
     tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "On another machine"));
   const country = countryPicker(f.country);
+  country.input.required = true;
   const unshackleParams = () => Object.fromEntries(["unshackle_mode", "unshackle_command", "unshackle_url", "unshackle_api_key"].map((k) => [k, f[k].value]));
   f.unshackle_mode.hidden = true;
   const uPanel = el("div", { className: "wiz-group" },
     el("div", { className: "field" }, el("label", { textContent: "Unshackle runs" }), tiles, f.unshackle_mode),
-    el("div", { className: "only-local" }, field("Unshackle command", f.unshackle_command, "Empty: unshackle from the PATH. Otherwise its full path, e.g. the .venv/bin/unshackle of a git clone.")),
+    el("div", { className: "only-local" }, field(optional("Unshackle command"), f.unshackle_command, "Empty: unshackle from the PATH. Otherwise its full path, e.g. the .venv/bin/unshackle of a git clone.")),
     el("div", { className: "only-remote" }, field("Unshackle address", f.unshackle_url),
       field("API key", f.unshackle_api_key, ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml."])),
-    field("Downloads folder", f.downloads, "Where episodes land before Sonarr imports them, as Unshacklarr sees it."),
-    el("div", { className: "only-remote" }, field("Downloads folder, as Unshackle sees it", f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
+    field(optional("Downloads folder"), f.downloads, "Where episodes land before Sonarr imports them, as Unshacklarr sees it."),
+    el("div", { className: "only-remote" }, field(optional("Downloads folder, as Unshackle sees it"), f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
   const showMode = () => {
     uPanel.dataset.mode = f.unshackle_mode.value;
     tiles.querySelectorAll(".wz-tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.value === f.unshackle_mode.value)));
@@ -283,7 +289,7 @@ function showSetup(found) {
   const steps = [
     { name: "Welcome", icon: "key", title: "Welcome to Unshacklarr", sub: "Setup code and password",
       body: [field("Setup code", f.setup_code, "Shown in Unshacklarr's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set."),
-        field("Password", f.password, "At least 8 characters.", meter), field("Confirm password", f.confirm, "", match), restoreBox],
+        field("Password", f.password, "At least 8 characters.", strength), field("Confirm password", f.confirm, "", match), restoreBox],
       check: async () => {
         if (!f.setup_code.value.trim()) return wrong("Enter the setup code", f.setup_code);
         if (!f.password.value && draft.step) return wrong("Type your password again: it is not kept when the page reloads", f.password);
@@ -314,7 +320,7 @@ function showSetup(found) {
       body: [field("Sonarr URL", f.sonarr_url),
         field("API key", f.sonarr_api_key, "In Sonarr: Settings, General."),
         field("Downloads folder, as Sonarr sees it", f.sonarr_downloads, "Its path on Sonarr's side, e.g. inside Sonarr's container."),
-        field("TMDB API key", f.tmdb_api_key, tmdbHint())],
+        field(optional("TMDB API key"), f.tmdb_api_key, tmdbHint())],
       fields: () => [f.sonarr_url, f.sonarr_api_key],
       check: async () => {
         if (!f.sonarr_url.value.trim()) return wrong("Enter Sonarr's URL", f.sonarr_url);
@@ -388,11 +394,12 @@ function showSetup(found) {
      (under it on a narrow screen); with no field to point at, under the step. */
   function showWrong({ error, fields }) {
     const [first] = fields;
-    fields.forEach((x) => x.classList.add("bad"));
+    fields.forEach((x) => markInvalid(x));
     if (!first) return note.replaceChildren(failed(error));
     note.replaceChildren();  // said in the bubble
-    panel.querySelector(".field-error")?.remove();
+    clearBubble();
     const bubble = el("div", { className: "field-error", role: "alert", textContent: error });
+    markInvalid(first, bubble);  // the field the message is about says it too, when it is focused
     first.after(bubble);
     bubble.style.setProperty("--at", `${first.offsetTop + first.offsetHeight / 2}px`);
     bubble.style.setProperty("--x", `${first.offsetLeft + first.offsetWidth + 14}px`);  // by the input's own right edge
@@ -401,10 +408,16 @@ function showSetup(found) {
     first.classList.add("shake");
     first.focus({ preventScroll: true });
   }
+  function clearBubble() {
+    const bubble = panel.querySelector(".field-error");
+    if (!bubble) return;
+    panel.querySelectorAll(`[aria-describedby~="${bubble.id}"]`).forEach((x) => describedBy(x, bubble, false));
+    bubble.remove();
+  }
   panel.addEventListener("input", keep);
   panel.addEventListener("input", (e) => {  // a mistake being fixed: its red goes, its bubble and the message
-    if (e.target !== f.confirm) e.target.classList.remove("bad");
-    panel.querySelector(".field-error")?.remove();
+    if (e.target !== f.confirm) markInvalid(e.target, null, false);  // the match of the two passwords says its own
+    clearBubble();
     if (note.textContent) note.replaceChildren();
   });
   const logo = $("#gate .logo").cloneNode(true);
