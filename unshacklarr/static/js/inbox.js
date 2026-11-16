@@ -48,11 +48,13 @@ function inboxRow(g, n) {
   mark.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${INBOX_ICONS[g.level] || INBOX_ICONS.info}</svg>`;
   const art = el("span", { className: "inbox-art" }, ...(g.series?.poster ? [el("img", { src: g.series.poster, alt: "", loading: "lazy", onerror: (e) => e.target.remove() })] : []), mark);
   const when = new Date(i.at);
-  const body = el("span", {},
-    ...(g.kind ? [el("span", { className: "inbox-kind", textContent: g.batch && g.items.length > 1 ? `${g.kind} · job` : g.kind })] : []),
-    el("b", { textContent: g.name }),
-    ...(g.eps.length ? [el("span", { className: "inbox-eps" }, ...g.eps.slice().sort().map((e) => el("span", { textContent: e })))] : []),
-    ...(i.message ? [el("p", {}, ...linkified(g.items.length > 1 ? i.message.replace(/^Aired \S+, /, "") : i.message))] : []));
+  // two lines: the series and its episodes; then what happened, in its colour, and the message
+  const kind = g.kind ? [el("span", { className: "inbox-kind", textContent: g.batch && g.items.length > 1 ? `${g.kind} · job` : g.kind })] : [];
+  const message = i.message ? linkified(g.items.length > 1 ? i.message.replace(/^Aired \S+, /, "") : i.message) : [];
+  const body = el("span", { className: "inbox-main" },
+    el("span", { className: "inbox-l1" }, el("b", { textContent: g.name }),
+      ...(g.eps.length ? [el("span", { className: "inbox-eps" }, ...g.eps.slice().sort().map((e) => el("span", { textContent: e })))] : [])),
+    ...(kind.length || message.length ? [el("p", {}, ...kind, ...(kind.length && message.length ? [" · "] : []), ...message)] : []));
   const time = el("time", { dateTime: i.at, title: when.toLocaleString(LOCALE, { dateStyle: "full", timeStyle: "short" }),
     textContent: Date.now() - when < 86400000 ? ago(i.at) : when.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) });
   const isNew = inboxSeenAt !== null && g.items.some((x) => x.at > inboxSeenAt);

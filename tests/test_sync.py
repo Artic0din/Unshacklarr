@@ -5310,7 +5310,10 @@ def test_an_attempt_that_got_through_keeps_nothing_unconfirmed(tmp_path, monkeyp
         def __init__(self, cancel_error): self.cancel_error = cancel_error
         def download(self, payload): return "j1"
         def job(self, job_id): raise UnshackleError("unshackle serve: Job not found")  # not transient: gives up at once
-        def cancel(self, job_id): raise UnshackleError(self.cancel_error)
+        def cancel(self, job_id):
+            error = UnshackleError(self.cancel_error)
+            error.status = 404 if "not found" in self.cancel_error else 0  # serve's own answer carries its status
+            raise error
 
     for cancel_error, marked in (("unshackle serve: Job not found", False),
                                  ("unshackle serve is unreachable at http://serve:8786: Read timed out", True)):
@@ -5323,6 +5326,51 @@ def test_an_attempt_that_got_through_keeps_nothing_unconfirmed(tmp_path, monkeyp
         assert ("unconfirmed_job" in run.card) is marked
         run.finish("downloaded")
         assert "unconfirmed_job" not in run.card  # got through after all: nothing left to ask about
+
+
+def serve_error(message, status=0, retry_after=0):
+    from unshacklarr.backend import UnshackleError
+    error = UnshackleError(message)
+    error.status, error.retry_after = status, retry_after
+    return error
+
+
+@pytest.mark.parametrize("refusal", [serve_error("Unshackle: HTTP 500: boom", 500), serve_error("Unshackle: HTTP 401: key", 401),
+                                     serve_error("busy", retry_after=1), serve_error("http://x redirects to http://y/", 0)])
+def test_a_serve_that_answers_without_naming_the_job_gone_keeps_it_unconfirmed(tmp_path, monkeypatch, refusal):
+    # #197: only serve saying "no such job" (404) frees the folder; a busy or failing one may still be writing to it
+    sync = load(tmp_path, monkeypatch)
+    run = type("Run", (), {"card": {"unconfirmed_job": {"backend": "", "job_id": "j1"}}})()
+    serve = type("Serve", (), {"job": lambda self, job_id: (_ for _ in ()).throw(refusal)})()
+    monkeypatch.setattr(sync, "backend_named", lambda name: serve)
+    with pytest.raises(sync.UnshackleError):
+        sync.unconfirmed_still_on(run)
+    assert run.card["unconfirmed_job"]["job_id"] == "j1"  # asked again by the next try, no second download started
+
+    gone = serve_error("Unshackle: HTTP 404: Job not found", 404)
+    serve = type("Serve", (), {"job": lambda self, job_id: (_ for _ in ()).throw(gone)})()
+    monkeypatch.setattr(sync, "backend_named", lambda name: serve)
+    assert sync.unconfirmed_still_on(run) is None and "unconfirmed_job" not in run.card
+
+
+@pytest.mark.parametrize("refused, marked", [(serve_error("Unshackle: HTTP 500: boom", 500), True),
+                                             (serve_error("Unshackle: HTTP 401: key", 401), True),
+                                             (serve_error("busy", retry_after=1), True),
+                                             (serve_error("Unshackle: HTTP 404: Job not found", 404), False)])
+def test_a_cancel_serve_did_not_accept_leaves_the_job_unconfirmed(tmp_path, monkeypatch, refused, marked):
+    sync = load(tmp_path, monkeypatch)
+
+    class Serve:
+        name = ""
+        def download(self, payload): return "j1"
+        def job(self, job_id): raise serve_error("Unshackle: HTTP 404: Job not found", 404)  # not transient: gives up at once
+        def cancel(self, job_id): raise refused
+
+    run = sync.EpisodeRun({"id": 5, "seriesId": 1, "series": {"title": "Show", "tvdbId": 111}, "seasonNumber": 1,
+                           "episodeNumber": 5}, {"service": "X"}, "manual")
+    with pytest.raises(sync.UnshackleError):
+        sync.follow_job(Serve(), {"service": "X"}, run, 0)
+    assert ("unconfirmed_job" in run.card) is marked
 
 
 def test_downloads_waiting_for_a_slot_go_in_the_order_they_came(tmp_path, monkeypatch):

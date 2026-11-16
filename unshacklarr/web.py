@@ -6498,18 +6498,14 @@ async def test_sonarr(request):
 
 def check_unshackle(settings: dict) -> int:
     """Reach Unshackle with these settings (starting a local serve if need be): its service
-    count, its EXAMPLE left out."""
+    count, its EXAMPLE left out. A connection of its own, so downloads and syncs on the saved one never meet the test."""
     from unshacklarr.backend import Unshackle
-    probe = UNSHACKLE if settings.get("unshackle_mode", "local") != "remote" else Unshackle(sonarr_sync.DATA)
-    if probe is UNSHACKLE and sonarr_sync.EpisodeRun.active and \
-            settings.get("unshackle_command", "") != str(sonarr_sync.SETTINGS.get("unshackle_command") or ""):
-        raise UnshackleError("Downloads are using the current command: test another one when they are done")
+    probe = Unshackle(sonarr_sync.DATA)
     probe.configure({**sonarr_sync.SETTINGS, **settings})
     try:
         return sum(s["tag"] != "EXAMPLE" for s in probe.services())
     finally:
-        if probe is UNSHACKLE:
-            UNSHACKLE.configure(sonarr_sync.SETTINGS)  # the saved settings again, until a save
+        probe.stop()  # a local serve started for the test only
 
 
 async def test_unshackle(request):

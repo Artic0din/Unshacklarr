@@ -77,6 +77,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Buttons, dropdowns, search boxes and filters share two heights everywhere (36px in toolbars and forms, 30px in rows and cards), dropdowns look the same in Safari, plain buttons have a visible edge, cards and rows that need attention are framed in their colour instead of a bar on the left, Settings uses the whole width, Interface and Region cards sit side by side with a Language dropdown, the Services table reads Service, Sign-in methods, Sign-in, Cookies, Used by, Actions with each cookie file on one line and Add only when there is none, notifications are two-line rows, and the job bar at the bottom of Activity is readable in the light look.
 - The page takes the Molt look: warm neutrals with one teal for the main action, shared shadows and spacing, one badge style whose colour says what it means, and a light theme; Settings › Interface › Appearance picks System, Light or Dark for this browser.
 - Services are named, not coded (RMC BFM Play, not RMCBFM), a series is "Downloading" or "Not downloading" everywhere, every sign-in says "Sign in", two-click confirmations name what they delete and stay until you leave the button, and counts such as "1 episode" and "2 episodes" are whole texts a translation can phrase its own way.
 - Press feedback on buttons, tabs and pills, hover colours only where a pointer can hover, a plain wizard (the normal Next button, a solid panel, no overshoot), tick, chevron and arrow icons drawn as icons instead of text glyphs, language names without flags, and reduced motion keeps short opacity cross-fades.
@@ -110,6 +111,12 @@ Every change worth knowing, newest first. The format follows
 
 - The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
 - The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
+- **Test Unshackle** with an edited local command no longer points the downloads and syncs running at the same moment at the test command, and no longer refuses to run while a download is going.
+- Restarting Unshackle from the page now makes Unshacklarr look again at where it keeps its cookies, devices and config, so a changed `directories:` no longer leaves sign-ins looking expired until Unshacklarr restarts.
+- A local Unshackle whose launcher starts with `#!/usr/bin/env python3` now starts, instead of failing with "illegal option".
+- A busy or failing Unshackle no longer lets a retry start a second download into the folder the first may still be writing: a job counts as gone only when Unshackle says there is no such job.
+- A busy Unshackle that answers "try again in 0 seconds" no longer makes Unshacklarr cancel the running download; it waits a second and asks again.
+- A local Unshackle that will not start is now said once for a minute, instead of every page load and sync waiting 90 seconds to start it again.
 - The example Docker Compose file now builds Unshackle from this repository's Dockerfile at the reviewed commit and pulls this repository's image, instead of upstream's, which ignored the commit pin; that commit now includes official Unshackle's latest development work.
 - The `--remote` servers' options now show in the first 10 minutes after the machine starts, instead of being missing until then.
 - Renaming or removing a Sonarr in Settings no longer makes every later Save fail with "no Sonarr named …": a rename keeps each series' own settings for it (such as switched off), and a removal drops them.
