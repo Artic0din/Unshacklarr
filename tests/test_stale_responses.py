@@ -96,3 +96,17 @@ vm.runInContext("let epSeq = 0;" + grab("loadEpisodes"), ctx);
 })();
 """, str(JS / "series.js"))
     assert shown == []
+
+
+@pytest.mark.parametrize("library", ["", "4K"])
+def test_downloading_marker_only_for_the_open_library(library):
+    shown = node(r"""
+const s = { tvdbId: 1, id: 10 }, library = process.argv[2];
+const card = (episodeId, instance) => ({ id: `r${episodeId}`, tvdbId: 1, episodeId, outcome: "running", instance });
+const ctx = { current: s, epSonarr: library, epBusy: new Map(), epBusyTimer: null, picked: new Set(), document: { hidden: false },
+  isLive: (c) => c.outcome === "running", api: async () => [card(1, ""), card(2, "4K")], loadEpisodes() {}, $: () => null, updateEpBar() {}, setTimeout: () => 0, clearTimeout() {} };
+vm.createContext(ctx);
+vm.runInContext(grab("refreshEpBusy"), ctx);
+ctx.refreshEpBusy(s).then(() => console.log(JSON.stringify([...ctx.epBusy.keys()])));
+""", str(JS / "series.js"), library)
+    assert shown == ([1] if library == "" else [2])

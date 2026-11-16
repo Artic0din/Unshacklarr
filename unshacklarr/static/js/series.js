@@ -370,7 +370,7 @@ async function refreshEpBusy(s) {
   if (current !== s) return;
   if (cards) {
     const was = epBusy;
-    epBusy = new Map(cards.filter((c) => isLive(c) && c.tvdbId === s.tvdbId).map((c) => [c.episodeId, c]));
+    epBusy = new Map(cards.filter((c) => isLive(c) && c.tvdbId === s.tvdbId && (c.instance || "") === epSonarr).map((c) => [c.episodeId, c]));
     epBusy.forEach((_, id) => picked.delete(id));
     if ([...was.keys()].some((id) => !epBusy.has(id))) loadEpisodes(s, true);  // one ended: on disk now, or not
     else if ($("#ep-list")) renderSeason();
