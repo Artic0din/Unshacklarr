@@ -588,16 +588,24 @@ def send_held(settings: dict) -> bool:
     """The quiet hours are over: what came meanwhile, in one message."""
     if in_quiet_hours(settings):
         return False
-    with sent_lock:
-        held = read_json(HELD_FILE, [])
-        if not held:
-            return False
-        HELD_FILE.unlink(missing_ok=True)
+    held = read_json(HELD_FILE, [])
+    if not held:
+        return False
     worst = "error" if any(h["level"] == "error" for h in held) else "warning" if any(h["level"] == "warning" for h in held) else "success"
     lines = [f"{'✓' if h['level'] == 'success' else '!' if h['level'] == 'warning' else '✗'} {h['title']}" for h in held[:30]]
     more = f"\n…and {len(held) - 30} more" if len(held) > 30 else ""
     title = f"During the quiet hours: {len(held)} message{'s' if len(held) > 1 else ''}"
-    return deliver(settings, worst, i18n.tr_lines(title, SETTINGS.get("language", "en")), "\n".join(lines) + more)
+    delivered = deliver(settings, worst, i18n.tr_lines(title, SETTINGS.get("language", "en")), "\n".join(lines) + more)
+    takes = any(worst in (ALL_LEVELS if t.get("levels") is None else t["levels"]) for t in notification_targets(settings))
+    if delivered or not takes:  # sent, or no address takes it: else kept, tried again next minute
+        with sent_lock:
+            current = read_json(HELD_FILE, [])
+            rest = current[len(held):] if current[:len(held)] == held else current  # what came while it was going out stays
+            if rest:
+                write_atomic(HELD_FILE, json.dumps(rest))
+            else:
+                HELD_FILE.unlink(missing_ok=True)
+    return delivered
 
 
 def missing_episodes(now: datetime | None = None) -> list[dict]:

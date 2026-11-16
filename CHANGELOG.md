@@ -232,6 +232,7 @@ Every change worth knowing, newest first. The format follows
 - Hiding an approval code no longer hides ordinary words with it: "enter your code ABCD-1234" hides only the code, not every "your" in the history and in error messages, so a download error such as "connection refused" still matches its retry rule.
 - A sign-in question in the bell is now crossed off when the service asks a new one ("wrong code, try again"), and when the download fails or is stopped while it was asking, instead of staying open.
 - Quiet hours typed by hand without quotes (`from: 23:00`, which the settings file reads as a number) no longer break every notification and the check that sends the held summary; a time that cannot be read now means no quiet hours.
+- The summary of messages held during the quiet hours is no longer lost when every address fails as they end: it is kept and tried again the next minute, and messages that arrived while it was going out are kept too.
 
 ### Removed
 

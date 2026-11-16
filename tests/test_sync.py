@@ -3340,6 +3340,34 @@ def test_each_address_gets_its_levels_and_quiet_hours_hold_messages_for_one_summ
     assert sync.send_held(settings) is False
 
 
+def test_a_held_summary_is_kept_until_it_is_delivered_and_keeps_what_came_meanwhile(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    up = [False]
+    got = []
+
+    def send_to(url, level, title, message, details=None):
+        got.append(message)
+        if not up[0]:
+            return "503 Service Unavailable"
+        sync.write_atomic(sync.HELD_FILE, json.dumps([*sync.read_json(sync.HELD_FILE, []), {"level": "success", "title": "Came during"}]))
+        return None
+    monkeypatch.setattr(sync, "send_to", send_to)
+    settings = {"targets": [{"url": "ntfy://ok", "levels": ["success", "warning", "error"]}]}
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    assert sync.send_held(settings) is False  # every address failed: the night's summary waits for the next try
+    assert [h["title"] for h in sync.read_json(sync.HELD_FILE, [])] == ["Failed: Show S01E04"]
+    up[0] = True
+    assert sync.send_held(settings) is True  # delivered: gone, but not the message that came while it went
+    assert [h["title"] for h in sync.read_json(sync.HELD_FILE, [])] == ["Came during"]
+    assert "Failed: Show S01E04" in got[-1]
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "x"}]))
+    assert sync.send_held({}) is False and not sync.HELD_FILE.exists()  # no address to send to: nothing to wait for
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "success", "title": "Downloaded: Show"}]))
+    assert sync.send_held({"targets": [{"url": "ntfy://errors", "levels": ["error"]}]}) is False
+    assert not sync.HELD_FILE.exists()  # the one address takes failures only: this summary has nowhere to go
+
+
 def test_an_address_with_no_level_ticked_gets_nothing_and_one_without_a_levels_key_gets_all(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
