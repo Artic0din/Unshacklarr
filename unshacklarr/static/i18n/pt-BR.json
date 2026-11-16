@@ -978,7 +978,10 @@
  "{0} deleted": "{0} excluído",
  "{0} done": "{0} concluídos",
  "{0} downloading": "{0} baixando",
- "{0} episodes": "{0} episódios",
+ "{0} episodes": {
+  "one": "{0} episódio",
+  "other": "{0} episódios"
+ },
  "{0} failed": "{0} com falha",
  "{0} finishing": "{0} finalizando",
  "{0} h ago": "há {0} h",
@@ -987,7 +990,10 @@
  "{0} has this episode. Downloaded again, it replaces the file only if it ranks higher in Sonarr.": "O {0} tem este episódio. Baixado de novo, ele só substitui o arquivo se ficar mais bem classificado no Sonarr.",
  "{0} has {1} of this series' episodes": "O {0} tem {1} dos episódios desta série",
  "{0} hidden from the schedule": "{0} oculta da agenda",
- "{0} hours": "{0} horas",
+ "{0} hours": {
+  "one": "{0} hora",
+  "other": "{0} horas"
+ },
  "{0} in all": "{0} no total",
  "{0} in {1}": "{0} ({1})",
  "{0} is a {1} remote CDM: change it in unshackle.yaml": "{0} é um CDM remoto {1}: altere-o no unshackle.yaml",
@@ -1307,7 +1313,10 @@
  "{0} is out": "{0} disponível",
  "{0} not out yet": "{0} ainda não disponível",
  "{0} remote": "{0} remoto(s)",
- "{0} services": "{0} serviços",
+ "{0} services": {
+  "one": "{0} serviço",
+  "other": "{0} serviços"
+ },
  "{0} syncs a day": "{0} sincronizações por dia",
  "{0} tries in {1} min": "{0} tentativas em {1} min",
  "{0}. Used by {1}: see Settings, CDM.": "{0}. Usado por {1}: veja Configurações, CDM.",
@@ -2098,7 +2107,10 @@
  "Used by": "Usado por",
  "updated {0}": "atualizado {0}",
  "{0} cookies": "{0} cookies",
- "{0} days": "{0} dias",
+ "{0} days": {
+  "one": "{0} dia",
+  "other": "{0} dias"
+ },
  "{0} need sign-in": "{0} precisam de login",
  "{0} not checked yet": "{0} ainda não verificados",
  "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services.": "{0} recusou o Unshackle: os cookies dele podem ter expirado. Atualize-os em Configurações › Serviços.",
@@ -2149,27 +2161,57 @@
  "Its path on the machine where Unshackle runs. Empty: the same path as above.": "O caminho na máquina onde o Unshackle roda. Vazio: o mesmo caminho acima.",
  "Managed where Unshackle runs": "Gerenciado onde o Unshackle roda",
  "1 device": "1 dispositivo",
- "{0} devices": "{0} dispositivos",
+ "{0} devices": {
+  "one": "{0} dispositivo",
+  "other": "{0} dispositivos"
+ },
  "1 download": "1 download",
- "{0} downloads": "{0} downloads",
+ "{0} downloads": {
+  "one": "{0} download",
+  "other": "{0} downloads"
+ },
  "1 earlier check": "1 verificação anterior",
- "{0} earlier checks": "{0} verificações anteriores",
+ "{0} earlier checks": {
+  "one": "{0} verificação anterior",
+  "other": "{0} verificações anteriores"
+ },
  "1 hour": "1 hora",
  "1 key": "1 chave",
- "{0} keys": "{0} chaves",
+ "{0} keys": {
+  "one": "{0} chave",
+  "other": "{0} chaves"
+ },
  "1 message": "1 mensagem",
- "{0} messages": "{0} mensagens",
+ "{0} messages": {
+  "one": "{0} mensagem",
+  "other": "{0} mensagens"
+ },
  "1 missing episode": "1 episódio faltante",
- "{0} missing episodes": "{0} episódios faltantes",
+ "{0} missing episodes": {
+  "one": "{0} episódio faltante",
+  "other": "{0} episódios faltantes"
+ },
  "1 more device": "1 dispositivo a mais",
- "{0} more devices": "{0} dispositivos a mais",
+ "{0} more devices": {
+  "one": "{0} dispositivo a mais",
+  "other": "{0} dispositivos a mais"
+ },
  "1 option": "1 opção",
- "{0} options": "{0} opções",
+ "{0} options": {
+  "one": "{0} opção",
+  "other": "{0} opções"
+ },
  "1 problem": "1 problema",
- "{0} problems": "{0} problemas",
+ "{0} problems": {
+  "one": "{0} problema",
+  "other": "{0} problemas"
+ },
  "1 service": "1 serviço",
  "1 upgrade": "1 melhoria",
- "{0} upgrades": "{0} melhorias",
+ "{0} upgrades": {
+  "one": "{0} melhoria",
+  "other": "{0} melhorias"
+ },
  "Connected to Unshackle ({0})": "Conectado ao Unshackle ({0})",
  "Reached: {0}": "Alcançado: {0}",
  "Delete the key? Programs using it will stop working": "Excluir a chave? Os programas que a usam deixarão de funcionar",

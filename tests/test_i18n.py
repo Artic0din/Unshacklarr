@@ -1,9 +1,16 @@
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 I18N = Path(__file__).resolve().parents[1] / "unshacklarr" / "static" / "i18n"
 HOLE = re.compile(r"\{\d+\}")
+CORE = Path(__file__).resolve().parents[1] / "unshacklarr" / "static" / "js" / "core.js"
+NEEDED_CATEGORIES = {"ru": {"one", "few", "many", "other"}, "fr": {"one", "other"}, "pt-BR": {"one", "other"}}  # beyond "1 x" and "{0} xs"
+ABBREVIATED = {"ru": {"{0} days", "{0} hours"}}  # "{0} дн.", "{0} ч": right for every number, whatever the sentence
 CHANGED_ERROR_TEXTS = {
     "Add cookies for {0}",
     "Replace {0}",
@@ -183,10 +190,11 @@ def test_translations_fit_the_page():
         if path.name == "en.json":
             continue
         translated = json.loads(path.read_text())
-        for key, text in translated.items():
+        for key, value in translated.items():
             assert key in english, f"{path.name}: {key!r} is not on the page (run tools/i18n/extract.py?)"
-            assert isinstance(text, str) and text.strip(), f"{path.name}: {key!r} is empty"
-            assert set(HOLE.findall(text)) <= set(HOLE.findall(key)), f"{path.name}: {key!r} has a {{n}} of its own"
+            for text in value.values() if isinstance(value, dict) else [value]:
+                assert isinstance(text, str) and text.strip(), f"{path.name}: {key!r} is empty"
+                assert set(HOLE.findall(text)) <= set(HOLE.findall(key)), f"{path.name}: {key!r} has a {{n}} of its own"
         assert CHANGED_ERROR_TEXTS <= translated.keys(), f"{path.name}: changed error text is untranslated"
 
 
@@ -244,3 +252,58 @@ def test_the_extractor_does_not_backtrack_on_a_long_code_literal():
     start = time.monotonic()
     assert wanted(line)
     assert time.monotonic() - start < 1
+
+
+def counted_nouns() -> list[str]:
+    """The many-form text of each counted noun of the page (COUNT in core.js): "{0} devices"."""
+    block = re.search(r"const COUNT = \{(.*?)\n\};", CORE.read_text(), re.S).group(1)
+    return ["{0} " + noun for noun in re.findall(r"`\$\{n\} ([^`]+)`", block)]
+
+
+def test_a_language_with_more_plural_forms_has_a_text_for_each_of_them():
+    nouns = counted_nouns()
+    assert len(nouns) == 14
+    for lang, needed in NEEDED_CATEGORIES.items():
+        translated = json.loads((I18N / f"{lang}.json").read_text())
+        for noun in set(nouns) - ABBREVIATED.get(lang, set()):
+            forms = translated.get(noun)
+            assert isinstance(forms, dict), f"{lang}: {noun!r} has no text per plural category"
+            assert needed <= forms.keys(), f"{lang}: {noun!r} lacks {sorted(needed - forms.keys())}"
+
+
+@pytest.mark.parametrize("lang, expected", [
+    ("ru", {1: "1 устройство", 2: "2 устройства", 5: "5 устройств", 21: "21 устройство", 11: "11 устройств", 112: "112 устройств"}),
+    ("fr", {0: "0 appareil", 1: "1 appareil", 2: "2 appareils"}),
+    ("pt-BR", {0: "0 dispositivo", 1: "1 dispositivo", 2: "2 dispositivos"}),
+    ("de", {1: "1 Gerät", 2: "2 Geräte"}),
+])
+def test_the_server_picks_the_plural_form_of_the_language(lang, expected):
+    from unshacklarr import i18n
+    english = lambda n: "1 device" if n == 1 else f"{n} devices"
+    assert {n: i18n.tr(english(n), lang) for n in expected} == expected
+
+
+@pytest.mark.parametrize("lang, expected", [
+    ("ru", {1: "1 устройство", 2: "2 устройства", 5: "5 устройств", 21: "21 устройство"}),
+    ("en", {1: "1 device", 2: "2 devices", 5: "5 devices", 21: "21 devices"}),
+])
+def test_the_page_picks_the_plural_form_of_the_language(lang, expected):
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    source = CORE.read_text()
+    code = "\n".join(re.search(pattern, source, re.M | re.S).group() for pattern in (
+        r"^let T = null, TP = \[\];", r"^const PLURALS = .*?;$", r"^function plural\([^\n]*\}$", r"^function templates\(.*?^\}",
+        r"^const translated = .*?;", r"^const trSeen = .*?;", r"^function tr\(.*?^\}", r"^function trFind\(.*?^\}",
+        r"^const COUNT = \{.*?^\};"))
+    harness = f"""
+const vm = require("vm"), fs = require("fs");
+const box = {{ LANG: {json.dumps(lang)}, Intl }};
+vm.createContext(box);
+vm.runInContext({json.dumps(code)} + `
+if (LANG !== "en") {{ T = JSON.parse(fs.readFileSync(path, "utf8")); TP = templates(T); }}
+out = [1, 2, 5, 21].map((n) => tr(COUNT.device(n)));`, Object.assign(box, {{ fs, path: {json.dumps(str(I18N / f"{lang}.json"))} }}));
+console.log(JSON.stringify(box.out));
+"""
+    done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == list(expected.values())

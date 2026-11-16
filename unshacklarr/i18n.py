@@ -13,6 +13,30 @@ FOLDER = Path(__file__).parent / "static" / "i18n"
 HOLE = re.compile(r"\{(\d+)\}")
 
 
+def plural_category(lang: str, n: int | None) -> str:
+    """The CLDR plural category of a whole number, for the languages the page has (what Intl.PluralRules gives it);
+    a text with no number is "other"."""
+    if n is None:
+        return "other"
+    if lang == "ru":
+        if n % 10 == 1 and n % 100 != 11:
+            return "one"
+        return "few" if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else "many"
+    if lang in ("fr", "pt-BR"):
+        return "one" if n in (0, 1) else "other"
+    if lang in ("de", "en", "es", "it"):
+        return "one" if n == 1 else "other"
+    return "other"
+
+
+def pick(to: str | dict[str, str], lang: str, found: list[str] | None) -> str:
+    """A text is one string, or one string per plural category: the first number it is filled with picks it."""
+    if isinstance(to, str):
+        return to
+    first = found[0].strip() if found else ""
+    return to.get(plural_category(lang, int(first) if first.isdigit() else None)) or to["other"]
+
+
 def languages() -> list[str]:
     return sorted(p.stem for p in FOLDER.glob("*.json"))
 
@@ -58,13 +82,13 @@ def tr(text: str, lang: str, depth: int = 0) -> str:
     if not exact or not key:
         return text
     if key in exact:
-        return exact[key]
+        return pick(exact[key], lang, None)
     if " · " in key:  # pieces joined by " · ": each its own text
         return " · ".join(tr(part, lang, depth + 1) for part in key.split(" · "))
     for _, anchor, parts, to, weak in patterns if depth < 3 else []:
         if anchor in key and (found := holes(parts, key)) is not None and not (weak and any(
                 len(g) > 24 or not (re.search(r"\d", g) or g.strip() in exact or not g.strip()) for g in found)):
-            return HOLE.sub(lambda h: tr(found[int(h[1])], lang, depth + 1) if int(h[1]) < len(found) else "", to)
+            return HOLE.sub(lambda h: tr(found[int(h[1])], lang, depth + 1) if int(h[1]) < len(found) else "", pick(to, lang, found))
     return text
 
 
