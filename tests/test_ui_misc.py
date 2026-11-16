@@ -289,7 +289,8 @@ let drawn = [];
 const stub = (value = "") => ({ value, checked: false, textContent: "", removeAttribute() {}, replaceChildren: (...kids) => { drawn = kids; } });
 const fields = { "#f-sort": stub("title") };
 const withAppend = (tag, props = {}, ...kids) => ({ tag, dataset: {}, ...props, kids, append(...more) { this.kids.push(...more); } });
-const ctx = sandbox({ el: withAppend, $: (sel) => fields[sel] ?? stub(), S: { series: [{ tvdbId: 1, title: "Dark Matter", poster }], config: { series: {}, hidden_series: [] }, health: {} }, SEL: { on: false, ids: new Set() } });
+const ctx = sandbox({ el: withAppend, $: (sel) => fields[sel] ?? stub(), S: { series: [{ tvdbId: 1, title: "Dark Matter", poster }], config: { series: {}, hidden_series: [] }, health: {} }, SEL: { on: false, ids: new Set() },
+  keepFocus: (box, draw) => draw() });
 vm.runInContext(grab(src, /function initialsOf[\s\S]*?\nconst posterFail[^\n]*\n/), ctx);
 vm.runInContext(grab(src, /function renderWall\(\) \{[\s\S]*?\n\}\n/), ctx);
 ctx.renderWall();
