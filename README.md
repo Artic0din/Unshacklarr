@@ -281,8 +281,14 @@ Behind a reverse proxy:
 - **Publish the port to the proxy only**: `127.0.0.1:8788:8788` in `docker-compose.yml` when the
   proxy runs on the same host, or no `ports:` at all when it shares a Docker network with Unshacklarr.
 - **Pass on the client's address and the scheme**: `X-Real-IP`, as the login limit counts tries per
-  address (and trusts that header from a private address only), and `X-Forwarded-Proto`, so that
-  the session cookie is marked `Secure` over HTTPS. Nginx Proxy Manager sends both.
+  address, and `X-Forwarded-Proto`, so that the session cookie is marked `Secure` over HTTPS.
+  Nginx Proxy Manager sends both.
+- **List the proxy's addresses**: Settings, Account, *Sign in through a reverse proxy*,
+  *The proxy's addresses* (as Unshacklarr sees the proxy: `172.18.0.0/16` for its container's
+  network), even when you do not sign in through it. `X-Real-IP` is believed from those addresses
+  only, so that no one else can claim another address to get more tries. Until they are listed,
+  every client behind the proxy shares one limit, the proxy's: five wrong passwords from anyone
+  there make everyone there wait 5 minutes.
 - **Let WebSockets and streams through**: Activity's output is a WebSocket and its live view a
   stream (in Nginx Proxy Manager, turn on *Websockets Support*).
 - **Pass on the original Host**: Activity's live output is refused ("Cross-origin terminal refused")
@@ -290,9 +296,9 @@ Behind a reverse proxy:
   Traefik keep it; plain Nginx needs `proxy_set_header Host $http_host;` (`$host` drops a port such
   as `:8443`).
 - **Sign in once, at the proxy** (optional): when Authelia or Authentik already asks who you are,
-  Settings, Account, *Sign in through a reverse proxy* takes the header that names you (`Remote-User`)
-  and the proxy's addresses. The header is believed from those addresses only; the password is still
-  asked again before the most sensitive changes.
+  Settings, Account, *Sign in through a reverse proxy* takes the header that names you (`Remote-User`),
+  believed from the proxy's addresses only; the password is still asked again before the most
+  sensitive changes.
 
 <a name="configuration"></a>
 

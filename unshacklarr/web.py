@@ -1644,12 +1644,12 @@ def check_prefer(value, where: str) -> str:
 
 
 def check_proxy_auth(header, sources) -> tuple[str, str]:
-    """A reverse proxy's login: the header that names the user, and the addresses the proxy connects from.
-    Both or neither: a header believed from anywhere would let anyone in."""
+    """A reverse proxy's addresses, whose X-Real-IP is believed, and the header that names the user, for signing in
+    through it. The addresses alone are fine; a header needs them: believed from anywhere, it would let anyone in."""
     header, sources = str(header or "").strip(), str(sources or "").strip()
     if not header and not sources:
         return "", ""
-    if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", header):
+    if header and not re.fullmatch(r"[A-Za-z0-9-]{1,64}", header):
         raise web.HTTPBadRequest(text="The reverse proxy's header is a name like Remote-User")
     networks = []
     for source in [s for s in re.split(r"[,\s]+", sources) if s]:
@@ -6051,20 +6051,22 @@ def read_session(value: str) -> tuple[int, str, str] | None:
     return int(expires), signed, signature
 
 
-def proxy_user(request) -> str:
-    """The user a reverse proxy vouches for: its header, only on a connection that comes from the proxy's own
-    address (the peer itself, never X-Real-IP or X-Forwarded-For: anyone writes those). Empty otherwise."""
-    header, sources = sonarr_sync.SETTINGS.get("proxy_auth_header"), sonarr_sync.SETTINGS.get("proxy_auth_from")
-    if not header or not sources:
-        return ""
+def from_proxy(request) -> bool:
+    """Whether the connection comes from one of the reverse proxy's addresses: the peer itself, never X-Real-IP or
+    X-Forwarded-For, which anyone writes."""
     try:
         peer = ipaddress.ip_address(request.remote or "")
-        networks = [ipaddress.ip_network(s.strip(), strict=False) for s in str(sources).split(",") if s.strip()]
+        networks = [ipaddress.ip_network(s.strip(), strict=False)
+                    for s in str(sonarr_sync.SETTINGS.get("proxy_auth_from") or "").split(",") if s.strip()]
     except ValueError:
-        return ""
-    if not any(peer in n for n in networks if n.version == peer.version):
-        return ""
-    return request.headers.get(header, "").strip()[:200]
+        return False
+    return any(peer in n for n in networks if n.version == peer.version)
+
+
+def proxy_user(request) -> str:
+    """The user a reverse proxy vouches for: its header, only on a connection from the proxy. Empty otherwise."""
+    header = sonarr_sync.SETTINGS.get("proxy_auth_header")
+    return request.headers.get(header, "").strip()[:200] if header and from_proxy(request) else ""
 
 
 def logged_in(request, auth: dict) -> bool:
@@ -6104,15 +6106,15 @@ def with_session(request, response, auth: dict):
 
 
 LOGIN_TRIES = 5  # per address, in 5 minutes
-LOGIN_TRIES_ALL = 30  # every address together: rotating X-Real-IP from the LAN gains nothing past it
 
 
 def recent_failures(ip: str, now: float) -> list[float]:
-    """This address's wrong passwords of the last 5 minutes, or a 429 when there were too many, from it or from all."""
+    """This address's wrong passwords of the last 5 minutes, or a 429 when there were too many. Per address only:
+    a cap on all addresses together would let anyone lock the owner out."""
     for key in [k for k, times in failed_logins.items() if not any(now - t < 300 for t in times)]:
         failed_logins.pop(key, None)  # forgotten after 5 minutes: the table never grows
     recent = [t for t in failed_logins.get(ip, []) if now - t < 300]
-    if len(recent) >= LOGIN_TRIES or sum(now - t < 300 for v in failed_logins.values() for t in v) >= LOGIN_TRIES_ALL:
+    if len(recent) >= LOGIN_TRIES:
         raise web.HTTPTooManyRequests(text="Too many wrong passwords: wait 5 minutes")
     return recent
 
@@ -6135,15 +6137,10 @@ async def password_try(request, password: str) -> bool:
 
 
 def client_ip(request) -> str:
-    """Who is trying to log in. X-Real-IP is believed only from a private address, i.e. the
-    reverse proxy, which sets it itself; X-Forwarded-For never: its first entry is the client's
-    to write, which would let anyone dodge the attempt limit."""
+    """Who is trying to log in. X-Real-IP is believed only from the proxy's listed addresses, as the proxy sets it
+    itself; X-Forwarded-For never: its first entry is the client's to write, which would let anyone dodge the limit."""
     remote = request.remote or "?"
-    try:
-        behind_proxy = ipaddress.ip_address(remote).is_private
-    except ValueError:
-        behind_proxy = False
-    return (request.headers.get("X-Real-IP") if behind_proxy else None) or remote
+    return (request.headers.get("X-Real-IP", "").strip() if from_proxy(request) else "") or remote
 
 
 # ---- The API for other programs: /api/v1, with an API key; its answers keep their shape (docs/API.md) ----
