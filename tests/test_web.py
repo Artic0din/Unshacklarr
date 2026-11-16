@@ -3249,6 +3249,28 @@ def test_every_answer_refuses_frames_and_the_api_replaces_only_when_asked(tmp_pa
     assert too_many == 400
 
 
+def test_a_save_refuses_a_start_date_that_is_not_a_date(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "known_services", lambda: None)
+    show = {"service": "iV", "title": "https://example.com/show"}
+
+    def save(since):
+        async def body():
+            return {"series": {"7": {**show, "since": since}}}
+        asyncio.run(web.save_config(SimpleNamespace(json=body)))
+    with pytest.raises(web.web.HTTPBadRequest) as refused:
+        save("soon")
+    assert "start date of 7" in refused.value.text
+    save("2026-10-01T00:00:00+00:00")
+    assert web.read_config()["series"][7]["since"] == "2026-10-01T00:00:00+00:00"
+
+
 def test_a_save_keeps_what_the_server_changed_since_the_page_loaded(tmp_path, monkeypatch):
     # a password changed during the wait on Unshackle, and a release time learnt after the page loaded (#29)
     import asyncio

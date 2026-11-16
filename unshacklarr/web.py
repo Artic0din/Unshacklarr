@@ -1179,7 +1179,12 @@ async def save_config(request):
             given = str(show.get("sonarr_order") or "")
             series[int(key)]["sonarr_order"] = given if re.fullmatch(r"[a-z]{1,24}", given) else known_order(int(key))
         # The automatic sync only takes episodes aired from here on: see sonarr_sync.wanted_automatically.
-        series[int(key)]["since"] = str(show.get("since") or datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        since = str(show.get("since") or datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        try:
+            sonarr_sync.parse_time(since)
+        except ValueError:
+            raise web.HTTPBadRequest(text=f"The start date of {key} must be a date, like 2026-10-01") from None
+        series[int(key)]["since"] = since
         try:  # the day the service publishes, from the day it airs: 1 after, -N days before (up to two weeks)
             day = int(show.get("release_day") or 0)
         except (TypeError, ValueError):

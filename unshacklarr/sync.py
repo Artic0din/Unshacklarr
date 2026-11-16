@@ -2699,7 +2699,11 @@ def wanted_automatically(show: dict, ep: dict, now: datetime) -> bool:
     aired = parse_time(aired)
     if not slot and aired > now:  # not aired yet, and no release before: Sonarr's wanted list alone kept these out
         return False
-    return aired >= parse_time(str(since)) and now - aired <= timedelta(days=AUTO_DAYS)
+    try:
+        started = parse_time(str(since))
+    except ValueError:  # a start date nobody can read: as none, so one series never stops the others
+        return False
+    return aired >= started and now - aired <= timedelta(days=AUTO_DAYS)
 
 
 BROADCAST_DAYS_MAX = 3 * 366  # how far a series' own schedule is followed: its episodes then go undated

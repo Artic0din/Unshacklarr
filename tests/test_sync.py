@@ -5554,6 +5554,15 @@ def test_the_year_of_a_new_years_airing_is_the_local_one(tmp_path, monkeypatch):
         sync.programme_for(show, {**ep, "id": 3, "airDate": "2025-12-31"}, {}, True)  # a real year apart is still refused
 
 
+def test_a_series_with_an_unreadable_start_date_takes_nothing_and_stops_no_other(tmp_path, monkeypatch):
+    # since: soon (a hand edit or an API client) read as no start date, as when none is set
+    sync = load(tmp_path, monkeypatch)
+    now = datetime(2026, 10, 1, 12, tzinfo=timezone.utc)
+    ep = {"airDateUtc": "2026-09-30T18:00:00Z"}
+    assert sync.wanted_automatically({"since": "2026-09-01T00:00:00Z"}, ep, now)
+    assert not sync.wanted_automatically({"since": "soon"}, ep, now)
+
+
 def test_a_job_paused_while_waiting_for_a_slot_blocks_no_one(tmp_path, monkeypatch):
     # A job paused while it waits loses its number (release_job): the next one asking still gets in line and in
     sync = load(tmp_path, monkeypatch)
