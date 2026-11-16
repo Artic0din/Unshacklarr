@@ -162,8 +162,8 @@ Unshackle you already have.
 
    ```bash
    mkdir unshacklarr && cd unshacklarr
-   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/OwnzZzZ/Unshacklarr/main/docker-compose.example.yml
-   curl -fsSLo .env https://raw.githubusercontent.com/OwnzZzZ/Unshacklarr/main/.env.example
+   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/Artic0din/Unshacklarr/main/docker-compose.example.yml
+   curl -fsSLo .env https://raw.githubusercontent.com/Artic0din/Unshacklarr/main/.env.example
    ```
 
 2. **Fill in `.env`:**
@@ -197,7 +197,7 @@ Unshackle you already have.
 4. **Create the folders it mounts**, so that Docker does not create them owned by root:
 
    ```bash
-   mkdir -p data unshackle-data "$(grep ^DOWNLOADS_DIR= .env | cut -d= -f2)"
+   mkdir -p data unshackle-data/temp "$(grep ^DOWNLOADS_DIR= .env | cut -d= -f2)"
    ```
 
 5. **Reach Sonarr**: if it runs in another compose project, uncomment the `networks:` lines of
@@ -246,8 +246,8 @@ keeps the disks from being saturated.
 ### 🖥️ On the computer where Unshackle runs
 
 ```bash
-uv tool install git+https://github.com/OwnzZzZ/Unshacklarr.git
-# or: pipx install git+https://github.com/OwnzZzZ/Unshacklarr.git
+uv tool install git+https://github.com/Artic0din/Unshacklarr.git
+# or: pipx install git+https://github.com/Artic0din/Unshacklarr.git
 unshacklarr
 ```
 
