@@ -3781,7 +3781,9 @@ def apply_ladder(
         trace(f"quality ladder {ladder['name']}: step {number} ({step_label(ladder['steps'][number - 1])}), {track_label(track)}")
     # its language order picks among the episode's tracks, unless the series or its service ask for languages themselves
     for key, kind, asked in (("a_lang", "audio", ("lang", "a_lang", "require_audio")), ("s_lang", "subtitles", ("s_lang", "require_subs"))):
-        if ladder.get(kind) and not any(request.get(k) for k in asked) and (lang := first_language(ladder[kind], episodes[0].get(kind) or [])):
+        # one every part has: a language one part lacks would stop the download of that part
+        common = next((w for w in ladder.get(kind) or [] if all(first_language([w], ep.get(kind) or []) for ep in episodes)), None)
+        if ladder.get(kind) and not any(request.get(k) for k in asked) and common and (lang := first_language([common], episodes[0].get(kind) or [])):
             request[key] = [lang]
             trace(f"quality ladder {ladder['name']}: {kind} in {lang}")
     # subtitles asked for (s_lang, e.g. from unshackle.yaml's dl:) the episode lacks: Unshackle would stop the download;
@@ -4493,6 +4495,11 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 continue
             # its numbering may now name other episodes: held unless picked by hand (a release burst is automatic)
             if (not manual or kind == "burst") and (why := order_changed(show, ep["series"])):
+                if kind == "burst":
+                    now_s = time.time()
+                    for stale in [k for k, at in held_bursts.items() if now_s - at > 86400]:  # a day on: long over
+                        del held_bursts[stale]
+                    held_bursts[((instance() or {}).get("name", ""), ep["id"])] = now_s
                 if first_warning(f"order:{ep['series']['tvdbId']}:{ep['series'].get('seasonType')}"):
                     notify_series(show, settings, "warning", f"Episode order changed: {ep['series']['title']}",
                                   f"{why}. New episodes of this series are not downloaded until you check its numbering in Unshacklarr.")
@@ -4809,6 +4816,9 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
 
 imported_at: dict[tuple, float] = {}  # (Sonarr's name, episode id) -> when this process had Sonarr import it
 warned_lock = threading.Lock()
+
+
+held_bursts: dict[tuple[str, int], float] = {}  # (Sonarr, episode) -> when a release burst was held for its order
 
 
 def order_changed(show: dict, serie: dict) -> str:
