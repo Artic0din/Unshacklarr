@@ -10,7 +10,9 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
     const open = wins.find((w) => new URL(w.url).origin === self.location.origin);
-    return open ? open.focus().then((w) => w.navigate(event.notification.data.url)) : self.clients.openWindow(event.notification.data.url);
+    const url = event.notification.data.url;
+    // navigate() rejects for a window this worker does not control: open the page in a new one then
+    return open ? open.focus().then((w) => w.navigate(url)).catch(() => self.clients.openWindow(url)) : self.clients.openWindow(url);
   }));
 });
 self.addEventListener("install", () => self.skipWaiting());

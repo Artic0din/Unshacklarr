@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends mkvtoolnix tzda
     && rm -rf /var/lib/apt/lists/*
 
 # uv installs exactly what uv.lock says, the versions the tests ran with, into the image's Python
-COPY --from=ghcr.io/astral-sh/uv:0.12.22 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /usr/local/bin/uv
 ENV UV_PROJECT_ENVIRONMENT=/usr/local UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_NO_CACHE=1
 
 WORKDIR /app

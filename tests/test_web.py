@@ -97,6 +97,34 @@ def test_the_unshackle_test_needs_the_setup_code_before_the_setup(tmp_path, monk
     assert len(started) == 1  # nothing ran for the request without the code
 
 
+def test_testing_a_local_unshackle_command_leaves_the_shared_connection_alone(tmp_path, monkeypatch):
+    # #211: the test used to configure the global UNSHACKLE with the edited command, for anything else using it to read
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.backend as backend
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    saved = {"unshackle_mode": "local", "unshackle_command": "/saved/unshackle"}
+    web.UNSHACKLE.configure(saved)
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_command", "/saved/unshackle")
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"a download going"})  # no longer a reason to refuse
+    seen, stopped = [], []
+
+    def services(self):
+        seen.append((self is web.UNSHACKLE, self.settings["unshackle_command"], web.UNSHACKLE.settings["unshackle_command"]))
+        return [{"tag": "EXAMPLE"}, {"tag": "ALL4"}]
+
+    monkeypatch.setattr(backend.Unshackle, "services", services)
+    monkeypatch.setattr(backend.Unshackle, "stop", lambda self: stopped.append(self))
+
+    assert web.check_unshackle({"unshackle_mode": "local", "unshackle_command": "/edited/unshackle"}) == 1
+
+    assert seen == [(False, "/edited/unshackle", "/saved/unshackle")]  # the shared one kept its command throughout
+    assert len(stopped) == 1 and stopped[0] is not web.UNSHACKLE  # the throwaway's serve stopped, the shared one's left running
+    assert web.UNSHACKLE.settings == saved
+
+
 def test_service_sites_come_from_url_and_help_and_survive_odd_urls(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -1152,7 +1180,7 @@ const promptState = (input) => {
     const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => {
       const cells = row.children.slice(1);
       return { name: find(row, (node) => node.className === "sv-name").textContent, label: find(row, (node) => node.className === "sv-label").textContent,
-        cookies: words(cells[1]), used: words(cells[3]), attention: !!row.dataset.attention };
+        cookies: words(cells[2]), used: words(cells[3]), attention: !!row.dataset.attention };
     });
     console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className }));
   }
@@ -1345,13 +1373,13 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     assert rows["HULU"] == {
         "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series"],
         "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
-                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete", "Add cookies"],
+                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete"],
     }
     # another backend's row never gets the main Unshackle's cookie files, nor its series count
     assert rows["HULU · vpn"] == {
         "name": "HULU · vpn", "label": "Confirmed now", "attention": False, "used": ["—"], "cookies": ["—", "Managed on that server"],
     }
-    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete", "Add cookies"]
+    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series"]
     assert result["state"] == "sx-state down"
 
@@ -1440,6 +1468,14 @@ const fs = require("fs"), vm = require("vm");
 const js = (name) => fs.readFileSync(process.argv[1] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const { fn, args } = JSON.parse(process.argv[2]);
+const quality = () => [
+  pick(js("quality.js"), /^const HEIGHTS = .*$/m),
+  pick(js("quality.js"), /^const heightClass = .*$/m),
+  pick(js("quality.js"), /^const eqHeight = .*?^\};$/ms),
+  pick(js("quality.js"), /^const ranges = .*$/m),
+  pick(js("quality.js"), /^const fitsStep = .*?;$/ms),
+  pick(js("quality.js"), /^const stepOf = .*$/m),
+];
 const code = {
   serviceEpisode: () => [pick(js("series.js"), /^const pad2 = .*$/m), pick(js("series.js"), /^function serviceEpisode\(.*?^\}/ms)],
   nextSyncAt: () => [pick(js("settings-services.js"), /^function nextSyncAt\(.*?^\}/ms)],
@@ -1449,12 +1485,22 @@ const code = {
     pick(js("services.js"), /^function authenticationLabel\(.*?^\}/ms),
   ],
   signInSummary: () => [pick(js("services.js"), /^function signInSummary\(.*?^\}/ms)],
+  broadcastDates: () => [
+    pick(js("schedule.js"), /^const isoDay = .*$/m),
+    pick(js("series.js"), /^const weekday = .*$/m),
+    pick(js("series.js"), /^function broadcastCount\(.*?^\}/ms),
+    pick(js("series.js"), /^function broadcastDates\(.*?^\}/ms),
+  ],
+  stepOf: quality,
+  fitsStep: quality,
 }[fn]().join("\n");
 const box = { Intl, Date, Number, String };
 vm.createContext(box);
 vm.runInContext(code + `\nthis.out = ${fn};`, box);
 const [first, ...rest] = args;
-const result = fn === "nextSyncAt" ? box.out(new Date(first), ...rest).toISOString() : box.out(first, ...rest);
+const result = fn === "nextSyncAt" ? box.out(new Date(first), ...rest).toISOString()
+  : fn === "broadcastDates" ? [...box.out(first, ...rest)].map(([id, at]) => [id, at.getTime() / 1000])
+  : box.out(first, ...rest);
 console.log(JSON.stringify(result));
 """
 
@@ -1929,6 +1975,8 @@ vm.runInContext(`
 let runsSeq = 0, runCards = [], runsTimer = null;
 const isLive = (c) => c.outcome === "running";
 const renderConsole = () => drawn.push(runCards.map((c) => c.id));
+const speedLog = {}, muxLog = {}, barWidths = new Map(), thumbs = new Map(), tracksOpen = new Set();
+${grab("forgetGoneRuns")}
 ${grab("openActivity")}
 ${src.slice(src.indexOf("let feedReloading"), src.indexOf("function liveTick"))}
 ${grab("liveTick")}
@@ -5664,9 +5712,9 @@ def test_replace_anyway_holds_for_a_retry_and_an_episode_queued_again(monkeypatc
     cards = [{"episodeId": 5, "batch": "20261012-070357-6b5682", "replace": True}, {"episodeId": 6, "batch": "20261012-070357-6b5682"}]
     monkeypatch.setattr(web, "cards_on_disk", lambda: cards)
     monkeypatch.setattr(web.sonarr_sync.RUNS_DIR.__class__, "exists", lambda self: True)
-    assert web.retried_replace([5], "20261012-070357-6b5682") is True
-    assert web.retried_replace([6], "20261012-070357-6b5682") is False
-    assert web.retried_replace([5], "20261012-080000-aaaaaa") is False  # another job's attempt
+    assert web.retried_replace([5], "20261012-070357-6b5682", "") is True
+    assert web.retried_replace([6], "20261012-070357-6b5682", "") is False
+    assert web.retried_replace([5], "20261012-080000-aaaaaa", "") is False  # another job's attempt
 
     # a cancelled episode queued again keeps it
     monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
@@ -7375,8 +7423,8 @@ def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
     monkeypatch.setattr(web, "join_job", join)
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
     monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
-    monkeypatch.setattr(web, "retried_numbering", lambda ids, batch: None)
-    monkeypatch.setattr(web, "retried_replace", lambda ids, batch: False)
+    monkeypatch.setattr(web, "retried_numbering", lambda ids, batch, instance: None)
+    monkeypatch.setattr(web, "retried_replace", lambda ids, batch, instance: False)
 
     class Request:
         def __init__(self, body): self.body = body
@@ -7623,3 +7671,349 @@ def test_stop_is_done_when_the_job_loop_already_cancelled_the_job_but_not_when_s
     monkeypatch.setattr(sync.UNSHACKLE, "job", lambda job_id: {"status": "downloading"})  # still going: Stop failed
     with pytest.raises(web.web.HTTPBadGateway):
         asyncio.run(web.stop_run(request))
+
+
+def test_a_post_without_the_x_unshackle_header_is_refused_before_it_runs(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    web = reloaded_web(tmp_path, monkeypatch)
+    ran = []
+    monkeypatch.setattr(web.sonarr_sync, "import_leftover", lambda folder: ran.append(folder))
+    assert web.same_origin_only in web.app._middlewares  # the real app runs it, not only this test
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            body = {"folder": "unshackle-111-S02E05"}
+            return [
+                (await client.post("/api/leftovers/import", json=body)).status,  # a page on another site cannot send the header
+                (await client.post("/api/leftovers/import", json=body, headers={"X-Unshackle": "0"})).status,
+                (await client.post("/api/leftovers/import", json=body, headers={"X-Unshackle": "1"})).status,
+            ]
+
+    assert asyncio.run(go()) == [403, 403, 200]
+    assert ran == ["unshackle-111-S02E05"]  # only the request with the header reached the handler
+
+
+def test_a_leftover_is_imported_or_deleted_by_the_endpoints_and_only_if_it_is_ours(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    monkeypatch.setenv("DOWNLOADS", str(tmp_path / "downloads"))
+    web = reloaded_web(tmp_path, monkeypatch)
+    folder = web.sonarr_sync.DOWNLOADS / "unshackle-111-S02E05"
+    folder.mkdir(parents=True)
+    (folder / "Show.mkv").write_bytes(b"x")
+    (web.sonarr_sync.DOWNLOADS / "elsewhere").mkdir()
+    (web.sonarr_sync.DOWNLOADS / "elsewhere" / "Film.mkv").write_bytes(b"x")
+    (web.sonarr_sync.DOWNLOADS / "unshackle-111-S02E08").symlink_to(web.sonarr_sync.DOWNLOADS / "elsewhere", target_is_directory=True)
+    imported = []
+    monkeypatch.setattr(web.sonarr_sync, "import_leftover", lambda name: imported.append(name))
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])
+    headers = {"X-Unshackle": "1"}
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            async def post(action, body):
+                r = await client.post(f"/api/leftovers/{action}", json=body, headers=headers)
+                return r.status
+            return [
+                await post("import", {"folder": "unshackle-111-S02E05"}),
+                await post("import", {"folder": "../elsewhere"}),  # not one of ours
+                await post("delete", {"folder": "unshackle-111-S02E08"}),  # a link named like ours
+                await post("delete", {"folder": "unshackle-111-S02E05"}),
+                await post("delete", {}),  # no folder at all
+            ]
+
+    assert asyncio.run(go()) == [200, 400, 400, 200, 400]
+    assert imported == ["unshackle-111-S02E05"]  # the refused names never reached the import
+    assert not folder.exists()  # deleted
+    assert (web.sonarr_sync.DOWNLOADS / "elsewhere" / "Film.mkv").exists()  # and the link's target is untouched
+
+
+def test_the_page_dates_a_broadcast_schedule_as_the_server_does(tmp_path, monkeypatch):
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("TZ", "Europe/Paris")  # the page's zone (node reads it); the server's follows
+    web = reloaded_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", ZoneInfo("Europe/Paris"))
+    episodes = [{"id": 100 * season + number, "seasonNumber": season, "episodeNumber": number}
+                for season in (0, 1, 2) for number in range(1, 7)][::-1]  # specials, and out of order
+    plans = [
+        {"start": "2026-10-20", "time": "20:39", "days": [1], "per_evening": 1, "from": "S01E02", "evenings": {"2026-10-27": 2, "2026-11-03": 0}},
+        {"start": "2026-10-22", "time": "07:05", "every": "daily", "per_evening": 2},  # across the clocks going back, 25 October
+        {"start": "2026-03-27", "time": "23:30", "days": [0, 4, 5], "per_evening": 3, "from": "S02E03"},  # and forward, 29 March
+        {"start": "2026-10-20", "time": "20:39", "days": [], "evenings": {"2026-10-21": 1}},  # only its first evening, and one more
+        {"start": "2026-10-20", "time": "20:39", "from": "S09E01"},  # nothing after it
+        {"start": "2026-10-20", "time": "20:39", "from": "garbage"},  # read as the start
+        {"start": "2026-10-20"},  # no time: no dates
+        {},
+    ]
+    for plan in plans:
+        expected = sorted([ep_id, at.timestamp()] for ep_id, at in web.sonarr_sync.broadcast_dates({"broadcast": plan}, episodes).items())
+        assert sorted(run_page_function("broadcastDates", plan, episodes)) == expected, plan
+    assert len(web.sonarr_sync.broadcast_dates({"broadcast": plans[0]}, episodes)) == 11  # the check is not comparing two empty answers
+
+
+def test_the_page_fits_and_ranks_tracks_on_a_ladder_as_the_server_does(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    steps = [
+        {"min": 2160, "codec": "HEVC", "range": "HYBRID"},
+        {"min": 2160, "codec": "HEVC", "range": "DV"},
+        {"min": 1080, "max": 1080, "codec": "HEVC", "range": "HDR10"},
+        {"min": 1080, "max": 1440, "codec": "AVC", "max_kbps": 6000},
+        {"min": 720, "range": "SDR"},
+        {"max": 576},
+        {},
+    ]
+    ladder = {"name": "test", "steps": steps}
+    tracks = [
+        {"width": 3840, "height": 2160, "codec": "HEVC", "range": "DV", "layers": ["DV", "HDR10"]},
+        {"width": 3840, "height": 2160, "codec": "HEVC", "range": "DV", "layers": ["DV", "HDR10P"]},
+        {"width": 3840, "height": 2160, "codec": "HEVC", "range": "DV"},
+        {"width": 3840, "height": 2160, "codec": "HEVC", "range": "HDR10"},
+        {"width": 1920, "height": 1080, "codec": "HEVC", "range": "HDR10"},
+        {"width": 1920, "height": 800, "codec": "HEVC", "range": "HDR10"},  # a cropped 1080p
+        {"width": 1920, "height": 1080, "codec": "AVC", "range": "SDR", "bitrate": 5000},
+        {"width": 1920, "height": 1080, "codec": "AVC", "range": "SDR", "bitrate": 9000},
+        {"width": 1920, "height": 1080, "codec": "AVC", "range": "SDR"},
+        {"width": 1280, "height": 720, "codec": "AVC", "range": "SDR"},
+        {"width": 1280, "height": 720, "codec": "HEVC", "range": "HDR10"},
+        {"width": 1024, "height": 576, "codec": "AVC", "range": "SDR"},
+        {"width": 640, "height": 360, "codec": "AVC", "range": "SDR"},
+        {"height": 0},
+    ]
+    reached = set()
+    for track in tracks:
+        # A listed track has no layers: the server lets one DV or HDR10 track pass a HYBRID step (climb then wants both
+        # among the parts' tracks), the page wants both layers of a file. They only mean the same for a file.
+        own = [st for st in steps if track.get("layers") or st.get("range") != "HYBRID"]
+        reached.add(sync.step_of({**ladder, "steps": own}, track))
+        assert run_page_function("stepOf", {**ladder, "steps": own}, track) == sync.step_of({**ladder, "steps": own}, track), track
+        for step in own:
+            assert run_page_function("fitsStep", step, track) == sync.fits(step, track), (step, track)
+    assert len(reached) >= 5  # the cases reach most steps, not one
+
+
+def test_a_non_ascii_setup_code_or_session_signature_is_refused_not_a_500(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    monkeypatch.setenv("SETUP_TOKEN", "code")
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    page = {"X-Unshackle": "1"}
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            before = [(await client.post(path, json={"setup_code": "é", "password": "password1"}, headers=page)).status
+                      for path in ("/api/setup", "/api/setup/restore", "/api/sonarr/test")]
+            web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+            client.session.cookie_jar.update_cookies({web.SESSION_COOKIE: f"{int(web.time.time()) + 3600}.x.é"})
+            answer = await client.get("/api/session")
+            return before, answer.status, (await answer.json())["logged_in"]
+
+    assert asyncio.run(go()) == ([403, 403, 403], 200, False)
+
+
+def test_someone_the_reverse_proxy_signed_in_can_use_the_test_buttons(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "sonarr_status", lambda url, key: "4.0")
+    monkeypatch.setattr(web, "check_unshackle", lambda settings: 3)
+    headers = {"X-Unshackle": "1", "Remote-User": "alice"}
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:  # the test client connects from 127.0.0.1
+            async def tests():
+                sonarr = await client.post("/api/sonarr/test", json={"sonarr_url": "http://sonarr:8989", "sonarr_api_key": "k"}, headers=headers)
+                unshackle = await client.post("/api/unshackle/test", json={"unshackle_mode": "local"}, headers=headers)
+                return sonarr.status, unshackle.status
+
+            web.sonarr_sync.SETTINGS.update(proxy_auth_header="Remote-User", proxy_auth_from="127.0.0.1/32")
+            before = await tests()  # not set up: the proxy's word is no setup code
+            web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+            web.sonarr_sync.SETTINGS.update(proxy_auth_header="Remote-User", proxy_auth_from="127.0.0.1/32")
+            return before, await tests()
+
+    assert asyncio.run(go()) == ((403, 403), (200, 200))
+
+
+def test_missing_with_a_superscript_digit_in_days_is_a_400_not_a_500(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "on_sonarr", lambda inst, fn, days: [])
+    with pytest.raises(web.web.HTTPBadRequest):
+        asyncio.run(web.missing(SimpleNamespace(query={"days": "²"})))
+
+
+def test_a_masked_notification_address_hides_an_ntfy_topic_and_keeps_known_webhook_paths(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    shown = lambda url: web.masked_url(url).partition("#")[0]
+    assert shown("https://ntfy.sh/familyalerts") == "https://ntfy.sh/•••"  # the topic is the whole secret
+    assert shown("https://user:pw@ntfy.example/alerts/more") == "https://ntfy.example/•••"
+    assert shown("https://discord.com/api/webhooks/123/SECRET") == "https://discord.com/api/webhooks/•••"
+    assert shown("https://hooks.slack.com/services/T0/B0/SECRET") == "https://hooks.slack.com/services/•••"
+    assert shown("tgram://BOTTOKEN/42") == "tgram://•••"
+
+
+def test_password_key_language_and_restore_writes_read_and_write_the_config_under_its_lock(tmp_path, monkeypatch):
+    # a sync thread that read the config just before would otherwise write the old password or key back
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def no_reauth(request, password):
+        return None
+    monkeypatch.setattr(web, "reauth", no_reauth)
+    monkeypatch.setattr(web, "backup_data", lambda text, passphrase: {"series": {}})
+    events = []
+    real_read, real_write = web.read_config, web.write_config
+    monkeypatch.setattr(web, "read_config", lambda: events.append(("read", web.CONFIG_LOCK.locked())) or real_read())
+    monkeypatch.setattr(web, "write_config", lambda config: events.append(("write", web.CONFIG_LOCK.locked())) or real_write(config))
+
+    def request(body, action=""):
+        async def json():
+            return body
+        return SimpleNamespace(json=json, match_info={"action": action}, secure=False, headers={}, cookies={})
+
+    calls = {
+        "set_language": lambda: web.set_language(request({"language": "en"})),
+        "change_password": lambda: web.change_password(request({"current": "password1", "new": "password2"})),
+        "logout_others": lambda: web.logout_others(request({})),
+        "api_key_action": lambda: web.api_key_action(request({"password": "password2"}, "new")),
+        "restore": lambda: web.restore(request({"password": "password2", "text": "x"})),
+        "backup_offsite": lambda: web.backup_offsite(request({"password": "password2", "settings": {}})),
+    }
+    unlocked = []
+    for name, call in [*calls.items(), ("reset_password", None)]:
+        events.clear()
+        asyncio.run(call()) if call else web.reset_password("password3")
+        writes = [i for i, (kind, _) in enumerate(events) if kind == "write"]
+        if not writes or not all(events[i][1] and events[i - 1] == ("read", True) for i in writes):
+            unlocked.append(name)
+    assert unlocked == []
+
+
+def test_an_api_retry_repeats_the_numbering_and_replace_of_the_attempt_it_retries(tmp_path, monkeypatch):
+    import asyncio
+    import hashlib
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1",
+                                                    "api_key": hashlib.sha256(b"key").hexdigest()}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    by_title = {"episode_map": {"S02E01": "S01E07"}}  # found by its title on the page, for that download only
+    for run_id, episode, extra in (("20261003-093229-000001-442345-S02E01", 70, {"numbering": by_title}),
+                                   ("20261003-093000-000001-442345-S02E02", 71, {"replace": True}),
+                                   ("20261003-092900-000001-442345-S02E03", 72, {})):
+        card = {"id": run_id, "episodeId": episode, "tvdbId": 442345, "sxxeyy": run_id[-6:], "outcome": "failed",
+                "started": "2026-10-03T09:32:29+00:00", "ended": "2026-10-03T09:33:00+00:00", **extra}
+        (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    asked = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("numbering"), kw.get("replace", False))))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as script:
+            key = {web.API_KEY_HEADER: "key"}
+            for ids in ([70], [71], [72]):
+                assert (await script.post("/api/v1/downloads", json={"episodeIds": ids, "retry": True}, headers=key)).status == 200
+            # asked anew, not as a retry: the series' numbering, no Replace
+            assert (await script.post("/api/v1/downloads", json={"episodeIds": [70]}, headers=key)).status == 200
+
+    asyncio.run(go())
+    assert asked == [([70], by_title, False), ([71], None, True), ([72], None, False), ([70], None, False)]
+
+
+def api_retries(tmp_path, monkeypatch, cards, *bodies):
+    """The status of each API retry asked, and what each asked run_sync for, with these attempts on disk."""
+    import asyncio
+    import hashlib
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1",
+                                                    "api_key": hashlib.sha256(b"key").hexdigest()}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    for run_id, episode, extra in cards:
+        card = {"id": run_id, "episodeId": episode, "tvdbId": 442345, "sxxeyy": run_id[-6:], "outcome": "failed",
+                "started": "2026-10-03T09:32:29+00:00", "ended": "2026-10-03T09:33:00+00:00", **extra}
+        (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    asked = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("numbering"), kw.get("replace", False))))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as script:
+            return [(await script.post("/api/v1/downloads", json={**body, "retry": True},
+                                       headers={web.API_KEY_HEADER: "key"})).status for body in bodies]
+
+    return asyncio.run(go()), asked
+
+
+def test_an_api_retry_reads_only_the_attempts_of_its_own_sonarr(tmp_path, monkeypatch):
+    # Episode ids overlap between Sonarr instances: the newest attempt of 70 is the 4K Sonarr's, not this one's
+    by_title = {"episode_map": {"S02E01": "S01E07"}}
+    cards = [("20261003-093229-000001-442345-S02E01", 70, {"numbering": by_title, "replace": True, "instance": "sonarr-4k"}),
+             ("20261003-093000-000001-442345-S02E02", 70, {})]
+    assert api_retries(tmp_path, monkeypatch, cards, {"episodeIds": [70]}) == ([200], [([70], None, False)])
+
+
+def test_an_api_retry_of_episodes_tried_differently_is_refused(tmp_path, monkeypatch):
+    # From different jobs: one episode's numbering and Replace anyway can't stand for the other's
+    by_title = {"episode_map": {"S02E01": "S01E07"}}
+    cards = [("20261003-093229-000001-442345-S02E01", 70, {"numbering": by_title}),
+             ("20261003-093000-000001-442345-S02E02", 71, {"replace": True}),
+             ("20261003-092900-000001-442345-S02E03", 72, {"replace": True})]
+    statuses, asked = api_retries(tmp_path, monkeypatch, cards, {"episodeIds": [70, 71]}, {"episodeIds": [71, 72]})
+    assert (statuses, asked) == ([400, 200], [([71, 72], None, True)])
+
+def test_a_single_download_is_not_a_sync_running(tmp_path, monkeypatch):
+    import asyncio
+    import threading
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    release = threading.Event()
+    monkeypatch.setattr(web.sonarr_sync, "main", lambda *args, **kwargs: release.wait(5))
+    try:
+        download = web.run_sync([1], kind="manual")
+        assert web.running() is False  # one episode asked by hand: Sync now still starts
+        assert json.loads(asyncio.run(web.start_sync(None)).text) == {"running": True}
+        assert web.running() is True
+        with pytest.raises(web.web.HTTPConflict):
+            asyncio.run(web.start_sync(None))
+        assert len(web.sync_threads) == 2  # both still count toward the cap on threads
+    finally:
+        release.set()
+    download.join(2)

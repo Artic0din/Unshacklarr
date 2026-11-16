@@ -26,6 +26,18 @@ function timeLeft(c) {
   return rate > 0 && p < 100 ? duration(((100 - p) / rate) * 1000) : "";
 }
 
+/* What the page keeps per download (time left, bar widths, posters, unfolded tracks) goes with the run, or it grows
+   for as long as the tab stays open. Keys are `row:<run>`, `row:job:<job>`, `job:<job>`, `mux:<run>`, `t:<run>:<track>`. */
+function forgetGoneRuns() {
+  const runs = new Set(runCards.map((c) => c.id)), jobs = new Set(runCards.map((c) => c.batch).filter(Boolean));
+  const listed = (key) => {
+    const [kind, a, b] = key.split(":");
+    return kind === "row" ? (a === "job" ? jobs.has(b) : runs.has(a)) : kind === "job" ? jobs.has(a) : kind === "mux" || kind === "t" ? runs.has(a) : true;
+  };
+  for (const log of [speedLog, muxLog]) for (const id of Object.keys(log)) if (!runs.has(id)) delete log[id];
+  for (const id of tracksOpen) if (!runs.has(id)) tracksOpen.delete(id);
+  for (const cache of [barWidths, thumbs]) for (const key of cache.keys()) if (!listed(key)) cache.delete(key);
+}
 let runsSeq = 0;
 async function openActivity() {
   const seq = ++runsSeq;
@@ -40,6 +52,7 @@ async function openActivity() {
   }
   if (seq !== runsSeq) return;  // a newer call is on its way: this answer may predate a Stop
   runCards = cards;
+  forgetGoneRuns();
   clearTimeout(runsTimer);
   renderConsole();
   api("/api/leftovers").then((r) => { $("#con-left-n").textContent = r.items.length ? `(${r.items.length})` : ""; }).catch(() => {});
@@ -875,7 +888,7 @@ async function downloadDiagnostic(c) {
     if (!r.ok) throw await responseError(r);
     const a = el("a", { href: URL.createObjectURL(await r.blob()), download: `unshacklarr-diagnostic-${c.id}.md` });
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
     toast("Diagnostic downloaded: check it, then attach it to the issue");
   } catch (e) { toast(e.message, true); }
 }
@@ -958,7 +971,7 @@ function runBody(c) {
       trackLabel(t.label, true),
       el("span", { className: "bar" + (t.progress >= 100 ? " done" : "") }, el("i", { style: `width:${t.progress}%`, dataset: { k: `t:${c.id}:${t.label}` } })),
       t.progress >= 100 ? trackDone(t) : el("span", { textContent: `${Math.round(t.progress)}%` }));
-    const byPart = Object.groupBy(tracks, (t) => /^Part (\d+)/.exec(t.label)?.[1] || "");
+    const byPart = tracks.reduce((g, t) => ((g[/^Part (\d+)/.exec(t.label)?.[1] || ""] ||= []).push(t), g), {});  // not Object.groupBy: Safari 17.4
     const numbers = Object.keys(byPart).filter(Boolean);
     // An episode in parts (Koh-Lanta on Molotov): each part under its own head, how far it is, then its tracks
     const list = numbers.length > 1 ? el("div", { className: "cd-tracks" }, ...numbers.map((n) => {
