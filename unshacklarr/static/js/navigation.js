@@ -94,7 +94,7 @@ function showTab(name, fromRoute = false, quiet = false) {
   if (!fromRoute) navigate(true);
   if (quiet) return;
   if (name === "log") { refreshLog(); openActivity(); }
-  else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; }  // Activity left: its output stops streaming
+  else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
   if (name === "settings" && settingsSec === "unshackle" && S.dlOptions.length) loadUnshackleStatus();
   if (name === "settings" && settingsSec === "services" && S.dlOptions.length) loadServices();
   if (name === "schedule") loadSchedule();
