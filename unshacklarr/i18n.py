@@ -23,7 +23,7 @@ def catalog(lang: str) -> tuple[dict, list]:
     path = FOLDER / f"{lang}.json"
     if lang == "en" or not path.is_file():
         return {}, []
-    exact = json.loads(path.read_text())
+    exact = json.loads(path.read_text(encoding="utf8"))
     patterns = []
     for key, to in exact.items():
         parts = HOLE.split(key)[::2]
