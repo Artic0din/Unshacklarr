@@ -130,7 +130,6 @@
  "Clear failed": "失敗をクリア",
  "Clear failed ({0})": "失敗をクリア（{0}）",
  "Clear the history": "履歴を消去",
- "Clear the notifications already seen": "既読の通知をクリア",
  "Clear the search or pick another filter.": "検索をクリアするか、別のフィルターを選択してください。",
  "Clear title cache before fetching.": "取得前にタイトルキャッシュを削除します。",
  "Clear…": "クリア…",
@@ -2407,5 +2406,19 @@
  "{0} session rejected": "{0} のセッションが拒否されました",
  "{0} timed out": "{0} がタイムアウトしました",
  "unshackle serve{0} stayed busy for {1} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve{0} が {1} 時間混み合ったままです：このキーのリクエスト上限にまだ達しているため、ダウンロードを中止しました",
- "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve が {0} 時間混み合ったままです：このキーのリクエスト上限にまだ達しているため、ダウンロードを中止しました"
+ "unshackle serve stayed busy for {0} hours: its limit of requests for this key is still reached, the download is given up": "unshackle serve が {0} 時間混み合ったままです：このキーのリクエスト上限にまだ達しているため、ダウンロードを中止しました",
+ "1 notification": "通知 1 件",
+ "{0} notifications": "通知 {0} 件",
+ "Clear every notification except those waiting for you": "対応待ちのもの以外の通知をすべてクリア",
+ "Clear {0}? They cannot be brought back": "{0}をクリアしますか？元に戻せません",
+ "Delete this attempt": "この試行を削除",
+ "Delete this job's {0} from the history?": "このジョブの{0}を履歴から削除しますか？",
+ "Delete {0} {1} from the history?": "{0} {1} を履歴から削除しますか？",
+ "Every setting now in Unshacklarr is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.": "Unshacklarr の設定はすべて、このファイルの内容（シリーズ、アドレス、パスワード、キー）に置き換えられます。元に戻せません。ページは再読み込みされます。",
+ "Replace the settings": "設定を置き換える",
+ "Restore the settings from {0}?": "{0} から設定を復元しますか？",
+ "This attempt and its Unshackle output are deleted and cannot be brought back. Your files and Sonarr are not touched.": "この試行と Unshackle の出力が削除され、元に戻せません。ファイルと Sonarr には影響しません。",
+ "Delete the partial downloads?": "未完了のダウンロードを削除しますか？",
+ "The leftovers of interrupted downloads are deleted and cannot be brought back.": "中断されたダウンロードの残りが削除され、元に戻せません。",
+ "Their Unshackle output goes with them and cannot be brought back. Your files and Sonarr are not touched.": "Unshackle の出力も一緒に削除され、元に戻せません。ファイルと Sonarr には影響しません。"
 }

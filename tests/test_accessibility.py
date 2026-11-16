@@ -206,7 +206,7 @@ const src = fs.readFileSync(process.argv[1], "utf8");
 const target = () => { const l = {}; return { l, addEventListener(t, f) { (l[t] ||= []).push(f); }, removeEventListener(t, f) { l[t] = (l[t] || []).filter((x) => x !== f); },
   fire(t, e) { [...(l[t] || [])].forEach((f) => f({ type: t, ...e })); } }; };
 const doc = target(), button = { ...target(), dataset: {}, textContent: "Delete", contains: (n) => n === button };
-const ctx = { document: doc };
+const ctx = { document: doc, $: () => ({}) };
 vm.createContext(ctx);
 vm.runInContext(src.match(/^function confirmClick\(.*?^\}/ms)[0], ctx);
 const out = {};

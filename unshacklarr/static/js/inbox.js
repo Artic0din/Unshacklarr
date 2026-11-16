@@ -130,7 +130,9 @@ $("#inbox-dialog").addEventListener("click", (e) => {  // a click outside the pa
   if (e.target === $("#inbox-dialog") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $("#inbox-dialog").close();
 });
 $("#inbox-dialog").addEventListener("close", refreshInbox);
-$("#inbox-clear").onclick = async () => {
+$("#inbox-clear").onclick = async (e) => {
+  const gone = inboxData.items.filter((i) => !(i.action && !i.action.done)).length;  // what the server clears: all but what still waits for you
+  if (!confirmClick(e.currentTarget, `Clear ${COUNT.notification(gone)}? They cannot be brought back`, $("#inbox-clear span"))) return;
   try { inboxData = await api("/api/inbox/clear", { method: "POST" }); renderInbox(true); toast("Notifications cleared"); }
   catch (e) { toast(e.message, true); }
 };

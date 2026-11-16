@@ -230,6 +230,7 @@ function icon(name, className = "", label = "") {
 /* A counted noun, one whole text for one and one for many: a language writes its own plural from either, no suffix glued on. */
 const COUNT = {
   episode: (n) => n === 1 ? "1 episode" : `${n} episodes`,
+  notification: (n) => n === 1 ? "1 notification" : `${n} notifications`,
   missingEpisode: (n) => n === 1 ? "1 missing episode" : `${n} missing episodes`,
   upgrade: (n) => n === 1 ? "1 upgrade" : `${n} upgrades`,
   download: (n) => n === 1 ? "1 download" : `${n} downloads`,
@@ -246,22 +247,37 @@ const COUNT = {
 };
 /* Two clicks for what cannot be undone: the first turns the label into the question, naming the action and what it is done to;
    the second does it. No timer takes the question back while it is being read: leaving the button, a press anywhere else
-   (Safari does not focus a clicked button, so it never blurs), or Escape does. */
+   (Safari does not focus a clicked button, so it never blurs), or Escape does (and only the question: the window around it stays).
+   The question is also spoken, in a live region: a screen reader does not announce a label that changes under its focus. */
 function confirmClick(button, question, label = button) {
-  if (button.dataset.sure === "1") { label.textContent = button.dataset.was; delete button.dataset.sure; return true; }
+  const say = (text) => { $("#sure-say").textContent = text; };
+  if (button.dataset.sure === "1") { label.textContent = button.dataset.was; delete button.dataset.sure; say(""); return true; }
   button.dataset.sure = "1"; button.dataset.was = label.textContent;
   label.textContent = question;
+  say(question);
   const cancel = (e) => {
     if (e.type === "keydown" && e.key !== "Escape") return;
     if (e.type === "pointerdown" && button.contains(e.target)) return;  // the second click on the button itself
-    button.removeEventListener("blur", cancel); button.removeEventListener("keydown", cancel);
-    document.removeEventListener("pointerdown", cancel, true);
+    button.removeEventListener("blur", cancel);
+    document.removeEventListener("keydown", cancel, true); document.removeEventListener("pointerdown", cancel, true);
     if (button.dataset.sure !== "1") return;
-    delete button.dataset.sure; label.textContent = button.dataset.was;
+    if (e.type === "keydown") { e.preventDefault(); e.stopPropagation(); }  // not also the window it sits in
+    delete button.dataset.sure; label.textContent = button.dataset.was; say("");
   };
-  button.addEventListener("blur", cancel); button.addEventListener("keydown", cancel);
-  document.addEventListener("pointerdown", cancel, true);
+  button.addEventListener("blur", cancel);
+  document.addEventListener("keydown", cancel, true); document.addEventListener("pointerdown", cancel, true);
   return false;
+}
+/* The same question in a window, Cancel first, for what needs a sentence, has no label to turn into one, or sits where the page
+   redraws its buttons (a job's, a status's: a question in the label would vanish with the redraw); true if confirmed. */
+function askToConfirm(title, text, verb) {
+  const dialog = $("#confirm-dialog");
+  $("#confirm-title").textContent = title;
+  $("#confirm-text").textContent = text;
+  $("#confirm-go").textContent = verb;
+  dialog.returnValue = "cancel";
+  dialog.showModal();
+  return new Promise((done) => dialog.addEventListener("close", () => done(dialog.returnValue === "go"), { once: true }));
 }
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */
 const slowHint = (svc) => setTimeout(() => toast(`${svc} is slow to answer. It may be waiting for you to sign in: look at Unshackle's log.`, false, ["OK", () => {}]), 20000);

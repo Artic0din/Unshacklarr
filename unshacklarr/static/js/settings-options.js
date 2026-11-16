@@ -448,6 +448,7 @@ $("#bk-file").onchange = async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
+  if (!await askToConfirm(`Restore the settings from ${file.name}?`, "Every setting now in Unshacklarr is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.", "Replace the settings")) return;
   try {
     const text = await file.text();
     bkFile = text;
