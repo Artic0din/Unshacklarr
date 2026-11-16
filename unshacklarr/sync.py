@@ -626,9 +626,13 @@ def send_held(settings: dict) -> bool:
         held_pushed = held
     takes = any(worst in (ALL_LEVELS if t.get("levels") is None else t["levels"]) for t in notification_targets(settings))
     if delivered or not takes:  # sent, or no address takes it: else kept, tried again next minute
-        held_pushed = None
         with sent_lock:
-            current = read_json(HELD_FILE, [], strict=True)  # unreadable for a moment: kept, tried again next minute
+            try:
+                current = read_json(HELD_FILE, [], strict=True)
+            except OSError as e:  # unreadable for a moment: kept, and the devices not pushed it again next minute
+                print(f"Quiet hours: could not read the held messages back: {no_credentials(e)}", file=sys.stderr)
+                return delivered
+            held_pushed = None
             rest = current[len(held):] if current[:len(held)] == held else current  # what came while it was going out stays
             if rest:
                 write_atomic(HELD_FILE, json.dumps(rest))

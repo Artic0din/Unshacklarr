@@ -7051,25 +7051,28 @@ def test_a_run_finishes_even_when_the_inbox_cannot_be_written(tmp_path, monkeypa
 
 def test_held_messages_that_cannot_be_read_back_after_sending_are_kept(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    pushed = []
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: pushed.append(a) or 0)
     monkeypatch.setattr(sync, "send_to", lambda *a, **k: None)
     monkeypatch.setattr(sync, "in_quiet_hours", lambda s, now=None: False)
     sync.HELD_FILE.parent.mkdir(parents=True, exist_ok=True)
     held = [{"level": "success", "title": "Downloaded: Show S01E01"}]
     sync.HELD_FILE.write_text(json.dumps(held))
-    real_read, reads = Path.read_text, []
+    real_read, reads, broken = Path.read_text, [], [True]
 
-    def flaky(self, *a, **k):  # the first read works, the one before deleting fails (a NAS share gone for a moment)
+    def flaky(self, *a, **k):  # the read before deleting fails (a NAS share gone for a moment)
         if self == sync.HELD_FILE:
             reads.append(1)
-            if len(reads) > 1:
+            if broken[0] and len(reads) % 2 == 0:
                 raise OSError(5, "Input/output error")
         return real_read(self, *a, **k)
     monkeypatch.setattr(Path, "read_text", flaky)
     settings = {"targets": [{"url": "ntfy://ok", "levels": ["success", "warning", "error"]}]}
-    with pytest.raises(OSError):
-        sync.send_held(settings)
+    assert sync.send_held(settings)  # the error stays here: the hourly checks after it still run
     assert json.loads(real_read(sync.HELD_FILE)) == held  # not deleted unread
+    broken[0] = False  # the next minute, the share is back
+    sync.send_held(settings)
+    assert len(pushed) == 1 and not sync.HELD_FILE.exists()  # the devices had it: not pushed twice
 
 
 def test_the_audio_add_mark_stays_while_its_audio_could_not_be_removed(tmp_path, monkeypatch):
