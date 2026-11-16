@@ -306,7 +306,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   };
   // Where things stand, in the header: what needs you first, else how the devices in use last tested
   const used = data.devices.filter((d) => d.used_by.length), untested = used.filter((d) => !d.test && !d.info?.unreadable);
-  const facts = [COUNT.device(data.devices.length), `${used.length} in use`, ...(data.remote.length ? [`${data.remote.length} remote`] : [])].join(" · ");
+  const facts = [COUNT.device(data.devices.length), `${used.length} in use`, ...(data.remote.length ? [`${data.remote.length} remote`] : [])].join("\u00a0· ");  // a line break comes after the dot, never before it
   if (alerts.length) show("down", `${COUNT.problem(alerts.length)} to fix`, facts);
   else if (!data.devices.length && !data.remote.length) show("", "No device yet", "Add a .wvd or .prd file");
   else if (untested.length) show("", `${COUNT.device(untested.length)} in use not tested yet`, facts);
