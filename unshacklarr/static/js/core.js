@@ -476,7 +476,7 @@ function renderWall() {
       const conf = S.config.series[s.tvdbId];
       const art = el("span", { className: "art" });
       if (s.poster) art.append(el("img", { src: s.poster, alt: "", loading: "lazy", decoding: "async" }));
-      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service) }));
+      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service), title: svcName(conf.service) }));
       if (libsOf(s).length) {  // the Sonarr libraries it is in, by their names; one switched off for it dimmed (by mj23au, #10)
         const off = (name, main) => Boolean(conf?.service) && Boolean(main ? conf.main_off : conf.sonarrs?.[name]?.off);
         art.append(el("span", { className: "lib" }, ...[...(s.id ? [[mainSonarr(), true]] : []), ...libsOf(s).map((o) => [o.name, false])]

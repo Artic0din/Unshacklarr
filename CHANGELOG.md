@@ -113,6 +113,14 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Nothing is cut off or piled on top of anything else on a narrow screen.** At 320 px (or 400% zoom), a run's buttons
+  wrap to a second line instead of losing "Delete", a running card's speed and time left sit on a row under the episode
+  (and a finished card's line carries its whole text as a tooltip), the series filter takes a second row instead of
+  spilling "Downloading" over "Not downloading", the late-episodes banner puts its sentence under its count and Show,
+  a long service name stays inside its poster, a wrong setup code's message wraps inside the card instead of widening the
+  page, "Notifications" no longer runs under Clear, the logo no longer overlaps the version (with new options, only
+  their count shows there on the narrowest phones), and a series' shortcut bar scrolls away with the page, with no
+  pinned head at all on a short screen, so the settings under it can be reached. (#280)
 - A restart while a retry ran beside its job (another Replace choice) no longer loses the job's queued episodes: each is kept with its own settings and picked up again. The queue saved by the version before still loads; once this version has saved it, an older version can no longer read it.
 - An API download request with `"audio"` now asks the service for that language first, with the series' own audio languages after it, and accepts the file in it (an episode that has a file is replaced only by one in that language), instead of downloading the series' usual language again and counting it as an audio upgrade. (#187)
 - With `--generate-dv` on, an episode with HDR10+ and no Dolby Vision now fits a quality ladder's Hybrid step, in downloads and in Upgrades, instead of failing with "None of the quality ladder's steps" or taking a lower step.
