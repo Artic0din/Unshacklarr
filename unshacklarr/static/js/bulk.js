@@ -1,7 +1,7 @@
 /* Several series changed at once: Select, then pick them on the wall, then Edit. Only the fields filled in change,
    in the page's settings: Save keeps them, as for one series. */
 const selBar = el("div", { className: "sel-bar", id: "sel-bar", hidden: true },
-  el("span", { id: "sel-count" }),
+  el("span", { id: "sel-count", role: "status" }),
   el("button", { type: "button", className: "btn small", textContent: "All shown", onclick: () => {
     document.querySelectorAll("#wall .poster").forEach((c) => SEL.ids.add(Number(c.dataset.tvdb)));
     renderWall(); renderSel();
@@ -11,7 +11,6 @@ const selBar = el("div", { className: "sel-bar", id: "sel-bar", hidden: true },
 $("#wall").after(selBar);
 function renderSel() {
   $("#sel-toggle").setAttribute("aria-pressed", String(SEL.on));
-  $("#sel-toggle").textContent = SEL.on ? "Done" : "Select";
   selBar.hidden = !SEL.on;
   $("#wall").classList.toggle("selecting", SEL.on);
   $("#sel-count").textContent = `${SEL.ids.size} picked`;

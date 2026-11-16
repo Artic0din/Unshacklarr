@@ -156,7 +156,7 @@ const ctx = { savedSonarr: (name) => name, $: (sel) => (boxes[sel] ??= { classLi
   } };
 vm.createContext(ctx);
 const lets = [/^let missingDays.*\n/m, /^let upgradeTimer.*\n/m, /^let upgradeLast\b.*\n/m].map((re) => src.match(re)[0]).join("");
-vm.runInContext(lets + ["sonarrPicker", "unsetNote", "showMissing", "showUpgrades"].map((n) => grab(n)).join(""), ctx);
+vm.runInContext(lets + ["markPicked", "sonarrPicker", "unsetNote", "showMissing", "showUpgrades"].map((n) => grab(n)).join(""), ctx);
 vm.runInContext("upgradePick.add(1); upgradePick.add(2); upgradePick.add(3);", ctx);
 const show = (sonarr, days) => { vm.runInContext(pane === "missing" ? `missingSonarr = ${JSON.stringify(sonarr)}; missingDays = ${days};` : `upgradeSonarr = ${JSON.stringify(sonarr)};`, ctx); return pane === "missing" ? ctx.showMissing() : ctx.showUpgrades(); };
 const goText = () => find(draws[draws.length - 1], (n) => n.className === "btn primary")?.textContent;

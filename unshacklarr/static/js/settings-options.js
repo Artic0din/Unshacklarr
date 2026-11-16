@@ -352,7 +352,7 @@ function renderBackups() {
   $("#bk-saved-head").replaceChildren("Saved backups", el("small", { textContent: ` · ${saved.length} in ${S.backups.folder}` }));
   $("#bk-list").replaceChildren(...saved.map((f) => el("div", { className: "bk-row" },
     el("span", { textContent: when(f.at) }), el("small", { textContent: `${Math.max(1, Math.round(f.size / 1024))} KB` }),
-    el("button", { className: "btn small", type: "button", textContent: "Download", onclick: () => backupFile(f.name) }))));
+    el("button", { className: "btn small", type: "button", textContent: "Download", ariaLabel: `Download backup from ${when(f.at)}`, onclick: () => backupFile(f.name) }))));
 }
 /* Account, backups sent elsewhere: WebDAV or S3, its fields, the passphrase, and how the last one went. Saved with
    its own button and the password, never by the settings' Save: a session alone must not send the keys elsewhere. */
@@ -563,16 +563,18 @@ function renderTargets() {
   const targets = S.config.notifications.targets;
   keepFocus($("#nt-targets"), () => $("#nt-targets").replaceChildren(...(targets.length ? targets.map((t, i) => {
     const tested = ntTested.get(t.url);
+    const nth = targets.filter((x, j) => j <= i && appOf(x.url) === appOf(t.url)).length;
+    const name = appOf(t.url) + (targets.filter((x) => appOf(x.url) === appOf(t.url)).length > 1 ? ` ${nth}` : "");  // two Discords are told apart
     const chips = Object.entries(LEVEL_NAMES).map(([lv, name]) => el("button", { type: "button", role: "checkbox", className: `nt-pick ${lv}`,
       ariaChecked: String(t.levels.includes(lv)), onclick: () => {
         t.levels = t.levels.includes(lv) ? t.levels.filter((x) => x !== lv) : [...t.levels, lv];
         renderTargets(); renderNotify(); dirty();
       } }, el("i", { ariaHidden: "true" }), name));
-    const test = el("button", { type: "button", className: "btn small", textContent: tested === "…" ? "Sending…" : "Test", disabled: tested === "…", onclick: () => testTargets([t.url]) });
-    const remove = el("button", { type: "button", className: "btn small danger", textContent: "Remove", onclick: () => { targets.splice(i, 1); renderTargets(); renderNotify(); dirty(); } });
+    const test = el("button", { type: "button", className: "btn small", textContent: tested === "…" ? "Sending…" : "Test", disabled: tested === "…", ...(tested === "…" ? {} : { ariaLabel: `Test ${name}` }), onclick: () => testTargets([t.url]) });
+    const remove = el("button", { type: "button", className: "btn small danger", textContent: "Remove", ariaLabel: `Remove ${name}`, onclick: () => { targets.splice(i, 1); renderTargets(); renderNotify(); dirty(); } });
     return el("div", { className: `nt-target${t.levels.length ? "" : " off"}` },
       el("span", { className: "nt-badge", textContent: badgeOf(appOf(t.url)), ariaHidden: "true" }),
-      el("span", { className: "nt-who" }, el("b", { textContent: appOf(t.url) + (targets.filter((x) => appOf(x.url) === appOf(t.url)).length > 1 ? ` ${targets.filter((x, j) => j <= i && appOf(x.url) === appOf(t.url)).length}` : "") }),
+      el("span", { className: "nt-who" }, el("b", { textContent: name }),
         ...(tested && tested !== "…" ? [el("em", { className: tested.ok ? "ok" : "bad" }, icon(tested.ok ? "check" : "x", "inl"), tested.ok ? "Delivered" : tested.error)] : [])),
       el("span", { className: "nt-chips", role: "group", ariaLabel: `What ${appOf(t.url)} gets` }, el("small", { textContent: "Sends" }), ...chips),
       el("span", { className: "btns" }, test, remove));
@@ -655,7 +657,7 @@ $("#nt-quiet-on").onchange = (e) => { S.config.notifications.quiet = e.target.ch
 function ntDraw() {
   const b = BUILDERS[ntApp];
   $("#nt-apps").replaceChildren(...Object.keys(BUILDERS).map((name) => el("button", { type: "button", className: "nt-app", ariaPressed: String(name === ntApp),
-    onclick: () => { ntApp = name; ntDraw(); $("#nt-fields input")?.focus(); } }, el("span", { className: "nt-badge", textContent: badgeOf(name) }), name)));
+    onclick: () => { ntApp = name; ntDraw(); $("#nt-fields input")?.focus(); } }, el("span", { className: "nt-badge", textContent: badgeOf(name), ariaHidden: "true" }), name)));
   $("#nt-d-hint").textContent = b.hint;
   $("#nt-fields").replaceChildren(...b.fields.map(([key, label, ph = "", type = "text"]) => el("label", { className: "field" }, label,
     el("input", { type, name: key, placeholder: ph, spellcheck: false, autocomplete: "off", dataset: { bwignore: "", "1pIgnore": "", lpignore: "true" },
