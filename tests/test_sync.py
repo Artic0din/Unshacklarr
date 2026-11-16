@@ -4256,6 +4256,23 @@ def test_another_sonarr_needs_a_ladder_chosen_and_waits_until_it_is(tmp_path, mo
         assert "Choose a quality ladder" in str(e)
 
 
+def test_another_sonarr_takes_the_same_episodes_the_main_one_does(tmp_path, monkeypatch):
+    # Early releases and a series' own schedule reach the second Sonarr too, for the series set up here only
+    sync = load(tmp_path, monkeypatch)
+    inst = with_4k(sync)
+    now = datetime.now(timezone.utc)
+    show = lambda tvdb: {"tvdbId": tvdb, "monitored": True}
+    ep = lambda id_, tvdb: {"id": id_, "seasonNumber": 1, "episodeNumber": id_, "airDateUtc": days_ago(1), "series": show(tvdb)}
+    plan = [(show(111), [{"id": 3, "seasonNumber": 1, "episodeNumber": 3}], {3: now - timedelta(hours=5)})]
+    monkeypatch.setattr(sync, "missing_episodes", lambda: [ep(1, 111), ep(3, 111), ep(4, 999)])  # 3: dated by its schedule
+    monkeypatch.setattr(sync, "early_episodes", lambda config, at: [ep(2, 111), ep(5, 999)])
+    monkeypatch.setattr(sync, "broadcast_plans", lambda config, fresh=False: plan)
+    taken = []
+    monkeypatch.setattr(sync, "sync", lambda config, settings, episodes, **kw: taken.extend(e["id"] for e in episodes) or 0)
+    assert sync.sync_instance(inst, sync.read_file(), {}) == 0
+    assert sorted(taken) == [1, 2, 3]
+
+
 def test_each_sonarr_keeps_its_own_series_list(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     inst = with_4k(sync)

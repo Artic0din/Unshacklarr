@@ -4231,6 +4231,20 @@ def clean_leftovers(now: float | None = None) -> list[str]:
 sweep_lock = threading.Lock()
 
 
+def automatic_episodes(config: dict) -> list[dict]:
+    """What the automatic sync of the current Sonarr looks at: its missing episodes, the ones a service puts out
+    before they air, and the ones a series' own schedule has air; Sonarr's own dates are set aside for the last."""
+    now, plans = datetime.now(timezone.utc), broadcast_plans(config, fresh=True)
+    dated = broadcast_dated(plans)
+    own = lambda ep: ep["id"] in dated  # its own schedule dates it
+    wanted = [ep for ep in missing_episodes() if not own(ep)]
+    seen = {ep["id"] for ep in wanted}
+    wanted += [ep for ep in early_episodes(config, now) if ep["id"] not in seen and not own(ep)]
+    wanted += [ep for ep in broadcast_episodes(config, now - timedelta(days=AUTO_DAYS + 1), now + timedelta(days=EARLY_DAYS_MAX + 1), plans)
+               if not ep.get("hasFile") and ep.get("monitored", True) and ep["series"].get("monitored", True)]
+    return wanted
+
+
 def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str = "manual", numbering: dict | None = None,
          batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None) -> int:
     config = read_file()
@@ -4253,15 +4267,7 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
                 print("Outside the download window (Settings, Automation): the sync waits for it.", flush=True)
                 return 0
             try:  # the main Sonarr down: told once per cause, and the other Sonarrs still synced
-                now, plans = datetime.now(timezone.utc), broadcast_plans(config, fresh=True)
-                dated = broadcast_dated(plans)
-                own = lambda ep: ep["id"] in dated  # its own schedule dates it
-                wanted = [ep for ep in missing_episodes() if not own(ep)]
-                seen = {ep["id"] for ep in wanted}
-                wanted += [ep for ep in early_episodes(config, now) if ep["id"] not in seen and not own(ep)]
-                wanted += [ep for ep in broadcast_episodes(config, now - timedelta(days=AUTO_DAYS + 1), now + timedelta(days=EARLY_DAYS_MAX + 1), plans)
-                           if not ep.get("hasFile") and ep.get("monitored", True) and ep["series"].get("monitored", True)]
-                failed = sync(config, settings, wanted, kind="auto")
+                failed = sync(config, settings, automatic_episodes(config), kind="auto")
                 instance_failed.pop("", None)
             except Exception as e:
                 why = no_credentials(f"{type(e).__name__}: {e}")
@@ -4323,7 +4329,7 @@ def sync_instance(inst: dict, config: dict, settings: dict) -> int:
     with on_instance(inst):
         try:
             series = {k: v for k, v in (config.get("series") or {}).items() if not off_in(inst, v)}
-            wanted = [ep for ep in missing_episodes() if ep["series"].get("tvdbId") in series]
+            wanted = [ep for ep in automatic_episodes(config) if ep["series"].get("tvdbId") in series]
             failed = sync(instance_config(inst, config), settings, wanted, kind="auto")
             instance_failed.pop(inst["name"], None)
             return failed
