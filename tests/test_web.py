@@ -5713,9 +5713,9 @@ def test_replace_anyway_holds_for_a_retry_and_an_episode_queued_again(monkeypatc
     cards = [{"episodeId": 5, "batch": "20261012-070357-6b5682", "replace": True}, {"episodeId": 6, "batch": "20261012-070357-6b5682"}]
     monkeypatch.setattr(web, "cards_on_disk", lambda: cards)
     monkeypatch.setattr(web.sonarr_sync.RUNS_DIR.__class__, "exists", lambda self: True)
-    assert web.retried_replace([5], "20261012-070357-6b5682") is True
-    assert web.retried_replace([6], "20261012-070357-6b5682") is False
-    assert web.retried_replace([5], "20261012-080000-aaaaaa") is False  # another job's attempt
+    assert web.retried_replace([5], "20261012-070357-6b5682", "") is True
+    assert web.retried_replace([6], "20261012-070357-6b5682", "") is False
+    assert web.retried_replace([5], "20261012-080000-aaaaaa", "") is False  # another job's attempt
 
     # a cancelled episode queued again keeps it
     monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
@@ -7424,8 +7424,8 @@ def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
     monkeypatch.setattr(web, "join_job", join)
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
     monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
-    monkeypatch.setattr(web, "retried_numbering", lambda ids, batch: None)
-    monkeypatch.setattr(web, "retried_replace", lambda ids, batch: False)
+    monkeypatch.setattr(web, "retried_numbering", lambda ids, batch, instance: None)
+    monkeypatch.setattr(web, "retried_replace", lambda ids, batch, instance: False)
 
     class Request:
         def __init__(self, body): self.body = body
@@ -7654,3 +7654,228 @@ def test_the_page_fits_and_ranks_tracks_on_a_ladder_as_the_server_does(tmp_path,
         for step in own:
             assert run_page_function("fitsStep", step, track) == sync.fits(step, track), (step, track)
     assert len(reached) >= 5  # the cases reach most steps, not one
+
+
+def test_a_non_ascii_setup_code_or_session_signature_is_refused_not_a_500(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    monkeypatch.setenv("SETUP_TOKEN", "code")
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    page = {"X-Unshackle": "1"}
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            before = [(await client.post(path, json={"setup_code": "é", "password": "password1"}, headers=page)).status
+                      for path in ("/api/setup", "/api/setup/restore", "/api/sonarr/test")]
+            web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+            client.session.cookie_jar.update_cookies({web.SESSION_COOKIE: f"{int(web.time.time()) + 3600}.x.é"})
+            answer = await client.get("/api/session")
+            return before, answer.status, (await answer.json())["logged_in"]
+
+    assert asyncio.run(go()) == ([403, 403, 403], 200, False)
+
+
+def test_someone_the_reverse_proxy_signed_in_can_use_the_test_buttons(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "sonarr_status", lambda url, key: "4.0")
+    monkeypatch.setattr(web, "check_unshackle", lambda settings: 3)
+    headers = {"X-Unshackle": "1", "Remote-User": "alice"}
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:  # the test client connects from 127.0.0.1
+            async def tests():
+                sonarr = await client.post("/api/sonarr/test", json={"sonarr_url": "http://sonarr:8989", "sonarr_api_key": "k"}, headers=headers)
+                unshackle = await client.post("/api/unshackle/test", json={"unshackle_mode": "local"}, headers=headers)
+                return sonarr.status, unshackle.status
+
+            web.sonarr_sync.SETTINGS.update(proxy_auth_header="Remote-User", proxy_auth_from="127.0.0.1/32")
+            before = await tests()  # not set up: the proxy's word is no setup code
+            web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+            web.sonarr_sync.SETTINGS.update(proxy_auth_header="Remote-User", proxy_auth_from="127.0.0.1/32")
+            return before, await tests()
+
+    assert asyncio.run(go()) == ((403, 403), (200, 200))
+
+
+def test_missing_with_a_superscript_digit_in_days_is_a_400_not_a_500(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    monkeypatch.setattr(web, "on_sonarr", lambda inst, fn, days: [])
+    with pytest.raises(web.web.HTTPBadRequest):
+        asyncio.run(web.missing(SimpleNamespace(query={"days": "²"})))
+
+
+def test_a_masked_notification_address_hides_an_ntfy_topic_and_keeps_known_webhook_paths(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    shown = lambda url: web.masked_url(url).partition("#")[0]
+    assert shown("https://ntfy.sh/familyalerts") == "https://ntfy.sh/•••"  # the topic is the whole secret
+    assert shown("https://user:pw@ntfy.example/alerts/more") == "https://ntfy.example/•••"
+    assert shown("https://discord.com/api/webhooks/123/SECRET") == "https://discord.com/api/webhooks/•••"
+    assert shown("https://hooks.slack.com/services/T0/B0/SECRET") == "https://hooks.slack.com/services/•••"
+    assert shown("tgram://BOTTOKEN/42") == "tgram://•••"
+
+
+def test_password_key_language_and_restore_writes_read_and_write_the_config_under_its_lock(tmp_path, monkeypatch):
+    # a sync thread that read the config just before would otherwise write the old password or key back
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def no_reauth(request, password):
+        return None
+    monkeypatch.setattr(web, "reauth", no_reauth)
+    monkeypatch.setattr(web, "backup_data", lambda text, passphrase: {"series": {}})
+    events = []
+    real_read, real_write = web.read_config, web.write_config
+    monkeypatch.setattr(web, "read_config", lambda: events.append(("read", web.CONFIG_LOCK.locked())) or real_read())
+    monkeypatch.setattr(web, "write_config", lambda config: events.append(("write", web.CONFIG_LOCK.locked())) or real_write(config))
+
+    def request(body, action=""):
+        async def json():
+            return body
+        return SimpleNamespace(json=json, match_info={"action": action}, secure=False, headers={}, cookies={})
+
+    calls = {
+        "set_language": lambda: web.set_language(request({"language": "en"})),
+        "change_password": lambda: web.change_password(request({"current": "password1", "new": "password2"})),
+        "logout_others": lambda: web.logout_others(request({})),
+        "api_key_action": lambda: web.api_key_action(request({"password": "password2"}, "new")),
+        "restore": lambda: web.restore(request({"password": "password2", "text": "x"})),
+        "backup_offsite": lambda: web.backup_offsite(request({"password": "password2", "settings": {}})),
+    }
+    unlocked = []
+    for name, call in [*calls.items(), ("reset_password", None)]:
+        events.clear()
+        asyncio.run(call()) if call else web.reset_password("password3")
+        writes = [i for i, (kind, _) in enumerate(events) if kind == "write"]
+        if not writes or not all(events[i][1] and events[i - 1] == ("read", True) for i in writes):
+            unlocked.append(name)
+    assert unlocked == []
+
+
+def test_an_api_retry_repeats_the_numbering_and_replace_of_the_attempt_it_retries(tmp_path, monkeypatch):
+    import asyncio
+    import hashlib
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1",
+                                                    "api_key": hashlib.sha256(b"key").hexdigest()}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    by_title = {"episode_map": {"S02E01": "S01E07"}}  # found by its title on the page, for that download only
+    for run_id, episode, extra in (("20261003-093229-000001-442345-S02E01", 70, {"numbering": by_title}),
+                                   ("20261003-093000-000001-442345-S02E02", 71, {"replace": True}),
+                                   ("20261003-092900-000001-442345-S02E03", 72, {})):
+        card = {"id": run_id, "episodeId": episode, "tvdbId": 442345, "sxxeyy": run_id[-6:], "outcome": "failed",
+                "started": "2026-10-03T09:32:29+00:00", "ended": "2026-10-03T09:33:00+00:00", **extra}
+        (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    asked = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("numbering"), kw.get("replace", False))))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as script:
+            key = {web.API_KEY_HEADER: "key"}
+            for ids in ([70], [71], [72]):
+                assert (await script.post("/api/v1/downloads", json={"episodeIds": ids, "retry": True}, headers=key)).status == 200
+            # asked anew, not as a retry: the series' numbering, no Replace
+            assert (await script.post("/api/v1/downloads", json={"episodeIds": [70]}, headers=key)).status == 200
+
+    asyncio.run(go())
+    assert asked == [([70], by_title, False), ([71], None, True), ([72], None, False), ([70], None, False)]
+
+
+def api_retries(tmp_path, monkeypatch, cards, *bodies):
+    """The status of each API retry asked, and what each asked run_sync for, with these attempts on disk."""
+    import asyncio
+    import hashlib
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1",
+                                                    "api_key": hashlib.sha256(b"key").hexdigest()}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    for run_id, episode, extra in cards:
+        card = {"id": run_id, "episodeId": episode, "tvdbId": 442345, "sxxeyy": run_id[-6:], "outcome": "failed",
+                "started": "2026-10-03T09:32:29+00:00", "ended": "2026-10-03T09:33:00+00:00", **extra}
+        (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    asked = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("numbering"), kw.get("replace", False))))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as script:
+            return [(await script.post("/api/v1/downloads", json={**body, "retry": True},
+                                       headers={web.API_KEY_HEADER: "key"})).status for body in bodies]
+
+    return asyncio.run(go()), asked
+
+
+def test_an_api_retry_reads_only_the_attempts_of_its_own_sonarr(tmp_path, monkeypatch):
+    # Episode ids overlap between Sonarr instances: the newest attempt of 70 is the 4K Sonarr's, not this one's
+    by_title = {"episode_map": {"S02E01": "S01E07"}}
+    cards = [("20261003-093229-000001-442345-S02E01", 70, {"numbering": by_title, "replace": True, "instance": "sonarr-4k"}),
+             ("20261003-093000-000001-442345-S02E02", 70, {})]
+    assert api_retries(tmp_path, monkeypatch, cards, {"episodeIds": [70]}) == ([200], [([70], None, False)])
+
+
+def test_an_api_retry_of_episodes_tried_differently_is_refused(tmp_path, monkeypatch):
+    # From different jobs: one episode's numbering and Replace anyway can't stand for the other's
+    by_title = {"episode_map": {"S02E01": "S01E07"}}
+    cards = [("20261003-093229-000001-442345-S02E01", 70, {"numbering": by_title}),
+             ("20261003-093000-000001-442345-S02E02", 71, {"replace": True}),
+             ("20261003-092900-000001-442345-S02E03", 72, {"replace": True})]
+    statuses, asked = api_retries(tmp_path, monkeypatch, cards, {"episodeIds": [70, 71]}, {"episodeIds": [71, 72]})
+    assert (statuses, asked) == ([400, 200], [([71, 72], None, True)])
+
+def test_a_single_download_is_not_a_sync_running(tmp_path, monkeypatch):
+    import asyncio
+    import threading
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    release = threading.Event()
+    monkeypatch.setattr(web.sonarr_sync, "main", lambda *args, **kwargs: release.wait(5))
+    try:
+        download = web.run_sync([1], kind="manual")
+        assert web.running() is False  # one episode asked by hand: Sync now still starts
+        assert json.loads(asyncio.run(web.start_sync(None)).text) == {"running": True}
+        assert web.running() is True
+        with pytest.raises(web.web.HTTPConflict):
+            asyncio.run(web.start_sync(None))
+        assert len(web.sync_threads) == 2  # both still count toward the cap on threads
+    finally:
+        release.set()
+    download.join(2)

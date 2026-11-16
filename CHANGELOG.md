@@ -124,6 +124,14 @@ Every change worth knowing, newest first. The format follows
 - Settings, Per service no longer stays blank when one service's options cannot be loaded (Unshackle down, or a service it no longer has): the list shows, and the stale entry can be removed.
 - The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
 - The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
+- Run sync now (`POST /api/sync` and `/api/v1/sync`) now starts while a single download, a retry or an upgrade is going, and only a sync of every missing episode counts as "a sync running" on Settings and in `/api/v1/status`.
+- A retry through the API (`"retry": true` on `POST /api/v1/downloads`) now repeats its last attempt's numbering and Replace anyway, as the page's Retry does, instead of asking for the series' numbering and keeping the file.
+- Changing the password, the API key or the page's language, logging out other devices, restoring a backup and saving where backups are sent now wait for a sync's settings write, so a revoked key or an old password can no longer come back when both happen at once.
+- The README's reverse proxy section now says to pass on the original Host, without which Activity's live output is refused as cross-origin behind plain Nginx.
+- A notification address over https, such as an ntfy topic at `https://ntfy.sh/familyalerts`, now reaches the page with everything after its host hidden; only Discord's and Slack's webhook paths still show.
+- Activity's catch-up with a superscript digit as its number of days (`/api/missing?days=²`) now answers that days is a number instead of a server error.
+- Someone signed in through the reverse proxy can now use the Test buttons for Sonarr and Unshackle, instead of being told to enter the setup code first.
+- A setup code or session cookie with an accented character is now refused as wrong instead of failing with a server error that kept the page from loading.
 - **Test Unshackle** with an edited local command no longer points the downloads and syncs running at the same moment at the test command, and no longer refuses to run while a download is going.
 - Restarting Unshackle from the page now makes Unshacklarr look again at where it keeps its cookies, devices and config, so a changed `directories:` no longer leaves sign-ins looking expired until Unshacklarr restarts.
 - A local Unshackle whose launcher starts with `#!/usr/bin/env python3` now starts, instead of failing with "illegal option".
