@@ -2075,6 +2075,7 @@ const box = {
   api: (url, opts) => url === "/api/config" ? (box.sentBody = opts.body, new Promise((resolve) => { release = resolve; })) : Promise.resolve(offsiteReply),
   renderCommands() {}, renderInherited() {}, renderServiceFilter() {}, renderWall() {}, loadSchedule() {}, renderOffsite() {},
   boWrong() {}, toast() {}, el: () => ({}), S: null, renderReleaseNext() { box.previews = (box.previews || 0) + 1; },
+  renderSettings() { box.redrawn = (box.redrawn || 0) + 1; },
 };
 vm.createContext(box);
 vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); } };", box);
@@ -2163,6 +2164,41 @@ const fresh = () => {
   saving = page.save(); release({ series: { 7: { ...show, release_time: "20:00", release_day: 1 } } }); await saving;  // only the day learnt
   out.learntDayShown = bars["#d-release-day"].value === "1" && box.previews === 1;
   box.current = null; box.drawerSnapshot = null;
+
+  // another tab saved the language meanwhile; the server kept both: this page takes it, in the same object (#184)
+  const tabB = () => {
+    box.S = { config: { settings: { theme: "dark", language: "en", debug: false }, series: {} } };
+    page.baseline(box.S.config);
+    vm.runInContext("savedUnits = configUnits(S.config)", box);
+  };
+  tabB(); box.redrawn = 0; let held = box.S.config.settings; held.debug = true; page.dirty();
+  saving = page.save(); release({ settings: { theme: "dark", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
+  out.mergedTaken = box.S.config.settings === held && held.language === "fr" && !page.state().unsaved && bars["#savebar"].hidden
+    && box.redrawn === 1;
+  held.theme = "light"; page.dirty();
+  saving = page.save(); release({}); await saving;
+  out.nextSaveSendsMerged = JSON.parse(box.sentBody).settings.language === "fr";
+  // a Sonarr's editor holds its entry: the key the server keeps (masked as api_key_set) changes that entry, not another
+  box.S = { config: { settings: { sonarrs: [{ name: "4K", url: "http://a" }] }, series: {} } }; page.baseline(box.S.config);
+  vm.runInContext("savedUnits = configUnits(S.config)", box);
+  const entry = box.S.config.settings.sonarrs[0]; entry.api_key = "k"; page.dirty();
+  saving = page.save(); release({ settings: { sonarrs: [{ name: "4K", url: "http://a", api_key_set: true }] } }); await saving;
+  out.listEntryKept = box.S.config.settings.sonarrs[0] === entry && entry.api_key_set === true && !("api_key" in entry)
+    && !page.state().unsaved;
+  tabB(); held = box.S.config.settings; held.debug = true; page.dirty();
+  saving = page.save(); held.language = "de"; page.dirty();  // changed here while the save ran
+  release({ settings: { theme: "dark", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
+  out.editMeanwhileWins = held.language === "de" && page.state().unsaved;
+  saving = page.save(); release({}); await saving;
+  out.editMeanwhileSent = JSON.parse(box.sentBody).changed.includes("settings") && JSON.parse(box.sentBody).settings.language === "de";
+  const seen = { service: "iV", title: "https://example.com/show", since: "2026-11-01T00:00:00+00:00" };
+  box.S = { config: { settings: {}, series: { 7: { ...seen } } } }; page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box);
+  box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };
+  box.S.config.series[7].episode_offset = 2; page.dirty();
+  saving = page.save(); release({ series: { 7: { ...seen, episode_offset: 2, title: "https://example.com/show-2" } } }); await saving;
+  out.seriesMergedAndPanelClean = box.S.config.series[7].title === "https://example.com/show-2" && !page.state().unsaved
+    && JSON.parse(box.drawerSnapshot.conf).title === "https://example.com/show-2";
+  box.current = null; box.drawerSnapshot = null;
   console.log(JSON.stringify(out));
 })();
 """
@@ -2198,6 +2234,12 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "otherSourceTakesNothing": True,  # moved to another service while the Save ran: the old one's time is not its
         "otherSourceSnapshotTakesNothing": True,  # nor its panel's snapshot, so closing it asks nothing
         "learntDayShown": True,  # a day kept alone shows too, and the next-episode line follows
+        "mergedTaken": True,  # another tab's change the server kept is taken, in the object the editors hold (#184)
+        "listEntryKept": True,  # an open Sonarr editor's entry is updated in place, not replaced
+        "nextSaveSendsMerged": True,  # so a later Save no longer sends the older copy back
+        "editMeanwhileWins": True,  # an edit made while the Save ran is not overwritten by its answer
+        "editMeanwhileSent": True,
+        "seriesMergedAndPanelClean": True,  # a series too, and its open panel does not ask to discard
     }
 
 

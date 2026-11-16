@@ -215,6 +215,9 @@ Every change worth knowing, newest first. The format follows
   restart, are tried again as before.
 - **No more false cookie warnings.** Crave's load balancer cookies (a week) and Apple's `utsdc` (an hour) no longer
   count as the date the login ends.
+- **A second Save from an older tab no longer undoes another tab's change.** After a Save, the page takes the
+  settings and series as the server merged them, keeping what you changed while it ran, so its next Save no longer
+  sends its older copy back.
 - **A backup a Save would refuse is no longer restored.** One with an Unshackle server or a Sonarr without a name,
   or a series value out of range, is refused with the reason before anything is written; before, it was written and
   the app could not start again until `config.yaml` was fixed by hand.

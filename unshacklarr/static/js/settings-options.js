@@ -703,13 +703,46 @@ async function save() {
       if (now?.service && missing(now, k) && (k === "since" || same)) now[k] = conf[k];
     }
   }
+  // The parts sent, as the server merged them with another tab's saves: taken key by key, never over an edit made
+  // while the request ran, so the next save of them does not send this page's older copy back. In place, down to
+  // each Sonarr or server of a list: the open editors hold references into S.config.
+  const alike = (a, b) => stableJSON(a) === stableJSON(b);
+  const nested = (a, b) => a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b)
+    && (!Array.isArray(a) || a.length === b.length);
+  const take = (into, was, now, series = false) => {
+    const moved = series && (into.service !== now.service || into.title !== now.title);  // a time learnt for another source is not its
+    let took = false;
+    for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
+      if (alike(now[k], was[k]) || !alike(into[k], was[k]) || (moved && ["release_time", "release_day"].includes(k))) continue;
+      if (nested(into[k], now[k])) take(into[k], was[k], now[k]);
+      else if (k in now) into[k] = now[k];
+      else delete into[k];
+      took = true;
+    }
+    return took;
+  };
+  const plain = (x) => x && typeof x === "object" && !Array.isArray(x);
+  const merged = {};
+  let redraw = false;
+  for (const u of changed) {
+    const id = u.startsWith("series:") ? u.slice("series:".length) : null;
+    const theirs = id ? saved?.series?.[id] : saved?.[u], mine = id ? S.config.series[id] : S.config[u];
+    if (!units[u] || !plain(theirs) || !plain(mine) || (id && !mine.service)) continue;  // stopped meanwhile: stays so
+    merged[u] = [JSON.parse(units[u]), theirs, Boolean(id)];
+    if (take(mine, ...merged[u]) && !id) redraw = true;
+    if (id) base.series[id] = theirs; else base[u] = theirs;
+    savedUnits[u] = JSON.stringify(alike(mine, theirs) ? mine : theirs);
+  }
   savedConfig = stableJSON(base);
+  if (redraw) renderSettings();  // another tab's settings now shown, its Sonarrs and servers too
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
   const open = drawerSnapshot && JSON.parse(drawerSnapshot.conf || "{}");  // its drawer, open since or opened meanwhile
   const sentShow = open && base.series[drawerSnapshot.id];  // and, for a release time, the source it was learnt for
   const added = open && Object.entries(stamped[drawerSnapshot.id] || {}).filter(([k]) => missing(open, k)
     && (k === "since" || (open.service === sentShow?.service && open.title === sentShow?.title)));
   if (added?.length) drawerSnapshot.conf = JSON.stringify({ ...open, ...Object.fromEntries(added) });
+  const panel = drawerSnapshot && merged[`series:${drawerSnapshot.id}`];
+  if (panel) { const snap = JSON.parse(drawerSnapshot.conf); take(snap, ...panel); drawerSnapshot.conf = JSON.stringify(snap); }
   const shown = current && S.config.series[current.tvdbId];  // its editor shows what is saved
   const learnt = stamped[current?.tvdbId];
   if (shown && (learnt?.release_time || learnt?.release_day)) {
