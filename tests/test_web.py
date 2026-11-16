@@ -2282,6 +2282,17 @@ const fresh = () => {
   saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "UHD", url: "http://a" }] } }); await saving;
   out.mergedRenameReachesLibraries = box.S.sonarrsOf[7][0].name === "UHD" && box.S.sonarrsOf[7][0].id === 3
     && page.savedSonarr(box.S.sonarrsOf[7][0].name) === "UHD";
+  // and each series' own settings for it, saved and in its open panel, as the other tab saved them
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "old", url: "http://a" }] }, series: { 7: { service: "IV", sonarrs: { old: { off: true } } } } },
+    sonarrsOf: { 7: [{ name: "old", id: 3 }] } };
+  box.current = { tvdbId: 7 };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "new", url: "http://a" }] } }); await saving;
+  out.mergedRenameReachesSeriesSettings = JSON.stringify(box.S.config.series[7].sonarrs) === '{"new":{"off":true}}'
+    && JSON.stringify(JSON.parse(box.drawerSnapshot.conf).sonarrs) === '{"new":{"off":true}}' && !page.state().unsaved
+    && vm.runInContext("configUnits(S.config)['series:7'] === savedUnits['series:7']", box);
+  box.current = box.drawerSnapshot = null;
   // and when another tab also added a Sonarr, so the whole list is taken: the rename is found by its address
   box.S = { config: { settings: { debug: false, sonarrs: [{ name: "old", url: "http://a" }] }, series: {} }, sonarrsOf: { 7: [{ name: "old", id: 3 }] } };
   page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
@@ -2360,6 +2371,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "nestedEditKeepsOthersRename": True,  # an edit inside a list entry does not block another tab's change beside it
         "mergedRenameIsSavedName": True,  # a rename another tab saved is the name the server knows
         "mergedRenameReachesLibraries": True,  # and the series' libraries follow it, so episode requests name it
+        "mergedRenameReachesSeriesSettings": True,  # and each series' own settings for that Sonarr, so none turns back on
         "replacedListRenameReachesLibraries": True,  # also when another tab added a Sonarr and the list is taken whole
         "listEditedMeanwhileKeepsNames": True,  # Sonarrs removed or added while the Save ran: no name moves to another
         "listEntriesMatchedByIdentity": True,  # and no other tab's change lands on another entry: the next Save asks to reload

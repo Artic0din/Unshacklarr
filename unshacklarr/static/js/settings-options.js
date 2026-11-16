@@ -759,6 +759,19 @@ async function save() {
   }));
   if (renamed.size) for (const [tvdb, libs] of Object.entries(S.sonarrsOf || {}))
     S.sonarrsOf[tvdb] = libs.map((o) => renamed.has(o.name) ? { ...o, name: renamed.get(o.name) } : o);
+  // and each series' own settings for it, here and as saved (quality.moveSonarrRefs: the new name starts clean)
+  const rekey = (conf) => {
+    const s = conf?.sonarrs;
+    if (!s) return conf;
+    const moved = [...renamed].filter(([from]) => from in s).map(([from, to]) => [to, s[from]]);
+    for (const [from, to] of renamed) { delete s[from]; delete s[to]; }
+    for (const [to, v] of moved) s[to] = v;
+    return conf;
+  };
+  if (renamed.size) {
+    for (const series of [S.config.series, base.series]) Object.values(series || {}).forEach(rekey);
+    for (const u of Object.keys(savedUnits)) if (u.startsWith("series:")) savedUnits[u] = JSON.stringify(rekey(JSON.parse(savedUnits[u])));
+  }
   savedConfig = stableJSON(base);
   if (redraw) renderSettings();  // another tab's settings now shown, its Sonarrs and servers too
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
@@ -769,6 +782,7 @@ async function save() {
   if (added?.length) drawerSnapshot.conf = JSON.stringify({ ...open, ...Object.fromEntries(added) });
   const panel = drawerSnapshot && merged[`series:${drawerSnapshot.id}`];
   if (panel) { const snap = JSON.parse(drawerSnapshot.conf); take(snap, ...panel); drawerSnapshot.conf = JSON.stringify(snap); }
+  if (renamed.size && drawerSnapshot?.conf) drawerSnapshot.conf = JSON.stringify(rekey(JSON.parse(drawerSnapshot.conf)));
   const shown = current && S.config.series[current.tvdbId];  // its editor shows what is saved
   const learnt = stamped[current?.tvdbId];
   if (shown && (learnt?.release_time || learnt?.release_day)) {
