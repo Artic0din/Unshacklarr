@@ -1975,6 +1975,8 @@ vm.runInContext(`
 let runsSeq = 0, runCards = [], runsTimer = null;
 const isLive = (c) => c.outcome === "running";
 const renderConsole = () => drawn.push(runCards.map((c) => c.id));
+const speedLog = {}, muxLog = {}, barWidths = new Map(), thumbs = new Map(), tracksOpen = new Set();
+${grab("forgetGoneRuns")}
 ${grab("openActivity")}
 ${src.slice(src.indexOf("let feedReloading"), src.indexOf("function liveTick"))}
 ${grab("liveTick")}

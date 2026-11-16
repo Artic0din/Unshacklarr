@@ -641,6 +641,7 @@ $("#dx-upmode").querySelectorAll("button").forEach((b) => b.onclick = () => {
 
 /* Automation: release times learnt, the download window. */
 function renderLearnWindow() {
+  if (!S.config?.settings) return;  // reloaded on this page: drawn once the config is in
   const set = S.config.settings;
   $("#ax-learn").checked = set.release_learn === true;
   $("#ax-learn-say").textContent = set.release_learn
