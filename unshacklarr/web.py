@@ -4819,30 +4819,31 @@ async def push_test(request):
     return web.json_response({"sent": sent})
 
 
-def last_attempts(ids: list[int], batch: str):
-    """The cards of the episodes' last attempts, newest first: each episode's last one decides."""
+def last_attempts(ids: list[int], batch: str, instance: str):
+    """The cards of the episodes' last attempts in that Sonarr ("" the main one; its episode ids are its own),
+    newest first: each episode's last one decides."""
     if not sonarr_sync.RUNS_DIR.exists():
         return
     seen = set()
     for card in cards_on_disk():
         episode = card.get("episodeId")
-        if episode not in ids or episode in seen or (batch and card.get("batch") != batch):
+        if episode not in ids or episode in seen or card.get("instance", "") != instance or (batch and card.get("batch") != batch):
             continue
         seen.add(episode)
         yield card
 
 
-def retried_numbering(ids: list[int], batch: str) -> dict | None:
+def retried_numbering(ids: list[int], batch: str, instance: str) -> dict | None:
     """The numbering a download was given for itself (from the page: by title, or set for it), which a retry
     of it repeats; None when its last attempt used the series' own. The episodes of one retry come from one
     job, given one numbering: the first found stands for them all."""
-    return next((card["numbering"] for card in last_attempts(ids, batch) if card.get("numbering") is not None), None)
+    return next((card["numbering"] for card in last_attempts(ids, batch, instance) if card.get("numbering") is not None), None)
 
 
-def retried_replace(ids: list[int], batch: str) -> bool:
+def retried_replace(ids: list[int], batch: str, instance: str) -> bool:
     """Whether the attempts a retry repeats were picked with Replace anyway: the retry replaces too (an attempt
     the library kept the same file for is otherwise kept again)."""
-    return any(card.get("replace") is True for card in last_attempts(ids, batch))
+    return any(card.get("replace") is True for card in last_attempts(ids, batch, instance))
 
 
 def cdm_refusal(ids: list[int]) -> str:
@@ -4881,8 +4882,8 @@ async def download(request):
         raise web.HTTPBadRequest(text=why)
     if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries
         if numbering is None:
-            numbering = await asyncio.to_thread(retried_numbering, ids, batch)
-        replace = replace or await asyncio.to_thread(retried_replace, ids, batch)
+            numbering = await asyncio.to_thread(retried_numbering, ids, batch, inst["name"] if inst else "")
+        replace = replace or await asyncio.to_thread(retried_replace, ids, batch, inst["name"] if inst else "")
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     if batch and not inst:  # the job still runs: in its queue (retries next, in order), one download at a time
@@ -6267,8 +6268,8 @@ async def v1_start_download(request):
         raise web.HTTPBadRequest(text=why)
     numbering = None
     if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries: as the page's Retry
-        numbering = await asyncio.to_thread(retried_numbering, ids, "")
-        replace = replace or await asyncio.to_thread(retried_replace, ids, "")
+        numbering = await asyncio.to_thread(retried_numbering, ids, "", inst["name"] if inst else "")
+        replace = replace or await asyncio.to_thread(retried_replace, ids, "", inst["name"] if inst else "")
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     room_for_one_more()

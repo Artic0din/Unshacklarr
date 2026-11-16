@@ -5682,9 +5682,9 @@ def test_replace_anyway_holds_for_a_retry_and_an_episode_queued_again(monkeypatc
     cards = [{"episodeId": 5, "batch": "20261012-070357-6b5682", "replace": True}, {"episodeId": 6, "batch": "20261012-070357-6b5682"}]
     monkeypatch.setattr(web, "cards_on_disk", lambda: cards)
     monkeypatch.setattr(web.sonarr_sync.RUNS_DIR.__class__, "exists", lambda self: True)
-    assert web.retried_replace([5], "20261012-070357-6b5682") is True
-    assert web.retried_replace([6], "20261012-070357-6b5682") is False
-    assert web.retried_replace([5], "20261012-080000-aaaaaa") is False  # another job's attempt
+    assert web.retried_replace([5], "20261012-070357-6b5682", "") is True
+    assert web.retried_replace([6], "20261012-070357-6b5682", "") is False
+    assert web.retried_replace([5], "20261012-080000-aaaaaa", "") is False  # another job's attempt
 
     # a cancelled episode queued again keeps it
     monkeypatch.setattr(web.sonarr_sync, "RUNS_DIR", tmp_path)
@@ -7393,8 +7393,8 @@ def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
     monkeypatch.setattr(web, "join_job", join)
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
     monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
-    monkeypatch.setattr(web, "retried_numbering", lambda ids, batch: None)
-    monkeypatch.setattr(web, "retried_replace", lambda ids, batch: False)
+    monkeypatch.setattr(web, "retried_numbering", lambda ids, batch, instance: None)
+    monkeypatch.setattr(web, "retried_replace", lambda ids, batch, instance: False)
 
     class Request:
         def __init__(self, body): self.body = body
@@ -7779,6 +7779,43 @@ def test_an_api_retry_repeats_the_numbering_and_replace_of_the_attempt_it_retrie
 
     asyncio.run(go())
     assert asked == [([70], by_title, False), ([71], None, True), ([72], None, False), ([70], None, False)]
+
+
+def api_retries(tmp_path, monkeypatch, cards, *bodies):
+    """The status of each API retry asked, and what each asked run_sync for, with these attempts on disk."""
+    import asyncio
+    import hashlib
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1",
+                                                    "api_key": hashlib.sha256(b"key").hexdigest()}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    for run_id, episode, extra in cards:
+        card = {"id": run_id, "episodeId": episode, "tvdbId": 442345, "sxxeyy": run_id[-6:], "outcome": "failed",
+                "started": "2026-10-03T09:32:29+00:00", "ended": "2026-10-03T09:33:00+00:00", **extra}
+        (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    asked = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("numbering"), kw.get("replace", False))))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as script:
+            return [(await script.post("/api/v1/downloads", json={**body, "retry": True},
+                                       headers={web.API_KEY_HEADER: "key"})).status for body in bodies]
+
+    return asyncio.run(go()), asked
+
+
+def test_an_api_retry_reads_only_the_attempts_of_its_own_sonarr(tmp_path, monkeypatch):
+    # Episode ids overlap between Sonarr instances: the newest attempt of 70 is the 4K Sonarr's, not this one's
+    by_title = {"episode_map": {"S02E01": "S01E07"}}
+    cards = [("20261003-093229-000001-442345-S02E01", 70, {"numbering": by_title, "replace": True, "instance": "sonarr-4k"}),
+             ("20261003-093000-000001-442345-S02E02", 70, {})]
+    assert api_retries(tmp_path, monkeypatch, cards, {"episodeIds": [70]}) == ([200], [([70], None, False)])
 
 
 def test_a_single_download_is_not_a_sync_running(tmp_path, monkeypatch):
