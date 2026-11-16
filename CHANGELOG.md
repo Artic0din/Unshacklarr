@@ -113,6 +113,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Quieter text is no longer too faint to read.** Other series' cards in Schedule, days outside the month, the counts on filters (the bell, Series, Activity), Series in Select mode that are not picked, an Unshackle feature that is not supported, a one-off download's file name and a hidden count in a job were faded with opacity, which left their text under the 4.5:1 contrast it needs. They now take the muted text colour instead, and a job count you hide keeps its strike-through. (#280)
 - With "Reduce motion" on, the shimmer on a download's current step in Activity now stays still, like every other animation, instead of looping for as long as the download runs. (#280)
 - A restart while a retry ran beside its job (another Replace choice) no longer loses the job's queued episodes: each is kept with its own settings and picked up again. The queue saved by the version before still loads; once this version has saved it, an older version can no longer read it.
 - An API download request with `"audio"` now asks the service for that language first, with the series' own audio languages after it, and accepts the file in it (an episode that has a file is replaced only by one in that language), instead of downloading the series' usual language again and counting it as an audio upgrade. (#187)
