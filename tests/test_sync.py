@@ -6511,6 +6511,23 @@ def test_a_sync_picked_up_again_starting_while_the_queue_is_saved_is_not_left_ou
         sync.waiting.pop(7, None)
 
 
+def test_a_paused_job_stays_paused_and_running_while_another_sync_of_it_still_downloads(tmp_path, monkeypatch):
+    # Two syncs of a job picked up after a restart, the later one ends first: the other is still the job in Activity,
+    # its pause and options buttons working, and it stays paused
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: 0)
+    other = {"episodes": [], "stubs": {}, "closed": False}
+    monkeypatch.setitem(sync.batch_jobs, "B", [other])
+    monkeypatch.setitem(sync.running_jobs, "B", other)
+    sync.paused_jobs.add("B")
+    try:
+        sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
+        assert sync.running_jobs.get("B") is other
+        assert "B" in sync.paused_jobs
+    finally:
+        sync.paused_jobs.discard("B")
+
+
 def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_path, monkeypatch):
     # A retry ran beside its job under the same batch and ended first: the job's next episodes keep its French override
     sync = load(tmp_path, monkeypatch)

@@ -4563,11 +4563,14 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
                 waiting.pop(episode_id, None)
                 unqueued.discard(episode_id)
         with jobs_lock:
-            if running_jobs.get(batch) is job:
-                running_jobs.pop(batch)
-                paused_jobs.discard(batch)
             others = [j for j in batch_jobs.pop(batch, []) if j is not job] if batch else []
             last = not others
+            if running_jobs.get(batch) is job:  # another sync of it still downloading is the job now, paused or not
+                if others:
+                    running_jobs[batch] = others[-1]
+                else:
+                    running_jobs.pop(batch)
+                    paused_jobs.discard(batch)
             if others:
                 batch_jobs[batch] = others
             elif batch and not any(key[0] == batch for key in restoring):  # nor while one picked up again has yet to start
