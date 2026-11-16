@@ -418,6 +418,7 @@ function renderJob(j) {
   renderDock({ ...(now ? dockOf(now) : { ep: `${j.cards.length} episodes`, line: st.words.join(" · "),
     pct: st.live ? `${st.progress}%` : st.n.failed ? `${st.n.failed} failed` : "✓", tone: st.live ? "" : st.n.failed ? "err" : "ok", progress: st.progress }),
     acts: [
+      series ? { key: "open", label: "Open series", icon: DOCK.series, go: () => openDrawer(series) } : null,
       st.live && st.n.queued ? { key: "pause", label: st.paused ? "Resume the job" : "Pause the job", icon: st.paused ? DOCK.play : DOCK.pause, cls: st.paused ? "on" : "",
         go: (b) => pauseJob(j, !st.paused, b) } : null,
       st.live && st.n.queued ? { key: "opts", label: "Options of this job", icon: DOCK.opts, go: () => openJobOptions(j) } : null,
@@ -449,18 +450,20 @@ function jobDone(j, st) {
 }
 function listRow(c) {
   const started = new Date(c.started);
+  const asking = isLive(c) && c.prompt;  // it waits for the person, not for the service: no pulse, no bar
   const sub = isLive(c)
-    ? (c.prompt ? `${svcName(c.service)} · waiting for your answer` : c.waiting ? `${svcName(c.service)} · in the queue`
+    ? (asking ? svcName(c.service) : c.waiting ? `${svcName(c.service)} · in the queue`
       : isQueued(c) ? `${svcName(c.service)} · waiting for a slot` : `${svcName(c.service)} · ${afterTracks(c) || speedOf(c) || c.step}`)
     : c.outcome === "unavailable" && c.checks > 1 ? `${svcName(c.service)} · checked ${c.checks} times, last ${day(started)} ${time(started)}`
     : `${day(started)} ${time(started)}${c.ended ? ` · ${duration(new Date(c.ended) - started)}` : ""}`;
-  const side = isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
+  const side = asking ? el("span", { className: "chip ask", textContent: "Waiting for your answer" })
+    : isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
     : el("span", { className: `chip o-${c.outcome}`, textContent: outcomeOf(c) });
   const row = el("button", { className: "crow" + (c.id === picked_run ? " sel" : "") + hovering(`row:${c.id}`), dataset: { hk: `row:${c.id}`, fk: `row:${c.id}` }, onclick: () => pickRun(c.id) },
     thumb(`row:${c.id}`, posterOf(c)),
     el("span", {}, el("b", {}, el("span", { textContent: c.series }), el("em", { textContent: c.sxxeyy })),
       el("small", { textContent: c.attempts > 1 ? `${sub} · attempt ${c.attempts}` : sub }),
-      ...(isLive(c) && !isQueued(c) ? [el("span", { className: "bar" }, el("i", { style: `width:${Number(c.live?.progress) || 0}%`, dataset: { k: `row:${c.id}` } }))] : [])),
+      ...(isLive(c) && !isQueued(c) && !asking ? [el("span", { className: "bar" }, el("i", { style: `width:${Number(c.live?.progress) || 0}%`, dataset: { k: `row:${c.id}` } }))] : [])),
     side);
   return row;
 }
@@ -833,6 +836,7 @@ const DOCK = {
   term: '<path d="m5 8 4 4-4 4M12 16h7"/>', up: '<path d="M6 15l6-6 6 6"/>', pause: '<path d="M8 5v14M16 5v14"/>', play: '<path d="M7 5v14l11-7z"/>',
   opts: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
   retry: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  series: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
 };
 function dockOf(c) {  // one download: where it stands, in a line
   const live = isLive(c), pct = Math.round(Number(c.live?.progress) || 0);
