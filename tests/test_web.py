@@ -7516,3 +7516,47 @@ def test_a_queued_episode_taken_out_is_never_handed_to_the_job_loop_as_well(tmp_
     for t in turns:
         t.join(5)
     assert seen == [True, True, True] and not sync.waiting and not sync.unqueued
+
+
+@pytest.mark.parametrize("ends", ["after", "during"])
+def test_a_jobs_terminal_waits_for_the_episode_that_left_the_queue_but_has_no_log_yet(tmp_path, monkeypatch, ends):
+    # the job's last episode is out of the queue and its run not yet made: the terminal is not done, it shows it,
+    # even when the job ends between the terminal's read of the cards and its look at the job
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    run_id, batch = "20261116-000000-123456-1-S01E02", "20261116-000000-abcdef"
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.log").write_bytes(b"last episode\n")
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"ended": "now"}))
+    monkeypatch.setitem(sync.running_jobs, batch, {"episodes": [], "stubs": {}})
+    calls = []
+
+    def run_cards():
+        calls.append(1)
+        if len(calls) == 1:
+            if ends == "during":  # read before its card was written, the job over before the terminal looks
+                sync.running_jobs.pop(batch, None)
+            return []  # in between: nothing queued, nothing started
+        sync.running_jobs.pop(batch, None)
+        return [{"id": run_id, "batch": batch, "series": "Show", "sxxeyy": "S01E02", "outcome": "downloaded"}]
+    monkeypatch.setattr(web, "run_cards", run_cards)
+
+    class Socket:
+        closed = False
+
+        def __init__(self):
+            self.sent = []
+
+        async def prepare(self, request):
+            pass
+
+        async def send_bytes(self, data):
+            self.sent.append(data)
+
+        async def close(self):
+            self.closed = True
+    socket = Socket()
+    monkeypatch.setattr(web.web, "WebSocketResponse", lambda **kwargs: socket)
+    request = SimpleNamespace(headers={"Origin": "http://localhost"}, host="localhost", query={"batch": batch})
+    asyncio.run(web.terminal(request))
+    assert b"last episode\n" in socket.sent and socket.closed

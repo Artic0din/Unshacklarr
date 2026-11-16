@@ -225,6 +225,7 @@ Every change worth knowing, newest first. The format follows
   no Unshackle or Sonarr of its own and use the main ones.
 - **Mux progress with two downloads muxing at once.** Each shows its own again, instead of none, or another
   client's.
+- **A job's output shows its last episode.** It no longer closed just before that episode's log began.
 
 **🆕 Sonarr 5, on this branch until it is out of beta**
 - **Languages.** Your files without your audio languages, read from Sonarr 5's own tracks: watch them for the

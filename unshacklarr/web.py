@@ -5902,6 +5902,7 @@ async def terminal(request):
         if run_id:
             await send_log(ws, run_id)
         sent: set[str] = set()
+        over = False  # the job seen ended: one more read, its last card may have come since the one before
         while batch and not ws.closed:
             cards = sorted((c for c in await asyncio.to_thread(run_cards) if c.get("batch") == batch and not c.get("waiting") and c["outcome"] != "cancelled"), key=lambda c: c["id"])
             todo = [c for c in cards if c["id"] not in sent]
@@ -5910,8 +5911,10 @@ async def terminal(request):
                 await ws.send_bytes(f"\r\n\x1b[1;36m━━━ {c['series']} {c['sxxeyy']} ━━━\x1b[0m\r\n".encode())
                 await send_log(ws, c["id"])
                 sent.add(c["id"])
-            elif any(w.get("batch") == batch for w in list(sonarr_sync.waiting.values())):
-                await asyncio.sleep(0.5)  # the next one has not started yet
+            elif batch in sonarr_sync.running_jobs or any(w.get("batch") == batch for w in list(sonarr_sync.waiting.values())):
+                await asyncio.sleep(0.5)  # the next one has not started yet (out of the queue, its log not yet made)
+            elif not over:
+                over = True
             else:
                 break
         await ws.close()
