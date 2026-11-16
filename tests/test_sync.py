@@ -6285,3 +6285,43 @@ def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_pa
     sync.batch_syncs.pop("B")  # the job's own sync gone: one more sync of it is then the last
     sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
     assert "B" not in sync.job_options
+
+
+@pytest.mark.parametrize("ends", ["pause", "episode"])
+def test_a_job_that_lets_its_slot_go_never_frees_one_another_of_its_episodes_just_took(tmp_path, monkeypatch, ends):
+    # another episode of the job starts just after it was found idle: the slot it now downloads in stays held,
+    # whether the job was paused between episodes or its episode ended while it was paused
+    sync = load(tmp_path, monkeypatch)
+    run = lambda rid: type("Run", (), {"card": {"batch": "J"}, "id": rid, "say": lambda self, text: None})()
+    entered, leave, threads = threading.Event(), threading.Event(), []
+
+    def another_episode():
+        with sync.download_slot("", run("b")):
+            entered.set()
+            leave.wait(5)
+
+    class Racy(dict):
+        fired = False
+
+        def __contains__(self, job):
+            found = super().__contains__(job)
+            if job == "J" and not Racy.fired:  # found idle: the other episode starts now
+                Racy.fired = True
+                threads.append(threading.Thread(target=another_episode, daemon=True))
+                threads[-1].start()
+                entered.wait(0.3)
+            return found
+    monkeypatch.setattr(sync, "slot_active", Racy())
+    if ends == "pause":
+        with sync.slots:
+            sync.slot_jobs[""] = ["J"]
+        sync.pause_job("J", True)
+    else:
+        sync.paused_jobs.add("J")
+        with sync.download_slot("", run("a")):
+            pass
+    assert entered.wait(5)
+    held = "J" in sync.slot_jobs.get("", [])
+    leave.set()
+    threads[0].join(5)
+    assert held  # still downloading: its slot is not free for the next in line

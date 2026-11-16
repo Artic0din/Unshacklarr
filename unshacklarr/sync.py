@@ -678,8 +678,9 @@ def pause_job(batch: str, pause: bool) -> None:
         for card in list(waiting.values()):
             if card.get("batch") == batch:
                 card["paused"] = pause
-    if pause and batch not in slot_active:  # paused between episodes: its slot goes to the next in line now (else
-        release_job(batch)                   # when its episode ends); resumed, it asks again at the end of the line (#10)
+    with slots:  # checked and let go in one step: an episode of it starting in between keeps its slot
+        if pause and batch not in slot_active:  # paused between episodes: its slot goes to the next in line now (else
+            release_job(batch)                   # when its episode ends); resumed, it asks again at the end of the line (#10)
 
 
 def job_episodes(episodes: list, batch: str | None):
@@ -2243,19 +2244,19 @@ def download_slot(server: str, run: EpisodeRun | None = None):
     try:
         yield
     finally:
-        with slots:
+        batch = run.card.get("batch") if run else None
+        with slots:  # one step: another episode of the job starting in between keeps the slot it takes
             if slot_active.get(job, 0) > 1:
                 slot_active[job] -= 1
             else:
                 slot_active.pop(job, None)
                 slots.notify_all()  # its slots are idle now: a wait of its own elsewhere gives them back
-        batch = run.card.get("batch") if run else None
-        # on its own (or the sync's), or its job paused: the slot goes with it; held around it (a run between its
-        # tries, run_job_retrying): kept till that ends
-        if job not in slot_active and (not batch or batch in paused_jobs):
-            release_job(job)
-        elif job not in slot_active:  # held around it still (between tries): nothing to lend yet
-            with slots:  # a retry waits: the job lends its slot between two episodes, and keeps its place in line
+            # on its own (or the sync's), or its job paused: the slot goes with it; held around it (a run between its
+            # tries, run_job_retrying): kept till that ends
+            if job not in slot_active and (not batch or batch in paused_jobs):
+                release_job(job)
+            elif job not in slot_active:  # held around it still (between tries): nothing to lend yet
+                # a retry waits: the job lends its slot between two episodes, and keeps its place in line
                 line = slot_line.setdefault(server, [])
                 if any(job_order.get(j, 0) < 0 for j in line):
                     release_job(job, keep_place=True)
