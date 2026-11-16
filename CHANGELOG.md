@@ -8,6 +8,10 @@ Every change worth knowing, newest first. The format follows
 
 ### Security
 
+- **No one can lock the owner out of signing in.** Wrong passwords are limited per client only, no longer 30 for
+  everyone together, and `X-Real-IP` is believed only from the proxy's addresses listed in Settings, Account. Behind
+  a reverse proxy, list its addresses there, even without signing in through it: until then, every client behind it
+  shares one limit. (#212)
 - **aiohttp 3.14.4.** Eight advisories fixed, three of them high: the server no longer waits without end for a
   request's headers, can no longer be made to use too much memory, CPU or file descriptors, and parses requests more
   strictly. (#24)
