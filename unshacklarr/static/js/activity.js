@@ -630,7 +630,7 @@ async function showLanguages(fresh = true) {
   $("#con").classList.add("open");
   document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-languages"));
   $("#cd-top-title").textContent = "Languages";
-  $("#cd-raw").hidden = true;
+  $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
   let r;
   if (fresh !== false || !langLast) {

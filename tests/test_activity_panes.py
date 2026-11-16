@@ -141,3 +141,21 @@ def test_terminal_stays_quiet_when_the_server_ends_it_cleanly_with_no_output():
 
 def test_terminal_ignores_the_close_of_a_socket_it_already_replaced():
     assert node(TERMINAL, str(JS / "attempts.js"), "replaced") == []
+
+
+def test_opening_languages_clears_the_dock_of_the_download_shown_before():
+    # The dock's Stop, Retry and Pause act on the download it was drawn for: Languages is no download
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const docks = [];
+const stub = { textContent: "", hidden: false, classList: { add() {} }, replaceChildren() {} };
+const ctx = { $: () => stub, document: { querySelectorAll: () => [] }, api: () => new Promise(() => {}),
+  renderDock: (d) => docks.push(d), clearTimeout() {} };
+vm.createContext(ctx);
+vm.runInContext(`var picked_run = null, langTimer = null, langLast = null;\n${grab("showLanguages")}`, ctx);
+ctx.showLanguages();
+console.log(JSON.stringify(docks));
+""", str(JS / "activity.js"))
+    assert shown == [None]
