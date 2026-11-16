@@ -278,7 +278,7 @@ const configKey = (c) => stableJSON({ ...c, hidden_series: undefined, versions: 
 // the server keeps what another tab changed meanwhile (web.merge_page_changes)
 let savedUnits = {};
 const configUnits = (c) => Object.fromEntries([
-  ...Object.entries(c).filter(([k]) => k !== "series" && k !== "versions").map(([k, v]) => [k, JSON.stringify(v)]),
+  ...Object.entries(c).filter(([k]) => !["series", "versions", "hidden_series"].includes(k)).map(([k, v]) => [k, JSON.stringify(v)]),
   ...Object.entries(c.series || {}).filter(([, x]) => x.service).map(([k, v]) => [`series:${k}`, JSON.stringify(v)])]);
 function dirty() {  // a change put back as it was hides the bar again
   renderCommands();

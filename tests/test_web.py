@@ -2071,6 +2071,9 @@ const fresh = () => {
   fresh(); box.S.config.settings.theme = "sepia"; page.dirty();  // a change the save before did not send
   saving = page.save(); release({ versions: { settings: "v2" } }); await saving;  // the server's new fingerprints
   out.newVersionsStaySaved = bars["#savebar"].hidden && !page.state().unsaved;
+  fresh(); box.S.config.hidden_series = [7]; box.S.config.settings.theme = "teal"; page.dirty();  // hidden at once by /api/hidden
+  saving = page.save(); release(); await saving;
+  out.hiddenListNotSentAsChanged = !JSON.parse(box.sentBody).changed.includes("hidden_series");
 
   fresh(); box.S.config.settings.theme = "light"; page.dirty();
   saving = page.save(); box.S.config.settings.theme = "blue"; page.dirty(); release(); await saving;
@@ -2160,6 +2163,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
     assert json.loads(run.stdout) == {
         "plainSaveHides": True,  # nothing changed meanwhile: the bar goes as before
         "newVersionsStaySaved": True,  # the fingerprints a save answers with are no edit
+        "hiddenListNotSentAsChanged": True,  # hiding saves at once, never through Save: no clash with another tab's
         "editDuringSaveKeepsBar": True,  # it was never sent
         "revertToSentHides": True,  # back to what was sent is saved
         "offsiteKeepsOtherEdit": True,  # the off-site save only saved its own fields
