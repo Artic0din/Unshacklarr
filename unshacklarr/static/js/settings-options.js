@@ -27,7 +27,7 @@ async function renderServiceDefaults() {
     const levels = all[tag];
     levels.options ??= {}; levels.service_options ??= {};
     const own = el("div", { className: "opts" }), dl = el("div", { className: "opts" });
-    const specs = await loadServiceOptions(tag);
+    const specs = await loadServiceOptions(tag).catch(() => []);  // Unshackle down or the service gone: still drawn, so it can be removed
     optionsEditor(dl, S.dlOptions, levels.options);
     optionsEditor(own, specs, levels.service_options, true);
     const count = Object.keys(levels.options).length + Object.keys(levels.service_options).length + (levels.backend ? 1 : 0) + (levels.ladder ? 1 : 0);
@@ -424,8 +424,9 @@ async function backupFile(name) {
     const r = await api("/api/backups/download", { method: "POST", body: JSON.stringify({ password: $("#bk-pass").value, name }) });
     const a = el("a", { href: URL.createObjectURL(new Blob([r.text], { type: "text/yaml" })), download: r.name });
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
     bkSay(`${r.name} downloaded`, false);
+    $("#bk-pass").value = "";  // typed to get the file, not kept
   } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
 }
 const bkSay = (text = "", bad = true) => { $("#bk-say").replaceChildren(...(text && !bad ? [icon("check", "inl"), text] : [text || "Asked again: the file holds secrets."])); $("#bk-say").className = `pw-match${text ? (bad ? " bad" : " good") : ""}`; };
@@ -437,8 +438,9 @@ $("#bk-save").onclick = async () => {
     const r = await api("/api/backup", { method: "POST", body: JSON.stringify({ password: $("#bk-pass").value }) });
     const a = el("a", { href: URL.createObjectURL(new Blob([r.text], { type: "text/yaml" })), download: r.name });
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
     bkSay(`${r.name} downloaded`, false);
+    $("#bk-pass").value = "";  // typed to get the file, not kept
   } catch (e) { if (/password/i.test(errorDetail(e))) { bkSay(e.message); $("#bk-pass").select(); } else toast(e.message, true); }
 };
 $("#bk-load").onclick = () => { if (bkPassword()) $("#bk-file").click(); };
@@ -450,6 +452,7 @@ $("#bk-file").onchange = async (e) => {
     const text = await file.text();
     bkFile = text;
     const r = await api("/api/restore", { method: "POST", body: JSON.stringify({ password: $("#bk-pass").value, text, passphrase: $("#bk-phrase").value }) });
+    $("#bk-pass").value = "";
     toast(`Settings restored: ${r.series} series`);
     setTimeout(() => location.reload(), 900);  // everything on the page comes from the settings
   } catch (err) {
@@ -462,6 +465,7 @@ $("#bk-phrase").onkeydown = async (e) => {
   if (e.key !== "Enter" || !bkFile) return;
   try {
     const r = await api("/api/restore", { method: "POST", body: JSON.stringify({ password: $("#bk-pass").value, text: bkFile, passphrase: e.target.value }) });
+    $("#bk-pass").value = "";
     toast(`Settings restored: ${r.series} series`);
     setTimeout(() => location.reload(), 900);
   } catch (err) { bkSay(err.message); }
@@ -475,6 +479,7 @@ $("#countries").oninput = (e) => {
 /* Interface: the language and the light or dark look of this browser, and spoilers on or off for the account. */
 document.querySelectorAll("#theme-row button").forEach((b) => b.onclick = () => { setTheme(b.dataset.themeChoice); renderInterface(); });
 function renderInterface() {
+  if (!S.config?.settings) return;  // reloaded on this page: drawn once the config is in
   const on = S.config.settings.spoiler_free === true;
   $("#rg-spoiler").checked = on;
   $("#theme-row").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeChoice === themeChoice())));

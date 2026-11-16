@@ -174,7 +174,7 @@ function cdmPicker(anchor, service, current, also = []) {
 const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
   el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: svg }),
     el("div", {}, el("h3", { textContent: title }), el("p", { textContent: text })), ...(extra ? [extra] : [])), ...body);
-function renderCdm() {
+function renderCdm(typing = false) {  // typing: in the search box, whose own element must stay
   const data = cdmData;
   $("#cdm-folder").textContent = data.folder || "";
   $("#cdm-add").hidden = !data.folder;
@@ -250,11 +250,11 @@ function renderCdm() {
   const filters = el("div", { className: "con-filters", role: "group", ariaLabel: "Show" }, ...[["all", "All"], ["Widevine", "Widevine"], ["PlayReady", "PlayReady"], ["used", "In use"], ["problems", "Problems"]]
     .map(([k, t]) => el("button", { ariaPressed: String(cdmFilter === k), textContent: `${t} (${counts[k]})`, onclick: () => { cdmFilter = k; renderCdm(); } })));
   const search = el("input", { type: "search", className: "con-search", placeholder: "Search a device, a maker, a service", value: cdmQuery, ariaLabel: "Search the devices" });
-  search.oninput = () => { cdmQuery = search.value; renderCdm(); $("#cdm-list .con-search")?.focus(); };
+  search.oninput = () => { cdmQuery = search.value; renderCdm(true); };
   const testable = found.filter((d) => !d.info?.unreadable && !d.folder);
   const inUse = data.devices.filter((d) => d.used_by.length && !d.info?.unreadable && !d.folder);
   const off = Boolean(cdmTesting || cdmRunning.size || data.details_error);
-  const testAll = el("button", { className: "btn small", textContent: cdmTesting ? `Testing ${cdmTesting}…` : `Test ${testable.length === data.devices.length ? "all" : "these"} (${testable.length})`,
+  const testAll = el("button", { id: "cdm-test-all", className: "btn small", textContent: cdmTesting ? `Testing ${cdmTesting}…` : `Test ${testable.length === data.devices.length ? "all" : "these"} (${testable.length})`,
     disabled: off || !testable.length, onclick: () => testCdms(testable) });
   $("#cdm-hero-test").replaceChildren(...(inUse.length ? [el("button", { className: "btn small", textContent: cdmTesting ? `Testing ${cdmTesting}…` : `Test the ${inUse.length} in use`, disabled: off, onclick: () => testCdms(inUse) })] : []));
   const actions = (d, anchor) => {
@@ -315,6 +315,10 @@ function renderCdm() {
   else show("ok", used.length ? "The devices in use work" : "Nothing in use", facts);
   $("#cdm-alerts").replaceChildren(...alerts);
   const plus = el("button", { type: "button", className: "btn small", textContent: "+ Add a remote CDM", onclick: () => editRemote(null) });
+  const devices = el("div", { id: "cdm-devices", className: "cdm-devs" }, ...(list.length ? list.map(row) : [el("p", { className: "muted cdm-empty", textContent: data.devices.length ? "No device matches." : "No device yet: add a .wvd or .prd file." })]),
+    ...(folded ? [el("button", { type: "button", className: "cdm-more-btn", textContent: `Show ${COUNT.moreDevice(folded)}, not in use`, onclick: () => { cdmShowUnused = true; renderCdm(); } })] : []));
+  // Typing keeps the search box itself (a new one would put the cursor at the end and break an input method's composition): only what it filters is drawn again
+  if (typing && $("#cdm-devices")) { $("#cdm-devices").replaceWith(devices); $("#cdm-test-all").replaceWith(testAll); return; }
   $("#cdm-list").replaceChildren(
     cdmCard('<svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h6M4 17h10"/><path d="m15 9 4 3-4 3"/></svg>', "Which device each service uses",
       "Click a service to move it to another device. A change applies to the next download.", null, services),
@@ -323,8 +327,7 @@ function renderCdm() {
       ...(data.details_error ? [el("p", { className: "cdm-note", textContent: `${data.details_error}. The list below comes from the files alone.` })] : []),
       el("div", { className: "cdm-tools" }, search, testAll),
       filters,
-      el("div", { className: "cdm-devs" }, ...(list.length ? list.map(row) : [el("p", { className: "muted cdm-empty", textContent: data.devices.length ? "No device matches." : "No device yet: add a .wvd or .prd file." })]),
-        ...(folded ? [el("button", { type: "button", className: "cdm-more-btn", textContent: `Show ${COUNT.moreDevice(folded)}, not in use`, onclick: () => { cdmShowUnused = true; renderCdm(); } })] : []))),
+      devices),
     cdmCard('<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>', "Remote CDMs",
       "A device on a server: pywidevine serve, a PlayReady API, Decrypt Labs. Saved in unshackle.yaml.", plus,
       ...(data.remote.length ? [el("div", { className: "cdm-devs" }, ...data.remote.map(remoteRow))] : [])));

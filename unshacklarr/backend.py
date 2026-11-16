@@ -190,7 +190,13 @@ def unshackle_python(command: str) -> tuple[str, Path]:
     with script.open("rb") as f:
         first = f.readline(512)
     if first.startswith(b"#!") and b"python" in first:
-        return first[2:].decode(errors="replace").strip().split()[0], folder
+        words = first[2:].decode(errors="replace").strip().split()
+        if Path(words[0]).name == "env":  # #!/usr/bin/env python3: the Python env would find, not env itself
+            named = next((w for w in words[1:] if not w.startswith("-")), "")
+            if resolved := shutil.which(named):
+                return resolved, folder
+        else:
+            return words[0], folder
     for name in ("python.exe", "python3", "python"):  # a Windows .exe launcher, or an odd shebang
         if (script.parent / name).exists():
             return str(script.parent / name), folder
@@ -210,13 +216,26 @@ class Local:
         self.url = self.key = ""
         self.command = None
         self.lock = threading.Lock()
+        self.failed: tuple[str, float, UnshackleError] | None = None  # the command that would not start, when, and why
+
+    def recent_failure(self, command: str) -> None:
+        """Say a start that failed under a minute ago again, instead of every caller waiting up to 90 s for another."""
+        failed = self.failed  # once: a restart or a save may clear it from another thread meanwhile
+        if failed and failed[0] == command and time.monotonic() - failed[1] < 60:
+            raise failed[2]
 
     def endpoint(self, command: str) -> tuple[str, str]:
+        self.recent_failure(command)
         with self.lock:
+            self.recent_failure(command)  # callers that waited for the start that has just failed
             if self.process and self.process.poll() is None and command == self.command:
                 return self.url, self.key
             self.stop()
-            self.start(command)
+            try:
+                self.start(command)
+            except UnshackleError as e:
+                self.failed = (command, time.monotonic(), e)
+                raise
             return self.url, self.key
 
     def start(self, command: str) -> None:
@@ -291,7 +310,8 @@ class Local:
 
     def paths(self, command: str) -> dict[str, Path]:
         """Where this unshackle keeps its config file, cookies and CDMs, as it says itself (asked once)."""
-        if getattr(self, "_paths", (None, None))[0] != command:
+        cached = getattr(self, "_paths", (None, None))  # read once: a restart may drop it meanwhile
+        if cached[0] != command:
             python, folder = unshackle_python(command)
             ask = ("from unshackle.core.config import config, config_path; d = config.directories\n"
                    "print(config_path or ''); print(d.cookies.resolve()); print(d.wvds.resolve()); print(d.prds.resolve());"
@@ -305,16 +325,22 @@ class Local:
             lines = out.stdout.strip().splitlines()[-6:]
             if out.returncode or len(lines) != 6:
                 raise UnshackleError(f"Could not ask unshackle where its files are: {out.stderr.strip()[-300:]}")
-            self._paths = (command, dict(zip(("config", "cookies", "wvds", "prds", "temp", "cache"), map(Path, lines))))
-        return self._paths[1]
+            cached = self._paths = (command, dict(zip(("config", "cookies", "wvds", "prds", "temp", "cache"), map(Path, lines))))
+        return cached[1]
 
     def cookies_dir(self, command: str) -> Path:
         return self.paths(command)["cookies"]
 
     def restart(self, command: str) -> None:
         with self.lock:
+            self.failed = None  # asked for: tried now, not refused for the minute
+            self.__dict__.pop("_paths", None)  # unshackle.yaml's directories: may have changed: asked again
             self.stop()
-            self.start(command)
+            try:
+                self.start(command)
+            except UnshackleError as e:
+                self.failed = (command, time.monotonic(), e)  # the callers waiting on this lock are told, not made to start again
+                raise
 
     def stop(self) -> None:
         if self.process and self.process.poll() is None:
@@ -345,6 +371,7 @@ class Unshackle:
         self._remote = (0.0, [])
         self._config = (0.0, {})
         self._down = (0.0, None)
+        self.local.failed = None  # settings or unshackle.yaml changed: a start is worth another try
 
     def cached_get(self, path: str) -> dict:
         """A GET whose answer is kept: an unreachable serve is said at once for a minute, instead of each call (the
@@ -432,7 +459,8 @@ class Unshackle:
                                                 "which is not unshackle serve's: check its address in Settings, Unshackle"))
         if r.status_code == 429:  # a limit set on the key (Unshackle 6): waited for, not a lost job
             err = UnshackleError("unshackle serve is busy: its limit of requests for this key is reached")
-            err.retry_after = int(r.headers.get("Retry-After") or 60) if str(r.headers.get("Retry-After") or "60").isdigit() else 60
+            asked = str(r.headers.get("Retry-After") or "60")
+            err.retry_after = max(1, int(asked)) if asked.isdigit() else 60  # never 0: callers read that as "no wait asked"
             raise err
         if not r.ok:
             payload, message, service = response_error(r)

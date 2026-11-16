@@ -94,13 +94,14 @@ function showTab(name, fromRoute = false, quiet = false) {
   if (!fromRoute) navigate(true);
   if (quiet) return;
   if (name === "log") { refreshLog(); openActivity(); }
-  else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; }  // Activity left: its output stops streaming
+  else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
   if (name === "settings" && settingsSec === "unshackle" && S.dlOptions.length) loadUnshackleStatus();
   if (name === "settings" && settingsSec === "services" && S.dlOptions.length) loadServices();
   if (name === "schedule") loadSchedule();
 }
 document.querySelectorAll("nav button").forEach((b) => b.onclick = () => { if (b.dataset.tab === "log") landOnLive = true; showTab(b.dataset.tab); });
-$("#search").oninput = renderWall;
+let wallTimer = null;  // typed: the wall drawn once the typing pauses, not at each key
+$("#search").oninput = () => { clearTimeout(wallTimer); wallTimer = setTimeout(renderWall, 150); };
 document.querySelectorAll("#tab-series .seg button").forEach((b) => b.onclick = () => {
   document.querySelectorAll("#tab-series .seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
   renderWall();
