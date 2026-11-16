@@ -288,7 +288,8 @@ Behind a reverse proxy:
   such as `172.18.0.5`), even when you do not sign in through it. `X-Real-IP` is believed from
   those addresses only, so that no one else can claim another address to get more tries.
   Every address in a range you list can do so: list a whole network (`172.18.0.0/16`) only if
-  nothing but the proxy runs on it. Until they are listed,
+  nothing but the proxy runs on it. A container's address can change when it is recreated: give
+  the proxy a fixed one (`ipv4_address` in its compose file), or update this list when it changes. Until they are listed,
   every client behind the proxy shares one limit, the proxy's: five wrong passwords from anyone
   there make everyone there wait 5 minutes.
 - **Let WebSockets and streams through**: Activity's output is a WebSocket and its live view a
