@@ -232,6 +232,7 @@ Every change worth knowing, newest first. The format follows
 - Hiding the browser tab with the serve log open and coming back no longer replaces the log with the output of a run opened earlier. (#242)
 - The Schedule no longer shows seven empty "Nothing that day." columns when a late logo download finishes while a new week or month is still loading: the spinner stays until the shows arrive. (#244)
 - Closing and quickly reopening "Suggest services" no longer leaves the first run's workers asking TMDB alongside the new ones or overwriting the progress count. (#254)
+- Episodes, Catch up and Upgrades no longer say Sonarr "did not answer" when it takes between 30 seconds and 2 minutes: they wait as long as the Schedule and the server do, and the series search on a service waits 70 seconds instead of 30. (#222)
 
 ### Removed
 

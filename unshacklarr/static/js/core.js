@@ -815,7 +815,7 @@ $("#d-find-go").onclick = async () => {
   if (!$("#d-find-q").value.trim()) return out.replaceChildren(el("p", { className: "status-err", textContent: "Type the series' name first" }));
   out.replaceChildren(loading(`Searching ${svcName(conf.service)}…`));
   let r;
-  try { r = await api("/api/series/search", { method: "POST", body: JSON.stringify({ show: conf, query: $("#d-find-q").value }) }); }
+  try { r = await api("/api/series/search", { method: "POST", body: JSON.stringify({ show: conf, query: $("#d-find-q").value }), wait: 70 }); }  // the server waits 60 s for the search
   catch (e) { if (current === s) out.replaceChildren(el("p", { className: "status-err", textContent: e.message })); return; }
   if (current !== s) return;
   if (!r.results.length) return out.replaceChildren(el("p", { className: "muted", textContent: `Nothing found on ${svcName(conf.service)} under that name.` }));

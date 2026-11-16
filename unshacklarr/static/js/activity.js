@@ -507,7 +507,8 @@ async function showMissing() {
   if (missingSonarr && !(S.config.settings.sonarrs || []).some((i) => i.name === missingSonarr)) missingSonarr = "";
   const sonarr = missingSonarr;  // the one this list is for: the buttons send it, whatever the picker says by then
   const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(sonarr ? { sonarr } : {}) });
-  try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`); } catch (e) { return seq === missingSeq && picked_run === "missing" ? $("#cd-main").replaceChildren(failed(e.message, showMissing)) : undefined; }
+  // wait: as long as the server waits for a busy Sonarr (120 s)
+  try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`, { wait: 130 }); } catch (e) { return seq === missingSeq && picked_run === "missing" ? $("#cd-main").replaceChildren(failed(e.message, showMissing)) : undefined; }
   if (picked_run !== "missing" || seq !== missingSeq) return;
   const ages = el("div", { className: "ax-seg", role: "group", ariaLabel: "Aired within" }, ...[[7, "7 days"], [30, "30 days"], [90, "90 days"], [0, "All"]].map(([d, label]) =>
     el("button", { type: "button", textContent: label, ariaPressed: String(missingDays === d), onclick: () => { missingDays = d; showMissing(); } })));
@@ -552,8 +553,8 @@ async function showUpgrades(fresh = true) {
   let sonarr = upgradeSonarr;  // the one this list is for: the buttons send it, whatever the picker says by then
   if (fresh !== false || !upgradeLast) {
     const seq = ++upgradeSeq;
-    let got;
-    try { got = await api(`/api/upgrades${sonarr ? `?sonarr=${encodeURIComponent(sonarr)}` : ""}`); }
+    let got;  // wait: as long as the server waits for a busy Sonarr (120 s)
+    try { got = await api(`/api/upgrades${sonarr ? `?sonarr=${encodeURIComponent(sonarr)}` : ""}`, { wait: 130 }); }
     catch (e) { return seq === upgradeSeq && picked_run === "upgrades" ? $("#cd-main").replaceChildren(failed(e.message, showUpgrades)) : undefined; }
     if (seq !== upgradeSeq) return;
     r = upgradeLast = got;

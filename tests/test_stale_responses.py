@@ -116,7 +116,7 @@ ctx.refreshEpBusy(s).then(() => console.log(JSON.stringify([...ctx.epBusy.keys()
 # Runs the page's real showMissing / showUpgrades (Catch up, Upgrades) with api answers delayed by request, and prints what was drawn or sent.
 LIST_PANES = r"""
 const [pane, scenario] = [process.argv[2], process.argv[3]];
-const draws = [], posts = [];
+const draws = [], posts = [], waits = [];
 const wait = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
 const find = (node, test) => { if (!node || typeof node !== "object") return null; if (test(node)) return node; for (const k of node.kids || (Array.isArray(node) ? node : [])) { const f = find(k, test); if (f) return f; } return null; };
 const items = (ids) => ids.map((episodeId) => ({ episodeId, tvdbId: 1, series: "Show", sxxeyy: `S01E0${episodeId}`, aired: "2026-01-01", running: false, file: "1080p", fileStep: 2, better: "4K", betterStep: 1, ladder: 3 }));
@@ -127,6 +127,7 @@ const ctx = { $: (sel) => (boxes[sel] ??= { classList: { add() {}, toggle() {} }
   renderDock() {}, posterSrc: () => "", posterFail: () => null, ago: () => "", episodeTitle: () => "", thumb: () => ({}), mainSonarr: () => "Main", URLSearchParams, toast() {}, setTimeout: () => 0, clearTimeout() {}, picked_run: null,
   api: (path, opts = {}) => {
     if (opts.method === "POST") { posts.push(JSON.parse(opts.body)); return wait(0, {}); }
+    waits.push(opts.wait);
     const slow = pane === "missing" ? !path.includes("days=") && !path.includes("sonarr=B") : path.includes("sonarr=A") || path === "/api/upgrades";
     const slowIds = [1, 2, 3], fastIds = [1, 2];
     const ids = scenario === "click" ? slowIds : slow ? slowIds : fastIds;
@@ -139,7 +140,10 @@ vm.runInContext("upgradePick.add(1); upgradePick.add(2); upgradePick.add(3);", c
 const show = (sonarr, days) => { vm.runInContext(pane === "missing" ? `missingSonarr = ${JSON.stringify(sonarr)}; missingDays = ${days};` : `upgradeSonarr = ${JSON.stringify(sonarr)};`, ctx); return pane === "missing" ? ctx.showMissing() : ctx.showUpgrades(); };
 const goText = () => find(draws[draws.length - 1], (n) => n.className === "btn primary")?.textContent;
 (async () => {
-  if (scenario === "overtaken") {  // the slow request first (All, or Sonarr A), the quick one picked right after (7 days, or Sonarr B)
+  if (scenario === "wait") {
+    await show("", 30);
+    console.log(JSON.stringify({ waits }));
+  } else if (scenario === "overtaken") {  // the slow request first (All, or Sonarr A), the quick one picked right after (7 days, or Sonarr B)
     const slow = show(pane === "missing" ? "" : "A", 0), fast = show(pane === "missing" ? "" : "B", 7);
     await Promise.all([slow, fast]);
     console.log(JSON.stringify({ shown: goText() }));
@@ -322,3 +326,35 @@ vm.runInContext("let bulkRun = 0;" + grab("openBulk"), ctx);
 })();
 """, str(JS / "settings-services.js"))
     assert shown == {"asked": 6, "progress": [f"Checked {n} of 4" for n in range(1, 5)]}
+
+
+# The server waits up to 120 s for Sonarr and 60 s for a series search: the page must wait longer, or a slow answer shows as "did not answer".
+@pytest.mark.parametrize("pane", ["missing", "upgrades"])
+def test_list_panes_wait_as_long_as_the_server_does_for_sonarr(pane):
+    assert node(LIST_PANES, str(JS / "activity.js"), pane, "wait") == {"waits": [130]}
+
+
+def test_episode_list_waits_as_long_as_the_server_does_for_sonarr():
+    shown = node(r"""
+const s = { tvdbId: 1, id: 10, title: "Show" }, waits = [];
+const ctx = { S: { sonarrsOf: { 1: [{ name: "4K", id: 9 }] }, config: { series: {} } }, current: s, epSonarr: "4K", epSonarrOf: 1, mainKeys: null, epAvailRaw: null, picked: new Set(),
+  $: () => ({ replaceChildren() {} }), loading: () => null, failed: () => null, updateEpBar() {}, refreshEpBusy() {}, sxxOf: () => "S01E01",
+  api: async (path, opts = {}) => { if (/^\/api\/series\/\d+\/episodes/.test(path)) waits.push(opts.wait); return []; }, applyBroadcast() { throw new Error("past the guard"); } };
+vm.createContext(ctx);
+vm.runInContext("let epSeq = 0;" + grab("loadEpisodes"), ctx);
+ctx.loadEpisodes(s).catch(() => {}).then(() => console.log(JSON.stringify({ waits })));
+""", str(JS / "series.js"))
+    assert shown == {"waits": [130, 130]}
+
+
+def test_series_search_waits_as_long_as_the_server_does():
+    shown = node(r"""
+const waits = [], s = { tvdbId: 1 };
+const field = { value: "Show", hidden: false, replaceChildren() {} };
+const ctx = { current: s, S: { config: { series: { 1: { service: "X" } } } }, $: () => field, el: () => ({}), loading: () => null, svcName: (t) => t,
+  api: async (path, opts = {}) => { waits.push(opts.wait); return { results: [] }; } };
+vm.createContext(ctx);
+const click = vm.runInContext(src.match(/\$\("#d-find-go"\)\.onclick = (async \(\) => \{[\s\S]*?\n\});/)[1], ctx);
+click().then(() => console.log(JSON.stringify({ waits })));
+""", str(JS / "core.js"))
+    assert shown == {"waits": [70]}
