@@ -260,7 +260,7 @@ Every change worth knowing, newest first. The format follows
   browser, and a series' episodes keep using the name the server knows, and switch to the new one once it is saved.
 - **A second Save from an older tab no longer undoes another tab's change.** After a Save, the page takes the
   settings and series as the server merged them, keeping what you changed while it ran, so its next Save no longer
-  sends its older copy back.
+  sends its older copy back. When another tab renamed a Sonarr, the page asks you to reload it instead.
 - **A backup a Save would refuse is no longer restored.** One with an Unshackle server or a Sonarr without a name,
   or a series value out of range, is refused with the reason before anything is written; before, it was written and
   the app could not start again until `config.yaml` was fixed by hand.

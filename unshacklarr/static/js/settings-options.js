@@ -678,6 +678,9 @@ $("#nt-form").onsubmit = (e) => {
 };
 
 async function save() {
+  // The server's words for a page it refuses as out of date: said here too, then every Save refused until a reload.
+  const OUT_OF_DATE = "This page is out of date. Reload it, then make your change again.";
+  if (S.outOfDate) throw new Error(OUT_OF_DATE);
   // Drop series with no service so the file only lists what Unshackle downloads.
   const series = Object.fromEntries(Object.entries(S.config.series).filter(([, c]) => c.service));
   // Saved is what was sent: an edit made while the request ran is not in it and stays unsaved.
@@ -688,8 +691,14 @@ async function save() {
   const changed = [...new Set([...Object.keys(units), ...Object.keys(savedUnits)])].filter((u) => units[u] !== savedUnits[u]);
   const unitBase = Object.fromEntries(changed.map((u) => [u, S.config.versions?.[u] ?? null]));
   const names = sonarrNames();  // as sent: a rename made while the Save runs is not saved yet
-  const sentUrls = names.map(([i]) => i.url);  // each one found again by it when another tab's list is taken whole
   const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series, changed, base: unitBase }) });
+  // Another tab renamed a Sonarr: each series' settings and libraries on this page are keyed by the old name, so the
+  // page asks for a reload rather than re-key them all. This Save stays saved.
+  const theirSonarrs = Array.isArray(saved?.settings?.sonarrs) ? saved.settings.sonarrs : [];
+  if (names.some(([i, name]) => i.url && theirSonarrs.some((o) => o.url === i.url && o.name !== name))) {
+    S.outOfDate = true;
+    throw new Error(OUT_OF_DATE);
+  }
   keepSonarrNames(names);
   for (const u of changed) {  // only these are as the server has them now: the others keep the version they were loaded at
     if (saved?.versions?.[u]) (S.config.versions ??= {})[u] = saved.versions[u]; else delete S.config.versions?.[u];
@@ -747,31 +756,9 @@ async function save() {
     if (id) base.series[id] = theirs; else base[u] = theirs;
     savedUnits[u] = JSON.stringify(alike(mine, theirs) ? mine : theirs);
   }
-  // the names the server now knows, another tab's rename among them: each entry the page holds now, found by its
-  // address (each Sonarr has its own), the entries of a list taken whole too
-  const theirSonarrs = Array.isArray(saved?.settings?.sonarrs) ? saved.settings.sonarrs : [];
+  // the names the server now knows: each entry the page holds now, found by its address (each Sonarr has its own),
+  // the entries of a list taken whole too
   keepSonarrNames((S.config.settings.sonarrs || []).flatMap((i) => theirSonarrs.filter((o) => i.url && o.url === i.url).map((o) => [i, o.name])));
-  // another tab's rename taken here: the libraries each series is in follow it, as a rename made here does (at once)
-  const held = S.config.settings.sonarrs || [];
-  const renamed = new Map(names.flatMap(([was, sent], n) => {
-    const i = held.includes(was) ? was : held.find((o) => sentUrls[n] && o.url === sentUrls[n]);
-    return i && i.name !== sent && sonarrSavedName.get(i) === i.name ? [[sent, i.name]] : [];
-  }));
-  if (renamed.size) for (const [tvdb, libs] of Object.entries(S.sonarrsOf || {}))
-    S.sonarrsOf[tvdb] = libs.map((o) => renamed.has(o.name) ? { ...o, name: renamed.get(o.name) } : o);
-  // and each series' own settings for it, here and as saved (quality.moveSonarrRefs: the new name starts clean)
-  const rekey = (conf) => {
-    const s = conf?.sonarrs;
-    if (!s) return conf;
-    const moved = [...renamed].filter(([from]) => from in s).map(([from, to]) => [from, to, s[from]]);
-    for (const [from, to] of moved) { delete s[from]; delete s[to]; }  // only where an old name moves: one already new is kept
-    for (const [, to, v] of moved) s[to] = v;
-    return conf;
-  };
-  if (renamed.size) {
-    for (const series of [S.config.series, base.series]) Object.values(series || {}).forEach(rekey);
-    for (const u of Object.keys(savedUnits)) if (u.startsWith("series:")) savedUnits[u] = JSON.stringify(rekey(JSON.parse(savedUnits[u])));
-  }
   savedConfig = stableJSON(base);
   if (redraw) renderSettings();  // another tab's settings now shown, its Sonarrs and servers too
   if (sentDrawer && current?.tvdbId === sentDrawer.id) drawerSnapshot = sentDrawer;
@@ -782,7 +769,6 @@ async function save() {
   if (added?.length) drawerSnapshot.conf = JSON.stringify({ ...open, ...Object.fromEntries(added) });
   const panel = drawerSnapshot && merged[`series:${drawerSnapshot.id}`];
   if (panel) { const snap = JSON.parse(drawerSnapshot.conf); take(snap, ...panel); drawerSnapshot.conf = JSON.stringify(snap); }
-  if (renamed.size && drawerSnapshot?.conf) drawerSnapshot.conf = JSON.stringify(rekey(JSON.parse(drawerSnapshot.conf)));
   const shown = current && S.config.series[current.tvdbId];  // its editor shows what is saved
   const learnt = stamped[current?.tvdbId];
   if (shown && (learnt?.release_time || learnt?.release_day)) {

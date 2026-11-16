@@ -2266,48 +2266,27 @@ const fresh = () => {
   saving = page.save(); box.S.config.settings.sonarrs[1].name = "children";  // renamed again while the Save runs: not sent
   release({}); await saving;
   out.renameSavedIsUsed = page.savedSonarr("UHD") === "UHD" && page.savedSonarr("children") === "kids";
-  // another tab renamed a Sonarr while this one saved debug and edited that Sonarr's folder: both stay, key by key
-  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "4K", url: "http://a", downloads: "" }] }, series: {} } };
+  // another tab chose a Sonarr's ladder while this one saved debug and edited that Sonarr's folder: both stay, key by key
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "4K", url: "http://a", downloads: "", quality_ladder: "" }] }, series: {} } };
   page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
   box.S.config.settings.debug = true; page.dirty();
   saving = page.save(); box.S.config.settings.sonarrs[0].downloads = "/dl";
-  release({ settings: { debug: true, sonarrs: [{ name: "UHD", url: "http://a", downloads: "" }] } }); await saving;
+  release({ settings: { debug: true, sonarrs: [{ name: "4K", url: "http://a", downloads: "", quality_ladder: "hd" }] } }); await saving;
   const four = box.S.config.settings.sonarrs[0];
-  out.nestedEditKeepsOthersRename = four.name === "UHD" && four.downloads === "/dl" && page.state().unsaved;
-  out.mergedRenameIsSavedName = page.savedSonarr("UHD") === "UHD";
-  // the libraries each series is in follow another tab's rename too: the series page finds its Sonarr by them
-  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "4K", url: "http://a" }] }, series: {} }, sonarrsOf: { 7: [{ name: "4K", id: 3 }] } };
-  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
-  box.S.config.settings.debug = true; page.dirty();
-  saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "UHD", url: "http://a" }] } }); await saving;
-  out.mergedRenameReachesLibraries = box.S.sonarrsOf[7][0].name === "UHD" && box.S.sonarrsOf[7][0].id === 3
-    && page.savedSonarr(box.S.sonarrsOf[7][0].name) === "UHD";
-  // and each series' own settings for it, saved and in its open panel, as the other tab saved them
-  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "old", url: "http://a" }] }, series: { 7: { service: "IV", sonarrs: { old: { off: true } } } } },
-    sonarrsOf: { 7: [{ name: "old", id: 3 }] } };
-  box.current = { tvdbId: 7 };
-  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
-  box.S.config.settings.debug = true; page.dirty();
-  saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "new", url: "http://a" }] } }); await saving;
-  out.mergedRenameReachesSeriesSettings = JSON.stringify(box.S.config.series[7].sonarrs) === '{"new":{"off":true}}'
-    && JSON.stringify(JSON.parse(box.drawerSnapshot.conf).sonarrs) === '{"new":{"off":true}}' && !page.state().unsaved
-    && vm.runInContext("configUnits(S.config)['series:7'] === savedUnits['series:7']", box);
-  box.current = box.drawerSnapshot = null;
-  // a series edited and saved meanwhile: the server's answer already keys its settings by the new name, kept
+  out.nestedEditKeepsOthersChange = four.quality_ladder === "hd" && four.downloads === "/dl" && page.state().unsaved;
+  // another tab renamed a Sonarr: each series' settings and libraries name it, so the page asks for a reload instead
   box.S = { config: { settings: { debug: false, sonarrs: [{ name: "old", url: "http://a" }] }, series: { 7: { service: "IV", sonarrs: { old: { off: true } } } } },
     sonarrsOf: { 7: [{ name: "old", id: 3 }] } };
   page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
-  box.S.config.settings.debug = true; box.S.config.series[7].service = "NF"; page.dirty();
+  box.S.config.settings.debug = true; box.S.config.series[7].sonarrs.old.off = false; page.dirty();
   saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "new", url: "http://a" }] },
-    series: { 7: { service: "NF", sonarrs: { new: { off: true } } } } }); await saving;
-  out.renamedSeriesAnswerKept = JSON.stringify(box.S.config.series[7].sonarrs) === '{"new":{"off":true}}' && !page.state().unsaved;
-  // and when another tab also added a Sonarr, so the whole list is taken: the rename is found by its address
-  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "old", url: "http://a" }] }, series: {} }, sonarrsOf: { 7: [{ name: "old", id: 3 }] } };
-  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
-  box.S.config.settings.debug = true; page.dirty();
-  saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "new", url: "http://a" }, { name: "other", url: "http://b" }] } }); await saving;
-  out.replacedListRenameReachesLibraries = box.S.config.settings.sonarrs.length === 2 && box.S.sonarrsOf[7][0].name === "new"
-    && page.savedSonarr(box.S.sonarrsOf[7][0].name) === "new";
+    series: { 7: { service: "IV", sonarrs: { new: { off: true } } } } });
+  const reloadAsked = await saving.then(() => "", (e) => e.message);
+  box.sentBody = null;
+  const second = page.save().then(() => "", (e) => e.message); release({});  // sent today: answered, not left waiting
+  const refused = await second;
+  out.othersRenameAsksReload = reloadAsked.includes("Reload") && refused === reloadAsked && box.sentBody === null
+    && page.state().unsaved && box.S.config.settings.sonarrs[0].name === "old" && box.S.sonarrsOf[7][0].name === "old";
   // one Sonarr removed and another added while the Save runs: each keeps its own saved name
   box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] }, series: {} } };
   page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
@@ -2376,12 +2355,8 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "mergedSourceTakesItsTime": True,  # another tab's new source comes with its release time
         "renamedAsSaved": True,  # an unsaved rename is not a name the server knows (#181)
         "renameSavedIsUsed": True,  # once saved, the new name; a rename made while the Save ran still is not
-        "nestedEditKeepsOthersRename": True,  # an edit inside a list entry does not block another tab's change beside it
-        "mergedRenameIsSavedName": True,  # a rename another tab saved is the name the server knows
-        "mergedRenameReachesLibraries": True,  # and the series' libraries follow it, so episode requests name it
-        "renamedSeriesAnswerKept": True,  # a series answer already under the new name is not emptied
-        "mergedRenameReachesSeriesSettings": True,  # and each series' own settings for that Sonarr, so none turns back on
-        "replacedListRenameReachesLibraries": True,  # also when another tab added a Sonarr and the list is taken whole
+        "nestedEditKeepsOthersChange": True,  # an edit inside a list entry does not block another tab's change beside it
+        "othersRenameAsksReload": True,  # another tab's Sonarr rename is not followed: reload, and no Save until then
         "listEditedMeanwhileKeepsNames": True,  # Sonarrs removed or added while the Save ran: no name moves to another
         "listEntriesMatchedByIdentity": True,  # and no other tab's change lands on another entry: the next Save asks to reload
         "takenListKeepsSavedNames": True,  # a list taken whole from another tab: its renamed entry is still named as saved
