@@ -7744,3 +7744,38 @@ def test_password_key_language_and_restore_writes_read_and_write_the_config_unde
         if not writes or not all(events[i][1] and events[i - 1] == ("read", True) for i in writes):
             unlocked.append(name)
     assert unlocked == []
+
+
+def test_an_api_retry_repeats_the_numbering_and_replace_of_the_attempt_it_retries(tmp_path, monkeypatch):
+    import asyncio
+    import hashlib
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1",
+                                                    "api_key": hashlib.sha256(b"key").hexdigest()}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    by_title = {"episode_map": {"S02E01": "S01E07"}}  # found by its title on the page, for that download only
+    for run_id, episode, extra in (("20261003-093229-000001-442345-S02E01", 70, {"numbering": by_title}),
+                                   ("20261003-093000-000001-442345-S02E02", 71, {"replace": True}),
+                                   ("20261003-092900-000001-442345-S02E03", 72, {})):
+        card = {"id": run_id, "episodeId": episode, "tvdbId": 442345, "sxxeyy": run_id[-6:], "outcome": "failed",
+                "started": "2026-10-03T09:32:29+00:00", "ended": "2026-10-03T09:33:00+00:00", **extra}
+        (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    asked = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("numbering"), kw.get("replace", False))))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as script:
+            key = {web.API_KEY_HEADER: "key"}
+            for ids in ([70], [71], [72]):
+                assert (await script.post("/api/v1/downloads", json={"episodeIds": ids, "retry": True}, headers=key)).status == 200
+            # asked anew, not as a retry: the series' numbering, no Replace
+            assert (await script.post("/api/v1/downloads", json={"episodeIds": [70]}, headers=key)).status == 200
+
+    asyncio.run(go())
+    assert asked == [([70], by_title, False), ([71], None, True), ([72], None, False), ([70], None, False)]

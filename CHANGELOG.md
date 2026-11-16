@@ -110,6 +110,7 @@ Every change worth knowing, newest first. The format follows
 
 - The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
 - The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
+- A retry through the API (`"retry": true` on `POST /api/v1/downloads`) now repeats its last attempt's numbering and Replace anyway, as the page's Retry does, instead of asking for the series' numbering and keeping the file.
 - Changing the password, the API key or the page's language, logging out other devices, restoring a backup and saving where backups are sent now wait for a sync's settings write, so a revoked key or an old password can no longer come back when both happen at once.
 - The README's reverse proxy section now says to pass on the original Host, without which Activity's live output is refused as cross-origin behind plain Nginx.
 - A notification address over https, such as an ntfy topic at `https://ntfy.sh/familyalerts`, now reaches the page with everything after its host hidden; only Discord's and Slack's webhook paths still show.

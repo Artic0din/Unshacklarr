@@ -6260,11 +6260,16 @@ async def v1_start_download(request):
         raise web.HTTPBadRequest(text="At most 100 episodes at a time")
     if why := await asyncio.to_thread(on_sonarr, inst, cdm_refusal, ids):
         raise web.HTTPBadRequest(text=why)
+    numbering = None
+    if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries: as the page's Retry
+        numbering = await asyncio.to_thread(retried_numbering, ids, "")
+        replace = replace or await asyncio.to_thread(retried_replace, ids, "")
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     room_for_one_more()
     common = {**({"kind": "retry"} if body.get("retry") is True else {}), **({"sonarr": inst["name"]} if inst else {}),
-              **({"proxy": proxy} if proxy else {}), **({"video": video} if video else {})}
+              **({"proxy": proxy} if proxy else {}), **({"video": video} if video else {}),
+              **({"numbering": numbering} if numbering is not None else {})}
     if not audio:
         run_sync(ids, **common, **({"replace": True} if replace else {}))
         return web.json_response({"queued": len(ids)})
