@@ -757,7 +757,7 @@ async function showStats() {
     el("div", { style: "display:grid;gap:8px" }, weeks, el("div", { className: "legend", ariaHidden: "true" }, el("span", {}, el("i", { className: "ok", style: "background:var(--ok)" }), "Downloaded"),
       el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept by Sonarr"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
     perWeek,
-    st.services.length ? el("div", { style: "overflow-x:auto" }, table) : ""));
+    st.services.length ? el("div", { className: "svc-scroll" }, table) : ""));
 }
 $("#con-stats").onclick = showStats;
 $("#cd-back").onclick = () => { $("#con").classList.remove("open"); picked_run = null; renderConsole(); };
