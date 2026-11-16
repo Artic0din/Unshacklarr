@@ -7047,3 +7047,26 @@ def test_a_run_finishes_even_when_the_inbox_cannot_be_written(tmp_path, monkeypa
     monkeypatch.setattr(sync, "write_atomic", full_disk)
     run.finish("failed")  # the bell is behind, the run's own record is not
     assert run.card["outcome"] == "failed" and "prompt" not in run.card
+
+
+def test_held_messages_that_cannot_be_read_back_after_sending_are_kept(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    monkeypatch.setattr(sync, "send_to", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "in_quiet_hours", lambda s, now=None: False)
+    sync.HELD_FILE.parent.mkdir(parents=True, exist_ok=True)
+    held = [{"level": "success", "title": "Downloaded: Show S01E01"}]
+    sync.HELD_FILE.write_text(json.dumps(held))
+    real_read, reads = Path.read_text, []
+
+    def flaky(self, *a, **k):  # the first read works, the one before deleting fails (a NAS share gone for a moment)
+        if self == sync.HELD_FILE:
+            reads.append(1)
+            if len(reads) > 1:
+                raise OSError(5, "Input/output error")
+        return real_read(self, *a, **k)
+    monkeypatch.setattr(Path, "read_text", flaky)
+    settings = {"targets": [{"url": "ntfy://ok", "levels": ["success", "warning", "error"]}]}
+    with pytest.raises(OSError):
+        sync.send_held(settings)
+    assert json.loads(real_read(sync.HELD_FILE)) == held  # not deleted unread

@@ -628,7 +628,7 @@ def send_held(settings: dict) -> bool:
     if delivered or not takes:  # sent, or no address takes it: else kept, tried again next minute
         held_pushed = None
         with sent_lock:
-            current = read_json(HELD_FILE, [])
+            current = read_json(HELD_FILE, [], strict=True)  # unreadable for a moment: kept, tried again next minute
             rest = current[len(held):] if current[:len(held)] == held else current  # what came while it was going out stays
             if rest:
                 write_atomic(HELD_FILE, json.dumps(rest))
