@@ -1119,6 +1119,14 @@ def check_service(service: str, known: dict | None, where: str) -> list[dict] | 
     return known[service]
 
 
+SIGN_IN_OPTIONS = ("profile", "proxy", "no_proxy", "remote", "server")  # what picks the login and the server of a call
+
+
+def sign_in_params(dl: dict) -> dict:
+    """The download options a lookup on a service sends with it: its profile, proxy and server, nothing else."""
+    return {k: v for k, v in options.to_params(dl, options.dl_specs()).items() if k in SIGN_IN_OPTIONS}
+
+
 async def series_search(request):
     """A series looked up by name on its service, with its profile and proxy, for its URL; nothing downloaded."""
     body = await json_object(request)
@@ -1126,7 +1134,7 @@ async def series_search(request):
     if not show.get("service") or not query:
         raise web.HTTPBadRequest(text="Pick a service and type a name first")
     dl, _ = sonarr_sync.stacked(show, read_config())
-    params = {k: v for k, v in options.to_params(dl, options.dl_specs()).items() if k in ("profile", "proxy", "no_proxy", "remote", "server")}
+    params = sign_in_params(dl)
     try:
         backend = await asyncio.to_thread(sonarr_sync.backend_for, show["service"])
         found = await asyncio.to_thread(backend.call, "POST", "/api/search", json={**params, "service": show["service"], "query": query})
@@ -1408,6 +1416,12 @@ def check_ladder_name(name, ladders: list[dict], where: str) -> str:
     return name
 
 
+def check_full_path(folder: str) -> None:
+    """A folder given from the root (or a drive letter), without ..; an empty one is not set."""
+    if folder and (not (posixpath.isabs(folder) or ntpath.isabs(folder)) or ".." in re.split(r"[\\/]", folder)):
+        raise web.HTTPBadRequest(text=f"{folder} must be a full path, from / (or a drive letter), without ..")
+
+
 def check_backends(given, saved) -> list[dict]:
     """Other unshackle serve: a name, its address, its API key (empty keeps the one saved for that name and
     address), and the downloads folder as it sees it."""
@@ -1428,8 +1442,7 @@ def check_backends(given, saved) -> list[dict]:
                 raise web.HTTPBadRequest(text=f"The new address of {name} needs its API key too")
             key = old["api_key"]
         folder = str(b.get("downloads") or "").strip().rstrip("/\\")
-        if folder and (not (posixpath.isabs(folder) or ntpath.isabs(folder)) or ".." in re.split(r"[\\/]", folder)):
-            raise web.HTTPBadRequest(text=f"{folder} must be a full path, from / (or a drive letter), without ..")
+        check_full_path(folder)
         out.append({"name": name, "url": url, "api_key": key, "downloads": folder})
     return out
 
@@ -1459,8 +1472,7 @@ def check_sonarrs(given, saved, main_url: str) -> list[dict]:
         if not key:
             raise web.HTTPBadRequest(text=f"Enter the API key of {name}")
         folder = str(i.get("downloads") or "").strip().rstrip("/\\")
-        if folder and (not (posixpath.isabs(folder) or ntpath.isabs(folder)) or ".." in re.split(r"[\\/]", folder)):
-            raise web.HTTPBadRequest(text=f"{folder} must be a full path, from / (or a drive letter), without ..")
+        check_full_path(folder)
         if not str(i.get("quality_ladder") or "") and name not in saved:  # a new one: chosen, never a silent default
             raise web.HTTPBadRequest(text=f"Choose a quality ladder for {name}: a ladder, Off, or Same as each series")
         only = i.get("download_only")
@@ -1475,8 +1487,7 @@ def check_library(given: dict, who: str) -> dict:
     out = {}
     for name in ("library_sonarr_root", "library_local_root"):
         out[name] = folder = str(given.get(name) or "").strip().rstrip("/\\")
-        if folder and (not (posixpath.isabs(folder) or ntpath.isabs(folder)) or ".." in re.split(r"[\\/]", folder)):
-            raise web.HTTPBadRequest(text=f"{folder} must be a full path, from / (or a drive letter), without ..")
+        check_full_path(folder)
     if bool(out["library_sonarr_root"]) != bool(out["library_local_root"]):
         raise web.HTTPBadRequest(text=f"Set the library folder of {who} both as it sees it and as Unshacklarr sees it, or neither")
     return out
@@ -1706,9 +1717,8 @@ def check_settings(body: dict, previous: dict) -> dict:
     for name in ("unshackle_command", "downloads", "unshackle_downloads", "sonarr_downloads", "cookies_dir", "cache_dir", "unshackle_config_dir"):
         settings[name] = str(body.get(name) or "").strip().rstrip("/\\")
         folder = settings[name]
-        if name != "unshackle_command" and folder and (not (posixpath.isabs(folder) or ntpath.isabs(folder))
-                                                       or ".." in re.split(r"[\\/]", folder)):
-            raise web.HTTPBadRequest(text=f"{folder} must be a full path, from / (or a drive letter), without ..")
+        if name != "unshackle_command":
+            check_full_path(folder)
     country = str(body.get("country") or "US").upper()
     if not re.fullmatch(r"[A-Z]{2}", country):
         raise web.HTTPBadRequest(text="The country must be a two-letter code, like US")
@@ -1985,7 +1995,7 @@ def search_series_url(service: str, title: str, limited_raises: bool = False) ->
     raised when asked (a background pass then stops, rather than keep a search that was never made)."""
     show = {"service": service}
     dl, _ = sonarr_sync.stacked(show, read_config())
-    params = {k: v for k, v in options.to_params(dl, options.dl_specs()).items() if k in ("profile", "proxy", "no_proxy", "remote", "server")}
+    params = sign_in_params(dl)
     query = TITLE_QUALIFIER.sub("", title)
     try:
         found = sonarr_sync.backend_for(service).call("POST", "/api/search", json={**params, "service": service, "query": query})
@@ -4255,7 +4265,7 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
 def list_titles(show: dict) -> list[dict]:
     """The series' titles on its service, with its profile, proxy and service options: nothing downloaded."""
     dl, own = sonarr_sync.stacked(show, read_config())
-    params = {k: v for k, v in options.to_params(dl, options.dl_specs()).items() if k in ("profile", "proxy", "no_proxy", "remote", "server")}
+    params = sign_in_params(dl)
     if service := options.to_params(own, options.service_specs(sonarr_sync.service_entry(show["service"]))):
         params["service_params"] = service
     return sonarr_sync.backend_for(show["service"]).call("POST", "/api/list-titles", json={**params, "service": show["service"], "title_id": str(show["title"])})["titles"]
@@ -4307,7 +4317,7 @@ def page_of_season(show: dict, name: str, aired: int) -> dict | None:
     """A show of its own on the series' service for one of its seasons: one search result of that very name, not the
     series' own page, whose listing holds at least half of the season's aired episodes in one of its seasons."""
     dl, _ = sonarr_sync.stacked(show, read_config())  # as search_series_url: the series' profile and proxy
-    params = {k: v for k, v in options.to_params(dl, options.dl_specs()).items() if k in ("profile", "proxy", "no_proxy", "remote", "server")}
+    params = sign_in_params(dl)
     try:
         found = sonarr_sync.backend_for(show["service"]).call("POST", "/api/search", json={**params, "service": show["service"], "query": name})
     except UnshackleError as e:
