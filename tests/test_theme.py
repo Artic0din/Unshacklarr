@@ -135,3 +135,30 @@ def test_reduced_motion_also_stills_what_before_and_after_draw():
     stilled = [{part.strip() for part in sel.split(",")} for sel in
                re.findall(r"@media \(prefers-reduced-motion: reduce\) \{ ([^{]+)\{[^}]*animation: none !important", css)]
     assert any({"*", "::before", "::after"} <= parts for parts in stilled), moving
+
+
+def css_at(width):
+    """The text of every @media block whose min-width / max-width conditions hold at `width` px."""
+    css, out = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S), []
+    for match in re.finditer(r"@media ([^{]+)\{", css):
+        depth, end = 1, match.end()
+        while depth:
+            depth += {"{": 1, "}": -1}.get(css[end], 0)
+            end += 1
+        conditions = re.findall(r"\((min|max)-width:\s*(\d+)px\)", match.group(1))
+        if conditions and all((width >= int(px)) if kind == "min" else (width <= int(px)) for kind, px in conditions):
+            out.append(css[match.end():end - 1])
+    return "\n".join(out)
+
+
+@pytest.mark.parametrize("width", [701, 800, 1024, 1130])
+def test_a_tablet_header_gives_up_its_words_to_stay_on_one_row(width):
+    # the nav, the status buttons and the sync button together need more than a tablet has: it wrapped to two rows
+    rules = css_at(width)
+    assert "#sync span { display: none; }" in rules  # the sync button as an icon, named by its aria-label
+    assert re.search(r"\.health span:not\(\.dot\) \{ position: absolute", rules)  # the status buttons as dots, named for a screen reader
+    assert 'id="sync" aria-label="Run sync now"' in (STATIC / "index.html").read_text()
+
+
+def test_a_wide_desktop_header_keeps_its_words():
+    assert "#sync span" not in css_at(1441) and ".health span:not(.dot)" not in css_at(1441)

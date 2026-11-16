@@ -1390,6 +1390,26 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
 .poster .meta .miss { color: var(--warn); }
 .poster:focus-visible { outline: none; }
 .poster:focus-visible .art { outline: 2px solid var(--accent); outline-offset: 3px; }  /* apart from the "managed" ring, which sits on the art itself */
+/* Below a wide desktop the header gives up its words, as on a phone, so it stays on one row: the sync button and the
+   status buttons become icons and dots (still named for a screen reader), then the nav loses its icons and the logo its name. */
+@media (max-width: 1240px) {
+  .health span:not(.dot) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* a service that is down says so in words here too, not by the dot's colour alone */
+  .health button:has(small:not(:empty)) span:not(.dot) { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
+  #sync { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
+  #sync span { display: none; }
+}
+@media (min-width: 701px) and (max-width: 1040px) { header { gap: var(--sp-3); padding-inline: var(--sp-4); } }
+@media (min-width: 701px) and (max-width: 940px) {
+  nav .ico { display: none; }
+  /* a status with words in it takes a row of its own, as on a phone, rather than push the buttons off the first */
+  header:has(.health small:not(:empty)) .health { order: 10; flex-basis: 100%; margin-left: 0; }
+  header:has(.health small:not(:empty)) #bell { margin-left: auto; }
+}
+@media (min-width: 701px) and (max-width: 840px) {
+  .brand span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  nav button { padding-inline: 8px; }
+}
 /* Phones: a native-app shell. Tabs move to a bottom bar, the series page goes full screen,
    touch targets are 44 px and fields 16 px (iOS zooms into anything smaller). */
 @media (max-width: 700px) {
@@ -1400,17 +1420,13 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; } .brand a { min-width: 0; }
   .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .last-sync { display: none; }
-  .health span:not(.dot) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  /* a service that is down says so in words on a phone too, not by the dot's colour alone */
-  .health button:has(small:not(:empty)) span:not(.dot) { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
   /* ...on a row of its own under the title, so the header's buttons stay on screen */
   header:has(.health small:not(:empty)) { flex-wrap: wrap; }
   header:has(.health small:not(:empty)) .health { order: 10; flex-basis: 100%; margin-left: 0; }
   .inbox-x { width: 44px; height: 44px; }
   .update-pill span { display: none; } .update-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
   .health button { padding: 12px 8px; }
-  #sync { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
-  #sync span { display: none; }
+  #sync { width: 44px; height: 44px; }
   #bell { width: 44px; height: 44px; }
   nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(4, 1fr);
     gap: 0; margin: 0; max-width: none; background: color-mix(in srgb, var(--panel) 96%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--line);
