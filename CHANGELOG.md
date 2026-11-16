@@ -113,6 +113,11 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **The device menus and the setup pop-up work from the keyboard.** In Settings, CDM, the ⋯ menus (Test, Reprovision,
+  Delete), the Change picker and a service's device menu, and in Activity the ⓘ that shows how a download runs, now
+  take focus when they open, keep Tab and the arrow keys inside, and give focus back to their button on Escape or
+  once a choice is made. Their buttons say whether the menu is open. A device's row in the CDM list is now a real
+  button that unfolds its details, with the ⋯ beside it instead of inside it. (#280)
 - **States no longer rest on a colour alone.** The header says "Update available" and "Checking…" in words (on a phone an update gets the same row as "Unreachable", and a check shows a ring); each download step says Done, Running, Failed, Stopped, Kept or Waiting to a screen reader, the current one is marked, and a failed or stopped one carries a mark; the weekly Stats bars come with a table of their numbers; the chosen quality ladder is marked like the other chips, with "Edit ladders" outside the group; the active country in the setup has an accent bar; and the Missing and Monitored pills have a visible edge and a tick when on. (#280)
 - **A list that goes on now shows it, and a cut-off name can be read in full.** The setup's country list shows part of the next row, the Activity stats table shades the edge that still hides columns, and the hidden-series list, the option picker's help text, the notification log and the device map wrap their text instead of cutting it off with an ellipsis. (#280)
 - **Settings is readable between phone and desktop widths.** A cookie file's name was squeezed to one letter per line in a window narrower than 1440 pixels, which the previous UI review round's equal-width buttons caused, and now keeps its room. The services table becomes stacked rows below 1180 pixels, so "Used by" and "Show series" no longer hide past an edge. A ladder's steps stack below 1120 pixels, so Codec and Range show their choice and the page no longer scrolls sideways. On a phone, Unshackle's Cancel and Copy buttons and the Notifications cards and quiet-hours fields no longer run past the right edge. (#280)

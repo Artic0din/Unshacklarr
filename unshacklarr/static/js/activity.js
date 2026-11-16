@@ -1026,12 +1026,12 @@ function runBody(c) {
 /* How a download runs, out of the way: an ⓘ opening a small menu (where, proxy, CDM, the episode on the service,
    the attempt, and the same as a command to copy). Closed by a click elsewhere or Escape. */
 let setupPop = null;
-const closeSetup = () => { setupPop?.remove(); setupPop = null; };
+const closeSetup = () => { if (!setupPop) return; const pop = setupPop; setupPop = null; popClose(pop); pop.remove(); };
 document.addEventListener("pointerdown", (e) => { if (setupPop && !setupPop.contains(e.target) && !e.target.closest?.(".setup-btn")) closeSetup(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSetup(); });
 function setupButton(c, className = "jact") {
   if (!c.setup) return "";
-  const b = el("button", { type: "button", className: `${className} setup-btn`, ariaLabel: "How it runs",
+  const b = el("button", { type: "button", className: `${className} setup-btn`, ariaLabel: "How it runs", dataset: { run: c.id },
     onclick: (e) => { e.stopPropagation(); openSetup(c, e.currentTarget); } });
   b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
   return b;
@@ -1047,6 +1047,7 @@ function openSetup(c, at) {
   const r = at.getBoundingClientRect(), p = setupPop.getBoundingClientRect();
   setupPop.style.left = `${Math.min(Math.max(8, r.right - p.width), innerWidth - p.width - 8)}px`;
   setupPop.style.top = `${r.bottom + 8 + p.height > innerHeight - 8 ? Math.max(8, r.top - p.height - 8) : r.bottom + 8}px`;
+  popOpen(setupPop, at, "How it runs", () => [...document.querySelectorAll(`.setup-btn[data-run="${CSS.escape(c.id)}"]`)].find((b) => b.getClientRects().length));
 }
 function setupBox(c) {
   const rows = [["Runs on", c.setup.via], ["On the service", c.serviceEpisode !== c.sxxeyy && c.serviceEpisode],
