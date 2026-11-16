@@ -506,7 +506,9 @@ function renderHealth(h) {
   for (const [name, label] of [["unshackle", "Unshackle"], ["sonarr", "Sonarr"]]) {
     const st = h[name] || {}, b = document.querySelector(`[data-health=${name}]`);
     b.querySelector(".dot").className = "dot " + (st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "");
-    b.querySelector("small").textContent = st.ok === false ? "Unreachable" : "";  // said in words, not by the colour alone
+    const state = st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "wait";
+    b.dataset.state = state;
+    b.querySelector("small").textContent = { warn: "Update available", down: "Unreachable", wait: "Checking…" }[state] || "";  // said in words, not by the colour alone
     b.title = st.ok ? `${label} ${st.version || ""} is running${st.latest ? ` (${st.latest} is out)` : ""}`
       : st.ok === false ? st.error || `${label} is unreachable` : `Checking ${label}…`;
   }

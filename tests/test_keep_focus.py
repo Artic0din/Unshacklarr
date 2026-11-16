@@ -138,7 +138,7 @@ if (scenario === "cdm") {  // a device's test result reorders the list: the focu
   run("cdmData.devices[1].test = { ok: false, error: 'refused', at: 1 }");  // bravo fails its test, so it sorts ahead of alpha
   ctx.renderCdm();
   out.menu = [rows(), label(doc.activeElement), doc.activeElement === menu("alpha")];
-  menu("alpha").parent.focus();  // the row itself is a control too
+  find(list, (n) => n.dataset?.fk === "row:Widevine:alpha").focus();  // the row's summary button is a control too
   run("cdmData.devices[1].test = null");  // and back again
   ctx.renderCdm();
   out.row = [rows(), label(doc.activeElement)];

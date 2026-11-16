@@ -107,7 +107,7 @@ function cdmShort(d) {
 }
 /* A small window by a button: a device to pick, a device's actions; gone on a click elsewhere or Escape. */
 let cdmPop = null;
-const closeCdmPop = () => { cdmPop?.remove(); cdmPop = null; };
+const closeCdmPop = () => { if (!cdmPop) return; const pop = cdmPop; cdmPop = null; popClose(pop); pop.remove(); };
 document.addEventListener("pointerdown", (e) => { if (cdmPop && !cdmPop.contains(e.target) && !e.target.closest?.(".cdm-pop-btn")) closeCdmPop(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCdmPop(); });
 function cdmPopAt(anchor, ...nodes) {
@@ -120,6 +120,7 @@ function cdmPopAt(anchor, ...nodes) {
   document.body.append(cdmPop);
   onTop(cdmPop);
   placeCdmPop();
+  popOpen(cdmPop, anchor, nodes[0].textContent, () => anchor.dataset.key && document.querySelector(`[data-key="${CSS.escape(anchor.dataset.key)}"]`));
   return cdmPop;
 }
 function placeCdmPop() {  // by its button, as the page scrolls; gone when the button is
@@ -289,19 +290,15 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
     menu.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
     const lvl = d.info?.level || d.level;
     const fold = () => { cdmOpen.has(d.name) ? cdmOpen.delete(d.name) : cdmOpen.add(d.name); renderCdm(); };
-    return el("div", { className: `cdm-dev t-${tone}${cdmOpen.has(d.name) ? " open" : ""}${cdmJust.has(d.name) ? " just" : ""}`, tabIndex: 0, role: "button", dataset: { fk: `row:${d.kind}:${d.name}` },
-      ariaExpanded: String(cdmOpen.has(d.name)),
-      // the row unfolds its details; not its buttons, nor a click in the details (their text can be selected)
-      onclick: (e) => { if (!e.target.closest("button, .cdm-more") && !getSelection().toString()) fold(); },
-      onkeydown: (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); fold(); } } },
+    const summary = el("button", { type: "button", className: "cdm-sum", ariaExpanded: String(cdmOpen.has(d.name)), dataset: { fk: `row:${d.kind}:${d.name}` }, onclick: fold },
       el("span", { className: "dot", title: why, ariaHidden: "true" }),
       el("span", { className: "who" }, el("b", { textContent: cdmTitle(d).replace(/^(.{6,}?)\s+\1\b/i, "$1") }),
         el("small", { textContent: d.folder ? `${d.name}/` : `${d.name}.${d.kind === "Widevine" ? "wvd" : "prd"}` })),
       el("span", { className: "kind" }, el("i", { textContent: `${d.kind === "PlayReady" ? "PlayReady" : "Widevine"}${lvl ? ` ${lvl}` : ""}` }), ...(d.info?.vmp ? [el("i", { textContent: "VMP" })] : [])),
       el("span", { className: "used" }, ...(d.used_by.length ? d.used_by.map((u) => el("span", { className: "cdm-chip static", textContent: u.toLowerCase() === "default" ? "default" : u }))
         : [el("small", { textContent: "not in use" })])),
-      el("span", { className: `st ${tone}`, title: why, textContent: word }),
-      menu,
+      el("span", { className: `st ${tone}`, title: why, textContent: word }));
+    return el("div", { className: `cdm-dev t-${tone}${cdmOpen.has(d.name) ? " open" : ""}${cdmJust.has(d.name) ? " just" : ""}` }, summary, menu,
       ...(cdmOpen.has(d.name) ? [el("div", { className: "cdm-more" }, ...(d.test && !d.test.ok ? [el("p", { className: `why ${tone}`, textContent: why })] : []), cdmDetails(d))] : []));
   };
   // Where things stand, in the header: what needs you first, else how the devices in use last tested

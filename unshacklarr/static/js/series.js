@@ -529,6 +529,30 @@ function onTop(node) {
   if (node.matches(":popover-open")) node.hidePopover();
   node.showPopover();
 }
+/* A pop-up opened from a button, for the keyboard: focus goes in, Tab and the arrows stay in it, and closing it
+   (Escape, a choice) gives focus back to the button; refind: where that button went if the page drew it again meanwhile. */
+function popOpen(pop, anchor, label, refind = () => null) {
+  Object.assign(pop, { anchor, refind });
+  pop.setAttribute("role", "dialog");
+  pop.setAttribute("aria-label", label);
+  anchor.setAttribute("aria-haspopup", "dialog");
+  anchor.setAttribute("aria-expanded", "true");
+  pop.tabIndex = -1;  // every action off (a device in use, nothing to test): the window itself holds the focus until Escape
+  const fields = () => [...pop.querySelectorAll("button:not(:disabled), input")];
+  pop.addEventListener("keydown", (e) => {
+    const step = e.key === "Tab" ? (e.shiftKey ? -1 : 1) : e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const all = fields();
+    all[(all.indexOf(document.activeElement) + step + all.length) % all.length]?.focus();
+  });
+  (fields()[0] || pop).focus();
+}
+function popClose(pop) {
+  const back = pop.anchor.isConnected ? pop.anchor : pop.refind();
+  pop.anchor.setAttribute("aria-expanded", "false");
+  if (pop.contains(document.activeElement)) back?.focus();
+}
 {  // a window opened as a modal while a tooltip or a toast shows: they come above it again
   const showModal = HTMLDialogElement.prototype.showModal;
   HTMLDialogElement.prototype.showModal = function () {
