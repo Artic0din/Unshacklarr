@@ -1134,10 +1134,6 @@ def _write_authentication_checkpoint(sessions: dict[str, dict], cleanups: dict[s
     write_atomic(AUTHENTICATION_SESSIONS_FILE, json.dumps(stored), mode=0o600)
 
 
-def _write_authentication_setups(sessions: dict[str, dict]) -> None:
-    _write_authentication_checkpoint(sessions, _read_authentication_cleanups())
-
-
 def _authentication_setup_session(key: str) -> dict | None:
     with authentication_sessions_lock:
         return _read_authentication_setups().get(key)

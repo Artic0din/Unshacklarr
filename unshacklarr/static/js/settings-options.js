@@ -311,7 +311,7 @@ $("#ak-delete").onclick = async (e) => {
 $("#ak-cmd").after((() => {
   const copy = el("button", { type: "button", className: "jact", ariaLabel: "Copy the command",
     onclick: () => navigator.clipboard.writeText($("#ak-cmd").textContent).then(() => toast("Command copied"), () => toast("The browser refused to copy", true)) });
-  copy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>';
+  copy.innerHTML = ICON_COPY;
   return copy;
 })());
 $("#ac-others").onclick = async (e) => {
@@ -323,7 +323,7 @@ $("#ac-others").onclick = async (e) => {
 $("#ac-reset").after((() => {
   const copy = el("button", { type: "button", className: "jact", ariaLabel: "Copy the command",
     onclick: () => navigator.clipboard.writeText($("#ac-reset").textContent).then(() => toast("Command copied"), () => toast("The browser refused to copy", true)) });
-  copy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>';
+  copy.innerHTML = ICON_COPY;
   return copy;
 })());
 /* Account, backup: the settings to a file and back, the password asked first (the file holds the keys). */

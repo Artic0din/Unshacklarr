@@ -35,9 +35,6 @@ $("#ck-form").onsubmit = async (e) => {
   } catch (err) { $("#ck-error").replaceChildren(failed(err.message)); }
 };
 
-/* The copy icon of a button with nothing else in it. */
-const ICON_COPY = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>';
-
 /* CDM: Unshackle's devices (what they are, whether they still get a license) and which one each service uses. */
 let cdmData = null, cdmFilter = "all", cdmQuery = "", cdmTesting = false, cdmShowUnused = false;
 const cdmOpen = new Set();  // devices whose details are unfolded

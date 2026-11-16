@@ -103,7 +103,7 @@ const renderCalendar = () => schedView() === "month" ? renderMonth() : renderWee
 function hideButton(d) {  // hidden series are not listed here: Series, Hidden brings them back
   const b = el("button", { className: "icon-hide", title: "Hide this series from the schedule (Series, Hidden brings it back)", ariaLabel: `Hide ${d.series} from the schedule`,
     onclick: (e) => { e.preventDefault(); e.stopPropagation(); hideSeries(d, true); } });
-  b.innerHTML = `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a17.6 17.6 0 0 1-2.2 3.3M6.6 6.6C3.6 8.6 2 12 2 12s3 8 10 8a10 10 0 0 0 5.4-1.6M14.1 14.1a3 3 0 0 1-4.2-4.2M2 2l20 20"/></svg>`;
+  b.innerHTML = `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${EYE_SHUT}</svg>`;
   return b;
 }
 
@@ -321,7 +321,6 @@ function schedCard(d, when) {
 
 /* Details: a popover by its card, a dialog on a phone. One at a time; Escape or Close returns to the card's name. */
 const det = { trigger: null, d: null, key: "", phone: false };
-const phoneLayout = () => matchMedia("(max-width: 700px)").matches;
 function detailsNode(d) {
   const series = S.series.find((x) => x.tvdbId === d.tvdbId), plan = detailsPlan(d);
   const onService = d.serviceEpisode && d.serviceEpisode !== d.sxxeyy ? d.serviceEpisode : "";

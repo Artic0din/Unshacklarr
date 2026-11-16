@@ -26,6 +26,10 @@ SERVICES = [{"tag": "RTLP", "cli_params": [{"name": "movie", "kind": "option", "
             {"tag": "MLT", "cli_params": []}, {"tag": "CRAVE", "cli_params": []}, {"tag": "ATV", "cli_params": []}]
 
 
+def write_authentication_setups(sync, sessions):
+    sync._write_authentication_checkpoint(sessions, sync._read_authentication_cleanups())
+
+
 def load(tmp_path, monkeypatch):
     (tmp_path / "config.yaml").write_text(
         "defaults: {--quality: '1080', --noatmos: true}\n"
@@ -1794,7 +1798,7 @@ def test_legacy_setup_cancel_proves_its_owner_before_cleanup_and_recovers_when_i
     backend_name = "living-room"
     key = f"RTLP@{backend_name}"
     legacy = {"service": "RTLP", "backend": backend_name, "session_id": "legacy-session"}
-    sync._write_authentication_setups({key: legacy})
+    write_authentication_setups(sync, {key: legacy})
     missing = sync.UnshackleError("session is not on this server")
     missing.status = 404
     replacement_calls = []
@@ -1891,12 +1895,12 @@ def test_legacy_setup_requires_read_proof_before_answer_or_retry(tmp_path, monke
             return {"session_id": "replacement-session"}
 
     sync.BACKENDS[backend_name] = Replacement()
-    sync._write_authentication_setups({key: legacy})
+    write_authentication_setups(sync, {key: legacy})
     with pytest.raises(sync.UnshackleError, match="not on this server"):
         sync.answer_authentication_setup("RTLP", "response", backend_name)
     assert sync._read_authentication_setups()[key] == legacy
 
-    sync._write_authentication_setups({key: {**legacy, "error": True}})
+    write_authentication_setups(sync, {key: {**legacy, "error": True}})
     assert sync.start_authentication_setup("RTLP", backend_name) == {
         "service": "RTLP",
         "backend": backend_name,
@@ -1962,7 +1966,7 @@ def test_authentication_setup_retry_cleans_the_old_owner_then_uses_the_requested
     sync.start_authentication_setup("RTLP", backend_name)
     key = f"RTLP@{backend_name}"
     session = sync._read_authentication_setups()[key]
-    sync._write_authentication_setups({key: {**session, "error": True}})
+    write_authentication_setups(sync, {key: {**session, "error": True}})
 
     replacement = Backend("https://replacement.invalid", "r" * 32, "replacement-session")
     sync.BACKENDS[backend_name] = replacement
@@ -2204,7 +2208,7 @@ def test_authentication_setup_migrates_the_previous_backend_fingerprint(
     )
     legacy_identity = sync.hashlib.sha256(legacy_material.encode()).hexdigest()
     key = "RTLP@living-room"
-    sync._write_authentication_setups(
+    write_authentication_setups(sync, 
         {
             key: {
                 "service": "RTLP",
@@ -2254,7 +2258,7 @@ def test_authentication_setup_proves_previous_fingerprint_after_key_rotation(
         separators=(",", ":"),
     )
     key = "RTLP@living-room"
-    sync._write_authentication_setups(
+    write_authentication_setups(sync, 
         {
             key: {
                 "service": "RTLP",
@@ -2726,7 +2730,7 @@ def test_authentication_setup_retries_terminal_cleanup_before_recording_success(
         "2026-11-14T01:00:00+00:00",
         authentication={"state": "authenticated", "method": "pairing"},
     )
-    sync._write_authentication_setups({"RTLP": {"service": "RTLP", "backend": "", "session_id": "session-two"}})
+    write_authentication_setups(sync, {"RTLP": {"service": "RTLP", "backend": "", "session_id": "session-two"}})
     missing = sync.UnshackleError("gone")
     missing.status = 404
     monkeypatch.setattr(
@@ -2870,11 +2874,11 @@ def test_authentication_setup_does_not_rewrite_an_unchanged_fallback(tmp_path, m
     monkeypatch.setattr(sync.UNSHACKLE, "call", lambda *args, **kwargs: {"authentication": fallback})
     sync.authentication_setups()
     writes = []
-    original_write = sync._write_authentication_setups
+    original_write = sync._write_authentication_checkpoint
     monkeypatch.setattr(
         sync,
-        "_write_authentication_setups",
-        lambda sessions: writes.append(json.loads(json.dumps(sessions))) or original_write(sessions),
+        "_write_authentication_checkpoint",
+        lambda sessions, cleanups: writes.append(json.loads(json.dumps(sessions))) or original_write(sessions, cleanups),
     )
 
     sync.authentication_setups()
