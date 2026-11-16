@@ -3741,7 +3741,8 @@ def accepted_subs(show: dict, config: dict) -> list[str]:
 def speaks(tags, accepted: list[str]) -> bool:
     """Whether a track language among `tags` is one accepted: fr takes fr-FR and fr-CA; fr-CA takes fr-CA, and a
     plain fr too (a file's tag says no region: it may be it), never fr-FR."""
-    have = {LANGS.get(head, head) + dash + region for t in tags if t for head, dash, region in [t.lower().partition("-")]}
+    norm = lambda codes: {LANGS.get(head, head) + dash + region for t in codes if t for head, dash, region in [t.lower().partition("-")]}
+    have, accepted = norm(tags), norm(accepted)  # both sides alike: an accepted fre-CA is fr-ca, as a file's
     return any(a == h or (a.split("-")[0] == h.split("-")[0] and ("-" not in a or "-" not in h)) for a in accepted for h in have)
 
 

@@ -3735,6 +3735,7 @@ def test_an_episode_in_none_of_the_accepted_languages_waits_undownloaded(tmp_pat
     assert sync.speaks({"en-US"}, ["fr", "en"]) and sync.speaks({"fre"}, ["fr"]) and not sync.speaks({"fr-FR"}, ["fr-CA"])
     assert sync.speaks({"fr"}, ["fr-ca"])  # --a-lang fr-CA: the file's plain French tag may be it, as before
     assert sync.speaks({"fre-CA"}, ["fr-ca"]) and not sync.speaks({"fre-FR"}, ["fr-ca"])  # a three-letter tag with a region
+    assert sync.speaks({"fr-CA"}, ["fre-CA"]) and sync.speaks({"fr"}, ["fra"])  # and an accepted code written that way too
     config = sync.read_file()
     assert sync.accepted_audio(config["series"][111], {**config, "settings": {"audio_accept": "fr, en"}}) == ["fr", "en"]
     config["series"][111]["audio_accept"] = "fr,en"
