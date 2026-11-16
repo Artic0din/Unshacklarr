@@ -362,21 +362,43 @@ console.log(JSON.stringify({ renamed, requestWhileRenamed, libraries: ctx.S.sona
     assert shown == {"renamed": "Anime 2", "requestWhileRenamed": "Anime", "libraries": ["Anime"], "request": "Anime", "requestAfter": "Anime"}
 
 
-def test_discard_before_upgrades_was_opened_asks_the_server_nothing():
+def test_discard_before_the_release_groups_are_looked_up_asks_nothing_and_still_resets_the_switch():
     shown = node(r"""
 const saved = { settings: { upgrade_other_groups: false }, series: {} };
+const config = JSON.parse(JSON.stringify(saved));
+config.settings.upgrade_other_groups = true;  // switched on, not saved; the lookup not done (or failed)
 const nodes = {}, $ = (sel) => (nodes[sel] ??= { checked: false, disabled: false, replaceChildren() {} });
+$("#ug-other").checked = true;
 let asked = 0;
-const ctx = sandbox({ S: { config: JSON.parse(JSON.stringify(saved)), dlOptions: [], series: [] }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "{}", $,
+const ctx = sandbox({ S: { config, dlOptions: [], series: [] }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "{}", $,
   api: async () => { asked++; return { groups: [], none: [] }; }, optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, dirty() {}, toast() {},
-  renderUpgradeSeries() {}, renderInterface() {}, keepSonarrNames() {}, sonarrNames: () => [] });
+  renderUpgradeSeries() {}, renderInterface() {}, keepSonarrNames() {}, sonarrNames: () => [], configUnits: () => ({}) });
 vm.runInContext("let ugGroups = null;", ctx);
 vm.runInContext(grab(read(process.argv[2]), /async function renderUpgradeGroups\b[\s\S]*?\n}\n/), ctx);
 vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
 ctx.discardChanges();
-setTimeout(() => console.log(JSON.stringify(asked)));
+setTimeout(() => console.log(JSON.stringify({ asked, switchOn: nodes["#ug-other"].checked })));
 """, str(JS / "settings-options.js"), str(JS / "quality.js"))
-    assert shown == 0  # the groups are looked up when Upgrades opens, not on every Discard
+    # the groups are looked up when Upgrades opens, not on every Discard; the switch shows the saved value either way
+    assert shown == {"asked": 0, "switchOn": False}
+
+
+def test_discard_leaves_the_next_save_sending_no_series_it_restored():
+    shown = node(r"""
+const core = read(process.argv[2]);
+const loaded = { settings: {}, series: { 1: { title: "A", service: "BINGE" } } };  // as the server sends it: not in key order
+const ctx = sandbox({ S: { config: JSON.parse(JSON.stringify(loaded)), dlOptions: [] }, savedSonarrsOf: "{}", $: (sel) => sel,
+  optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, dirty() {}, toast() {}, renderUpgradeSeries() {}, renderInterface() {} });
+for (const re of [/const stableJSON = .*\n/, /const configKey = .*\n/, /let savedUnits = \{\};\nconst configUnits = [\s\S]*?\]\)\]\);\n/, /const sonarrSavedName = new WeakMap\(\);[\s\S]*?const savedSonarr = .*\n/])
+  vm.runInContext(grab(core, re), ctx);
+vm.runInContext("var savedConfig = configKey(S.config); savedUnits = configUnits(S.config);", ctx);  // as the page loads it
+vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
+ctx.S.config.series[1].title = "B";
+ctx.discardChanges();
+const now = vm.runInContext("configUnits(S.config)", ctx), before = vm.runInContext("savedUnits", ctx);
+console.log(JSON.stringify(Object.keys(now).filter((u) => now[u] !== before[u])));
+""", str(JS / "settings-options.js"), str(JS / "core.js"))
+    assert shown == []  # what a Save would send as changed: nothing
 
 
 def test_discard_waits_for_a_save_in_flight():

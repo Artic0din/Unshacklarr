@@ -834,11 +834,13 @@ function discardChanges() {
   Object.assign(S.config.series, savedSeries);
   S.sonarrsOf = JSON.parse(savedSonarrsOf);
   keepSonarrNames(sonarrNames());  // the restored entries are new objects, under their saved names
+  savedUnits = configUnits(S.config);  // the same as saved, its keys now in order: a Save sends none of it as changed
   optionsEditor($("#defaults"), S.dlOptions, S.config.defaults);
   renderSettings();
   // drawn when their section opens, not by renderSettings: their handlers hold the objects just replaced
   renderUpgradeSeries();
-  if (ugGroups) renderUpgradeGroups(false);  // not looked up yet: Upgrades looks them up as it opens
+  if (ugGroups) renderUpgradeGroups(false);
+  else $("#ug-other").checked = !!S.config.settings.upgrade_other_groups;  // groups not looked up (yet): Upgrades does as it opens
   renderInterface();
   renderServiceFilter();
   renderWall();
