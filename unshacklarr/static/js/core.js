@@ -674,7 +674,7 @@ async function closeDrawer(fromRoute = false) {
   if (drawerChanged()) {
     const choice = await askUnsaved(current.title);
     if (choice === "save") {
-      try { await save(); } catch (e) { toast(`Could not save: ${e.message}`, true); return keepDrawer(fromRoute); }
+      try { await save(); } catch (e) { toast(e.saved ? e.message : `Could not save: ${e.message}`, true); return keepDrawer(fromRoute); }
     } else if (choice === "discard") discardDrawer();
     else return keepDrawer(fromRoute);
   }

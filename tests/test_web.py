@@ -2281,11 +2281,11 @@ const fresh = () => {
   box.S.config.settings.debug = true; box.S.config.series[7].sonarrs.old.off = false; page.dirty();
   saving = page.save(); release({ settings: { debug: true, sonarrs: [{ name: "new", url: "http://a" }] },
     series: { 7: { service: "IV", sonarrs: { new: { off: true } } } } });
-  const reloadAsked = await saving.then(() => "", (e) => e.message);
+  const reloadAsked = await saving.then(() => "", (e) => (e.saved ? "saved:" : "") + e.message);  // it did save: said so
   box.sentBody = null;
   const second = page.save().then(() => "", (e) => e.message); release({});  // sent today: answered, not left waiting
   const refused = await second;
-  out.othersRenameAsksReload = reloadAsked.includes("Reload") && refused === reloadAsked && box.sentBody === null
+  out.othersRenameAsksReload = reloadAsked.startsWith("saved:Saved.") && reloadAsked.includes("reload") && refused.includes("Reload") && box.sentBody === null
     && page.state().unsaved && box.S.config.settings.sonarrs[0].name === "old" && box.S.sonarrsOf[7][0].name === "old";
   // one Sonarr removed and another added while the Save runs: each keeps its own saved name
   box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] }, series: {} } };

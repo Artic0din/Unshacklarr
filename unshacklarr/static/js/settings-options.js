@@ -697,7 +697,7 @@ async function save() {
   const theirSonarrs = Array.isArray(saved?.settings?.sonarrs) ? saved.settings.sonarrs : [];
   if (names.some(([i, name]) => i.url && theirSonarrs.some((o) => o.url === i.url && o.name !== name))) {
     S.outOfDate = true;
-    throw new Error(OUT_OF_DATE);
+    throw Object.assign(new Error("Saved. Another tab renamed a Sonarr: reload this page before your next change."), { saved: true });
   }
   keepSonarrNames(names);
   for (const u of changed) {  // only these are as the server has them now: the others keep the version they were loaded at
@@ -786,7 +786,7 @@ async function save() {
 async function saveHere(button, bar = null) {
   button.disabled = true;
   try { await save(); }
-  catch (e) { button.disabled = false; return toast(`Could not save: ${e.message}`, true); }
+  catch (e) { button.disabled = false; return toast(e.saved ? e.message : `Could not save: ${e.message}`, true); }
   const label = button.innerHTML;
   const shown = bar || button;  // what save() just hid
   shown.hidden = false;
