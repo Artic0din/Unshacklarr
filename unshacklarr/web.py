@@ -3193,6 +3193,8 @@ async def unshackle_maintenance(request):
         raise web.HTTPBadGateway(text=no_credentials(e))
     if action == "refresh-services":
         UNSHACKLE.configure(sonarr_sync.SETTINGS)  # forget the services it listed before
+    if action == "clear-cache":
+        sonarr_sync.record_authentication_clear()
     return web.json_response(result)
 
 
@@ -3222,6 +3224,7 @@ def clear_service_cache(tag: str) -> int:
         else:
             freed += item.lstat().st_size
             item.unlink()
+    sonarr_sync.record_authentication_clear(tag)
     return freed
 
 
@@ -5650,6 +5653,7 @@ def authentication_status(
         for service in [*(main_services or []), *services]
     }
     observations = sonarr_sync.read_authentication_observations()
+    clears = sonarr_sync.read_authentication_clears()
     identities = {(service["tag"], str(service.get("backend") or "")) for service in services}
     successes_by_identity = collections.defaultdict(list)
     explicit_successes_by_identity = collections.defaultdict(list)
@@ -5681,11 +5685,16 @@ def authentication_status(
     for tag, backend in sorted(identities):
         methods = service_methods.get((tag, backend))
         stored = (observations.get(backend) or {}).get(tag) or {}
+        cleared = max((clears.get(backend) or {}).get(tag, ""), (clears.get(backend) or {}).get(sonarr_sync.ALL_SERVICES, ""))
+        if stored.get("observed_at", "") <= cleared:
+            stored = {}
+        elif (stored.get("validated_at") or "") <= cleared:
+            stored = {**stored, "validated_at": None}
         status = {"state": "unknown", "validated_at": None, "observed_at": None, "needs_user_action": None}
-        successes = successes_by_identity[tag, backend]
-        failures = failures_by_identity[tag, backend]
+        successes = [at for at in successes_by_identity[tag, backend] if at > cleared]
+        failures = [at for at in failures_by_identity[tag, backend] if at > cleared]
         if methods is None and not stored and not failures:
-            successes = explicit_successes_by_identity[tag, backend]
+            successes = [at for at in explicit_successes_by_identity[tag, backend] if at > cleared]
         if methods == []:
             status.update(state="anonymous", needs_user_action=False)
         elif methods is not None or stored or successes or failures:

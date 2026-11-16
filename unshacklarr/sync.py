@@ -117,6 +117,8 @@ SEEN_FILE = DATA / "availability.json"  # per episode: last try it was not out y
 RUNS_DIR = DATA / "runs"
 AUTHENTICATION_FILE = DATA / "authentication.json"
 AUTHENTICATION_SESSIONS_FILE = DATA / "authentication-sessions.json"
+AUTHENTICATION_CLEARS_FILE = DATA / "authentication-cleared.json"  # when Unshackle's saved sign-ins were last cleared
+ALL_SERVICES = "*"
 authentication_lock = threading.Lock()
 authentication_sessions_lock = threading.Lock()
 authentication_session_locks: dict[str, tuple[threading.Lock, int]] = {}
@@ -850,6 +852,27 @@ def read_authentication_observations() -> dict[str, dict[str, dict]]:
         if valid:
             observations[str(backend)] = valid
     return observations
+
+
+def read_authentication_clears() -> dict[str, dict[str, str]]:
+    """When each backend's saved sign-ins were cleared: by backend, then by service (ALL_SERVICES for all of them)."""
+    stored = read_json(AUTHENTICATION_CLEARS_FILE, {})
+    if not isinstance(stored, dict):
+        return {}
+    return {
+        str(backend): {service: at for service, at in services.items() if isinstance(service, str) and isinstance(at, str)}
+        for backend, services in stored.items()
+        if isinstance(services, dict)
+    }
+
+
+def record_authentication_clear(service: str | None = None, backend: str = "") -> None:
+    """Unshackle's saved sign-ins were cleared, for one service or for all of a backend's: what was confirmed
+    before is no longer evidence, and the services read "not checked yet" until a check or download confirms them."""
+    with authentication_lock:
+        clears = read_authentication_clears()
+        clears.setdefault(backend, {})[service or ALL_SERVICES] = datetime.now(timezone.utc).isoformat()
+        write_atomic(AUTHENTICATION_CLEARS_FILE, json.dumps(clears))
 
 
 def record_authentication_observations(observations_to_record: list[tuple[str, str, str, str]]) -> None:
