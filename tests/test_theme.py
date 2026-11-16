@@ -112,3 +112,14 @@ def test_no_later_rule_reshapes_a_tag():
     late = [sel.strip() for i, (sel, body) in enumerate(rules) if i > shared and shaping.search(body)
             and any(name in [s.strip() for s in sel.split(",")] for name in names)]
     assert not late  # the shared shape is the last word for every tag
+
+
+def test_reduced_motion_also_stills_what_before_and_after_draw():
+    """`*` matches elements only: a looping ::before (the running step's shimmer) kept moving."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)  # a commented-out rule does nothing
+    moving = [sel.strip() for sel, body in re.findall(r"([^{}]*::(?:before|after)[^{}]*)\{([^{}]*)\}", css)
+              if re.search(r"animation:\s*(?!none)[\w-]+", body)]
+    assert moving, "no animated ::before/::after left to check"
+    stilled = [{part.strip() for part in sel.split(",")} for sel in
+               re.findall(r"@media \(prefers-reduced-motion: reduce\) \{ ([^{]+)\{[^}]*animation: none !important", css)]
+    assert any({"*", "::before", "::after"} <= parts for parts in stilled), moving
