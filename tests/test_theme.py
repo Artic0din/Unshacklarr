@@ -135,3 +135,81 @@ def test_reduced_motion_also_stills_what_before_and_after_draw():
     stilled = [{part.strip() for part in sel.split(",")} for sel in
                re.findall(r"@media \(prefers-reduced-motion: reduce\) \{ ([^{]+)\{[^}]*animation: none !important", css)]
     assert any({"*", "::before", "::after"} <= parts for parts in stilled), moving
+
+
+def rules_of(selector, *, within=None):
+    """The declarations of every rule whose selector list names `selector` exactly (a media query's rules too)."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    return [body for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+            if selector in [part.strip() for part in sel.split(",")]]
+
+
+def test_a_link_drawn_as_a_button_takes_the_buttons_colour_not_the_browsers_link_blue():
+    assert any(re.search(r"(?<![\w-])color:\s*inherit", body) for body in rules_of(".btn"))
+    assert any("text-decoration: none" in body for body in rules_of("a.btn"))
+
+
+def test_a_text_fields_focus_is_a_2px_ring_on_every_field_rule():
+    """The old 1px accent edge plus a 16% halo was 2.4:1 (dark) and 1.6:1 (light) against the resting edge."""
+    focus = [".remote-form input:focus", ".remote-form select:focus", "input[type=time]:focus:not(.bad)"]
+    for selector in focus:
+        assert any("outline: 2px solid var(--accent)" in body for body in rules_of(selector)), selector
+    general = [body for body in rules_of("textarea):focus:not(.bad)") + rules_of(":is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], select, textarea):focus:not(.bad)")]
+    assert any("outline: 2px solid var(--accent)" in body for body in general)
+    for selector in (".card input:focus", ".remote-form input:focus"):
+        assert not any("outline: none" in body or "box-shadow" in body for body in rules_of(selector)), selector
+
+
+def test_the_other_pill_carries_a_ring_because_its_input_has_no_edge():
+    assert any("outline: 2px solid var(--accent)" in body for body in rules_of(".rt-custom:focus-within"))
+    assert any("outline: none !important" in body for body in rules_of(".rt-custom input"))  # not a second ring inside the pill
+
+
+@pytest.mark.parametrize("selector", [".jx.again:focus-visible", ".jx:focus-visible", ".jact.primary:focus-visible", ".jact.danger:focus-visible"])
+def test_an_activity_icon_button_keeps_the_page_focus_ring(selector):
+    bodies = rules_of(selector)
+    assert bodies and not any("outline" in body for body in bodies)  # the global :focus-visible ring shows
+
+
+def test_the_segmented_controls_ring_is_drawn_inside_its_scroller():
+    assert any(re.search(r"outline-offset:\s*-2px", body) for body in rules_of(".seg button:focus-visible"))
+
+
+def test_a_choice_chips_edge_is_a_field_edge():
+    assert any("border: 1.5px solid var(--field-line)" in body for body in rules_of(".ax-seg button"))
+
+
+def test_a_pressed_control_scales_to_96_percent():
+    pressed = [body for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", CSS) if ".btn:active" in sel]
+    assert pressed and all("scale(.96)" in body for body in pressed)
+
+
+def test_remote_cdm_fields_are_16px_on_a_phone_so_ios_does_not_zoom():
+    assert re.search(r"@media \(max-width: 700px\) \{ \.remote-form input, \.remote-form select \{ font-size: 16px; \} \}", CSS)
+
+
+def test_every_dialog_or_menu_scroller_stays_put_at_its_end():
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    contained = {part.strip() for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css) if "overscroll-behavior: contain" in body for part in sel.split(",")}
+    panes = {".con-list", ".con-detail"}  # columns of a page, not a dialog or a menu
+    scrollers = {part.strip() for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+                 if re.search(r"(?<![\w-])overflow(?:-y)?:\s*(?:auto|scroll)", body) for part in sel.split(",")}
+    assert scrollers - contained - panes == set()
+    assert {".modal", ".news-rels"} <= contained
+
+
+def test_the_series_load_error_spans_the_whole_wall_like_the_empty_message():
+    assert any("grid-column: 1 / -1" in body for body in rules_of(".failed")) and any("grid-column: 1 / -1" in body for body in rules_of(".empty"))
+
+
+def test_the_loading_boxes_show_on_the_page_ground_and_the_wall_says_it_is_loading():
+    assert any("background: var(--well)" in body for body in rules_of(".skeleton"))
+    page = (STATIC / "index.html").read_text()
+    wall = re.search(r'<div class="wall" id="wall" aria-busy="true">(.*?)<div class="skeleton">', page, flags=re.S).group(1)
+    assert 'role="status"' in wall and "Loading series…" in wall
+
+
+def test_the_country_list_is_no_wider_than_its_input():
+    assert any("max-width: 420px" in body and ".wz-main .cp-list" in sel
+               for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", CSS))
+    assert re.search(r"\.wz-main \.cp-input, \.wz-main \.cp-list, \.wz-tiles,[^{}]*\{ max-width: none; \}", CSS)  # a phone: the full width of both
