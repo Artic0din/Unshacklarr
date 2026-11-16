@@ -97,6 +97,34 @@ def test_the_unshackle_test_needs_the_setup_code_before_the_setup(tmp_path, monk
     assert len(started) == 1  # nothing ran for the request without the code
 
 
+def test_testing_a_local_unshackle_command_leaves_the_shared_connection_alone(tmp_path, monkeypatch):
+    # #211: the test used to configure the global UNSHACKLE with the edited command, for anything else using it to read
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.backend as backend
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    saved = {"unshackle_mode": "local", "unshackle_command": "/saved/unshackle"}
+    web.UNSHACKLE.configure(saved)
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_command", "/saved/unshackle")
+    monkeypatch.setattr(web.sonarr_sync.EpisodeRun, "active", {"a download going"})  # no longer a reason to refuse
+    seen, stopped = [], []
+
+    def services(self):
+        seen.append((self is web.UNSHACKLE, self.settings["unshackle_command"], web.UNSHACKLE.settings["unshackle_command"]))
+        return [{"tag": "EXAMPLE"}, {"tag": "ALL4"}]
+
+    monkeypatch.setattr(backend.Unshackle, "services", services)
+    monkeypatch.setattr(backend.Unshackle, "stop", lambda self: stopped.append(self))
+
+    assert web.check_unshackle({"unshackle_mode": "local", "unshackle_command": "/edited/unshackle"}) == 1
+
+    assert seen == [(False, "/edited/unshackle", "/saved/unshackle")]  # the shared one kept its command throughout
+    assert len(stopped) == 1 and stopped[0] is not web.UNSHACKLE  # the throwaway's serve stopped, the shared one's left running
+    assert web.UNSHACKLE.settings == saved
+
+
 def test_service_sites_come_from_url_and_help_and_survive_odd_urls(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -1152,7 +1180,7 @@ const promptState = (input) => {
     const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => {
       const cells = row.children.slice(1);
       return { name: find(row, (node) => node.className === "sv-name").textContent, label: find(row, (node) => node.className === "sv-label").textContent,
-        cookies: words(cells[1]), used: words(cells[3]), attention: !!row.dataset.attention };
+        cookies: words(cells[2]), used: words(cells[3]), attention: !!row.dataset.attention };
     });
     console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className }));
   }
@@ -1345,13 +1373,13 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     assert rows["HULU"] == {
         "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series"],
         "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
-                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete", "Add cookies"],
+                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete"],
     }
     # another backend's row never gets the main Unshackle's cookie files, nor its series count
     assert rows["HULU · vpn"] == {
         "name": "HULU · vpn", "label": "Confirmed now", "attention": False, "used": ["—"], "cookies": ["—", "Managed on that server"],
     }
-    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete", "Add cookies"]
+    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series"]
     assert result["state"] == "sx-state down"
 
@@ -1947,6 +1975,8 @@ vm.runInContext(`
 let runsSeq = 0, runCards = [], runsTimer = null;
 const isLive = (c) => c.outcome === "running";
 const renderConsole = () => drawn.push(runCards.map((c) => c.id));
+const speedLog = {}, muxLog = {}, barWidths = new Map(), thumbs = new Map(), tracksOpen = new Set();
+${grab("forgetGoneRuns")}
 ${grab("openActivity")}
 ${src.slice(src.indexOf("let feedReloading"), src.indexOf("function liveTick"))}
 ${grab("liveTick")}

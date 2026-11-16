@@ -36,7 +36,7 @@ $("#d-release-gap").oninput = (e) => {
 $("#d-release-day").onchange = (e) => { S.config.series[current.tvdbId].release_day = Number(e.target.value); dirty(); renderReleaseNext(); };
 /* The day a service publishes, from the day Sonarr says an episode airs: that day, the day after, or up to two weeks
    before (a platform ahead of the channel: sync.EARLY_DAYS_MAX). */
-const RELEASE_DAYS = [-14, -7, -6, -5, -4, -3, -2, -1, 0, 1];
+const RELEASE_DAYS = Array.from({ length: 16 }, (_, i) => i - 14);  // -14 to 1: every day the server accepts
 const releaseDayLabel = (d) => d === 0 ? "the day it airs" : d === 1 ? "the day after" : d === -1 ? "the day before"
   : d === -7 ? "a week before" : d === -14 ? "two weeks before" : `${-d} days before`;
 $("#d-release-day").replaceChildren(...RELEASE_DAYS.map((d) => el("option", { value: String(d), textContent: releaseDayLabel(d) })));
@@ -662,7 +662,7 @@ function renderCatchUp() {
   // One season's counts are in the title row and the select row: the box says more only for several, or for what they lack
   box.hidden = !epAvail || !(new Set(missing.map((e) => e.seasonNumber)).size > 1 || upgrades.length || renumbered || elsewhere.length || Object.keys(epPages).length);
   if (box.hidden) return;
-  const bySeason = Object.entries(Object.groupBy(there, (e) => e.seasonNumber)).sort((a, b) => b[0] - a[0]);
+  const bySeason = Object.entries(there.reduce((g, e) => ((g[e.seasonNumber] ||= []).push(e), g), {})).sort((a, b) => b[0] - a[0]);  // not Object.groupBy: Safari 17.4
   const free = there.filter((e) => !epBusy.has(e.id));
   box.classList.toggle("none", !there.length && !upgrades.length);
   box.replaceChildren(
@@ -727,13 +727,14 @@ async function followTitles(s, want) {
 }
 async function askService(s) {
   const conf = S.config.series[s.tvdbId], svc = seriesSvcs(conf), check = $(".ep-check");
+  const libs = S.sonarrsOf?.[s.tvdbId] || [], inst = libs.find((o) => o.name === epSonarr) || libs[0];  // in no main Sonarr: the Sonarr being viewed, else the first
   if (check) { check.setAttribute("aria-disabled", "true"); check.replaceChildren(el("span", { className: "spinner", ariaHidden: "true" }), ` Asking ${svc}…`); }
   let r = null;
   const slow = slowHint(svc);
   try {
     // Each season page can list for 65 s; each other service can search and list, plus its 2 s pause.
-    r = await api("/api/probe", { method: "POST", wait: 120 + 65 * Object.keys(conf.season_pages || {}).length + 132 * S.services.length, body: JSON.stringify({ show: conf, seriesId: s.id ?? S.sonarrsOf?.[s.tvdbId]?.[0]?.id, tvdbId: s.tvdbId, title: s.title,
-      ...(s.id ? {} : { sonarr: S.sonarrsOf?.[s.tvdbId]?.[0]?.name }) }) });  // in no main Sonarr: its own Sonarr's episodes
+    r = await api("/api/probe", { method: "POST", wait: 120 + 65 * Object.keys(conf.season_pages || {}).length + 132 * S.services.length, body: JSON.stringify({ show: conf, seriesId: s.id ?? inst?.id, tvdbId: s.tvdbId, title: s.title,
+      ...(s.id ? {} : { sonarr: inst?.name }) }) });  // in no main Sonarr: its own Sonarr's episodes
     if (current === s) { epElsewhere = r.elsewhere || {}; epElsewhereFresh = true; epPages = r.page_suggest || {}; epAvail = viewAvail(r.available); epTitles = r.titles || []; epPagesListed = r.pages || {}; epChecked = r.checked; localTitles(r.local_titles); $("#ep-avail").hidden = false; renderSeason(); renderPreview();
       epTitlesAgree = r.titlesAgree ?? null; renderSeriesLanguage(); }
     if (current === s && r.elsewhere_error) toast(`Availability refreshed, but the search on other services failed: ${r.elsewhere_error}`, true);
@@ -849,9 +850,9 @@ $("#ep-go-edit").onclick = () => {
   renderPreview();
   $("#oneoff-cdm").replaceChildren(cdmNote(conf.service));
   $("#oneoff-dialog").showModal();
-  // the preview says what the service has; a listing from before season pages' titles were kept is asked again
-  if (!epTitles || Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).some((page) => !epTitles.some((t) => t.page != null && String(t.page) === page) 
-    && !(epPagesListed[page]?.count === 0 && epPagesListed[page].url === S.config.series[current.tvdbId].season_pages[page].url))) askService(current);  // listed empty, at this URL
+  // the preview says what the service has; a listing from before season pages' titles were kept is asked again (a series with no main page: nothing to ask)
+  if (conf.title && (!epTitles || Object.keys(S.config.series[current.tvdbId]?.season_pages || {}).some((page) => !epTitles.some((t) => t.page != null && String(t.page) === page) 
+    && !(epPagesListed[page]?.count === 0 && epPagesListed[page].url === S.config.series[current.tvdbId].season_pages[page].url)))) askService(current);  // listed empty, at this URL
 };
 /* Sonarr's episode as the service numbers it, the rule sync.service_episode applies: the episode table, else offset and seasons. */
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -974,7 +975,7 @@ $("#ep-go").onclick = () => startDownload();
 async function startDownload(numbering = null) {
   const conf = S.config.series[current.tvdbId];
   if (!conf.service || !(conf.title || conf.programmes)) return toast("Pick a service and the series URL first, then save.", true);
-  if (!$("#savebar").hidden) return toast("Save your changes first: the download reads the saved settings.", true);
+  if (unsaved) return toast("Save your changes first: the download reads the saved settings.", true);
   let replace = false;
   const onDisk = Object.values(epSeasons).flat().filter((e) => picked.has(e.id) && e.hasFile).length;
   if (onDisk) {

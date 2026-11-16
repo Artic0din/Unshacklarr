@@ -2311,17 +2311,17 @@ def run_job(payload: dict, run: EpisodeRun | None = None, poll: float = 0.5, job
 def unconfirmed_still_on(run: EpisodeRun | None) -> str | None:
     """Before a retry: the run's earlier job that serve never confirmed stopped (it didn't answer the cancel), when it
     is still there, queued, downloading or completed: followed again rather than a second download into the same
-    folder. None when serve answers it has gone (no such job, failed, cancelled). Still unreachable: the UnshackleError
-    goes on, and the retry waits again (#10)."""
+    folder. None when serve answers it has gone (404 no such job, failed, cancelled). Any other refusal, unreachable
+    or busy (429, 500, 401...) included, says nothing of it: the UnshackleError goes on, and the retry waits again (#10)."""
     pending = (run.card.get("unconfirmed_job") if run else None) or {}
     if not pending.get("job_id"):
         return None
     try:
         status = backend_named(pending.get("backend") or None).job(pending["job_id"]).get("status")
     except UnshackleError as e:
-        if UNREACHABLE in str(e):
+        if e.status != 404:
             raise
-        status = None  # serve answered (404): nothing of it runs any more
+        status = None  # serve answered 404: nothing of it runs any more
     if status in ("queued", "downloading", "completed"):
         return pending["job_id"]
     run.card.pop("unconfirmed_job", None)
@@ -2413,9 +2413,9 @@ def follow_job(backend, payload: dict, run: EpisodeRun | None, poll: float, job_
                 try:
                     backend.cancel(job_id)  # gone for good: nothing of it may go on behind a retry
                 except UnshackleError as refused:
-                    # serve couldn't be reached even for that: the job may go on there and finish (by mj23au, #10).
-                    # An answer (404: no such job) means it is gone: nothing to keep
-                    if run and UNREACHABLE in str(refused):
+                    # serve couldn't be reached, or refused even that: the job may go on there and finish (by mj23au, #10).
+                    # Only 404 (no such job) means it is gone: nothing to keep
+                    if run and refused.status != 404:
                         run.card["unconfirmed_job"] = {"backend": backend.name or "", "job_id": job_id}
                         run.save()
                 raise
