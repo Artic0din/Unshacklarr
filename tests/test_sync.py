@@ -6604,6 +6604,23 @@ def test_a_sync_still_to_start_keeps_a_pause_and_options_given_just_before_the_j
     assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [{**entry, "paused": True, "options": {"options": {"--a-lang": ["de"]}}}]}
 
 
+def test_a_pause_given_before_the_jobs_last_running_sync_ends_holds_for_a_sync_of_it_still_starting(tmp_path, monkeypatch):
+    # Two syncs of a job picked up after a restart: one ends, paused, while the other still fetches its episodes. The
+    # other must start paused, not download its queue without the job being resumed
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setitem(sync.restoring, ("B", 1), (None, {"episodes": [7], "kind": "manual"}))
+    seen = []
+    monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: sync.pause_job("B", True) or 0)
+    sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
+    monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: seen.append("B" in sync.paused_jobs) or 0)
+    try:
+        sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B", restored=("B", 1))
+        assert seen == [True]
+        assert "B" not in sync.paused_jobs  # the job's last sync over: nothing left to pause
+    finally:
+        sync.paused_jobs.discard("B")
+
+
 def test_a_sync_picked_up_again_starting_while_the_queue_is_saved_is_not_left_out(tmp_path, monkeypatch):
     # It starts between the running jobs and the waiting ones being read: one read for both, or it is in neither
     sync = load(tmp_path, monkeypatch)

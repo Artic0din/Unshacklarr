@@ -708,6 +708,11 @@ def queue_snapshot() -> dict[str, list[dict]]:
 restoring: dict[tuple[str, int], tuple] = {}  # (job, its sync's place in the file) -> (its thread, its entry) while picked up again
 
 
+def syncs_alive(batch: str) -> bool:
+    """A sync of the job running, or picked up after a restart and still starting. Under jobs_lock."""
+    return bool(batch_jobs.get(batch)) or any(key[0] == batch for key in restoring)
+
+
 def keep_live(batch: str) -> None:
     """The job's syncs still to start after a restart, given its pause and options as they are now. Under jobs_lock."""
     live = job_options.get(batch)
@@ -4588,17 +4593,17 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
         with jobs_lock:
             others = [j for j in batch_jobs.pop(batch, []) if j is not job] if batch else []
             last = not others
+            if others:
+                batch_jobs[batch] = others
             if running_jobs.get(batch) is job:  # another sync of it still downloading is the job now, paused or not
                 if others:
                     running_jobs[batch] = others[-1]
                 else:
                     running_jobs.pop(batch)
                     keep_live(batch)  # a pause or options given since the last save: not lost by one still to start
-                    paused_jobs.discard(batch)
-            if others:
-                batch_jobs[batch] = others
-            elif batch and not any(key[0] == batch for key in restoring):  # nor while one picked up again has yet to start
-                job_options.pop(batch, None)  # its own options: not while another sync of it still downloads
+            if batch and not syncs_alive(batch):  # its pause and own options: kept while another sync of it lives
+                paused_jobs.discard(batch)
+                job_options.pop(batch, None)
             if last:  # the job is over: its slot goes to the next pick in line (#10); not while another sync of it runs,
                 release_job(batch)  # and under the lock, so none can start under the batch in between
 
