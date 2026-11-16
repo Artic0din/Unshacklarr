@@ -234,3 +234,27 @@ vm.runInContext(grab("openDrawer"), ctx);
 ctx.openDrawer({ tvdbId: 2 }, "episodes", true).catch(() => {}).then(() => console.log(JSON.stringify({ ariaDisabled: button.ariaDisabled })));  // later steps need the whole page: only the first lines matter
 """, str(JS / "core.js"))
     assert shown == {"ariaDisabled": None}
+
+
+@pytest.mark.parametrize("slow_answer", ["not found", "error"])
+def test_library_check_shows_the_newest_path_not_the_slowest(slow_answer):
+    shown = node(r"""
+const slowAnswer = process.argv[2], runs = [];
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const say = { className: "", textContent: "", replaceChildren(...kids) { this.textContent = kids.join(""); } };
+const lib = {}, ctx = { libWho: "", libRoots: [], libCommon: "", libTimer: null, URLSearchParams, S: { config: { settings: {} } }, mainSonarr: () => "Sonarr", icon: () => "", el: () => ({}),
+  libOf: () => lib, renderLibraryPicks() {}, $: () => say, clearTimeout() {}, setTimeout: (fn) => { runs.push(fn()); return 1; },
+  api: async (path) => {
+    if (path.includes("sonarr_root=%2Fmnt%2Ft&")) { await wait(30); if (slowAnswer === "error") throw new Error("Unshacklarr did not answer"); return { ok: false, local_path: "/mnt/t", roots: ["/mnt/old"] }; }
+    return { ok: true, local_path: "/mnt/tv", roots: ["/mnt/tv"] };
+  } };
+vm.createContext(ctx);
+vm.runInContext("let libSeq = 0;" + grab("checkLibrary"), ctx);
+(async () => {
+  lib.library_sonarr_root = "/mnt/t"; ctx.checkLibrary();
+  lib.library_sonarr_root = "/mnt/tv"; ctx.checkLibrary();
+  await Promise.all(runs);
+  console.log(JSON.stringify({ text: say.textContent, className: say.className, roots: ctx.libRoots }));
+})();
+""", str(JS / "quality.js"), slow_answer)
+    assert shown == {"text": "Unshacklarr reads Sonarr's library: /mnt/tv", "className": "lib-check ok", "roots": ["/mnt/tv"]}
