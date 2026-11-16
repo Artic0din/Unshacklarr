@@ -66,8 +66,9 @@ function renderNews() {
   const version = $("#version"), count = S.news?.list_read !== S.version ? unseen.length : 0;  // how many, until this version's list is read
   version.classList.toggle("has-new", !!count);
   version.querySelector("b")?.remove();
+  const name = version.textContent;  // the chip hides it on the narrowest phones: the label keeps it
+  const label = count === 1 ? `What's new in ${name}: 1 new option` : count ? `What's new in ${name}: ${count} new options` : "What's new in each version";
   if (count) version.append(el("b", { textContent: count }));
-  const label = count === 1 ? "What's new: 1 new option" : count ? `What's new: ${count} new options` : "What's new in each version";
   version.title = label;
   version.setAttribute("aria-label", label);
 }

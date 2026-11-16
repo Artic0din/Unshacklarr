@@ -346,6 +346,7 @@ function renderJob(j) {
   const followed = j.cards.find((c) => c.id === following);
   const next = followed && !isDownloading(followed) && !isQueued(followed) && j.cards.find(isDownloading);
   if (next) { openCards.delete(followed.id); openCards.add(next.id); following = next.id; }
+  const tookLine = (c, live) => !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "";
   const shown = j.cards.filter((c) => !jobHidden.has(cardKind(c)));
   const cards = shown.map((c) => {
     // a card that doesn't move (done, queued, folded) is the same element as at the last draw: a job of 200 episodes
@@ -368,7 +369,7 @@ function renderJob(j) {
         ...[...(afterTracks(c) ? [[ICON_CLOCK, muxLeft(c) ? `${afterTracks(c)} · ${muxLeft(c)} left` : `${afterTracks(c)} · ${since(c.mux_from || c.tracks_in)}`]] : [[ICON_SPEED, speedOf(c)], [ICON_CLOCK, timeLeft(c) && `${timeLeft(c)} left`]]), [ICON_GLOBE, proxyOf(c), "extra"], [ICON_FILM, videoOf(c), "extra"],
           [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${svcName(c.service)}`, "extra"]]
           .filter(([, t]) => t).map(([svg, t, extra]) => { const chip = metaChip(svg, t); if (extra) chip.classList.add(extra); return chip; }))
-      : el("small", { textContent: !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "" });
+      : el("small", { textContent: tookLine(c, live), title: tookLine(c, live) });  // ellipsised when narrow: the whole line on hover
     const open = openCards.has(c.id) && !c.waiting;
     const acts = open ? cardActs(c) : [];
     const fold = () => {
