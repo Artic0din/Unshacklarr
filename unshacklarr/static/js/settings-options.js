@@ -475,6 +475,7 @@ $("#countries").oninput = (e) => {
 /* Interface: the language and the light or dark look of this browser, and spoilers on or off for the account. */
 document.querySelectorAll("#theme-row button").forEach((b) => b.onclick = () => { setTheme(b.dataset.themeChoice); renderInterface(); });
 function renderInterface() {
+  if (!S.config?.settings) return;  // reloaded on this page: drawn once the config is in
   const on = S.config.settings.spoiler_free === true;
   $("#rg-spoiler").checked = on;
   $("#theme-row").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeChoice === themeChoice())));

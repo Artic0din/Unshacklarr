@@ -99,3 +99,14 @@ vm.runInContext(grab(read(file), /async function askService\b[\s\S]*?\n}\n/), ct
 ctx.askService(s).then(() => console.log(JSON.stringify(sent)));
 """, str(JS / "series.js"), viewing)
     assert (body["sonarr"], body["seriesId"]) == asked
+
+
+@pytest.mark.parametrize("file,name", [("settings-options.js", "renderInterface"), ("quality.js", "renderLearnWindow")])
+def test_settings_screens_wait_for_the_config_instead_of_throwing(file, name):
+    threw = node(r"""
+const [file, name] = process.argv.slice(1);
+const ctx = sandbox({ S: {} });  // reloaded on #/settings/...: drawn before the config arrives
+vm.runInContext(grab(read(file), new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`)), ctx);
+try { ctx[name](); console.log("false"); } catch (e) { console.log("true"); }
+""", str(JS / file), name)
+    assert threw is False

@@ -227,6 +227,7 @@ Every change worth knowing, newest first. The format follows
   order changes, its new episodes wait until you confirm the numbering.
 The episode list and a running download's track list now draw on iPhones before iOS 17.4, where "What's on…?" results and the live track list used to stop the page drawing.
 "What's on…?" for a series that is in no main Sonarr now asks the Sonarr you are viewing (for example 4K), not always the first, so its badges match that library's episodes.
+Reloading on Settings, Automation or Interface no longer throws, so the installed app keeps pull-to-reload on those pages.
 
 ### Removed
 
