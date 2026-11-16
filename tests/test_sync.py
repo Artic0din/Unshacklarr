@@ -4023,6 +4023,25 @@ def test_a_download_only_series_is_downloaded_never_imported_nor_cleaned(tmp_pat
     assert sync.download_only({}, {"settings": {"download_only": True}}) is True
 
 
+
+@responses.activate
+def test_a_download_only_episode_in_a_subfolder_is_posted_with_its_subfolder(tmp_path, monkeypatch):
+    # finalize renames a file where it is: the after-download script gets the path it has, subfolders kept
+    sync = load(tmp_path, monkeypatch)
+    (tmp_path / "config.yaml").write_text((tmp_path / "config.yaml").read_text().replace("options: {--noatmos: false}", "download_only: true, options: {--noatmos: false}"))
+    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.post(re.compile(re.escape(WEBHOOK)))
+
+    def dl(out, wanted):
+        (out / "Show" / "Season 2").mkdir(parents=True)
+        (out / "Show" / "Season 2" / "Show.S02E05.mkv").write_bytes(b"x")
+
+    posted = []
+    use_tools(monkeypatch, sync, fake_tools([], dl, {}))
+    monkeypatch.setattr(sync, "after_download", lambda ep, show, run, files, imported: posted.append(files))
+    assert sync.main() == 0
+    assert len(posted) == 1 and [f.split("unshackle-111-S02E05/", 1)[1] for f in posted[0]] == ["Show/Season 2/Show.S02E05.mkv"]
+
 def test_each_service_downloads_with_its_own_unshackle_server(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     sync.apply_settings({**sync.SETTINGS, "backends": [{"name": "vpn", "url": "http://vpn:8786", "api_key": "k2", "downloads": "/vpn/dl"}]})

@@ -4406,7 +4406,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 run.say(f"{label}: downloaded but not imported (download only). It waits in {where}")
                 run.step("done")
                 run.finish("kept", "Download only: not imported", f"The download waits in {where}")
-                after_download(ep, show, run, [f"{where}/{f.name}" for f in videos_in(out)], False)
+                after_download(ep, show, run, [f"{where}/{f.relative_to(out).as_posix()}" for f in videos_in(out)], False)
                 notify_series(show, settings, "success", f"Downloaded, not imported: {label}",
                        f"Download only: the file waits in {where}. Import or delete it in Activity, Waiting in downloads.",
                        batch=batch, details=episode_details(ep, show, run))
