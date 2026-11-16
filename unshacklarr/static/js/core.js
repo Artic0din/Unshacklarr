@@ -438,10 +438,10 @@ const usesService = (conf, tag) => conf?.service === tag || Object.values(conf?.
 // The names a series is searched by: Sonarr's title, its other titles there, its name in file names
 const seriesNames = (s) => [s.title, ...(s.altTitles || []), S.config.series[s.tvdbId]?.file_name || ""];
 /* Every filter of the wall back to nothing (the sort stays: it hides no series). */
-function clearWallFilters() {
+function clearWallFilters(draw = true) {  // draw: false when the caller sets a filter of its own and draws once after
   $("#search").value = ""; $("#f-service").value = ""; $("#f-library").value = ""; $("#f-missing").checked = false; $("#f-monitored").checked = false;
   document.querySelectorAll("#tab-series .seg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.managed === ""));
-  renderWall();
+  if (draw) renderWall();
 }
 function renderWall() {
   const query = $("#search").value.trim(), q = query.toLowerCase();

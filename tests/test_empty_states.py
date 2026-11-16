@@ -182,3 +182,22 @@ ctx.loadEpisodes(s).then(() => {
     assert shown["texts"][0] == "Sonarr lists no episode for this series."
     assert shown["labels"] == ["Refresh"]
     assert shown["asked"]
+
+
+def test_show_series_of_a_service_draws_the_wall_once():
+    shown = node(r"""
+const core = read(process.argv[1]), services = read(process.argv[2]);
+let draws = 0;
+const fields = { "#search": box({ value: "x" }), "#f-service": box(), "#f-library": box(), "#f-missing": box({ checked: true }), "#f-monitored": box() };
+const ctx = sandbox({ $: (sel) => fields[sel] ?? box(), showTab() {}, document: { querySelectorAll: () => [] } });
+vm.runInContext(grab(core, /function clearWallFilters\b[\s\S]*?\n}\n/) + grab(services, /function showSeriesOf\b[\s\S]*?\n}\n/), ctx);
+ctx.renderWall = () => { draws++; };
+ctx.showSeriesOf("hbo");
+console.log(JSON.stringify({ draws, service: fields["#f-service"].value, search: fields["#search"].value }));
+""", str(JS / "core.js"), str(JS / "services.js"))
+    assert shown == {"draws": 1, "service": "hbo", "search": ""}  # the filters cleared, then one wall for that service
+
+
+def test_a_device_search_of_spaces_filters_nothing():
+    src = (JS / "cookies-cdm.js").read_text()
+    assert "cdmQuery.trim().toLowerCase()" in src and "!cdmQuery.trim() ||" in src  # the same trimmed query the empty line names

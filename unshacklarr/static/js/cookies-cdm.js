@@ -249,9 +249,9 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   ];
   // Devices: one line each, those in use or in trouble first, the others folded
   const matches = (d) => ({ all: true, Widevine: d.kind === "Widevine", PlayReady: d.kind === "PlayReady", used: d.used_by.length > 0, problems: problem(d) }[cdmFilter])
-    && (!cdmQuery || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")}`.toLowerCase().includes(cdmQuery.toLowerCase()));
+    && (!cdmQuery.trim() || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")}`.toLowerCase().includes(cdmQuery.trim().toLowerCase()));  // the same trimmed query the empty line names
   const found = data.devices.filter(matches).sort((a, b) => (b.used_by.length > 0) - (a.used_by.length > 0) || (cdmTesting ? 0 : (problem(b) ? 1 : 0) - (problem(a) ? 1 : 0)));  // no jumping about while a batch is tested
-  const folding = cdmFilter === "all" && !cdmQuery && !cdmShowUnused;
+  const folding = cdmFilter === "all" && !cdmQuery.trim() && !cdmShowUnused;
   const list = folding ? found.filter((d) => d.used_by.length || problem(d)) : found;
   const folded = found.length - list.length;
   const counts = { all: data.devices.length, Widevine: data.devices.filter((d) => d.kind === "Widevine").length,

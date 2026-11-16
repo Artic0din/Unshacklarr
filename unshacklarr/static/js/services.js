@@ -264,7 +264,7 @@ async function openServiceRow(service) {
 }
 function showSeriesOf(service) {  // every series of that service: the other filters cleared, as they could hide some
   showTab("series");
-  clearWallFilters();
+  clearWallFilters(false);
   $("#f-service").value = service;
   renderWall();
 }

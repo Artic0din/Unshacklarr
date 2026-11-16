@@ -149,8 +149,8 @@ function emptyHistory(query, filter) {
   const label = document.querySelector(`#tab-log .con-filters [data-f="${filter}"]`).firstChild.textContent.trim();
   const text = query && filter !== "all" ? `No download under ${label} matches “${query}”.` : query ? `No download matches “${query}”.` : `No download under ${label}.`;
   return el("div", { className: "con-empty", role: "status" }, el("p", { textContent: text }),
-    ...(query ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", onclick: () => { $("#con-search").value = ""; renderConsole(); $("#con-search").focus(); } })] : []),
-    ...(filter !== "all" ? [el("button", { type: "button", className: "btn small", textContent: "Show all", onclick: () => { setConFilter("all"); document.querySelector('#tab-log .con-filters [data-f="all"]').focus(); } })] : []));
+    ...(query ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", dataset: { fk: "empty-clear" }, onclick: () => { $("#con-search").value = ""; renderConsole(); $("#con-search").focus(); } })] : []),
+    ...(filter !== "all" ? [el("button", { type: "button", className: "btn small", textContent: "Show all", dataset: { fk: "empty-all" }, onclick: () => { setConFilter("all"); document.querySelector('#tab-log .con-filters [data-f="all"]').focus(); } })] : []));
 }
 function renderConsole(liveOnly = false) {  // liveOnly: a tick of the live feed, the same downloads moving on
   const live = runCards.filter(isLive);
