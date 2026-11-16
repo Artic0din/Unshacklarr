@@ -35,7 +35,7 @@ def pick(to: str | dict[str, str], lang: str, found: list[str] | None) -> str:
     if isinstance(to, str):
         return to
     first = found[0].strip() if found else ""
-    return to.get(plural_category(lang, int(first) if first.isdigit() else None)) or to["other"]
+    return to.get(plural_category(lang, int(first) if first.isdecimal() else None)) or to["other"]  # not isdigit: it takes ², which int refuses
 
 
 def languages() -> list[str]:

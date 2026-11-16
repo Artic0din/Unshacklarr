@@ -388,3 +388,8 @@ def test_a_template_with_a_dot_separator_is_read_whole_before_its_pieces():
     # "Sign-in failed" alone would match the older "{0} failed" and leave the rest of the line in English
     assert {text: i18n.tr(text, "fr") for text in SIGN_IN_LABELS} == SIGN_IN_LABELS
     assert page_translate("fr", [json.dumps(text) for text in SIGN_IN_LABELS]) == list(SIGN_IN_LABELS.values())
+
+
+def test_a_superscript_number_picks_the_other_form_instead_of_failing():
+    from unshacklarr import i18n
+    assert i18n.pick({"one": "un", "other": "plusieurs"}, "fr", ["²"]) == "plusieurs"
