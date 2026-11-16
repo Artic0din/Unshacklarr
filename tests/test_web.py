@@ -7779,3 +7779,26 @@ def test_an_api_retry_repeats_the_numbering_and_replace_of_the_attempt_it_retrie
 
     asyncio.run(go())
     assert asked == [([70], by_title, False), ([71], None, True), ([72], None, False), ([70], None, False)]
+
+
+def test_a_single_download_is_not_a_sync_running(tmp_path, monkeypatch):
+    import asyncio
+    import threading
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    release = threading.Event()
+    monkeypatch.setattr(web.sonarr_sync, "main", lambda *args, **kwargs: release.wait(5))
+    try:
+        download = web.run_sync([1], kind="manual")
+        assert web.running() is False  # one episode asked by hand: Sync now still starts
+        assert json.loads(asyncio.run(web.start_sync(None)).text) == {"running": True}
+        assert web.running() is True
+        with pytest.raises(web.web.HTTPConflict):
+            asyncio.run(web.start_sync(None))
+        assert len(web.sync_threads) == 2  # both still count toward the cap on threads
+    finally:
+        release.set()
+    download.join(2)

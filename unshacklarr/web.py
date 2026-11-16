@@ -258,7 +258,8 @@ def service_for_network(network: str, installed: set[str]) -> str | None:
     """The installed service a network's catch-up is on (BBC One: iP)."""
     return next((t for t in network_services(network) if t in installed), None)
 
-sync_threads: list[threading.Thread] = []
+sync_threads: list[threading.Thread] = []  # every run_sync still going, for the cap on threads
+whole_syncs: list[threading.Thread] = []  # the ones of every missing episode: "a sync is running"
 last_sync: datetime | None = None
 
 
@@ -3744,8 +3745,9 @@ async def networks(request):
 
 
 def running() -> bool:
-    sync_threads[:] = [t for t in sync_threads if t.is_alive()]
-    return bool(sync_threads)
+    """A sync of every missing episode going; a download asked by hand, by the API, a retry or an upgrade is not one."""
+    whole_syncs[:] = [t for t in whole_syncs if t.is_alive()]
+    return bool(whole_syncs)
 
 
 ASKED_AT_ONCE = 20  # downloads asked by hand or by the API and not over yet: each is a thread
@@ -3753,7 +3755,8 @@ ASKED_AT_ONCE = 20  # downloads asked by hand or by the API and not over yet: ea
 
 def room_for_one_more() -> None:
     """Refuse a download asked on top of too many still going: a thread each, a client in a loop would pile them up."""
-    if running() and len(sync_threads) >= ASKED_AT_ONCE:
+    sync_threads[:] = [t for t in sync_threads if t.is_alive()]
+    if len(sync_threads) >= ASKED_AT_ONCE:
         raise web.HTTPTooManyRequests(text="Too many downloads requested at once: wait for some to finish")
 
 
@@ -3773,6 +3776,8 @@ def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: 
     thread = threading.Thread(target=work, daemon=True)
     thread.start()
     sync_threads.append(thread)
+    if episode_ids is None:
+        whole_syncs.append(thread)
     return thread
 
 
