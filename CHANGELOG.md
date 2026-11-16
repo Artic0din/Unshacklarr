@@ -108,6 +108,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
 - The example Docker Compose file now builds Unshackle from this repository's Dockerfile at the reviewed commit and pulls this repository's image, instead of upstream's, which ignored the commit pin; that commit now includes official Unshackle's latest development work.
 - The `--remote` servers' options now show in the first 10 minutes after the machine starts, instead of being missing until then.
 - Renaming or removing a Sonarr in Settings no longer makes every later Save fail with "no Sonarr named …": a rename keeps each series' own settings for it (such as switched off), and a removal drops them.
