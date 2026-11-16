@@ -7425,3 +7425,9 @@ def test_a_files_regional_audio_tag_is_kept_for_the_language_scan():
     assert not web.sonarr_sync.speaks(audio[:1], ["pt-br"]) and web.sonarr_sync.speaks(audio[:1], ["pt"])
     audio, _ = web.file_languages({"mediaInfo": {"audioStreams": [{"language": "eng-US"}, {"language": "fre"}]}})
     assert audio == ["en-us", "fr"] and web.sonarr_sync.speaks(audio[:1], ["en"])  # a three-letter code with its region
+
+
+def test_include_sample_is_not_offered_while_joining_and_importing_would_take_its_samples():
+    # Unshackle puts a sample next to each muxed file, Part.N in its name too: the join would add them to the episode
+    from unshacklarr import options
+    assert "--include-sample" not in {s["flag"] for s in options.dl_specs()}

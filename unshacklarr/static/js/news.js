@@ -28,7 +28,7 @@ const NEWS = [
   { id: "after-download", version: "1.6.0", title: "After download", sec: "notifications", target: "#nt-after-card" },
   { id: "ladder-blind", version: "1.6.0", title: "Try unlisted codecs", sec: "quality", target: ".ql-blind" },
   { id: "ladder-chips", version: "1.6.0", title: "Ladders as chips, a bitrate per step", sec: "downloads", target: "#svc-defaults" },
-  { id: "dl-generate-dv-sample", version: "1.6.0", title: "--generate-dv and --include-sample", sec: "downloads", target: "section.sx-card:has(#defaults)" },
+  { id: "dl-generate-dv-sample", version: "1.6.0", title: "--generate-dv", sec: "downloads", target: "section.sx-card:has(#defaults)" },
 ];
 const NEWS_KINDS = { new: "New", improved: "Improved", fix: "Fix", security: "Security", note: "Note" };
 const versionKey = (v) => String(v || "0").split(".").map((n) => parseInt(n, 10) || 0).reduce((a, n) => a * 1000 + n, 0);

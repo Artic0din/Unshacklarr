@@ -52,7 +52,6 @@ Every change worth knowing, newest first. The format follows
 - **Restart waits for the downloads**, with that key too: Restart in Settings › Unshackle says Unshackle is busy
   instead of cutting them.
 - **`--generate-dv`.** With `-r HYBRID`, Dolby Vision made from the HDR10+ when a title has none. In Download options.
-- **`--include-sample`**: a 60 second sample of each file, in a Sample folder next to it. In Download options.
 - **Proxies by network or IP.** `nordvpn:fr@187.14.108.15`, `nordvpn:ca@-datacamp`: the API's `proxy` takes them.
 - **Clear finished**, in Settings › Unshackle › Maintenance: Unshackle forgets its finished downloads.
 - **The editor knows the new keys** of `unshackle.yaml`: `codec_names`, `muxing.track_names`, `original_label`…
