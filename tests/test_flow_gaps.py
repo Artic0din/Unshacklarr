@@ -173,3 +173,12 @@ def test_the_setup_gate_leaves_the_confirm_dialog_visible():
     assert hiding and ":not(#confirm-dialog)" in hiding[1]
     html = (Path(__file__).parents[1] / "unshacklarr" / "static" / "index.html").read_text()
     assert re.search(r"<body[^>]*>[\s\S]*<dialog[^>]*id=\"confirm-dialog\"", html)
+
+
+def test_a_phone_dock_with_four_buttons_or_more_puts_them_under_the_status():
+    """Open series makes four (Open, Pause, Options, Stop) or five with Retry: on one row at 320 px they overlapped the episode."""
+    phone = CSS[CSS.index("@media (max-width: 700px)"):]
+    dock = re.search(r"\n  \.dock \{[^}]*\}", phone)[0]
+    assert "flex-wrap: wrap" in dock
+    assert re.search(r"\.dock:has\(\.d-acts > :nth-child\(4\)\) \.d-mid \{ flex-basis: 100%; \}", phone)
+    assert re.search(r"\.dock \.d-mid, \.dock \.d-l1 \{ min-width: max-content; \}", phone)

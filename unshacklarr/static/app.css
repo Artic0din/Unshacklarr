@@ -1595,7 +1595,9 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .cd-stats div:nth-child(4) { display: none; }
   .cd-foot { display: flex; flex-wrap: wrap; gap: 10px; }
   .cd-foot .btn { flex: 1; min-height: 44px; }
-  .dock { bottom: calc(76px + env(safe-area-inset-bottom)); padding: 8px 8px 8px 10px; gap: 8px; }
+  .dock { bottom: calc(76px + env(safe-area-inset-bottom)); padding: 8px 8px 8px 10px; gap: 8px; flex-wrap: wrap; row-gap: 8px; }
+  .dock .d-mid, .dock .d-l1 { min-width: max-content; }  /* the episode and its percent whole (the line is hidden here) */
+  .dock:has(.d-acts > :nth-child(4)) .d-mid { flex-basis: 100%; }  /* four buttons or more: on a row of their own, under it */
   .dock .d-ico, .dock .d-l1 span { display: none; }
   .dock .d-acts button { width: 32px; height: 32px; }
   .con-detail.docked-acts .cd-foot { display: none; }  /* the bar has the job's actions; only Delete, which it has no button for, stays */
