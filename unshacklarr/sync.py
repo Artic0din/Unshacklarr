@@ -699,7 +699,7 @@ def queue_snapshot() -> dict[str, list[dict]]:
             if ids := list(dict.fromkeys(ep["id"] for ep in job["episodes"] if waiting.get(ep["id"]) is job["stubs"].get(ep["id"], False))):
                 queue.setdefault(batch, []).append(
                     {"episodes": ids, "paused": batch in paused_jobs, **({"options": job_options[batch]} if job_options.get(batch) else {}),
-                     **{k: job.get(k) for k in ("replace", "kind", "sonarr", "proxy", "video") if job.get(k)},
+                     **{k: job.get(k) for k in ("replace", "kind", "sonarr", "proxy", "video", "audio") if job.get(k)},
                      # an empty numbering is one too: the series' own set aside, kept so after a restart
                      **({"numbering": job["numbering"]} if job.get("numbering") is not None else {})})
     return queue
@@ -779,7 +779,7 @@ def job_episodes(episodes: list, batch: str | None):
 
 
 def queued_card(ep: dict, show: dict, kind: str, batch: str | None, replace: bool = False, proxy: str = "",
-                video: dict | None = None) -> dict:
+                video: dict | None = None, audio: str = "") -> dict:
     """An episode waiting its turn, as Activity shows it until its download starts."""
     return {"id": f"waiting-{ep['id']}", "series": ep["series"]["title"], "tvdbId": ep["series"]["tvdbId"],
             "sxxeyy": f"S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}", "service": season_page(show, ep["seasonNumber"])["service"], "kind": kind,
@@ -788,7 +788,8 @@ def queued_card(ep: dict, show: dict, kind: str, batch: str | None, replace: boo
             **({"instance": instance()["name"]} if instance() else {}),
             **({"replace": True} if replace else {}),  # cancelled then queued again, it keeps Replace anyway
             **({"proxy_override": proxy} if proxy else {}),  # and the proxy asked for this download
-            **({"video_override": video} if video else {})}  # and its codec and height
+            **({"video_override": video} if video else {}),  # and its codec and height
+            **({"audio_override": audio} if audio else {})}  # and its audio language
 
 
 def add_to_job(batch: str, ep: dict, show: dict, replace: bool = False, first: bool = False) -> bool:
@@ -805,7 +806,8 @@ def add_to_job(batch: str, ep: dict, show: dict, replace: bool = False, first: b
             job["episodes"].insert(job.get("at", 0), ep)
         else:
             job["episodes"].append(ep)
-        waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, "manual", batch, replace), "paused": batch in paused_jobs}
+        waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, "manual", batch, replace, audio=job.get("audio") or ""),
+                                                      "paused": batch in paused_jobs}
         return True
 
 
@@ -3307,10 +3309,11 @@ def download_request(
     if not dl.get("--cdm") and (why := no_cdm(show["service"], config, backend)):
         raise ValueError(why)
     service = options.to_params(own, options.service_specs(service_entry(show["service"], config, backend)))
-    request = options.to_params(dl, options.dl_specs())
+    request = {**options.from_dl_config(backend.dl_config(), show["service"]), **options.to_params(dl, options.dl_specs())}
+    if asked := show.get("asked_audio"):  # this download's own language first, the series' own after it as fallbacks
+        request["a_lang"] = list(dict.fromkeys([asked, *(request.get("a_lang") or request.get("lang") or [])]))
     return {
         # unshackle.yaml's dl: section first, as on the command line: serve does not apply it
-        **options.from_dl_config(backend.dl_config(), show["service"]),
         **request,
         # the service's own options apart: flat, NF's --profile PRK_DO would be dl's --profile (an account)
         **({"service_params": service} if service else {}),
@@ -3544,12 +3547,13 @@ def original_language(serie: dict | None) -> str:
 def accepted_audio(show: dict, config: dict, serie: dict | None = None) -> list[str]:
     """The audio languages a download must have one of (fr, en): the series' own, else the settings'; none
     set, the language asked for first, as before. orig is the series' original language (Sonarr's), left out
-    when Sonarr doesn't say it."""
+    when Sonarr doesn't say it. A download asked in its own language (the API's "audio") accepts that one first."""
     raw = show.get("audio_accept") or (config.get("settings") or {}).get("audio_accept") or ""
     accepted = [c.strip().lower() for c in re.split(r"[,\s]+", str(raw)) if c.strip()]
     orig = original_language(serie)
     accepted = list(dict.fromkeys(orig if c == "orig" else c for c in accepted if c != "orig" or orig))
-    return accepted or [want for want in [wanted_audio(show, config)] if want]
+    asked = [show["asked_audio"]] if show.get("asked_audio") else []  # this download's own language, accepted too
+    return list(dict.fromkeys(asked + (accepted or [want for want in [wanted_audio(show, config)] if want])))
 
 
 def preferred_audio(show: dict, config: dict) -> str:
@@ -3759,7 +3763,8 @@ def accepted_subs(show: dict, config: dict) -> list[str]:
 def speaks(tags, accepted: list[str]) -> bool:
     """Whether a track language among `tags` is one accepted: fr takes fr-FR and fr-CA; fr-CA takes fr-CA, and a
     plain fr too (a file's tag says no region: it may be it), never fr-FR."""
-    have = {LANGS.get(t.lower(), t.lower()) for t in tags if t}
+    norm = lambda codes: {LANGS.get(head, head) + dash + region for t in codes if t for head, dash, region in [t.lower().partition("-")]}
+    have, accepted = norm(tags), norm(accepted)  # both sides alike: an accepted fre-CA is fr-ca, as a file's
     return any(a == h or (a.split("-")[0] == h.split("-")[0] and ("-" not in a or "-" not in h)) for a in accepted for h in have)
 
 
@@ -4047,17 +4052,18 @@ def audio_languages(path: Path, kind: str = "audio") -> set[str]:
     return found
 
 
-def check_audio(out: Path, accepted: list[str]) -> None:
+def check_audio(out: Path, accepted: list[str], proof: bool = False) -> None:
     """Refuse a download with none of the accepted audio languages: a VO-only file in the library is
-    worse than no file (best_available lets unshackle take what there is)."""
+    worse than no file (best_available lets unshackle take what there is). With proof (a file replaced for
+    a language asked), a download must show one: untagged or not an MKV, it is refused too."""
     if not accepted:
         trace("audio: no language asked for, not checked")
         return
-    for f in out.rglob("*.mkv"):
-        langs = audio_languages(f)
+    for f in videos_in(out) if proof else out.rglob("*.mkv"):
+        langs = audio_languages(f) if f.suffix.lower() == ".mkv" else set()
         trace(f"audio of {f.name}: {', '.join(sorted(langs)) or 'no language tag'} (accepted: {', '.join(accepted)})")
-        if langs and not speaks(langs, accepted):  # a file without language tags says nothing either way
-            raise RuntimeError(f"No {' or '.join(accepted)} audio in the download (it has {', '.join(sorted(langs))}): not imported")
+        if (langs or proof) and not speaks(langs, accepted):  # a file without language tags says nothing either way
+            raise RuntimeError(f"No {' or '.join(accepted)} audio in the download (it has {', '.join(sorted(langs)) or 'no language tag'}): not imported")
 
 
 def check_subs(out: Path, accepted: list[str]) -> None:
@@ -4447,7 +4453,7 @@ def automatic_episodes(config: dict) -> list[dict]:
 
 
 def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str = "manual", numbering: dict | None = None,
-         batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None,
+         batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None, audio: str = "",
          restored: tuple[str, int] | None = None) -> int:
     config = read_file()
     settings = config.get("notifications") or {}
@@ -4460,7 +4466,7 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
                 raise RuntimeError(f"Choose a quality ladder for Sonarr {sonarr} in Settings, Sonarr first")
             with on_instance(inst):
                 return sync(instance_config(inst, config) if inst else config, settings, chosen_episodes(episode_ids),
-                            manual=True, replace=replace, kind=kind, numbering=numbering, batch=batch, proxy=proxy, video=video,
+                            manual=True, replace=replace, kind=kind, numbering=numbering, batch=batch, proxy=proxy, video=video, audio=audio,
                             restored=restored)
         if not sweep_lock.acquire(blocking=False):  # one automatic sweep at a time
             print("A sync is already running, nothing to do.")
@@ -4549,7 +4555,7 @@ NUMBERING = ("season_map", "season_offset", "season_offset_from", "episode_offse
 
 
 def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: bool = False, kind: str = "auto",
-         numbering: dict | None = None, batch: str | None = None, proxy: str = "", video: dict | None = None,
+         numbering: dict | None = None, batch: str | None = None, proxy: str = "", video: dict | None = None, audio: str = "",
          restored: tuple[str, int] | None = None) -> int:
     series = config.get("series") or {}
     if numbering is not None:  # this download's own, in place of the series': the file keeps its own
@@ -4562,6 +4568,10 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
     if video:  # this download's own codec and height ({vcodec, quality}), over the series' ladder; the setup is untouched
         series = {k: {**show, "asked_video": video} for k, show in series.items()}
         config = {**config, "series": series}
+    if audio:  # this download's own audio language, asked first and accepted (download_request, accepted_audio)
+        # replacing a file, only that language is accepted: the series' own after it would put its file back
+        series = {k: {**show, "asked_audio": audio, **({"audio_accept": audio} if replace else {})} for k, show in series.items()}
+        config = {**config, "series": series}
     episodes = list(episodes)
     if kind in ("auto", "burst"):  # switched off for this Sonarr: none of its new episodes
         episodes = [ep for ep in episodes if not off_in(instance(), series.get(ep["series"]["tvdbId"]) or {})]
@@ -4569,13 +4579,13 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
     # (a job's episode queued again once the job was over goes on in that same job)
     batch = batch or (f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}" if kind != "auto" and len(episodes) > 1 else None)
     job = {"episodes": episodes, "stubs": {}, "closed": False, "replace": replace,  # the rest: to pick it up after a restart
-           "kind": kind, "sonarr": (instance() or {}).get("name", ""), "proxy": proxy, "video": video, "numbering": numbering}
+           "kind": kind, "sonarr": (instance() or {}).get("name", ""), "proxy": proxy, "video": video, "audio": audio, "numbering": numbering}
     if kind != "auto":  # picked by hand: the ones after the first show as queued in Activity
         for ep in episodes:
             show = series.get(ep["series"]["tvdbId"]) or {}
             if show.get("service") and ep["id"] not in waiting:
                 with jobs_lock:
-                    waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, kind, batch, replace, proxy, video),
+                    waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, kind, batch, replace, proxy, video, audio),
                                                                   **({"paused": True} if batch in paused_jobs else {})}  # picked up paused
     if batch:
         number_job(batch, kind == "retry")  # its place for a download slot: the order it was picked in (#10), a retry first
@@ -4634,7 +4644,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 on_step,
                 bool(show.get("programmes")),
             )
-            check_audio(out, accepted_audio(show, config, ep.get("series")))
+            check_audio(out, accepted_audio(show, config, ep.get("series")), replace and bool(show.get("asked_audio") and ep.get("hasFile")))
             check_subs(out, accepted_subs(show, config))
             lacking = lacks_preferred(out, show, config)  # read now: Sonarr moves the file away
             run.card["size"] = sum(f.stat().st_size for f in videos_in(out))  # for the job's sum
@@ -4838,6 +4848,11 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     backend = backend_for(use["service"], config)
                     run.card["backend"] = backend.name
                     try:
+                        # saved before anything below can end the attempt: a Retry of it asks the same again
+                        if use.get("asked_video"):
+                            run.card["video_override"] = use["asked_video"]
+                        if use.get("asked_audio"):
+                            run.card["audio_override"] = use["asked_audio"]
                         request = download_request(use, config, wanted, out, backend)
                         if profile:  # a fallback profile, its login refused with the series' own
                             request["profile"] = profile
@@ -4847,8 +4862,6 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                             for kind, accepted in wanted_langs.items():
                                 if accepted and not speaks(tracks[kind], accepted):
                                     raise Missing(kind, accepted, tracks[kind])
-                        if use.get("asked_video"):
-                            run.card["video_override"] = use["asked_video"]
                         if (
                             apply_ladder(use, config, request, backend)
                             and use is show

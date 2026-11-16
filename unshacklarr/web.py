@@ -3452,9 +3452,10 @@ async def requeue(request):
     sonarr = cancelled.get("instance") if isinstance(cancelled.get("instance"), str) else ""
     proxy = cancelled.get("proxy_override") if isinstance(cancelled.get("proxy_override"), str) else ""  # and its own proxy
     video = cancelled.get("video_override") if isinstance(cancelled.get("video_override"), dict) else None  # codec, height
+    audio = cancelled.get("audio_override") if isinstance(cancelled.get("audio_override"), str) else ""  # audio language
     if not await join_job(batch, episode_id, replace, sonarr):  # its job took its last episode: it starts on its own, in that job
         run_sync([episode_id], kind="manual", batch=batch, **({"replace": True} if replace else {}), **({"proxy": proxy} if proxy else {}),
-                 **({"video": video} if video else {}), **({"sonarr": sonarr} if sonarr else {}))
+                 **({"video": video} if video else {}), **({"audio": audio} if audio else {}), **({"sonarr": sonarr} if sonarr else {}))
     return web.json_response({"queued": episode_id})
 
 
@@ -3799,7 +3800,7 @@ def room_for_one_more() -> None:
 
 
 def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: str = "manual", numbering: dict | None = None,
-             batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None,
+             batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None, audio: str = "",
              restored: tuple[str, int] | None = None) -> threading.Thread:
     """A sync in the background: every missing episode, or the ones given. Each episode has
     its own lock, so these runs never download the same one twice."""
@@ -3807,7 +3808,7 @@ def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: 
         global last_sync
         try:
             sonarr_sync.main(episode_ids, replace=replace, kind=kind, numbering=numbering, batch=batch, sonarr=sonarr, proxy=proxy, video=video,
-                              restored=restored)
+                              audio=audio, restored=restored)
         except Exception as e:  # notified already; the page shows the history
             print(f"Sync stopped: {type(e).__name__}: {e}", flush=True)
         finally:
@@ -4897,10 +4898,15 @@ def retried_replace(ids: list[int], batch: str, instance: str) -> bool:
     return any(card.get("replace") is True for card in last_attempts(ids, batch, instance))
 
 
-def retried_alike(ids: list[int], instance: str) -> tuple[dict | None, bool] | None:
-    """The numbering and Replace anyway an API retry repeats: its episodes' own last attempts', None when they
-    differ (episodes of different jobs: one's numbering can't stand for another's)."""
-    picks = [(retried_numbering([i], "", instance), retried_replace([i], "", instance)) for i in ids]
+def retried_audio(ids: list[int], batch: str, instance: str) -> str:
+    """The audio language a download was asked in (the API's "audio"), which a retry of it asks again; "" for the series' own."""
+    return next((card["audio_override"] for card in last_attempts(ids, batch, instance) if isinstance(card.get("audio_override"), str)), "")
+
+
+def retried_alike(ids: list[int], instance: str) -> tuple[dict | None, bool, str] | None:
+    """The numbering, Replace anyway and audio language an API retry repeats: its episodes' own last attempts',
+    None when they differ (episodes of different jobs: one's numbering can't stand for another's)."""
+    picks = [(retried_numbering([i], "", instance), retried_replace([i], "", instance), retried_audio([i], "", instance)) for i in ids]
     return picks[0] if all(p == picks[0] for p in picks) else None
 
 
@@ -4942,6 +4948,7 @@ async def download(request):
         if numbering is None:
             numbering = await asyncio.to_thread(retried_numbering, ids, batch, inst["name"] if inst else "")
         replace = replace or await asyncio.to_thread(retried_replace, ids, batch, inst["name"] if inst else "")
+    audio = await asyncio.to_thread(retried_audio, ids, batch, inst["name"] if inst else "") if body.get("retry") is True else ""
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     if batch and not inst:  # the job still runs: in its queue (retries next, in order), one download at a time
@@ -4952,7 +4959,7 @@ async def download(request):
         ids = left[::-1] if first else left
     room_for_one_more()
     run_sync(ids, replace=replace, kind="retry" if body.get("retry") is True else "manual", numbering=numbering, batch=batch or None,
-             sonarr=inst["name"] if inst else "")
+             sonarr=inst["name"] if inst else "", **({"audio": audio} if audio else {}))
     return web.json_response({"running": True})
 
 
@@ -6300,6 +6307,8 @@ async def v1_start_download(request):
     audio = str(body.get("audio") or "").strip().lower()
     if audio and not LANGUAGE_TAG.fullmatch(audio):
         raise web.HTTPBadRequest(text='"audio" is one language code, such as "fr"')
+    head, dash, region = audio.partition("-")  # fre as fr, as speaks reads a file's tags: the same language either way
+    audio = sonarr_sync.LANGS.get(head, head) + dash + region
     by_service = body.get("numbering") == "service"
     if body.get("numbering") not in (None, "", "sonarr", "service"):
         raise web.HTTPBadRequest(text='"numbering" is "service" (the service\'s own episode codes) or "sonarr"')
@@ -6333,8 +6342,8 @@ async def v1_start_download(request):
     numbering = None
     if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries: as the page's Retry
         if not (alike := await asyncio.to_thread(retried_alike, ids, inst["name"] if inst else "")):
-            raise web.HTTPBadRequest(text="These episodes were last tried with different numbering or Replace anyway: retry them apart")
-        numbering, replace = alike[0], replace or alike[1]
+            raise web.HTTPBadRequest(text="These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart")
+        numbering, replace, audio = alike[0], replace or alike[1], audio or alike[2]
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
     room_for_one_more()
@@ -6348,6 +6357,7 @@ async def v1_start_download(request):
     eps = await asyncio.to_thread(on_sonarr, inst, lambda: sonarr_sync.sonarr_get("episode", episodeIds=ids, includeEpisodeFile="true"))
     kinds = {e["id"]: file_speaks(e, audio) for e in eps}
     fresh, again, lacking = ([i for i in ids if kinds.get(i) is k] for k in (None, True, False))
+    common["audio"] = audio  # each download asks it first, the series' own after it, and accepts it
     if fresh:
         run_sync(fresh, **common)
     if again:
@@ -6771,7 +6781,7 @@ def resume_queue() -> int:
         sonarr_sync.restoring[key] = (None, job)  # kept in the file until it runs; before it starts, as it may run at once
         thread = run_sync(list(dict.fromkeys(ids)), replace=job.get("replace") is True, kind=job.get("kind") or "manual",
                           numbering=numbering, batch=batch, sonarr=job.get("sonarr") or "", proxy=job.get("proxy") or "",
-                          video=job.get("video"), restored=key)
+                          video=job.get("video"), audio=job.get("audio") or "", restored=key)
         with sonarr_sync.jobs_lock:
             if key in sonarr_sync.restoring:  # not running yet: its thread, so save_queue can tell it never started
                 sonarr_sync.restoring[key] = (thread, job)
