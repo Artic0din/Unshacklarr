@@ -280,6 +280,29 @@ console.log(JSON.stringify({ listRedrawn: after.some(([sel]) => sel === "#cdm-li
     assert seen == {"listRedrawn": False, "shown": True, "hidden": True}
 
 
+@pytest.mark.parametrize("poster", ["", "https://img.example/p.jpg"])
+def test_a_series_wall_card_draws_initials_for_a_missing_or_failed_poster(poster):
+    seen = node(r"""
+const [poster] = process.argv.slice(2);
+const src = read(process.argv[1]);
+let drawn = [];
+const stub = (value = "") => ({ value, checked: false, textContent: "", removeAttribute() {}, replaceChildren: (...kids) => { drawn = kids; } });
+const fields = { "#f-sort": stub("title") };
+const withAppend = (tag, props = {}, ...kids) => ({ tag, dataset: {}, ...props, kids, append(...more) { this.kids.push(...more); } });
+const ctx = sandbox({ el: withAppend, $: (sel) => fields[sel] ?? stub(), S: { series: [{ tvdbId: 1, title: "Dark Matter", poster }], config: { series: {}, hidden_series: [] }, health: {} }, SEL: { on: false, ids: new Set() },
+  keepFocus: (box, draw) => draw() });
+vm.runInContext(grab(src, /function initialsOf[\s\S]*?\nconst posterFail[^\n]*\n/), ctx);
+vm.runInContext(grab(src, /function renderWall\(\) \{[\s\S]*?\n\}\n/), ctx);
+ctx.renderWall();
+const img = drawn[0].kids[0].kids.find((k) => k.tag === "img");
+const initials = ctx.posterSrc("", "Dark Matter");
+const failing = { target: { src: img.src, getAttribute() { return this.src; } } };
+img.onerror(failing);
+console.log(JSON.stringify({ src: img.src === (poster || initials), initials: initials.includes("DM"), afterFail: failing.target.src === initials }));
+""", str(JS / "core.js"), poster)
+    assert seen == {"src": True, "initials": True, "afterFail": True}
+
+
 def test_a_duration_names_the_unit_of_each_part():
     shown = node(r"""
 const src = read(process.argv[1]);

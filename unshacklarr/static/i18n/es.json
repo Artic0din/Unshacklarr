@@ -356,6 +356,7 @@
  "Line {0}, column {1}{2}": "Línea {0}, columna {1}{2}",
  "Ask {0} which episodes of this series it has, and mark them in the list": "Preguntar a {0} qué episodios de esta serie tiene y marcarlos en la lista",
  "Loading episodes from Sonarr…": "Cargando los episodios desde Sonarr…",
+ "Loading series…": "Cargando series…",
  "Loading the month…": "Cargando el mes…",
  "Loading the schedule…": "Cargando el calendario…",
  "Look it up on TMDB again": "Volver a buscarla en TMDB",
