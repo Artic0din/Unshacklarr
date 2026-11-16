@@ -2218,6 +2218,13 @@ const fresh = () => {
   const four = box.S.config.settings.sonarrs[0];
   out.nestedEditKeepsOthersRename = four.name === "UHD" && four.downloads === "/dl" && page.state().unsaved;
   out.mergedRenameIsSavedName = page.savedSonarr("UHD") === "UHD";
+  // one Sonarr removed and another added while the Save runs: each keeps its own saved name
+  box.S = { config: { settings: { debug: false, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] }, series: {} } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box); page.keepSonarrNames(page.sonarrNames());
+  box.S.config.settings.debug = true; page.dirty();
+  saving = page.save(); box.S.config.settings.sonarrs.splice(0, 1); box.S.config.settings.sonarrs.push({ name: "third", url: "http://c" });
+  release({ settings: { debug: true, sonarrs: [{ name: "first", url: "http://a" }, { name: "second", url: "http://b" }] } }); await saving;
+  out.listEditedMeanwhileKeepsNames = page.savedSonarr("second") === "second" && page.savedSonarr("third") === "third";
   console.log(JSON.stringify(out));
 })();
 """
@@ -2263,6 +2270,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "renameSavedIsUsed": True,  # once saved, the new name; a rename made while the Save ran still is not
         "nestedEditKeepsOthersRename": True,  # an edit inside a list entry does not block another tab's change beside it
         "mergedRenameIsSavedName": True,  # a rename another tab saved is the name the server knows
+        "listEditedMeanwhileKeepsNames": True,  # Sonarrs removed or added while the Save ran: no name moves to another
     }
 
 
