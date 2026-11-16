@@ -807,6 +807,7 @@ def test_lightweight_authentication_refresh_repaints_visible_status():
         pytest.skip("node is not installed")
     source = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "schedule.js").read_text()
     render = re.search(r"^function renderHealth\(h\) \{.*?^\}", source, re.M | re.S).group()
+    render += "\n" + re.search(r"^function paintLights\(h\) \{.*?^\}", source, re.M | re.S).group()
     details = re.search(r"^let unshackleDetails = .*;$", source, re.M).group()
     harness = f"""
 const vm = require("vm");

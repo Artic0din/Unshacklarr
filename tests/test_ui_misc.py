@@ -400,6 +400,7 @@ const buttons = Object.fromEntries(["unshackle", "sonarr"].map((n) => [n, { data
   querySelector(sel) { return sel === ".dot" ? this.dot : this.small; } }]));
 const ctx = sandbox({ S: {}, document: { querySelector: (sel) => buttons[sel.match(/data-health=(\w+)/)[1]] }, unshackleDetails: null });
 vm.runInContext(grab(read(process.argv[1]), /^function renderHealth\(.*?^\}/ms), ctx);
+vm.runInContext(grab(read(process.argv[1]), /^function paintLights\(.*?^\}/ms), ctx);
 const say = (h) => { ctx.renderHealth(h); return ["unshackle", "sonarr"].map((n) => [buttons[n].small.textContent, buttons[n].dataset.state, buttons[n].dot.className.trim()]); };
 console.log(JSON.stringify({
   running: say({ unshackle: { ok: true, version: "4.0.0" }, sonarr: { ok: true } }),

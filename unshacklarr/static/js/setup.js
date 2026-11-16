@@ -479,6 +479,8 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
   catch (e) { return $("#wall").replaceChildren(failed(`Unshacklarr can't be reached: ${e.message}`, () => location.reload())); }
   if (!session.configured) return showSetup(session.setup);
   if (!session.logged_in) return showLogin();
+  // the server's last background check, answered at once: the lights do not wait for Sonarr's series or a live Unshackle check
+  api("/api/status").then(paintLights, () => { /* the full check below paints them */ });
   try {
     const asked = await stateAsked;
     if (asked instanceof Error) throw asked;
