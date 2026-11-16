@@ -1,11 +1,11 @@
-/* Colours, elevation and spacing from the Molt design system: warm neutrals, one teal for the primary action.
+/* Colours, elevation and spacing from the Molt design system: warm neutrals, one teal for the primary action, a green for success.
    Dark by default; light when the system asks for it or the person picks it (Settings › Interface). */
 :root {
   color-scheme: dark;
   --bg: #171614; --panel: #22201d; --line: #33302b; --text: #f1ede6; --muted: #a8a196;
   --well: #2c2925;  /* a quiet fill inside a card: rows, tracks, chips */
   --accent: #5fcfb8; --accent-ink: #0b2a24; --accent-tint: #173a33; --warn-tint: #3d2f0e; --err-tint: #45201a;
-  --ok: #5fcfb8; --warn: #e8b651; --warn-ink: #241a03; --err: #ff8a75; --err-ink: #2a0c06;
+  --ok: #6cd981; --ok-tint: #1e3a22; --warn: #e8b651; --warn-ink: #241a03; --err: #ff8a75; --err-ink: #2a0c06;
   --line-strong: #4a453e;  /* a divider or thumb that must show on --panel; never text */
   --scrim: rgb(10 9 8 / .6);
   --term-bg: #12110f; --tk-video: #8fb3ff; --tk-audio: #cfa0ff; --code-string: #a8d68f; --net-chip: #ece7df;
@@ -29,7 +29,7 @@
   color-scheme: light;
   --bg: #f6f3ee; --panel: #fdfcfa; --line: #ddd6cb; --text: #1c1a17; --muted: #5c574f;
   --well: #ece7df; --accent: #0f6b5c; --accent-ink: #ffffff; --accent-tint: #d9ebe6; --warn-tint: #f6e7c4; --err-tint: #f7ddd6;
-  --ok: #0f6b5c; --warn: #7d5200; --warn-ink: #ffffff; --err: #a82d1b; --err-ink: #ffffff;
+  --ok: #1a662d; --ok-tint: #dcf2de; --warn: #7d5200; --warn-ink: #ffffff; --err: #a82d1b; --err-ink: #ffffff;
   --line-strong: #c4bcaf; --scrim: rgb(28 26 23 / .35); --tk-video: #2f5fc4; --tk-audio: #7b3fc4; --code-string: #3d6e1f; --net-chip: #ece7df;
   --dim: grayscale(.85) opacity(.55);
   --field-bg: #ffffff; --field-line: #857e73; --field-line-hover: #6b655c;
@@ -43,7 +43,7 @@
   color-scheme: light;
   --bg: #f6f3ee; --panel: #fdfcfa; --line: #ddd6cb; --text: #1c1a17; --muted: #5c574f;
   --well: #ece7df; --accent: #0f6b5c; --accent-ink: #ffffff; --accent-tint: #d9ebe6; --warn-tint: #f6e7c4; --err-tint: #f7ddd6;
-  --ok: #0f6b5c; --warn: #7d5200; --warn-ink: #ffffff; --err: #a82d1b; --err-ink: #ffffff;
+  --ok: #1a662d; --ok-tint: #dcf2de; --warn: #7d5200; --warn-ink: #ffffff; --err: #a82d1b; --err-ink: #ffffff;
   --line-strong: #c4bcaf; --scrim: rgb(28 26 23 / .35); --tk-video: #2f5fc4; --tk-audio: #7b3fc4; --code-string: #3d6e1f; --net-chip: #ece7df;
   --dim: grayscale(.85) opacity(.55);
   --field-bg: #ffffff; --field-line: #857e73; --field-line-hover: #6b655c;
@@ -1963,8 +1963,9 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); box-shadow: 0 0 
   color: var(--muted); background: var(--well); }
 .sched-card .svc { white-space: normal; overflow-wrap: anywhere; }  /* a long name in a narrow day column */
 .poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip { color: var(--text); }  /* a service: just its name */
-.ep-on, .ep-on.other, .new-badge, .new-dot, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest, .rg-chip, .ck-pill.ok, .sched-st.ok, .sched-st.try, .chip.disk, .chip.o-downloaded,
+.ep-on, .ep-on.other, .new-badge, .new-dot, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest, .rg-chip, .sched-st.try,
 .news-list .new .news-kind, .news-list .improved .news-kind { color: var(--accent); background: var(--accent-tint); }
+.ck-pill.ok, .sched-st.ok, .chip.disk, .chip.o-downloaded { color: var(--ok); background: var(--ok-tint); }  /* done and healthy: green, apart from the teal that means selected or managed */
 .ep-up, .ck-pill.warn, .sched-st.wait, .chip.miss, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
 .ck-pill.bad, .sched-st.late, .rg-chip.bad, .chip.o-failed, .news-list .security .news-kind { color: var(--err); background: var(--err-tint); }
 .ax-seg button[aria-pressed=true] .chip-default { color: var(--accent-ink); background: var(--accent); }  /* filled, to stand out on the picked button's tint */

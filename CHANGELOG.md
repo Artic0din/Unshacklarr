@@ -81,6 +81,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- **Success has its own green, apart from the teal accent.** Healthy status dots, "Downloaded" notifications, valid cookie pills, a working CDM and finished job steps no longer share the teal that marks what is selected or being downloaded. (#280)
 - Buttons, dropdowns, search boxes and filters share two heights everywhere (36px in toolbars and forms, 30px in rows and cards), dropdowns look the same in Safari, plain buttons have a visible edge, cards and rows that need attention are framed in their colour instead of a bar on the left, Settings uses the whole width, Interface and Region cards sit side by side with a Language dropdown, the Services table reads Service, Sign-in methods, Sign-in, Cookies, Used by, Actions with each cookie file on one line and Add only when there is none, notifications are two-line rows, and the job bar at the bottom of Activity is readable in the light look.
 - The page takes the Molt look: warm neutrals with one teal for the main action, shared shadows and spacing, one badge style whose colour says what it means, and a light theme; Settings › Interface › Appearance picks System, Light or Dark for this browser.
 - Services are named, not coded (RMC BFM Play, not RMCBFM), a series is "Downloading" or "Not downloading" everywhere, every sign-in says "Sign in", two-click confirmations name what they delete and stay until you leave the button, and counts such as "1 episode" and "2 episodes" are whole texts a translation can phrase its own way.
