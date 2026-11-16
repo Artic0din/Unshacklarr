@@ -3753,33 +3753,32 @@ def apply_ladder(
     episodes = list_tracks(show, config, request, ladder, backend)
     if not episodes:  # ponytail: not on the service (yet): the download finds nothing either, and says so as usual
         return None
-    found = climb(ladder, episodes)
+    found, blind = climb(ladder, episodes), None
     if not found and ladder.get("blind"):  # "Try unlisted codecs": the first step whose codec the listing has none of
         listed = {t.get("codec") for ep in episodes for t in ep.get("video") or []}
-        if blind := next(((i, st) for i, st in enumerate(ladder["steps"], 1) if st.get("codec") and st["codec"] not in listed), None):
-            number, step = blind
-            request.pop("vbitrate", None)
-            request.pop("vbitrate_range", None)
-            request.update(vcodec=[step["codec"]], **({"quality": [step.get("max") or step["min"]]} if step.get("max") or step.get("min") else {}),
-                           **({"range": [step["range"]]} if step.get("range") and not request.get("range") else {}),
-                           **({"vbitrate_range": f"0-{step['max_kbps']}"} if step.get("max_kbps") else {}))
-            trace(f"quality ladder {ladder['name']}: step {number} ({step_label(step)}) is not listed by {show['service']}: tried anyway")
-            return number
-    if not found:
+        blind = next(((i, st) for i, st in enumerate(ladder["steps"], 1) if st.get("codec") and st["codec"] not in listed), None)
+    if not found and not blind:
         have = sorted({track_label(t) for ep in episodes for t in ep.get("video") or []})
         raise ValueError(f"None of the quality ladder {ladder['name']}'s steps is on {show['service']} (it has {', '.join(have) or 'no video'})")
-    number, track = found
     # the ladder picks the video: a --vbitrate(-range) of the options would only keep its track out; its step's own cap does
     request.pop("vbitrate", None)
     request.pop("vbitrate_range", None)
-    if cap := ladder["steps"][number - 1].get("max_kbps"):
-        request["vbitrate_range"] = f"0-{cap}"
-    # its own height: Unshackle's --quality takes a track by it exactly (its 16:9 class may be no exact match there)
-    # a --range the series or its service ask for themselves (HYBRID: DV merged onto HDR10) is kept, not the track's
-    request.update(quality=[int(track.get("height") or 0) or eq_height(track)], vcodec=[track["codec"]],
-                   **({"range": [ladder["steps"][number - 1]["range"] if ladder["steps"][number - 1].get("range") == "HYBRID" else track["range"]]}
-                      if track.get("range") and not request.get("range") else {}))
-    trace(f"quality ladder {ladder['name']}: step {number} ({step_label(ladder['steps'][number - 1])}), {track_label(track)}")
+    if blind:  # only the video is a guess: the languages below are picked from the listing as for any step
+        number, step = blind
+        request.update(vcodec=[step["codec"]], **({"quality": [step.get("max") or step["min"]]} if step.get("max") or step.get("min") else {}),
+                       **({"range": [step["range"]]} if step.get("range") and not request.get("range") else {}),
+                       **({"vbitrate_range": f"0-{step['max_kbps']}"} if step.get("max_kbps") else {}))
+        trace(f"quality ladder {ladder['name']}: step {number} ({step_label(step)}) is not listed by {show['service']}: tried anyway")
+    else:
+        number, track = found
+        if cap := ladder["steps"][number - 1].get("max_kbps"):
+            request["vbitrate_range"] = f"0-{cap}"
+        # its own height: Unshackle's --quality takes a track by it exactly (its 16:9 class may be no exact match there)
+        # a --range the series or its service ask for themselves (HYBRID: DV merged onto HDR10) is kept, not the track's
+        request.update(quality=[int(track.get("height") or 0) or eq_height(track)], vcodec=[track["codec"]],
+                       **({"range": [ladder["steps"][number - 1]["range"] if ladder["steps"][number - 1].get("range") == "HYBRID" else track["range"]]}
+                          if track.get("range") and not request.get("range") else {}))
+        trace(f"quality ladder {ladder['name']}: step {number} ({step_label(ladder['steps'][number - 1])}), {track_label(track)}")
     # its language order picks among the episode's tracks, unless the series or its service ask for languages themselves
     for key, kind, asked in (("a_lang", "audio", ("lang", "a_lang", "require_audio")), ("s_lang", "subtitles", ("s_lang", "require_subs"))):
         if ladder.get(kind) and not any(request.get(k) for k in asked) and (lang := first_language(ladder[kind], episodes[0].get(kind) or [])):

@@ -6225,3 +6225,20 @@ def test_a_release_burst_holds_a_series_whose_episode_order_changed(tmp_path, mo
     assert reached == [], "held, as the regular sync holds it"
     sync.run_episodes({"series": {7: show}}, {}, [ep], manual=True, replace=False, kind="manual")
     assert reached == [2], "picked by hand: asked for, so tried"
+
+
+def test_a_ladder_step_tried_unlisted_still_picks_the_ladders_languages(tmp_path, monkeypatch):
+    # "Try unlisted codecs": only the video is a guess; the audio and subtitles are listed, and the ladder's order picks them
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["quality_ladders"] = [{"name": "AV1", "blind": True, "audio": ["fr", "en"], "subtitles": ["fr"],
+                                  "steps": [{"codec": "AV1", "range": "SDR", "min": 1080, "max": 1080}]}]
+    config["series"][111]["ladder"] = "AV1"
+    listing = {"episodes": [{"video": [{"height": 1080, "codec": "AVC", "range": "SDR"}],
+                             "audio": [{"language": "en"}, {"language": "fr"}], "subtitles": [{"language": "fr"}]}]}
+    monkeypatch.setattr(sync.UNSHACKLE, "call", lambda method, path, json=None, **_: listing)
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    downloads = []
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: downloads.append(payload))
+    sync.sync(config, {}, [episode(111, 2, 5)], manual=True, kind="manual")
+    assert [(d["vcodec"], d.get("a_lang"), d.get("s_lang")) for d in downloads] == [(["AV1"], ["fr"], ["fr"])]
