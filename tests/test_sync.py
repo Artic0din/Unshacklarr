@@ -6482,6 +6482,35 @@ def test_a_sync_still_to_start_after_a_restart_is_saved_with_its_jobs_live_pause
     assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [saved]}
 
 
+def test_a_sync_picked_up_again_starting_while_the_queue_is_saved_is_not_left_out(tmp_path, monkeypatch):
+    # It starts between the running jobs and the waiting ones being read: one read for both, or it is in neither
+    sync = load(tmp_path, monkeypatch)
+    lock, started = threading.Lock(), []
+    stub, job = object(), {"episodes": [{"id": 7}], "stubs": {}}
+
+    class Lock:
+        def __enter__(self):
+            lock.acquire()
+
+        def __exit__(self, *exc):
+            lock.release()
+            if not started:  # the sync picked up again takes its place in the jobs right after the first read
+                started.append(True)
+                with lock:
+                    job["stubs"][7] = sync.waiting[7] = stub
+                    sync.batch_jobs["B"] = [job]
+                    sync.restoring.pop(("B", 0))
+
+    monkeypatch.setattr(sync, "jobs_lock", Lock())
+    monkeypatch.setitem(sync.restoring, ("B", 0), (None, {"episodes": [7], "kind": "manual"}))
+    try:
+        sync.save_queue()
+        assert [e["episodes"] for e in json.loads(sync.QUEUE_FILE.read_text())["B"]] == [[7]]
+    finally:
+        sync.batch_jobs.pop("B", None)
+        sync.waiting.pop(7, None)
+
+
 def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_path, monkeypatch):
     # A retry ran beside its job under the same batch and ended first: the job's next episodes keep its French override
     sync = load(tmp_path, monkeypatch)

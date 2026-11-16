@@ -692,17 +692,16 @@ QUEUE_FILE = DATA / "queue.json"  # the episodes jobs still have to download: pi
 def queue_snapshot() -> dict[str, list[dict]]:
     """What each job still has to download, in order, and how: queued episodes only (the one downloading, stopped
     by a restart, is in the history as interrupted, its Retry there). One entry per sync of the job, each with its
-    own settings: a retry with another Replace beside it is one more."""
+    own settings: a retry with another Replace beside it is one more. Under jobs_lock."""
     queue: dict[str, list[dict]] = {}
-    with jobs_lock:
-        for batch, jobs in sorted(batch_jobs.items()):
-            for job in jobs:
-                if ids := list(dict.fromkeys(ep["id"] for ep in job["episodes"] if waiting.get(ep["id"]) is job["stubs"].get(ep["id"], False))):
-                    queue.setdefault(batch, []).append(
-                        {"episodes": ids, "paused": batch in paused_jobs, **({"options": job_options[batch]} if job_options.get(batch) else {}),
-                         **{k: job.get(k) for k in ("replace", "kind", "sonarr", "proxy", "video") if job.get(k)},
-                         # an empty numbering is one too: the series' own set aside, kept so after a restart
-                         **({"numbering": job["numbering"]} if job.get("numbering") is not None else {})})
+    for batch, jobs in sorted(batch_jobs.items()):
+        for job in jobs:
+            if ids := list(dict.fromkeys(ep["id"] for ep in job["episodes"] if waiting.get(ep["id"]) is job["stubs"].get(ep["id"], False))):
+                queue.setdefault(batch, []).append(
+                    {"episodes": ids, "paused": batch in paused_jobs, **({"options": job_options[batch]} if job_options.get(batch) else {}),
+                     **{k: job.get(k) for k in ("replace", "kind", "sonarr", "proxy", "video") if job.get(k)},
+                     # an empty numbering is one too: the series' own set aside, kept so after a restart
+                     **({"numbering": job["numbering"]} if job.get("numbering") is not None else {})})
     return queue
 
 
@@ -713,17 +712,17 @@ def save_queue(last: str | None = None) -> str:
     """The queue on disk when it changed; returns what was written, to compare with next time. A job picked up again
     after a restart stays as it was in the file until it runs: if it could not start (Sonarr down), the next start
     tries again, instead of the queue written empty losing it."""
-    queue = queue_snapshot()
-    for key, (thread, entry) in list(restoring.items()):
-        with jobs_lock:
+    with jobs_lock:  # one read of both: a sync picked up again starting in between would be in neither
+        queue = queue_snapshot()
+        for key, (thread, entry) in list(restoring.items()):
             if key[0] in batch_jobs:  # its job runs: its pause and options as they are now, kept once that sync ends
                 live = job_options.get(key[0])
                 entry = {**{k: v for k, v in entry.items() if k != "options"}, "paused": key[0] in paused_jobs, **({"options": live} if live else {})}
                 restoring[key] = (thread, entry)
-        queue.setdefault(key[0], []).append(entry)
-        if thread is not None and not thread.is_alive():
-            print(f"Job {key[0]} could not be picked up again: kept for the next start", flush=True)
-            restoring[key] = (None, entry)  # said once
+            queue.setdefault(key[0], []).append(entry)
+            if thread is not None and not thread.is_alive():
+                print(f"Job {key[0]} could not be picked up again: kept for the next start", flush=True)
+                restoring[key] = (None, entry)  # said once
     text = json.dumps(queue)
     if text != last:
         write_atomic(QUEUE_FILE, text)
