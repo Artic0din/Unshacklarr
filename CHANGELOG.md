@@ -110,6 +110,7 @@ Every change worth knowing, newest first. The format follows
 
 - The README now creates `unshackle-data/temp` with the other folders, so a fresh Docker install does not get it owned by root, which Unshackle could not write to.
 - The README's Docker and `uv`/`pipx` install steps now fetch this repository's files and package, not upstream's.
+- **Test Unshackle** with an edited local command no longer points the downloads and syncs running at the same moment at the test command, and no longer refuses to run while a download is going.
 - Restarting Unshackle from the page now makes Unshacklarr look again at where it keeps its cookies, devices and config, so a changed `directories:` no longer leaves sign-ins looking expired until Unshacklarr restarts.
 - A local Unshackle whose launcher starts with `#!/usr/bin/env python3` now starts, instead of failing with "illegal option".
 - A busy or failing Unshackle no longer lets a retry start a second download into the folder the first may still be writing: a job counts as gone only when Unshackle says there is no such job.

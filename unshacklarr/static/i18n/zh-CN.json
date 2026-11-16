@@ -1144,7 +1144,6 @@
  "Days kept": "保留天数",
  "Delete the key": "删除密钥",
  "Delete them after": "保留时间上限",
- "Downloads are using the current command: test another one when they are done": "下载正在使用当前命令：待其结束后再测试其他命令",
  "Downloads kept": "保留的下载数",
  "During the quiet hours: {0} message{1}": "免打扰时段内：{0} 条消息",
  "Empty: the URL above, if your browser can open it.": "留空：使用上方 URL（如果你的浏览器可以打开）。",

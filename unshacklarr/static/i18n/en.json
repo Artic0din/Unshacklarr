@@ -818,7 +818,6 @@
   "epSonarr ? ` for ${epSonarr}` : \"\""
  ],
  "Downloads": [],
- "Downloads are using the current command: test another one when they are done": [],
  "Downloads at once": [],
  "Downloads carry on.": [],
  "Downloads folder": [],

@@ -1147,7 +1147,6 @@
  "Days kept": "保持日数",
  "Delete the key": "キーを削除",
  "Delete them after": "削除までの期間：",
- "Downloads are using the current command: test another one when they are done": "ダウンロードが現在のコマンドを使用中です：終わってから別のコマンドをテストしてください",
  "Downloads kept": "保持するダウンロード数",
  "During the quiet hours: {0} message{1}": "休止時間中：{0} 件のメッセージ",
  "Empty: the URL above, if your browser can open it.": "空欄：ブラウザで開ける場合は上の URL を使います。",
