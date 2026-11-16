@@ -2198,7 +2198,7 @@ def download_slot(server: str, run: EpisodeRun | None = None):
                     del lent[job]
                 else:
                     if (kept := lent.pop(job, None)) is not None:  # its place was kept on another server: no longer
-                        while job in slot_line.get(kept, []):
+                        if job in slot_line.get(kept, []):  # that one place only: another sync of the job may wait there
                             slot_line[kept].remove(job)
                     line.append(job)
                 # in the order picked, whenever each got here; a job paused while it waited lost its number: last

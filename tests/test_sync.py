@@ -6203,9 +6203,9 @@ def test_a_job_that_lent_its_slot_on_one_server_downloads_its_next_episode_on_an
         def say(self, text): pass
 
     sync.number_job("job1")
-    sync.slot_line["X"] = ["job1"]
+    sync.slot_line["X"] = ["job1", "job1"]  # its kept place, and another sync of the job waiting there
     sync.lent["job1"] = "X"
     with sync.download_slot("Y", Run("job1", 2)):
         assert sync.slot_jobs["Y"] == ["job1"]
-    assert sync.slot_line["X"] == [] and "job1" not in sync.lent
+    assert sync.slot_line["X"] == ["job1"] and "job1" not in sync.lent  # the other sync still waits
     sync.release_job("job1")
