@@ -18,6 +18,7 @@ async function importKept(c, button) {
   } catch (e) { button.disabled = false; if (worded) button.textContent = c.outcome === "kept" ? "Import anyway" : "Import"; toast(e.message, true); }
 }
 async function deleteRun(c, button) {
+  if (!await askToConfirm(`Delete ${c.series} ${c.sxxeyy} from the history?`, "This attempt and its Unshackle output are deleted and cannot be brought back. Your files and Sonarr are not touched.", "Delete this attempt", button)) return;
   button.disabled = true;
   try {
     await api(`/api/runs/${encodeURIComponent(c.id)}`, { method: "DELETE" });
@@ -28,6 +29,7 @@ async function deleteRun(c, button) {
   } catch (e) { button.disabled = false; toast(e.message, true); }
 }
 async function deleteJob(j, button) {
+  if (!await askToConfirm(`Delete this job's ${COUNT.episode(j.cards.length)} from the history?`, "Their Unshackle output goes with them and cannot be brought back. Your files and Sonarr are not touched.", `Delete ${COUNT.episode(j.cards.length)}`, button)) return;
   button.disabled = true;
   try {
     const r = await api(`/api/jobs/${encodeURIComponent(j.job)}`, { method: "DELETE" });

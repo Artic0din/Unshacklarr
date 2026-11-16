@@ -109,6 +109,9 @@ nav .short { display: none; }
   font: inherit; font-size: var(--fs-sub); cursor: pointer; border-radius: 999px; transition: background .15s, color .15s; }
 .inbox-clear { padding: 6px 12px; } .inbox-x { width: 34px; height: 34px; }
 .inbox-clear, .inbox-x { border: 1px solid var(--line); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.inbox-head:has(.inbox-clear[data-sure]) { flex-wrap: wrap; }  /* the question has a row of its own: the title is not squeezed away */
+.inbox-clear[data-sure] { order: 1; flex: 1 0 100%; color: var(--err); border-color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); font-weight: 600; }
 /* The menu: under the bell, over the page, which stays usable */
 #inbox-dialog.menu { position: fixed; inset: 64px 16px auto auto; margin: 0; width: min(420px, calc(100vw - 32px)); padding: 16px 16px 8px;
   box-shadow: var(--sh-lg); z-index: 50; animation: inbox-drop .16s ease-out; }

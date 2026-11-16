@@ -88,6 +88,7 @@
  "1 missing episode": [],
  "1 more device": [],
  "1 needs sign-in": [],
+ "1 notification": [],
  "1 of these {0} episodes is already on disk": [
   "picked.size"
  ],
@@ -546,6 +547,7 @@
  "Clear cache": [],
  "Clear cache and sign-ins": [],
  "Clear either the failed downloads or all of them": [],
+ "Clear every notification except those waiting for you": [],
  "Clear failed": [],
  "Clear failed ({0})": [
   "failedN"
@@ -555,9 +557,11 @@
  "Clear one service's cache": [],
  "Clear search": [],
  "Clear the history": [],
- "Clear the notifications already seen": [],
  "Clear the search or pick another filter.": [],
  "Clear title cache before fetching.": [],
+ "Clear {0}? They cannot be brought back": [
+  "COUNT.notification(gone)"
+ ],
  "Clear…": [],
  "Click a day to set 0, 1, 2 or 3 episodes (0: none that day). Orange: different from the usual schedule.": [],
  "Click a service to move it to another device. A change applies to the next download.": [],
@@ -706,13 +710,22 @@
  "Delete the job": [],
  "Delete the key": [],
  "Delete the key? Programs using it will stop working": [],
+ "Delete the partial downloads?": [],
  "Delete them after": [],
+ "Delete this attempt": [],
+ "Delete this job's {0} from the history?": [
+  "COUNT.episode(j.cards.length)"
+ ],
  "Delete your own ladders?": [],
  "Delete {0}": [
   "file"
  ],
  "Delete {0} from Unshackle's cookies folder?": [
   "file"
+ ],
+ "Delete {0} {1} from the history?": [
+  "c.series",
+  "c.sxxeyy"
  ],
  "Delete {0}?": [
   "cdmShort(d)"
@@ -930,6 +943,7 @@
  "Every series: {0}": [
   "def"
  ],
+ "Every setting now in Unshacklarr is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.": [],
  "Example: +3 from season 8 means Sonarr's S08 is the service's S11, S09 is S12, and so on, new seasons included. \"Seasons on the service\" takes priority over this.": [],
  "Example: /mnt/tv": [],
  "Example: /tv": [],
@@ -1924,6 +1938,7 @@
  "Replace it": [],
  "Replace only if better": [],
  "Replace the key": [],
+ "Replace the settings": [],
  "Replace the {0} selected": [
   "picked.length"
  ],
@@ -1959,6 +1974,9 @@
  "Restore from a backup": [],
  "Restore from a file…": [],
  "Restore its settings from a backup instead of setting it up again.": [],
+ "Restore the settings from {0}?": [
+  "file.name"
+ ],
  "Restoring, then testing Sonarr and Unshackle…": [],
  "Resume": [],
  "Resume the job": [],
@@ -2593,6 +2611,7 @@
  "The last": [],
  "The last try: after it, the regular syncs take over": [],
  "The last weeks, and each service": [],
+ "The leftovers of interrupted downloads are deleted and cannot be brought back.": [],
  "The lowest height is above the highest": [],
  "The main one (Settings, Unshackle)": [],
  "The message did not go through ({0}): turn notifications off and on again": [
@@ -2728,6 +2747,7 @@
  "The {0} titles are in Sonarr.": [
   "want"
  ],
+ "Their Unshackle output goes with them and cannot be brought back. Your files and Sonarr are not touched.": [],
  "Then add the file here with Add.": [],
  "These settings were changed elsewhere since this page was loaded. Reload the page, then make your change again.": [],
  "These {0} episodes are": [
@@ -2737,6 +2757,7 @@
  "This Unshackle cannot describe or test its devices: it needs the /api/cdm routes (a newer Unshackle)": [],
  "This Unshackle has no unshackle.yaml yet": [],
  "This address is already there.": [],
+ "This attempt and its Unshackle output are deleted and cannot be brought back. Your files and Sonarr are not touched.": [],
  "This backup is encrypted: type its passphrase": [],
  "This browser cannot receive them.": [],
  "This browser is on": [],
@@ -4014,6 +4035,9 @@
  ],
  "{0} not out yet": [
   "missing"
+ ],
+ "{0} notifications": [
+  "n"
  ],
  "{0} of them have no service: pick one above, or their changes are not kept.": [
   "none"
