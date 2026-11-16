@@ -6430,3 +6430,20 @@ def test_a_labelled_approval_code_is_redacted_in_any_case(tmp_path, monkeypatch)
     assert sync.without_approval("Pairing failed for aBcDeF", fragments) == "Pairing failed for [approval removed]"
     assert "abcd" in sync.approval_fragments({}, {"message": "Approve: abcd"})
     assert "expires" not in sync.approval_fragments({}, {"message": "Your code expires soon"})  # no label colon: a word
+
+
+def test_a_run_finishes_even_when_the_inbox_cannot_be_written(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    monkeypatch.setattr(sync, "notification_urls", lambda settings: [])
+    run = sync.EpisodeRun(episode(111, 2, 5), {"service": "DSNP"}, "auto")
+    sync.ask_for_input(run, "Enter the code sent to your e-mail")
+    original_write = sync.write_atomic
+
+    def full_disk(path, data):
+        if path == sync.INBOX_FILE:
+            raise OSError("disk full")
+        return original_write(path, data)
+    monkeypatch.setattr(sync, "write_atomic", full_disk)
+    run.finish("failed")  # the bell is behind, the run's own record is not
+    assert run.card["outcome"] == "failed" and "prompt" not in run.card

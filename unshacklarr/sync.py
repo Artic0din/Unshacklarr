@@ -432,6 +432,14 @@ def inbox_resolve(key: str) -> None:
     change_inbox(done)
 
 
+def close_question(key: str) -> None:
+    """inbox_resolve for a run: the bell lagging behind (full disk) must not stop the run itself."""
+    try:
+        inbox_resolve(key)
+    except OSError as e:
+        print(f"Inbox not written: {e}", file=sys.stderr)
+
+
 ALL_LEVELS = ("success", "warning", "error")
 APPS = [(r"discord(app)?\.com/api/webhooks|^discord:", "Discord"), (r"^tgram:", "Telegram"), (r"^ntfys?:", "ntfy"), (r"^pover:", "Pushover"),
         (r"^slack:|hooks\.slack\.com", "Slack"), (r"^mailtos?:", "E-mail"), (r"^gotifys?:", "Gotify"), (r"^matrixs?:", "Matrix"),
@@ -1746,7 +1754,7 @@ class EpisodeRun:
 
     def finish(self, outcome: str, cause: str = "", detail: str = "", *, auth_failed: bool = False) -> None:
         if asked := self.card.pop("prompt", None):  # failed or stopped mid-question: nobody can answer it now
-            inbox_resolve(asked["id"])
+            close_question(asked["id"])
         self.set_approval(None)
         self.set_authentication(None)
         if getattr(current, "run", None) is self:
@@ -2172,7 +2180,7 @@ def ask_for_input(run: EpisodeRun, prompt: str | None) -> None:
     had = run.card.get("prompt")
     if prompt and prompt != (had or {}).get("text"):
         if had:
-            inbox_resolve(had["id"])  # replaced ("wrong code, try again"): the old question no longer waits
+            close_question(had["id"])  # replaced ("wrong code, try again"): the old question no longer waits
         service = run.card["service"]
         run.card["prompt"] = {"id": uuid.uuid4().hex[:12], "text": prompt, "service": service, "run": run.id}
         run.say(f"\r\n\x1b[33m{service} asks: {prompt}\x1b[0m")
@@ -2181,7 +2189,7 @@ def ask_for_input(run: EpisodeRun, prompt: str | None) -> None:
                action={"kind": "input", **run.card["prompt"]})
     elif not prompt and had:
         del run.card["prompt"]
-        inbox_resolve(had["id"])
+        close_question(had["id"])
         run.say(f"\r\n\x1b[32m{had['service']}: answered, going on\x1b[0m")
 
 
