@@ -40,7 +40,7 @@ TEXT = [("text", "bg"), ("text", "panel"), ("text", "well"), ("text", "field-bg"
         ("accent-ink", "accent"), ("ok", "panel"), ("warn", "bg"), ("warn", "panel"), ("warn-ink", "warn"), ("warn", "warn-tint"),
         ("err", "err-tint"), ("muted", "well"),
         ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg")]
-EDGES = [("field-line", "field-bg"), ("field-line", "panel")]
+EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel")]  # a control's edge, and the marks of a chosen one (WCAG 1.4.11)
 
 
 @pytest.mark.parametrize("theme", ["dark", "light"])
@@ -112,3 +112,54 @@ def test_no_later_rule_reshapes_a_tag():
     late = [sel.strip() for i, (sel, body) in enumerate(rules) if i > shared and shaping.search(body)
             and any(name in [s.strip() for s in sel.split(",")] for name in names)]
     assert not late  # the shared shape is the last word for every tag
+
+
+def rule(selector):
+    """The bodies of every rule whose selector list holds exactly this selector."""
+    found = [body for names, body in re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", CSS, flags=re.S))
+             if selector in [n.strip() for n in re.split(r",(?![^()]*\))", names)]]
+    assert found, f"no rule for {selector}"
+    return " ".join(found)
+
+
+def test_a_toggle_pill_has_an_edge_you_can_see_and_a_tick_when_on():
+    assert "var(--field-line)" in rule(".pill")  # off: an edge at 3:1, not the faint divider
+    on = rule(".pill:has(input:checked)::before")
+    assert "clip-path" in on and rule("#sel-toggle[aria-pressed=\"true\"]::before").count("clip-path") == 1  # the Select toggle's tick
+
+
+def test_the_active_country_option_has_an_accent_bar_not_only_a_tint():
+    assert "inset 3px 0 0 var(--accent)" in rule(".cp-list li.on")
+
+
+def test_a_failed_or_stopped_step_has_a_mark_and_the_word_is_there_for_everyone():
+    assert "\\2715" in rule(".steps .fail :is(.l, .s)::before") and "\\25A0" in rule(".steps .halt :is(.l, .s)::before")
+    assert "clip" in rule(".sr-only")
+
+
+def test_a_phone_widens_the_header_only_for_a_service_with_something_to_say():
+    phone = CSS[CSS.index("@media (max-width: 700px) {"):]
+    assert "small:not(:empty)" not in phone  # "Checking…" is brief: it must not make the header jump on every load
+    assert "[data-state=warn], [data-state=down]" in phone
+
+FADED_TEXT = [".sched-card.other", ".cal-cell.out", ".inbox-filters b", ".seg button span", ".toolbar .pill span", ".con-filters button span",
+              ".job-counts button.off", ".tools span.optional-missing", ".oneoff-preview .file", ".wall.selecting .poster:not(.picked)"]
+
+
+@pytest.mark.parametrize("selector", FADED_TEXT)
+def test_text_is_never_faded_with_opacity(selector):
+    # opacity composites the text with what is behind it, below 4.5:1 (WCAG 1.4.3); a quieter look takes a colour token instead
+    rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", CSS, flags=re.S))
+    faded = [sel.strip() for sel, body in rules if re.search(r"(?<![\w-])opacity\s*:\s*0?\.\d", body)
+             and any(name.strip().split(":hover")[0].split(":focus-within")[0] == selector for name in sel.split(","))]
+    assert not faded
+
+def test_reduced_motion_also_stills_what_before_and_after_draw():
+    """`*` matches elements only: a looping ::before (the running step's shimmer) kept moving."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)  # a commented-out rule does nothing
+    moving = [sel.strip() for sel, body in re.findall(r"([^{}]*::(?:before|after)[^{}]*)\{([^{}]*)\}", css)
+              if re.search(r"animation:\s*(?!none)[\w-]+", body)]
+    assert moving, "no animated ::before/::after left to check"
+    stilled = [{part.strip() for part in sel.split(",")} for sel in
+               re.findall(r"@media \(prefers-reduced-motion: reduce\) \{ ([^{]+)\{[^}]*animation: none !important", css)]
+    assert any({"*", "::before", "::after"} <= parts for parts in stilled), moving
