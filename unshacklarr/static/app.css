@@ -922,9 +922,9 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .weeks small { color: var(--muted); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; } .weeks b { font-size: var(--fs-footnote); }
 .legend { display: flex; gap: 16px; font-size: var(--fs-footnote); color: var(--muted); }
 .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
-.svc-scroll { overflow-x: auto;  /* shadows at the edges that still hide columns: the page background covers each once that edge is reached */
-  background: linear-gradient(to right, var(--bg) 30%, transparent) left / 28px 100% no-repeat local,
-    linear-gradient(to left, var(--bg) 30%, transparent) right / 28px 100% no-repeat local,
+.svc-scroll { overflow-x: auto; --cover: var(--panel);  /* shadows at the edges that still hide columns: the surface under the table covers each once that edge is reached */
+  background: linear-gradient(to right, var(--cover) 30%, transparent) left / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--cover) 30%, transparent) right / 28px 100% no-repeat local,
     linear-gradient(to right, color-mix(in srgb, var(--text) 25%, transparent), transparent) left / 12px 100% no-repeat scroll,
     linear-gradient(to left, color-mix(in srgb, var(--text) 25%, transparent), transparent) right / 12px 100% no-repeat scroll; }
 .svc-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sub); }
@@ -1530,6 +1530,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .sched-filter::after { content: ""; flex: 0 0 4px; }  /* the last pill clears the edge once scrolled */
   .sched-filter .pill { flex: 1 0 auto; justify-content: center; min-height: 40px; white-space: nowrap; }
   .con { grid-template-columns: 1fr; height: auto; min-height: 0; border: 0; background: none; border-radius: 0; overflow: visible; }
+  .svc-scroll { --cover: var(--bg); }  /* .con has no panel on a phone: the page is under the table */
   .con-detail { overflow: visible; }  /* the page scrolls: the bar stays at the bottom of the screen */
   .con-list, #runs-history { overflow: visible; flex: none; }
   .con-list { border-right: 0; padding: 0; background: none; }

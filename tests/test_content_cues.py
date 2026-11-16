@@ -25,6 +25,7 @@ def test_the_stats_table_shows_a_shadow_at_an_edge_that_hides_columns():
     assert "overflow-x: auto" in body
     assert body.count("local") == 2 and body.count("scroll;") + body.count("scroll,") == 2  # a cover and a shadow per edge
     assert 'className: "svc-scroll"' in (STATIC / "js" / "activity.js").read_text()
+    assert "--cover: var(--panel)" in body  # desktop Stats sits on .con's panel: a --bg cover left a strip at a reached edge
 
 
 def test_names_and_help_text_wrap_instead_of_being_cut_with_an_ellipsis():
