@@ -7560,3 +7560,28 @@ def test_a_jobs_terminal_waits_for_the_episode_that_left_the_queue_but_has_no_lo
     request = SimpleNamespace(headers={"Origin": "http://localhost"}, host="localhost", query={"batch": batch})
     asyncio.run(web.terminal(request))
     assert b"last episode\n" in socket.sent and socket.closed
+
+
+@pytest.mark.parametrize("action", ["delete", "import"])
+def test_a_waiting_folder_a_new_download_now_uses_is_neither_deleted_nor_imported(tmp_path, monkeypatch, action):
+    # Sonarr emptied the folder and a new download started into it: a click on the list shown before refuses
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    folder = "unshackle-111-S02E05"
+    monkeypatch.setattr(sync, "DOWNLOADS", tmp_path)
+    (tmp_path / folder).mkdir()
+    (tmp_path / folder / "Show.S02E05.mkv").write_bytes(b"x")
+    imported = []
+    monkeypatch.setattr(sync, "import_leftover", lambda f: imported.append(f))
+
+    class Request:
+        match_info = {"action": action}
+
+        async def json(self):
+            return {"folder": folder}
+    with sync.episode_lock(tmp_path / folder):  # the new download
+        with pytest.raises(web.web.HTTPConflict):
+            asyncio.run(web.leftover_action(Request()))
+    assert (tmp_path / folder / "Show.S02E05.mkv").exists() and not imported
+    asyncio.run(web.leftover_action(Request()))  # done downloading: it goes
+    assert imported == [folder] if action == "import" else not (tmp_path / folder).exists()

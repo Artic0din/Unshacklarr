@@ -4747,14 +4747,25 @@ async def list_leftovers(_):
 async def leftover_action(request):
     body = await json_object(request)
     folder = str(body.get("folder") or "")
-    try:
+    delete = request.match_info["action"] == "delete"
+
+    def act() -> bool:
+        """False: a download uses the folder now (Sonarr emptied it, a new one started into it): left alone."""
         path = sonarr_sync.leftover_path(folder)
-        if request.match_info["action"] == "delete":
-            await asyncio.to_thread(sonarr_sync.shutil.rmtree, path, True)
-        else:
-            await asyncio.to_thread(sonarr_sync.import_leftover, folder)
+        with sonarr_sync.episode_lock(path) as mine:
+            if not mine:
+                return False
+            if delete:
+                sonarr_sync.shutil.rmtree(path, True)
+            else:
+                sonarr_sync.import_leftover(folder)
+        return True
+    try:
+        done = await asyncio.to_thread(act)
     except (RuntimeError, requests.RequestException) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
+    if not done:
+        raise web.HTTPConflict(text="This episode is downloading now: try again once it is done")
     return web.json_response({"done": True})
 
 
