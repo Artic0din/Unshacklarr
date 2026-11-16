@@ -7785,6 +7785,70 @@ def test_an_audio_request_for_many_episodes_starts_one_download_not_one_each(tmp
     asyncio.run(go())
 
 
+def test_an_audio_request_asks_every_download_it_starts_in_that_language(tmp_path, monkeypatch):
+    # "audio": "fr" for a series set to English: the episode with no file, the one whose file has French and the one
+    # whose file lacks it are each downloaded asking for French; a request without it asks as before
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    eps = [{"id": 1, "seasonNumber": 1, "episodeNumber": 1, "hasFile": False},
+           {"id": 2, "seasonNumber": 1, "episodeNumber": 2, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "fre"}}},
+           {"id": 3, "seasonNumber": 1, "episodeNumber": 3, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "eng"}}}]
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **p: [e for e in eps if e["id"] in p.get("episodeIds", [])])
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append((list(ids), k)))
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as browser:
+            page = {"X-Unshackle": "1"}
+            await browser.post("/api/login", json={"password": "password1"}, headers=page)
+            key = (await (await browser.post("/api/api-key/new", json={"password": "password1"}, headers=page)).json())["key"]
+            api = {"X-Api-Key": key}
+            answer = await browser.post("/api/v1/downloads", headers=api, json={"episodeIds": [1, 2, 3], "audio": "FR"})
+            assert await answer.json() == {"queued": 3, "downloaded": 1, "replaced": 1, "audio_added": 1}
+            assert [(ids, k.get("audio"), k.get("replace", False)) for ids, k in started] == [
+                ([1], "fr", False), ([2], "fr", True), ([3], "fr", True)]
+            started.clear()
+            assert (await browser.post("/api/v1/downloads", headers=api, json={"episodeIds": [1, 2, 3]})).status == 200
+            assert started == [([1, 2, 3], {})]
+            bad = await browser.post("/api/v1/downloads", headers=api, json={"episodeIds": [1], "audio": "fr en"})
+            assert bad.status == 400 and await bad.text() == '"audio" is one language code, such as "fr"'
+            # a three-letter code is the same language as the file's: French as "fre" finds the French file
+            started.clear()
+            answer = await browser.post("/api/v1/downloads", headers=api, json={"episodeIds": [2], "audio": "fre"})
+            assert await answer.json() == {"queued": 1, "downloaded": 0, "replaced": 1, "audio_added": 0}
+            assert [(ids, k.get("audio"), k.get("replace", False)) for ids, k in started] == [([2], "fr", True)]
+    asyncio.run(go())
+
+
+def test_a_retry_keeps_the_audio_language_of_the_attempt_it_retries(monkeypatch):
+    # Asked in French, failed, then retried from Activity once its job was over: the retry asks French again
+    import asyncio
+    from unshacklarr import web
+    cards = [{"episodeId": 5, "audio_override": "fr"}, {"episodeId": 6}]
+    monkeypatch.setattr(web, "cards_on_disk", lambda: cards)
+    monkeypatch.setattr(web.sonarr_sync.RUNS_DIR.__class__, "exists", lambda self: True)
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    monkeypatch.setattr(web, "room_for_one_more", lambda: None)
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append((list(ids), k.get("audio", ""))))
+
+    class Request:
+        def __init__(self, body): self.body = body
+        async def json(self): return self.body
+    for ids, retry in (([5], True), ([6], True), ([5], False)):
+        asyncio.run(web.download(Request({"episodeIds": ids, "retry": retry})))
+    assert started == [([5], "fr"), ([6], ""), ([5], "")]
+
+
 def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
     # Added at the end, they go in as picked; retries go in next, each before the one after it, so last first
     import asyncio
@@ -8507,6 +8571,41 @@ def test_an_api_retry_of_episodes_tried_differently_is_refused(tmp_path, monkeyp
              ("20261003-092900-000001-442345-S02E03", 72, {"replace": True})]
     statuses, asked = api_retries(tmp_path, monkeypatch, cards, {"episodeIds": [70, 71]}, {"episodeIds": [71, 72]})
     assert (statuses, asked) == ([400, 200], [([71, 72], None, True)])
+
+def test_an_api_retry_repeats_the_audio_language_of_the_attempt_it_retries(tmp_path, monkeypatch):
+    # A French replacement stopped, retried by the API without "audio": French again, replacing only with it;
+    # episodes last tried in different languages are refused together, as for numbering
+    import asyncio
+    import hashlib
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1",
+                                                    "api_key": hashlib.sha256(b"key").hexdigest()}})
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
+    for run_id, episode, extra in (("20261003-093229-000001-442345-S02E01", 70, {"replace": True, "audio_override": "fr"}),
+                                   ("20261003-093000-000001-442345-S02E02", 71, {"replace": True, "audio_override": "de"})):
+        card = {"id": run_id, "episodeId": episode, "tvdbId": 442345, "sxxeyy": run_id[-6:], "outcome": "stopped",
+                "started": "2026-10-03T09:32:29+00:00", "ended": "2026-10-03T09:33:00+00:00", **extra}
+        (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
+    asked = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("audio"), kw.get("replace", False))))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **kw: [
+        {"id": 70, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "eng"}}}])
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as script:
+            key = {web.API_KEY_HEADER: "key"}
+            return [(await script.post("/api/v1/downloads", json={"episodeIds": ids, "retry": True}, headers=key)).status
+                    for ids in ([70], [70, 71])]
+
+    assert asyncio.run(go()) == [200, 400]
+    assert asked == [([70], "fr", True)]
+
 
 def test_a_single_download_is_not_a_sync_running(tmp_path, monkeypatch):
     import asyncio
