@@ -284,9 +284,11 @@ Behind a reverse proxy:
   address, and `X-Forwarded-Proto`, so that the session cookie is marked `Secure` over HTTPS.
   Nginx Proxy Manager sends both.
 - **List the proxy's addresses**: Settings, Account, *Sign in through a reverse proxy*,
-  *The proxy's addresses* (as Unshacklarr sees the proxy: `172.18.0.0/16` for its container's
-  network), even when you do not sign in through it. `X-Real-IP` is believed from those addresses
-  only, so that no one else can claim another address to get more tries. Until they are listed,
+  *The proxy's addresses*: the proxy's own address as Unshacklarr sees it (its container's IP,
+  such as `172.18.0.5`), even when you do not sign in through it. `X-Real-IP` is believed from
+  those addresses only, so that no one else can claim another address to get more tries.
+  Every address in a range you list can do so: list a whole network (`172.18.0.0/16`) only if
+  nothing but the proxy runs on it. Until they are listed,
   every client behind the proxy shares one limit, the proxy's: five wrong passwords from anyone
   there make everyone there wait 5 minutes.
 - **Let WebSockets and streams through**: Activity's output is a WebSocket and its live view a
