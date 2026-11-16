@@ -44,3 +44,14 @@ vm.runInContext(grab(src, /async function renderServiceDefaults\b[\s\S]*?\n}\n/)
 ctx.renderServiceDefaults().then(() => console.log(JSON.stringify(drawn)), (e) => console.log(JSON.stringify("threw: " + e.message)));
 """, str(JS / "settings-options.js"))
     assert shown == ["svc-block"]
+
+
+def test_release_day_choices_are_every_day_the_server_accepts():
+    from unshacklarr import sync
+
+    days = node(r"""
+const ctx = sandbox();
+vm.runInContext(grab(read(process.argv[1]), /const RELEASE_DAYS = [^\n]*\n/), ctx);
+console.log(JSON.stringify(vm.runInContext("RELEASE_DAYS", ctx)));
+""", str(JS / "series.js"))
+    assert days == list(range(-sync.EARLY_DAYS_MAX, 2))

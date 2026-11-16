@@ -36,7 +36,7 @@ $("#d-release-gap").oninput = (e) => {
 $("#d-release-day").onchange = (e) => { S.config.series[current.tvdbId].release_day = Number(e.target.value); dirty(); renderReleaseNext(); };
 /* The day a service publishes, from the day Sonarr says an episode airs: that day, the day after, or up to two weeks
    before (a platform ahead of the channel: sync.EARLY_DAYS_MAX). */
-const RELEASE_DAYS = [-14, -7, -6, -5, -4, -3, -2, -1, 0, 1];
+const RELEASE_DAYS = Array.from({ length: 16 }, (_, i) => i - 14);  // -14 to 1: every day the server accepts
 const releaseDayLabel = (d) => d === 0 ? "the day it airs" : d === 1 ? "the day after" : d === -1 ? "the day before"
   : d === -7 ? "a week before" : d === -14 ? "two weeks before" : `${-d} days before`;
 $("#d-release-day").replaceChildren(...RELEASE_DAYS.map((d) => el("option", { value: String(d), textContent: releaseDayLabel(d) })));
