@@ -115,8 +115,10 @@ backwards. A code no Sonarr episode answers to, or more than one, gives `404` na
 `"audio"` (one language, `"fr"`) says that language has just come on the service, and Unshacklarr decides per episode
 from the file Sonarr has: no file, the episode is downloaded; a file that has it, the service's is downloaded again in
 its place; a file without it gets it as Settings, Download options, *Audio upgrade* says: the track added to the file
-(asked about in the bell first when the file is not from the series' service), or the whole episode again. `"replace"`
-is then not needed. The answer counts each: `{"queued": 3, "downloaded": 1, "replaced": 1, "audio_added": 1}`. Send
+(asked about in the bell first when the file is not from the series' service), or the whole episode again. Each
+episode downloaded asks for that language first, the series' own audio languages after it as fallbacks (`--a-lang en`
+becomes `fr,en`), and its file is accepted with that language even when the series accepts only others; the series'
+settings stay as they are. `"replace"` is then not needed. The answer counts each: `{"queued": 3, "downloaded": 1, "replaced": 1, "audio_added": 1}`. Send
 it only when audio in that language has come, not French subtitles alone.
 
 ### `GET /api/v1/downloads?limit=50`

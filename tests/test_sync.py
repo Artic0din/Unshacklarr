@@ -4080,6 +4080,43 @@ def test_a_download_with_its_own_codec_and_height_takes_them_over_the_ladder_and
     assert card["outcome"] == "failed" and "asked for this download (720p any codec any range)" in card["cause"]
 
 
+def test_a_download_asked_in_one_audio_language_asks_it_first_and_accepts_it(tmp_path, monkeypatch):
+    # The API's "audio": "fr" for a series set to English: French first, its English after it as a fallback, the French
+    # file accepted though the series accepts English only; the series stays as it is, the next download its own again
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    config["series"][111].update(options={"--a-lang": "en"}, audio_accept="en")
+    monkeypatch.setattr(sync, "tracks_on_service", lambda show, config, request, backend=None: {"audio": {"fr", "en"}, "subtitles": set()})
+    monkeypatch.setattr(sync, "no_cdm", lambda tag, config=None, backend=None: "")
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    for name in ("finalize", "import_episode"):
+        monkeypatch.setattr(sync, name, lambda *a, **k: None)
+    downloads, accepted, queued = [], [], []
+    monkeypatch.setattr(sync, "check_audio", lambda out, langs: accepted.append(langs))
+
+    def download(payload, run=None):
+        downloads.append(payload)
+        queued.extend([c.get("audio_override") for c in sync.waiting.values()] + [j.get("audio") for j in sync.queue_snapshot().values()])
+        out = Path(payload["output_dir"])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "Show.mkv").touch()
+    monkeypatch.setattr(sync, "run_job_retrying", download)
+    sync.sync(config, {}, [episode(111, 2, 5), episode(111, 2, 6)], manual=True, kind="manual", audio="fr")
+    assert [d["a_lang"] for d in downloads] == [["fr", "en"]] * 2
+    assert accepted == [["fr", "en"]] * 2
+    assert queued == ["fr", "fr"]  # the queued card and the job on disk keep it, for a queue again and a restart
+    cards = [json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json")]
+    assert [c.get("audio_override") for c in cards] == ["fr", "fr"]
+    assert config["series"][111]["options"] == {"--a-lang": "en"} and "asked_audio" not in config["series"][111]
+    sync.sync(config, {}, [episode(111, 2, 7)], manual=True, kind="manual")
+    assert downloads[-1]["a_lang"] == ["en"] and accepted[-1] == ["en"]  # without it: the series' own, as before
+
+    show = {"service": "CRAVE", "title": "x", "asked_audio": "fr"}
+    assert sync.download_request({**show, "options": {"--lang": "orig,en"}}, {}, "S01E01", tmp_path)["a_lang"] == ["fr", "orig", "en"]
+    assert sync.download_request(show, {}, "S01E01", tmp_path)["a_lang"] == ["fr"]
+    assert sync.accepted_audio(show, {}) == ["fr"]
+
+
 @responses.activate
 def test_a_download_only_series_is_downloaded_never_imported_nor_cleaned(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)

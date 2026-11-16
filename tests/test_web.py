@@ -7727,6 +7727,44 @@ def test_an_audio_request_for_many_episodes_starts_one_download_not_one_each(tmp
     asyncio.run(go())
 
 
+def test_an_audio_request_asks_every_download_it_starts_in_that_language(tmp_path, monkeypatch):
+    # "audio": "fr" for a series set to English: the episode with no file, the one whose file has French and the one
+    # whose file lacks it are each downloaded asking for French; a request without it asks as before
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    eps = [{"id": 1, "seasonNumber": 1, "episodeNumber": 1, "hasFile": False},
+           {"id": 2, "seasonNumber": 1, "episodeNumber": 2, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "fre"}}},
+           {"id": 3, "seasonNumber": 1, "episodeNumber": 3, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "eng"}}}]
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **p: [e for e in eps if e["id"] in p.get("episodeIds", [])])
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append((list(ids), k)))
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as browser:
+            page = {"X-Unshackle": "1"}
+            await browser.post("/api/login", json={"password": "password1"}, headers=page)
+            key = (await (await browser.post("/api/api-key/new", json={"password": "password1"}, headers=page)).json())["key"]
+            api = {"X-Api-Key": key}
+            answer = await browser.post("/api/v1/downloads", headers=api, json={"episodeIds": [1, 2, 3], "audio": "FR"})
+            assert await answer.json() == {"queued": 3, "downloaded": 1, "replaced": 1, "audio_added": 1}
+            assert [(ids, k.get("audio"), k.get("replace", False)) for ids, k in started] == [
+                ([1], "fr", False), ([2], "fr", True), ([3], "fr", True)]
+            started.clear()
+            assert (await browser.post("/api/v1/downloads", headers=api, json={"episodeIds": [1, 2, 3]})).status == 200
+            assert started == [([1, 2, 3], {})]
+            bad = await browser.post("/api/v1/downloads", headers=api, json={"episodeIds": [1], "audio": "fr en"})
+            assert bad.status == 400 and await bad.text() == '"audio" is one language code, such as "fr"'
+    asyncio.run(go())
+
+
 def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
     # Added at the end, they go in as picked; retries go in next, each before the one after it, so last first
     import asyncio

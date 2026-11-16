@@ -3452,9 +3452,10 @@ async def requeue(request):
     sonarr = cancelled.get("instance") if isinstance(cancelled.get("instance"), str) else ""
     proxy = cancelled.get("proxy_override") if isinstance(cancelled.get("proxy_override"), str) else ""  # and its own proxy
     video = cancelled.get("video_override") if isinstance(cancelled.get("video_override"), dict) else None  # codec, height
+    audio = cancelled.get("audio_override") if isinstance(cancelled.get("audio_override"), str) else ""  # audio language
     if not await join_job(batch, episode_id, replace, sonarr):  # its job took its last episode: it starts on its own, in that job
         run_sync([episode_id], kind="manual", batch=batch, **({"replace": True} if replace else {}), **({"proxy": proxy} if proxy else {}),
-                 **({"video": video} if video else {}), **({"sonarr": sonarr} if sonarr else {}))
+                 **({"video": video} if video else {}), **({"audio": audio} if audio else {}), **({"sonarr": sonarr} if sonarr else {}))
     return web.json_response({"queued": episode_id})
 
 
@@ -3799,13 +3800,14 @@ def room_for_one_more() -> None:
 
 
 def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: str = "manual", numbering: dict | None = None,
-             batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None) -> threading.Thread:
+             batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None, audio: str = "") -> threading.Thread:
     """A sync in the background: every missing episode, or the ones given. Each episode has
     its own lock, so these runs never download the same one twice."""
     def work():
         global last_sync
         try:
-            sonarr_sync.main(episode_ids, replace=replace, kind=kind, numbering=numbering, batch=batch, sonarr=sonarr, proxy=proxy, video=video)
+            sonarr_sync.main(episode_ids, replace=replace, kind=kind, numbering=numbering, batch=batch, sonarr=sonarr, proxy=proxy, video=video,
+                             audio=audio)
         except Exception as e:  # notified already; the page shows the history
             print(f"Sync stopped: {type(e).__name__}: {e}", flush=True)
         finally:
@@ -6349,6 +6351,7 @@ async def v1_start_download(request):
     eps = await asyncio.to_thread(on_sonarr, inst, lambda: sonarr_sync.sonarr_get("episode", episodeIds=ids, includeEpisodeFile="true"))
     kinds = {e["id"]: file_speaks(e, audio) for e in eps}
     fresh, again, lacking = ([i for i in ids if kinds.get(i) is k] for k in (None, True, False))
+    common["audio"] = audio  # each download asks it first, the series' own after it, and accepts it
     if fresh:
         run_sync(fresh, **common)
     if again:
@@ -6767,7 +6770,7 @@ def resume_queue() -> int:
         sonarr_sync.restoring[batch] = (None, job)  # kept in the file until it runs; before it starts, as it may run at once
         thread = run_sync(list(dict.fromkeys(ids)), replace=job.get("replace") is True, kind=job.get("kind") or "manual",
                           numbering=numbering, batch=batch, sonarr=job.get("sonarr") or "", proxy=job.get("proxy") or "",
-                          video=job.get("video"))
+                          video=job.get("video"), audio=job.get("audio") or "")
         with sonarr_sync.jobs_lock:
             if batch in sonarr_sync.restoring:  # not running yet: its thread, so save_queue can tell it never started
                 sonarr_sync.restoring[batch] = (thread, job)
