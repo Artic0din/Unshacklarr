@@ -412,14 +412,16 @@ def test_a_superscript_number_picks_the_other_form_instead_of_failing():
 def test_a_short_name_template_is_translated_whole_with_the_name_filled_in():
     """"Test {0}" takes no name it has no text for when matched after the fact, so these labels are translated first, then filled."""
     shown = page_translate("de", ['trWith("Test {0}", "Discord")', 'trWith("Remove {0}", "ntfy")', 'trWith("{0} value", "--quality")',
-                                  'trWith("In schedule: {0}", "Abbott Elementary")', 'trWith("Move {0} up", "Res.")', '"Test Discord"'])
+                                  'trWith("In schedule: {0}", "Abbott Elementary")', 'trWith("Move {0} up", "Res.")', '"Test Discord"',
+                                  'trWith("Move {0} up", tr("Subtitles"))'])
     assert shown == ["Discord testen", "ntfy entfernen", "Wert von --quality", "Im Kalender: Abbott Elementary", "Res. nach oben",
-                     "Test Discord"]  # the last: the same label matched after the fact stays English
+                     "Test Discord",  # the same label matched after the fact stays English
+                     "Untertitel nach oben"]  # a column's name is translated before it is filled in
 
 
 def test_the_labels_that_name_an_item_are_translated_whole():
     js = {n: (CORE.parent / n).read_text() for n in ("core.js", "schedule.js", "series.js", "settings-options.js")}
-    for name, label in (("core.js", '"{0} value"'), ("schedule.js", '"In schedule: {0}"'), ("series.js", '"Move {0} up"'), ("series.js", '"Move {0} down"'),
+    for name, label in (("core.js", '"{0} value"'), ("schedule.js", '"In schedule: {0}"'), ("series.js", '"Move {0} up", tr(c.label)'), ("series.js", '"Move {0} down", tr(c.label)'),
                         ("settings-options.js", '"Test {0}"'), ("settings-options.js", '"Remove {0}"'), ("settings-options.js", '"Download backup from {0}"'),
                         ("core.js", '"Language: {0}"')):
         assert f"trWith({label}" in js[name], (name, label)

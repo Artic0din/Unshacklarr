@@ -41,7 +41,7 @@ const find = (box, pick) => [...box.walk()].find(pick);
 const doc = { listeners: {}, activeElement: null, addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }, createElement: (tag) => new Node(tag), querySelectorAll: () => [] };
 const boxes = {};
 const $ = (sel) => (boxes[sel] ||= new Node("div"));
-const ctx = { document: doc, $, console, Object, String, Math, JSON, Promise, setTimeout, Set, Map, WeakMap, Date, Number, Array, Intl, LOCALE: "en", icon: () => new Node("svg"), keepFocus: (box, draw) => draw(), dirty() {},
+const ctx = { document: doc, $, console, Object, String, Math, JSON, Promise, setTimeout, Set, Map, WeakMap, Date, Number, Array, Intl, LOCALE: "en", icon: () => new Node("svg"), keepFocus: (box, draw) => draw(), dirty() {}, tr: String,
   trWith: (t, ...fill) => (ctx.tr || String)(t).replace(/\{(\d+)\}/g, (_, i) => fill[i]) };  // as the page's: through the scenario's tr
 vm.createContext(ctx);
 const run = (code) => vm.runInContext(code, ctx);
