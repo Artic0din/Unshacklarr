@@ -7216,6 +7216,33 @@ def test_a_page_saves_only_what_it_changed_and_a_clash_is_refused(tmp_path, monk
     assert body["settings"]["sonarrs"] == [{"name": "4K"}]
 
 
+
+def test_a_save_merges_against_the_config_as_it_is_when_written(tmp_path, monkeypatch):
+    # another tab's save lands while this one waits on Unshackle: the merge must see it, not the config read before
+    import asyncio
+    from types import SimpleNamespace
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "series": {1: {"service": "A", "title": "x"}, 2: {"service": "B", "title": "y"}}})
+    loaded = json.loads(json.dumps(web.public_config(web.read_config())))  # as the page gets it
+
+    def unshackle_slow():  # meanwhile another tab renames series 2's page
+        config = web.read_config()
+        web.write_config({**config, "series": {**config["series"], 2: {**config["series"][2], "title": "z"}}})
+    monkeypatch.setattr(web, "known_services", unshackle_slow)
+
+    async def body():  # this tab changed series 1 only
+        page = {k: v for k, v in loaded.items() if k != "versions"}
+        return {**page, "series": {**page["series"], "1": {**page["series"]["1"], "episode_offset": 2}},
+                "changed": ["series:1"], "base": {"series:1": loaded["versions"]["series:1"]}}
+    asyncio.run(web.save_config(SimpleNamespace(json=body)))
+    saved = web.read_config()["series"]
+    assert saved[2]["title"] == "z", "the other tab's save stays"
+    assert saved[1].get("episode_offset") == 2
+
 def test_settings_edited_by_hand_apply_without_a_restart(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync

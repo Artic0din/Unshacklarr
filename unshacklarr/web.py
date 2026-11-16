@@ -1156,11 +1156,33 @@ async def service_profiles(request):
 
 async def save_config(request):
     body = await json_object(request)
-    previous = read_config()
-    merge_page_changes(body, public_config(previous))
-    real_config(body, previous)  # the secrets the browser only saw masked
+    known = await asyncio.to_thread(known_services)  # waited on first: a save from another tab meanwhile is read below
+    with CONFIG_LOCK:  # read, merged, checked and written at once: nothing saved in between is written over
+        previous = read_config()
+        merge_page_changes(body, public_config(previous))
+        real_config(body, previous)  # the secrets the browser only saw masked
+        config = checked_config(body, previous, known)
+        for key, show in (body.get("series") or {}).items():
+            learned, saved = previous["series"].get(int(key)) or {}, config["series"].get(int(key))
+            if saved is None or (learned.get("service"), str(learned.get("title"))) != (saved.get("service"), str(saved.get("title"))):
+                continue  # another service or page now: what was learnt for the old one is not its
+            # learnt after the page loaded: each field the page did not send at all is kept (it sends "" to clear one)
+            if "release_time" not in show and learned.get("release_time"):
+                saved["release_time"] = learned["release_time"]
+            day = int(show["release_day"] or 0) if "release_day" in show else learned.get("release_day") or 0  # checked
+            if day and (saved.get("release_time") or day < 0):  # the day after means nothing without a time, as checked
+                saved["release_day"] = day
+        write_config(config)
+        with sonarr_sync.held_lock:  # a release held for its episode order: a save may have fixed its numbering
+            sonarr_sync.held_bursts.clear()
+    if config["settings"].get("upgrade_check_new"):  # by mj23au: a series just set up, its files already on disk, checked once
+        upgrade_pending.update(newly_set_up(config["series"], previous.get("series") or {}))
+    return web.json_response(public_config(read_config()))
+
+
+def checked_config(body: dict, previous: dict, known: dict | None) -> dict:
+    """The config a Save writes: the page's, merged and unmasked, each value checked (400 on the first bad one)."""
     dl_specs = options.dl_specs()
-    known = await asyncio.to_thread(known_services)
     ladders = check_ladders(body.get("quality_ladders"))
     series = {}
     for key, show in (body.get("series") or {}).items():
@@ -1271,29 +1293,10 @@ async def save_config(request):
             "events": {k: bool((notifications.get("events") or {}).get(k, True)) for k in EVENTS},
         },
         "tmdb_countries": countries or [sonarr_sync.load_settings(previous)["country"]],
-        "hidden_series": [],  # the stored list, read under the lock below: config.yaml keeps its key order
+        "hidden_series": previous["hidden_series"],  # saved at once by hide_series, never by Save
         "quality_ladders": ladders,
     }
-    with CONFIG_LOCK:  # what changed on the server since the page was loaded, or during the wait on Unshackle above
-        now = read_config()
-        config["auth"] = now["auth"]  # a new password or a revoked API key meanwhile stays
-        config["hidden_series"] = now["hidden_series"]  # saved at once by hide_series, never by Save
-        for key, show in (body.get("series") or {}).items():
-            learned, saved = now["series"].get(int(key)) or {}, series.get(int(key))
-            if saved is None or (learned.get("service"), str(learned.get("title"))) != (saved.get("service"), str(saved.get("title"))):
-                continue  # another service or page now: what was learnt for the old one is not its
-            # learnt after the page loaded: each field the page did not send at all is kept (it sends "" to clear one)
-            if "release_time" not in show and learned.get("release_time"):
-                saved["release_time"] = learned["release_time"]
-            day = int(show["release_day"] or 0) if "release_day" in show else learned.get("release_day") or 0  # checked above
-            if day and (saved.get("release_time") or day < 0):  # the day after means nothing without a time, as above
-                saved["release_day"] = day
-        write_config(config)
-        with sonarr_sync.held_lock:  # a release held for its episode order: a save may have fixed its numbering
-            sonarr_sync.held_bursts.clear()
-    if settings.get("upgrade_check_new"):  # by mj23au: a series just set up, its files already on disk, checked once
-        upgrade_pending.update(newly_set_up(series, previous.get("series") or {}))
-    return web.json_response(public_config(read_config()))
+    return config
 
 
 def newly_set_up(series: dict, was: dict) -> set[int]:
