@@ -2439,5 +2439,9 @@
  "Unshacklarr, schedule": "Unshacklarr、スケジュール",
  "Wait for the audio, in days": "音声を待つ日数",
  "{0} min {1} s": "{0} 分 {1} 秒",
- "{0} h {1} min": "{0} 時間 {1} 分"
+ "{0} h {1} min": "{0} 時間 {1} 分",
+ "Esc, then Tab, leaves the editor.": "Esc、続けて Tab で、エディターから出られます。",
+ "Results on {0}: {1}": "{0} の結果: {1} 件",
+ "Settings: {0} · Unshacklarr": "設定: {0} · Unshacklarr",
+ "{0} · Unshacklarr": "{0} · Unshacklarr"
 }

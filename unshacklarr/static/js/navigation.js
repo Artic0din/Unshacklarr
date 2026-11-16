@@ -30,7 +30,7 @@ function showSettingsSec(name, fromRoute = false) {
   if (name === "quality") renderQuality();
   if (name === "upgrades") { renderUpgradeSeries(); renderUpgradeGroups(); }
   if (name === "interface") renderInterface();
-  if (!fromRoute && currentTab === "settings") navigate(fromList);  // from the list: back returns to it
+  if (!fromRoute && currentTab === "settings") { navigate(fromList); updateTitle(); }  // from the list: back returns to it
   if (fromList) { scrollTo({ top: 0 }); focusHeading(document.querySelector(`.set-sec[data-sec="${name}"]`).querySelector("h2, h3")); }
 }
 document.querySelectorAll(".set-nav button").forEach((x) => x.onclick = () => showSettingsSec(x.dataset.sec));
@@ -38,6 +38,7 @@ $("#set-back").onclick = () => {
   if (secFromList) return history.back();  // the list is the page before: the phone's back does the same
   showSettingsList(true);
   navigate(false);
+  updateTitle();
   scrollTo({ top: 0 });
 };
 showSettingsSec("unshackle", true);
@@ -61,6 +62,14 @@ function parseRoute() {
   const [s, id, view] = rest;
   return { tab: ["series", "schedule", "settings", "log", "yaml"].includes(name) ? name : "schedule", id: s === "s" ? id : null, view, sec };
 }
+/* The tab's title says where you are: the page, a series (open over any page), a Settings section. */
+const PAGE_NAME = { schedule: "Schedule", series: "Series", log: "Activity", settings: "Settings", yaml: "unshackle.yaml" };
+function updateTitle() {
+  if (document.body.classList.contains("gated")) return;  // the sign-in and the setup name themselves
+  const section = currentTab === "settings" && !settingsList && $(`.set-nav [data-sec="${settingsSec}"] span`)?.textContent;
+  document.title = current ? tr(`${current.title} · Unshacklarr`)
+    : section ? tr(`Settings: ${section} · Unshacklarr`) : tr(`${PAGE_NAME[currentTab]} · Unshacklarr`);
+}
 let routed = false;
 function applyRoute() {
   if (location.hash.startsWith("#/inbox")) {  // a push notification touched: the bell's list over the current page
@@ -76,6 +85,7 @@ function applyRoute() {
   if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
   else if (series && route.view) showDrawerTab(route.view, true);
   else if (!series && current) closeDrawer(true);
+  updateTitle();
 }
 window.addEventListener("popstate", applyRoute);
 
@@ -86,6 +96,7 @@ function showTab(name, fromRoute = false, quiet = false) {
   }
   if (name !== currentTab && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);
   currentTab = name;
+  updateTitle();
   closeDetails(false);  // the Schedule's popover belongs to its card
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   document.querySelectorAll("nav button").forEach((b) => {

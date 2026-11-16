@@ -175,7 +175,7 @@ if (scenario === "lang") {  // Escape closes the language menu and the focus goe
 if (scenario === "settings") {  // a phone: a section opens on its heading, Back returns to its item in the list
   const nav = make("button", { dataset: { sec: "sonarr" } }); root.append(nav);
   const heading = make("h2"), sec = make("div"); sec.querySelector = () => heading; sec.append(heading); root.append(sec);
-  Object.assign(ctx, { currentTab: "settings", phone: true, leaveNews() {}, navigate() {}, scrollTo() {}, S: { dlOptions: [] },
+  Object.assign(ctx, { currentTab: "settings", phone: true, leaveNews() {}, navigate() {}, updateTitle() {}, scrollTo() {}, S: { dlOptions: [] },
     $: () => ({ classList: { toggle() {} } }), phoneLayout: () => ctx.phone });
   doc.querySelector = (sel) => sel === '.set-nav [data-sec="sonarr"]' ? nav : sel === '.set-sec[data-sec="sonarr"]' ? sec : { scrollIntoView() {} };
   doc.querySelectorAll = () => [];

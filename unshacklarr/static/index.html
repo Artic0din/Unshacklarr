@@ -634,7 +634,7 @@
       <div class="uy-cm" id="uy-cm"></div>
       <pre id="uy-diff" class="uy-diff" hidden></pre>
     </div>
-    <div class="uy-foot" id="uy-foot" hidden><span class="status-err" id="uy-error"></span><span class="uy-where" id="uy-where"></span></div>
+    <div class="uy-foot" id="uy-foot" hidden><span class="status-err" id="uy-error"></span><span class="uy-hint">Esc, then Tab, leaves the editor.</span><span class="uy-where" id="uy-where"></span></div>
   </section>
 </main>
 
@@ -690,12 +690,13 @@
         <details class="d-libs-adv" id="d-libs-adv"><summary>Advanced</summary><div id="d-libs-adv-body"></div></details>
       </div>
       <div class="ds-tools">
-        <button class="btn small" id="d-find-open" type="button" hidden></button>
+        <button class="btn small" id="d-find-open" type="button" aria-expanded="false" aria-controls="d-find" hidden></button>
         <button class="btn small" id="d-probe">Test this series</button><span class="muted" id="d-probe-state">Asks the service which episodes it has. Nothing is downloaded.</span>
       </div>
       <div class="url-find-box" id="d-find" hidden>
         <div class="url-find-row"><input type="search" id="d-find-q" aria-label="The series' name on the service" spellcheck="false"><button class="btn small primary" id="d-find-go" type="button">Search</button></div>
         <div class="url-find-out" id="d-find-out"></div>
+        <div class="sr-only" id="d-find-count" role="status"></div>
       </div>
       <div id="d-probe-out" role="status"></div>
       <details class="ds-sub" id="d-fb">

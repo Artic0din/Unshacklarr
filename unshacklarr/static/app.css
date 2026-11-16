@@ -133,7 +133,7 @@ nav .short { display: none; }
 .uy-cm, .uy-diff { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--bg); }
 .uy-cm .cm-editor { height: 100%; } .uy-cm .cm-editor.cm-focused { outline: none; } .uy-cm:focus-within { border-color: var(--accent); }
 .uy-diff { overflow: auto; margin: 0; padding: 10px 12px; font: var(--fs-sub)/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
-.uy-foot:not([hidden]) { display: flex; gap: 12px; font-size: var(--fs-footnote); min-height: 18px; } .uy-where { margin-left: auto; color: var(--muted); }
+.uy-foot:not([hidden]) { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-footnote); min-height: 18px; } .uy-hint { color: var(--muted); } .uy-where { margin-left: auto; color: var(--muted); }
 .uy-diff .add { color: var(--ok); } .uy-diff .del { color: var(--err); } .uy-diff .gap { color: var(--muted); } .inbox-head div { flex: 1 1 auto; min-width: min-content; } .inbox-head h2 { margin: 0; font-size: var(--fs-title3); outline: none; }
 #inbox-list { max-height: min(70vh, 640px); overflow-y: auto; margin: 0 -8px; padding: 0 8px; overscroll-behavior: contain; }
 #inbox-filters:not([hidden]) + #inbox-list { height: min(70vh, 640px); }  /* with filters, a fixed height: switching them never resizes the popup */

@@ -121,6 +121,11 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Escape, focus and page titles now follow where you are.** Escape in a series with unsaved changes opens the "unsaved
+  changes" question and leaves it open (it was cancelled by the same key press). Closing a series opened from a Schedule
+  card returns to that card even after the Schedule redrew. The browser tab's title names the page, the series or the
+  Settings section (and the setup step), in your language. The unshackle.yaml editor says "Esc, then Tab, leaves the
+  editor", and "Find it on" a service says whether its results are open and how many it found. (#280)
 - **Nothing is cut off or piled on top of anything else on a narrow screen.** At 320 px (or 400% zoom), a run's buttons
   wrap to a second line instead of losing "Delete", a running card's speed and time left sit on a row under the episode
   (and a finished card's line carries its whole text as a tooltip), the series filter takes a second row instead of
