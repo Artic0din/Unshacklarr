@@ -3522,6 +3522,8 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
         got: list[Path] = []
         try:
             run.say(f"{label}: adding the {want} audio from {show['service']} to the file it has")
+            out.mkdir(parents=True, exist_ok=True)
+            (out / AUDIO_ADD).touch()  # until the joined file is whole: what a stop leaves here is cleared at the next start
             backend = backend_for(show["service"], config)
             run.card["backend"] = backend.name
             request = download_request(show, config, service_sxxeyy, out, backend)
@@ -3562,6 +3564,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
                 raise RuntimeError(f"The file with the {want} audio could not be renamed: {e}") from None
             for f in got:
                 f.unlink(missing_ok=True)
+            (out / AUDIO_ADD).unlink(missing_ok=True)  # the joined file is whole: it may wait for import
             run.card["size"] = joined.stat().st_size
             run.step("importing")
             import_episode(ep, out, replace=True)
@@ -4194,18 +4197,21 @@ def leftovers() -> list[dict]:
 
 
 PARTIAL = ".part"  # an audio merge is written under this suffix, then renamed: Import never sees one cut short
+AUDIO_ADD = ".audio-add"  # in an episode folder while an audio add works there: its audio alone may be an .mkv
 
 
 def remove_partial_merges() -> int:
-    """At start: the audio merges a crash or a restart cut short, and the folders left empty by them. How many."""
+    """At start: the audio merges a crash or a restart cut short, and the folders left empty by them. How many folders."""
     removed = 0
     for d in sorted(DOWNLOADS.glob("unshackle-*")) if DOWNLOADS.is_dir() else []:
         if not FOLDER.fullmatch(d.name) or d.is_symlink() or not d.is_dir() or d.name in busy_episodes:
             continue
         try:
             stray = [f for f in d.glob(f"*{PARTIAL}") if f.is_file() and not f.is_symlink()]
+            if (d / AUDIO_ADD).is_file():  # an audio add stopped midway: its audio alone must not wait for import as a video
+                stray = sorted((f for f in d.rglob("*") if f.is_symlink() or not f.is_dir()), key=lambda f: f.name == AUDIO_ADD)  # its mark last
             left = unlink_inside(d, stray)  # the folder may be swapped for a link after these checks
-            removed += len(stray) - len(left)
+            removed += len(left) < len(stray)
             if left:
                 print(f"Could not remove a cut-short merge in {d.name}: {', '.join(f.name for f in left)}", file=sys.stderr)
             if stray and not any(d.iterdir()):
