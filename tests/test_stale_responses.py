@@ -206,9 +206,9 @@ const A = { tvdbId: 1, id: 10, title: "A" }, B = { tvdbId: 2, id: 20, title: "B"
 const nodes = {}, drawn = [], release = {};
 const node = (sel) => (nodes[sel] ??= { ariaDisabled: null, textContent: "", setAttribute(n, v) { if (n === "aria-disabled") this.ariaDisabled = v; }, removeAttribute() { this.ariaDisabled = null; },
   replaceChildren(...kids) { drawn.push([sel, kids.length]); } });
-const ctx = { current: A, S: { config: { series: { 1: { service: "X", title: "A" }, 2: { service: "X", title: "B" } } } }, $: node, loading: (t) => t, failed: (t) => ({ failed: t }),
+const ctx = { probeSeq: 0, current: A, S: { config: { series: { 1: { service: "X", title: "A" }, 2: { service: "X", title: "B" } } } }, $: node, loading: (t) => t, failed: (t) => ({ failed: t }),
   slowHint: () => 0, clearTimeout() {}, svcName: (t) => t, icon: () => "", dirty() {}, toast() {}, el: (tag, props = {}, ...kids) => ({ tag, ...props, kids }),
-  api: (path, opts) => new Promise((resolve, reject) => { release[JSON.parse(opts.body).title] = { resolve, reject }; }) };
+  api: (path, opts) => new Promise((resolve, reject) => { (release[JSON.parse(opts.body).title] ??= []).push({ resolve, reject }); }) };
 vm.createContext(ctx);
 const click = vm.runInContext(src.match(/\$\("#d-probe"\)\.onclick = (async \(\) => \{[\s\S]*?\n\});/)[1], ctx);
 const answer = { seasons: [], checks: [], season_map: { 1: "2" }, count: 5, series: "Show" };
@@ -221,7 +221,7 @@ def test_probe_answer_of_a_series_closed_meanwhile_is_not_drawn():
 (async () => {
   const first = click();  // series A is tested, then B is opened
   ctx.current = B;
-  release.A.resolve(answer);
+  release.A[0].resolve(answer);
   await first;
   console.log(JSON.stringify({ drawnInB: drawn.filter(([sel, n]) => sel === "#d-probe-out" && n > 0), button: nodes["#d-probe"].ariaDisabled }));
 })();
@@ -234,7 +234,7 @@ def test_probe_failure_of_a_series_closed_meanwhile_is_not_drawn():
 (async () => {
   const first = click();
   ctx.current = B;
-  release.A.reject(new Error("Sonarr is down"));
+  release.A[0].reject(new Error("Sonarr is down"));
   await first;
   console.log(JSON.stringify({ state: drawn.filter(([sel, n]) => sel === "#d-probe-state" && n > 0).length }));
 })();
@@ -249,15 +249,35 @@ def test_probe_ending_in_a_closed_series_leaves_the_open_one_testing():
   ctx.current = B;
   nodes["#d-probe"].ariaDisabled = null;  // opening B enables its button
   const second = click();  // B is tested too
-  release.A.resolve(answer);
+  release.A[0].resolve(answer);
   await first;
   const whileBTests = nodes["#d-probe"].ariaDisabled;
-  release.B.resolve(answer);
+  release.B[0].resolve(answer);
   await second;
   console.log(JSON.stringify({ whileBTests, afterwards: nodes["#d-probe"].ariaDisabled }));
 })();
 """, str(JS / "settings-services.js"))
     assert shown == {"whileBTests": "true", "afterwards": None}
+
+
+def test_reopening_the_same_series_ignores_the_earlier_test():
+    shown = node(PROBE + r"""
+(async () => {
+  const first = click();  // A is tested, closed and opened again: the same object, its button enabled
+  nodes["#d-probe"].ariaDisabled = null;
+  const second = click();
+  const newer = { ...answer, series: "Newer" };
+  release.A[1].resolve(newer);
+  await second;
+  const afterNewer = nodes["#d-probe"].ariaDisabled;
+  nodes["#d-probe"].ariaDisabled = "true";  // a third test is under way
+  drawn.length = 0;
+  release.A[0].resolve({ ...answer, series: "Older", season_map: {} });
+  await first;
+  console.log(JSON.stringify({ afterNewer, drawnByOlder: drawn.filter(([sel, n]) => sel === "#d-probe-out" && n > 0), button: nodes["#d-probe"].ariaDisabled }));
+})();
+""", str(JS / "settings-services.js"))
+    assert shown == {"afterNewer": None, "drawnByOlder": [], "button": "true"}
 
 
 def test_opening_a_series_enables_its_test_button():

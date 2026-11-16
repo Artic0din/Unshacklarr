@@ -289,11 +289,13 @@ async function showReleaseSeen(s) {
 }
 
 /* Test this series: the service's episodes, the next ones against Sonarr, a season map if needed. */
+let probeSeq = 0;  // the newest test: reopening the same series reuses its object, so `current === s` alone cannot tell the tests apart
 $("#d-probe").onclick = async () => {
   if ($("#d-probe").ariaDisabled === "true") return;  // aria-disabled, not disabled: the button keeps the focus while it asks
   const s = current, conf = S.config.series[s.tvdbId];
   const out = $("#d-probe-out"), state = $("#d-probe-state");
   if (!conf?.service || !conf.title) { state.textContent = "Pick a service and its URL first."; return; }
+  const seq = ++probeSeq, mine = () => seq === probeSeq && current === s;
   $("#d-probe").setAttribute("aria-disabled", "true");
   state.replaceChildren(loading("Asking the service… (up to a minute)"));
   out.replaceChildren();
@@ -301,7 +303,7 @@ $("#d-probe").onclick = async () => {
   try {
     const r = await api("/api/probe", { method: "POST", wait: 120,
       body: JSON.stringify({ show: conf, seriesId: s.id, title: s.title }) });
-    if (current !== s) return;  // another series was opened meanwhile: the answer is not its
+    if (!mine()) return;  // another series, or this one tested again, meanwhile: the answer is not the open test's
     state.textContent = "";
     const seasons = r.seasons.map((x) => `S${x.season} (${x.episodes})`).join(", ");
     const rows = r.checks.map((c) => el("div", { className: "probe-row" },
@@ -329,8 +331,8 @@ $("#d-probe").onclick = async () => {
     out.replaceChildren(el("div", { className: "probe-out" },
       el("div", { className: "head" }, "Found ", el("b", { textContent: r.series || "the series" }), `: ${r.count} episodes${seasons ? ` · ${seasons}` : ""}`),
       ...single, ...apply, ...rows));
-  } catch (e) { if (current === s) state.replaceChildren(failed(e.message)); }
-  finally { if (current === s) $("#d-probe").removeAttribute("aria-disabled"); clearTimeout(slow); }  // another series' button is its own
+  } catch (e) { if (mine()) state.replaceChildren(failed(e.message)); }
+  finally { if (mine()) $("#d-probe").removeAttribute("aria-disabled"); clearTimeout(slow); }  // another series' button is its own
 };
 
 /* This device's notifications (Web Push): allowed here, sent by the server through the browser's push service. */
