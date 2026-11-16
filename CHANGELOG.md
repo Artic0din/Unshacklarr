@@ -215,6 +215,8 @@ Every change worth knowing, newest first. The format follows
   restart, are tried again as before.
 - **No more false cookie warnings.** Crave's load balancer cookies (a week) and Apple's `utsdc` (an hour) no longer
   count as the date the login ends.
+- **A queued episode taken out stays out.** Removed or stopped just as its turn came, it no longer downloaded
+  while the history said cancelled.
 
 **🆕 Sonarr 5, on this branch until it is out of beta**
 - **Languages.** Your files without your audio languages, read from Sonarr 5's own tracks: watch them for the

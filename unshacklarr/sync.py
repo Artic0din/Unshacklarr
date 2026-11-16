@@ -736,6 +736,16 @@ def add_to_job(batch: str, ep: dict, show: dict, replace: bool = False, first: b
         return True
 
 
+def take_out(episode_id: int) -> dict | None:
+    """A queued episode out of its job's queue, its card returned (None: it has started). One step under the lock:
+    the job loop, taking its turn, sees it still queued or taken out, never the card gone without the mark."""
+    with jobs_lock:
+        card = waiting.pop(episode_id, None)
+        if card is not None:
+            unqueued.add(episode_id)
+    return card
+
+
 def cancel_queued(card: dict) -> None:
     """A queued episode that won't start: kept in its job and the history as "cancelled", not dropped."""
     now = datetime.now(timezone.utc)

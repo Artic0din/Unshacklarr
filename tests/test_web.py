@@ -7484,3 +7484,35 @@ def test_a_queued_jobs_own_season_map_is_read_back_as_the_sync_reads_it(tmp_path
     sync.save_queue()
     kept = json.loads(sync.QUEUE_FILE.read_text())
     assert kept["20261021-121218-44d6d0"] == damaged["20261021-121218-44d6d0"]
+
+
+def test_a_queued_episode_taken_out_is_never_handed_to_the_job_loop_as_well(tmp_path, monkeypatch):
+    # the job loop reaches the episode between the card leaving the queue and its "taken out" mark: it must still see
+    # the mark, whichever of the cross, the API's stop or Stop job took it out
+    import threading
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    monkeypatch.setattr(sync, "cancel_queued", lambda card: None)
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    seen, turns = [], []
+
+    class Racy(dict):
+        def pop(self, key, *default):
+            card = super().pop(key, *default)
+
+            def loop_turn():  # the job loop's turn for that episode, as it takes it
+                with sync.jobs_lock:
+                    seen.append(key in sync.unqueued)
+                    sync.unqueued.discard(key)
+            turns.append(threading.Thread(target=loop_turn))
+            turns[-1].start()
+            turns[-1].join(0.3)
+            return card
+    batch = "20261116-120000-abcdef"
+    monkeypatch.setattr(sync, "waiting", Racy({n: {"batch": batch, "tvdbId": 1, "sxxeyy": f"S02E0{n - 200}"} for n in (205, 206, 207)}))
+    asyncio.run(web.unqueue(SimpleNamespace(match_info={"episode_id": "205"})))
+    asyncio.run(web.v1_stop(SimpleNamespace(match_info={"run_id": "waiting-206"})))
+    asyncio.run(web.stop_job(SimpleNamespace(match_info={"batch": batch})))
+    for t in turns:
+        t.join(5)
+    assert seen == [True, True, True] and not sync.waiting and not sync.unqueued

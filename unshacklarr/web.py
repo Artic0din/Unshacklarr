@@ -3287,9 +3287,8 @@ async def stop_job(request):
         raise web.HTTPBadRequest(text="Unknown job")
     sonarr_sync.pause_job(batch, False)  # a paused job stops too: its loop wakes to skip what was cancelled
     for episode_id, card in list(sonarr_sync.waiting.items()):
-        if card.get("batch") == batch and sonarr_sync.waiting.pop(episode_id, None):
-            sonarr_sync.unqueued.add(episode_id)
-            await asyncio.to_thread(sonarr_sync.cancel_queued, card)
+        if card.get("batch") == batch and (taken := sonarr_sync.take_out(episode_id)):
+            await asyncio.to_thread(sonarr_sync.cancel_queued, taken)
     cancelled = 0
     for c in await asyncio.to_thread(run_cards):
         if c.get("batch") == batch and c["outcome"] == "running" and c.get("job_id") and c.get("step") in ("queued", "downloading"):
@@ -3304,10 +3303,9 @@ async def stop_job(request):
 async def unqueue(request):
     """Take an episode out of its job's queue: it is skipped when its turn comes."""
     episode_id = int(request.match_info["episode_id"])
-    card = sonarr_sync.waiting.pop(episode_id, None)
+    card = sonarr_sync.take_out(episode_id)
     if card is None:
         raise web.HTTPConflict(text="This episode has already started")
-    sonarr_sync.unqueued.add(episode_id)
     await asyncio.to_thread(sonarr_sync.cancel_queued, card)
     return web.json_response({"unqueued": episode_id})
 
@@ -6273,10 +6271,9 @@ async def v1_start_download(request):
 async def v1_stop(request):
     """Stop a download: one running is cancelled, one still queued leaves the queue."""
     if m := re.fullmatch(r"waiting-(\d+)", request.match_info["run_id"]):
-        card = sonarr_sync.waiting.pop(int(m[1]), None)
+        card = sonarr_sync.take_out(int(m[1]))
         if card is None:
             raise web.HTTPConflict(text="This download has already started")
-        sonarr_sync.unqueued.add(int(m[1]))
         await asyncio.to_thread(sonarr_sync.cancel_queued, card)
         return web.json_response({"stopping": True})
     return await stop_run(request)
