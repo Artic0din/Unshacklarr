@@ -3555,7 +3555,11 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             if done.returncode not in (0, 1):  # 1: warnings only; below 0: killed by a signal
                 partial.unlink(missing_ok=True)
                 raise RuntimeError(f"mkvmerge could not add the audio: {done.stdout.strip()[-300:]}")
-            os.replace(partial, joined)  # whole, or not there: a cut-short video would replace the library's on import
+            try:
+                os.replace(partial, joined)  # whole, or not there: a cut-short video would replace the library's on import
+            except OSError as e:  # the failure's own clean-up below: an audio-only .mkv must not wait for import
+                partial.unlink(missing_ok=True)
+                raise RuntimeError(f"The file with the {want} audio could not be renamed: {e}") from None
             for f in got:
                 f.unlink(missing_ok=True)
             run.card["size"] = joined.stat().st_size

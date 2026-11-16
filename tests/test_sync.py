@@ -4781,7 +4781,7 @@ def test_the_added_audio_is_written_as_a_matroska_file_whatever_the_library_file
         assert imported[-1] == ([written], True)  # the one file, in place of the library's: Sonarr drops the old .mp4
 
 
-@pytest.mark.parametrize("code", [2, -9, "stuck"])  # an error, the process killed (a negative code), or one that never ends
+@pytest.mark.parametrize("code", [2, -9, "stuck", "rename"])  # an error, killed (a negative code), never ends, or not renamed
 @pytest.mark.parametrize("audio", ["audio.mka", "audio.mkv"])  # the audio alone may come in a video container
 def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeypatch, code, audio):
     sync = load(tmp_path, monkeypatch)
@@ -4810,8 +4810,18 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
         if code == "stuck":
             assert kwargs.get("timeout") == sync.MKV_WRITE_TIMEOUT  # without one, the sync would wait for good
             raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+        if code == "rename":
+            return subprocess.CompletedProcess(cmd, 0, stdout="")
         return subprocess.CompletedProcess(cmd, code, stdout="Error: disk full")
 
+    if code == "rename":  # only the merge's own rename refused (a share's permissions): the run's files still saved
+        real_replace = sync.os.replace
+
+        def refused(src, dst):
+            if str(src).endswith(".part"):
+                raise PermissionError(13, "Permission denied")
+            return real_replace(src, dst)
+        monkeypatch.setattr(sync.os, "replace", refused)
     imported = []
     monkeypatch.setattr(sync, "run_job_retrying", download)
     monkeypatch.setattr(sync.subprocess, "run", tools)
@@ -4823,7 +4833,9 @@ def test_a_failed_audio_join_leaves_no_partial_file_for_import(tmp_path, monkeyp
     assert imported == []
     card = next(json.loads(p.read_text()) for p in (tmp_path / "runs").glob("*.json"))
     assert card["outcome"] == "failed"
-    assert ("mkvmerge did not finish within 1 h 00" if code == "stuck" else "mkvmerge could not add the audio: Error: disk full") in card["cause"]
+    assert {"stuck": "mkvmerge did not finish within 1 h 00", "rename": "could not be renamed: [Errno 13] Permission denied"}.get(
+        code, "mkvmerge could not add the audio: Error: disk full") in card["cause"]
+    assert sync.leftovers() == []
     assert (library / "Show - S02E05.mkv").read_bytes() == b"video"
 
 
