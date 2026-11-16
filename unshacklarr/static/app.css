@@ -187,6 +187,7 @@ nav .short { display: none; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .seg button span { margin-left: 4px; font-variant-numeric: tabular-nums; }
 .seg button:focus-visible { outline-offset: -2px; }  /* inside the button: the scroller would clip a ring drawn outside */
+.seg button[aria-pressed="true"]:focus-visible { outline-color: var(--accent-ink); }  /* the fill is --accent: a ring in it would not show */
 nav { overflow-x: auto; max-width: 100%; padding: 4px; margin: -4px; }  /* room inside the scroller for the focus ring */
 nav button { white-space: nowrap; }
 input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], select, textarea {
@@ -423,7 +424,7 @@ body.drawer-open .savebar { display: none; }
   width: min(460px, calc(100vw - 32px)); box-shadow: var(--sh-lg); }
 .modal::backdrop { background: var(--scrim); }
 /* A dialog's or a menu's own scroller ends at its end: it never scrolls the page behind it */
-.modal, #oneoff-dialog, .gate, .uy-diff, .cp-list, .picker-list, .hidden-rows, .bulk-rows, .cdm-pop-list, .sched-pop, .url-find-out, .ug-list, .news-rels { overscroll-behavior: contain; }
+.modal, #oneoff-dialog, .gate, .uy-diff, .cp-list, .picker-list, .hidden-rows, .bulk-rows, .cdm-pop-list, .sched-pop, .url-find-out, .news-rels { overscroll-behavior: contain; }
 .modal h2 { margin: 0 0 8px; font-size: var(--fs-title3); }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; } .modal-head .inbox-x { flex: none; margin: -4px -6px 0 0; }
 .modal p { margin: 0 0 18px; color: var(--muted); }
@@ -1074,9 +1075,9 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .jcard.cancelled { border-style: dashed; background: none; }
 .jx { width: 26px; height: 26px; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: var(--fs-title3); line-height: 1; cursor: pointer; }
 .jx.again:focus-visible { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
-@media (hover: hover) { .jx.again:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); outline: none; } }
+@media (hover: hover) { .jx.again:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); } }
 .jx:focus-visible { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err); }
-@media (hover: hover) { .jx:hover { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err); outline: none; } }
+@media (hover: hover) { .jx:hover { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err); } }
 .jcard.open .jhead .steps.mini { display: none; }  /* unfolded: its full steps below say it */
 .jrow > .chev { width: 14px; margin-right: 14px; color: var(--muted); font-size: var(--fs-title3); line-height: 1; cursor: pointer; transition: transform .15s; text-align: center; }
 .jcard.open .jrow > .chev { transform: rotate(90deg); }
@@ -1088,9 +1089,9 @@ body.gated > :not(.gate):not(.toasts) { display: none !important; }
 .jact { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
 .jact svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .jact.primary:focus-visible { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-@media (hover: hover) { .jact.primary:hover { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); outline: none; } }
+@media (hover: hover) { .jact.primary:hover { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); } }
 .jact.danger:focus-visible { color: var(--err); border-color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
-@media (hover: hover) { .jact.danger:hover { color: var(--err); border-color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); outline: none; } }
+@media (hover: hover) { .jact.danger:hover { color: var(--err); border-color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); } }
 .jact:disabled { opacity: .5; cursor: default; }
 .jcard .ep { font: 600 var(--fs-callout) ui-monospace, SFMono-Regular, Menlo, monospace; }
 .jcard .mid { display: grid; gap: 6px; min-width: 0; }

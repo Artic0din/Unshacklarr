@@ -199,8 +199,29 @@ def test_an_activity_icon_button_keeps_the_page_focus_ring(selector):
     assert bodies and not any("outline" in body for body in bodies)  # the global :focus-visible ring shows
 
 
+@pytest.mark.parametrize("selector", [".jx.again:hover", ".jx:hover", ".jact.primary:hover", ".jact.danger:hover"])
+def test_an_activity_icon_button_keeps_its_ring_while_hovered_and_focused(selector):
+    bodies = rules_of(selector)
+    assert bodies and not any("outline" in body for body in bodies)  # hover must not take the ring off a focused button
+
+
 def test_the_segmented_controls_ring_is_drawn_inside_its_scroller():
     assert any(re.search(r"outline-offset:\s*-2px", body) for body in rules_of(".seg button:focus-visible"))
+
+
+def test_the_selected_filters_ring_contrasts_with_its_accent_fill():
+    assert any("outline-color: var(--accent-ink)" in body for body in rules_of('.seg button[aria-pressed="true"]:focus-visible'))
+    pairs = re.findall(r"--accent: (#[0-9a-f]{6}); --accent-ink: (#[0-9a-f]{6});", CSS)
+    assert len(pairs) >= 2 and len(set(pairs)) >= 2  # a dark and a light look
+
+    def luminance(hex_colour):
+        channels = [int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b = [c / 12.92 if c <= .03928 else ((c + .055) / 1.055) ** 2.4 for c in channels]
+        return .2126 * r + .7152 * g + .0722 * b
+
+    for fill, ring in set(pairs):
+        light, dark = sorted((luminance(fill), luminance(ring)), reverse=True)
+        assert (light + .05) / (dark + .05) >= 3, (fill, ring)
 
 
 def test_a_choice_chips_edge_is_a_field_edge():
@@ -219,11 +240,12 @@ def test_remote_cdm_fields_are_16px_on_a_phone_so_ios_does_not_zoom():
 def test_every_dialog_or_menu_scroller_stays_put_at_its_end():
     css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
     contained = {part.strip() for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css) if "overscroll-behavior: contain" in body for part in sel.split(",")}
-    panes = {".con-list", ".con-detail"}  # columns of a page, not a dialog or a menu
+    panes = {".con-list", ".con-detail", ".ug-list"}  # parts of a page, not a dialog or a menu: at their end the page scrolls on
     scrollers = {part.strip() for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css)
                  if re.search(r"(?<![\w-])overflow(?:-y)?:\s*(?:auto|scroll)", body) for part in sel.split(",")}
     assert scrollers - contained - panes == set()
     assert {".modal", ".news-rels"} <= contained
+    assert not panes & contained
 
 
 def test_the_series_load_error_spans_the_whole_wall_like_the_empty_message():
