@@ -79,6 +79,20 @@ function applyRoute() {
 }
 window.addEventListener("popstate", applyRoute);
 
+// The page's scroll padding, so focus stops clear of what is pinned: the header as tall as it is (a status row under it
+// makes it taller), and how far up the bars pinned to the bottom reach, stacked, wrapped or expanded as they are now.
+// By each bar's own offset and height, not where it is now: a sticky bar is measured where it sticks.
+const BOTTOM_BARS = ['nav[aria-label="Main"]', "#savebar", "#sel-bar", "#dock", "#ep-bar"].map((sel) => $(sel));
+function measureBars() {
+  const reach = BOTTOM_BARS.map((bar) => bar.offsetHeight && bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0));
+  document.documentElement.style.setProperty("--head-h", `${$("header").offsetHeight}px`);
+  document.documentElement.style.setProperty("--bars-h", `${Math.max(...reach) + 8}px`);
+  // a wide Activity pane scrolls itself, and its dock sticks above the pane's own bottom padding
+  const pane = parseFloat(getComputedStyle($("#con-detail")).paddingBottom) || 0;
+  document.documentElement.style.setProperty("--dock-h", `${reach[BOTTOM_BARS.indexOf($("#dock"))] + pane + 8}px`);
+}
+const barsSeen = new ResizeObserver(measureBars);
+[$("header"), ...BOTTOM_BARS].forEach((n) => barsSeen.observe(n));
 function showTab(name, fromRoute = false, quiet = false) {
   if (currentTab === "yaml" && name !== "yaml") {  // leaving the editor: it forgets the password and the file
     if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }
