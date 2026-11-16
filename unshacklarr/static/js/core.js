@@ -633,7 +633,10 @@ async function openDrawer(s, tab, fromRoute = false) {
     || conf.programmes);
   optionsEditor($("#d-opts"), S.dlOptions, conf.options);
   renderHideToggle();
-  if (!$("#drawer").classList.contains("open")) drawerOpener = document.activeElement === document.body ? null : document.activeElement;
+  if (!$("#drawer").classList.contains("open")) {
+    drawerOpener = document.activeElement === document.body ? null : document.activeElement;
+    drawerOpenerCard = drawerOpener?.closest(".sched-card")?.dataset.key ?? null;
+  }
   $("#drawer").classList.add("open");
   $("#backdrop").classList.add("open");
   drawerModal(true);
@@ -641,6 +644,7 @@ async function openDrawer(s, tab, fromRoute = false) {
   document.body.classList.add("drawer-open");
   showDrawerTab(tab || (conf.service ? "episodes" : "settings"), true);  // a new series needs its service first
   navigate(false);
+  updateTitle();
   loadEpisodes(s);
   $("#drawer .d-body").scrollTop = 0;
   dsPicked = null;
@@ -692,7 +696,7 @@ $("#home").onclick = async (e) => {
 };
 let wallScroll = 0;
 /* The drawer is a modal: with it open the page behind cannot be reached by keyboard or screen reader, and closed, it is out of the tab order. */
-let drawerOpener = null;
+let drawerOpener = null, drawerOpenerCard = null;  // the Schedule redraws its cards: the card is found again by its key
 function drawerModal(open) {
   // the toasts join the drawer while it is open: their Dismiss and Undo stay in reach and focus never leaves the dialog
   const toasts = $("#toasts"), shown = Boolean(toasts.showPopover) && toasts.matches(":popover-open");  // an older browser has no popover: its z-index
@@ -702,10 +706,11 @@ function drawerModal(open) {
   for (const behind of document.querySelectorAll("body > header, main")) behind.inert = open;
 }
 /* Closed, focus goes back to what opened it if that is still there and in sight, else to the series' poster. */
-function returnFocus(opener, tvdbId) {
+function returnFocus(opener, tvdbId, cardKey = null) {
   const seen = (e) => e?.isConnected && e.getClientRects().length;
-  // the opener may be gone (Schedule redrew it) or hidden (the Series page): the series' own control in sight, else the current page's tab
-  const back = [opener, ...document.querySelectorAll(`[data-tvdb="${tvdbId}"]`)].find(seen) || document.querySelector('nav [aria-current="page"]');
+  const card = cardKey && [...document.querySelectorAll(".sched-card")].find((c) => c.dataset.key === cardKey)?.querySelector(".sc-open");
+  // the opener may be gone (Schedule redrew it) or hidden (the Series page): its card's name, the series' own control in sight, else the current page's tab
+  const back = [opener, card, ...document.querySelectorAll(`[data-tvdb="${tvdbId}"]`)].find(seen) || document.querySelector('nav [aria-current="page"]');
   back?.focus({ preventScroll: true });
 }
 /* Focus stays inside the open drawer: the toasts after it are outside the inert page but must not take focus from it
@@ -754,10 +759,11 @@ async function closeDrawer(fromRoute = false) {
   const id = current.tvdbId;
   current = null;
   if (!fromRoute) navigate(false);  // opened from a link: no history entry to go back to
+  updateTitle();
   renderWall();  // rebuilds the cards: a poster that opened it is a new one now
   scrollTo({ top: wallScroll });
-  returnFocus(drawerOpener, id);
-  drawerOpener = null;
+  returnFocus(drawerOpener, id, drawerOpenerCard);
+  drawerOpener = drawerOpenerCard = null;
   return true;
 }
 function keepDrawer(fromRoute) {  // it stays open; the back button already left its address: back to it
@@ -794,7 +800,7 @@ function networkButton(s, tag) {
   return el("button", { type: "button", ariaLabel: `Find it on ${svcName(tag)}`, onclick: () => {
     const sel = $("#d-service");
     if (sel.value !== tag) { sel.value = tag; sel.dispatchEvent(new Event("change")); }
-    $("#d-find").hidden = true;
+    showFind(false);
     $("#d-find-q").value = s.title;
     $("#d-find-open").click();
   } }, el("b", { textContent: svcName(tag) }), el("span", { textContent: `Find ${s.title} on ${svcName(tag)}` }));
@@ -893,14 +899,19 @@ function serviceOfLink(link) {
   return hit ? hit[1] : null;
 }
 /* The series looked up by its name on its service (unshackle's search): a result picked fills in its URL. */
+function showFind(open) {
+  $("#d-find").hidden = !open;
+  $("#d-find-open").setAttribute("aria-expanded", String(open));
+}
 function renderFind(service) {
-  $("#d-find").hidden = true;
+  showFind(false);
   $("#d-find-out").replaceChildren();
+  $("#d-find-count").textContent = "";
   $("#d-find-open").hidden = !service;
   $("#d-find-open").textContent = service ? `Find it on ${svcName(service)}` : "";
 }
 $("#d-find-open").onclick = () => {
-  $("#d-find").hidden = !$("#d-find").hidden;
+  showFind($("#d-find").hidden);
   if ($("#d-find").hidden) return;
   if (!$("#d-find-q").value) $("#d-find-q").value = current.title;
   $("#d-find-go").click();
@@ -910,15 +921,17 @@ $("#d-find-go").onclick = async () => {
   const conf = S.config.series[current.tvdbId], s = current, out = $("#d-find-out");
   if (!$("#d-find-q").value.trim()) return out.replaceChildren(el("p", { className: "status-err", textContent: "Type the series' name first" }));
   out.replaceChildren(loading(`Searching ${svcName(conf.service)}…`));
+  $("#d-find-count").textContent = "";
   let r;
   try { r = await api("/api/series/search", { method: "POST", body: JSON.stringify({ show: conf, query: $("#d-find-q").value }), wait: 70 }); }  // the server waits 60 s for the search
   catch (e) { if (current === s) out.replaceChildren(el("p", { className: "status-err", textContent: e.message })); return; }
   if (current !== s) return;
+  $("#d-find-count").textContent = `Results on ${svcName(conf.service)}: ${r.results.length}`;
   if (!r.results.length) return out.replaceChildren(el("p", { className: "muted", textContent: `Nothing found on ${svcName(conf.service)} under that name.` }));
   out.replaceChildren(...r.results.map((x) => el("button", { type: "button", className: "url-hit", onclick: () => {
     $("#d-url").value = x.url || x.id;
     $("#d-url").dispatchEvent(new Event("input"));
-    $("#d-find").hidden = true;
+    showFind(false);
     toast(`${x.title}: its URL is filled in`);
   } }, el("b", { textContent: x.title }), x.label ? el("span", { className: "url-hit-label", textContent: x.label }) : "",
     x.description ? el("small", { textContent: x.description }) : "")));

@@ -2441,5 +2441,9 @@
  "Unshacklarr, schedule": "Unshacklarr, calendario",
  "Wait for the audio, in days": "Attendere l'audio, in giorni",
  "{0} min {1} s": "{0} min {1} s",
- "{0} h {1} min": "{0} h {1} min"
+ "{0} h {1} min": "{0} h {1} min",
+ "Esc, then Tab, leaves the editor.": "Esc, poi Tab, esce dall'editor.",
+ "Results on {0}: {1}": "Risultati su {0}: {1}",
+ "Settings: {0} · Unshacklarr": "Impostazioni: {0} · Unshacklarr",
+ "{0} · Unshacklarr": "{0} · Unshacklarr"
 }

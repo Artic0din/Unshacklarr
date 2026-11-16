@@ -1,6 +1,7 @@
 /* First-run setup and login: a full-screen card over the app until the password is known. */
 function gate(subtitle, ...content) {
   document.body.classList.add("gated");
+  document.title = "Unshacklarr";
   $("#gate").hidden = false;
   if (!$("#gate .lang-corner")) $("#gate").prepend(langCorner());
   $("#gate-sub").textContent = subtitle;
@@ -269,6 +270,7 @@ function showSetup(found) {
     el("button", { type: "button", className: "btn small", textContent: "Restore from a backup", onclick: openRestore }), restoreFile, restoreSay);
   function restored(r) {
     reached = steps.length;
+    document.title = tr("Settings restored");
     drawRail(null);
     progress.firstChild.textContent = "Done";
     progress.querySelector("b").style.width = "100%";
@@ -356,6 +358,7 @@ function showSetup(found) {
     at = Math.max(0, Math.min(to, steps.length - 1));
     reached = Math.max(reached, at);
     const s = steps[at], moved = !!panel.firstChild;  // not the first draw: a step the person moved to
+    document.title = tr(s.title.includes("Unshacklarr") ? s.title : `${s.title} · Unshacklarr`);  // "Welcome to Unshacklarr" already names it
     drawRail(at);
     progress.firstChild.textContent = `Step ${at + 1} of ${steps.length}`;
     progress.querySelector("b").style.width = `${(at + 1) / steps.length * 100}%`;
@@ -376,6 +379,7 @@ function showSetup(found) {
   /* The end: what was checked, and the way in */
   function allSet() {
     reached = steps.length;
+    document.title = tr("Unshacklarr is set up");
     drawRail(null);
     progress.firstChild.textContent = "Done";
     progress.querySelector("b").style.width = "100%";

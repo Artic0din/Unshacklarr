@@ -2450,5 +2450,9 @@
  "Unshacklarr, schedule": "Unshacklarr，日程",
  "Wait for the audio, in days": "等待音频，按天数",
  "{0} min {1} s": "{0} 分 {1} 秒",
- "{0} h {1} min": "{0} 小时 {1} 分钟"
+ "{0} h {1} min": "{0} 小时 {1} 分钟",
+ "Esc, then Tab, leaves the editor.": "按 Esc，再按 Tab，即可离开编辑器。",
+ "Results on {0}: {1}": "{0} 上的结果：{1}",
+ "Settings: {0} · Unshacklarr": "设置：{0} · Unshacklarr",
+ "{0} · Unshacklarr": "{0} · Unshacklarr"
 }

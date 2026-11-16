@@ -2476,5 +2476,9 @@
  "Unshacklarr, schedule": "Unshacklarr, calendrier",
  "Wait for the audio, in days": "Attendre l'audio, en jours",
  "{0} min {1} s": "{0} min {1} s",
- "{0} h {1} min": "{0} h {1} min"
+ "{0} h {1} min": "{0} h {1} min",
+ "Esc, then Tab, leaves the editor.": "Échap, puis Tab, quitte l'éditeur.",
+ "Results on {0}: {1}": "Résultats sur {0}: {1}",
+ "Settings: {0} · Unshacklarr": "Réglages: {0} · Unshacklarr",
+ "{0} · Unshacklarr": "{0} · Unshacklarr"
 }
