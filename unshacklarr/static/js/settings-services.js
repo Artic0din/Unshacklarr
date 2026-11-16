@@ -202,7 +202,9 @@ async function showServeLog() {
 }
 
 /* Suggest services: every series without a service, airing ones first, with what TMDB finds for it, added at once. */
+let bulkRun = 0;  // the newest opening: the workers of an earlier one stop, and what they still await is dropped
 async function openBulk() {
+  const run = ++bulkRun;
   const todo = S.series.filter((s) => !S.config.series[s.tvdbId]?.service && s.monitored
     && !S.config.hidden_series.includes(s.tvdbId) && s.tmdbId)
     .sort((a, b) => (a.status === "ended") - (b.status === "ended"));  // ended ones too, after the airing ones
@@ -225,11 +227,13 @@ async function openBulk() {
     let links;
     try { links = (await api(`/api/suggest/${s.tmdbId}?network=${encodeURIComponent(s.network || "")}`, { wait: 120 })).links; }
     catch {  // TMDB refuses bursts now and then: say so, and let it be asked again
+      if (run !== bulkRun) return;
       li.querySelector(".opts").replaceChildren(el("span", { className: "none", textContent: "TMDB did not answer" }),
         el("button", { type: "button", className: "btn small", textContent: "Retry", onclick: () => one(s, li) }));
       $("#bulk-progress").textContent = `Checked ${++done} of ${todo.length}`;
       return;
     }
+    if (run !== bulkRun) return;
     // other_title: another title of the series' service (its specials): never the series itself
     const usable = links.filter((l) => !l.needs_series_url && !l.episode && !l.other_title && S.services.includes(l.service));
     const name = `pick-${s.tvdbId}`;
@@ -244,7 +248,7 @@ async function openBulk() {
     pickCount();
   };
   const queue = todo.map((s, i) => [s, rows[i]]);  // two at a time (each asks TMDB per country); cached a week after
-  await Promise.all(Array.from({ length: 2 }, async () => { while (queue.length) { const [s, li] = queue.shift(); if ($("#bulk-dialog").open) await one(s, li); } }));
+  await Promise.all(Array.from({ length: 2 }, async () => { while (queue.length && run === bulkRun) { const [s, li] = queue.shift(); if ($("#bulk-dialog").open) await one(s, li); } }));
 }
 $("#bulk-open").onclick = openBulk;
 $("#bulk-form").onsubmit = async (e) => {

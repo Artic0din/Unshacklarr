@@ -300,3 +300,25 @@ vm.runInContext(grab("fetchNetworks"), ctx);
 ctx.fetchNetworks([{ tvdbId: 1 }]).then(() => console.log(JSON.stringify({ redraws: redraws.length, logos: Object.keys(ctx.networksById) })));
 """, str(JS / "schedule.js"), view, key, str(loaded).lower())
     assert shown == {"redraws": 1 if loaded else 0, "logos": ["7"]}
+
+
+def test_reopening_suggest_services_stops_the_previous_run():
+    shown = node(r"""
+const progress = [], asked = [];
+let release; const gate = new Promise((resolve) => { release = resolve; });
+const boxes = {};
+const $ = (sel) => (boxes[sel] ??= sel === "#bulk-progress" ? { set textContent(t) { progress.push(t); } } : { open: true, showModal() {}, replaceChildren() {}, set disabled(v) {}, set textContent(t) {} });
+const ctx = { $, S: { series: [1, 2, 3, 4].map((tvdbId) => ({ tvdbId, tmdbId: tvdbId, monitored: true, title: `S${tvdbId}`, status: "continuing" })), config: { series: {}, hidden_series: [] }, services: [] },
+  el: (tag, props = {}, ...kids) => ({ tag, ...props, kids, dataset: {}, querySelector: () => ({ replaceChildren() {} }) }), loading: () => null, posterSrc: () => "", posterFail: () => null,
+  svcName: (t) => t, document: { querySelectorAll: () => [] }, api: async (path) => { asked.push(path); await gate; return { links: [] }; } };
+vm.createContext(ctx);
+vm.runInContext("let bulkRun = 0;" + grab("openBulk"), ctx);
+(async () => {
+  const first = ctx.openBulk();   // two workers are asking TMDB, two series wait
+  const second = ctx.openBulk();  // the dialog was closed and opened again
+  release();
+  await Promise.all([first, second]);
+  console.log(JSON.stringify({ asked: asked.length, progress }));
+})();
+""", str(JS / "settings-services.js"))
+    assert shown == {"asked": 6, "progress": [f"Checked {n} of 4" for n in range(1, 5)]}
