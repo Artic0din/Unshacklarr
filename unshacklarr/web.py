@@ -5992,7 +5992,12 @@ def logged_in(request, auth: dict) -> bool:
         return False
     _, signed, signature = session
     expected = hmac.new(auth["secret"].encode(), signed.encode(), "sha256").hexdigest()
-    return hmac.compare_digest(signature, expected) and signature not in read_json(LOGGED_OUT_FILE, {})
+    return hmac.compare_digest(signature.encode(), expected.encode()) and signature not in read_json(LOGGED_OUT_FILE, {})
+
+
+def setup_code_ok(body: dict) -> bool:
+    """Bytes compared: compare_digest raises on non-ASCII text, which would be a 500 instead of a wrong code."""
+    return hmac.compare_digest(str(body.get("setup_code") or "").strip().encode(), SETUP_CODE.encode())
 
 
 LOGGED_OUT_FILE = sonarr_sync.DATA / "logged_out.json"  # sessions closed before their end: {signature: expires}
@@ -6409,7 +6414,7 @@ async def setup_restore(request):
     if config["auth"].get("password"):
         raise web.HTTPForbidden(text="Already set up")
     body = await json_object(request)
-    if not hmac.compare_digest(str(body.get("setup_code") or "").strip(), SETUP_CODE):
+    if not setup_code_ok(body):
         raise web.HTTPForbidden(text="Wrong setup code: Unshacklarr prints it when it starts (docker logs unshacklarr)")
     password = str(body.get("password") or "")
     if len(password) < 8:
@@ -6471,7 +6476,7 @@ def stored_key_for(url: str, what: str = "sonarr") -> str:
 
 
 def trusted(request, body: dict) -> bool:
-    return logged_in(request, read_config()["auth"]) or hmac.compare_digest(str(body.get("setup_code") or "").strip(), SETUP_CODE)
+    return logged_in(request, read_config()["auth"]) or setup_code_ok(body)
 
 
 async def test_sonarr(request):
@@ -6542,7 +6547,7 @@ async def setup(request):
     if config["auth"].get("password"):
         raise web.HTTPForbidden(text="Already set up")
     body = await json_object(request)
-    if not hmac.compare_digest(str(body.get("setup_code") or "").strip(), SETUP_CODE):
+    if not setup_code_ok(body):
         raise web.HTTPForbidden(text="Wrong setup code: Unshacklarr prints it when it starts (docker logs unshacklarr)")
     password = str(body.get("password") or "")
     if len(password) < 8:

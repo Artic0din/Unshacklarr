@@ -7623,3 +7623,26 @@ def test_the_page_fits_and_ranks_tracks_on_a_ladder_as_the_server_does(tmp_path,
         for step in own:
             assert run_page_function("fitsStep", step, track) == sync.fits(step, track), (step, track)
     assert len(reached) >= 5  # the cases reach most steps, not one
+
+
+def test_a_non_ascii_setup_code_or_session_signature_is_refused_not_a_500(tmp_path, monkeypatch):
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    monkeypatch.setenv("SETUP_TOKEN", "code")
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    page = {"X-Unshackle": "1"}
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            before = [(await client.post(path, json={"setup_code": "é", "password": "password1"}, headers=page)).status
+                      for path in ("/api/setup", "/api/setup/restore", "/api/sonarr/test")]
+            web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+            client.session.cookie_jar.update_cookies({web.SESSION_COOKIE: f"{int(web.time.time()) + 3600}.x.é"})
+            answer = await client.get("/api/session")
+            return before, answer.status, (await answer.json())["logged_in"]
+
+    assert asyncio.run(go()) == ([403, 403, 403], 200, False)
