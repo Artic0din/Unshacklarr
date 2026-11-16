@@ -228,6 +228,7 @@ Every change worth knowing, newest first. The format follows
 - An episode that aired just after midnight on 1 January is no longer refused as a year too early: the programme's year is now Sonarr's own air date, or the UTC time converted to your time zone.
 - One series with an unreadable start date no longer stops the automatic sync of every series after it, nor makes the missing list fail: Save now refuses a start date that is not a date, and one already stored that way counts as no start date.
 - A second Sonarr now gets the same automatic sync as the main one: a series' own broadcast schedule and its early releases (a negative release day) reach it too, so a weekly series Sonarr dates all on its premiere is no longer missed there.
+- A failure whose message merely contains "log in" inside another word ("catalog index", "assign in time") is no longer taken for a sign-in problem, so it no longer tries every fallback profile or says the cookies may have expired.
 
 ### Removed
 

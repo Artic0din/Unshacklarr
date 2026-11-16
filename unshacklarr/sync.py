@@ -2507,7 +2507,7 @@ UNREACHABLE = "unshackle serve is unreachable"  # Unshackle.call's words when it
 SIGN_IN_HINT = 120  # seconds with no track before a download says the service may wait for a sign-in
 POLL_MISSES = 12  # job statuses missed in a row (5 s apart at least) before the job counts as lost
 # The service turned Unshackle away: cookies or credentials out of date, most of the time.
-LOGIN = re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|not logged|log ?in|sign ?in|cookie|expired|session|"
+LOGIN = re.compile(r"\b40[13]\b|unauthori[sz]ed|forbidden|not logged|\blog ?in|\bsign ?in|cookie|expired|session|"
                    r"invalid token|access token|credential|authenticat", re.IGNORECASE)
 # the files themselves refused (the login went through): the downloads leave from a country the service blocks
 FILES_REFUSED = re.compile(r"download worker failed.*\b40[13]\b", re.IGNORECASE | re.DOTALL)
