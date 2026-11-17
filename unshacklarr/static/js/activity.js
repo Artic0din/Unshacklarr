@@ -50,6 +50,7 @@ async function openActivity() {
   catch (e) {
     if (seq !== runsSeq) return;
     $("#runs-live").replaceChildren(failed(`Could not load the downloads: ${e.message}`, openActivity));
+    if ($("#cd-main > .loading")) nothingPicked();  // the list says it failed, with its retry: the detail stops loading
     clearTimeout(runsTimer);
     runsTimer = setTimeout(activityLater, 10000);  // back from a sleep, the network may not be up yet: tried again
     return;
@@ -152,6 +153,7 @@ function emptyHistory(query, filter) {
     ...(query ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", dataset: { fk: "empty-clear" }, onclick: () => { $("#con-search").value = ""; renderConsole(); $("#con-search").focus(); } })] : []),
     ...(filter !== "all" ? [el("button", { type: "button", className: "btn small", textContent: "Show all", dataset: { fk: "empty-all" }, onclick: () => { setConFilter("all"); document.querySelector('#tab-log .con-filters [data-f="all"]').focus(); } })] : []));
 }
+const nothingPicked = () => $("#cd-main").replaceChildren(el("div", { className: "con-none" }, el("b", { textContent: "Nothing picked" }), "Pick a download on the left to see where it stands."));
 /* Each tick redraws the lists and the detail: the control in use is found again by its data-fk. */
 function renderConsole(liveOnly = false) { keepFocus($("#con"), () => drawConsole(liveOnly)); }
 function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same downloads moving on
@@ -186,6 +188,8 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
   }
   const card = runCards.find((c) => c.id === picked_run);
   if (card) renderDetail(card);
+  // the history is in, nothing picked (a phone, an empty history): said so, in place of the loading the page opened with
+  else if (!picked_run) nothingPicked();
 }
 /* Episodes picked together, as one job: [{job, cards}] in place of their cards, in the list's order. */
 function jobsOf(cards) {
@@ -925,14 +929,17 @@ function cardActs(c) {
     !live ? act("delete", "Delete", deleteRun, "danger") : "",
   ].filter(Boolean);
 }
-/* What can be done with an attempt: stop it, import it anyway, retry it, forget it. */
+/* The service whose sign-in failed the attempt (the first schema's single failure too): a retry fails the same way. */
+const signInFailed = (c) => c.outcome === "failed" && (Object.keys(c.auth_failures || {})[0] || (c.auth_failure && (c.auth_failure_service || c.service))) || "";
+/* What can be done with an attempt: stop it, import it anyway, fix its sign-in, retry it, forget it. */
 function runActs(c) {
-  const live = isLive(c);
+  const live = isLive(c), signIn = signInFailed(c);
   return [
     setupButton(c),
+    signIn ? el("button", { className: "btn small primary", textContent: "Fix sign-in", title: `Check ${svcName(signIn)} in Settings › Services`, dataset: { fk: "sign-in" }, onclick: () => openServiceRow(signIn) }) : "",
     live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
     !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
-    !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: "btn small primary", textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
+    !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: `btn small${signIn ? "" : " primary"}`, textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
     !live ? el("button", { className: "btn small", textContent: "Save diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
       onclick: () => downloadDiagnostic(c) }) : "",
     !live ? el("button", { className: "btn small danger", textContent: "Delete", dataset: { focusKey: `delete:${c.id}`, fk: "delete" }, onclick: (e) => deleteRun(c, e.target) }) : "",

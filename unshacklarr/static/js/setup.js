@@ -160,8 +160,8 @@ function showSetup(found) {
   };
   // A key the environment already has: said in the field's help, where a placeholder would be cut off
   const keyFound = (text, known) => el("span", { className: "env-found", hidden: !known, textContent: text });
-  const sonarrKeyFound = keyFound("Found in the environment for the URL above. Leave empty to use it", found.sonarr_api_key_set);
-  const unshackleKeyFound = keyFound("Found in the environment for the address above. Leave empty to use it", found.unshackle_api_key_set);
+  const sonarrKeyFound = keyFound("Unshacklarr already has a key from SONARR_API_KEY. Leave this empty to use it with the URL from SONARR_URL.", found.sonarr_api_key_set);
+  const unshackleKeyFound = keyFound("Unshacklarr already has a key from UNSHACKLE_API_KEY. Leave this empty to use it with the address from UNSHACKLE_URL.", found.unshackle_api_key_set);
   const SECRET = ["password", "confirm", "sonarr_api_key", "unshackle_api_key", "tmdb_api_key"];
   f.unshackle_mode.value = found.unshackle_mode || "local";
   f.timezone.value = found.timezone !== "UTC" ? found.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;

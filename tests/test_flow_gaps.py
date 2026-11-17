@@ -162,7 +162,7 @@ console.log(JSON.stringify({ placeholder: sonarrKey.placeholder ?? "", described
     assert seen["placeholder"] == ""
     assert seen["described"] is True
     assert seen["hidden"] is False
-    assert seen["text"] == "Found in the environment for the URL above. Leave empty to use it"
+    assert seen["text"] == "Unshacklarr already has a key from SONARR_API_KEY. Leave this empty to use it with the URL from SONARR_URL."
     assert seen["unshackle"] == [False, True]  # Sonarr's found, the remote Unshackle's not
 
 
@@ -182,3 +182,56 @@ def test_a_phone_dock_with_four_buttons_or_more_puts_them_under_the_status():
     assert "flex-wrap: wrap" in dock
     assert re.search(r"\.dock:has\(\.d-acts > :nth-child\(4\)\) \.d-mid \{ flex-basis: 100%; \}", phone)
     assert re.search(r"\.dock \.d-mid, \.dock \.d-l1 \{ min-width: max-content; \}", phone)
+
+
+RUN_ACTS = r"""
+const src = read(process.argv[1]);
+const opened = [];
+const ctx = sandbox({ isLive: () => false, setupButton: () => "", svcName: (s) => `${s}+`, openServiceRow: (s) => opened.push(s) });
+vm.runInContext(grab(src, /^const signInFailed = .*$/m) + "\n" + grab(src, /^function runActs\b[\s\S]*?\n}\n/m), ctx);
+const acts = (extra) => ctx.runActs({ id: "a", episodeId: 1, service: "HULU", outcome: "failed", ...extra }).map((b) => ({ text: b.textContent, title: b.title, primary: b.className.includes("primary"), go: b.onclick }));
+const refused = acts({ auth_failures: { HULU: "2026-11-17T00:00:00Z" } }), plain = acts({}), old = acts({ auth_failure: true });
+refused[0].go();
+console.log(JSON.stringify({ refused: refused.map(({ text, primary }) => [text, primary]), plain: plain.map(({ text, primary }) => [text, primary]),
+  title: refused[0].title, old: old[0].text, opened }));
+"""
+
+
+def test_an_attempt_its_sign_in_failed_offers_the_sign_in_first_and_retry_after():
+    seen = node(RUN_ACTS, str(JS / "activity.js"))
+    # a retry would fail the same way: the service's row in Settings, where its sign-in is renewed, comes first
+    assert seen["refused"][:2] == [["Fix sign-in", True], ["Retry", False]]
+    assert seen["title"] == "Check HULU+ in Settings › Services"  # where it leads, short enough for a phone's bar
+    assert seen["opened"] == ["HULU"]
+    assert seen["plain"][0] == ["Retry", True]  # any other failure: retrying is still the thing to do
+    assert seen["old"] == "Fix sign-in"  # a card from the first sign-in schema
+
+
+WHEN_TEXT = r"""
+const src = read(process.argv[1]);
+const ctx = sandbox({ isoDay: (d) => d.toISOString().slice(0, 10), day: (d) => `day${d.getUTCDate()}`, time: (d) => d.toISOString().slice(11, 16), until: () => "soon" });
+vm.runInContext(grab(src, /^const triesAt = .*\n/m) + grab(src, /^const whenText = [\s\S]*?\n};\n/m) + "globalThis.whenText = whenText;", ctx);  // a const is not on the context
+const text = (d) => { const n = ctx.whenText({ managed: true, hasFile: false, airDateUtc: "2099-01-05T12:00:00Z", ...d }); return [n.kids[0], n.kids[1].textContent]; };
+console.log(JSON.stringify({
+  sync: text({ firstTry: "2099-01-05T13:00:00Z" }),
+  nextDay: text({ firstTry: "2099-01-06T00:00:00Z" }),
+  aired: text({ airDateUtc: "2000-01-05T12:00:00Z" }),
+  onDisk: text({ hasFile: true, firstTry: "2099-01-05T13:00:00Z" }),
+}));
+"""
+
+
+def test_a_schedule_card_without_a_release_time_shows_the_sync_that_tries_it_and_when_it_airs():
+    seen = node(WHEN_TEXT, str(JS / "schedule.js"))
+    # not the airing labelled "next sync", which read as the sync's own time
+    assert seen["sync"] == ["13:00", "airs 12:00"]
+    assert seen["nextDay"] == ["day6 00:00", "airs 12:00"]
+    assert seen["aired"] == ["12:00", "airs"]  # aired, not tried yet: its pill says "Tries at the next sync"
+    assert seen["onDisk"] == ["12:00", "airs"]
+
+
+def test_activity_detail_says_it_is_loading_until_the_history_is_in():
+    page = (STATIC / "index.html").read_text()
+    detail = re.search(r'<div id="cd-main">(.*?)</div></div>', page).group(1)
+    assert 'class="loading" role="status"' in detail and "Loading the downloads…" in detail
+    assert "Nothing picked" not in detail  # the empty state only once the history is in and nothing is picked

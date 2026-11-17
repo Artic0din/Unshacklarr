@@ -488,7 +488,8 @@
  "Check now reads each series' files from Sonarr.": [],
  "Check this series' Numbering (its episode table), then try again": [],
  "Check {0} in Settings › Services": [
-  "svcName(conf.service)"
+  "svcName(conf.service)",
+  "svcName(signIn)"
  ],
  "Checked a moment ago": [],
  "Checked automatically every day": [],
@@ -1030,8 +1031,6 @@
  "Found by its title, under another number: Download asks the service for {0}": [
   "found.service"
  ],
- "Found in the environment for the URL above. Leave empty to use it": [],
- "Found in the environment for the address above. Leave empty to use it": [],
  "Found on TMDB": [],
  "Français": [],
  "French": [],
@@ -2178,7 +2177,6 @@
  "Sign out": [],
  "Sign out other devices": [],
  "Sign out other devices? They sign in again": [],
- "Sign-in": [],
  "Sign-in and cookies": [],
  "Sign-in cancelled": [],
  "Sign-in failed on {0}: {1}": [
@@ -2188,7 +2186,6 @@
  "Sign-in failed · {0}": [
   "AUTH_FAILURE_LABELS[observation.failure] || \"application\""
  ],
- "Sign-in methods": [],
  "Sign-in needed": [],
  "Signal": [],
  "Signed in by your reverse proxy as {0}": [
@@ -3296,7 +3293,6 @@
   "run.stdout.strip()[-500:]"
  ],
  "never": [],
- "next sync": [],
  "no": [],
  "no (no group key: an older .prd)": [],
  "no DRM: no device used": [],
@@ -4608,5 +4604,11 @@
   "PAGE_NAME[currentTab]"
  ],
  "Sign in again": [],
- "Not signed in": []
+ "Not signed in": [],
+ "Signs in with": [],
+ "Sign-in status": [],
+ "Loading the downloads…": [],
+ "Unshacklarr already has a key from SONARR_API_KEY. Leave this empty to use it with the URL from SONARR_URL.": [],
+ "Unshacklarr already has a key from UNSHACKLE_API_KEY. Leave this empty to use it with the address from UNSHACKLE_URL.": [],
+ "Fix sign-in": []
 }

@@ -199,19 +199,21 @@ function moveWeek(step) {
   cal.date = step ? addDays(cal.date, 7 * step) : startOfDay(new Date());
   loadWeek();
 }
-/* When something happens to an episode: its release time for a series that has one (Unshackle tries then), else airing. */
-const whenOf = (d) => d.release || d.airDateUtc || "";
+/* When something happens to an episode: when it is tried (its release time, else the first sync after airing: the
+   server's firstTry, while it is still to come), else airing. */
+const triesAt = (d) => d.release || (d.managed && !d.hasFile && d.firstTry) || "";
+const whenOf = (d) => triesAt(d) || d.airDateUtc || "";
 const byWhen = (a, b) => new Date(whenOf(a)) - new Date(whenOf(b));  // instants: release times carry an offset, airings a Z
 const whenText = (d) => {
-  const aired = new Date(d.airDateUtc);
-  if (d.release) {
-    const at = new Date(d.release), other = isoDay(at) !== isoDay(aired), early = other && at < aired;
+  const aired = new Date(d.airDateUtc), tries = triesAt(d);
+  if (tries) {
+    const at = new Date(tries), other = isoDay(at) !== isoDay(aired), early = other && at < aired;
     // out days before it airs: listed on the day it's tried, so the airing says its day; the day after: the try does
     return el("span", { className: "tm", title: at > Date.now() ? `Tries in ${until(at)}` : "" },
       `${other && !early ? `${day(at)} ` : ""}${time(at)}`, el("small", { textContent: `airs ${early ? `${day(aired)} ` : ""}${time(aired)}` }));
   }
-  // "next sync": tried at the first sync after airing; already on disk, nothing will be tried: when it airs
-  return el("span", { className: "tm" }, time(aired), el("small", { className: "m", textContent: d.managed && !d.hasFile ? "next sync" : "airs" }));
+  // on disk, not yours, or aired and not tried yet (its pill says "Tries at the next sync"): when it airs
+  return el("span", { className: "tm" }, time(aired), el("small", { className: "m", textContent: "airs" }));
 };
 /* Where one of your episodes stands, in a word and a colour. */
 function schedStatus(d) {
