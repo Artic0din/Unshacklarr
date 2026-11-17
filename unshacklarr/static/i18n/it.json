@@ -2448,5 +2448,10 @@
  "Settings: {0} · Unshacklarr": "Impostazioni: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
  "Sign in again": "Accedi di nuovo",
- "Not signed in": "Accesso non eseguito"
+ "Not signed in": "Accesso non eseguito",
+ "Skip to content": "Vai al contenuto",
+ "{0}: running": "{0}: in esecuzione",
+ "{0}: update available": "{0}: aggiornamento disponibile",
+ "{0}: unreachable": "{0}: non raggiungibile",
+ "{0}: checking": "{0}: controllo in corso"
 }

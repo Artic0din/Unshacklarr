@@ -20,7 +20,7 @@ const ctx = { document: { querySelector: (sel) => lights[sel.match(/data-health=
 vm.createContext(ctx);
 vm.runInContext(fn, ctx);
 ctx.paintLights({ unshackle: { ok: true, version: "6.1" }, sonarr: { ok: false, error: "Sonarr is unreachable" } });
-console.log(JSON.stringify(Object.fromEntries(Object.entries(lights).map(([k, l]) => [k, [l.dataset.state, l.dot.className, l.small.textContent]]))));
+console.log(JSON.stringify(Object.fromEntries(Object.entries(lights).map(([k, l]) => [k, [l.dataset.state, l.dot.className, l.small.textContent, l.ariaLabel]]))));
 """
 
 
@@ -29,7 +29,9 @@ def test_lights_paint_from_a_status_answer():
         pytest.skip("node is not installed")
     out = subprocess.run(["node", "-e", PAINT, "--", str(JS / "schedule.js")], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
-    assert json.loads(out.stdout) == {"unshackle": ["ok", "dot ok", ""], "sonarr": ["down", "dot down", "Unreachable"]}
+    # the name says the state: a phone shows only the dot
+    assert json.loads(out.stdout) == {"unshackle": ["ok", "dot ok", "", "Unshackle: running"],
+                                      "sonarr": ["down", "dot down", "Unreachable", "Sonarr: unreachable"]}
 
 
 def test_page_asks_the_cached_lights_before_waiting_for_its_state():

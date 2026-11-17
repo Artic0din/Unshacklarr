@@ -2441,5 +2441,10 @@
  "Settings: {0} · Unshacklarr": "Einstellungen: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
  "Sign in again": "Erneut anmelden",
- "Not signed in": "Nicht angemeldet"
+ "Not signed in": "Nicht angemeldet",
+ "Skip to content": "Zum Inhalt springen",
+ "{0}: running": "{0}: läuft",
+ "{0}: update available": "{0}: Update verfügbar",
+ "{0}: unreachable": "{0}: nicht erreichbar",
+ "{0}: checking": "{0}: wird geprüft"
 }

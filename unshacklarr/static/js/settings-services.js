@@ -196,7 +196,7 @@ async function showServeLog() {
   picked_run = "serve";
   markPicked(picked_run);
   $("#con").classList.add("open");
-  $("#cd-main").replaceChildren(el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "unshackle serve" }),
+  $("#cd-main").replaceChildren(el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "unshackle serve" }),
     el("small", { textContent: "Its log, last lines" }))));
   $("#cd-raw").hidden = false;
   $("#cd-raw").open = true;
