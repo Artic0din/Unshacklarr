@@ -775,6 +775,9 @@
  "Download a backup": [],
  "Download audio description tracks and no standard audio tracks.": [],
  "Download audio description tracks.": [],
+ "Download backup from {0}": [
+  "when(f.at)"
+ ],
  "Download forced subtitle tracks and no other subtitle tracks.": [],
  "Download it": [],
  "Download it again": [],
@@ -1123,6 +1126,9 @@
  ],
  "In Unshacklarr's settings folder": [],
  "In schedule": [],
+ "In schedule: {0}": [
+  "name"
+ ],
  "In use": [],
  "In use: move its services first": [],
  "In your browser": [],
@@ -1226,9 +1232,7 @@
  "Language wanted for Video. You would use this if the video language doesn't match the audio. Prefix a value with '-' to exclude it, e.g. 'all,-es'.": [],
  "Language(s) wanted for Video and Audio (comma-separated). Use 'orig' to select the original language, e.g. 'orig,en' for both original and English. Prefix a value with '-' to exclude it, e.g. 'all,-es'.": [],
  "Language, no spoilers": [],
- "Language: {0}": [
-  "LANGS[LANG]"
- ],
+ "Language: {0}": [],
  "Languages": [],
  "Languages reads each file's tracks from Sonarr 5; this Sonarr is version {0}": [
   "major or 'unknown'"
@@ -1347,10 +1351,10 @@
  "Move this ladder down": [],
  "Move this ladder up": [],
  "Move up": [],
- "Move {0} left": [
+ "Move {0} down": [
   "c.label"
  ],
- "Move {0} right": [
+ "Move {0} up": [
   "c.label"
  ],
  "Mux": [],
@@ -1903,7 +1907,7 @@
  "Remove it when parts were joined": [],
  "Remove this step": [],
  "Remove {0}": [
-  "flag"
+  "name"
  ],
  "Remove {0} from unshackle.yaml?": [
   "r.name"
@@ -2164,9 +2168,6 @@
  "Show the output": [],
  "Show the title": [],
  "Show these episodes": [],
- "Show {0} in the schedule": [
-  "name"
- ],
  "Show {0}, not in use": [
   "COUNT.moreDevice(folded)"
  ],
@@ -2482,6 +2483,9 @@
  ],
  "Test this series": [],
  "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services.": [],
+ "Test {0}": [
+  "name"
+ ],
  "Test {0} ({1})": [
   "testable.length === data.devices.length ? \"all\" : \"these\"",
   "testable.length"
@@ -4237,6 +4241,9 @@
  "{0} uses the quality ladder {1}, which is not in Settings, Quality": [
   "where",
   "name"
+ ],
+ "{0} value": [
+  "flag"
  ],
  "{0} waiting for the end of the quiet hours": [
   "COUNT.message(data.held)"

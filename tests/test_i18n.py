@@ -365,7 +365,7 @@ def page_translate(lang: str, expressions: list[str]) -> list[str]:
     code = "\n".join(re.search(pattern, source, re.M | re.S).group() for pattern in (
         r"^let T = null, TP = \[\];", r"^const PLURALS = .*?;$", r"^function plural\([^\n]*\}$", r"^function templates\(.*?^\}",
         r"^const translated = .*?;", r"^const trSeen = .*?;", r"^function tr\(.*?^\}", r"^function trFind\(.*?^\}",
-        r"^function trTemplate\(.*?^\}", r"^const COUNT = \{.*?^\};"))
+        r"^function trTemplate\(.*?^\}", r"^const trWith = .*?;$", r"^const COUNT = \{.*?^\};"))
     harness = f"""
 const vm = require("vm"), fs = require("fs");
 const box = {{ LANG: {json.dumps(lang)}, Intl, fs, path: {json.dumps(str(I18N / f"{lang}.json"))} }};
@@ -407,3 +407,29 @@ def test_a_template_with_a_dot_separator_is_read_whole_before_its_pieces():
 def test_a_superscript_number_picks_the_other_form_instead_of_failing():
     from unshacklarr import i18n
     assert i18n.pick({"one": "un", "other": "plusieurs"}, "fr", ["²"]) == "plusieurs"
+
+
+def test_a_short_name_template_is_translated_whole_with_the_name_filled_in():
+    """"Test {0}" takes no name it has no text for when matched after the fact, so these labels are translated first, then filled."""
+    shown = page_translate("de", ['trWith("Test {0}", "Discord")', 'trWith("Remove {0}", "ntfy")', 'trWith("{0} value", "--quality")',
+                                  'trWith("In schedule: {0}", "Abbott Elementary")', 'trWith("Move {0} up", "Res.")', '"Test Discord"',
+                                  'trWith("Move {0} up", tr("Subtitles"))'])
+    assert shown == ["Discord testen", "ntfy entfernen", "Wert von --quality", "Im Kalender: Abbott Elementary", "Res. nach oben",
+                     "Test Discord",  # the same label matched after the fact stays English
+                     "Untertitel nach oben"]  # a column's name is translated before it is filled in
+
+
+def test_the_labels_that_name_an_item_are_translated_whole():
+    js = {n: (CORE.parent / n).read_text() for n in ("core.js", "schedule.js", "series.js", "settings-options.js")}
+    for name, label in (("core.js", '"{0} value"'), ("schedule.js", '"In schedule: {0}"'), ("series.js", '"Move {0} up", tr(c.label)'), ("series.js", '"Move {0} down", tr(c.label)'),
+                        ("settings-options.js", '"Test {0}"'), ("settings-options.js", '"Remove {0}"'), ("settings-options.js", '"Download backup from {0}"'),
+                        ("core.js", '"Language: {0}"')):
+        assert f"trWith({label}" in js[name], (name, label)
+
+
+def test_a_notification_address_is_named_by_its_app_in_the_language():
+    """The row reads "Correo electrónico": its Test and Remove say the same, not "Probar E-mail"."""
+    assert page_translate("es", ['trWith("Test {0}", tr("E-mail"))', 'trWith("Remove {0}", tr("E-mail") + " 2")']) == [
+        "Probar Correo electrónico", "Quitar Correo electrónico 2"]
+    options = (CORE.parent / "settings-options.js").read_text()
+    assert "const name = tr(appOf(t.url))" in options

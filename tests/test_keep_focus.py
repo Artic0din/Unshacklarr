@@ -156,7 +156,7 @@ if (scenario === "chips") {  // a slide-out's chips are rebuilt at each pick
 }
 
 if (scenario === "lang") {  // Escape closes the language menu and the focus goes back to its button
-  Object.assign(ctx, { LANGS: { en: "English", fr: "Francais" }, LANG: "en", setLang() {} });
+  Object.assign(ctx, { LANGS: { en: "English", fr: "Francais" }, LANG: "en", setLang() {}, tr: (t) => t, trWith: (t, ...fill) => t.replace(/\{(\d+)\}/g, (_, i) => fill[i]) });
   run(fn(core, "langCorner"));
   const corner = ctx.langCorner(); root.append(corner);
   const [button, menu] = corner.children;

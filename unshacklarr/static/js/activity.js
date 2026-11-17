@@ -178,6 +178,7 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
   landOnLive = false;
   // On a wide screen, something is always shown: what runs first, else the latest download.
   if (!picked_run && innerWidth > 700) picked_run = itemKey(liveItems[0] || jobsOf(runCards)[0]) || null;
+  markPicked(picked_run);  // the rows were drawn before this pick, and the summary rows are not redrawn
   if (picked_run === "serve" || picked_run === "stats" || picked_run === "left") return;
   if (picked_run?.startsWith("job:")) {
     const job = jobsOf(runCards).find((i) => i.job === picked_run.slice(4));
@@ -216,7 +217,7 @@ document.addEventListener("mouseover", (e) => {
 });
 /* Lists are redrawn at each update: an animation there starts where the clock has it, not over (no blink). */
 const phase = (ms) => `animation-delay: -${Date.now() % ms}ms`;
-const pulse = () => el("span", { className: "pulse", ariaLabel: "Running", style: phase(1600) });
+const pulse = () => el("span", { className: "pulse", role: "img", ariaLabel: "Running", style: phase(1600) });
 /* A row's poster, the same element from one render to the next: a redrawn row doesn't reload it (no blink). */
 const thumbs = new Map();
 function thumb(key, src) {
@@ -252,7 +253,7 @@ function jobState(j) {
 function jobRow(j) {
   const first = j.cards[0], st = jobState(j), key = `job:${j.job}`;
   const series = new Set(j.cards.map((c) => c.series)).size > 1 ? "Several series" : first.series;
-  return el("button", { className: "crow job" + (key === picked_run ? " sel" : "") + hovering(`row:${key}`), dataset: { hk: `row:${key}`, fk: `row:${key}` }, onclick: () => pickRun(key) },
+  return el("button", { className: "crow job" + (key === picked_run ? " sel" : "") + hovering(`row:${key}`), ariaCurrent: String(key === picked_run), dataset: { hk: `row:${key}`, fk: `row:${key}` }, onclick: () => pickRun(key) },
     thumb(`row:${key}`, posterOf(first)),
     el("span", {}, el("b", {}, el("span", { textContent: series }), el("em", { textContent: `${j.cards.length} episodes` })),
       el("small", { textContent: (st.live ? st.words : [...st.words, ...jobTotals(j)]).join(" · ") }),
@@ -459,13 +460,21 @@ function listRow(c) {
   const side = asking ? el("span", { className: "chip ask", textContent: "Waiting for your answer" })
     : isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
     : el("span", { className: `chip o-${c.outcome}`, textContent: outcomeOf(c) });
-  const row = el("button", { className: "crow" + (c.id === picked_run ? " sel" : "") + hovering(`row:${c.id}`), dataset: { hk: `row:${c.id}`, fk: `row:${c.id}` }, onclick: () => pickRun(c.id) },
+  const row = el("button", { className: "crow" + (c.id === picked_run ? " sel" : "") + hovering(`row:${c.id}`), ariaCurrent: String(c.id === picked_run), dataset: { hk: `row:${c.id}`, fk: `row:${c.id}` }, onclick: () => pickRun(c.id) },
     thumb(`row:${c.id}`, posterOf(c)),
     el("span", {}, el("b", {}, el("span", { textContent: c.series }), el("em", { textContent: c.sxxeyy })),
       el("small", { textContent: c.attempts > 1 ? `${sub} · attempt ${c.attempts}` : sub }),
       ...(isLive(c) && !isQueued(c) && !asking ? [el("span", { className: "bar" }, el("i", { style: `width:${Number(c.live?.progress) || 0}%`, dataset: { k: `row:${c.id}` } }))] : [])),
     side);
   return row;
+}
+// The one row shown as current: a summary row (Waiting in downloads, Stats…) by its id or its picked_run key,
+// a download or job by its key. Nothing else is: picking one clears the others, and the serve log clears them all.
+function markPicked(key) {
+  document.querySelectorAll(".crow").forEach((r) => {
+    const on = !!key && (r.id === key || r.id === `con-${key}` || r.dataset.hk === `row:${key}`);
+    r.classList.toggle("sel", on); r.setAttribute("aria-current", String(on));
+  });
 }
 function pickRun(id) {
   picked_run = id;
@@ -477,7 +486,7 @@ function pickRun(id) {
 async function showLeftovers() {
   picked_run = "left";
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-left"));
+  markPicked("con-left");
   $("#cd-top-title").textContent = "Waiting in downloads";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -531,7 +540,7 @@ async function showMissing() {
   picked_run = "missing";
   const seq = ++missingSeq;
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-missing"));
+  markPicked("con-missing");
   $("#cd-top-title").textContent = "Catch up";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -577,7 +586,7 @@ async function showUpgrades(fresh = true) {
   picked_run = "upgrades";
   clearTimeout(upgradeTimer);
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-upgrades"));
+  markPicked("con-upgrades");
   $("#cd-top-title").textContent = "Upgrades";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -674,7 +683,7 @@ async function showLanguages(fresh = true) {
   picked_run = "languages";
   clearTimeout(langTimer);
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-languages"));
+  markPicked("con-languages");
   $("#cd-top-title").textContent = "Languages";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -739,7 +748,7 @@ $("#con-languages").onclick = showLanguages;
 async function showStats() {
   picked_run = "stats";
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-stats"));
+  markPicked("con-stats");
   $("#cd-top-title").textContent = "Stats";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -857,7 +866,7 @@ function renderDock(d) {
     dock.append(el("span", { className: "d-ico" }, svg(DOCK.term)),
       el("div", { className: "d-mid" }, el("div", { className: "d-l1" }, el("b"), el("span"), el("em")), el("span", { className: "bar" }, el("i"))),
       el("div", { className: "d-acts" }), el("span", { className: "d-sep" }),
-      el("button", { type: "button", className: "d-open", ariaLabel: "Show the output", onclick: () => (dock.classList.contains("open") ? closeSheet() : openSheet()) }, svg(DOCK.up)));
+      el("button", { type: "button", className: "d-open", ariaLabel: "Show the output", ariaExpanded: "false", onclick: () => (dock.classList.contains("open") ? closeSheet() : openSheet()) }, svg(DOCK.up)));
   }
   const [b, span, em] = dock.querySelector(".d-l1").children;
   b.textContent = d.ep; span.textContent = d.line; span.title = d.line; em.textContent = d.pct; em.className = d.tone || "";
@@ -876,12 +885,14 @@ function openSheet() {
   const raw = $("#cd-raw"), dock = $("#dock");
   dock.prepend(raw);
   dock.classList.add("open");
+  dock.querySelector(".d-open").setAttribute("aria-expanded", String(true));
   raw.open = true;  // its toggle streams the output
 }
 function closeSheet() {
   const raw = $("#cd-raw"), dock = $("#dock");
   if (!dock.classList.contains("open")) return;
   dock.classList.remove("open");
+  dock.querySelector(".d-open").setAttribute("aria-expanded", String(false));
   raw.open = false;
   $("#cd-foot").before(raw);  // back in its place, hidden while the bar is there
 }

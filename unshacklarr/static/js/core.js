@@ -75,15 +75,16 @@ async function setLang(lang) {
   await api("/api/language", { method: "POST", body: JSON.stringify({ language: lang }) }).catch(() => {});  // the notifications' too; before logging in, nothing to tell
   location.reload();
 }
-/* The language, in a corner of the login and the first run: its name, the others in a menu. */
+/* The language, in a corner of the login and the first run: its name, the others in a list that opens under it. */
 function langCorner() {
-  const menu = el("div", { className: "lang-menu", role: "menu", hidden: true },
-    ...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", role: "menuitemradio", ariaChecked: String(k === LANG),
+  const menu = el("div", { className: "lang-menu", hidden: true },
+    ...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", ariaCurrent: String(k === LANG),
       className: k === LANG ? "on" : "", onclick: () => { if (k !== LANG) setLang(k); } }, name)));
   const open = (on) => { menu.hidden = !on; button.setAttribute("aria-expanded", String(on)); };
-  const button = el("button", { type: "button", className: "lang-btn", ariaHasPopup: "menu", ariaExpanded: "false", ariaLabel: `Language: ${LANGS[LANG]}`,
+  const button = el("button", { type: "button", className: "lang-btn", ariaExpanded: "false", ariaLabel: trWith("Language: {0}", LANGS[LANG]),
     onclick: () => open(menu.hidden) }, el("span", { textContent: LANGS[LANG] }), el("span", { className: "caret", ariaHidden: "true" }));
-  const corner = el("div", { className: "lang-corner", translate: "no" }, button, menu);
+  const corner = el("div", { className: "lang-corner" }, button, menu);
+  corner.setAttribute("translate", "no");  // the property takes a boolean: "no" is true, which sets translate="yes"
   document.addEventListener("click", (e) => { if (!corner.contains(e.target)) open(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { open(false); button.focus(); } });
   return corner;
@@ -115,6 +116,9 @@ function tr(text, depth = 0) {
   else if (out === undefined) out = trFind(key, depth);
   return out === undefined ? text : text.match(/^\s*/)[0] + out + text.match(/\s*$/)[0];
 }
+// A short template naming an item ("Test {0}"), translated whole, then filled: matched after the fact, a template this
+// short takes no name it has no text for, so "Test Discord" would stay English
+const trWith = (template, ...fill) => tr(template).replace(/\{(\d+)\}/g, (_, i) => fill[i]);
 function trFind(key, depth) {
   let out = trTemplate(key, depth, true);  // a template that has the " · " itself ("Sign-in failed · {0}"): before pieces are split
   if (out === undefined && key.includes(" · ")) {  // pieces joined by " · ": each its own text
@@ -395,9 +399,9 @@ function optionsEditor(root, specs, values, anyFlag = false) {  // anyFlag: a se
     const spec = specs.find((s) => s.flag === flag) || { flag, help: "", is_flag: typeof value === "boolean", choices: [] };
     let input;
     if (spec.is_flag) {
-      input = el("label", { className: "check" }, el("input", { type: "checkbox", checked: !!value, onchange: (e) => { values[flag] = e.target.checked; dirty(); } }), "on");
+      input = el("label", { className: "check" }, el("input", { type: "checkbox", checked: !!value, ariaLabel: flag, onchange: (e) => { values[flag] = e.target.checked; dirty(); } }), "on");
     } else {
-      input = el("input", { type: "text", value: value ?? "", placeholder: spec.choices.length ? spec.choices.join(", ") : spec.help,
+      input = el("input", { type: "text", value: value ?? "", placeholder: spec.choices.length ? spec.choices.join(", ") : spec.help, ariaLabel: trWith("{0} value", flag),
         oninput: (e) => { values[flag] = e.target.value; dirty(); } });
       if (spec.choices.length) {
         const id = "dl" + Math.random().toString(36).slice(2);
