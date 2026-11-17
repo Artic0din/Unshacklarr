@@ -2482,6 +2482,6 @@
  "Results on {0}: {1}": "Résultats sur {0}: {1}",
  "Settings: {0} · Unshacklarr": "Réglages: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
- "Not signed in yet": "Pas encore connecté",
- "Sign in again": "Se reconnecter"
+ "Sign in again": "Se reconnecter",
+ "Not signed in": "Non connecté"
 }

@@ -2514,6 +2514,6 @@
  "Results on {0}: {1}": "Результаты на {0}: {1}",
  "Settings: {0} · Unshacklarr": "Настройки: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
- "Not signed in yet": "Вход ещё не выполнен",
- "Sign in again": "Войти заново"
+ "Sign in again": "Войти заново",
+ "Not signed in": "Вход не выполнен"
 }

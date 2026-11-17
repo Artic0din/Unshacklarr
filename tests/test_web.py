@@ -1603,7 +1603,7 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
 @pytest.mark.parametrize(
     ("observation", "label"),
     [
-        ({"state": "ready", "available_methods": ["pairing", "cookies"]}, "Not signed in yet"),  # the methods have their own column
+        ({"state": "ready", "available_methods": ["pairing", "cookies"]}, "Not signed in"),  # the methods have their own column
         ({"state": "session_present", "method": "cookies"}, "Cookies session available"),
         ({"state": "session_expired", "method": "pairing"}, "Pairing session expired"),
         ({"state": "session_rejected", "method": "pairing"}, "Pairing session rejected"),
@@ -8730,7 +8730,8 @@ def test_the_sign_in_column_says_where_it_stands_once_and_offers_the_fitting_act
     rows = {name: (label, controls) for name, label, controls in run_authentication_ui("sign_in_states")}
     # not "Ready · pairing, cookies": the chips already say it. Nothing has checked it (its cookies may work): not checked
     assert rows["READY"] == ("Not checked yet", ["Sign in"])
-    assert rows["CORE_READY"] == ("Not signed in yet", ["Sign in"])  # Unshackle itself says no session has started
+    # Unshackle says no session now: not "yet", which would say never, though it may have been confirmed before a restart
+    assert rows["CORE_READY"] == ("Not signed in", ["Sign in"])
     assert rows["LIVE"] == ("Signed in with pairing", ["Sign in again"])  # signed in: no plain "Sign in" to puzzle over
     assert rows["CONFIRMED"] == ("Confirmed now", ["Sign in again"])
     assert rows["NEEDED"] == ("Sign-in needed", ["Sign in again"])  # signed in before: again, not "Reauthenticate"

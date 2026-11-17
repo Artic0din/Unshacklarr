@@ -2480,6 +2480,6 @@
  "Results on {0}: {1}": "Resultados em {0}: {1}",
  "Settings: {0} · Unshacklarr": "Configurações: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
- "Not signed in yet": "Login ainda não feito",
- "Sign in again": "Entrar novamente"
+ "Sign in again": "Entrar novamente",
+ "Not signed in": "Sem login"
 }

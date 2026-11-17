@@ -7,7 +7,7 @@ function authenticationLabel(observation) {
   const method = AUTH_METHOD_LABELS[observation.method] || "sign-in";
   const next = AUTH_METHOD_LABELS[observation.next_method] || "sign-in";
   const named = method[0].toUpperCase() + method.slice(1);
-  if (observation.state === "ready") return "Not signed in yet";  // the ways in are in their own column
+  if (observation.state === "ready") return "Not signed in";  // no session now (not "yet": it may have been before); the ways in have their own column
   if (observation.state === "session_present") return `${named} session available`;
   if (observation.state === "session_expired") return `${named} session expired`;
   if (observation.state === "session_rejected") return `${named} session rejected`;

@@ -201,7 +201,7 @@ SIGN_IN_TEXTS = {
     "No authentication session is waiting",
     "Not checked yet",
     "Open: {0}",
-    "Not signed in yet",
+    "Not signed in",
     "Renewing {0} session",
     "Repairing {0} session",
     "Service approval",

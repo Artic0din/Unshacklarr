@@ -2451,6 +2451,6 @@
  "Results on {0}: {1}": "{0} の結果: {1} 件",
  "Settings: {0} · Unshacklarr": "設定: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
- "Not signed in yet": "まだサインインしていません",
- "Sign in again": "もう一度サインイン"
+ "Sign in again": "もう一度サインイン",
+ "Not signed in": "サインインしていません"
 }

@@ -2425,6 +2425,6 @@
  "Results on {0}: {1}": "Resultados en {0}: {1}",
  "Settings: {0} · Unshacklarr": "Ajustes: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
- "Not signed in yet": "Aún sin iniciar sesión",
- "Sign in again": "Volver a iniciar sesión"
+ "Sign in again": "Volver a iniciar sesión",
+ "Not signed in": "Sin sesión iniciada"
 }
