@@ -857,7 +857,8 @@ def test_saved_authentication_status_remains_visible_while_unshackle_is_offline(
             r"^const AUTH_METHOD_LABELS = .*?;$", r"^const AUTH_METHOD_NAMES = .*?;$", r"^const AUTH_FAILURE_LABELS = .*?;$",
             r"^function authenticationLabel\(.*?^\}", r"^function signInCounts\(.*?^\}", r"^function signInSummary\(.*?^\}",
             r"^const SERVICE_COLUMNS = .*?;$", r"^let servicesCookies = .*?;", r"^let servicesDrawn = .*?;", r"^let servicesAsked = .*?;",
-            r"^let servicesReveal = .*?;", r"^function serviceModels\(.*?^\}", r"^function renderServices\(.*?^\}", r"^function revealService\(.*?^\}",
+            r"^let servicesReveal = .*?;", r"^const SIGN_IN_FAILED = .*?;$", r"^function serviceModels\(.*?^\}", r"^function renderServices\(.*?^\}",
+            r"^function revealService\(.*?^\}", r"^function needingText\(.*?^\}", r"^function paintServicesBadge\(.*?^\}",
         )
     )
     harness = f"""
@@ -867,7 +868,7 @@ for (const name of ["#sv-list", "#sv-state", "#sv-folder", "#sv-note"])
   nodes[name] = {{ replaceChildren(...children) {{ this.children = children; }}, querySelector: () => ({{}}) }};
 const box = {{
   S: {{ authentication: {{ PAIRED: {{ state: "needs_user_action", service: "PAIRED" }} }}, config: {{ settings: {{}}, series: {{}} }} }},
-  document: {{ activeElement: null }},
+  document: {{ activeElement: null, querySelector: () => null }},
   $: (selector) => nodes[selector],
   el: (tag, props = {{}}, ...children) => ({{ tag, ...props, children }}),
   svcName: (name) => name,
@@ -919,9 +920,14 @@ const source = [
   pick(services, /^let servicesDrawn = .*?;/m),
   pick(services, /^let servicesAsked = .*?;/m),
   pick(services, /^let servicesReveal = .*?;/m),
+  pick(services, /^const SIGN_IN_FAILED = .*?;$/m),
   pick(services, /^function serviceModels\(.*?^\}/ms),
   pick(services, /^function renderServices\(.*?^\}/ms),
   pick(services, /^function revealService\(.*?^\}/ms),
+  pick(services, /^function needingText\(.*?^\}/ms),
+  pick(services, /^function paintServicesBadge\(.*?^\}/ms),
+  pick(services, /^let servicesCookiesAsked = .*$/m),
+  pick(services, /^function loadServiceCookies\(.*?^\}/ms),
   pick(schedule, /^async function refreshBusy\(.*?^\}/ms),
   pick(schedule, /^async function refreshHealth\(.*?^\}/ms),
   pick(schedule, /^function renderHealth\(.*?^\}/ms),
@@ -1386,9 +1392,9 @@ def test_existing_setup_controls_survive_backend_selection_changes():
             {"name": "PAIRED", "controls": []},
             {"name": "PAIRED · old", "controls": ["Submit", "Cancel"]},
         ],
-        "errored": [
-            {"name": "PAIRED", "controls": []},
+        "errored": [  # a failed sign-in needs attention: its row comes first
             {"name": "PAIRED · old", "controls": ["Cancel"]},
+            {"name": "PAIRED", "controls": []},
         ],
     }
 
@@ -1407,13 +1413,13 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     assert rows["HULU"] == {
         "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series", "Show series"],
         "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
-                    "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete"],
+                    "kids.txt", "Valid · 90 days left", "3 cookies · updated today", "Replace", "Delete"],
     }
     # another backend's row never gets the main Unshackle's cookie files, nor its series count
     assert rows["HULU · vpn"] == {
         "name": "HULU · vpn", "label": "Confirmed now", "attention": False, "used": ["—"], "cookies": ["—", "Managed on that server"],
     }
-    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
+    assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 90 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series", "Show series"]
     assert result["state"] == "sx-state down"
 

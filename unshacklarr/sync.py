@@ -416,14 +416,22 @@ def change_inbox(change) -> dict:
         return inbox
 
 
-def inbox_add(level: str, title: str, message: str, action: dict | None = None, batch: str | None = None) -> None:
+def inbox_add(level: str, title: str, message: str, action: dict | None = None, batch: str | None = None,
+              key: str | None = None, service: str | None = None) -> None:
     title, message = no_credentials(title), no_credentials(message)
     item = {"id": uuid.uuid4().hex[:12], "at": datetime.now(timezone.utc).isoformat(), "level": level, "title": title, "message": message[:4000]}
     if action:
         item["action"] = action
     if batch:
         item["batch"] = batch  # from a job: the bell groups its lines by job
-    change_inbox(lambda inbox: inbox["items"].insert(0, item))
+    if key:
+        item["key"] = key  # the same problem told again ("expire in 4 days", then 3): its new line replaces the old one
+    if service:
+        item["service"] = service  # the page opens that service's row in Settings, Services
+
+    def add(inbox):
+        inbox["items"] = [item, *(i for i in inbox["items"] if not key or i.get("key") != key)]
+    change_inbox(add)
 
 
 def inbox_resolve(key: str) -> None:
@@ -581,12 +589,12 @@ def after_download(ep: dict, show: dict, run, files: list[str], imported: bool) 
 
 
 def notify(settings: dict, level: str, title: str, message: str, action: dict | None = None, batch: str | None = None,
-           details: dict | None = None) -> bool:
+           details: dict | None = None, key: str | None = None, service: str | None = None) -> bool:
     if action and action.get("url"):
         message = "Open the action in Unshacklarr to continue."
     title, message = no_credentials(title), no_credentials(message)
     try:
-        inbox_add(level, title, message, action, batch)  # the page's bell keeps them all, whatever goes out
+        inbox_add(level, title, message, action, batch, key, service)  # the page's bell keeps them all, whatever goes out
     except OSError as e:
         print(f"Inbox not written: {e}", file=sys.stderr)
     if not settings.get(level, True):

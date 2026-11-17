@@ -2,13 +2,14 @@
 const ago_days = (ts) => { const d = Math.floor((Date.now() / 1000 - ts) / 86400); return d < 1 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
 /* Where a cookie file stands: a colour, a word, a sentence for the tooltip. */
 function cookieStatus(f) {
-  const left = f.expires ? Math.floor((f.expires * 1000 - Date.now()) / 86400000) : null;
+  const exact = f.expires ? (f.expires * 1000 - Date.now()) / 86400000 : null;
+  const left = exact === null || exact < 0 ? exact : Math.max(1, Math.round(exact));  // as the bell counts them (web.check_alerts)
   if (f.unreadable) return ["bad", "Unreadable", "Unshacklarr cannot read this file: check its permissions, or replace it"];
   if (f.expired) return ["bad", "Expired", "The service will refuse them: replace them with fresh ones"];
   // Session cookies carry no date: how long they sign in is the service's secret
   if (left === null || left < 0) return ["mut", "Session only", "Session cookies have no expiry date: only a failed sign-in shows they are over"];
   const days = left === 1 ? "1 day" : `${left} days`;
-  return left < 7 ? ["warn", `Expires in ${days}`, "Replace them soon"] : ["ok", `Valid · ${days} left`, "Nothing to do"];
+  return exact < 7 ? ["warn", `Expires in ${days}`, "Replace them soon"] : ["ok", `Valid · ${days} left`, "Nothing to do"];
 }
 function openCookieDialog(service = "", profile = "default", newProfile = false) {
   $("#ck-service").replaceChildren(...S.services.map((t) => el("option", { value: t, textContent: svcName(t) })));

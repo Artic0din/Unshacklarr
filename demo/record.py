@@ -336,7 +336,8 @@ live = run(by_title["The Bear"], airing[0], 2, "running", kind="manual", running
 
 sync.inbox_add("success", "Downloaded: The Simpsons S02E11", "1.4 GB in 5 min, imported by Sonarr.", batch=batch)
 sync.inbox_add("error", "Not downloaded: Wheeler Dealers S01E07", "RMC BFM Play: your session has expired, log in again (cookies or credentials)")
-sync.inbox_add("warning", "HULU cookies expire in 5 days", "Replace them before they expire, in Settings › Services.")
+sync.inbox_add("warning", "HULU cookies expire in 5 days", "Replace them before they expire, in Settings › Services.",
+               key="cookies:HULU", service="HULU")  # as web.check_alerts tells it: the line it tells again replaces this one
 sync.inbox_add("success", "Downloaded: Koh-Lanta S01E09", "Both parts joined into one file, imported by Sonarr.")
 (DATA / "notifications_sent.json").write_text(json.dumps([
     {"at": ago(hours=h), "level": lv, "title": t, "to": [{"app": "Discord", "ok": True}, {"app": "ntfy", "ok": lv != "success"}]}
@@ -348,7 +349,8 @@ sync.inbox_add("success", "Downloaded: Koh-Lanta S01E09", "Both parts joined int
 
 async def record() -> dict:
     from aiohttp.test_utils import TestClient, TestServer
-    out = {"recorded": NOW.isoformat(), "password": PASSWORD, "routes": {}, "logs": {}, "live": live and live["id"]}
+    out = {"recorded": NOW.isoformat(), "password": PASSWORD, "routes": {}, "logs": {}, "live": live and live["id"],
+           "zone_countries": web.zone_countries()}  # the setup's country, from the time zone
     async with TestClient(TestServer(web.app)) as client:
         h = {"X-Unshackle": "1"}
         assert (await client.post("/api/login", json={"password": PASSWORD}, headers=h)).status == 200

@@ -128,6 +128,17 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Every page tells the same story about a service, a download and a cookie file.** Settings, Services counts every
+  service whose sign-in failed, timed out or was rejected as needing attention, names them, and shows the count beside
+  Services in the Settings list. A cookie file's days left are counted the same way in Services and in the bell. A
+  failed download no longer shows its last steps as done. The setup's Unshackle test and Settings count the same
+  services (Unshackle's EXAMPLE left out).
+- **A failing series says why where it opens.** Its Episodes tab starts with the last error and, for a sign-in, a
+  button to that service in Settings, Services.
+- **The bell keeps one line per cookie file.** "Expires in 5 days", then "4 days" the next day, replaces its line
+  instead of adding one, and a click on it opens the service in Settings, Services.
+- **The setup picks the country of your time zone.** It started on United States whatever the time zone; it now starts
+  on the time zone's country (Australia for Australia/Melbourne) until you pick one.
 - **Every button on a phone is big enough to tap.** Episode titles, the eye that hides an episode, the week arrows, Week and Month, the filters, the series' links and shortcuts and the other small controls in Schedule, Series and Activity now answer a finger 44 px wide and tall, mostly without changing how they look. The series page's Back button sits in the page's margin instead of against the screen's edge, and the header shows the whole name "Unshacklarr" (or only the logo on the narrowest phones) instead of "Uns…"; on a phone, the version and what's new are in Settings.
 - **The page works better with a keyboard and a screen reader.** A "Skip to content" link comes first; the main tabs
   are links, so they open in a new tab; a series poster says its title before its service; the header's status dots

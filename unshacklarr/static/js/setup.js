@@ -130,6 +130,16 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
   return { input, list, sync };
 }
 let settingsCountry = null, settingsZone = null;
+/* The setup's country, guessed from its time zone, follows a time zone picked after it, until a country is picked.
+   picked: already picked before the page was rebuilt (a reload, a language change), as its draft says. */
+function countryFollowsZone(country, timezone, zones, sync, picked = false) {
+  country.addEventListener("input", () => { picked = true; });
+  timezone.addEventListener("change", () => {
+    const code = zones?.[timezone.value];
+    if (code && !picked) { country.value = code; sync(); }
+  });
+  return () => picked;  // for the draft
+}
 
 /* The first run, one step at a time: each is checked before the next (Unshackle and Sonarr answer, the
    password is typed twice), and a language change on the way keeps what was typed (secrets aside). */
@@ -165,8 +175,9 @@ function showSetup(found) {
   const SECRET = ["password", "confirm", "sonarr_api_key", "unshackle_api_key", "tmdb_api_key"];
   f.unshackle_mode.value = found.unshackle_mode || "local";
   f.timezone.value = found.timezone !== "UTC" ? found.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;
+  f.country.value = found.zone_countries?.[f.timezone.value] || f.country.value;  // none chosen yet: the time zone's, not US
   for (const [k, v] of Object.entries(draft.values || {})) if (f[k] && !SECRET.includes(k)) f[k].value = v;
-  setupDraft = () => ({ step: at, reached, secrets: SECRET.some((k) => f[k].value), values: Object.fromEntries(Object.entries(f).filter(([k]) => !SECRET.includes(k)).map(([k, x]) => [k, x.value])) });
+  setupDraft = () => ({ step: at, reached, secrets: SECRET.some((k) => f[k].value), countryPicked: countryPicked(), values: Object.fromEntries(Object.entries(f).filter(([k]) => !SECRET.includes(k)).map(([k, x]) => [k, x.value])) });
   const keep = () => { try { sessionStorage.setItem("setup-draft", JSON.stringify(setupDraft())); } catch {} };
 
   // The password: its strength, and the second one the same
@@ -209,6 +220,8 @@ function showSetup(found) {
     tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "On another machine"));
   const country = countryPicker(f.country);
   country.input.required = true;
+  const countryPicked = countryFollowsZone(f.country, f.timezone, found.zone_countries, country.sync, Boolean(draft.countryPicked));
+  f.country.addEventListener("input", keep);  // picked: kept through a reload too, not only a language change
   const unshackleParams = () => Object.fromEntries(["unshackle_mode", "unshackle_command", "unshackle_url", "unshackle_api_key"].map((k) => [k, f[k].value]));
   f.unshackle_mode.hidden = true;
   const uPanel = el("div", { className: "wiz-group" },
