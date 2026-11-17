@@ -1306,7 +1306,8 @@ const promptState = (input) => {
     const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
     const buttons = findAll(row, (node) => node.tag === "button");
     await buttons.find((button) => button.textContent === "Retry").onclick();
-    console.log(JSON.stringify({ controls: buttons.map((button) => button.textContent), requests }));
+    console.log(JSON.stringify({ controls: buttons.map((button) => button.textContent),
+      primary: buttons.filter((button) => button.className.includes("primary")).map((button) => button.textContent), requests }));
   }
 })().catch((error) => { console.error(error); process.exit(1); });
 """
@@ -1481,6 +1482,7 @@ def test_sign_in_polling_follows_the_services_section():
 def test_retained_authentication_error_keeps_cancel_and_posts_retry_directly():
     assert run_authentication_ui("retry_retained_error") == {
         "controls": ["Retry", "Cancel"],
+        "primary": ["Retry"],  # its sign-in failed: Retry is the thing to do
         "requests": ["POST"],
     }
 

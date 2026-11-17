@@ -155,7 +155,7 @@ function renderServices() {
     const controls = [];
     if (m.setup) {
       if (["timed_out", "cancelled", "error"].includes(m.setup.state)) {
-        if (m.listed && !m.cookiesOnly) controls.push(el("button", { className: "btn small", textContent: "Retry", onclick: () => startServiceAuthentication(m.service, m.backend) }));
+        if (m.listed && !m.cookiesOnly) controls.push(el("button", { className: `btn small${m.tone === "bad" ? " primary" : ""}`, textContent: "Retry", onclick: () => startServiceAuthentication(m.service, m.backend) }));
       } else if (m.setup.prompt) {
         const reusePrompt = activePrompt?.dataset.authenticationService === m.service
           && activePrompt.dataset.authenticationBackend === m.backend && activePrompt.placeholder === m.setup.prompt;
