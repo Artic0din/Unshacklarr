@@ -167,7 +167,11 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
     const groups = { all: () => true, downloaded: (c) => c.outcome === "downloaded", failed: (c) => c.outcome === "failed",
       kept: (c) => c.outcome === "kept" || c.outcome === "import", stopped: (c) => ["stopped", "interrupted", "cancelled"].includes(c.outcome) };
     const searched = runCards.filter((c) => !isLive(c) && (!q || c.series.toLowerCase().includes(q)));
-    document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.querySelector("span").textContent = `(${searched.filter(groups[b.dataset.f]).length})`);
+    document.querySelectorAll("#tab-log .con-filters button").forEach((b) => {
+      const n = searched.filter(groups[b.dataset.f]).length;
+      b.querySelector("span").textContent = `(${n})`;
+      b.hidden = !n && b.dataset.f !== "all" && b.dataset.f !== conFilter;  // an empty kind is noise; the pressed one stays, to be let go
+    });
     const pastItems = jobsOf(searched.filter(groups[conFilter]).filter((c) => !liveJobs.has(c.batch)));
     $("#runs-history").replaceChildren(...(pastItems.length ? pastItems.slice(0, runsShown).map(itemRow)
       : [emptyHistory(query, conFilter)]));
@@ -331,7 +335,7 @@ function renderJob(j) {
       onclick: (e) => deleteJob(j, e.target) }) : ""].filter(Boolean);
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(first)),
-    el("div", {}, el("h3", { textContent: title }),
+    el("div", {}, el("h2", { textContent: title }),
       el("small", { className: "line1", textContent: `${svcName(first.service)} · ${KIND[first.kind] || first.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
       el("small", { className: "line2" }, el("b", { textContent: svcName(first.service) }), `${KIND[first.kind] || first.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
@@ -514,7 +518,7 @@ async function showLeftovers() {
       el("div", { className: "btns" }, act(it, "import", it.by_hand ? "Import" : "Import anyway", it.by_hand ? "primary" : ""), act(it, "delete", "Delete", "danger")));
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
-    el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Waiting in downloads" }),
+    el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Waiting in downloads" }),
       el("small", { className: "line1", textContent: r.days > 0 ? `Deleted on their own after ${r.days} days (Settings, Automation).` : "Kept until you delete them (Settings, Automation)." }))),
     ...(rows.length ? [el("div", {}, ...rows)] : [el("p", { className: "muted", textContent: "Nothing waits: every download went to Sonarr." })])));
 }
@@ -570,7 +574,7 @@ async function showMissing() {
         el("small", {}, ...(it.title ? [episodeTitle(it.tvdbId, it.sxxeyy, it.title), " · "] : []), `aired ${ago(it.aired)}`)));
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
-    el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Catch up" }),
+    el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Catch up" }),
       el("small", { className: "line1", textContent: "Episodes that aired, are monitored and have no file in Sonarr, for the series Unshackle downloads. The automatic sync only looks at recent ones." }))),
     ...[sonarrPicker(sonarr, (n) => { missingSonarr = n; showMissing(); }), unset].filter(Boolean),
     el("div", { className: "miss-bar" }, ages, go),
@@ -664,7 +668,7 @@ async function showUpgrades(fresh = true) {
     return card;
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
-    el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Upgrades" }),
+    el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Upgrades" }),
       el("small", { className: "line1", textContent: "Files your quality ladder says could be better. Check now asks each service what it has, up to 10 episodes of a series at a time, and keeps each answer for the days set in Settings, Upgrades. Replace downloads the better ones over your files, even when Sonarr ranks both the same (H.264 and H.265 in 1080p)." }))),
     ...[sonarrPicker(sonarr, (n) => { upgradeSonarr = n; upgradePick.clear(); upgradeOpen.clear(); showUpgrades(); }), unsetNote(sonarr)].filter(Boolean),
     el("div", { className: "miss-bar" }, el("span", { className: "muted", textContent: state }), el("span", { className: "up-acts" }, selAll, check, go)),
@@ -735,7 +739,7 @@ async function showLanguages(fresh = true) {
       (n) => (n === 1 ? "Download it again" : `Download the ${n} again`)),
   ];
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
-    el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Languages" }),
+    el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Languages" }),
       el("small", { className: "line1", textContent: "Your files without your audio languages, read from Sonarr 5's own tracks: no file is opened, and nothing is downloaded until you choose. Only the series set up here are checked, against their accepted and preferred audio languages." }))),
     el("div", { className: "miss-bar" }, el("span", { className: "muted", textContent: state }), el("span", { className: "up-acts" }, check)),
     ...(parts.length ? parts : [el("p", { className: "muted", textContent: scan.running ? "Nothing found yet." : r.checked ? "Every file has your audio languages." : "Check now reads each series' files from Sonarr." })])));
@@ -773,7 +777,7 @@ async function showStats() {
       el("td", { className: v.success === null ? "" : v.success < 70 ? "bad" : "fine", textContent: fmt(v.success, "%") }),
       el("td", { textContent: v.last_success ? ago(v.last_success) : "never" }), el("td", { textContent: v.average ? duration(v.average * 1000) : "–" })))));
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:22px" },
-    el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Stats" }),
+    el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Stats" }),
       el("small", { className: "line1", textContent: st.since ? `From the history kept since ${day(new Date(st.since))}` : "Nothing in the history yet" }))),
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
       ["Kept", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
@@ -825,7 +829,7 @@ function renderDetail(c) {
   const acts = [series ? el("button", { className: "btn small", textContent: "Open series", dataset: { fk: "open" }, onclick: () => openDrawer(series) }) : "", ...runActs(c)].filter(Boolean);
   const onService = c.serviceEpisode && c.serviceEpisode !== c.sxxeyy ? `, as ${c.serviceEpisode}` : "";
   const head = el("div", { className: "cd-head" }, thumb("detail", posterOf(c)),
-    el("div", {}, el("h3", { textContent: `${c.series} ${c.sxxeyy}` }),
+    el("div", {}, el("h2", { textContent: `${c.series} ${c.sxxeyy}` }),
       el("small", { className: "line1", textContent: `${svcName(c.service)}${onService} · ${KIND[c.kind] || c.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
       el("small", { className: "line2" }, el("b", { textContent: `${svcName(c.service)}${onService}` }), `${KIND[c.kind] || c.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));

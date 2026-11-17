@@ -1,5 +1,4 @@
 """Narrow screens: nothing clipped or overlapping at 320 px or 400% zoom (WCAG 1.4.10), read from the stylesheet and the scripts."""
-import json
 import re
 from pathlib import Path
 
@@ -65,7 +64,7 @@ def test_a_phone_shows_the_apps_name_whole_or_its_labelled_logo_never_a_cut_name
     phone = media("max-width: 700px")
     has(phone, ".version-chip { display: none; }")  # Settings has the version and what's new
     has(phone, "header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; container-type: inline-size; }")
-    has(CSS, "@container (width < 8.75rem) { .brand span { display: none; } }")
+    has(CSS, "@container (width < 9.25rem) { .brand span { display: none; } }")
     assert "text-overflow: ellipsis" not in squash(phone[phone.index("header h1 {"):][:400])
     assert 'id="home" aria-label="Unshacklarr, schedule"' in (STATIC / "index.html").read_text()
     assert 'id="set-version"' in (STATIC / "index.html").read_text()
@@ -103,17 +102,6 @@ def test_lighting_a_shortcut_scrolls_only_the_bar_sideways_and_counts_only_what_
     assert "nav.scrollLeft +=" in light
     has(light, 'getComputedStyle(box).position === "sticky" ? box.getBoundingClientRect().bottom : 0')
     has(light, "Math.max(pinned($(\".d-head\")), pinned(nav))")
-
-
-def test_the_version_chip_keeps_its_version_in_its_name_when_the_phone_hides_it():
-    news = (STATIC / "js" / "news.js").read_text()
-    has(news, "`What's new in ${name}: 1 new option`")
-    has(news, "`What's new in ${name}: ${count} new options`")
-    assert news.index("const name = version.textContent") < news.index("version.append(el(\"b\"")
-    for lang in ("de", "es", "fr", "it", "ja", "pt-BR", "ru", "zh-CN"):
-        words = json.loads((STATIC / "i18n" / f"{lang}.json").read_text())
-        assert "What's new in {0}: 1 new option" in words and "What's new in {0}: {1} new options" in words, lang
-        assert "What's new: {0} new options" not in words, lang
 
 
 def test_the_late_banner_puts_its_sentence_under_the_count_and_button_on_a_phone():

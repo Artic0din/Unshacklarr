@@ -1721,7 +1721,6 @@
  "No spoilers": "ネタバレ防止",
  "Episode titles": "エピソードのタイトル",
  "Shown": "表示",
- "What's new in {0}: {1} new options": "{0} の新機能：新しいオプション {1} 件",
  "A new {0} URL needs its password or secret key too": "新しい {0} の URL には、そのパスワードまたはシークレットキーも必要です",
  "Access key": "アクセスキー",
  "Automatic backups are off: set how often above, or send one now.": "自動バックアップはオフです。上で頻度を設定するか、今すぐ送信してください。",
@@ -1770,7 +1769,6 @@
  "The passphrase must be at least 12 characters: a few words are easy to remember": "パスフレーズは 12 文字以上にしてください。いくつかの単語を並べると覚えやすくなります",
  "Type your password first.": "先にパスワードを入力してください。",
  "Use an https:// address: over http://, the WebDAV password would cross the network unencrypted": "https:// のアドレスを使ってください。http:// では、WebDAV のパスワードが暗号化されずにネットワークを流れます",
- "What's new in {0}: 1 new option": "{0} の新機能：新しいオプション 1 件",
  "Audio upgrade": "音声のアップグレード",
  "Add audio track": "音声トラックを追加",
  "Remote backup": "リモートバックアップ",
@@ -2452,5 +2450,10 @@
  "Settings: {0} · Unshacklarr": "設定: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
  "Sign in again": "もう一度サインイン",
- "Not signed in": "サインインしていません"
+ "Not signed in": "サインインしていません",
+ "Skip to content": "コンテンツへスキップ",
+ "{0}: running": "{0}: 実行中",
+ "{0}: update available": "{0}: アップデートあり",
+ "{0}: unreachable": "{0}: 接続不可",
+ "{0}: checking": "{0}: 確認中"
 }

@@ -202,10 +202,10 @@ function showSetup(found) {
     x.innerHTML = `<svg viewBox="0 0 24 24">${ICONS[name]}</svg>`;
     return x;
   };
-  const tile = (value, name, sub) => el("button", { type: "button", className: "wz-tile", dataset: { value },
+  const tile = (value, name, sub) => el("button", { type: "button", className: "wz-tile", role: "radio", dataset: { value },
     onclick: () => { f.unshackle_mode.value = value; f.unshackle_mode.dispatchEvent(new Event("change")); keep(); } },
     ico(value, "wz-tile-ico"), el("b", { textContent: name }), el("small", { textContent: sub }));
-  const tiles = el("div", { className: "wz-tiles", role: "group", ariaLabel: "Unshackle runs" },
+  const tiles = el("div", { className: "wz-tiles", role: "radiogroup", ariaLabel: "Unshackle runs" },
     tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "On another machine"));
   const country = countryPicker(f.country);
   country.input.required = true;
@@ -220,8 +220,9 @@ function showSetup(found) {
     el("div", { className: "only-remote" }, field(optional("Downloads folder, as Unshackle sees it"), f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
   const showMode = () => {
     uPanel.dataset.mode = f.unshackle_mode.value;
-    tiles.querySelectorAll(".wz-tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.value === f.unshackle_mode.value)));
+    pickTile(tiles, f.unshackle_mode.value);
   };
+  arrowPicks(tiles);
   f.unshackle_mode.onchange = showMode;
   showMode();
 
@@ -517,7 +518,7 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     const [, branch, commit] = (data.build || "").match(/^(.*?)(?:-([0-9a-f]{7,}))?$/);
     $("#set-version").textContent = data.version ? `Unshacklarr ${data.build ? [branch, commit].filter(Boolean).join(" · ") : data.version}` : "";
     if (data.build) $("#version").replaceChildren(branch, ...(commit ? [el("span", { className: "v-commit", textContent: ` · ${commit}` })] : []));
-    else $("#version").textContent = data.version ? `v${data.version}` : "";  // renderNews adds the count of new options
+    else $("#version").textContent = data.version ? `v${data.version}` : "";
     $("#version").classList.toggle("beta", !!data.build);
     $("#version").hidden = !data.version;
     const update = $("#update");  // a newer release: in sight on every page, its notes one click away

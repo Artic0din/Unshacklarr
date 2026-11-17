@@ -1,4 +1,4 @@
-/* What's new: each new option wears a "New" badge (and its Settings section too) until it has been on screen for a
+/* What's new: each new option wears a "New" badge until it has been on screen for a
    moment or clicked. What was seen is kept by the server, for the account: seen on the computer, gone on the phone
    too. A new install starts with nothing new. The window shows the release notes, read from the CHANGELOG, one
    release per row; a change whose title is an option's below gets a way to it. */
@@ -37,15 +37,14 @@ function newsUnseen() {
   const news = S.news, seen = new Set(news.seen || []);
   return NEWS.filter((n) => !seen.has(n.id) && !(news.installed && versionKey(n.version) <= versionKey(news.installed)));
 }
-async function markNews(ids, list = false) {
-  if (!ids.length && !list) return;
-  S.news = { ...(S.news || {}), seen: [...new Set([...(S.news?.seen || []), ...ids])], ...(list ? { list_read: S.version } : {}) };
+async function markNews(ids) {
+  if (!ids.length) return;
+  S.news = { ...(S.news || {}), seen: [...new Set([...(S.news?.seen || []), ...ids])] };
   renderNews();
-  try { await api("/api/news/seen", { method: "POST", body: JSON.stringify({ ids, list }) }); } catch { /* the badge comes back on the next load */ }
+  try { await api("/api/news/seen", { method: "POST", body: JSON.stringify({ ids }) }); } catch { /* the badge comes back on the next load */ }
 }
 
-/* The badges: on each new option's title (its card outlined), on its Settings section in the list, and a strip at
-   the top of that section saying how many, with a way down to them. */
+/* The badges: on each new option's title, its card outlined. */
 const newsTitle = (box) => box.querySelector(".sx-head h3, summary b, .sub") || (box.matches("label, span[id]") ? box : null);  // a field's own label
 function renderNews() {
   const unseen = newsUnseen(), ids = new Set(unseen.map((n) => n.id));
@@ -57,20 +56,6 @@ function renderNews() {
     if (title && !title.querySelector(`.new-badge[data-news="${n.id}"]`)) title.append(el("span", { className: "new-badge", textContent: "New", dataset: { news: n.id } }));
     if (box) watchNews(box, n.id);
   }
-  document.querySelectorAll(".set-nav button[data-sec]").forEach((b) => {
-    const has = unseen.some((n) => n.sec === b.dataset.sec);
-    const badge = b.querySelector(":scope > .new-dot");  // beside the name, not in it: a long name wraps alone
-    if (has && !badge) b.querySelector(":scope > span").after(el("i", { className: "new-dot", textContent: "New" }));
-    if (!has && badge) badge.remove();
-  });
-  const version = $("#version"), count = S.news?.list_read !== S.version ? unseen.length : 0;  // how many, until this version's list is read
-  version.classList.toggle("has-new", !!count);
-  version.querySelector("b")?.remove();
-  const name = version.textContent;  // the version, named in the label too
-  const label = count === 1 ? `What's new in ${name}: 1 new option` : count ? `What's new in ${name}: ${count} new options` : "What's new in each version";
-  if (count) version.append(el("b", { textContent: count }));
-  version.title = label;
-  version.setAttribute("aria-label", label);
 }
 
 /* Seen when its section is left: every new option there, looked at or not. */
@@ -132,7 +117,6 @@ function releaseRow(r, installed, latest) {
 async function openNews() {
   const list = $("#news-list"), dlg = $("#news-dlg");
   if (!dlg.open) dlg.showModal();
-  markNews([], true);  // the list read: the count goes, each badge stays until its option is seen
   try { releaseNotes ||= await api("/api/changelog"); } catch (e) { return list.replaceChildren(failed(e.message, openNews)); }
   const { installed, releases } = releaseNotes, newer = S.update?.version;
   const latest = newer || installed;

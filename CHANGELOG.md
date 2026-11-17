@@ -86,6 +86,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Fewer things ask for attention. The Settings sections no longer carry a "New" badge, the version in the header no longer counts new options (it still opens What's new), and Activity hides a history filter with nothing under it, keeping All and the one you picked.
 - Less stands between you and the content. On a phone, the Series filters sit in one row that scrolls sideways under the search, and each choice above them takes one line. The Schedule puts Reload beside the sync line and Week/Month beside its filter. In Activity, the five shortcuts sit in two columns, so the history starts higher on every screen.
 - **Success has its own green, apart from the teal accent.** Healthy status dots, "Downloaded" notifications, valid cookie pills, a working CDM and finished job steps no longer share the teal that marks what is selected or being downloaded. (#280)
 - Buttons, dropdowns, search boxes and filters share two heights everywhere (36px in toolbars and forms, 30px in rows and cards), dropdowns look the same in Safari, plain buttons have a visible edge, cards and rows that need attention are framed in their colour instead of a bar on the left, Settings uses the whole width, Interface and Region cards sit side by side with a Language dropdown, the Services table reads Service, Sign-in methods, Sign-in, Cookies, Used by, Actions with each cookie file on one line and Add only when there is none, notifications are two-line rows, and the job bar at the bottom of Activity is readable in the light look.
@@ -128,6 +129,11 @@ Every change worth knowing, newest first. The format follows
 ### Fixed
 
 - **Every button on a phone is big enough to tap.** Episode titles, the eye that hides an episode, the week arrows, Week and Month, the filters, the series' links and shortcuts and the other small controls in Schedule, Series and Activity now answer a finger 44 px wide and tall, mostly without changing how they look. The series page's Back button sits in the page's margin instead of against the screen's edge, and the header shows the whole name "Unshacklarr" (or only the logo on the narrowest phones) instead of "Uns…"; on a phone, the version and what's new are in Settings.
+- **The page works better with a keyboard and a screen reader.** A "Skip to content" link comes first; the main tabs
+  are links, so they open in a new tab; a series poster says its title before its service; the header's status dots
+  say "running" or "unreachable" in their name; Local and Remote are a radio group the arrow keys move through; and
+  Activity's headings no longer skip a level. Menus and dialogs cast a tighter shadow, and section titles are a step
+  larger.
 - **Four more visual slips are gone.** The demo's tour card follows the light or dark theme, where its heading and
   subtitle were near-invisible in light mode; "Sign-in and cookies", "Open Sonarr" and "CDM devices" sit level with the
   buttons beside them; the Local and Remote tiles line up their titles; and on a phone, Activity's history filters and

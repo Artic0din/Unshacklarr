@@ -115,7 +115,7 @@ function showTab(name, fromRoute = false, quiet = false) {
   closeDetails(false);  // the Schedule's popover belongs to its card
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   updateTitle();  // after the list is chosen: a phone's Settings tab names the list, not the section it left
-  document.querySelectorAll("nav button").forEach((b) => {
+  document.querySelectorAll("nav [data-tab]").forEach((b) => {
     if (b.dataset.tab === (name === "yaml" ? "settings" : name)) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
   document.querySelectorAll("main > section").forEach((s) => s.hidden = s.id !== "tab-" + name);
@@ -127,7 +127,14 @@ function showTab(name, fromRoute = false, quiet = false) {
   if (name === "settings" && settingsSec === "services" && S.dlOptions.length) loadServices();
   if (name === "schedule") loadSchedule();
 }
-document.querySelectorAll("nav button").forEach((b) => b.onclick = () => { if (b.dataset.tab === "log") landOnLive = true; showTab(b.dataset.tab); });
+document.querySelectorAll("nav [data-tab]").forEach((b) => b.onclick = (e) => {
+  if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;  // a new tab or window: the browser opens the link
+  e.preventDefault();
+  if (b.dataset.tab === "log") landOnLive = true;
+  showTab(b.dataset.tab);
+});
+// the hash is the route: the skip link moves the focus itself and leaves the URL as it is
+$(".skip").onclick = (e) => { e.preventDefault(); $("main").focus(); };
 let wallTimer = null;  // typed: the wall drawn once the typing pauses, not at each key
 $("#search").oninput = () => { clearTimeout(wallTimer); wallTimer = setTimeout(renderWall, 150); };
 document.querySelectorAll("#tab-series .seg button").forEach((b) => b.onclick = () => {

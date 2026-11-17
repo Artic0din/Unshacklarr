@@ -1696,7 +1696,6 @@
  "No spoilers": "Keine Spoiler",
  "Episode titles": "Episodentitel",
  "Shown": "Angezeigt",
- "What's new in {0}: {1} new options": "Neuerungen in {0}: {1} neue Optionen",
  "A new {0} URL needs its password or secret key too": "Eine neue {0}-URL braucht auch ihr Passwort oder ihren geheimen Schlüssel",
  "Access key": "Zugriffsschlüssel",
  "Automatic backups are off: set how often above, or send one now.": "Automatische Sicherungen sind aus: Lege oben fest, wie oft, oder sende jetzt eine.",
@@ -1745,7 +1744,6 @@
  "The passphrase must be at least 12 characters: a few words are easy to remember": "Die Passphrase muss mindestens 12 Zeichen lang sein: Ein paar Wörter merkt man sich leicht",
  "Type your password first.": "Gib zuerst dein Passwort ein.",
  "Use an https:// address: over http://, the WebDAV password would cross the network unencrypted": "Verwende eine https://-Adresse: Über http:// würde das WebDAV-Passwort unverschlüsselt durchs Netz gehen",
- "What's new in {0}: 1 new option": "Neuerungen in {0}: 1 neue Option",
  "Audio upgrade": "Audio-Upgrade",
  "Add audio track": "Tonspur hinzufügen",
  "Remote backup": "Externe Sicherung",
@@ -2441,5 +2439,10 @@
  "Settings: {0} · Unshacklarr": "Einstellungen: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
  "Sign in again": "Erneut anmelden",
- "Not signed in": "Nicht angemeldet"
+ "Not signed in": "Nicht angemeldet",
+ "Skip to content": "Zum Inhalt springen",
+ "{0}: running": "{0}: läuft",
+ "{0}: update available": "{0}: Update verfügbar",
+ "{0}: unreachable": "{0}: nicht erreichbar",
+ "{0}: checking": "{0}: wird geprüft"
 }
