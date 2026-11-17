@@ -453,7 +453,6 @@ body.drawer-open .savebar { display: none; }
 .version-chip b { margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 700 var(--fs-caption)/1.5 system-ui, sans-serif; }
 .version-chip.has-new { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .version-chip.beta { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 10%, var(--field-bg)); }  /* a test build of a branch */
-@media (max-width: 700px) { .version-chip .v-commit { display: none; } }  /* its branch only, beside the logo */
 .version-chip:focus-visible { border-color: var(--accent); color: var(--accent); }
 @media (hover: hover) { .version-chip:hover { border-color: var(--accent); color: var(--accent); } }
 .gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px 16px; overflow-y: auto; background: var(--bg); }
@@ -1462,8 +1461,8 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   /* No backdrop-filter here: it would make the header the containing block of the fixed tab bar. */
   header { position: sticky; top: 0; z-index: 8; background: var(--bg);
     padding: calc(10px + env(safe-area-inset-top)) 16px 10px; gap: 8px; flex-wrap: nowrap; }
-  header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; } .brand a { min-width: 0; }
-  .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; container-type: inline-size; } .brand a { min-width: 0; }
+  .version-chip { display: none; }  /* Settings has the version and what's new: the app's name keeps the room */
   /* ...on a row of its own under the title, so the header's buttons stay on screen */
   header:has(.health :is([data-state=warn], [data-state=down])) { flex-wrap: wrap; }
   header:has(.health :is([data-state=warn], [data-state=down])) .health { order: 10; flex-basis: 100%; margin-left: 0; }
@@ -1510,9 +1509,9 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .d-head { position: sticky; top: 0; }
   .d-body { overflow: visible; }
   .ep-bar { position: sticky; bottom: 0; }
-  #d-back { display: grid; }
+  #d-back { display: grid; margin-left: 0; }  /* in the page's gutter, not against the screen's edge */
   #close { display: none; }
-  .d-head { padding: calc(8px + env(safe-area-inset-top)) 12px 0; gap: 10px; }
+  .d-head { padding: calc(8px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); gap: 10px; }
   .d-head img { width: 34px; }
   .d-name h2 { font-size: var(--fs-headline); }
   #d-save .long, #d-hide .long { display: none; }
@@ -1937,10 +1936,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 }
 #bo-fields > .sx-grid + .sx-grid { margin-top: 4px; }
 #bo-fields .sx-grid[hidden] { display: none; }
-@media (max-width: 380px) {  /* the narrowest phones: the logo and the version are enough */
-  .brand span { display: none; }
-  .version-chip.has-new { font-size: 0; } .version-chip.has-new b { margin-left: 0; }  /* new options: only their count, the label has the version */
-}
+@container (width < 8.75rem) { .brand span { display: none; } }  /* the name whole or not at all: the logo, labelled, alone */
 #news-title:focus { outline: none; }  /* focused on opening for screen readers; not a control */
 .field small.status-err { color: var(--err); } .field small.status-err:empty { display: none; }
 #bo-say { margin-bottom: 14px; }
@@ -2073,6 +2069,25 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .btn.small, .inbox-filters button, .con-filters button { min-height: var(--ctl-h-sm); padding-block: 0; }
   .sc-foot .icon-hide { width: var(--ctl-h-sm); height: var(--ctl-h-sm); }
   :is(.toolbar, .sched-head, .sched-tools, .cal-nav, .cd-head .act) .btn.small { min-height: var(--ctl-h); padding-inline: 14px; font-size: inherit; }
+}
+/* A phone: every control 44 px to the finger (Apple HIG). Where the mark is smaller by design, an invisible
+   slop centred on it makes up the rest without moving anything: a percentage inset is of the control's own size. */
+@media (max-width: 700px) {
+  :where(.brand a, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
+    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button) { position: relative; }
+  :where(.brand a, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
+    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
+  details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
+  .seg { overflow: visible; }  /* it wraps here, never scrolls: the slop reaches past its frame */
+  .con-filters { row-gap: 8px; }  /* a wrapped row's slop would cover the row above */
+  #d-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(44px - 1lh) .3em; }  /* wrapped, its links 44 px apart */
+  .seg:not(.small) button { min-height: 44px; }  /* rows touching: no room for a slop */
+  .health { gap: 0; } .health button { min-width: 44px; min-height: 44px; padding: 0 8px; justify-content: center; }
+  .ds .sx-grid :is(select, input[type=time]) { min-height: 44px; }
+  .ladder-pick .ax-edit { display: inline-flex; align-items: center; min-height: 44px; }  /* under the buttons: a slop would cover them */
+  .ug-line { min-height: 44px; }
+  .ep-sel button { min-width: 44px; min-height: 44px; }  /* its frame clips: no room for a slop */
+  .set-nav button.set-version { min-height: 44px; }
 }
 /* Dropdowns drawn as fields, in every browser: Safari otherwise sizes its native ones on its own, ignoring the heights above.
    The arrow is two gradients in the look's muted colour, so it follows light and dark. */

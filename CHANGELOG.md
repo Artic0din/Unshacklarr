@@ -127,6 +127,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Every button on a phone is big enough to tap.** Episode titles, the eye that hides an episode, the week arrows, Week and Month, the filters, the series' links and shortcuts and the other small controls in Schedule, Series and Activity now answer a finger 44 px wide and tall, mostly without changing how they look. The series page's Back button sits in the page's margin instead of against the screen's edge, and the header shows the whole name "Unshacklarr" (or only the logo on the narrowest phones) instead of "Uns…"; on a phone, the version and what's new are in Settings.
 - **Four more visual slips are gone.** The demo's tour card follows the light or dark theme, where its heading and
   subtitle were near-invisible in light mode; "Sign-in and cookies", "Open Sonarr" and "CDM devices" sit level with the
   buttons beside them; the Local and Remote tiles line up their titles; and on a phone, Activity's history filters and
