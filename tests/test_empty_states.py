@@ -113,6 +113,25 @@ console.log(JSON.stringify(texts(history.children[0])));
     assert texts == ["No download yet. Downloads start from a series, or with Run sync now."]
 
 
+@pytest.mark.parametrize("pressed, hidden", [
+    ("all", ["kept", "stopped"]),
+    ("stopped", ["kept"]),  # the pressed one stays, even at 0, so it can be let go
+])
+def test_a_history_filter_with_nothing_under_it_is_hidden_but_all_and_the_pressed_one_stay(pressed, hidden):
+    shown = node(r"""
+const src = read(process.argv[1]), [pressed] = process.argv.slice(2);
+const chips = ["all", "downloaded", "failed", "kept", "stopped"].map((f) => box({ dataset: { f } }));
+const runCards = [{ series: "A", outcome: "downloaded" }, { series: "B", outcome: "failed" }];
+const ctx = sandbox({ runCards, conFilter: pressed, runsShown: 50, landOnLive: false, picked_run: "serve", innerWidth: 500,
+  isLive: () => false, jobsOf: () => [], glideBars() {}, $: () => box(),
+  document: { querySelector: () => box(), querySelectorAll: (sel) => (sel.includes("con-filters") ? chips : []) } });
+vm.runInContext(grab(src, /function emptyHistory\b[\s\S]*?\n}\n/) + grab(src, /function renderConsole\b[\s\S]*?\n}\n(?=\/\* Episodes picked)/), ctx);
+ctx.renderConsole();
+console.log(JSON.stringify(chips.filter((c) => c.hidden).map((c) => c.dataset.f)));
+""", str(JS / "activity.js"), pressed)
+    assert shown == hidden
+
+
 def test_upgrades_names_the_search_that_matched_no_series_and_clears_it():
     shown = node(r"""
 const src = read(process.argv[1]);

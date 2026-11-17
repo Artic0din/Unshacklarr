@@ -169,7 +169,11 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
     const groups = { all: () => true, downloaded: (c) => c.outcome === "downloaded", failed: (c) => c.outcome === "failed",
       kept: (c) => c.outcome === "kept" || c.outcome === "import", stopped: (c) => ["stopped", "interrupted", "cancelled"].includes(c.outcome) };
     const searched = runCards.filter((c) => !isLive(c) && (!q || c.series.toLowerCase().includes(q)));
-    document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.querySelector("span").textContent = `(${searched.filter(groups[b.dataset.f]).length})`);
+    document.querySelectorAll("#tab-log .con-filters button").forEach((b) => {
+      const n = searched.filter(groups[b.dataset.f]).length;
+      b.querySelector("span").textContent = `(${n})`;
+      b.hidden = !n && b.dataset.f !== "all" && b.dataset.f !== conFilter;  // an empty kind is noise; the pressed one stays, to be let go
+    });
     const pastItems = jobsOf(searched.filter(groups[conFilter]).filter((c) => !liveJobs.has(c.batch)));
     $("#runs-history").replaceChildren(...(pastItems.length ? pastItems.slice(0, runsShown).map(itemRow)
       : [emptyHistory(query, conFilter)]));

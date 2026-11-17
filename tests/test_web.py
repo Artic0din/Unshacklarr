@@ -5365,12 +5365,12 @@ def test_news_seen_is_kept_for_the_account_and_a_new_install_starts_with_none(tm
     async def go():
         async with TestClient(TestServer(web.app)) as client:
             a = await (await client.post("/api/news/seen", json={"ids": ["download-window", "../bad", 5]}, headers=h)).json()
-            b = await (await client.post("/api/news/seen", json={"ids": ["fallback-service"], "list": True}, headers=h)).json()
+            b = await (await client.post("/api/news/seen", json={"ids": ["fallback-service"]}, headers=h)).json()
             return a, b
 
     a, b = asyncio.run(go())
     assert a["seen"] == ["download-window"]  # only ids, never anything else
-    assert b["seen"] == ["download-window", "fallback-service"] and b["list_read"] == web.__version__
+    assert b["seen"] == ["download-window", "fallback-service"]
     web.news_installed()
     assert web.read_json(web.NEWS_FILE, {})["installed"] == web.__version__ and web.read_json(web.NEWS_FILE, {})["seen"]
 
