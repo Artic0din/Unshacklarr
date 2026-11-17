@@ -2516,5 +2516,10 @@
  "Loading the downloads…": "Загрузка списка загрузок…",
  "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": "У Unshacklarr уже есть ключ для указанного выше URL, сохранённый или из SONARR_API_KEY. Оставьте поле пустым, чтобы использовать его.",
  "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": "У Unshacklarr уже есть ключ для указанного выше адреса, сохранённый или из UNSHACKLE_API_KEY. Оставьте поле пустым, чтобы использовать его.",
- "Fix sign-in": "Исправить вход"
+ "Fix sign-in": "Исправить вход",
+ "Skip to content": "Перейти к содержимому",
+ "{0}: running": "{0}: работает",
+ "{0}: update available": "{0}: доступно обновление",
+ "{0}: unreachable": "{0}: недоступен",
+ "{0}: checking": "{0}: проверка"
 }

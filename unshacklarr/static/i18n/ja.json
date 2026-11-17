@@ -2453,5 +2453,10 @@
  "Loading the downloads…": "ダウンロードを読み込み中…",
  "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": "上に入力された URL 用のキー（保存済み、または SONARR_API_KEY）がすでにあります。空欄のままならそのキーを使います。",
  "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": "上に入力されたアドレス用のキー（保存済み、または UNSHACKLE_API_KEY）がすでにあります。空欄のままならそのキーを使います。",
- "Fix sign-in": "サインインを修正"
+ "Fix sign-in": "サインインを修正",
+ "Skip to content": "コンテンツへスキップ",
+ "{0}: running": "{0}: 実行中",
+ "{0}: update available": "{0}: アップデートあり",
+ "{0}: unreachable": "{0}: 接続不可",
+ "{0}: checking": "{0}: 確認中"
 }

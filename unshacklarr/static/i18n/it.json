@@ -2449,5 +2449,10 @@
  "Loading the downloads…": "Caricamento dei download…",
  "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": "Unshacklarr ha già una chiave per l'URL indicato qui sopra, salvata o da SONARR_API_KEY. Lascia vuoto per usarla.",
  "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": "Unshacklarr ha già una chiave per l'indirizzo indicato qui sopra, salvata o da UNSHACKLE_API_KEY. Lascia vuoto per usarla.",
- "Fix sign-in": "Sistema l'accesso"
+ "Fix sign-in": "Sistema l'accesso",
+ "Skip to content": "Vai al contenuto",
+ "{0}: running": "{0}: in esecuzione",
+ "{0}: update available": "{0}: aggiornamento disponibile",
+ "{0}: unreachable": "{0}: non raggiungibile",
+ "{0}: checking": "{0}: controllo in corso"
 }

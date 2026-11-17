@@ -2427,5 +2427,10 @@
  "Loading the downloads…": "Cargando las descargas…",
  "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": "Unshacklarr ya tiene una clave para la URL indicada arriba, guardada o de SONARR_API_KEY. Déjalo vacío para usarla.",
  "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": "Unshacklarr ya tiene una clave para la dirección indicada arriba, guardada o de UNSHACKLE_API_KEY. Déjalo vacío para usarla.",
- "Fix sign-in": "Arreglar inicio de sesión"
+ "Fix sign-in": "Arreglar inicio de sesión",
+ "Skip to content": "Saltar al contenido",
+ "{0}: running": "{0}: en marcha",
+ "{0}: update available": "{0}: actualización disponible",
+ "{0}: unreachable": "{0}: inaccesible",
+ "{0}: checking": "{0}: comprobando"
 }

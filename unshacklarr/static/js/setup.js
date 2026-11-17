@@ -202,10 +202,10 @@ function showSetup(found) {
     x.innerHTML = `<svg viewBox="0 0 24 24">${ICONS[name]}</svg>`;
     return x;
   };
-  const tile = (value, name, sub) => el("button", { type: "button", className: "wz-tile", dataset: { value },
+  const tile = (value, name, sub) => el("button", { type: "button", className: "wz-tile", role: "radio", dataset: { value },
     onclick: () => { f.unshackle_mode.value = value; f.unshackle_mode.dispatchEvent(new Event("change")); keep(); } },
     ico(value, "wz-tile-ico"), el("b", { textContent: name }), el("small", { textContent: sub }));
-  const tiles = el("div", { className: "wz-tiles", role: "group", ariaLabel: "Unshackle runs" },
+  const tiles = el("div", { className: "wz-tiles", role: "radiogroup", ariaLabel: "Unshackle runs" },
     tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "On another machine"));
   const country = countryPicker(f.country);
   country.input.required = true;
@@ -220,8 +220,9 @@ function showSetup(found) {
     el("div", { className: "only-remote" }, field(optional("Downloads folder, as Unshackle sees it"), f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
   const showMode = () => {
     uPanel.dataset.mode = f.unshackle_mode.value;
-    tiles.querySelectorAll(".wz-tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.value === f.unshackle_mode.value)));
+    pickTile(tiles, f.unshackle_mode.value);
   };
+  arrowPicks(tiles);
   f.unshackle_mode.onchange = showMode;
   showMode();
 

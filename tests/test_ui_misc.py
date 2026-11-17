@@ -435,7 +435,7 @@ const ctx = sandbox({ el: withAppend, $: (sel) => fields[sel] ?? stub(), S: { se
 vm.runInContext(grab(src, /function initialsOf[\s\S]*?\nconst posterFail[^\n]*\n/), ctx);
 vm.runInContext(grab(src, /function renderWall\(\) \{[\s\S]*?\n\}\n/), ctx);
 ctx.renderWall();
-const img = drawn[0].kids[0].kids.find((k) => k.tag === "img");
+const img = drawn[0].kids.find((k) => k.className === "art").kids.find((k) => k.tag === "img");
 const initials = ctx.posterSrc("", "Dark Matter");
 const failing = { target: { src: img.src, getAttribute() { return this.src; } } };
 img.onerror(failing);

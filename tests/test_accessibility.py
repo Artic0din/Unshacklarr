@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -222,3 +223,85 @@ console.log(JSON.stringify(out));
 """)
     assert shown == {"asked": "Delete RMCBFM.txt?", "onItself": "Delete RMCBFM.txt?", "confirmed": True,
                      "elsewhere": ["Delete", None, False]}  # taken back: the next click only asks again
+
+
+PAGE = JS.parent / "index.html"
+I18N = JS.parent / "i18n"
+
+
+def test_a_skip_link_comes_first_and_moves_the_focus_without_changing_the_route():
+    page = PAGE.read_text(encoding="utf8")
+    body = page[page.index("<body>"):]
+    first = re.search(r"<(a|button|input|select|textarea)\b[^>]*>", body).group(0)
+    assert first == '<a class="skip" href="#main">' and body.startswith('<body>\n<a class="skip" href="#main">Skip to content</a>')
+    assert '<main id="main" tabindex="-1">' in page
+    nav = (JS / "navigation.js").read_text(encoding="utf8")
+    assert '$(".skip").onclick = (e) => { e.preventDefault(); $("main").focus(); };' in nav  # "#main" is not a route
+
+
+def test_the_main_tabs_are_links_to_their_routes():
+    page = PAGE.read_text(encoding="utf8")
+    nav = page[page.index('<nav aria-label="Main">'):page.index("</nav>")]
+    assert "<button" not in nav
+    assert re.findall(r'<a href="(#/[\w.]+)" data-tab="(\w+)"', nav) == [
+        ("#/schedule", "schedule"), ("#/series", "series"), ("#/activity", "log"), ("#/settings", "settings")]
+    js = (JS / "navigation.js").read_text(encoding="utf8")
+    assert 'querySelectorAll("nav button")' not in js
+    assert "if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;" in js  # a new tab: the browser's
+
+
+def test_a_series_poster_is_named_by_its_title_before_its_service():
+    core = (JS / "core.js").read_text(encoding="utf8")
+    card = core[core.index('const card = el("button", { className: "poster"'):]
+    card = card[:card.index("card.dataset.tvdb")]
+    assert card.index('className: "name"') < card.index("art);")
+    art = core[core.index('const art = el("span", { className: "art" });'):core.index('const card = el("button", { className: "poster"')]
+    assert art.index('className: "sick"') < art.index('className: "svc"')  # its state, then where it comes from
+
+
+def test_the_unshackle_mode_is_a_radio_group_the_arrows_move_through():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const grab = (name) => src.match(new RegExp(`^function ${name}\\(.*?^\\}`, "ms"))[0];
+let handler = null, focused = null, value = "local";
+const tile = (v) => ({ dataset: { value: v }, ariaChecked: null, tabIndex: 0, focus() { focused = v; }, click() { value = v; ctx.pickTile(group, v); } });
+const tiles = [tile("local"), tile("remote")];
+const group = { querySelectorAll: () => tiles, addEventListener: (type, fn) => { handler = fn; } };
+const ctx = {};
+vm.createContext(ctx);
+vm.runInContext(grab("pickTile") + grab("arrowPicks"), ctx);
+ctx.pickTile(group, "local");
+const state = () => tiles.map((t) => [t.ariaChecked, t.tabIndex]);
+const out = { start: state() };
+ctx.arrowPicks(group);
+const press = (key, target) => { let stopped = false; handler({ key, target, preventDefault() { stopped = true; } }); return stopped; };
+out.right = [press("ArrowRight", tiles[0]), value, focused, state()];
+out.wraps = [press("ArrowDown", tiles[1]), value];
+out.other = press("Enter", tiles[0]);
+console.log(JSON.stringify(out));
+""")
+    assert shown == {"start": [["true", 0], ["false", -1]],
+                     "right": [True, "remote", "remote", [["false", -1], ["true", 0]]],
+                     "wraps": [True, "local"], "other": False}
+    page = PAGE.read_text(encoding="utf8")
+    assert '<div class="wz-tiles ux-tiles" role="radiogroup" aria-label="Unshackle runs">' in page
+    assert 'role: "radiogroup", ariaLabel: "Unshackle runs"' in (JS / "setup.js").read_text(encoding="utf8")
+
+
+def test_activity_pane_titles_follow_the_page_heading_without_a_skip():
+    for name in ["activity.js", "settings-services.js"]:
+        assert 'className: "cd-head" }, el("div", {}, el("h3"' not in (JS / name).read_text(encoding="utf8"), name
+    assert '<h2 id="cd-top-title"></h2>' in PAGE.read_text(encoding="utf8")
+
+
+def test_every_language_translates_the_skip_link_and_the_light_states():
+    texts = ["Skip to content", "{0}: running", "{0}: update available", "{0}: unreachable", "{0}: checking"]
+    english = json.loads((I18N / "en.json").read_text(encoding="utf8"))
+    for path in sorted(I18N.glob("*.json")):
+        translated = json.loads(path.read_text(encoding="utf8"))
+        for text in texts:
+            assert text in english, text
+            if path.name != "en.json":
+                assert translated.get(text), f"{path.name}: {text!r}"
+                assert ("{0}" in translated[text]) == ("{0}" in text), f"{path.name}: {text!r} placeholder"

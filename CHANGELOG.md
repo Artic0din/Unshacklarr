@@ -127,6 +127,11 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **The page works better with a keyboard and a screen reader.** A "Skip to content" link comes first; the main tabs
+  are links, so they open in a new tab; a series poster says its title before its service; the header's status dots
+  say "running" or "unreachable" in their name; Local and Remote are a radio group the arrow keys move through; and
+  Activity's headings no longer skip a level. Menus and dialogs cast a tighter shadow, and section titles are a step
+  larger.
 - **Clearer words where they mattered.** A Schedule card without a release time shows when the sync tries it, with
   its airing beside it, instead of the airing labelled "next sync"; a download refused for an expired sign-in offers
   Fix sign-in first, which opens that service in Settings › Services, and Retry after it; Activity says it is loading
