@@ -35,6 +35,27 @@ def test_lights_paint_from_a_status_answer():
 def test_page_asks_the_cached_lights_before_waiting_for_its_state():
     boot = (JS / "setup.js").read_text(encoding="utf8")
     logged_in = boot.index("if (!session.logged_in) return showLogin();")
-    lights = re.search(r'api\("/api/status"\)\.then\(paintLights', boot)
-    assert lights, "the page never asks the plain, cached /api/status"
+    lights = re.search(r'api\("/api/status"\)\.then\(\(h\) => \{ if \(!\$\("\[data-health=unshackle\]"\)\.dataset\.state\) paintLights\(h\)', boot)
+    assert lights, "the page never asks the plain, cached /api/status, or paints it over a newer answer"
     assert logged_in < lights.start() < boot.index("await stateAsked")
+
+
+def test_cached_lights_never_paint_over_a_newer_answer():
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = r"""
+const fs = require("fs"), vm = require("vm");
+const boot = fs.readFileSync(process.argv[1], "utf8");
+const then = boot.match(/api\("\/api\/status"\)\.then\((\(h\) => \{[^\n]*?\}),/)[1];
+const painted = [], light = { dataset: {} };
+const ctx = { $: () => light, paintLights: (h) => painted.push(h.from) };
+vm.createContext(ctx);
+const onCached = vm.runInContext(then, ctx);
+onCached({ from: "cached-first" });
+light.dataset.state = "down";  // the live check painted meanwhile
+onCached({ from: "cached-late" });
+console.log(JSON.stringify(painted));
+"""
+    out = subprocess.run(["node", "-e", script, "--", str(JS / "setup.js")], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout) == ["cached-first"]

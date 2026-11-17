@@ -501,7 +501,8 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
   if (!session.configured) return showSetup(session.setup);
   if (!session.logged_in) return showLogin();
   // the server's last background check, answered at once: the lights do not wait for Sonarr's series or a live Unshackle check
-  api("/api/status").then(paintLights, () => { /* the full check below paints them */ });
+  api("/api/status").then((h) => { if (!$("[data-health=unshackle]").dataset.state) paintLights(h); },  // never over a newer, live answer
+    () => { /* the full check below paints them */ });
   try {
     const asked = await stateAsked;
     if (asked instanceof Error) throw asked;
