@@ -2456,7 +2456,7 @@
  "Signs in with": "登录途径",
  "Sign-in status": "登录状态",
  "Loading the downloads…": "正在加载下载…",
- "Unshacklarr already has a key from SONARR_API_KEY. Leave this empty to use it with the URL from SONARR_URL.": "Unshacklarr 已从 SONARR_API_KEY 获得密钥。留空即可将其用于 SONARR_URL 中的 URL。",
- "Unshacklarr already has a key from UNSHACKLE_API_KEY. Leave this empty to use it with the address from UNSHACKLE_URL.": "Unshacklarr 已从 UNSHACKLE_API_KEY 获得密钥。留空即可将其用于 UNSHACKLE_URL 中的地址。",
+ "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": "Unshacklarr 已有上方所填 URL 的密钥（已保存或来自 SONARR_API_KEY）。留空即可使用。",
+ "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": "Unshacklarr 已有上方所填地址的密钥（已保存或来自 UNSHACKLE_API_KEY）。留空即可使用。",
  "Fix sign-in": "修复登录"
 }

@@ -238,9 +238,10 @@ function renderServices() {
 }
 /* Scrolled to and focused, when another page sent you to one service's row. */
 function revealService() {
-  const backend = servicesReveal && S.config.service_defaults?.[servicesReveal]?.backend;
-  const row = servicesReveal && ((backend && document.getElementById(`sv-${servicesReveal}@${backend}`)) || document.getElementById(`sv-${servicesReveal}`)
-    || document.querySelector(`[id^="sv-${CSS.escape(servicesReveal)}@"]`));  // only on another server
+  // "SERVICE@backend": that server's row (where a download's sign-in failed, "" the main one); else the one set for it
+  const [service, named] = servicesReveal.split("@"), backend = named ?? S.config.service_defaults?.[service]?.backend;
+  const row = service && ((backend && document.getElementById(`sv-${service}@${backend}`)) || document.getElementById(`sv-${service}`)
+    || document.querySelector(`[id^="sv-${CSS.escape(service)}@"]`));  // only on another server
   if (!row) return;
   servicesReveal = "";
   row.scrollIntoView({ block: "center", behavior: SCROLL });
@@ -257,10 +258,11 @@ async function loadServices() {
   }
   renderServices();
 }
-/* From another page (a failing series): Settings, Services, at the service's row. */
-async function openServiceRow(service) {
+/* From another page (a failing series, a refused download): Settings, Services, at the service's row; with a
+   backend, that server's row. */
+async function openServiceRow(service, backend) {
   if (current && !await closeDrawer(true)) return;
-  servicesReveal = service;
+  servicesReveal = backend === undefined ? service : `${service}@${backend}`;
   showTab("settings");
   showSettingsSec("services");
   renderServices();

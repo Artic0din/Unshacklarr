@@ -215,6 +215,8 @@ const whenText = (d) => {
   // on disk, not yours, or aired and not tried yet (its pill says "Tries at the next sync"): when it airs
   return el("span", { className: "tm" }, time(aired), el("small", { className: "m", textContent: "airs" }));
 };
+/* A month cell's time: filed under the day it airs, a try on another day (a sync after midnight) says its weekday. */
+const monthTime = (d, key) => { const at = new Date(whenOf(d)); return `${isoDay(at) !== key ? `${at.toLocaleDateString(LOCALE, { weekday: "short" })} ` : ""}${time(at)}`; };
 /* Where one of your episodes stands, in a word and a colour. */
 function schedStatus(d) {
   if (d.hasFile) return ["ok", d.managed ? "Downloaded" : "On disk"];
@@ -258,7 +260,7 @@ function renderMonth() {
       el("span", { className: "cal-count" }, ...(mine ? [el("i", { className: "mine", textContent: mine })] : []),
         ...(list.length - mine ? [el("i", { textContent: list.length - mine })] : [])),
       el("span", { className: "cal-eps" }, ...shown.map((d) => el("span", { className: "cal-ep" + (d.managed ? " mine" : "") },
-        el("b", { textContent: time(new Date(whenOf(d))) }), ` ${d.series}`)),
+        el("b", { textContent: monthTime(d, key) }), ` ${d.series}`)),
         ...(list.length > 3 ? [el("span", { className: "cal-ep more", textContent: `+${list.length - 3} more` })] : [])));
     cells.push(cell);
   }

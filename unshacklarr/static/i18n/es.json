@@ -2425,7 +2425,7 @@
  "Signs in with": "Inicia sesión con",
  "Sign-in status": "Estado del inicio de sesión",
  "Loading the downloads…": "Cargando las descargas…",
- "Unshacklarr already has a key from SONARR_API_KEY. Leave this empty to use it with the URL from SONARR_URL.": "Unshacklarr ya tiene una clave de SONARR_API_KEY. Déjalo vacío para usarla con la URL de SONARR_URL.",
- "Unshacklarr already has a key from UNSHACKLE_API_KEY. Leave this empty to use it with the address from UNSHACKLE_URL.": "Unshacklarr ya tiene una clave de UNSHACKLE_API_KEY. Déjalo vacío para usarla con la dirección de UNSHACKLE_URL.",
+ "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": "Unshacklarr ya tiene una clave para la URL indicada arriba, guardada o de SONARR_API_KEY. Déjalo vacío para usarla.",
+ "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": "Unshacklarr ya tiene una clave para la dirección indicada arriba, guardada o de UNSHACKLE_API_KEY. Déjalo vacío para usarla.",
  "Fix sign-in": "Arreglar inicio de sesión"
 }

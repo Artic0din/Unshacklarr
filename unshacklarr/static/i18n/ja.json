@@ -2451,7 +2451,7 @@
  "Signs in with": "サインイン手段",
  "Sign-in status": "サインイン状況",
  "Loading the downloads…": "ダウンロードを読み込み中…",
- "Unshacklarr already has a key from SONARR_API_KEY. Leave this empty to use it with the URL from SONARR_URL.": "SONARR_API_KEY のキーがすでにあります。空欄のままなら SONARR_URL の URL でそのキーを使います。",
- "Unshacklarr already has a key from UNSHACKLE_API_KEY. Leave this empty to use it with the address from UNSHACKLE_URL.": "UNSHACKLE_API_KEY のキーがすでにあります。空欄のままなら UNSHACKLE_URL のアドレスでそのキーを使います。",
+ "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": "上に入力された URL 用のキー（保存済み、または SONARR_API_KEY）がすでにあります。空欄のままならそのキーを使います。",
+ "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": "上に入力されたアドレス用のキー（保存済み、または UNSHACKLE_API_KEY）がすでにあります。空欄のままならそのキーを使います。",
  "Fix sign-in": "サインインを修正"
 }

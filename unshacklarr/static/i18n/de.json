@@ -2440,7 +2440,7 @@
  "Signs in with": "Anmeldung über",
  "Sign-in status": "Anmeldestatus",
  "Loading the downloads…": "Downloads werden geladen…",
- "Unshacklarr already has a key from SONARR_API_KEY. Leave this empty to use it with the URL from SONARR_URL.": "Unshacklarr hat schon einen Schlüssel aus SONARR_API_KEY. Lass das Feld leer, um ihn mit der URL aus SONARR_URL zu verwenden.",
- "Unshacklarr already has a key from UNSHACKLE_API_KEY. Leave this empty to use it with the address from UNSHACKLE_URL.": "Unshacklarr hat schon einen Schlüssel aus UNSHACKLE_API_KEY. Lass das Feld leer, um ihn mit der Adresse aus UNSHACKLE_URL zu verwenden.",
+ "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": "Unshacklarr hat schon einen Schlüssel für die oben eingetragene URL, gespeichert oder aus SONARR_API_KEY. Lass das Feld leer, um ihn zu verwenden.",
+ "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": "Unshacklarr hat schon einen Schlüssel für die oben eingetragene Adresse, gespeichert oder aus UNSHACKLE_API_KEY. Lass das Feld leer, um ihn zu verwenden.",
  "Fix sign-in": "Anmeldung beheben"
 }

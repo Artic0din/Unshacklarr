@@ -2514,7 +2514,7 @@
  "Signs in with": "Способ входа",
  "Sign-in status": "Состояние входа",
  "Loading the downloads…": "Загрузка списка загрузок…",
- "Unshacklarr already has a key from SONARR_API_KEY. Leave this empty to use it with the URL from SONARR_URL.": "У Unshacklarr уже есть ключ из SONARR_API_KEY. Оставьте поле пустым, чтобы использовать его с URL из SONARR_URL.",
- "Unshacklarr already has a key from UNSHACKLE_API_KEY. Leave this empty to use it with the address from UNSHACKLE_URL.": "У Unshacklarr уже есть ключ из UNSHACKLE_API_KEY. Оставьте поле пустым, чтобы использовать его с адресом из UNSHACKLE_URL.",
+ "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": "У Unshacklarr уже есть ключ для указанного выше URL, сохранённый или из SONARR_API_KEY. Оставьте поле пустым, чтобы использовать его.",
+ "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": "У Unshacklarr уже есть ключ для указанного выше адреса, сохранённый или из UNSHACKLE_API_KEY. Оставьте поле пустым, чтобы использовать его.",
  "Fix sign-in": "Исправить вход"
 }

@@ -162,7 +162,7 @@ console.log(JSON.stringify({ placeholder: sonarrKey.placeholder ?? "", described
     assert seen["placeholder"] == ""
     assert seen["described"] is True
     assert seen["hidden"] is False
-    assert seen["text"] == "Unshacklarr already has a key from SONARR_API_KEY. Leave this empty to use it with the URL from SONARR_URL."
+    assert seen["text"] == "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it."
     assert seen["unshackle"] == [False, True]  # Sonarr's found, the remote Unshackle's not
 
 
@@ -187,13 +187,20 @@ def test_a_phone_dock_with_four_buttons_or_more_puts_them_under_the_status():
 RUN_ACTS = r"""
 const src = read(process.argv[1]);
 const opened = [];
-const ctx = sandbox({ isLive: () => false, setupButton: () => "", svcName: (s) => `${s}+`, openServiceRow: (s) => opened.push(s) });
-vm.runInContext(grab(src, /^const signInFailed = .*$/m) + "\n" + grab(src, /^function runActs\b[\s\S]*?\n}\n/m), ctx);
-const acts = (extra) => ctx.runActs({ id: "a", episodeId: 1, service: "HULU", outcome: "failed", ...extra }).map((b) => ({ text: b.textContent, title: b.title, primary: b.className.includes("primary"), go: b.onclick }));
-const refused = acts({ auth_failures: { HULU: "2026-11-17T00:00:00Z" } }), plain = acts({}), old = acts({ auth_failure: true });
+const ctx = sandbox({ isLive: () => false, setupButton: () => "", svcName: (s) => `${s}+`, openServiceRow: (...a) => opened.push(a),
+  el: (tag, props = {}, ...kids) => ({ tag, ...props, kids, set innerHTML(v) {} }) });
+vm.runInContext(grab(src, /^function signInFailed\b[\s\S]*?\n}\n/m) + grab(src, /^const fixSignIn = .*$/m) + "\n" + grab(src, /^const ACT_ICONS = [\s\S]*?\n};\n/m)
+  + grab(src, /^function cardActs\b[\s\S]*?\n}\n/m) + grab(src, /^function runActs\b[\s\S]*?\n}\n/m), ctx);
+const card = (extra) => ({ id: "a", episodeId: 1, service: "HULU", backend: "", outcome: "failed", ...extra });
+const acts = (extra) => ctx.runActs(card(extra)).map((b) => ({ text: b.textContent, title: b.title, primary: b.className.includes("primary"), go: b.onclick }));
+const icons = (extra) => ctx.cardActs(card(extra)).map((b) => [b.ariaLabel, b.className.includes("primary"), b.onclick]);
+const refused = acts({ auth_failures: { HULU: "2026-11-17T00:00:00Z" }, auth_failure_backends: { HULU: "vpn" } }), plain = acts({}), old = acts({ auth_failure: true, backend: "eu" });
 refused[0].go();
+old[0].go();
+const grouped = icons({ auth_failures: { HULU: "2026-11-17T00:00:00Z" } });
+grouped[0][2]({ ...card({ auth_failures: { HULU: "x" } }) });
 console.log(JSON.stringify({ refused: refused.map(({ text, primary }) => [text, primary]), plain: plain.map(({ text, primary }) => [text, primary]),
-  title: refused[0].title, old: old[0].text, opened }));
+  title: refused[0].title, old: old[0].text, opened, grouped: grouped.map(([l, p]) => [l, p]), groupedPlain: icons({}).map(([l, p]) => [l, p]) }));
 """
 
 
@@ -202,9 +209,45 @@ def test_an_attempt_its_sign_in_failed_offers_the_sign_in_first_and_retry_after(
     # a retry would fail the same way: the service's row in Settings, where its sign-in is renewed, comes first
     assert seen["refused"][:2] == [["Fix sign-in", True], ["Retry", False]]
     assert seen["title"] == "Check HULU+ in Settings › Services"  # where it leads, short enough for a phone's bar
-    assert seen["opened"] == ["HULU"]
+    # the server it failed on, not the one set for the service now; a card of the first schema: its own backend
+    assert seen["opened"][:2] == [["HULU", "vpn"], ["HULU", "eu"]]
     assert seen["plain"][0] == ["Retry", True]  # any other failure: retrying is still the thing to do
-    assert seen["old"] == "Fix sign-in"  # a card from the first sign-in schema
+    assert seen["old"] == "Fix sign-in"
+    # an attempt in a job (its icon buttons) too, on the main server when that is where it failed
+    assert seen["grouped"][:2] == [["Fix sign-in", True], ["Retry", False]] and seen["opened"][2] == ["HULU", ""]
+    assert seen["groupedPlain"][0] == ["Retry", True]
+
+
+REVEAL = r"""
+const src = read(process.argv[1]);
+const rows = new Set(["sv-HULU", "sv-HULU@vpn", "sv-HULU@eu"]), shown = [];
+const ctx = sandbox({ S: { config: { service_defaults: { HULU: { backend: "eu" } } } }, SCROLL: "auto", CSS: { escape: (s) => s },
+  document: { getElementById: (id) => (rows.has(id) ? { id, scrollIntoView() { shown.push(id); }, focus() {} } : null), querySelector: () => null } });
+vm.runInContext("let servicesReveal = '';\n" + grab(src, /^function revealService\b[\s\S]*?\n}\n/m) + "globalThis.go = (s) => { servicesReveal = s; revealService(); };", ctx);
+for (const s of ["HULU@vpn", "HULU@", "HULU"]) ctx.go(s);
+console.log(JSON.stringify(shown));
+"""
+
+
+def test_the_services_row_opened_for_a_failed_sign_in_is_the_server_it_failed_on():
+    # a backend named: that row ("" the main server's); none: the one set for the service, as before
+    assert node(REVEAL, str(JS / "services.js")) == ["sv-HULU@vpn", "sv-HULU", "sv-HULU@eu"]
+
+
+MONTH_TIME = r"""
+const src = read(process.argv[1]);
+const ctx = sandbox({ isoDay: (d) => d.toISOString().slice(0, 10), time: (d) => d.toISOString().slice(11, 16), LOCALE: "en-GB" });
+vm.runInContext(grab(src, /^const triesAt = .*\n/m) + grab(src, /^const whenOf = .*\n/m) + grab(src, /^const monthTime = .*\n/m) + "globalThis.monthTime = monthTime;", ctx);
+const ep = { managed: true, hasFile: false, airDateUtc: "2099-01-05T23:30:00Z" };
+console.log(JSON.stringify({ nextDay: ctx.monthTime({ ...ep, firstTry: "2099-01-06T00:00:00Z" }, "2099-01-05"),
+  sameDay: ctx.monthTime({ ...ep, firstTry: "2099-01-05T23:45:00Z" }, "2099-01-05") }));
+"""
+
+
+def test_a_month_cell_names_the_day_of_a_try_after_midnight():
+    seen = node(MONTH_TIME, str(JS / "schedule.js"))
+    # filed under the day it airs: "00:00" alone would put the sync a day early
+    assert seen == {"nextDay": "Tue 00:00", "sameDay": "23:45"}
 
 
 WHEN_TEXT = r"""

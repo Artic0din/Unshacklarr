@@ -912,9 +912,10 @@ document.addEventListener("click", (e) => {  // a click beside the open output f
 const ACT_ICONS = {
   stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>', import: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   retry: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.7"/><path d="M4 4v4.7h4.7"/>', delete: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  signin: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
 };
 function cardActs(c) {
-  const live = isLive(c);
+  const live = isLive(c), signIn = signInFailed(c);
   const act = (kind, label, run, extra = "") => {
     const b = el("button", { type: "button", className: `jact ${extra}`, ariaLabel: label, dataset: { focusKey: `${kind}:${c.id}`, fk: `${label}:${c.id}` }, onclick: (e) => run(c, e.currentTarget) });
     b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ACT_ICONS[kind]}</svg>`;
@@ -925,18 +926,25 @@ function cardActs(c) {
     live && c.job_id ? act("stop", "Stop", stopRun, "danger") : "",
     !live && c.outcome === "kept" ? act("import", "Import anyway", importKept, "primary") : "",
     !live && c.outcome === "import" ? act("import", "Import", importKept, "primary") : "",
-    !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? act("retry", "Retry", retryRun, "primary") : "",
+    signIn ? act("signin", "Fix sign-in", fixSignIn, "primary") : "",
+    !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? act("retry", "Retry", retryRun, signIn ? "" : "primary") : "",
     !live ? act("delete", "Delete", deleteRun, "danger") : "",
   ].filter(Boolean);
 }
-/* The service whose sign-in failed the attempt (the first schema's single failure too): a retry fails the same way. */
-const signInFailed = (c) => c.outcome === "failed" && (Object.keys(c.auth_failures || {})[0] || (c.auth_failure && (c.auth_failure_service || c.service))) || "";
+/* The service whose sign-in failed the attempt, and on which server (the first schema's single failure too): a retry
+   fails the same way. null when none did. */
+function signInFailed(c) {
+  if (c.outcome !== "failed") return null;
+  const service = Object.keys(c.auth_failures || {})[0] || (c.auth_failure && (c.auth_failure_service || c.service));
+  return service ? { service, backend: c.auth_failure_backends?.[service] ?? c.backend ?? "" } : null;
+}
+const fixSignIn = (c) => { const { service, backend } = signInFailed(c); openServiceRow(service, backend); };
 /* What can be done with an attempt: stop it, import it anyway, fix its sign-in, retry it, forget it. */
 function runActs(c) {
   const live = isLive(c), signIn = signInFailed(c);
   return [
     setupButton(c),
-    signIn ? el("button", { className: "btn small primary", textContent: "Fix sign-in", title: `Check ${svcName(signIn)} in Settings › Services`, dataset: { fk: "sign-in" }, onclick: () => openServiceRow(signIn) }) : "",
+    signIn ? el("button", { className: "btn small primary", textContent: "Fix sign-in", title: `Check ${svcName(signIn.service)} in Settings › Services`, dataset: { fk: "sign-in" }, onclick: () => fixSignIn(c) }) : "",
     live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
     !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: `btn small${signIn ? "" : " primary"}`, textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
