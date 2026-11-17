@@ -2513,5 +2513,10 @@
  "Settings: {0} · Unshacklarr": "Настройки: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
  "Sign in again": "Войти заново",
- "Not signed in": "Вход не выполнен"
+ "Not signed in": "Вход не выполнен",
+ "Skip to content": "Перейти к содержимому",
+ "{0}: running": "{0}: работает",
+ "{0}: update available": "{0}: доступно обновление",
+ "{0}: unreachable": "{0}: недоступен",
+ "{0}: checking": "{0}: проверка"
 }

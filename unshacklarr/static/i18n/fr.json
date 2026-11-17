@@ -2481,5 +2481,10 @@
  "Settings: {0} · Unshacklarr": "Réglages: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
  "Sign in again": "Se reconnecter",
- "Not signed in": "Non connecté"
+ "Not signed in": "Non connecté",
+ "Skip to content": "Aller au contenu",
+ "{0}: running": "{0} : en marche",
+ "{0}: update available": "{0} : mise à jour disponible",
+ "{0}: unreachable": "{0} : injoignable",
+ "{0}: checking": "{0} : vérification"
 }

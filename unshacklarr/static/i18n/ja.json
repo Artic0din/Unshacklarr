@@ -2450,5 +2450,10 @@
  "Settings: {0} · Unshacklarr": "設定: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
  "Sign in again": "もう一度サインイン",
- "Not signed in": "サインインしていません"
+ "Not signed in": "サインインしていません",
+ "Skip to content": "コンテンツへスキップ",
+ "{0}: running": "{0}: 実行中",
+ "{0}: update available": "{0}: アップデートあり",
+ "{0}: unreachable": "{0}: 接続不可",
+ "{0}: checking": "{0}: 確認中"
 }
