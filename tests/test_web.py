@@ -1411,7 +1411,7 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     rows = {row["name"]: row for row in result["rows"]}
     assert [row["name"] for row in result["rows"]] == ["HULU", "OPEN", "EXTRA", "HULU · vpn"]
     assert rows["HULU"] == {
-        "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series"],
+        "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series", "Show series"],
         "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
                     "kids.txt", "Valid · 90 days left", "3 cookies · updated today", "Replace", "Delete"],
     }
@@ -1420,7 +1420,7 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
         "name": "HULU · vpn", "label": "Confirmed now", "attention": False, "used": ["—"], "cookies": ["—", "Managed on that server"],
     }
     assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 90 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
-    assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series"]
+    assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series", "Show series"]
     assert result["state"] == "sx-state down"
 
 
@@ -5371,12 +5371,12 @@ def test_news_seen_is_kept_for_the_account_and_a_new_install_starts_with_none(tm
     async def go():
         async with TestClient(TestServer(web.app)) as client:
             a = await (await client.post("/api/news/seen", json={"ids": ["download-window", "../bad", 5]}, headers=h)).json()
-            b = await (await client.post("/api/news/seen", json={"ids": ["fallback-service"], "list": True}, headers=h)).json()
+            b = await (await client.post("/api/news/seen", json={"ids": ["fallback-service"]}, headers=h)).json()
             return a, b
 
     a, b = asyncio.run(go())
     assert a["seen"] == ["download-window"]  # only ids, never anything else
-    assert b["seen"] == ["download-window", "fallback-service"] and b["list_read"] == web.__version__
+    assert b["seen"] == ["download-window", "fallback-service"]
     web.news_installed()
     assert web.read_json(web.NEWS_FILE, {})["installed"] == web.__version__ and web.read_json(web.NEWS_FILE, {})["seen"]
 

@@ -6458,7 +6458,7 @@ async def setup_found(request):
 
 # What's new: the new options a person has seen (their "New" badges gone), for the account, on every device.
 # A new install sees nothing as new: its options are all new to it, so none is pointed at.
-NEWS_FILE = sonarr_sync.DATA / "news_seen.json"  # {"seen": [ids], "installed": the version set up with, "list_read": a version}
+NEWS_FILE = sonarr_sync.DATA / "news_seen.json"  # {"seen": [ids], "installed": the version set up with}
 NEWS_ID = re.compile(r"[a-z0-9-]{1,40}")
 
 
@@ -6467,13 +6467,11 @@ def news_installed() -> None:
 
 
 async def news_seen(request):
-    """Mark news items seen ({"ids": [...]}), or the What's new list read ({"list": true})."""
+    """Mark news items seen ({"ids": [...]})."""
     body = await json_object(request)
     ids = [i for i in body.get("ids") or [] if isinstance(i, str) and NEWS_ID.fullmatch(i)][:50]
     news = read_json(NEWS_FILE, {})
     news["seen"] = sorted(set(news.get("seen") or []) | set(ids))
-    if body.get("list") is True:
-        news["list_read"] = __version__
     write_atomic(NEWS_FILE, json.dumps(news))
     return web.json_response(news)
 

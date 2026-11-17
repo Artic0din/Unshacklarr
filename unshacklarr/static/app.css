@@ -454,10 +454,7 @@ body.drawer-open .savebar { display: none; }
 .brand .logo { flex: none; }
 .version-chip { flex: none; margin-left: -4px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--field-bg);
   color: var(--muted); font: 600 var(--fs-footnote)/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; }
-.version-chip b { margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 700 var(--fs-caption)/1.5 system-ui, sans-serif; }
-.version-chip.has-new { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .version-chip.beta { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 10%, var(--field-bg)); }  /* a test build of a branch */
-@media (max-width: 700px) { .version-chip .v-commit { display: none; } }  /* its branch only, beside the logo */
 .version-chip:focus-visible { border-color: var(--accent); color: var(--accent); }
 @media (hover: hover) { .version-chip:hover { border-color: var(--accent); color: var(--accent); } }
 .gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px 16px; overflow-y: auto; background: var(--bg); }
@@ -1466,8 +1463,8 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   /* No backdrop-filter here: it would make the header the containing block of the fixed tab bar. */
   header { position: sticky; top: 0; z-index: 8; background: var(--bg);
     padding: calc(10px + env(safe-area-inset-top)) 16px 10px; gap: 8px; flex-wrap: nowrap; }
-  header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; } .brand a { min-width: 0; }
-  .brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; container-type: inline-size; } .brand a { min-width: 0; }
+  .version-chip { display: none; }  /* Settings has the version and what's new: the app's name keeps the room */
   /* ...on a row of its own under the title, so the header's buttons stay on screen */
   header:has(.health :is([data-state=warn], [data-state=down])) { flex-wrap: wrap; }
   header:has(.health :is([data-state=warn], [data-state=down])) .health { order: 10; flex-basis: 100%; margin-left: 0; }
@@ -1514,9 +1511,9 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .d-head { position: sticky; top: 0; }
   .d-body { overflow: visible; }
   .ep-bar { position: sticky; bottom: 0; }
-  #d-back { display: grid; }
+  #d-back { display: grid; margin-left: 0; }  /* in the page's gutter, not against the screen's edge */
   #close { display: none; }
-  .d-head { padding: calc(8px + env(safe-area-inset-top)) 12px 0; gap: 10px; }
+  .d-head { padding: calc(8px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); gap: 10px; }
   .d-head img { width: 34px; }
   .d-name h2 { font-size: var(--fs-headline); }
   #d-save .long, #d-hide .long { display: none; }
@@ -1543,7 +1540,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .set-nav .ico { grid-row: 1 / 3; align-self: center; width: 30px; height: 30px; padding: 6px; border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
   .set-nav span { font-size: var(--fs-body); }
   .set-nav small { display: block; grid-column: 2; font-size: var(--fs-sub); font-weight: 400; color: var(--muted); }
-  .set-nav .new-dot, .set-nav .sv-attn { grid-column: 3; grid-row: 1 / 3; align-self: center; margin: 0; }
+  .set-nav .sv-attn { grid-column: 3; grid-row: 1 / 3; align-self: center; margin: 0; }
   .set-nav button::after { content: ""; grid-column: 4; grid-row: 1 / 3; align-self: center; width: 18px; height: 18px; color: var(--muted); background: currentColor; -webkit-mask: var(--ic-chevron) center / contain no-repeat; mask: var(--ic-chevron) center / contain no-repeat; }
   .set-back { display: inline-flex; align-items: center; gap: 2px; margin: 0 0 10px -4px; padding: 6px 8px 6px 2px; min-height: 40px; border: 0; background: none;
     color: var(--accent); font: inherit; font-size: var(--fs-body); font-weight: 600; cursor: pointer; }
@@ -1882,7 +1879,7 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 input[type=time] { background: var(--field-bg); border: 1px solid var(--field-line); border-radius: var(--r-md); padding: 7px 10px; width: 100%; min-height: 40px; color: var(--text); }
 input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
 #d-fb-say.status-err, #ax-window-say.status-err { color: var(--err); }
-/* What's new: the version's count, the list, and the "New" badges on the new options */
+/* What's new: the list, and the "New" badges on the new options */
 #news-dlg { width: min(600px, calc(100vw - 32px)); } #news-dlg .modal-head p { margin: 2px 0 0; font-size: var(--fs-callout); }
 .news-rels { margin: 14px -22px; max-height: min(62vh, 560px); overflow-y: auto; border-block: 1px solid var(--line); }
 .news-rel { display: block; border-bottom: 1px solid var(--line); } .news-rel:last-child { border-bottom: 0; }
@@ -1914,8 +1911,6 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .new-badge { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
   font-size: var(--fs-caption); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; vertical-align: middle;
 }
-.new-dot { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
-  font-size: var(--fs-caption); font-style: normal; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; vertical-align: middle; }
 .is-new { border-color: color-mix(in srgb, var(--accent) 70%, var(--line)) !important; } .is-new.new-blink { animation: new-pulse 1.2s ease-in-out 2; }
 /* a part of a card (its line on top, no frame of its own): a frame of its own and a tint while new */
 .up-mode, .ds-sub { transition: background-color .8s, box-shadow .8s; border-radius: var(--r-md); }
@@ -1934,17 +1929,13 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 #bo-fields[hidden], #bo-card .field[hidden], #bk-phrase-row[hidden] { display: none; }
 #bo-kind { margin-bottom: var(--gap-field, 16px); } #bo-fields .ac-go { margin-top: 8px; }
 .wz-phrase { display: flex; gap: 8px; margin-top: 8px; } .wz-phrase input { flex: 1; min-width: 0; }
-.set-nav button > .new-dot { flex: none; margin-left: auto; }
 @media (max-width: 700px) {  /* release notes: the kind beside its text, the date under the version */
   .news-list li { display: block; } .news-kind { display: inline-block; min-width: 0; margin: 0 8px 0 0; vertical-align: 1px; }
   .news-list p { display: inline; } .news-rel time { flex-basis: 100%; margin-left: 21px; }
 }
 #bo-fields > .sx-grid + .sx-grid { margin-top: 4px; }
 #bo-fields .sx-grid[hidden] { display: none; }
-@media (max-width: 380px) {  /* the narrowest phones: the logo and the version are enough */
-  .brand span { display: none; }
-  .version-chip.has-new { font-size: 0; } .version-chip.has-new b { margin-left: 0; }  /* new options: only their count, the label has the version */
-}
+@container (width < 9.25rem) { .brand span { display: none; } }  /* the name whole or not at all: the logo, labelled, alone (the logo, its gap and the name at --fs-headline, with a little to spare) */
 #news-title:focus { outline: none; }  /* focused on opening for screen readers; not a control */
 .field small.status-err { color: var(--err); } .field small.status-err:empty { display: none; }
 #bo-say { margin-bottom: 14px; }
@@ -2050,14 +2041,14 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .ck-locked code { word-break: break-all; }
 
 /* Tags: every badge and chip has one shape (Molt's Badge); its colour says what it means. */
-.poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip, .ep-on, .ep-off, .ep-up, .chip, .ck-pill, .sched-st, .rg-chip, .news-tag, .news-kind, .new-badge, .new-dot, .chip-default, .ax-seg button .chip-default, .finale-tag {
+.poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip, .ep-on, .ep-off, .ep-up, .chip, .ck-pill, .sched-st, .rg-chip, .news-tag, .news-kind, .new-badge, .chip-default, .ax-seg button .chip-default, .finale-tag {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); padding: 2px var(--sp-2); border: 0; border-radius: 999px; box-shadow: none;
   font-size: var(--fs-footnote); font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 1.4; white-space: nowrap;
   color: var(--muted); background: var(--well); }
 .sched-card .svc { white-space: normal; overflow-wrap: anywhere; }  /* a long name in a narrow day column */
 .poster .svc { display: block; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; }  /* a long name stays inside its poster; its panel has the whole name */
 .poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip { color: var(--text); }  /* a service: just its name */
-.ep-on, .ep-on.other, .new-badge, .new-dot, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest, .rg-chip, .sched-st.try,
+.ep-on, .ep-on.other, .new-badge, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest, .rg-chip, .sched-st.try,
 .news-list .new .news-kind, .news-list .improved .news-kind { color: var(--accent); background: var(--accent-tint); }
 .ck-pill.ok, .sched-st.ok, .chip.disk, .chip.o-downloaded { color: var(--ok); background: var(--ok-tint); }  /* done and healthy: green, apart from the teal that means selected or managed */
 .ep-up, .ck-pill.warn, .sched-st.wait, .chip.miss, .chip.ask, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
@@ -2079,6 +2070,25 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .btn.small, .inbox-filters button, .con-filters button { min-height: var(--ctl-h-sm); padding-block: 0; }
   .sc-foot .icon-hide { width: var(--ctl-h-sm); height: var(--ctl-h-sm); }
   :is(.toolbar, .sched-head, .sched-tools, .cal-nav, .cd-head .act) .btn.small { min-height: var(--ctl-h); padding-inline: 14px; font-size: inherit; }
+}
+/* A phone: every control 44 px to the finger (Apple HIG). Where the mark is smaller by design, an invisible
+   slop centred on it makes up the rest without moving anything: a percentage inset is of the control's own size. */
+@media (max-width: 700px) {
+  :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
+    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button) { position: relative; }
+  :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
+    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
+  details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
+  .seg { overflow: visible; }  /* it wraps here, never scrolls: the slop reaches past its frame */
+  .con-filters { row-gap: 8px; }  /* a wrapped row's slop would cover the row above */
+  #d-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(44px - 1lh) .3em; }  /* wrapped, its links 44 px apart */
+  .seg button { min-height: 44px; }  /* wrapped rows touch: no room for a slop (Week and Month, one row, keep theirs) */
+  .health { gap: 0; } .health button { min-width: 44px; min-height: 44px; padding: 0 8px; justify-content: center; }
+  .ds .sx-grid :is(select, input[type=time]) { min-height: 44px; }
+  .ladder-pick .ax-edit { display: inline-flex; align-items: center; min-height: 44px; }  /* under the buttons: a slop would cover them */
+  .ug-line { min-height: 44px; }
+  .ep-sel button { min-width: 44px; min-height: 44px; }  /* its frame clips: no room for a slop */
+  .set-nav button.set-version { min-height: 44px; }
 }
 /* Dropdowns drawn as fields, in every browser: Safari otherwise sizes its native ones on its own, ignoring the heights above.
    The arrow is two gradients in the look's muted colour, so it follows light and dark. */

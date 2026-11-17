@@ -169,8 +169,8 @@ function showSetup(found) {
   };
   // A key the environment already has: said in the field's help, where a placeholder would be cut off
   const keyFound = (text, known) => el("span", { className: "env-found", hidden: !known, textContent: text });
-  const sonarrKeyFound = keyFound("Found in the environment for the URL above. Leave empty to use it", found.sonarr_api_key_set);
-  const unshackleKeyFound = keyFound("Found in the environment for the address above. Leave empty to use it", found.unshackle_api_key_set);
+  const sonarrKeyFound = keyFound("Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.", found.sonarr_api_key_set);
+  const unshackleKeyFound = keyFound("Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.", found.unshackle_api_key_set);
   const SECRET = ["password", "confirm", "sonarr_api_key", "unshackle_api_key", "tmdb_api_key"];
   f.unshackle_mode.value = found.unshackle_mode || "local";
   f.timezone.value = found.timezone !== "UTC" ? found.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -529,7 +529,7 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     const [, branch, commit] = (data.build || "").match(/^(.*?)(?:-([0-9a-f]{7,}))?$/);
     $("#set-version").textContent = data.version ? `Unshacklarr ${data.build ? [branch, commit].filter(Boolean).join(" · ") : data.version}` : "";
     if (data.build) $("#version").replaceChildren(branch, ...(commit ? [el("span", { className: "v-commit", textContent: ` · ${commit}` })] : []));
-    else $("#version").textContent = data.version ? `v${data.version}` : "";  // renderNews adds the count of new options
+    else $("#version").textContent = data.version ? `v${data.version}` : "";
     $("#version").classList.toggle("beta", !!data.build);
     $("#version").hidden = !data.version;
     const update = $("#update");  // a newer release: in sight on every page, its notes one click away
