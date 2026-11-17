@@ -73,12 +73,12 @@ def test_a_phone_shows_the_apps_name_whole_or_its_labelled_logo_never_a_cut_name
 
 def test_every_small_control_on_a_phone_is_44px_to_the_finger():
     phone = media("max-width: 700px")
-    slop = phone[phone.index(":where(.brand a, .btn.small"):]
+    slop = phone[phone.index(":where(.brand a, #update, .btn.small"):]
     has(slop, "::after { content: \"\"; position: absolute; inset: min(0px, (100% - 44px) / 2); }")
-    for target in (".btn.small", ".seg.small button", ".pill", ".icon-hide", ".sc-open", "#d-meta a", ".ds-nav a", ".ax-seg button"):
+    for target in ("#update", ".btn.small", ".seg.small button", ".pill", ".icon-hide", ".sc-open", "#d-meta a", ".ds-nav a", ".ax-seg button"):
         assert target in slop[:slop.index("{")], target
     has(phone, ".health button { min-width: 44px; min-height: 44px; padding: 0 8px;")
-    has(phone, ".seg:not(.small) button { min-height: 44px; }")
+    has(phone, ".seg button { min-height: 44px; }")
     has(phone, ".ep-sel button { min-width: 44px; min-height: 44px; }")
 
 

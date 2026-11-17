@@ -2073,15 +2073,15 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 /* A phone: every control 44 px to the finger (Apple HIG). Where the mark is smaller by design, an invisible
    slop centred on it makes up the rest without moving anything: a percentage inset is of the control's own size. */
 @media (max-width: 700px) {
-  :where(.brand a, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
+  :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
     .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button) { position: relative; }
-  :where(.brand a, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
+  :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
     .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
   details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
   .seg { overflow: visible; }  /* it wraps here, never scrolls: the slop reaches past its frame */
   .con-filters { row-gap: 8px; }  /* a wrapped row's slop would cover the row above */
   #d-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(44px - 1lh) .3em; }  /* wrapped, its links 44 px apart */
-  .seg:not(.small) button { min-height: 44px; }  /* rows touching: no room for a slop */
+  .seg button { min-height: 44px; }  /* wrapped rows touch: no room for a slop (Week and Month, one row, keep theirs) */
   .health { gap: 0; } .health button { min-width: 44px; min-height: 44px; padding: 0 8px; justify-content: center; }
   .ds .sx-grid :is(select, input[type=time]) { min-height: 44px; }
   .ladder-pick .ax-edit { display: inline-flex; align-items: center; min-height: 44px; }  /* under the buttons: a slop would cover them */
