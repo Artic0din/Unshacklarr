@@ -185,12 +185,13 @@ $("#sx-name").addEventListener("input", (e) => {
 });
 function showMode() {
   $(".set-sec[data-sec=unshackle]").dataset.mode = $("#mode-select").value;
-  document.querySelectorAll(".ux-tiles .wz-tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.value === $("#mode-select").value)));
+  pickTile($(".ux-tiles"), $("#mode-select").value);
 }
 document.querySelectorAll(".ux-tiles .wz-tile").forEach((t) => t.onclick = () => {
   $("#mode-select").value = t.dataset.value;
   $("#mode-select").dispatchEvent(new Event("change"));
 });
+arrowPicks($(".ux-tiles"));
 $("#mode-select").addEventListener("change", showMode);
 $("#unshackle-test").onclick = async () => {
   const b = $("#unshackle-test"), box = $("#ux-state"), v = (k) => $(`[data-set=${k}]`).value.trim();

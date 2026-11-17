@@ -2426,5 +2426,10 @@
  "Settings: {0} · Unshacklarr": "Ajustes: {0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
  "Sign in again": "Volver a iniciar sesión",
- "Not signed in": "Sin sesión iniciada"
+ "Not signed in": "Sin sesión iniciada",
+ "Skip to content": "Saltar al contenido",
+ "{0}: running": "{0}: en marcha",
+ "{0}: update available": "{0}: actualización disponible",
+ "{0}: unreachable": "{0}: inaccesible",
+ "{0}: checking": "{0}: comprobando"
 }

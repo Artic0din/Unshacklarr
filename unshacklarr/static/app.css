@@ -16,14 +16,14 @@
   --field-bg: #171614; --field-line: #7d766b; --field-line-hover: #9a9286;
   /* Type scale in rem, so text follows the browser's text-size setting */
   --fs-caption: .6875rem; --fs-footnote: .75rem; --fs-sub: .8125rem; --fs-callout: .875rem; --fs-body: .9375rem;
-  --fs-headline: 1.0625rem; --fs-title3: 1.25rem; --fs-title2: 1.375rem; --fs-title1: 1.75rem;
+  --fs-headline: 1.125rem; --fs-title3: 1.25rem; --fs-title2: 1.375rem; --fs-title1: 1.75rem;
   --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
   --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230b2a24' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");  /* a tick on an --accent fill, in --accent-ink */
   --sh-xs: 0 1px 2px 0 #0000004d;
   --sh-sm: 0 1px 2px 0 #00000066, 0 1px 3px 0 #00000066;
   --sh-md: 0 1px 2px 0 #00000066, 0 4px 12px 0 #00000080;
-  --sh-lg: 0 2px 4px 0 #00000066, 0 16px 40px 0 #00000099;
+  --sh-lg: 0 2px 4px 0 #00000066, 0 8px 24px 0 #00000099;
 }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
   color-scheme: light;
@@ -37,7 +37,7 @@
   --sh-xs: 0 1px 2px 0 #1c1a170d;
   --sh-sm: 0 1px 2px 0 #1c1a170f, 0 1px 3px 0 #1c1a1714;
   --sh-md: 0 1px 2px 0 #1c1a170f, 0 4px 12px 0 #1c1a1714;
-  --sh-lg: 0 2px 4px 0 #1c1a170f, 0 16px 40px 0 #1c1a1729;
+  --sh-lg: 0 2px 4px 0 #1c1a170f, 0 8px 24px 0 #1c1a1729;
  } }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -51,7 +51,7 @@
   --sh-xs: 0 1px 2px 0 #1c1a170d;
   --sh-sm: 0 1px 2px 0 #1c1a170f, 0 1px 3px 0 #1c1a1714;
   --sh-md: 0 1px 2px 0 #1c1a170f, 0 4px 12px 0 #1c1a1714;
-  --sh-lg: 0 2px 4px 0 #1c1a170f, 0 16px 40px 0 #1c1a1729;
+  --sh-lg: 0 2px 4px 0 #1c1a170f, 0 8px 24px 0 #1c1a1729;
  }
 * { box-sizing: border-box; }
 input[type=checkbox] { accent-color: var(--accent); }
@@ -62,19 +62,23 @@ body { margin: 0; background: var(--bg); color: var(--text); font: var(--fs-body
 button, input, select { font: inherit; color: inherit; }
 h1, h2, h3 { line-height: 1.2; letter-spacing: -.01em; text-wrap: balance; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.skip { position: fixed; top: var(--sp-2); left: var(--sp-2); z-index: 100; padding: var(--sp-2) var(--sp-4); border-radius: var(--r-sm);
+  background: var(--panel); color: var(--text); font-weight: 600; text-decoration: none; box-shadow: var(--sh-md); }
+.skip:not(:focus) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+main:focus { outline: none; }  /* the skip link's target, not a control */
 
 header { display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-3) var(--sp-6); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 header h1 { font-size: var(--fs-title3); font-weight: 700; margin: 0; }
 nav { display: flex; gap: 4px; }
-nav button { background: none; border: 0; padding: 6px 12px; border-radius: var(--r-sm); color: var(--muted); cursor: pointer; }
-nav button[aria-current="page"] { background: var(--panel); color: var(--text); }
+nav a { background: none; border: 0; padding: 6px 12px; border-radius: var(--r-sm); color: var(--muted); cursor: pointer; text-decoration: none; line-height: normal; }
+nav a[aria-current="page"] { background: var(--panel); color: var(--text); }
 .btn { background: var(--panel); color: inherit; border: 1px solid var(--field-line); border-radius: var(--r-sm); padding: 7px 14px; cursor: pointer; }  /* a field's edge: it shows on any surface */
 a.btn { text-decoration: none; }  /* a link drawn as a button: the button's colour, no underline */
 a.btn:not([hidden]) { display: inline-flex; align-items: center; }  /* its text centred as a <button> does on its own; a display here would undo [hidden] */
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .btn:disabled, .btn[aria-disabled="true"] { opacity: .5; cursor: default; }
-.btn, nav button, .seg button, .pill { transition: transform .1s ease-out; }
-.btn:active:not(:disabled):not([aria-disabled="true"]), nav button:active, .seg button:active, .pill:active { transform: scale(.96); }
+.btn, nav a, .seg button, .pill { transition: transform .1s ease-out; }
+.btn:active:not(:disabled):not([aria-disabled="true"]), nav a:active, .seg button:active, .pill:active { transform: scale(.96); }
 
 main { padding: var(--sp-6); max-width: 2400px; margin: 0 auto; }  /* a large screen shows more, not wider margins */
 section[hidden] { display: none; }
@@ -90,7 +94,7 @@ section[hidden] { display: none; }
 .opt .rm .ico, .jx .ico, .poster .sick .ico { width: 14px; height: 14px; } .poster .sick .ico { stroke-width: 3; }
 .col-rows .mv .ico, .bc-cal-head button .ico, .cal-nav .btn .ico { width: 16px; height: 16px; }
 .jrow > .chev .ico { width: 14px; height: 14px; } .oneoff-preview .arrow .ico { vertical-align: middle; margin: 0; }
-nav button { display: inline-flex; align-items: center; gap: 7px; }
+nav a { display: inline-flex; align-items: center; gap: 7px; }
 nav .short { display: none; }
 /* Activity's count of downloads going on, pulsing: in sight from every page (not on a phone's tab bar) */
 .nav-busy { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
@@ -195,7 +199,7 @@ nav .short { display: none; }
 .seg button:focus-visible { outline-offset: -2px; }  /* inside the button: the scroller would clip a ring drawn outside */
 .seg button[aria-pressed="true"]:focus-visible { outline-color: var(--accent-ink); }  /* the fill is --accent: a ring in it would not show */
 nav { overflow-x: auto; max-width: 100%; padding: 4px; margin: -4px; }  /* room inside the scroller for the focus ring */
-nav button { white-space: nowrap; }
+nav a { white-space: nowrap; }
 input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], select, textarea {
   background: var(--field-bg); border: 1px solid var(--field-line); border-radius: var(--r-sm); padding: 7px 10px; width: 100%; color: var(--text);
   transition: border-color .15s, box-shadow .15s;
@@ -208,8 +212,8 @@ label.check { display: inline-flex; gap: 8px; align-items: center; cursor: point
 
 /* The poster wall: the one bold element. Unmapped series recede, mapped ones carry their service. */
 .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 18px; align-items: start; }
-.poster { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
-.poster .art { display: block; aspect-ratio: 2 / 3; border-radius: var(--r-sm); background: var(--panel); position: relative; overflow: hidden; }
+.poster { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; display: flex; flex-direction: column; }
+.poster .art { order: -1; display: block; aspect-ratio: 2 / 3; border-radius: var(--r-sm); background: var(--panel); position: relative; overflow: hidden; }
 .poster .art img { width: 100%; height: 100%; object-fit: cover; display: block; filter: var(--dim); transition: filter .15s; }
 .poster.on .art img { filter: none; }
 @media (hover: hover) { .poster:hover .art img { filter: none; } }
@@ -708,7 +712,7 @@ input[type=checkbox].switch:checked { background: var(--accent); } input[type=ch
 .wz-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 420px; }
 .wz-tile { display: grid; justify-items: start; align-content: start; gap: 4px; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--bg);
   color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .2s, background .2s; }
-@media (hover: hover) { .wz-tile:hover { border-color: color-mix(in srgb, var(--accent) 50%, transparent); } } .wz-tile[aria-pressed=true] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+@media (hover: hover) { .wz-tile:hover { border-color: color-mix(in srgb, var(--accent) 50%, transparent); } } .wz-tile[aria-checked=true] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .wz-tile b { font-size: var(--fs-callout); } .wz-tile small { color: var(--muted); font-size: var(--fs-footnote); line-height: 1.35; }
 .wz-tile-ico { color: var(--accent); margin-bottom: 2px; } .wz-tile-ico svg { width: 20px; height: 20px; }
 .wz-main .wiz-nav { margin-top: 6px; justify-content: space-between; } .wz-main .wiz-nav .btn { min-height: 44px; padding: 0 20px; border-radius: var(--r-md); }
@@ -962,7 +966,7 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .con-detail { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .cd-head { display: flex; gap: 14px; align-items: center; }
 .cd-head img { width: 44px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-sm); background: var(--bg); }
-.cd-head h3 { margin: 0; font-size: var(--fs-title3); }
+.cd-head h2 { margin: 0; font-size: var(--fs-title3); }
 .cd-head small { color: var(--muted); font-size: var(--fs-sub); }
 .cd-head .act { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .cd-top, .cd-foot, .steps .s, .cd-head .line2 { display: none; }
@@ -1454,7 +1458,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
 }
 @media (min-width: 701px) and (max-width: 1040px) { .brand span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 @media (min-width: 701px) and (max-width: 940px) { nav .ico { display: none; } }
-@media (min-width: 701px) and (max-width: 840px) { nav button { padding-inline: 8px; } }
+@media (min-width: 701px) and (max-width: 840px) { nav a { padding-inline: 8px; } }
 /* Phones: a native-app shell. Tabs move to a bottom bar, the series page goes full screen,
    touch targets are 44 px and fields 16 px (iOS zooms into anything smaller). */
 @media (max-width: 700px) {
@@ -1474,10 +1478,10 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(4, 1fr);
     gap: 0; margin: 0; max-width: none; background: color-mix(in srgb, var(--panel) 96%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--line);
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
-  nav button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; min-height: 52px;
+  nav a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; min-height: 52px;
     font-size: var(--fs-caption); font-weight: 600; border-radius: var(--r-md); }
-  nav button .ico { width: 22px; height: 22px; }
-  nav button[aria-current="page"] { background: none; color: var(--accent); }
+  nav a .ico { width: 22px; height: 22px; }
+  nav a[aria-current="page"] { background: none; color: var(--accent); }
   nav .long { display: none; }
   nav .short { display: inline; }
   main { padding: 12px 16px 24px; }
@@ -1596,11 +1600,11 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
      the figures on one line, and the actions at the bottom. */
   .con-detail { gap: 14px; }
   .cd-top { display: flex; align-items: center; gap: 6px; margin: 0 0 0 -4px; }  /* the back arrow on the edge; the right side inside, or the pane scrolls sideways */
-  .cd-top h3 { margin: 0; font-size: var(--fs-headline); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cd-top h2 { margin: 0; font-size: var(--fs-headline); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cd-back { display: grid; place-items: center; width: 36px; height: 36px; border: 0; background: none; color: var(--accent);
     font-size: var(--fs-title1); line-height: 1; cursor: pointer; border-radius: 50%; }
   .cd-head img { width: 40px; }
-  .cd-head h3, .cd-head .line1, .cd-head .act { display: none; }
+  .cd-head h2, .cd-head .line1, .cd-head .act { display: none; }
   .cd-head .line2 { display: block; }
   .cd-head .line2 b { display: block; color: var(--text); font-size: var(--fs-body); }
   .steps { gap: 5px; } .steps > span { font-size: var(--fs-footnote); }
@@ -2062,7 +2066,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
    36px in toolbars and forms, 30px for the buttons inside a row or a card. Segmented controls: their frame is 36px. */
 :root { --ctl-h: 36px; --ctl-h-sm: 30px; }
 @media (min-width: 701px) {
-  .btn, nav button, .pill, .ax-seg button,
+  .btn, nav a, .pill, .ax-seg button,
   :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: var(--ctl-h); height: auto; }
   .ax-seg button, input[type=time] { height: var(--ctl-h); }  /* a time field's own inner box is taller than the rest */
   .sx-grid input, .nt-fields input, .ds .sx-grid select, .ql-name, .ql-step select, .ql-h input, .svc-picks select { min-height: var(--ctl-h); }

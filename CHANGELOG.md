@@ -127,6 +127,11 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **The page works better with a keyboard and a screen reader.** A "Skip to content" link comes first; the main tabs
+  are links, so they open in a new tab; a series poster says its title before its service; the header's status dots
+  say "running" or "unreachable" in their name; Local and Remote are a radio group the arrow keys move through; and
+  Activity's headings no longer skip a level. Menus and dialogs cast a tighter shadow, and section titles are a step
+  larger.
 - **Four more visual slips are gone.** The demo's tour card follows the light or dark theme, where its heading and
   subtitle were near-invisible in light mode; "Sign-in and cookies", "Open Sonarr" and "CDM devices" sit level with the
   buttons beside them; the Local and Remote tiles line up their titles; and on a phone, Activity's history filters and
