@@ -84,7 +84,7 @@ function signInCheck() {
   return box;
 }
 
-const SERVICE_COLUMNS = ["Service", "Sign-in methods", "Sign-in", "Cookies", "Used by", "Actions"];
+const SERVICE_COLUMNS = ["Service", "Signs in with", "Sign-in status", "Cookies", "Used by"];
 let servicesCookies = null;  // /api/cookies: the files of Unshackle's own cookies folder, by service
 let servicesDrawn = "";      // what the table was drawn from: a refresh that changes nothing leaves it (and the focus) alone
 let servicesAsked = "";      // the cookie file whose deletion is being confirmed: "SERVICE/profile"
@@ -158,7 +158,7 @@ function renderServices() {
         controls.push(input, el("button", { className: "btn small", textContent: "Submit", onclick: () => answerServiceAuthentication(m.service, m.backend, input) }));
       }
       if (!["authenticated", "timed_out", "cancelled"].includes(m.setup.state)) {
-        controls.push(el("button", { className: "btn small danger", textContent: "Cancel", onclick: () => cancelServiceAuthentication(m.service, m.backend) }));
+        controls.push(el("button", { className: "btn small", textContent: "Cancel", onclick: () => cancelServiceAuthentication(m.service, m.backend) }));
       }
     } else if (m.listed && m.state !== "anonymous") {
       controls.push(el("button", { className: "btn small", textContent: m.signedIn || m.state === "needs_user_action" ? "Sign in again" : "Sign in",
@@ -207,10 +207,11 @@ function renderServices() {
     : m.methods.length ? [el("div", { className: "sv-chips" }, ...m.methods.map((x) => el("span", { className: "sv-chip", textContent: AUTH_METHOD_NAMES[x] || x })))]
     : m.anonymous ? [el("span", { textContent: "No sign-in required" })]
     : [el("span", { className: "muted", textContent: "—" })];  // listed without methods (its server unreachable): not known
-  const usedCell = (m) => [el("span", { className: m.used === null ? "muted" : "", textContent: m.used === null ? "—" : m.used === 0 ? "No series" : m.used === 1 ? "1 series" : `${m.used} series` })];
-  const actionCell = (m) => m.used ? [el("button", { className: "btn small", textContent: "Show series", onclick: () => showSeriesOf(m.service) })] : [];
+  // the count, and the series behind it: "Show series" sits with what it shows, not under a column of its own
+  const usedCell = (m) => [el("span", { className: m.used === null ? "muted" : "", textContent: m.used === null ? "—" : m.used === 0 ? "No series" : m.used === 1 ? "1 series" : `${m.used} series` }),
+    ...(m.used ? [el("div", { className: "sv-ctl" }, el("button", { className: "btn small", textContent: "Show series", onclick: () => showSeriesOf(m.service) }))] : [])];
 
-  const cells = [methodsCell, signInCell, cookieCell, usedCell, actionCell];
+  const cells = [methodsCell, signInCell, cookieCell, usedCell];
   const table = el("table", { className: "sv-table" },
     el("thead", {}, el("tr", {}, ...SERVICE_COLUMNS.map((name) => el("th", { scope: "col", textContent: name })))),
     el("tbody", {}, ...models.map((m) => el("tr", { className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, id: `sv-${m.service}${m.backend ? `@${m.backend}` : ""}` },
@@ -237,9 +238,10 @@ function renderServices() {
 }
 /* Scrolled to and focused, when another page sent you to one service's row. */
 function revealService() {
-  const backend = servicesReveal && S.config.service_defaults?.[servicesReveal]?.backend;
-  const row = servicesReveal && ((backend && document.getElementById(`sv-${servicesReveal}@${backend}`)) || document.getElementById(`sv-${servicesReveal}`)
-    || document.querySelector(`[id^="sv-${CSS.escape(servicesReveal)}@"]`));  // only on another server
+  // "SERVICE@backend": that server's row (where a download's sign-in failed, "" the main one); else the one set for it
+  const [service, named] = servicesReveal.split("@"), backend = named ?? S.config.service_defaults?.[service]?.backend;
+  const row = service && ((backend && document.getElementById(`sv-${service}@${backend}`)) || document.getElementById(`sv-${service}`)
+    || document.querySelector(`[id^="sv-${CSS.escape(service)}@"]`));  // only on another server
   if (!row) return;
   servicesReveal = "";
   row.scrollIntoView({ block: "center", behavior: SCROLL });
@@ -256,10 +258,11 @@ async function loadServices() {
   }
   renderServices();
 }
-/* From another page (a failing series): Settings, Services, at the service's row. */
-async function openServiceRow(service) {
+/* From another page (a failing series, a refused download): Settings, Services, at the service's row; with a
+   backend, that server's row. */
+async function openServiceRow(service, backend) {
   if (current && !await closeDrawer(true)) return;
-  servicesReveal = service;
+  servicesReveal = backend === undefined ? service : `${service}@${backend}`;
   showTab("settings");
   showSettingsSec("services");
   renderServices();

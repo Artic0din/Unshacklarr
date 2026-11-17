@@ -1405,7 +1405,7 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     rows = {row["name"]: row for row in result["rows"]}
     assert [row["name"] for row in result["rows"]] == ["HULU", "OPEN", "EXTRA", "HULU · vpn"]
     assert rows["HULU"] == {
-        "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series"],
+        "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series", "Show series"],
         "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
                     "kids.txt", "Valid · 89 days left", "3 cookies · updated today", "Replace", "Delete"],
     }
@@ -1414,7 +1414,7 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
         "name": "HULU · vpn", "label": "Confirmed now", "attention": False, "used": ["—"], "cookies": ["—", "Managed on that server"],
     }
     assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 89 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
-    assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series"]
+    assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series", "Show series"]
     assert result["state"] == "sx-state down"
 
 
