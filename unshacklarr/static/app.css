@@ -70,6 +70,7 @@ nav button { background: none; border: 0; padding: 6px 12px; border-radius: var(
 nav button[aria-current="page"] { background: var(--panel); color: var(--text); }
 .btn { background: var(--panel); color: inherit; border: 1px solid var(--field-line); border-radius: var(--r-sm); padding: 7px 14px; cursor: pointer; }  /* a field's edge: it shows on any surface */
 a.btn { text-decoration: none; }  /* a link drawn as a button: the button's colour, no underline */
+a.btn:not([hidden]) { display: inline-flex; align-items: center; }  /* its text centred as a <button> does on its own; a display here would undo [hidden] */
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .btn:disabled, .btn[aria-disabled="true"] { opacity: .5; cursor: default; }
 .btn, nav button, .seg button, .pill { transition: transform .1s ease-out; }
@@ -704,7 +705,7 @@ input[type=checkbox].switch:checked { background: var(--accent); } input[type=ch
 .wz-main .wiz-step .field > input, .wz-main .wiz-step .field > select, .wz-main .cp-input, .wz-main .cp-list { max-width: 420px; }  /* the list as wide as its input */
 .wz-main input:not([type=radio]), .wz-main select { min-height: 42px; border-radius: var(--r-md); }
 .wz-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 420px; }
-.wz-tile { display: grid; justify-items: start; gap: 4px; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--bg);
+.wz-tile { display: grid; justify-items: start; align-content: start; gap: 4px; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--bg);
   color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .2s, background .2s; }
 @media (hover: hover) { .wz-tile:hover { border-color: color-mix(in srgb, var(--accent) 50%, transparent); } } .wz-tile[aria-pressed=true] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .wz-tile b { font-size: var(--fs-callout); } .wz-tile small { color: var(--muted); font-size: var(--fs-footnote); line-height: 1.35; }
@@ -895,7 +896,7 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .con-detail { overflow-y: auto; }
 .con-detail > * { flex-shrink: 0; }  /* a card unfolding makes the column scroll; it never squeezes the output (overflow: hidden let it) */
 .con-state { font-size: var(--fs-sub); color: var(--muted); padding: 2px 4px 6px; }
-.con-gh { display: flex; justify-content: space-between; font-size: var(--fs-footnote); font-weight: 700; color: var(--muted); letter-spacing: .04em;
+.con-gh { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-footnote); font-weight: 700; color: var(--muted); letter-spacing: .04em;
   margin: 10px 4px 4px; text-transform: uppercase; }
 .con-gh b { color: var(--accent); }
 .gh-act { background: none; border: 0; padding: 0 2px; font: inherit; color: var(--muted); cursor: pointer; letter-spacing: inherit; text-transform: inherit; }
@@ -1477,7 +1478,8 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
 
   input[type=text], input[type=url], input[type=search], input[type=number], input[type=time], input[type=password], textarea, select { font-size: 16px; min-height: 44px; }
   .btn { min-height: 44px; }
-  .btn.small { min-height: 36px; }
+  .btn.small, .con-filters button { min-height: 36px; }
+  .gh-act { min-height: 36px; padding-inline: 8px; margin-right: -8px; }  /* the text stays at the edge, the target grows */
   input[type=checkbox] { width: 20px; height: 20px; }
 
   .seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); width: 100%; margin-bottom: 10px; }  /* more choices than fit: a second row */

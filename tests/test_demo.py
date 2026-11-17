@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -20,3 +21,12 @@ def test_the_demo_records_every_answer_it_plays_back(tmp_path):
                for setup in state["authentication_setups"])
     assert "/var/" not in out.read_text() and "/tmp/" not in out.read_text()  # no path of the machine it was recorded on
     subprocess.run(["node", "--check", str(ROOT / "demo" / "demo.js")], check=True)
+
+
+def test_the_tour_card_takes_the_themes_colours_not_a_fixed_dark_one():
+    """A fixed navy top left its light-theme heading and subtitle near-invisible."""
+    js = (ROOT / "demo" / "demo.js").read_text()
+    card = js[js.index("#tour-card {"):]
+    card = card[:card.index("}")]
+    assert "background: var(--panel);" in card and "border: 1px solid var(--line);" in card
+    assert not re.search(r"#[0-9a-f]{6}", card, re.I), card
