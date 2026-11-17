@@ -275,3 +275,23 @@ zone.value = "Asia/Tokyo"; zone.dispatchEvent(new Event("change"));
 console.log(JSON.stringify({ followed, kept: country.value, synced }));
 """, str(JS / "setup.js"))
     assert shown == {"followed": "FR", "kept": "GB", "synced": 1}
+
+
+def test_a_country_picked_before_a_reload_or_a_language_change_stays_picked():
+    shown = node(r"""
+const ctx = sandbox();
+vm.runInContext(grab(read(process.argv[1]), /^function countryFollowsZone\(.*?^\}/ms), ctx);
+const zones = { "Europe/Paris": "FR", "Asia/Tokyo": "JP" };
+const make = (value) => [Object.assign(new EventTarget(), { value }), Object.assign(new EventTarget(), { value: "Australia/Melbourne" })];
+// first time: the person picks Great Britain; the draft keeps what countryFollowsZone says
+let [country, zone] = make("AU");
+const picked = ctx.countryFollowsZone(country, zone, zones, () => {});
+country.value = "GB"; country.dispatchEvent(new Event("input"));
+const kept = picked();
+// rebuilt from that draft: a time zone picked now leaves the country alone
+[country, zone] = make("GB");
+ctx.countryFollowsZone(country, zone, zones, () => {}, kept);
+zone.value = "Asia/Tokyo"; zone.dispatchEvent(new Event("change"));
+console.log(JSON.stringify({ kept, country: country.value }));
+""", str(JS / "setup.js"))
+    assert shown == {"kept": True, "country": "GB"}
