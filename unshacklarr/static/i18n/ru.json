@@ -2519,5 +2519,6 @@
  "{0}: running": "{0}: работает",
  "{0}: update available": "{0}: доступно обновление",
  "{0}: unreachable": "{0}: недоступен",
- "{0}: checking": "{0}: проверка"
+ "{0}: checking": "{0}: проверка",
+ "Check the cookies for {0}": "Проверить cookie для {0}"
 }

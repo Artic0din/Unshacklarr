@@ -1194,20 +1194,23 @@ const promptState = (input) => {
       "HULU@vpn": { service: "HULU", backend: "vpn", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
       OPEN: { service: "OPEN", backend: "", state: "anonymous" },
     };
-    box.S.authenticationMethods = { HULU: ["cookies", "credentials"], "HULU@vpn": ["cookies"], OPEN: [] };
+    box.S.authenticationMethods = { HULU: ["cookies", "credentials"], "HULU@vpn": ["cookies"], OPEN: [], ATVP: ["cookies"], ZONE: ["cookies"] };
     box.S.authenticationSetups = [];
     box.S.config.series = { 1: { service: "HULU" }, 2: { service: "HULU" }, 3: { service: "OPEN" } };
     const now = Math.floor(Date.now() / 1000);
     vm.runInContext(`servicesCookies = { folder: "/cookies", files: {
       HULU: [{ profile: "", count: 1, expired: true, expires: ${now - 86400}, updated: ${now} }, { profile: "kids", count: 3, expires: ${now + 90 * 86400}, updated: ${now} }],
-      EXTRA: [{ profile: "", count: 2, expires: ${now + 90 * 86400}, updated: ${now} }] } }`, box);
+      ZONE: [{ profile: "", count: 1, expired: true, expires: ${now - 86400}, updated: ${now} }, { profile: "kids", count: 3, expires: ${now + 90 * 86400}, updated: ${now} }],
+      EXTRA: [{ profile: "", count: 2, expires: ${now + 90 * 86400}, updated: ${now} }],
+      ATVP: [{ profile: "", count: 15, expires: ${now + 90 * 86400}, updated: ${now} }] } }`, box);
     box.renderServices();
     const words = (cell) => findAll(cell, (node) => node.textContent && node.className !== "sv-k" && !(node.children || []).some((c) => c.textContent))
       .map((node) => node.textContent);
     const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => {
       const cells = row.children.slice(1);
-      return { name: find(row, (node) => node.className === "sv-name").textContent, label: find(row, (node) => node.className === "sv-label").textContent,
-        cookies: words(cells[2]), used: words(cells[3]), attention: !!row.dataset.attention };
+      const label = find(row, (node) => node.className === "sv-label");
+      return { name: find(row, (node) => node.className === "sv-name").textContent, label: label.textContent, tone: label.dataset.tone || "",
+        signIn: words(cells[1]), cookies: words(cells[2]), used: words(cells[3]), attention: !!row.dataset.attention };
     });
     console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className }));
   }
@@ -1303,7 +1306,8 @@ const promptState = (input) => {
     const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
     const buttons = findAll(row, (node) => node.tag === "button");
     await buttons.find((button) => button.textContent === "Retry").onclick();
-    console.log(JSON.stringify({ controls: buttons.map((button) => button.textContent), requests }));
+    console.log(JSON.stringify({ controls: buttons.map((button) => button.textContent),
+      primary: buttons.filter((button) => button.className.includes("primary")).map((button) => button.textContent), requests }));
   }
 })().catch((error) => { console.error(error); process.exit(1); });
 """
@@ -1409,16 +1413,23 @@ def test_cancelled_authentication_is_rendered_until_the_next_refresh():
 def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     result = run_authentication_ui("cookies_per_service")
     rows = {row["name"]: row for row in result["rows"]}
-    assert [row["name"] for row in result["rows"]] == ["HULU", "OPEN", "EXTRA", "HULU · vpn"]
+    assert [row["name"] for row in result["rows"]] == ["HULU", "OPEN", "ATVP", "EXTRA", "HULU · vpn", "ZONE"]
     assert rows["HULU"] == {
-        "name": "HULU", "label": "Sign-in needed", "attention": True, "used": ["2 series", "Show series"],
+        "name": "HULU", "label": "Sign-in needed", "tone": "bad", "signIn": ["Sign-in needed", "Sign in again"], "attention": True, "used": ["2 series", "Show series"],
         "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
                     "kids.txt", "Valid · 90 days left", "3 cookies · updated today", "Replace", "Delete"],
     }
     # another backend's row never gets the main Unshackle's cookie files, nor its series count
     assert rows["HULU · vpn"] == {
-        "name": "HULU · vpn", "label": "Confirmed now", "attention": False, "used": ["—"], "cookies": ["—", "Managed on that server"],
+        "name": "HULU · vpn", "label": "Confirmed now", "tone": "ok", "signIn": ["Confirmed now"], "attention": False, "used": ["—"],
+        "cookies": ["—", "Managed on that server", "Check"],
     }
+    # a cookie-only sign-in only tests its cookie file: no sign-in button, a Check beside the file
+    assert rows["ATVP"]["signIn"] == ["Not checked yet"] and rows["ATVP"]["tone"] == ""
+    assert rows["ATVP"]["cookies"] == ["ATVP.txt", "Valid · 90 days left", "15 cookies · updated today", "Check", "Replace", "Delete"]
+    # several files: the check uses its series' profile, so Check sits under them all, not beside one
+    assert rows["ZONE"]["cookies"] == ["ZONE.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
+                                       "kids.txt", "Valid · 90 days left", "3 cookies · updated today", "Replace", "Delete", "Check"]
     assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 90 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series", "Show series"]
     assert result["state"] == "sx-state down"
@@ -1471,6 +1482,7 @@ def test_sign_in_polling_follows_the_services_section():
 def test_retained_authentication_error_keeps_cancel_and_posts_retry_directly():
     assert run_authentication_ui("retry_retained_error") == {
         "controls": ["Retry", "Cancel"],
+        "primary": ["Retry"],  # its sign-in failed: Retry is the thing to do
         "requests": ["POST"],
     }
 

@@ -152,6 +152,9 @@ Every change worth knowing, newest first. The format follows
   from and what leaving it empty does; and the Services table's columns say what they hold, with a neutral Cancel.
 - **Services go by their names.** Apple TV+, Prime Video, Netflix, SBS On Demand, 7plus and the rest are named as
   people know them on every page, where most showed their web address (tv.apple.com) and only Paramount+ its name.
+- **The Services page shows where each sign-in stands at a glance.** Its state is a pill: green when signed in, red
+  when a sign-in is needed, whose button turns primary. A cookies-only service (Apple TV+) has no Sign in button,
+  which only ever tested its cookie file: Check, in the Cookies column, does that. Every button in a row sits on one line.
 - **Four more visual slips are gone.** The demo's tour card follows the light or dark theme, where its heading and
   subtitle were near-invisible in light mode; "Sign-in and cookies", "Open Sonarr" and "CDM devices" sit level with the
   buttons beside them; the Local and Remote tiles line up their titles; and on a phone, Activity's history filters and
