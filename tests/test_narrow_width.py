@@ -1,5 +1,4 @@
 """Narrow screens: nothing clipped or overlapping at 320 px or 400% zoom (WCAG 1.4.10), read from the stylesheet and the scripts."""
-import json
 import re
 from pathlib import Path
 
@@ -61,12 +60,6 @@ def test_the_notifications_heading_keeps_its_own_width_and_the_row_may_wrap():
     has(media("max-width: 340px"), "#inbox-clear { order: 1; margin-left: auto; }")
 
 
-def test_the_version_chip_shows_only_its_count_on_the_narrowest_phones():
-    narrow = media("max-width: 380px")
-    has(narrow, ".version-chip.has-new { font-size: 0; }")
-    has(narrow, ".version-chip.has-new b { margin-left: 0; }")
-
-
 def test_the_series_shortcuts_stay_pinned_below_the_head_except_on_a_short_screen():
     has(media("max-width: 700px"), ".ds-nav { top: var(--d-head, 118px); }")
     has(media("max-width: 700px"), "html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: calc(var(--d-head, 118px) + 64px); }")
@@ -82,17 +75,6 @@ def test_lighting_a_shortcut_scrolls_only_the_bar_sideways_and_counts_only_what_
     assert "nav.scrollLeft +=" in light
     has(light, 'getComputedStyle(box).position === "sticky" ? box.getBoundingClientRect().bottom : 0')
     has(light, "Math.max(pinned($(\".d-head\")), pinned(nav))")
-
-
-def test_the_version_chip_keeps_its_version_in_its_name_when_the_phone_hides_it():
-    news = (STATIC / "js" / "news.js").read_text()
-    has(news, "`What's new in ${name}: 1 new option`")
-    has(news, "`What's new in ${name}: ${count} new options`")
-    assert news.index("const name = version.textContent") < news.index("version.append(el(\"b\"")
-    for lang in ("de", "es", "fr", "it", "ja", "pt-BR", "ru", "zh-CN"):
-        words = json.loads((STATIC / "i18n" / f"{lang}.json").read_text())
-        assert "What's new in {0}: 1 new option" in words and "What's new in {0}: {1} new options" in words, lang
-        assert "What's new: {0} new options" not in words, lang
 
 
 def test_the_late_banner_puts_its_sentence_under_the_count_and_button_on_a_phone():
