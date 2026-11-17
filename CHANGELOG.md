@@ -138,6 +138,11 @@ Every change worth knowing, newest first. The format follows
   instead of adding one, and a click on it opens the service in Settings, Services.
 - **The setup picks the country of your time zone.** It started on United States whatever the time zone; it now starts
   on the time zone's country (Australia for Australia/Melbourne) until you pick one.
+- **The page works better with a keyboard and a screen reader.** A "Skip to content" link comes first; the main tabs
+  are links, so they open in a new tab; a series poster says its title before its service; the header's status dots
+  say "running" or "unreachable" in their name; Local and Remote are a radio group the arrow keys move through; and
+  Activity's headings no longer skip a level. Menus and dialogs cast a tighter shadow, and section titles are a step
+  larger.
 - **Four more visual slips are gone.** The demo's tour card follows the light or dark theme, where its heading and
   subtitle were near-invisible in light mode; "Sign-in and cookies", "Open Sonarr" and "CDM devices" sit level with the
   buttons beside them; the Local and Remote tiles line up their titles; and on a phone, Activity's history filters and

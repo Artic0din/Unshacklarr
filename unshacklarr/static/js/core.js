@@ -367,6 +367,20 @@ function el(tag, { dataset, ...props } = {}, ...children) {
   e.append(...children);
   return e;
 }
+/* One choice of two tiles, as a radio group: the picked one is checked and the only Tab stop, the arrows pick the next. */
+function pickTile(group, value) {
+  group.querySelectorAll("[role=radio]").forEach((t) => { t.ariaChecked = String(t.dataset.value === value); t.tabIndex = t.dataset.value === value ? 0 : -1; });
+}
+function arrowPicks(group) {
+  group.addEventListener("keydown", (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    const radios = [...group.querySelectorAll("[role=radio]")], to = radios[(radios.indexOf(e.target) + step + radios.length) % radios.length];
+    e.preventDefault();
+    to.focus();
+    to.click();
+  });
+}
 /* A redraw replaces the control in use, and the keyboard falls to the top of the page. Draw inside this: the control
    in the same place of the new ones takes the focus back (one in a list that reorders carries a data-fk, to be found
    by it; a field keeps its caret or selected range). The box is what the draw rebuilds. */
@@ -542,12 +556,12 @@ function renderWall() {
       const conf = S.config.series[s.tvdbId];
       const art = el("span", { className: "art" });
       art.append(el("img", { src: posterSrc(s.poster, s.title), alt: "", loading: "lazy", decoding: "async", onerror: posterFail(s.title) }));
-      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service), title: svcName(conf.service) }));
+      let libs = null;
       if (libsOf(s).length) {  // the Sonarr libraries it is in, by their names; one switched off for it dimmed (by mj23au, #10)
         const off = (name, main) => Boolean(conf?.service) && Boolean(main ? conf.main_off : conf.sonarrs?.[name]?.off);
-        art.append(el("span", { className: "lib" }, ...[...(s.id ? [[mainSonarr(), true]] : []), ...libsOf(s).map((o) => [o.name, false])]
+        libs = el("span", { className: "lib" }, ...[...(s.id ? [[mainSonarr(), true]] : []), ...libsOf(s).map((o) => [o.name, false])]
           .flatMap(([n, main], i) => [...(i ? [" · "] : []),
-            el("span", { textContent: n, ...(off(n, main) ? { className: "lib-off", title: "Switched off" } : {}) })])));
+            el("span", { textContent: n, ...(off(n, main) ? { className: "lib-off", title: "Switched off" } : {}) })]));
       }
       const sick = conf?.service && S.health[s.tvdbId];
       if (sick) art.append(el("span", { className: "sick", role: "img", ariaLabel: sick.cause ? `Failing: ${sick.cause}` : "Failing",
@@ -557,12 +571,15 @@ function renderWall() {
         off.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${EYE_SHUT}</svg>`;
         art.append(off);
       }
+      // the button's name reads title, state, then service: the art comes last, the CSS draws it on top
+      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service), title: svcName(conf.service) }));
+      if (libs) art.append(libs);
       const card = el("button", { className: "poster" + (conf?.service ? " on" : "") + (SEL.ids.has(s.tvdbId) ? " picked" : ""),
         ariaPressed: SEL.on ? String(SEL.ids.has(s.tvdbId)) : null, onclick: () => SEL.on ? pickSeries(s.tvdbId) : openDrawer(s) },
-        art,
         el("span", { className: "name", textContent: s.title }),
         el("span", { className: "meta" }, `${s.year ?? ""}`,
-          ...(s.missing ? [" · ", el("span", { className: "miss", textContent: `${s.missing} missing` })] : [])));
+          ...(s.missing ? [" · ", el("span", { className: "miss", textContent: `${s.missing} missing` })] : [])),
+        art);
       card.dataset.tvdb = s.tvdbId;
       card.dataset.fk = s.tvdbId;
       return card;

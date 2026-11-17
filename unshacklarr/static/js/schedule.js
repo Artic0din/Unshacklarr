@@ -529,6 +529,8 @@ function paintLights(h) {
     const state = st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "wait";
     b.dataset.state = state;
     b.querySelector("small").textContent = { warn: "Update available", down: "Unreachable", wait: "Checking…" }[state] || "";  // said in words, not by the colour alone
+    // its name says the state too: on a narrow screen the dot is all there is to see
+    b.ariaLabel = { ok: `${label}: running`, warn: `${label}: update available`, down: `${label}: unreachable`, wait: `${label}: checking` }[state];
     b.title = st.ok ? `${label} ${st.version || ""} is running${st.latest ? ` (${st.latest} is out)` : ""}`
       : st.ok === false ? st.error || `${label} is unreachable` : `Checking ${label}…`;
   }

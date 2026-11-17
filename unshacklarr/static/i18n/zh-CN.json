@@ -2457,5 +2457,10 @@
  "Settings: {0} · Unshacklarr": "设置：{0} · Unshacklarr",
  "{0} · Unshacklarr": "{0} · Unshacklarr",
  "Sign in again": "重新登录",
- "Not signed in": "未登录"
+ "Not signed in": "未登录",
+ "Skip to content": "跳到主要内容",
+ "{0}: running": "{0}：运行中",
+ "{0}: update available": "{0}：有可用更新",
+ "{0}: unreachable": "{0}：无法访问",
+ "{0}: checking": "{0}：正在检查"
 }
