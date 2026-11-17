@@ -2389,8 +2389,6 @@
  "No authentication session is waiting": "没有等待中的认证会话",
  "Not checked yet": "尚未检查",
  "Open: {0}": "打开：{0}",
- "Ready · {0}": "就绪 · {0}",
- "Reauthenticate": "重新认证",
  "Renewing {0} session": "正在续期 {0} 会话",
  "Repairing {0} session": "正在修复 {0} 会话",
  "Service approval": "服务批准",
@@ -2457,5 +2455,7 @@
  "Esc, then Tab, leaves the editor.": "按 Esc，再按 Tab，即可离开编辑器。",
  "Results on {0}: {1}": "{0} 上的结果：{1}",
  "Settings: {0} · Unshacklarr": "设置：{0} · Unshacklarr",
- "{0} · Unshacklarr": "{0} · Unshacklarr"
+ "{0} · Unshacklarr": "{0} · Unshacklarr",
+ "Sign in again": "重新登录",
+ "Not signed in": "未登录"
 }
