@@ -150,6 +150,8 @@ Every change worth knowing, newest first. The format follows
   Fix sign-in first, which opens that service in Settings › Services, and Retry after it; Activity says it is loading
   instead of "Nothing picked" while the history loads; the setup's API key help names the variable the key came
   from and what leaving it empty does; and the Services table's columns say what they hold, with a neutral Cancel.
+- **Services go by their names.** Apple TV+, Prime Video, Netflix, SBS On Demand, 7plus and the rest are named as
+  people know them on every page, where most showed their web address (tv.apple.com) and only Paramount+ its name.
 - **Four more visual slips are gone.** The demo's tour card follows the light or dark theme, where its heading and
   subtitle were near-invisible in light mode; "Sign-in and cookies", "Open Sonarr" and "CDM devices" sit level with the
   buttons beside them; the Local and Remote tiles line up their titles; and on a phone, Activity's history filters and

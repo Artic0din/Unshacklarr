@@ -265,15 +265,28 @@ whole_syncs: list[threading.Thread] = []  # the ones of every missing episode: "
 last_sync: datetime | None = None
 
 
+# A site's streaming brand, for services whose help names only their site (or an old brand). Extend per country.
+SERVICE_BRANDS = {
+    "netflix.com": "Netflix", "tv.apple.com": "Apple TV+", "primevideo.com": "Prime Video", "disneyplus.com": "Disney+",
+    "paramountplus.com": "Paramount+", "hbomax.com": "HBO Max", "max.com": "HBO Max", "hayu.com": "hayu",
+    "binge.com.au": "Binge", "stan.com.au": "Stan", "sbs.com.au": "SBS On Demand", "7plus.com.au": "7plus",
+    "iview.abc.net.au": "ABC iview", "9now.com.au": "9Now", "10.com.au": "10", "10play.com.au": "10",
+}
+
+
 def service_name(service: dict) -> str:
-    """What people call a service ("RMC+" for RMCP), from its help ("Service code for RMC+ (https://…)"),
-    else its site ("netflix.com"), else its tag."""
+    """What people call a service: its site's brand ("Apple TV+" for tv.apple.com), else the name in its help
+    ("Service code for RMC+ (https://…)"), else its site ("rmcplus.fr"), else its tag."""
+    try:
+        site = (urlparse(str(service.get("url") or "").split(",")[0].strip()).hostname or "").removeprefix("www.")
+    except ValueError:  # a malformed URL ("https://[…]"): named from its help or tag
+        site = ""
     first = (service.get("help") or "").strip().split("\n")[0]
     m = re.match(r"Service (?:code )?(?:for|pour) (.+?)(?:\s*[(\[—]|\.?$)", first)
     name = re.sub(r"(?:'s)? streaming service$|,? streaming service$", "", m.group(1), flags=re.IGNORECASE).strip() if m else ""
     if not name or name.startswith("http"):
-        name = (urlparse(str(service.get("url") or "").split(",")[0].strip()).hostname or "").removeprefix("www.")
-    return name or service["tag"]
+        name = site
+    return SERVICE_BRANDS.get(site) or name or service["tag"]
 
 
 def service_domains(services: list[dict] | None = None) -> dict[str, str]:

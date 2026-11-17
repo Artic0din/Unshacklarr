@@ -2732,8 +2732,12 @@ def test_a_service_is_named_as_people_know_it():
     assert name("RMCP", "Service code for RMC+ (https://www.rmcplus.fr)") == "RMC+"
     assert name("DSNP", "Service code for Disney+ Streaming Service (https://disneyplus.com).") == "Disney+"
     assert name("MAX", "Service code for MAX's streaming service (https://max.com).") == "MAX"
-    assert name("NF", "Service for https://netflix.com", "https://netflix.com") == "netflix.com"  # no name: its site
+    assert name("NF", "Service for https://netflix.com", "https://netflix.com") == "Netflix"  # its site's brand
+    assert name("ATVP", "Service for https://tv.apple.com", "https://tv.apple.com") == "Apple TV+"
+    assert name("SBS", "", "https://www.sbs.com.au/ondemand") == "SBS On Demand"
+    assert name("HMAX", "Service code for MAX's streaming service", "https://hbomax.com") == "HBO Max"  # the brand beats an old help
     assert name("DSCP", "", "https://discoveryplus.com") == "discoveryplus.com"
+    assert name("BAD", "Service code for Bad+", "https://[bad") == "Bad+"  # a malformed URL breaks nothing
     assert name("EXAMPLE") == "EXAMPLE"
 
 
