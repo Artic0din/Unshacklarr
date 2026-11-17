@@ -2731,12 +2731,16 @@ def test_a_service_is_named_as_people_know_it():
     name = lambda tag, help_="", url="": service_name({"tag": tag, "help": help_, "url": url})
     assert name("RMCP", "Service code for RMC+ (https://www.rmcplus.fr)") == "RMC+"
     assert name("DSNP", "Service code for Disney+ Streaming Service (https://disneyplus.com).") == "Disney+"
-    assert name("MAX", "Service code for MAX's streaming service (https://max.com).") == "MAX"
+    assert name("MAX", "Service code for MAX's streaming service (https://max.com).") == "HBO Max"  # renamed back in 2025
     assert name("NF", "Service for https://netflix.com", "https://netflix.com") == "Netflix"  # its site's brand
     assert name("ATVP", "Service for https://tv.apple.com", "https://tv.apple.com") == "Apple TV+"
     assert name("SBS", "", "https://www.sbs.com.au/ondemand") == "SBS On Demand"
     assert name("HMAX", "Service code for MAX's streaming service", "https://hbomax.com") == "HBO Max"  # the brand beats an old help
     assert name("DSCP", "", "https://discoveryplus.com") == "discoveryplus.com"
+    assert name("HMAX", "", "https://play.hbomax.com") == "HBO Max"  # a subdomain of the brand's site
+    assert name("AMZN", "", "https://www.amazon.de") == "Prime Video"  # Amazon's regional sites
+    assert name("AMZN", "https://www.primevideo.com") == "Prime Video"  # the site only in its help
+    assert name("XYZ", "", "https://notnetflix.com") == "notnetflix.com"  # a suffix is not a subdomain
     assert name("BAD", "Service code for Bad+", "https://[bad") == "Bad+"  # a malformed URL breaks nothing
     assert name("EXAMPLE") == "EXAMPLE"
 

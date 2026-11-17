@@ -271,22 +271,25 @@ SERVICE_BRANDS = {
     "paramountplus.com": "Paramount+", "hbomax.com": "HBO Max", "max.com": "HBO Max", "hayu.com": "hayu",
     "binge.com.au": "Binge", "stan.com.au": "Stan", "sbs.com.au": "SBS On Demand", "7plus.com.au": "7plus",
     "iview.abc.net.au": "ABC iview", "9now.com.au": "9Now", "10.com.au": "10", "10play.com.au": "10",
+    "amazon.com": "Prime Video", "amazon.fr": "Prime Video", "amazon.de": "Prime Video",
 }
 
 
 def service_name(service: dict) -> str:
     """What people call a service: its site's brand ("Apple TV+" for tv.apple.com), else the name in its help
     ("Service code for RMC+ (https://…)"), else its site ("rmcplus.fr"), else its tag."""
+    first = (service.get("help") or "").strip().split("\n")[0]
+    url = str(service.get("url") or "").split(",")[0].strip() or next(iter(re.findall(r"https?://[^\s,]+", first)), "")
     try:
-        site = (urlparse(str(service.get("url") or "").split(",")[0].strip()).hostname or "").removeprefix("www.")
+        site = (urlparse(url.rstrip(").;:")).hostname or "").removeprefix("www.")
     except ValueError:  # a malformed URL ("https://[…]"): named from its help or tag
         site = ""
-    first = (service.get("help") or "").strip().split("\n")[0]
     m = re.match(r"Service (?:code )?(?:for|pour) (.+?)(?:\s*[(\[—]|\.?$)", first)
     name = re.sub(r"(?:'s)? streaming service$|,? streaming service$", "", m.group(1), flags=re.IGNORECASE).strip() if m else ""
     if not name or name.startswith("http"):
         name = site
-    return SERVICE_BRANDS.get(site) or name or service["tag"]
+    brand = next((b for domain, b in SERVICE_BRANDS.items() if site == domain or site.endswith("." + domain)), "")
+    return brand or name or service["tag"]
 
 
 def service_domains(services: list[dict] | None = None) -> dict[str, str]:
