@@ -141,3 +141,4 @@ def test_an_open_dock_on_the_save_bar_gives_its_output_the_save_bars_height():
     """Raised onto the save bar, the dock's open output would reach behind the header: it loses the save bar's height."""
     rule = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\) \.dock\.open > \.cd-raw \.term \{([^}]*)\}", phone_blocks())
     assert rule and "var(--save-h" in rule[1] and "min-height: 0" in rule[1]  # the 320px floor of .term would undo it
+    assert "var(--head-h" in rule[1]  # a header with a status row under it is taller
