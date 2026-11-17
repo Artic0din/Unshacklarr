@@ -2442,8 +2442,6 @@
  "No authentication session is waiting": "Нет сессии аутентификации в ожидании",
  "Not checked yet": "Ещё не проверено",
  "Open: {0}": "Открыть: {0}",
- "Ready · {0}": "Готово · {0}",
- "Reauthenticate": "Войти заново",
  "Renewing {0} session": "Обновление сессии: {0}",
  "Repairing {0} session": "Восстановление сессии: {0}",
  "Service approval": "Подтверждение сервиса",
@@ -2515,5 +2513,7 @@
  "Esc, then Tab, leaves the editor.": "Esc, затем Tab: выход из редактора.",
  "Results on {0}: {1}": "Результаты на {0}: {1}",
  "Settings: {0} · Unshacklarr": "Настройки: {0} · Unshacklarr",
- "{0} · Unshacklarr": "{0} · Unshacklarr"
+ "{0} · Unshacklarr": "{0} · Unshacklarr",
+ "Sign in again": "Войти заново",
+ "Not signed in": "Вход не выполнен"
 }

@@ -130,6 +130,10 @@ Every change worth knowing, newest first. The format follows
   subtitle were near-invisible in light mode; "Sign-in and cookies", "Open Sonarr" and "CDM devices" sit level with the
   buttons beside them; the Local and Remote tiles line up their titles; and on a phone, Activity's history filters and
   its Clear… are 36 px tall, easy to tap. (#280)
+- **The Services page says where each sign-in stands once.** "Ready · pairing, cookies" repeated the sign-in methods
+  and read like a pairing in progress: a service nothing has checked yet now reads "Not checked yet", and one
+  Unshackle reports as not signed in reads "Not signed in". A service already signed in or confirmed offers
+  "Sign in again" instead of "Sign in", and "Reauthenticate" is "Sign in again" too.
 - **On a phone, the Activity bar and the selection bar no longer hide behind the save bar.** With unsaved Settings
   changes, the save bar sat in the same spot as a running download's bar, and the Series selection bar overlapped it
   once it wrapped to two rows. Both now stand on the save bar, as tall as it is. (#298)
