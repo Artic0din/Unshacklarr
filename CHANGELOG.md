@@ -128,6 +128,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Every button on a phone is big enough to tap.** Episode titles, the eye that hides an episode, the week arrows, Week and Month, the filters, the series' links and shortcuts and the other small controls in Schedule, Series and Activity now answer a finger 44 px wide and tall, mostly without changing how they look. The series page's Back button sits in the page's margin instead of against the screen's edge, and the header shows the whole name "Unshacklarr" (or only the logo on the narrowest phones) instead of "Uns…"; on a phone, the version and what's new are in Settings.
 - **The page works better with a keyboard and a screen reader.** A "Skip to content" link comes first; the main tabs
   are links, so they open in a new tab; a series poster says its title before its service; the header's status dots
   say "running" or "unreachable" in their name; Local and Remote are a radio group the arrow keys move through; and
