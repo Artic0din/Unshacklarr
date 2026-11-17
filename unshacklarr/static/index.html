@@ -31,7 +31,7 @@
   </div>
 </div>
 <header>
-  <h1 class="brand"><a href="#/series" id="home" aria-label="Unshacklarr, back to the series"><svg class="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+  <h1 class="brand"><a href="#/schedule" id="home" aria-label="Unshacklarr, schedule"><svg class="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
   <circle cx="32" cy="32" r="31" fill="#26a69a"/><circle cx="32" cy="32" r="27.6" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.4"/><path d="M25 25.5v-5a7 7 0 0 1 14 0" fill="none" stroke="#fff" stroke-width="4.4" stroke-linecap="round"/><rect x="13" y="25" width="38" height="24" rx="5" fill="#fff"/><path d="M32 29.5v10M27.3 35 32 39.7l4.7-4.7" fill="none" stroke="#1b7a71" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M25 53.5h14" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/>
 </svg><span>Unshacklarr</span></a></h1>
   <button class="version-chip" id="version" type="button" title="What's new in each version" hidden></button>
@@ -48,7 +48,7 @@
   <a class="update-pill" id="update" target="_blank" rel="noopener" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span></span></a>
   <button class="btn approval-reopen" id="approval-reopen" type="button" hidden>Approval</button>
   <button class="btn" id="bell" aria-label="Notifications"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><b class="count" id="bell-count" hidden></b></button>
-  <button class="btn" id="sync" aria-label="Run sync now"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="sync-text"><span id="sync-label">Run sync now</span><small class="last-sync" id="last-sync"></small></span></button>
+  <button class="btn" id="sync" aria-label="Run sync now" aria-describedby="last-sync"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="sync-text"><span id="sync-label">Run sync now</span><small class="last-sync" id="last-sync"></small></span></button>
 </header>
 
 <main>
@@ -78,13 +78,13 @@
       <button class="btn small" id="bulk-open" title="Services for your series, found on TMDB">Suggest services</button>
       <button class="btn small" id="sel-toggle" type="button" aria-pressed="false">Select</button>
     </div>
-    <div class="wall" id="wall" aria-busy="true"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+    <div class="wall" id="wall" aria-busy="true"><span class="sr-only" role="status">Loading series…</span><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
   </section>
 
   <section id="tab-schedule">
     <div class="sched-head">
       <p id="next-sync" class="muted"><span class="loading"><span class="spinner" aria-hidden="true"></span>Loading the schedule…</span></p>
-      <button class="btn small" id="sched-refresh">Refresh</button>
+      <button class="btn small" id="sched-refresh">Reload calendar</button>
     </div>
     <div id="sched-late" hidden>
       <div class="late-banner"><b id="late-n"></b><span id="late-sum"></span><button class="btn small" id="late-toggle" aria-expanded="false">Show</button></div>
@@ -105,7 +105,6 @@
         <button class="hidden-btn" id="hidden-open" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a17.6 17.6 0 0 1-2.2 3.3M6.6 6.6C3.6 8.6 2 12 2 12s3 8 10 8a10 10 0 0 0 5.4-1.6M14.1 14.1a3 3 0 0 1-4.2-4.2M2 2l20 20"/></svg><span></span></button>
       </div>
     </div>
-    <p class="muted sched-sub">Unshackle tries its series at their release time, or at the first sync after airing. Add any other series in one tap, or hide the ones you don't follow.</p>
     <div class="cal-nav">
       <button class="btn small" id="cal-prev" aria-label="Previous week"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
       <h3 id="cal-range" aria-live="polite"></h3>
@@ -274,7 +273,7 @@
           <div class="sx-head"><div><h3>Download window</h3><p>Automatic downloads only run between these times, at night for example. Episodes you start by hand are not affected.</p></div></div>
           <div class="sx-grid ax-grid">
             <div class="field"><label for="ax-from">From</label><input id="ax-from" type="time" data-set="download_from"><small>Leave empty for no limit.</small></div>
-            <div class="field"><label for="ax-to">To</label><input id="ax-to" type="time" data-set="download_to"><small>It can span midnight, for example 23:00 to 06:00.</small></div>
+            <div class="field"><label for="ax-to">To</label><input id="ax-to" type="time" data-set="download_to"><small>It can span midnight, for example 23:00 to 06:00.</small><small class="status-err" id="ax-window-err" role="status"></small></div>
           </div>
           <label class="check ax-bursts"><input type="checkbox" id="ax-window-bursts"> Also apply to release-time downloads</label>
           <p class="rt-who" id="ax-window-say"></p>
@@ -346,7 +345,7 @@
           <div class="sx-grid">
             <div class="field"><label for="dx-audio">Accepted audio languages</label><input id="dx-audio" type="text" data-set="audio_accept" placeholder="Example: fr, en" spellcheck="false"><small>The episode must have at least one of them. It is checked before the download, then on the file. orig is each series' original language, as Sonarr gives it. Empty: the first language of --a-lang or --lang. A series can set its own.</small></div>
             <div class="field"><label for="dx-prefer">Upgrade the audio to</label><input id="dx-prefer" type="text" data-set="audio_prefer" placeholder="Example: fr" spellcheck="false"><small>One language. An episode downloaded in another accepted language (for example English with French subtitles) is downloaded again when the service has this one. Empty: never.</small></div>
-            <div class="field"><label for="dx-upgrade-days">Wait for it</label><div class="unit-input"><input id="dx-upgrade-days" type="number" data-set="upgrade_days" data-num min="1" max="365" step="1" inputmode="numeric"><span>days</span></div><small>After the download, the service is checked once a day for this many days. Nothing is downloaded until that language is there. After that, the episode keeps the audio it has.</small></div>
+            <div class="field"><label for="dx-upgrade-days">Wait for the audio, in days</label><div class="unit-input"><input id="dx-upgrade-days" type="number" data-set="upgrade_days" data-num min="1" max="365" step="1" inputmode="numeric"><span>days</span></div><small>After the download, the service is checked once a day for this many days. Nothing is downloaded until that language is there. After that, the episode keeps the audio it has.</small></div>
             <div class="field"><label for="dx-subs">Required subtitle languages</label><input id="dx-subs" type="text" data-set="subs_accept" placeholder="Example: fr" spellcheck="false"><small>The episode must have full subtitles in at least one of them. Forced subtitles (only a few lines) do not count. Empty: not checked. A series can set its own.</small></div>
           </div>
           <div class="up-mode">
@@ -403,7 +402,7 @@
         </section>
         <section class="sx-card" id="ug-series-card">
           <div class="sx-head"><div><h3>Series to check</h3></div></div>
-          <div class="ug-tools"><input type="search" id="ug-find" placeholder="Find a series" autocomplete="off"><button type="button" class="btn small" id="ug-all">Select all</button><button type="button" class="btn small" id="ug-none">Select none</button></div>
+          <div class="ug-tools"><input type="search" id="ug-find" placeholder="Find a series" aria-label="Find a series" autocomplete="off"><button type="button" class="btn small" id="ug-all">Select all</button><button type="button" class="btn small" id="ug-none">Select none</button></div>
           <div class="ug-list" id="ug-series"></div>
           <small class="muted" id="ug-say"></small>
         </section>
@@ -526,11 +525,11 @@
         <section class="sx-card">
           <div class="sx-head"><div><h3>Change the password</h3><p>At least 8 characters.<br>Every other device is signed out and stops getting push notifications. This one stays signed in.</p></div></div>
           <div class="sx-grid">
-            <div class="field ac-wide"><label for="pw-current">Current password</label><input type="password" id="pw-current" autocomplete="current-password"><small class="pw-match" id="pw-current-say"></small></div>
-            <div class="field"><label for="pw-new">New password</label><input type="password" id="pw-new" autocomplete="new-password" minlength="8" aria-describedby="pw-meter"><div class="pw-meter" id="pw-meter" data-score="0" aria-live="polite"><i></i><i></i><i></i><i></i><span></span></div></div>
-            <div class="field"><label for="pw-again">Confirm new password</label><input type="password" id="pw-again" autocomplete="new-password" minlength="8"><small class="pw-match" id="pw-match"></small></div>
+            <div class="field ac-wide"><label for="pw-current">Current password</label><input type="password" id="pw-current" autocomplete="current-password"><small class="pw-match" id="pw-current-say" role="alert"></small></div>
+            <div class="field"><label for="pw-new">New password</label><input type="password" id="pw-new" autocomplete="new-password" minlength="8" aria-describedby="pw-meter"><div role="status"><div class="pw-meter" id="pw-meter" data-score="0"><i></i><i></i><i></i><i></i><span></span></div></div><small class="pw-match" id="pw-new-say" role="alert"></small></div>
+            <div class="field"><label for="pw-again">Confirm new password</label><input type="password" id="pw-again" autocomplete="new-password" minlength="8"><small class="pw-match" id="pw-match" role="status"></small></div>
           </div>
-          <div class="ac-go"><button class="btn primary" id="pw-change" type="button" disabled>Change the password</button></div>
+          <div class="ac-go"><button class="btn primary" id="pw-change" type="button">Change the password</button></div>
         </section>
         <section class="sx-card">
           <div class="sx-head"><div><h3>API key <span class="sx-saved" id="ak-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></h3><p>It only opens the /api/v1 routes: never the password, the cookies or the settings.</p></div></div>
@@ -635,7 +634,7 @@
       <div class="uy-cm" id="uy-cm"></div>
       <pre id="uy-diff" class="uy-diff" hidden></pre>
     </div>
-    <div class="uy-foot" id="uy-foot" hidden><span class="status-err" id="uy-error"></span><span class="uy-where" id="uy-where"></span></div>
+    <div class="uy-foot" id="uy-foot" hidden><span class="status-err" id="uy-error"></span><span class="uy-hint">Esc, then Tab, leaves the editor.</span><span class="uy-where" id="uy-where"></span></div>
   </section>
 </main>
 
@@ -668,7 +667,6 @@
 
     <section class="card sx-card" id="ds-source">
       <div class="sx-head"><div><h3>Source</h3></div></div>
-      <div class="d-sick" id="d-sick" hidden></div>
       <div class="field ds-tmdb">
         <div class="field-head"><span>Found on TMDB</span><small id="d-checked"></small>
           <button class="btn small" id="d-refresh" title="Look it up on TMDB again">Refresh</button></div>
@@ -692,12 +690,13 @@
         <details class="d-libs-adv" id="d-libs-adv"><summary>Advanced</summary><div id="d-libs-adv-body"></div></details>
       </div>
       <div class="ds-tools">
-        <button class="btn small" id="d-find-open" type="button" hidden></button>
+        <button class="btn small" id="d-find-open" type="button" aria-expanded="false" aria-controls="d-find" hidden></button>
         <button class="btn small" id="d-probe">Test this series</button><span class="muted" id="d-probe-state">Asks the service which episodes it has. Nothing is downloaded.</span>
       </div>
       <div class="url-find-box" id="d-find" hidden>
         <div class="url-find-row"><input type="search" id="d-find-q" aria-label="The series' name on the service" spellcheck="false"><button class="btn small primary" id="d-find-go" type="button">Search</button></div>
         <div class="url-find-out" id="d-find-out"></div>
+        <div class="sr-only" id="d-find-count" role="status"></div>
       </div>
       <div id="d-probe-out" role="status"></div>
       <details class="ds-sub" id="d-fb">
@@ -963,7 +962,7 @@
       <label class="field" data-for="widevine"><span>System ID</span><input name="system_id" inputmode="numeric" placeholder="26830"></label>
       <label class="field" data-for="widevine playready"><span>Security level</span><input name="security_level" inputmode="numeric" placeholder="3 or 3000"></label>
     </div>
-    <p class="status-err" id="remote-error"></p>
+    <p class="status-err" id="remote-error" role="alert"></p>
     <div class="modal-actions"><button class="btn" type="button" id="remote-cancel">Cancel</button><button class="btn primary" type="submit">Save</button></div>
   </form>
 </dialog>
@@ -971,7 +970,7 @@
   <form method="dialog" id="sel-form">
     <h2 id="sel-title">Change several series</h2>
     <p>Only the fields you fill in change. Everything else stays as it is for each series. Save afterwards, as for one series.</p>
-    <p class="status-warn" id="sel-noservice" hidden></p>
+    <p class="status-warn" id="sel-noservice" role="status" hidden></p>
     <div class="sel-grid">
       <div class="field"><label for="sel-service">Service</label><select id="sel-service"></select></div>
       <div class="field"><label for="sel-release">Release time</label><input type="time" id="sel-release"></div>
@@ -982,7 +981,7 @@
       <div class="field"><label for="sel-fallback">Fallback profiles</label><input type="text" id="sel-fallback" placeholder="Unchanged" spellcheck="false"></div>
     </div>
     <div class="field"><span>Download options</span><div class="opts" id="sel-options"></div><small>Added to each series' own options. An option a series already has is replaced.</small></div>
-    <div class="modal-actions"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="apply" id="sel-apply">Apply</button></div>
+    <div class="modal-actions"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="apply" id="sel-apply">Change</button></div>
   </form>
 </dialog>
 <dialog class="modal wide" id="jobopts-dialog" aria-labelledby="jobopts-title">
@@ -991,7 +990,7 @@
     <p>For the episodes still to come in this job. It starts from the options they have now; what you change is for this job only, the series itself does not change.</p>
     <div class="field"><span>Download options</span><div class="opts" id="jobopts-dl"></div></div>
     <div class="field"><span>Options of the service</span><div class="opts" id="jobopts-own"></div><small>A flag the service on a remote server knows, such as -B, can be written as is.</small></div>
-    <p class="status-err" id="jobopts-err"></p>
+    <p class="status-err" id="jobopts-err" role="alert"></p>
     <div class="modal-actions"><button class="btn" value="cancel" formnovalidate autofocus>Cancel</button><button class="btn primary" value="apply" id="jobopts-apply">Apply to this job</button></div>
   </form>
 </dialog>
@@ -1000,7 +999,7 @@
     <h2 id="folder-title">Choose a folder</h2>
     <p class="folder-path" id="folder-path"></p>
     <div class="url-find-out folder-list" id="folder-list"></div>
-    <p class="status-err" id="folder-err"></p>
+    <p class="status-err" id="folder-err" role="alert"></p>
     <div class="modal-actions"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="use" id="folder-use">Use this folder</button></div>
   </form>
 </dialog>
@@ -1089,9 +1088,12 @@
 <div class="sched-pop" id="sched-pop" role="dialog" aria-labelledby="sched-det-h" tabindex="-1" hidden></div>
 <dialog class="modal" id="sched-dlg" aria-labelledby="sched-det-h"></dialog>
 
-<div class="savebar" id="savebar" hidden>
+<div class="savebar" id="savebar" role="status" hidden>
   <span>Unsaved changes</span>
-  <button class="btn primary" id="save">Save changes</button>
+  <span class="savebar-actions">
+    <button class="btn" id="discard">Discard changes</button>
+    <button class="btn primary" id="save">Save changes</button>
+  </span>
 </div>
 
 <script src="/js/core.js"></script>

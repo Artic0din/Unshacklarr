@@ -12,7 +12,7 @@ const speedLog = {};  // run id -> [[time, progress]], for the time left
 
 function duration(ms) {
   const s = Math.round(ms / 1000);
-  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")}` : `${Math.floor(s / 3600)} h ${String(Math.round(s / 60) % 60).padStart(2, "0")}`;
+  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s` : `${Math.floor(s / 3600)} h ${String(Math.round(s / 60) % 60).padStart(2, "0")} min`;
 }
 const posterOf = (c) => { const s = S.series.find((x) => x.tvdbId === c.tvdbId); return posterSrc(s?.poster, s?.title || c.series); };
 const isLive = (c) => c.outcome === "running";
@@ -143,6 +143,15 @@ function glideBars(root) {
   root.offsetWidth;  // the start widths are laid out before the targets are set
   bars.forEach((b, i) => { b.style.width = targets[i]; barWidths.set(b.dataset.k, targets[i]); });
 }
+/* No download to list: what was asked for named, with a way back to the whole history. */
+function emptyHistory(query, filter) {
+  if (!query && filter === "all") return el("p", { className: "con-empty", textContent: "No download yet. Downloads start from a series, or with Run sync now." });
+  const label = document.querySelector(`#tab-log .con-filters [data-f="${filter}"]`).firstChild.textContent.trim();
+  const text = query && filter !== "all" ? `No download under ${label} matches “${query}”.` : query ? `No download matches “${query}”.` : `No download under ${label}.`;
+  return el("div", { className: "con-empty", role: "status" }, el("p", { textContent: text }),
+    ...(query ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", dataset: { fk: "empty-clear" }, onclick: () => { $("#con-search").value = ""; renderConsole(); $("#con-search").focus(); } })] : []),
+    ...(filter !== "all" ? [el("button", { type: "button", className: "btn small", textContent: "Show all", dataset: { fk: "empty-all" }, onclick: () => { setConFilter("all"); document.querySelector('#tab-log .con-filters [data-f="all"]').focus(); } })] : []));
+}
 /* Each tick redraws the lists and the detail: the control in use is found again by its data-fk. */
 function renderConsole(liveOnly = false) { keepFocus($("#con"), () => drawConsole(liveOnly)); }
 function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same downloads moving on
@@ -154,14 +163,14 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
   $("#runs-live").replaceChildren(...(liveItems.length ? liveItems.map(itemRow) : [el("p", { className: "con-empty", textContent: "Nothing is downloading right now." })]));
   glideBars($("#runs-live"));
   if (!liveOnly) {  // the history and its counts: unchanged while the same downloads only move on
-    const q = $("#con-search").value.trim().toLowerCase();
+    const query = $("#con-search").value.trim(), q = query.toLowerCase();
     const groups = { all: () => true, downloaded: (c) => c.outcome === "downloaded", failed: (c) => c.outcome === "failed",
       kept: (c) => c.outcome === "kept" || c.outcome === "import", stopped: (c) => ["stopped", "interrupted", "cancelled"].includes(c.outcome) };
     const searched = runCards.filter((c) => !isLive(c) && (!q || c.series.toLowerCase().includes(q)));
     document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.querySelector("span").textContent = `(${searched.filter(groups[b.dataset.f]).length})`);
     const pastItems = jobsOf(searched.filter(groups[conFilter]).filter((c) => !liveJobs.has(c.batch)));
     $("#runs-history").replaceChildren(...(pastItems.length ? pastItems.slice(0, runsShown).map(itemRow)
-      : [el("p", { className: "con-empty", textContent: q || conFilter !== "all" ? "No download matches." : "No download yet." })]));
+      : [emptyHistory(query, conFilter)]));
     $("#runs-more").hidden = pastItems.length <= runsShown;
   }
   // Activity opened from the menu while a download runs: straight to it, a phone too.
@@ -169,6 +178,7 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
   landOnLive = false;
   // On a wide screen, something is always shown: what runs first, else the latest download.
   if (!picked_run && innerWidth > 700) picked_run = itemKey(liveItems[0] || jobsOf(runCards)[0]) || null;
+  markPicked(picked_run);  // the rows were drawn before this pick, and the summary rows are not redrawn
   if (picked_run === "serve" || picked_run === "stats" || picked_run === "left") return;
   if (picked_run?.startsWith("job:")) {
     const job = jobsOf(runCards).find((i) => i.job === picked_run.slice(4));
@@ -207,7 +217,7 @@ document.addEventListener("mouseover", (e) => {
 });
 /* Lists are redrawn at each update: an animation there starts where the clock has it, not over (no blink). */
 const phase = (ms) => `animation-delay: -${Date.now() % ms}ms`;
-const pulse = () => el("span", { className: "pulse", ariaLabel: "Running", style: phase(1600) });
+const pulse = () => el("span", { className: "pulse", role: "img", ariaLabel: "Running", style: phase(1600) });
 /* A row's poster, the same element from one render to the next: a redrawn row doesn't reload it (no blink). */
 const thumbs = new Map();
 function thumb(key, src) {
@@ -243,7 +253,7 @@ function jobState(j) {
 function jobRow(j) {
   const first = j.cards[0], st = jobState(j), key = `job:${j.job}`;
   const series = new Set(j.cards.map((c) => c.series)).size > 1 ? "Several series" : first.series;
-  return el("button", { className: "crow job" + (key === picked_run ? " sel" : "") + hovering(`row:${key}`), dataset: { hk: `row:${key}`, fk: `row:${key}` }, onclick: () => pickRun(key) },
+  return el("button", { className: "crow job" + (key === picked_run ? " sel" : "") + hovering(`row:${key}`), ariaCurrent: String(key === picked_run), dataset: { hk: `row:${key}`, fk: `row:${key}` }, onclick: () => pickRun(key) },
     thumb(`row:${key}`, posterOf(first)),
     el("span", {}, el("b", {}, el("span", { textContent: series }), el("em", { textContent: `${j.cards.length} episodes` })),
       el("small", { textContent: (st.live ? st.words : [...st.words, ...jobTotals(j)]).join(" · ") }),
@@ -326,7 +336,7 @@ function renderJob(j) {
       el("small", { className: "line2" }, el("b", { textContent: svcName(first.service) }), `${KIND[first.kind] || first.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
   // each count shows or hides its episodes: a job of 200 episodes, its failed ones alone in sight
-  const counts = el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused", textContent: "⏸ Paused: the next episode waits" })] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
+  const counts = el("div", { className: "job-counts" }, ...(st.paused ? [el("span", { className: "paused" }, icon("pause", "inl"), "Paused: the next episode waits")] : []), ...[["done", "Done", "ok"], ["downloading", "Downloading", "now"], ["finishing", "Finishing", "now"],
     ["queued", "Queued", ""], ["failed", "Failed", "err"], ["stopped", "Stopped", ""], ["cancelled", "Cancelled", ""]]
     .filter(([k]) => st.n[k]).map(([k, label, cls]) => el("button", { type: "button", className: `${cls}${jobHidden.has(k) ? " off" : ""}`, ariaPressed: String(!jobHidden.has(k)), dataset: { fk: `count:${k}` },
       title: jobHidden.has(k) ? "Show these episodes" : "Hide these episodes", onclick: () => { jobHidden.has(k) ? jobHidden.delete(k) : jobHidden.add(k); renderConsole(); } },
@@ -337,6 +347,7 @@ function renderJob(j) {
   const followed = j.cards.find((c) => c.id === following);
   const next = followed && !isDownloading(followed) && !isQueued(followed) && j.cards.find(isDownloading);
   if (next) { openCards.delete(followed.id); openCards.add(next.id); following = next.id; }
+  const tookLine = (c, live) => !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "";
   const shown = j.cards.filter((c) => !jobHidden.has(cardKind(c)));
   const cards = shown.map((c) => {
     // a card that doesn't move (done, queued, folded) is the same element as at the last draw: a job of 200 episodes
@@ -359,7 +370,7 @@ function renderJob(j) {
         ...[...(afterTracks(c) ? [[ICON_CLOCK, muxLeft(c) ? `${afterTracks(c)} · ${muxLeft(c)} left` : `${afterTracks(c)} · ${since(c.mux_from || c.tracks_in)}`]] : [[ICON_SPEED, speedOf(c)], [ICON_CLOCK, timeLeft(c) && `${timeLeft(c)} left`]]), [ICON_GLOBE, proxyOf(c), "extra"], [ICON_FILM, videoOf(c), "extra"],
           [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${svcName(c.service)}`, "extra"]]
           .filter(([, t]) => t).map(([svg, t, extra]) => { const chip = metaChip(svg, t); if (extra) chip.classList.add(extra); return chip; }))
-      : el("small", { textContent: !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "" });
+      : el("small", { textContent: tookLine(c, live), title: tookLine(c, live) });  // ellipsised when narrow: the whole line on hover
     const open = openCards.has(c.id) && !c.waiting;
     const acts = open ? cardActs(c) : [];
     const fold = () => {
@@ -408,6 +419,7 @@ function renderJob(j) {
   renderDock({ ...(now ? dockOf(now) : { ep: `${j.cards.length} episodes`, line: st.words.join(" · "),
     pct: st.live ? `${st.progress}%` : st.n.failed ? `${st.n.failed} failed` : "✓", tone: st.live ? "" : st.n.failed ? "err" : "ok", progress: st.progress }),
     acts: [
+      series ? { key: "open", label: "Open series", icon: DOCK.series, go: () => openDrawer(series) } : null,
       st.live && st.n.queued ? { key: "pause", label: st.paused ? "Resume the job" : "Pause the job", icon: st.paused ? DOCK.play : DOCK.pause, cls: st.paused ? "on" : "",
         go: (b) => pauseJob(j, !st.paused, b) } : null,
       st.live && st.n.queued ? { key: "opts", label: "Options of this job", icon: DOCK.opts, go: () => openJobOptions(j) } : null,
@@ -439,20 +451,30 @@ function jobDone(j, st) {
 }
 function listRow(c) {
   const started = new Date(c.started);
+  const asking = isLive(c) && c.prompt;  // it waits for the person, not for the service: no pulse, no bar
   const sub = isLive(c)
-    ? (c.prompt ? `${svcName(c.service)} · waiting for your answer` : c.waiting ? `${svcName(c.service)} · in the queue`
+    ? (asking ? svcName(c.service) : c.waiting ? `${svcName(c.service)} · in the queue`
       : isQueued(c) ? `${svcName(c.service)} · waiting for a slot` : `${svcName(c.service)} · ${afterTracks(c) || speedOf(c) || c.step}`)
     : c.outcome === "unavailable" && c.checks > 1 ? `${svcName(c.service)} · checked ${c.checks} times, last ${day(started)} ${time(started)}`
     : `${day(started)} ${time(started)}${c.ended ? ` · ${duration(new Date(c.ended) - started)}` : ""}`;
-  const side = isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
+  const side = asking ? el("span", { className: "chip ask", textContent: "Waiting for your answer" })
+    : isLive(c) ? (isQueued(c) ? el("span", { className: "chip", textContent: "Queued" }) : pulse())
     : el("span", { className: `chip o-${c.outcome}`, textContent: outcomeOf(c) });
-  const row = el("button", { className: "crow" + (c.id === picked_run ? " sel" : "") + hovering(`row:${c.id}`), dataset: { hk: `row:${c.id}`, fk: `row:${c.id}` }, onclick: () => pickRun(c.id) },
+  const row = el("button", { className: "crow" + (c.id === picked_run ? " sel" : "") + hovering(`row:${c.id}`), ariaCurrent: String(c.id === picked_run), dataset: { hk: `row:${c.id}`, fk: `row:${c.id}` }, onclick: () => pickRun(c.id) },
     thumb(`row:${c.id}`, posterOf(c)),
     el("span", {}, el("b", {}, el("span", { textContent: c.series }), el("em", { textContent: c.sxxeyy })),
       el("small", { textContent: c.attempts > 1 ? `${sub} · attempt ${c.attempts}` : sub }),
-      ...(isLive(c) && !isQueued(c) ? [el("span", { className: "bar" }, el("i", { style: `width:${Number(c.live?.progress) || 0}%`, dataset: { k: `row:${c.id}` } }))] : [])),
+      ...(isLive(c) && !isQueued(c) && !asking ? [el("span", { className: "bar" }, el("i", { style: `width:${Number(c.live?.progress) || 0}%`, dataset: { k: `row:${c.id}` } }))] : [])),
     side);
   return row;
+}
+// The one row shown as current: a summary row (Waiting in downloads, Stats…) by its id or its picked_run key,
+// a download or job by its key. Nothing else is: picking one clears the others, and the serve log clears them all.
+function markPicked(key) {
+  document.querySelectorAll(".crow").forEach((r) => {
+    const on = !!key && (r.id === key || r.id === `con-${key}` || r.dataset.hk === `row:${key}`);
+    r.classList.toggle("sel", on); r.setAttribute("aria-current", String(on));
+  });
 }
 function pickRun(id) {
   picked_run = id;
@@ -464,7 +486,7 @@ function pickRun(id) {
 async function showLeftovers() {
   picked_run = "left";
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-left"));
+  markPicked("con-left");
   $("#cd-top-title").textContent = "Waiting in downloads";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -518,7 +540,7 @@ async function showMissing() {
   picked_run = "missing";
   const seq = ++missingSeq;
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-missing"));
+  markPicked("con-missing");
   $("#cd-top-title").textContent = "Catch up";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -564,7 +586,7 @@ async function showUpgrades(fresh = true) {
   picked_run = "upgrades";
   clearTimeout(upgradeTimer);
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-upgrades"));
+  markPicked("con-upgrades");
   $("#cd-top-title").textContent = "Upgrades";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -661,7 +683,7 @@ async function showLanguages(fresh = true) {
   picked_run = "languages";
   clearTimeout(langTimer);
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-languages"));
+  markPicked("con-languages");
   $("#cd-top-title").textContent = "Languages";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -726,7 +748,7 @@ $("#con-languages").onclick = showLanguages;
 async function showStats() {
   picked_run = "stats";
   $("#con").classList.add("open");
-  document.querySelectorAll(".crow").forEach((r) => r.classList.toggle("sel", r.id === "con-stats"));
+  markPicked("con-stats");
   $("#cd-top-title").textContent = "Stats";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -754,10 +776,10 @@ async function showStats() {
     el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "Stats" }),
       el("small", { className: "line1", textContent: st.since ? `From the history kept since ${day(new Date(st.since))}` : "Nothing in the history yet" }))),
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
-      ["Kept by Sonarr", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
+      ["Kept", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
       .map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v })))),
     el("div", { style: "display:grid;gap:8px" }, weeks, el("div", { className: "legend", ariaHidden: "true" }, el("span", {}, el("i", { className: "ok", style: "background:var(--ok)" }), "Downloaded"),
-      el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept by Sonarr"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
+      el("span", {}, el("i", { style: "background:var(--warn)" }), "Kept"), el("span", {}, el("i", { style: "background:var(--err)" }), "Failed"))),
     perWeek,
     st.services.length ? el("div", { className: "svc-scroll" }, table) : ""));
 }
@@ -769,11 +791,12 @@ $("#cd-back").onclick = () => {
 };
 let searchTimer = null;  // typed: the history filtered once the typing pauses, not at each key
 $("#con-search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 150); };
-document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.onclick = () => {
-  conFilter = b.dataset.f;
-  document.querySelectorAll("#tab-log .con-filters button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+function setConFilter(f) {
+  conFilter = f;
+  document.querySelectorAll("#tab-log .con-filters button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.f === f));
   renderConsole();
-});
+}
+document.querySelectorAll("#tab-log .con-filters button").forEach((b) => b.onclick = () => setConFilter(b.dataset.f));
 const moreRuns = () => { if (!$("#runs-more").hidden) { runsShown += 50; renderConsole(); } };
 $("#runs-more").onclick = moreRuns;
 $("#runs-history").addEventListener("scroll", (e) => { const h = e.target; if (h.scrollTop + h.clientHeight > h.scrollHeight - 300) moreRuns(); }, { passive: true });
@@ -822,6 +845,7 @@ const DOCK = {
   term: '<path d="m5 8 4 4-4 4M12 16h7"/>', up: '<path d="M6 15l6-6 6 6"/>', pause: '<path d="M8 5v14M16 5v14"/>', play: '<path d="M7 5v14l11-7z"/>',
   opts: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
   retry: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>', stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  series: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
 };
 function dockOf(c) {  // one download: where it stands, in a line
   const live = isLive(c), pct = Math.round(Number(c.live?.progress) || 0);
@@ -842,7 +866,7 @@ function renderDock(d) {
     dock.append(el("span", { className: "d-ico" }, svg(DOCK.term)),
       el("div", { className: "d-mid" }, el("div", { className: "d-l1" }, el("b"), el("span"), el("em")), el("span", { className: "bar" }, el("i"))),
       el("div", { className: "d-acts" }), el("span", { className: "d-sep" }),
-      el("button", { type: "button", className: "d-open", ariaLabel: "Show the output", onclick: () => (dock.classList.contains("open") ? closeSheet() : openSheet()) }, svg(DOCK.up)));
+      el("button", { type: "button", className: "d-open", ariaLabel: "Show the output", ariaExpanded: "false", onclick: () => (dock.classList.contains("open") ? closeSheet() : openSheet()) }, svg(DOCK.up)));
   }
   const [b, span, em] = dock.querySelector(".d-l1").children;
   b.textContent = d.ep; span.textContent = d.line; span.title = d.line; em.textContent = d.pct; em.className = d.tone || "";
@@ -861,12 +885,14 @@ function openSheet() {
   const raw = $("#cd-raw"), dock = $("#dock");
   dock.prepend(raw);
   dock.classList.add("open");
+  dock.querySelector(".d-open").setAttribute("aria-expanded", String(true));
   raw.open = true;  // its toggle streams the output
 }
 function closeSheet() {
   const raw = $("#cd-raw"), dock = $("#dock");
   if (!dock.classList.contains("open")) return;
   dock.classList.remove("open");
+  dock.querySelector(".d-open").setAttribute("aria-expanded", String(false));
   raw.open = false;
   $("#cd-foot").before(raw);  // back in its place, hidden while the bar is there
 }
@@ -907,7 +933,7 @@ function runActs(c) {
     live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
     !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: "btn small primary", textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
-    !live ? el("button", { className: "btn small", textContent: "Diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
+    !live ? el("button", { className: "btn small", textContent: "Save diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
       onclick: () => downloadDiagnostic(c) }) : "",
     !live ? el("button", { className: "btn small danger", textContent: "Delete", dataset: { focusKey: `delete:${c.id}`, fk: "delete" }, onclick: (e) => deleteRun(c, e.target) }) : "",
   ].filter(Boolean);
@@ -919,7 +945,7 @@ async function downloadDiagnostic(c) {
     const a = el("a", { href: URL.createObjectURL(await r.blob()), download: `unshacklarr-diagnostic-${c.id}.md` });
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
-    toast("Diagnostic downloaded: check it, then attach it to the issue");
+    toast("Diagnostic saved: check it, then attach it to the issue");
   } catch (e) { toast(e.message, true); }
 }
 /* A track as serve names it ("Part 1 · audio fr 2.0"): an icon for its kind, the kind, then what it is in chips. */
@@ -986,7 +1012,7 @@ function runBody(c) {
         el("span", { className: `bar${pct == null ? " busy" : ""}` }, el("i", { style: `width:${pct ?? 100}%`, dataset: { k: `mux:${c.id}` } }))));
     }
   } else {
-    const note = { downloaded: ["ok", "Downloaded"], failed: ["err", "Failed"], kept: ["warn", "Sonarr kept its own file"], import: ["warn", "Downloaded, import needed"],
+    const note = { downloaded: ["ok", "Downloaded"], failed: ["err", "Failed"], kept: ["warn", "Kept: Sonarr's own file was not replaced"], import: ["warn", "Downloaded, import needed"],
       stopped: ["mut", "Stopped"], interrupted: ["mut", "Interrupted: Unshacklarr stopped during it"],
       unavailable: ["mut", c.notOn ? `${outcomeOf(c)}: nothing to download` : "Not out yet: nothing to download"] }[c.outcome] || ["mut", c.outcome];
     if (c.outcome === "downloaded") {  // all went well: one quiet line, not a block

@@ -280,6 +280,245 @@ console.log(JSON.stringify({ listRedrawn: after.some(([sel]) => sel === "#cdm-li
     assert seen == {"listRedrawn": False, "shown": True, "hidden": True}
 
 
+def test_discard_puts_the_settings_back_as_saved_and_draws_them_again():
+    shown = node(r"""
+const saved = { settings: { timezone: "Europe/Paris" }, notifications: { targets: [{ url: "ntfy://a" }, { url: "ntfy://b" }] }, defaults: { quality: "1080" },
+  series: { 1: { service: "BINGE", title: "Kept" } } };
+const config = JSON.parse(JSON.stringify(saved));
+Object.assign(config, { versions: { settings: "7" }, hidden_series: [9] });
+config.settings.timezone = "UTC";                                   // an edited field
+config.settings.sonarr_api_key = "typed";                           // a key typed, never saved
+config.notifications.targets.splice(0, 1);                          // an address staged for removal
+config.series[1].title = "Edited"; config.series[2] = { service: "STAN", title: "Added" };
+config.series[3] = { title: "No service: not part of a save" };
+config.extra = true;
+const calls = [];
+const ctx = sandbox({ S: { config, dlOptions: [] }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "{}", $: (sel) => sel,
+  optionsEditor: (...a) => calls.push("options"), renderSettings: () => calls.push("settings"), renderServiceFilter: () => calls.push("filter"),
+  renderWall: () => calls.push("wall"), dirty: () => calls.push("dirty"), toast: (t) => calls.push(t) });
+vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
+ctx.discardChanges();
+console.log(JSON.stringify({ config, calls }));
+""", str(JS / "settings-options.js"))
+    config = shown["config"]
+    assert config["settings"] == {"timezone": "Europe/Paris"}
+    assert [t["url"] for t in config["notifications"]["targets"]] == ["ntfy://a", "ntfy://b"]
+    assert "extra" not in config
+    assert config["series"] == {"1": {"service": "BINGE", "title": "Kept"}, "3": {"title": "No service: not part of a save"}}
+    assert config["versions"] == {"settings": "7"} and config["hidden_series"] == [9]  # not changes of a save: left as they are
+    assert shown["calls"] == ["options", "settings", "filter", "wall", "dirty", "Changes discarded"]
+
+
+def test_discard_draws_the_controls_settings_does_not_so_a_later_toggle_still_counts():
+    shown = node(r"""
+const saved = { settings: { upgrade_other_groups: false, upgrade_check_new: false, spoiler_free: false }, series: { 1: { service: "BINGE", title: "A" } } };
+const config = JSON.parse(JSON.stringify(saved));
+config.series[1].skip_upgrades = true;
+Object.assign(config.settings, { upgrade_other_groups: true, upgrade_check_new: true, spoiler_free: true });
+const nodes = {};
+const $ = (sel) => (nodes[sel] ??= { value: "", checked: false, hidden: false, disabled: false, className: "", textContent: "", replaceChildren(...k) { this.kids = k; },
+  querySelector: () => ({ textContent: "" }), querySelectorAll: () => [], setAttribute() {} });
+const ctx = sandbox({ S: { config, dlOptions: [], series: [] }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "{}", $, dirty() {}, toast() {},
+  optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, themeChoice: () => "", LANGS: {}, LANG: "en" });
+const quality = read(process.argv[2]), options = read(process.argv[1]);
+vm.runInContext("let ugGroups = { groups: [], none: [] };", ctx);
+for (const re of [/function upgradeSeries\b[\s\S]*?\n}\n/, /function renderUpgradeSeries\b[\s\S]*?\n}\n/, /function upgradeSay\b[\s\S]*?\n}\n/, /async function renderUpgradeGroups\b[\s\S]*?\n}\n/])
+  vm.runInContext(grab(quality, re), ctx);
+for (const re of [/function renderInterface\b[\s\S]*?\n}\n/, /function discardChanges\b[\s\S]*?\n}\n/]) vm.runInContext(grab(options, re), ctx);
+const box = () => nodes["#ug-series"].kids[0].kids[0];  // the one series' checkbox, as drawn now
+ctx.renderUpgradeSeries();
+const before = box().checked;
+ctx.discardChanges();
+const after = box();
+after.onchange({ target: { checked: false } });  // ticked off again after the discard
+console.log(JSON.stringify({ before, after: after.checked, skip: ctx.S.config.series[1].skip_upgrades, other: nodes["#ug-other"].checked,
+  fresh: nodes["#ug-new"].checked, spoiler: nodes["#rg-spoiler"].checked }));
+""", str(JS / "settings-options.js"), str(JS / "quality.js"))
+    # the box shows the series ticked again, and the next toggle reaches the live config, not an object the discard replaced
+    assert shown == {"before": False, "after": True, "skip": True, "other": False, "fresh": False, "spoiler": False}
+
+
+def test_discard_puts_the_libraries_a_renamed_sonarr_moved_back_under_its_saved_name():
+    shown = node(r"""
+const saved = { settings: { sonarrs: [{ name: "Anime", url: "http://a" }] }, series: {} };
+const config = JSON.parse(JSON.stringify(saved));
+const ctx = sandbox({ S: { config, dlOptions: [], sonarrsOf: { 7: [{ name: "Anime", id: 1 }] } }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "", $: (sel) => sel,
+  optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, dirty() {}, toast() {}, renderUpgradeSeries() {}, renderUpgradeGroups() {}, renderInterface() {} });
+vm.runInContext(grab(read(process.argv[2]), /const sonarrSavedName = new WeakMap\(\);[\s\S]*?const savedSonarr = .*\n/), ctx);
+vm.runInContext(grab(read(process.argv[3]), /function moveSonarrRefs\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
+ctx.savedSonarrsOf = JSON.stringify(ctx.S.sonarrsOf);
+vm.runInContext("keepSonarrNames(sonarrNames())", ctx);
+ctx.S.config.settings.sonarrs[0].name = "Anime 2";  // an unsaved rename, as the Sonarr editor does it
+ctx.moveSonarrRefs("Anime", "Anime 2");
+const renamed = ctx.S.sonarrsOf[7][0].name, requestWhileRenamed = vm.runInContext('savedSonarr("Anime 2")', ctx);
+ctx.discardChanges();
+const request = vm.runInContext('savedSonarr("Anime")', ctx);
+ctx.S.config.settings.sonarrs[0].name = "Anime 3";  // renamed again after the discard, still unsaved
+console.log(JSON.stringify({ renamed, requestWhileRenamed, libraries: ctx.S.sonarrsOf[7].map((o) => o.name), request,
+  requestAfter: vm.runInContext('savedSonarr("Anime 3")', ctx) }));
+""", str(JS / "settings-options.js"), str(JS / "core.js"), str(JS / "quality.js"))
+    # the restored entry is a new object: requests still name the Sonarr as the server knows it
+    assert shown == {"renamed": "Anime 2", "requestWhileRenamed": "Anime", "libraries": ["Anime"], "request": "Anime", "requestAfter": "Anime"}
+
+
+def test_discard_before_the_release_groups_are_looked_up_asks_nothing_and_still_resets_the_switch():
+    shown = node(r"""
+const saved = { settings: { upgrade_other_groups: false }, series: {} };
+const config = JSON.parse(JSON.stringify(saved));
+config.settings.upgrade_other_groups = true;  // switched on, not saved; the lookup not done (or failed)
+const nodes = {}, $ = (sel) => (nodes[sel] ??= { checked: false, disabled: false, replaceChildren() {} });
+$("#ug-other").checked = true;
+let asked = 0;
+const ctx = sandbox({ S: { config, dlOptions: [], series: [] }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "{}", $,
+  api: async () => { asked++; return { groups: [], none: [] }; }, optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, dirty() {}, toast() {},
+  renderUpgradeSeries() {}, renderInterface() {}, keepSonarrNames() {}, sonarrNames: () => [], configUnits: () => ({}) });
+vm.runInContext("let ugGroups = null;", ctx);
+vm.runInContext(grab(read(process.argv[2]), /async function renderUpgradeGroups\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
+ctx.discardChanges();
+setTimeout(() => console.log(JSON.stringify({ asked, switchOn: nodes["#ug-other"].checked })));
+""", str(JS / "settings-options.js"), str(JS / "quality.js"))
+    # the groups are looked up when Upgrades opens, not on every Discard; the switch shows the saved value either way
+    assert shown == {"asked": 0, "switchOn": False}
+
+
+def test_discard_leaves_the_next_save_sending_no_series_it_restored():
+    shown = node(r"""
+const core = read(process.argv[2]);
+const loaded = { settings: {}, series: { 1: { title: "A", service: "BINGE" } } };  // as the server sends it: not in key order
+const ctx = sandbox({ S: { config: JSON.parse(JSON.stringify(loaded)), dlOptions: [] }, savedSonarrsOf: "{}", $: (sel) => sel,
+  optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, dirty() {}, toast() {}, renderUpgradeSeries() {}, renderInterface() {} });
+for (const re of [/const stableJSON = .*\n/, /const configKey = .*\n/, /let savedUnits = \{\};\nconst configUnits = [\s\S]*?\]\)\]\);\n/, /const sonarrSavedName = new WeakMap\(\);[\s\S]*?const savedSonarr = .*\n/])
+  vm.runInContext(grab(core, re), ctx);
+vm.runInContext("var savedConfig = configKey(S.config); savedUnits = configUnits(S.config);", ctx);  // as the page loads it
+vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);
+ctx.S.config.series[1].title = "B";
+ctx.discardChanges();
+const now = vm.runInContext("configUnits(S.config)", ctx), before = vm.runInContext("savedUnits", ctx);
+console.log(JSON.stringify(Object.keys(now).filter((u) => now[u] !== before[u])));
+""", str(JS / "settings-options.js"), str(JS / "core.js"))
+    assert shown == []  # what a Save would send as changed: nothing
+
+
+def test_discard_waits_for_a_save_in_flight():
+    shown = node(r"""
+const nodes = {}, $ = (sel) => (nodes[sel] ??= { disabled: false, hidden: false, classList: { add() {}, remove() {} }, replaceChildren() {} });
+let release, during;
+const ctx = sandbox({ $, save: () => new Promise((resolve) => { release = resolve; }), toast() {}, icon: () => "", unsaved: false, setTimeout() {} });
+vm.runInContext(grab(read(process.argv[1]), /async function saveHere\b[\s\S]*?\n}\n/), ctx);
+const done = ctx.saveHere($("#save"), $("#savebar"));
+during = nodes["#discard"].disabled;
+release();
+done.then(() => console.log(JSON.stringify({ during, after: nodes["#discard"].disabled })));
+""", str(JS / "settings-options.js"))
+    assert shown == {"during": True, "after": False}
+
+
+def test_the_save_bar_offers_discard_and_announces_itself():
+    page = (STATIC / "index.html").read_text()
+    bar = page[page.index('<div class="savebar"'):].split("</div>", 1)[0]
+    assert 'role="status"' in bar.split(">", 1)[0]
+    assert bar.index('id="discard"') < bar.index('id="save"')
+
+@pytest.mark.parametrize("poster", ["", "https://img.example/p.jpg"])
+def test_a_series_wall_card_draws_initials_for_a_missing_or_failed_poster(poster):
+    seen = node(r"""
+const [poster] = process.argv.slice(2);
+const src = read(process.argv[1]);
+let drawn = [];
+const stub = (value = "") => ({ value, checked: false, textContent: "", removeAttribute() {}, replaceChildren: (...kids) => { drawn = kids; } });
+const fields = { "#f-sort": stub("title") };
+const withAppend = (tag, props = {}, ...kids) => ({ tag, dataset: {}, ...props, kids, append(...more) { this.kids.push(...more); } });
+const ctx = sandbox({ el: withAppend, $: (sel) => fields[sel] ?? stub(), S: { series: [{ tvdbId: 1, title: "Dark Matter", poster }], config: { series: {}, hidden_series: [] }, health: {} }, SEL: { on: false, ids: new Set() },
+  keepFocus: (box, draw) => draw() });
+vm.runInContext(grab(src, /function initialsOf[\s\S]*?\nconst posterFail[^\n]*\n/), ctx);
+vm.runInContext(grab(src, /function renderWall\(\) \{[\s\S]*?\n\}\n/), ctx);
+ctx.renderWall();
+const img = drawn[0].kids[0].kids.find((k) => k.tag === "img");
+const initials = ctx.posterSrc("", "Dark Matter");
+const failing = { target: { src: img.src, getAttribute() { return this.src; } } };
+img.onerror(failing);
+console.log(JSON.stringify({ src: img.src === (poster || initials), initials: initials.includes("DM"), afterFail: failing.target.src === initials }));
+""", str(JS / "core.js"), poster)
+    assert seen == {"src": True, "initials": True, "afterFail": True}
+
+
+def test_a_duration_names_the_unit_of_each_part():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const ctx = sandbox();
+vm.runInContext(grab(src, /^function duration\(.*?^\}/ms) + "\nthis.duration = duration;", ctx);
+console.log(JSON.stringify([25000, 144000, 3900000].map((ms) => ctx.duration(ms))));
+""", str(JS / "activity.js"))
+    assert shown == ["25 s", "2 min 24 s", "1 h 05 min"]
+
+
+def test_the_server_names_the_unit_of_each_part_of_a_duration_too():
+    from unshacklarr import sync
+    assert [sync.human_time(s) for s in (25, 144, 3900)] == ["25 s", "2 min 24 s", "1 h 05 min"]
+
+
+def test_the_logo_goes_to_the_schedule_and_is_named_from_its_text():
+    import re
+    page = (STATIC / "index.html").read_text()
+    link = re.search(r'<a href="([^"]+)" id="home" aria-label="([^"]+)"', page)
+    assert link and link.group(1) == "#/schedule"  # the app opens on the schedule
+    assert link.group(2).startswith("Unshacklarr")  # the visible name starts the accessible one (and the narrowest phones hide the text)
+
+
+def test_a_failing_series_says_so_once_with_its_fix():
+    page = (STATIC / "index.html").read_text()
+    assert 'id="d-sick"' not in page and "#d-sick" not in (JS / "core.js").read_text()
+    shown = node(r"""
+const src = read(process.argv[1]);
+const box = { classList: { remove() {}, add() {} } }, fix = { hidden: true, kids: [] }, text = { textContent: "" };
+const sels = { "#ds-state": box, "#ds-state-text": text, "#ds-fix": { ...fix, set hidden(v) { fix.hidden = v; }, replaceChildren: (...k) => { fix.kids = k; } } };
+const ctx = sandbox({ $: (sel) => sels[sel] || any, current: { tvdbId: 7 }, svcName: (s) => s, renderSeriesLanguage() {}, openServiceRow() {},
+  S: { config: { series: { 7: { service: "HULU", title: "x" } } }, health: { 7: { failing: 3, cause: "Session expired" } } } });
+vm.runInContext(grab(src, /function renderSeriesState\b[\s\S]*?\n}\n/) + "\nthis.renderSeriesState = renderSeriesState;", ctx);
+ctx.renderSeriesState();
+console.log(JSON.stringify({ state: text.textContent, fix: fix.kids.map((k) => k.textContent) }));
+""", str(JS / "core.js"))
+    assert shown == {"state": "Its last 3 downloads from HULU failed", "fix": [
+        "Session expired", "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services.",
+        "Check HULU in Settings › Services"]}
+
+
+def test_an_empty_choice_of_episodes_is_hidden_not_greyed():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const out = {};
+for (const onService of [0, 2]) {
+  const pick = { hidden: false, disabled: false, textContent: "" };
+  const list = [{ id: 1 }, { id: 2 }];
+  const ctx = sandbox({ $: (sel) => (sel === "#ep-avail" ? pick : any), list, state: () => (onService ? "miss" : "disk"), epAvail: { 1: 1, 2: 1 }, seasonSvc: () => "HULU", epSeason: 1 });
+  vm.runInContext(grab(src, /if \(\$\("#ep-avail"\)\) \{[\s\S]*?\n  \}\n/), ctx);
+  out[onService] = pick.hidden;
+}
+console.log(JSON.stringify(out));
+""", str(JS / "series.js"))
+    assert shown == {"0": True, "2": False}
+
+
+def test_a_phones_back_button_is_named_for_the_page_it_returns_to():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const ctx = sandbox();
+vm.runInContext(grab(src, /^const BACK_NAME = .*$/m) + "\nthis.BACK_NAME = BACK_NAME;", ctx);
+console.log(JSON.stringify([ctx.BACK_NAME.schedule, ctx.BACK_NAME.log, ctx.BACK_NAME.yaml, ctx.BACK_NAME.series ?? null]));
+""", str(JS / "core.js"))
+    assert shown == ["Back to the schedule", "Back to Activity", "Back to unshackle.yaml", None]  # the editor too, from Notifications or a deep link  # the series wall is the default: "Back to all series"
+    assert 'BACK_NAME[currentTab] || "Back to all series"' in (JS / "core.js").read_text()
+
+
+def test_the_page_draws_no_emoji():
+    import re
+    emoji = re.compile("[\U0001F000-\U0001FFFF⏩-⏿]")  # flags are regional-indicator pairs: both in this range
+    found = [f"{path.name}:{n}" for path in JS.glob("*.js")
+             for n, line in enumerate(path.read_text().splitlines(), 1) if emoji.search(line)]
+    assert not found
+
 # A tiny stand-in for the DOM a pop-up touches: nodes that keep what is set on them and a shared "focused" node.
 POP_DOM = r"""
 let active = null;

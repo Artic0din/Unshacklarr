@@ -79,6 +79,11 @@ Every change worth knowing, newest first. The format follows
   `docker exec`.
 - **Search by any title.** The series search also finds a series by its other titles in Sonarr and its name in files.
 
+**💾 Saving**
+- **Discard unsaved changes.** The bar at the bottom has a Discard changes button next to Save changes: it puts the
+  settings back as last saved, a notification address you removed included, and says "Unsaved changes" to a screen
+  reader when it shows. (#280)
+
 ### Changed
 
 - **Success has its own green, apart from the teal accent.** Healthy status dots, "Downloaded" notifications, valid cookie pills, a working CDM and finished job steps no longer share the teal that marks what is selected or being downloaded. (#280)
@@ -111,12 +116,43 @@ Every change worth knowing, newest first. The format follows
 - Suggest scrape follows TMDB/JustWatch sections (Stream / Free / Ads only). Anchor titles mark Channel packaging and Amazon/Apple purchases, which are never offered. Stale suggest cache without `kind` is refreshed.
 - Removed a duplicated test file, an unused constant and several repeated helpers (reading a file with `mkvmerge`, the retried download's numbering and Replace, the HH:MM check, the page's local-date helper), with no change in behaviour.
 - The API document now says what `GET /api/v1/downloads` returns: the queued downloads first, then every other one, running ones included, newest first.
+- **The wording is clearer and consistent across the app.** The Schedule's "Refresh" is "Reload calendar" and its
+  helper line is gone, the logo is named "Unshacklarr, schedule" and goes to the Schedule, Settings › Downloads asks
+  you to "Wait for the audio, in days", the series selection says "Change" throughout, "Kept" names that outcome
+  everywhere in Activity, the "Diagnostic" button is "Save diagnostic", durations say "2 min 24 s" and "1 h 05 min",
+  a paused job and the country pickers no longer use emoji, the series page says a failure once (with its fix) and
+  hides the empty "Missing, available on …" choice, a phone's Back is named for the page it returns to, and the
+  audio-upgrade explainer is easier to read. The translation catalogues are back in step with the page. (#280)
 
 ### Fixed
 
 - **The header's Sonarr and Unshackle lights show at once after a reload.** They used to stay grey until the series and, in Settings, a fresh check of Unshackle had loaded, a few seconds or more; they now show the last background check straight away and the details follow.
+- **Tabbing to a control no longer leaves it hidden behind a bar.** The page, and a series' slide-out, now stop the focused control short of the header, the tab bar, the save bar, the select bar, the download bar at the bottom of a job and the series' settings shortcuts, instead of leaving it under them. The last row of Settings also clears the save bar at the end of the page. (#280)
+- **Focus is easier to see, and the small visual slips are gone.** A text field, the "Other" number pill, the Activity icon buttons and the filter bars now show a clear 2px ring when you reach them; "Open Sonarr", "Sign-in and cookies" and "CDM devices" are drawn in the button colour instead of the browser's link blue; the new remote CDM fields no longer make iOS zoom the page; choice chips have a visible edge; pressed controls scale to 96%; dialogs and menus no longer scroll the page behind them at their ends; a series with no poster, or one that fails to load, shows its initials on the wall; a failed load spans the whole wall, and the loading boxes can be seen and are announced as "Loading series…"; and the country list in setup is as wide as its field. (#280)
+- **Escape, focus and page titles now follow where you are.** Escape in a series with unsaved changes opens the "unsaved
+  changes" question and leaves it open (it was cancelled by the same key press). Closing a series opened from a Schedule
+  card returns to that card even after the Schedule redrew. The browser tab's title names the page, the series or the
+  Settings section (and the setup step), in your language. The unshackle.yaml editor says "Esc, then Tab, leaves the
+  editor", and "Find it on" a service says whether its results are open and how many it found. (#280)
+- **Activity and the first-run setup no longer leave you stranded.** On a phone, a running job's bar has Open series
+  next to Pause, Options and Stop, and a finished job keeps its Delete; a download waiting for your OTP code or answer
+  says "Waiting for your answer" in a chip, with no running pulse or progress bar; a step of the setup scrolls its card
+  to the top and puts the keyboard on its heading; the Sonarr and Unshackle API key say "Found in the environment" in
+  their help, where the placeholder was cut off; and switching language in the setup asks first, since it clears the
+  password and keys. (#280)
+- **Nothing is cut off or piled on top of anything else on a narrow screen.** At 320 px (or 400% zoom), a run's buttons
+  wrap to a second line instead of losing "Delete", a running card's speed and time left sit on a row under the episode
+  (and a finished card's line carries its whole text as a tooltip), the series filter takes a second row instead of
+  spilling "Downloading" over "Not downloading", the late-episodes banner puts its sentence under its count and Show,
+  a long service name stays inside its poster, a wrong setup code's message wraps inside the card instead of widening the
+  page, "Notifications" no longer runs under Clear, the logo no longer overlaps the version (with new options, only
+  their count shows there on the narrowest phones, and the chip's name still says the version), and on a short screen a
+  series' head and shortcut bar scroll away with the page instead of pinning, so the settings under them can be reached;
+  choosing a shortcut no longer jumps the page back. (#280)
+- **Errors are easier to see, and say what is wrong where it is wrong.** The messages in the folder browser, the remote CDM form, a job's options and the change-several-series dialog were grey like the text around them; they now take the error colour and are read out when they appear. A failed lookup (the release group, the library check) is shown as an error with a Try again button. A wrong field in the setup, the quality settings, the cookie and notification dialogs, the download window and the password form is now marked invalid for screen readers and linked to its message, and the setup marks which fields are needed and which are optional. The password strength and match are read out as you type. A refused setup or sign-in now shows the server's reason, not "Unshacklarr answered HTTP 403. Try again." ahead of it, and "Change the password" stays pressable and says on the field what is missing instead of staying dimmed without a reason. (#280)
 - **Deleting now asks first.** Clearing the notifications, deleting a job or a run, deleting the partial downloads and restoring a backup used to act on one click. Each now asks, naming what goes and that it cannot be brought back: the notifications' Clear turns into the question (Escape or a click elsewhere takes it back), and the others ask in a window that keeps Cancel as the default, naming the backup's file when restoring. Their buttons are red like the other deletes, and a screen reader now hears the question when a button turns into one. (#280)
 - **The keyboard no longer loses its place when a list redraws or a view changes.** Activity's live buttons, the Select mode of the series wall, the quality, broadcast and calendar buttons of a series, Notifications' Sends, the CDM devices and Schedule's month days keep their focus when they are redrawn, instead of Tab starting again at the top of the page. A phone's Settings section and Activity download open on their heading and Back returns to the item it came from, the Setup steps focus their first visible field (or heading), Escape on the language menu returns to its button, a series opened from Schedule's popover returns to its card on Escape, and the picked day of the month says it is pressed. (#280)
+- **Controls are named by what they act on, and say their state.** An option's value (and its on box) is named by its flag, and the Upgrades search by what it finds. Each Test, Remove and Download of an address or a saved backup names its own, the app picker no longer reads its badge letters, and a series' suggested services are a group named by the series. The running dot, the picked Activity row and the output toggle (open or closed) are announced, the columns move up and down, not left and right, and a series hidden from the Schedule is named from its visible "In schedule". The selection count is read out, and the Select button keeps one name while it says it is pressed. The language list is a plain button and list, not a menu without its arrow keys, and its button is named in your language. (#280)
 - **The device menus and the setup pop-up work from the keyboard.** In Settings, CDM, the ⋯ menus (Test, Reprovision,
   Delete), the Change picker and a service's device menu, and in Activity the ⓘ that shows how a download runs, now
   take focus when they open, keep Tab and the arrow keys inside, and give focus back to their button on Escape or
@@ -126,7 +162,12 @@ Every change worth knowing, newest first. The format follows
 - **A list that goes on now shows it, and a cut-off name can be read in full.** The setup's country list shows part of the next row, the Activity stats table shades the edge that still hides columns, and the hidden-series list, the option picker's help text, the notification log and the device map wrap their text instead of cutting it off with an ellipsis. (#280)
 - **Settings is readable between phone and desktop widths.** A cookie file's name was squeezed to one letter per line in a window narrower than 1440 pixels, which the previous UI review round's equal-width buttons caused, and now keeps its room. The services table becomes stacked rows below 1180 pixels, so "Used by" and "Show series" no longer hide past an edge. A ladder's steps stack below 1120 pixels, so Codec and Range show their choice and the page no longer scrolls sideways. On a phone, Unshackle's Cancel and Copy buttons and the Notifications cards and quiet-hours fields no longer run past the right edge. (#280)
 - **Quieter text is no longer too faint to read.** Other series' cards in Schedule, days outside the month, the counts on filters (the bell, Series, Activity), Series in Select mode that are not picked, an Unshackle feature that is not supported, a one-off download's file name and a hidden count in a job were faded with opacity, which left their text under the 4.5:1 contrast it needs. They now take the muted text colour instead, and a job count you hide keeps its strike-through. (#280)
+- **The header stays on one row on a tablet.** Between 701 and 1240 px wide the nav, the Unshackle and Sonarr status buttons and "Run sync now" did not fit and wrapped to a second row, leaving the bell and the sync button alone on the left. Here the sync button is an icon, the status buttons are dots and the update pill is an icon, as on a phone; under 1040 px the logo loses its name and under 940 px the nav its icons. A service that is down or has an update still says so in words, on a row of its own with the bell and the sync button kept on the first. The sync button keeps "Last sync …" and "Sync running…" for a screen reader, and shows a ring while it runs with "Reduce motion" on. (#280)
 - With "Reduce motion" on, the shimmer on a download's current step in Activity now stays still, like every other animation, instead of looping for as long as the download runs. (#280)
+- **An empty list now says what it was asked for and how to get back.** Series, Activity, Settings › Upgrades and
+  Settings › CDM name the search or filter that matched nothing and offer "Clear filters", "Clear search" or "Show all";
+  the empty Series list announces itself to a screen reader, Activity's empty history says downloads start from a
+  series or with Run sync now, and a series Sonarr lists no episode for has a Refresh button. (#280)
 - A restart while a retry ran beside its job (another Replace choice) no longer loses the job's queued episodes: each is kept with its own settings and picked up again. The queue saved by the version before still loads; once this version has saved it, an older version can no longer read it.
 - An API download request with `"audio"` now asks the service for that language first, with the series' own audio languages after it, and accepts the file in it (an episode that has a file is replaced only by one in that language), instead of downloading the series' usual language again and counting it as an audio upgrade. (#187)
 - With `--generate-dv` on, an episode with HDR10+ and no Dolby Vision now fits a quality ladder's Hybrid step, in downloads and in Upgrades, instead of failing with "None of the quality ladder's steps" or taking a lower step.

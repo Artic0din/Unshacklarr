@@ -291,7 +291,8 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
   renderReleaseNext();  // Timing says when the next one is tried
   renderBroadcast();
   const numbers = Object.keys(epSeasons).map(Number).sort((a, b) => (a === 0) - (b === 0) || b - a);  // newest first, specials last
-  if (!numbers.length) return box.replaceChildren(el("p", { className: "muted", textContent: "Sonarr lists no episode for this series." }));
+  if (!numbers.length) return box.replaceChildren(el("p", { className: "muted", textContent: "Sonarr lists no episode for this series." }),
+    el("button", { type: "button", className: "btn small", textContent: "Refresh", onclick: () => loadEpisodes(s) }));
   if (!(keep && numbers.includes(epSeason))) epSeason = numbers[0];  // the newest; seasons with gaps stand out in the strip
   box.replaceChildren(
     sonarrSwitch(s),
@@ -481,8 +482,8 @@ function openColumns() {
     const box = el("input", { type: "checkbox", checked: p.on, onchange: () => { p.on = box.checked; saveColPrefs(colsNow); } });
     const move = (d) => { const next = [...colsNow]; [next[i], next[i + d]] = [next[i + d], next[i]]; saveColPrefs(next); draw(); $("#col-rows").children[i + d]?.querySelector(d < 0 ? ".up" : ".down")?.focus(); };
     return el("li", {}, el("label", {}, box, c.label, c.file ? "" : el("small", { textContent: "any episode" })),
-      el("button", { type: "button", className: "mv up", ariaLabel: `Move ${c.label} left`, disabled: i === 0, onclick: () => move(-1) }, icon("arrowUp")),
-      el("button", { type: "button", className: "mv down", ariaLabel: `Move ${c.label} right`, disabled: i === colsNow.length - 1, onclick: () => move(1) }, icon("arrowDown")));
+      el("button", { type: "button", className: "mv up", ariaLabel: trWith("Move {0} up", tr(c.label)), disabled: i === 0, onclick: () => move(-1) }, icon("arrowUp")),
+      el("button", { type: "button", className: "mv down", ariaLabel: trWith("Move {0} down", tr(c.label)), disabled: i === colsNow.length - 1, onclick: () => move(1) }, icon("arrowDown")));
   }));
   $("#cols-reset").onclick = (e) => { e.preventDefault(); try { localStorage.removeItem(COLS_KEY); } catch { /* nothing kept */ } colsNow = colPrefs(); renderSeason(); draw(); };
   draw();
@@ -816,7 +817,7 @@ function renderSeason() {
   if ($("#ep-avail")) {
     const onService = list.filter((e) => state(e) === "miss" && epAvail?.[e.id]).length;
     $("#ep-avail").textContent = `Missing, available on ${seasonSvc(epSeason)} (${onService})`;
-    $("#ep-avail").disabled = !onService;
+    $("#ep-avail").hidden = !onService;
   }
   const named = current.seasonTitles?.[epSeason];  // its name in Sonarr, when it has one
   const q = epQualities[epSeason], missing = list.filter((e) => state(e) === "miss").length;
@@ -1035,7 +1036,11 @@ async function startDownload(numbering = null) {
 }
 $("#backdrop").onclick = () => closeDrawer();
 $("#d-back").onclick = () => closeDrawer();
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) closeDrawer(); });  // a dialog's Escape closes it alone
+document.addEventListener("keydown", (e) => {  // a dialog's Escape closes it alone
+  if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
+  if ($("#drawer").classList.contains("open")) e.preventDefault();  // "unsaved changes" opens in this keydown: left alone, the same Escape would cancel it
+  closeDrawer();
+});
 
 /* Settings' shortcuts: straight to a card, opened if folded, the page's address left as it is. */
 $(".ds-nav").onclick = (e) => {
@@ -1050,14 +1055,19 @@ $(".ds-nav").onclick = (e) => {
 };
 // the card in view lights its shortcut
 let dsPicked = null;  // the shortcut clicked: lit until the person scrolls on their own
-function dsLight() {  // the card in view: the last one whose top went under the bar
+function dsLight() {  // the card in view: the last one whose top went under what is pinned
   if ($("#dt-settings").hidden) return;  // the episodes scrolling, or the drawer closed: nothing to light
-  const links = [...document.querySelectorAll(".ds-nav a[data-to]")], bar = $(".ds-nav").getBoundingClientRect().bottom + 24;
+  const nav = $(".ds-nav"), links = [...nav.querySelectorAll("a[data-to]")];
+  const pinned = (box) => (getComputedStyle(box).position === "sticky" ? box.getBoundingClientRect().bottom : 0);  // a bar that scrolled away covers nothing
+  const bar = Math.max(pinned($(".d-head")), pinned(nav)) + 24;
   let on = dsPicked || links[0]?.dataset.to;
   if (!dsPicked) for (const a of links) if ($(`#${a.dataset.to}`)?.getBoundingClientRect().top <= bar) on = a.dataset.to;
   links.forEach((a) => {
     const lit = a.dataset.to === on;
-    if (lit && a.getAttribute("aria-current") !== "true") a.scrollIntoView({ block: "nearest", inline: "nearest" });  // a phone's bar scrolls sideways
+    if (lit && a.getAttribute("aria-current") !== "true") {  // a phone's bar scrolls sideways: its own scroll only, never the page's or the drawer's
+      const at = a.getBoundingClientRect(), box = nav.getBoundingClientRect();
+      nav.scrollLeft += at.left < box.left ? at.left - box.left : Math.max(0, at.right - box.right);
+    }
     a.setAttribute("aria-current", String(lit));
   });
 }

@@ -30,7 +30,7 @@ function showSettingsSec(name, fromRoute = false) {
   if (name === "quality") renderQuality();
   if (name === "upgrades") { renderUpgradeSeries(); renderUpgradeGroups(); }
   if (name === "interface") renderInterface();
-  if (!fromRoute && currentTab === "settings") navigate(fromList);  // from the list: back returns to it
+  if (!fromRoute && currentTab === "settings") { navigate(fromList); updateTitle(); }  // from the list: back returns to it
   if (fromList) { scrollTo({ top: 0 }); focusHeading(document.querySelector(`.set-sec[data-sec="${name}"]`).querySelector("h2, h3")); }
 }
 document.querySelectorAll(".set-nav button").forEach((x) => x.onclick = () => showSettingsSec(x.dataset.sec));
@@ -38,6 +38,7 @@ $("#set-back").onclick = () => {
   if (secFromList) return history.back();  // the list is the page before: the phone's back does the same
   showSettingsList(true);
   navigate(false);
+  updateTitle();
   scrollTo({ top: 0 });
 };
 showSettingsSec("unshackle", true);
@@ -61,6 +62,14 @@ function parseRoute() {
   const [s, id, view] = rest;
   return { tab: ["series", "schedule", "settings", "log", "yaml"].includes(name) ? name : "schedule", id: s === "s" ? id : null, view, sec };
 }
+/* The tab's title says where you are: the page, a series (open over any page), a Settings section. */
+const PAGE_NAME = { schedule: "Schedule", series: "Series", log: "Activity", settings: "Settings", yaml: "unshackle.yaml" };
+function updateTitle() {
+  if (document.body.classList.contains("gated")) return;  // the sign-in and the setup name themselves
+  const section = currentTab === "settings" && !settingsList && $(`.set-nav [data-sec="${settingsSec}"] span`)?.textContent;
+  document.title = current?.title?.trim() ? tr(`${current.title} · Unshacklarr`)
+    : section ? tr(`Settings: ${section} · Unshacklarr`) : tr(`${PAGE_NAME[currentTab]} · Unshacklarr`);
+}
 let routed = false;
 function applyRoute() {
   if (location.hash.startsWith("#/inbox")) {  // a push notification touched: the bell's list over the current page
@@ -76,9 +85,24 @@ function applyRoute() {
   if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
   else if (series && route.view) showDrawerTab(route.view, true);
   else if (!series && current) closeDrawer(true);
+  updateTitle();
 }
 window.addEventListener("popstate", applyRoute);
 
+// The page's scroll padding, so focus stops clear of what is pinned: the header as tall as it is (a status row under it
+// makes it taller), and how far up the bars pinned to the bottom reach, stacked, wrapped or expanded as they are now.
+// By each bar's own offset and height, not where it is now: a sticky bar is measured where it sticks.
+const BOTTOM_BARS = ['nav[aria-label="Main"]', "#savebar", "#sel-bar", "#dock", "#ep-bar"].map((sel) => $(sel));
+function measureBars() {
+  const reach = BOTTOM_BARS.map((bar) => bar.offsetHeight && bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0));
+  document.documentElement.style.setProperty("--head-h", `${$("header").offsetHeight}px`);
+  document.documentElement.style.setProperty("--bars-h", `${Math.max(...reach) + 8}px`);
+  // a wide Activity pane scrolls itself, and its dock sticks above the pane's own bottom padding
+  const pane = parseFloat(getComputedStyle($("#con-detail")).paddingBottom) || 0;
+  document.documentElement.style.setProperty("--dock-h", `${reach[BOTTOM_BARS.indexOf($("#dock"))] + pane + 8}px`);
+}
+const barsSeen = new ResizeObserver(measureBars);
+[$("header"), ...BOTTOM_BARS].forEach((n) => barsSeen.observe(n));
 function showTab(name, fromRoute = false, quiet = false) {
   if (currentTab === "yaml" && name !== "yaml") {  // leaving the editor: it forgets the password and the file
     if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }
@@ -88,6 +112,7 @@ function showTab(name, fromRoute = false, quiet = false) {
   currentTab = name;
   closeDetails(false);  // the Schedule's popover belongs to its card
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
+  updateTitle();  // after the list is chosen: a phone's Settings tab names the list, not the section it left
   document.querySelectorAll("nav button").forEach((b) => {
     if (b.dataset.tab === (name === "yaml" ? "settings" : name)) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });

@@ -67,20 +67,24 @@ function setTheme(choice) {
 applyTheme(themeChoice());
 matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", () => applyTheme(themeChoice()));
 async function setLang(lang) {
+  const draft = setupDraft?.();
+  // the password and the keys are never kept (not in the tab either): the person chooses to lose them
+  if (draft?.secrets && !await askToConfirm("Switch the language?", "Switching language reloads the page: your password and keys are cleared.", "Switch language")) return;
   try { localStorage.setItem("lang", lang); } catch {}
-  try { if (setupDraft) sessionStorage.setItem("setup-draft", JSON.stringify(setupDraft())); } catch {}  // the first run goes on where it was
+  try { if (draft) sessionStorage.setItem("setup-draft", JSON.stringify(draft)); } catch {}  // the first run goes on where it was
   await api("/api/language", { method: "POST", body: JSON.stringify({ language: lang }) }).catch(() => {});  // the notifications' too; before logging in, nothing to tell
   location.reload();
 }
-/* The language, in a corner of the login and the first run: its name, the others in a menu. */
+/* The language, in a corner of the login and the first run: its name, the others in a list that opens under it. */
 function langCorner() {
-  const menu = el("div", { className: "lang-menu", role: "menu", hidden: true },
-    ...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", role: "menuitemradio", ariaChecked: String(k === LANG),
+  const menu = el("div", { className: "lang-menu", hidden: true },
+    ...Object.entries(LANGS).map(([k, name]) => el("button", { type: "button", ariaCurrent: String(k === LANG),
       className: k === LANG ? "on" : "", onclick: () => { if (k !== LANG) setLang(k); } }, name)));
   const open = (on) => { menu.hidden = !on; button.setAttribute("aria-expanded", String(on)); };
-  const button = el("button", { type: "button", className: "lang-btn", ariaHasPopup: "menu", ariaExpanded: "false", ariaLabel: `Language: ${LANGS[LANG]}`,
+  const button = el("button", { type: "button", className: "lang-btn", ariaExpanded: "false", ariaLabel: trWith("Language: {0}", LANGS[LANG]),
     onclick: () => open(menu.hidden) }, el("span", { textContent: LANGS[LANG] }), el("span", { className: "caret", ariaHidden: "true" }));
-  const corner = el("div", { className: "lang-corner", translate: "no" }, button, menu);
+  const corner = el("div", { className: "lang-corner" }, button, menu);
+  corner.setAttribute("translate", "no");  // the property takes a boolean: "no" is true, which sets translate="yes"
   document.addEventListener("click", (e) => { if (!corner.contains(e.target)) open(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { open(false); button.focus(); } });
   return corner;
@@ -112,6 +116,9 @@ function tr(text, depth = 0) {
   else if (out === undefined) out = trFind(key, depth);
   return out === undefined ? text : text.match(/^\s*/)[0] + out + text.match(/\s*$/)[0];
 }
+// A short template naming an item ("Test {0}"), translated whole, then filled: matched after the fact, a template this
+// short takes no name it has no text for, so "Test Discord" would stay English
+const trWith = (template, ...fill) => tr(template).replace(/\{(\d+)\}/g, (_, i) => fill[i]);
 function trFind(key, depth) {
   let out = trTemplate(key, depth, true);  // a template that has the " · " itself ("Sign-in failed · {0}"): before pieces are split
   if (out === undefined && key.includes(" · ")) {  // pieces joined by " · ": each its own text
@@ -186,13 +193,13 @@ let current = null;
 async function responseError(response) {
   const detail = (await response.text()).trim();
   const reason = response.statusText ? `: ${response.statusText}` : "";
-  const context = tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`);
   const safeDetail = detail && !/^\s*</.test(detail) ? detail
     .replace(/\/\/[^:/@\s]*:[^/@\s]+@/g, "//***@")
     .replace(/([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret)=)[^&#\s]+/gi, "$1***")
     .replace(/\b(Authorization:\s*(?:Bearer|Basic)\s+|(?:X-Api-Key|X-Secret-Key|Api-Key):\s*)\S+|\b((?:Set-)?Cookie:)\s*[^\r\n]+/gi,
       (_, authorization, cookie) => `${(authorization || cookie).trimEnd()} ***`) : "";
-  const error = new Error(safeDetail ? `${context}\n${tr(safeDetail)}` : context);
+  // the cause alone when the server gives one: leading with "answered HTTP 403" pushes it out of a narrow field
+  const error = new Error(safeDetail ? tr(safeDetail) : tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`));
   error.detail = safeDetail;
   return error;
 }
@@ -218,7 +225,7 @@ const ICON_PATHS = {
   check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', alert: '<path d="M12 6v8M12 18h.01"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>', chevronLeft: '<path d="m15 6-6 6 6 6"/>',
   arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', arrowLeft: '<path d="M19 12H5m6-6-6 6 6 6"/>',
-  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
+  arrowUp: '<path d="M12 19V5m-6 6 6-6 6 6"/>', arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>', pause: '<path d="M9 6v12M15 6v12"/>',
 };
 function icon(name, className = "", label = "") {
   const holder = document.createElement("template");
@@ -309,6 +316,7 @@ function toast(msg, err = false, action = null) {  // action: [label, onclick], 
 
 let unsaved = false;
 let savedConfig = "";  // the settings as last loaded or saved: a discard that brings them back clears the bar
+let savedSonarrsOf = "";  // the libraries each series is in, as last loaded or saved: a rename moves them in S.sonarrsOf
 // what a save sends: a series opened without a service is not part of it
 // keys in order: a field cleared and typed again comes back last, and is still the same settings
 const stableJSON = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
@@ -391,9 +399,9 @@ function optionsEditor(root, specs, values, anyFlag = false) {  // anyFlag: a se
     const spec = specs.find((s) => s.flag === flag) || { flag, help: "", is_flag: typeof value === "boolean", choices: [] };
     let input;
     if (spec.is_flag) {
-      input = el("label", { className: "check" }, el("input", { type: "checkbox", checked: !!value, onchange: (e) => { values[flag] = e.target.checked; dirty(); } }), "on");
+      input = el("label", { className: "check" }, el("input", { type: "checkbox", checked: !!value, ariaLabel: flag, onchange: (e) => { values[flag] = e.target.checked; dirty(); } }), "on");
     } else {
-      input = el("input", { type: "text", value: value ?? "", placeholder: spec.choices.length ? spec.choices.join(", ") : spec.help,
+      input = el("input", { type: "text", value: value ?? "", placeholder: spec.choices.length ? spec.choices.join(", ") : spec.help, ariaLabel: trWith("{0} value", flag),
         oninput: (e) => { values[flag] = e.target.value; dirty(); } });
       if (spec.choices.length) {
         const id = "dl" + Math.random().toString(36).slice(2);
@@ -489,8 +497,14 @@ const SEL = { on: false, ids: new Set() };  // the series picked to change toget
 const usesService = (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || {}).some((page) => page.service === tag);
 // The names a series is searched by: Sonarr's title, its other titles there, its name in file names
 const seriesNames = (s) => [s.title, ...(s.altTitles || []), S.config.series[s.tvdbId]?.file_name || ""];
+/* Every filter of the wall back to nothing (the sort stays: it hides no series). */
+function clearWallFilters(draw = true) {  // draw: false when the caller sets a filter of its own and draws once after
+  $("#search").value = ""; $("#f-service").value = ""; $("#f-library").value = ""; $("#f-missing").checked = false; $("#f-monitored").checked = false;
+  document.querySelectorAll("#tab-series .seg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.managed === ""));
+  if (draw) renderWall();
+}
 function renderWall() {
-  const q = $("#search").value.trim().toLowerCase();
+  const query = $("#search").value.trim(), q = query.toLowerCase();
   const svc = $("#f-service").value, lib = $("#f-library").value;
   const libsOf = (s) => S.sonarrsOf?.[s.tvdbId] || [];
   const on = (s) => Boolean(S.config.series[s.tvdbId]?.service);
@@ -527,8 +541,8 @@ function renderWall() {
   const cards = shown.map((s) => {
       const conf = S.config.series[s.tvdbId];
       const art = el("span", { className: "art" });
-      if (s.poster) art.append(el("img", { src: s.poster, alt: "", loading: "lazy", decoding: "async" }));
-      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service) }));
+      art.append(el("img", { src: posterSrc(s.poster, s.title), alt: "", loading: "lazy", decoding: "async", onerror: posterFail(s.title) }));
+      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service), title: svcName(conf.service) }));
       if (libsOf(s).length) {  // the Sonarr libraries it is in, by their names; one switched off for it dimmed (by mj23au, #10)
         const off = (name, main) => Boolean(conf?.service) && Boolean(main ? conf.main_off : conf.sonarrs?.[name]?.off);
         art.append(el("span", { className: "lib" }, ...[...(s.id ? [[mainSonarr(), true]] : []), ...libsOf(s).map((o) => [o.name, false])]
@@ -557,7 +571,9 @@ function renderWall() {
   const empty = managed0
     ? el("div", { className: "empty" }, el("b", { textContent: "No series is downloading yet." }),
         "Open a series under All, pick a service or one of the links found on TMDB, then save.")
-    : el("div", { className: "empty" }, el("b", { textContent: "No series match these filters." }), "Clear the search or pick another filter.");
+    : el("div", { className: "empty", role: "status" },
+        el("b", { textContent: query ? `No series match “${query}”.` : "No series match these filters." }), "Clear the search or pick another filter.",
+        el("button", { type: "button", className: "btn small", textContent: "Clear filters", onclick: () => { clearWallFilters(); $("#search").focus(); } }));
   $("#wall").removeAttribute("aria-busy");
   keepFocus($("#wall"), () => $("#wall").replaceChildren(...(cards.length ? cards : [empty])));
 }
@@ -568,17 +584,14 @@ async function loadServiceOptions(tag) {
   return serviceOptions[tag];
 }
 
+const BACK_NAME = { schedule: "Back to the schedule", log: "Back to Activity", settings: "Back to Settings", yaml: "Back to unshackle.yaml" };
 async function openDrawer(s, tab, fromRoute = false) {
   current = s;
   $("#d-probe-out").replaceChildren();
   $("#d-probe").removeAttribute("aria-disabled");  // a test of the series left behind may still be asking
+  $("#d-back").setAttribute("aria-label", BACK_NAME[currentTab] || "Back to all series");  // a phone's Back returns to the page it was opened from
   $("#d-url").placeholder = "URL or ID of the series";  // a Crave suggestion changes it for one series only
   showReleaseSeen(s);
-  const sick = S.config.series[s.tvdbId]?.service && S.health[s.tvdbId];
-  $("#d-sick").hidden = !sick;
-  if (sick) $("#d-sick").replaceChildren(el("b", { textContent: `Its last ${sick.failing} downloads failed` }),
-    el("span", { textContent: sick.cause || "See the history in Activity for why." }),
-    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }));
   $("#d-probe-state").textContent = "Asks the service which episodes it has. Nothing is downloaded.";
   drawerPushed = !fromRoute;
   if (!fromRoute) { drawerTab = tab || "episodes"; navigate(true); }  // back will close it
@@ -624,7 +637,10 @@ async function openDrawer(s, tab, fromRoute = false) {
     || conf.programmes);
   optionsEditor($("#d-opts"), S.dlOptions, conf.options);
   renderHideToggle();
-  if (!$("#drawer").classList.contains("open")) drawerOpener = document.activeElement === document.body ? null : document.activeElement;
+  if (!$("#drawer").classList.contains("open")) {
+    drawerOpener = document.activeElement === document.body ? null : document.activeElement;
+    drawerOpenerCard = drawerOpener?.closest(".sched-card")?.dataset.key ?? null;
+  }
   $("#drawer").classList.add("open");
   $("#backdrop").classList.add("open");
   drawerModal(true);
@@ -632,6 +648,7 @@ async function openDrawer(s, tab, fromRoute = false) {
   document.body.classList.add("drawer-open");
   showDrawerTab(tab || (conf.service ? "episodes" : "settings"), true);  // a new series needs its service first
   navigate(false);
+  updateTitle();
   loadEpisodes(s);
   $("#drawer .d-body").scrollTop = 0;
   dsPicked = null;
@@ -649,7 +666,7 @@ function renderSeriesState() {
   renderSeriesLanguage();  // its service picked or changed since the page opened: said then too
   const sick = conf.service && S.health[current.tvdbId];
   const [cls, text] = !conf.service ? ["", "Not downloading"]
-    : sick ? ["down", `Its downloads from ${svcName(conf.service)} fail`]
+    : sick ? ["down", `Its last ${sick.failing} downloads from ${svcName(conf.service)} failed`]
     : !conf.title && !conf.programmes ? ["warn", `On ${svcName(conf.service)}: its series URL is missing`]
     : conf.programmes ? ["ok", `Downloaded from ${svcName(conf.service)}, each episode its own programme`]
     : ["ok", `Downloaded from ${svcName(conf.service)}`];
@@ -659,6 +676,7 @@ function renderSeriesState() {
   // What failed, and where to mend it: the service's row in Settings, Services
   $("#ds-fix").hidden = !sick;
   $("#ds-fix").replaceChildren(...(sick ? [el("span", { textContent: sick.cause || "See the history in Activity for why." }),
+    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }),
     el("button", { type: "button", className: "btn small", textContent: `Check ${svcName(conf.service)} in Settings › Services`, onclick: () => openServiceRow(conf.service) })] : []));
 }
 /* Service options only show for a service that has some; "stop" only for a managed series. */
@@ -682,7 +700,7 @@ $("#home").onclick = async (e) => {
 };
 let wallScroll = 0;
 /* The drawer is a modal: with it open the page behind cannot be reached by keyboard or screen reader, and closed, it is out of the tab order. */
-let drawerOpener = null;
+let drawerOpener = null, drawerOpenerCard = null;  // the Schedule redraws its cards: the card is found again by its key
 function drawerModal(open) {
   // the toasts join the drawer while it is open: their Dismiss and Undo stay in reach and focus never leaves the dialog
   const toasts = $("#toasts"), shown = Boolean(toasts.showPopover) && toasts.matches(":popover-open");  // an older browser has no popover: its z-index
@@ -692,10 +710,11 @@ function drawerModal(open) {
   for (const behind of document.querySelectorAll("body > header, main")) behind.inert = open;
 }
 /* Closed, focus goes back to what opened it if that is still there and in sight, else to the series' poster. */
-function returnFocus(opener, tvdbId) {
+function returnFocus(opener, tvdbId, cardKey = null) {
   const seen = (e) => e?.isConnected && e.getClientRects().length;
-  // the opener may be gone (Schedule redrew it) or hidden (the Series page): the series' own control in sight, else the current page's tab
-  const back = [opener, ...document.querySelectorAll(`[data-tvdb="${tvdbId}"]`)].find(seen) || document.querySelector('nav [aria-current="page"]');
+  const card = cardKey && [...document.querySelectorAll(".sched-card")].find((c) => c.dataset.key === cardKey)?.querySelector(".sc-open");
+  // the opener may be gone (Schedule redrew it) or hidden (the Series page): its card's name, the series' own control in sight, else the current page's tab
+  const back = [opener, card, ...document.querySelectorAll(`[data-tvdb="${tvdbId}"]`)].find(seen) || document.querySelector('nav [aria-current="page"]');
   back?.focus({ preventScroll: true });
 }
 /* Focus stays inside the open drawer: the toasts after it are outside the inert page but must not take focus from it
@@ -744,10 +763,11 @@ async function closeDrawer(fromRoute = false) {
   const id = current.tvdbId;
   current = null;
   if (!fromRoute) navigate(false);  // opened from a link: no history entry to go back to
+  updateTitle();
   renderWall();  // rebuilds the cards: a poster that opened it is a new one now
   scrollTo({ top: wallScroll });
-  returnFocus(drawerOpener, id);
-  drawerOpener = null;
+  returnFocus(drawerOpener, id, drawerOpenerCard);
+  drawerOpener = drawerOpenerCard = null;
   return true;
 }
 function keepDrawer(fromRoute) {  // it stays open; the back button already left its address: back to it
@@ -764,13 +784,27 @@ function failed(text, retry) {
   return el("div", { className: "failed", role: "alert" }, el("span", { textContent: text }),
     retry ? el("button", { className: "btn small", textContent: "Try again", onclick: retry }) : "");
 }
+/* A field's mistake: red, flagged to assistive technology, and tied to the message that says it. An id the field
+   already describes itself by (its help) stays. */
+let messageIds = 0;
+function describedBy(input, message, on) {
+  message.id ||= `message-${++messageIds}`;
+  const ids = (input.getAttribute("aria-describedby") || "").split(" ").filter((id) => id && id !== message.id);
+  if (on) ids.push(message.id);
+  if (ids.length) input.setAttribute("aria-describedby", ids.join(" ")); else input.removeAttribute("aria-describedby");
+}
+function markInvalid(input, message, on = true) {
+  input.classList.toggle("bad", on);
+  if (on) input.setAttribute("aria-invalid", "true"); else input.removeAttribute("aria-invalid");
+  if (message) describedBy(input, message, on);
+}
 
 /* The series' channel may have a catch-up service here, picked and looked up on by its name. */
 function networkButton(s, tag) {
   return el("button", { type: "button", ariaLabel: `Find it on ${svcName(tag)}`, onclick: () => {
     const sel = $("#d-service");
     if (sel.value !== tag) { sel.value = tag; sel.dispatchEvent(new Event("change")); }
-    $("#d-find").hidden = true;
+    showFind(false);
     $("#d-find-q").value = s.title;
     $("#d-find-open").click();
   } }, el("b", { textContent: svcName(tag) }), el("span", { textContent: `Find ${s.title} on ${svcName(tag)}` }));
@@ -869,14 +903,19 @@ function serviceOfLink(link) {
   return hit ? hit[1] : null;
 }
 /* The series looked up by its name on its service (unshackle's search): a result picked fills in its URL. */
+function showFind(open) {
+  $("#d-find").hidden = !open;
+  $("#d-find-open").setAttribute("aria-expanded", String(open));
+}
 function renderFind(service) {
-  $("#d-find").hidden = true;
+  showFind(false);
   $("#d-find-out").replaceChildren();
+  $("#d-find-count").textContent = "";
   $("#d-find-open").hidden = !service;
   $("#d-find-open").textContent = service ? `Find it on ${svcName(service)}` : "";
 }
 $("#d-find-open").onclick = () => {
-  $("#d-find").hidden = !$("#d-find").hidden;
+  showFind($("#d-find").hidden);
   if ($("#d-find").hidden) return;
   if (!$("#d-find-q").value) $("#d-find-q").value = current.title;
   $("#d-find-go").click();
@@ -886,15 +925,17 @@ $("#d-find-go").onclick = async () => {
   const conf = S.config.series[current.tvdbId], s = current, out = $("#d-find-out");
   if (!$("#d-find-q").value.trim()) return out.replaceChildren(el("p", { className: "status-err", textContent: "Type the series' name first" }));
   out.replaceChildren(loading(`Searching ${svcName(conf.service)}…`));
+  $("#d-find-count").textContent = "";
   let r;
   try { r = await api("/api/series/search", { method: "POST", body: JSON.stringify({ show: conf, query: $("#d-find-q").value }), wait: 70 }); }  // the server waits 60 s for the search
   catch (e) { if (current === s) out.replaceChildren(el("p", { className: "status-err", textContent: e.message })); return; }
   if (current !== s) return;
+  $("#d-find-count").textContent = `Results on ${svcName(conf.service)}: ${r.results.length}`;
   if (!r.results.length) return out.replaceChildren(el("p", { className: "muted", textContent: `Nothing found on ${svcName(conf.service)} under that name.` }));
   out.replaceChildren(...r.results.map((x) => el("button", { type: "button", className: "url-hit", onclick: () => {
     $("#d-url").value = x.url || x.id;
     $("#d-url").dispatchEvent(new Event("input"));
-    $("#d-find").hidden = true;
+    showFind(false);
     toast(`${x.title}: its URL is filled in`);
   } }, el("b", { textContent: x.title }), x.label ? el("span", { className: "url-hit-label", textContent: x.label }) : "",
     x.description ? el("small", { textContent: x.description }) : "")));

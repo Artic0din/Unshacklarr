@@ -468,6 +468,7 @@
   "SEL.ids.size"
  ],
  "Changed": [],
+ "Changes discarded": [],
  "Change…": [],
  "Chapters": [],
  "Chapters_": [],
@@ -552,8 +553,10 @@
  "Clear failed ({0})": [
   "failedN"
  ],
+ "Clear filters": [],
  "Clear finished": [],
  "Clear one service's cache": [],
+ "Clear search": [],
  "Clear the history": [],
  "Clear the search or pick another filter.": [],
  "Clear title cache before fetching.": [],
@@ -752,11 +755,10 @@
  "Device type": [],
  "Devices": [],
  "Devices (CDM)": [],
- "Diagnostic": [],
- "Diagnostic downloaded: check it, then attach it to the issue": [],
  "Disable folder creation for TV Shows.": [],
  "Disable the source tag from the output file name and path.": [],
  "Discard": [],
+ "Discard changes": [],
  "Discord": [],
  "Discord, this device and more": [],
  "Dismiss": [],
@@ -773,6 +775,9 @@
  "Download a backup": [],
  "Download audio description tracks and no standard audio tracks.": [],
  "Download audio description tracks.": [],
+ "Download backup from {0}": [
+  "when(f.at)"
+ ],
  "Download forced subtitle tracks and no other subtitle tracks.": [],
  "Download it": [],
  "Download it again": [],
@@ -867,7 +872,6 @@
  "Edit": [],
  "Edit ladders": [],
  "Edit unshackle.yaml": [],
- "Edit…": [],
  "Empty: keyxtractor.decryptlabs.com": [],
  "Empty: nothing is sent.": [],
  "Empty: the URL above, if your browser can open it.": [],
@@ -896,6 +900,7 @@
  "Enter the setup code": [],
  "Enter the setup code first": [],
  "Enter the setup code first: it opens the backups": [],
+ "Enter your current password": [],
  "Episode columns": [],
  "Episode name in file names": [],
  "Episode offset": [],
@@ -1121,6 +1126,9 @@
  ],
  "In Unshacklarr's settings folder": [],
  "In schedule": [],
+ "In schedule: {0}": [
+  "name"
+ ],
  "In use": [],
  "In use: move its services first": [],
  "In your browser": [],
@@ -1150,13 +1158,7 @@
  "Italiano": [],
  "Its address, API key, and TMDB": [],
  "Its address: http(s)://…": [],
- "Its downloads from {0} fail": [
-  "svcName(conf.service)"
- ],
  "Its downloads will fail: replace them in Settings › Services.": [],
- "Its last {0} downloads failed": [
-  "sick.failing"
- ],
  "Its last {0} downloads failed{1}": [
   "sick.failing",
   "sick.cause ? `: ${sick.cause}` : \"\""
@@ -1207,7 +1209,6 @@
   "COUNT.day(days)"
  ],
  "Kept": [],
- "Kept by Sonarr": [],
  "Kept the existing file: {0}": [
   "label"
  ],
@@ -1231,9 +1232,7 @@
  "Language wanted for Video. You would use this if the video language doesn't match the audio. Prefix a value with '-' to exclude it, e.g. 'all,-es'.": [],
  "Language(s) wanted for Video and Audio (comma-separated). Use 'orig' to select the original language, e.g. 'orig,en' for both original and English. Prefix a value with '-' to exclude it, e.g. 'all,-es'.": [],
  "Language, no spoilers": [],
- "Language: {0}": [
-  "LANGS[LANG]"
- ],
+ "Language: {0}": [],
  "Languages": [],
  "Languages reads each file's tracks from Sonarr 5; this Sonarr is version {0}": [
   "major or 'unknown'"
@@ -1287,6 +1286,7 @@
   "state.doc.toString() !== uy.original ? \" · Unsaved changes\" : \"\""
  ],
  "Loading episodes from Sonarr…": [],
+ "Loading series…": [],
  "Loading the month…": [],
  "Loading the schedule…": [],
  "Loading the week…": [],
@@ -1351,10 +1351,10 @@
  "Move this ladder down": [],
  "Move this ladder up": [],
  "Move up": [],
- "Move {0} left": [
+ "Move {0} down": [
   "c.label"
  ],
- "Move {0} right": [
+ "Move {0} up": [
   "c.label"
  ],
  "Mux": [],
@@ -1411,9 +1411,6 @@
   "tag"
  ],
  "No DRM, nothing to decrypt": [],
- "No Sonarr named {0}": [
-  "body['sonarr']"
- ],
  "No Sonarr named {0} in Settings, Sonarr": [
   "name"
  ],
@@ -1432,12 +1429,31 @@
  "No device called {0}": [
   "device"
  ],
+ "No device matches “{0}”.": [
+  "typed"
+ ],
  "No device matches.": [],
+ "No device under {0} matches “{1}”.": [
+  "label",
+  "typed"
+ ],
+ "No device under {0}.": [
+  "label"
+ ],
  "No device yet": [],
  "No device yet: add a .wvd or .prd file.": [],
  "No download history for it": [],
- "No download matches.": [],
- "No download yet.": [],
+ "No download matches “{0}”.": [
+  "query"
+ ],
+ "No download under {0} matches “{1}”.": [
+  "label",
+  "query"
+ ],
+ "No download under {0}.": [
+  "label"
+ ],
+ "No download yet. Downloads start from a series, or with Run sync now.": [],
  "No earlier version yet": [],
  "No episode of Sonarr is {0}'s {1} for this series": [
   "svc",
@@ -1465,7 +1481,12 @@
  "No series has a release time yet. Set one on a series' page, in its Settings tab.": [],
  "No series is downloading yet.": [],
  "No series match these filters.": [],
- "No series matches.": [],
+ "No series match “{0}”.": [
+  "query"
+ ],
+ "No series matches “{0}”.": [
+  "typed"
+ ],
  "No series set up yet.": [],
  "No service has options of its own yet.": [],
  "No service is known yet. Unshackle lists them once it answers.": [],
@@ -1886,7 +1907,7 @@
  "Remove it when parts were joined": [],
  "Remove this step": [],
  "Remove {0}": [
-  "flag"
+  "name"
  ],
  "Remove {0} from unshackle.yaml?": [
   "r.name"
@@ -2138,6 +2159,7 @@
  "Several series": [],
  "Shaka Packager": [],
  "Show": [],
+ "Show all": [],
  "Show changes": [],
  "Show me": [],
  "Show more": [],
@@ -2146,9 +2168,6 @@
  "Show the output": [],
  "Show the title": [],
  "Show these episodes": [],
- "Show {0} in the schedule": [
-  "name"
- ],
  "Show {0}, not in use": [
   "COUNT.moreDevice(folded)"
  ],
@@ -2253,7 +2272,6 @@
   "current.title",
   "want"
  ],
- "Sonarr kept its own file": [],
  "Sonarr lists no episode for this series.": [],
  "Sonarr name": [],
  "Sonarr now numbers this series in {0}, but the numbering below was set for {1}. New episodes of this series are not downloaded until you check the numbering and confirm it.": [
@@ -2410,7 +2428,10 @@
   "st.caps.length"
  ],
  "Swedish": [],
+ "Switch language": [],
+ "Switch the language?": [],
  "Switched off": [],
+ "Switching language reloads the page: your password and keys are cleared.": [],
  "Sync running…": [],
  "Syncs, release times, retries": [],
  "System": [],
@@ -2462,6 +2483,9 @@
  ],
  "Test this series": [],
  "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services.": [],
+ "Test {0}": [
+  "name"
+ ],
  "Test {0} ({1})": [
   "testable.length === data.devices.length ? \"all\" : \"these\"",
   "testable.length"
@@ -2900,7 +2924,6 @@
  "Unshacklarr · Today at {0}": [
   "now"
  ],
- "Unshacklarr, back to the series": [],
  "Unshackle": [],
  "Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): allow it in Settings, Unshackle": [],
  "Unshackle address": [],
@@ -2929,7 +2952,6 @@
  "Unshackle runs": [],
  "Unshackle server": [],
  "Unshackle tries at that time, then every 30 s for 10 min. Empty: only the regular syncs (every 2 h).": [],
- "Unshackle tries its series at their release time, or at the first sync after airing. Add any other series in one tap, or hide the ones you don't follow.": [],
  "Unshackle {0}": [
   "name"
  ],
@@ -3005,11 +3027,11 @@
  "Wait for 2 parts": [],
  "Wait for 3 parts": [],
  "Wait for 4 parts": [],
- "Wait for it": [],
  "Waiting": [],
  "Waiting for Sonarr": [],
  "Waiting for a slot": [],
  "Waiting for you": [],
+ "Waiting for your answer": [],
  "Waiting for {0} approval": [
   "method"
  ],
@@ -3057,8 +3079,11 @@
  ],
  "What's new": [],
  "What's new in each version": [],
- "What's new: 1 new option": [],
- "What's new: {0} new options": [
+ "What's new in {0}: 1 new option": [
+  "name"
+ ],
+ "What's new in {0}: {1} new options": [
+  "name",
   "count"
  ],
  "What's on {0}?": [
@@ -3963,10 +3988,6 @@
  "{0} min ago": [
   "min"
  ],
- "{0} min {1}": [
-  "Math.floor(s / 60)",
-  "String(s % 60).padStart(2, \"0\")"
- ],
  "{0} missing": [
   "missing"
  ],
@@ -4221,6 +4242,9 @@
   "where",
   "name"
  ],
+ "{0} value": [
+  "flag"
+ ],
  "{0} waiting for the end of the quiet hours": [
   "COUNT.message(data.held)"
  ],
@@ -4275,9 +4299,6 @@
   "svcName(j.service)"
  ],
  "{0} · waiting for a slot": [
-  "svcName(c.service)"
- ],
- "{0} · waiting for your answer": [
   "svcName(c.service)"
  ],
  "{0} · waiting {1} · {2}": [
@@ -4536,9 +4557,58 @@
  "≤ {0} kbps": [
   "st.max_kbps"
  ],
- "⏸ Paused: the next episode waits": [],
  "● Connected{0}": [
   "st.version ? ` · Sonarr ${st.version}` : \"\""
  ],
- "⚠ No CDM for this service": []
+ "⚠ No CDM for this service": [],
+ "An audio track add stopped midway in this folder: it holds audio only, not a video to import": [],
+ "Back to Activity": [],
+ "Back to Settings": [],
+ "Back to the schedule": [],
+ "Back to unshackle.yaml": [],
+ "Diagnostic saved: check it, then attach it to the issue": [],
+ "Its last {0} downloads from {1} failed": [
+  "sick.failing",
+  "svcName(conf.service)"
+ ],
+ "Kept: Sonarr's own file was not replaced": [],
+ "Paused: the next episode waits": [],
+ "Reload calendar": [],
+ "Save diagnostic": [],
+ "Saved. Another tab renamed a Sonarr: reload this page before your next change.": [],
+ "The file with the {0} audio could not be renamed: {1}": [
+  "want",
+  "e"
+ ],
+ "The start date of {0} must be a date, like 2026-10-01": [
+  "key"
+ ],
+ "These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart": [],
+ "Unshacklarr, schedule": [],
+ "Wait for the audio, in days": [],
+ "{0} did not finish within {1}: is the downloads folder reachable?": [
+  "cmd[0]",
+  "human_time(timeout)"
+ ],
+ "{0} h {1} min": [
+  "Math.floor(min / 60)",
+  "String(min % 60).padStart(2, \"0\")"
+ ],
+ "{0} min {1} s": [
+  "Math.floor(s / 60)",
+  "String(s % 60).padStart(2, \"0\")"
+ ],
+ "Esc, then Tab, leaves the editor.": [],
+ "Results on {0}: {1}": [
+  "svcName(conf.service)",
+  "r.results.length"
+ ],
+ "Settings: {0} · Unshacklarr": [
+  "section"
+ ],
+ "{0} · Unshacklarr": [
+  "current.title",
+  "s.title",
+  "PAGE_NAME[currentTab]"
+ ]
 }

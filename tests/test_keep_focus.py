@@ -124,7 +124,7 @@ if (scenario === "cdm") {  // a device's test result reorders the list: the focu
   Object.assign(ctx, { Date, Intl, Math, Set, Object, Map, LOCALE: "en-GB", S: { config: { series: {}, settings: {} } }, tr: String, ago: () => "now", svcName: String,
     hideTip() {}, onTop() {}, COUNT: new Proxy({}, { get: () => (n) => `${n}` }), api: async () => ({}), toast() {}, confirmClick: () => true,
     $: (sel) => sel === "#cdm-state" ? state : sel === "#cdm-devices" ? null : at(sel) });
-  run([40, 41, 42, 109, 110].map((n) => cdm.split("\n")[n - 1]).join("\n") + "\n" + cdm.match(/^const cdmCard = [\s\S]*?\.\.\.body\);$/m)[0] + "\n"
+  run([/^let cdmData = .*$/m, /^const cdmOpen = .*$/m, /^const cdmRunning = .*$/m, /^let cdmPop = .*$/m, /^const closeCdmPop = .*$/m].map((re) => cdm.match(re)[0]).join("\n") + "\n" + cdm.match(/^const cdmCard = [\s\S]*?\.\.\.body\);$/m)[0] + "\n"
     + ["cdmTitle", "cdmStatus", "cdmShort", "renderCdm"].map((n) => fn(cdm, n)).join("\n"));
   const device = (name) => ({ name, kind: "Widevine", folder: false, used_by: ["Netflix"], info: null, test: null, level: "L3" });
   run("cdmData = " + JSON.stringify({ folder: "/cdm", map: {}, services: [], remote: [], devices: [device("alpha"), device("bravo")] }));
@@ -156,7 +156,7 @@ if (scenario === "chips") {  // a slide-out's chips are rebuilt at each pick
 }
 
 if (scenario === "lang") {  // Escape closes the language menu and the focus goes back to its button
-  Object.assign(ctx, { LANGS: { en: "English", fr: "Francais" }, LANG: "en", setLang() {} });
+  Object.assign(ctx, { LANGS: { en: "English", fr: "Francais" }, LANG: "en", setLang() {}, tr: (t) => t, trWith: (t, ...fill) => t.replace(/\{(\d+)\}/g, (_, i) => fill[i]) });
   run(fn(core, "langCorner"));
   const corner = ctx.langCorner(); root.append(corner);
   const [button, menu] = corner.children;
@@ -175,7 +175,7 @@ if (scenario === "lang") {  // Escape closes the language menu and the focus goe
 if (scenario === "settings") {  // a phone: a section opens on its heading, Back returns to its item in the list
   const nav = make("button", { dataset: { sec: "sonarr" } }); root.append(nav);
   const heading = make("h2"), sec = make("div"); sec.querySelector = () => heading; sec.append(heading); root.append(sec);
-  Object.assign(ctx, { currentTab: "settings", phone: true, leaveNews() {}, navigate() {}, scrollTo() {}, S: { dlOptions: [] },
+  Object.assign(ctx, { currentTab: "settings", phone: true, leaveNews() {}, navigate() {}, updateTitle() {}, scrollTo() {}, S: { dlOptions: [] },
     $: () => ({ classList: { toggle() {} } }), phoneLayout: () => ctx.phone });
   doc.querySelector = (sel) => sel === '.set-nav [data-sec="sonarr"]' ? nav : sel === '.set-sec[data-sec="sonarr"]' ? sec : { scrollIntoView() {} };
   doc.querySelectorAll = () => [];

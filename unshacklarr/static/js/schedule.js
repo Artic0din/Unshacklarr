@@ -81,7 +81,7 @@ function renderHiddenButton() {
 $("#hidden-open").onclick = () => {
   const rows = S.config.hidden_series.map((tvdbId) => {
     const series = S.series.find((x) => x.tvdbId === tvdbId), name = series?.title || `TVDB ${tvdbId}`;
-    const input = el("input", { type: "checkbox", checked: false, ariaLabel: `Show ${name} in the schedule` });
+    const input = el("input", { type: "checkbox", checked: false, ariaLabel: trWith("In schedule: {0}", name) });
     const li = el("li", { className: "off" }, el("img", { alt: "", loading: "lazy", src: posterSrc(series?.poster, name), onerror: posterFail(name) }), el("span", { className: "n", textContent: name }),
       el("label", { className: "switch" }, "In schedule", input, el("i")));
     input.onchange = async () => {
@@ -419,7 +419,7 @@ function day(d) {
 }
 function until(d) {
   const min = Math.max(0, Math.round((d - Date.now()) / 60000));
-  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")}`;
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min`;
 }
 $("#sched-refresh").onclick = () => loadSchedule();
 document.querySelectorAll(".sched-filter .pill").forEach((b) => b.onclick = () => {

@@ -1,6 +1,7 @@
 /* First-run setup and login: a full-screen card over the app until the password is known. */
 function gate(subtitle, ...content) {
   document.body.classList.add("gated");
+  document.title = "Unshacklarr";
   $("#gate").hidden = false;
   if (!$("#gate .lang-corner")) $("#gate").prepend(langCorner());
   $("#gate-sub").textContent = subtitle;
@@ -35,12 +36,15 @@ document.addEventListener("input", (e) => {
   }
 });
 
-/* A field: its name (a label: a click on it goes to the input), the input, and help that stays text to select. */
+/* A field: its name (a label: a click on it goes to the input), the input, and help that stays text to select
+   and is what the input is described by. */
 let fieldIds = 0;
+const optional = (label) => [label, " ", el("span", { className: "optional", textContent: "Optional" })];
 function field(label, input, help, ...more) {
   input.id ||= `field-${++fieldIds}`;
-  return el("div", { className: "field" }, el("label", { htmlFor: input.id, textContent: label }), input, ...more,
-    help ? lineBySentence(el("small", {}, ...[help].flat())) : "");
+  const note = help ? lineBySentence(el("small", {}, ...[help].flat())) : "";
+  if (note) { note.id = `${input.id}-help`; describedBy(input, note, true); }
+  return el("div", { className: "field" }, el("label", { htmlFor: input.id }, ...[label].flat()), input, ...more, note);
 }
 function showLogin() {
   if (!$("#gate").hidden) return;
@@ -55,23 +59,22 @@ function showLogin() {
   };
   pw.focus();
 }
-/* A country, searched by its name (in the page's language) with its flag; its two-letter code is what is kept,
+/* A country, searched by its name (in the page's language); its two-letter code is what is kept,
    in `real` (hidden), whose input event the page listens to as before. Ten at a time, the rest by scrolling. */
 const COUNTRIES = "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW";
-const flagOf = (code) => String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
 const plain = (text) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 function countryPicker(real) {
   const names = new Intl.DisplayNames([LOCALE, "en"], { type: "region" });
-  return listPicker(real, COUNTRIES.split(" ").map((code) => ({ code, name: names.of(code) || code, flag: flagOf(code), small: code }))
+  return listPicker(real, COUNTRIES.split(" ").map((code) => ({ code, name: names.of(code) || code, small: code }))
     .sort((a, b) => a.name.localeCompare(b.name, LOCALE)), { placeholder: "Search a country", none: "No country matches" });
 }
 /* The time zone, picked the same way: its name, its offset from UTC now. */
 function zonePicker(real) {
   const offset = (z) => new Date().toLocaleString("en", { timeZone: z, timeZoneName: "shortOffset" }).split(" ").pop().replace("GMT", "UTC");
-  return listPicker(real, ZONES.map((code) => ({ code, name: code.replaceAll("_", " "), flag: "", small: offset(code) })),
+  return listPicker(real, ZONES.map((code) => ({ code, name: code.replaceAll("_", " "), small: offset(code) })),
     { placeholder: "Search a city or a region", none: "No time zone matches", exact: true });
 }
-/* A searchable list in place of a hidden input: the items are {code, name, flag, small}, the input keeps the code. */
+/* A searchable list in place of a hidden input: the items are {code, name, small}, the input keeps the code. */
 let pickerIds = 0;
 function listPicker(real, all, { placeholder, none, exact = false }) {
   real.type = "hidden";
@@ -82,7 +85,7 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
   input.setAttribute("aria-controls", list.id);
   let shown = [], active = -1;
   const current = () => all.find((c) => c.code === (exact ? String(real.value || "") : String(real.value || "").toUpperCase()));
-  const sync = () => { const c = current(); input.value = c ? (c.flag ? `${c.flag}  ${c.name}` : c.name) : real.value || ""; };
+  const sync = () => { const c = current(); input.value = c ? c.name : real.value || ""; };
   const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); };
   const draw = (query) => {
     const q = plain(query.trim());
@@ -90,7 +93,7 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
     shown.sort((a, b) => (plain(b.name).startsWith(q) || b.code.toLowerCase() === q) - (plain(a.name).startsWith(q) || a.code.toLowerCase() === q));
     active = shown.length ? Math.max(0, shown.findIndex((c) => c.code === current()?.code)) : -1;
     list.replaceChildren(...shown.map((c, i) => el("li", { id: `${list.id}-${i}`, role: "option", className: i === active ? "on" : "", ariaSelected: String(i === active),
-      onmousedown: (e) => { e.preventDefault(); pick(c); } }, ...(c.flag ? [el("span", { className: "flag", textContent: c.flag })] : []), el("span", { textContent: c.name }), el("small", { textContent: c.small }))));
+      onmousedown: (e) => { e.preventDefault(); pick(c); } }, el("span", { textContent: c.name }), el("small", { textContent: c.small }))));
     if (!shown.length) list.append(el("li", { className: "cp-none", textContent: none }));
     list.style.top = `${input.offsetTop + input.offsetHeight + 4}px`;  // right under the input, over its help
     list.hidden = false;
@@ -100,7 +103,7 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
   };
   const pick = (c) => {
     real.value = c.code;
-    input.classList.remove("bad");
+    markInvalid(input, null, false);  // the box marked wrong is this one, not the hidden input the event comes from
     real.dispatchEvent(new Event("input", { bubbles: true }));
     sync();
     close();
@@ -139,41 +142,45 @@ function showSetup(found) {
   // An API key is no password: password managers (Bitwarden, Vaultwarden, 1Password, LastPass) leave it alone
   const apiKey = (props) => input({ type: "password", autocomplete: "off", spellcheck: false, dataset: { bwignore: "", "1pIgnore": "", lpignore: "true" }, ...props });
   const f = {
-    setup_code: input({ autocomplete: "off", spellcheck: false }),
-    password: input({ type: "password", autocomplete: "new-password", minLength: 8 }),
-    confirm: input({ type: "password", autocomplete: "new-password" }),
-    sonarr_url: input({ type: "url", value: found.sonarr_url, placeholder: "http://sonarr:8989" }),
-    sonarr_api_key: apiKey({
-      placeholder: found.sonarr_api_key_set ? "Found in the environment for the URL above. Leave empty to use it" : "" }),
-    sonarr_downloads: input({ value: found.sonarr_downloads, placeholder: "/downloads" }),
+    setup_code: input({ autocomplete: "off", spellcheck: false, required: true }),
+    password: input({ type: "password", autocomplete: "new-password", minLength: 8, required: true }),
+    confirm: input({ type: "password", autocomplete: "new-password", required: true }),
+    sonarr_url: input({ type: "url", value: found.sonarr_url, placeholder: "http://sonarr:8989", required: true }),
+    sonarr_api_key: apiKey(),
+    sonarr_downloads: input({ value: found.sonarr_downloads, placeholder: "/downloads", required: true }),
     unshackle_mode: el("select", {}, el("option", { value: "local", textContent: "Local" }), el("option", { value: "remote", textContent: "Remote" })),
     unshackle_command: input({ value: found.unshackle_command, placeholder: "unshackle", spellcheck: false }),
-    unshackle_url: input({ type: "url", value: found.unshackle_url, placeholder: "http://unshackle:8786" }),
-    unshackle_api_key: apiKey({
-      placeholder: found.unshackle_api_key_set ? "Found in the environment for the address above. Leave empty to use it" : "" }),
+    unshackle_url: input({ type: "url", value: found.unshackle_url, placeholder: "http://unshackle:8786", required: true }),
+    unshackle_api_key: apiKey(),
     downloads: input({ value: found.downloads, placeholder: "In Unshacklarr's settings folder", spellcheck: false }),
     unshackle_downloads: input({ value: found.unshackle_downloads, placeholder: "Same path", spellcheck: false }),
     country: input({ value: found.country }),
     timezone: el("select", {}, ...(Intl.supportedValuesOf?.("timeZone") || ["UTC"]).map((z) => el("option", { value: z, textContent: z.replaceAll("_", " ") }))),
     tmdb_api_key: apiKey({ placeholder: "Optional" }),
   };
+  // A key the environment already has: said in the field's help, where a placeholder would be cut off
+  const keyFound = (text, known) => el("span", { className: "env-found", hidden: !known, textContent: text });
+  const sonarrKeyFound = keyFound("Found in the environment for the URL above. Leave empty to use it", found.sonarr_api_key_set);
+  const unshackleKeyFound = keyFound("Found in the environment for the address above. Leave empty to use it", found.unshackle_api_key_set);
   const SECRET = ["password", "confirm", "sonarr_api_key", "unshackle_api_key", "tmdb_api_key"];
   f.unshackle_mode.value = found.unshackle_mode || "local";
   f.timezone.value = found.timezone !== "UTC" ? found.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;
   for (const [k, v] of Object.entries(draft.values || {})) if (f[k] && !SECRET.includes(k)) f[k].value = v;
-  setupDraft = () => ({ step: at, reached, values: Object.fromEntries(Object.entries(f).filter(([k]) => !SECRET.includes(k)).map(([k, x]) => [k, x.value])) });
+  setupDraft = () => ({ step: at, reached, secrets: SECRET.some((k) => f[k].value), values: Object.fromEntries(Object.entries(f).filter(([k]) => !SECRET.includes(k)).map(([k, x]) => [k, x.value])) });
   const keep = () => { try { sessionStorage.setItem("setup-draft", JSON.stringify(setupDraft())); } catch {} };
 
   // The password: its strength, and the second one the same
   const meter = el("div", { className: "pw-meter", dataset: { score: "0" } }, el("i"), el("i"), el("i"), el("i"), el("span"));
-  const match = el("small", { className: "pw-match" });
+  // a region exists before it is filled, or what it says is not read out (the meter itself is not displayed until a password is typed)
+  const strength = el("div", { role: "status" }, meter);
+  const match = el("small", { className: "pw-match", role: "status" });
   const pwLive = () => {
     const pw = f.password.value, again = f.confirm.value, score = pwStrength(pw);
     meter.dataset.score = score;
     meter.lastChild.textContent = ["", pw.length < 8 ? "Too short" : "Weak", "Fair", "Good", "Strong"][score];
     const same = again && again === pw, typing = again && !same && pw.startsWith(again);
     f.confirm.classList.toggle("good", !!same);
-    f.confirm.classList.toggle("bad", !!again && !same && !typing);
+    markInvalid(f.confirm, match, !!again && !same && !typing);
     match.className = `pw-match ${!again || typing ? "" : same ? "good" : "bad"}`;
     match.replaceChildren(...(!again || typing ? [] : same ? [icon("check", "inl"), "Passwords match"] : ["Passwords do not match"]));
   };
@@ -201,15 +208,16 @@ function showSetup(found) {
   const tiles = el("div", { className: "wz-tiles", role: "group", ariaLabel: "Unshackle runs" },
     tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "On another machine"));
   const country = countryPicker(f.country);
+  country.input.required = true;
   const unshackleParams = () => Object.fromEntries(["unshackle_mode", "unshackle_command", "unshackle_url", "unshackle_api_key"].map((k) => [k, f[k].value]));
   f.unshackle_mode.hidden = true;
   const uPanel = el("div", { className: "wiz-group" },
     el("div", { className: "field" }, el("label", { textContent: "Unshackle runs" }), tiles, f.unshackle_mode),
-    el("div", { className: "only-local" }, field("Unshackle command", f.unshackle_command, "Empty: unshackle from the PATH. Otherwise its full path, e.g. the .venv/bin/unshackle of a git clone.")),
+    el("div", { className: "only-local" }, field(optional("Unshackle command"), f.unshackle_command, "Empty: unshackle from the PATH. Otherwise its full path, e.g. the .venv/bin/unshackle of a git clone.")),
     el("div", { className: "only-remote" }, field("Unshackle address", f.unshackle_url),
-      field("API key", f.unshackle_api_key, ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml."])),
-    field("Downloads folder", f.downloads, "Where episodes land before Sonarr imports them, as Unshacklarr sees it."),
-    el("div", { className: "only-remote" }, field("Downloads folder, as Unshackle sees it", f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
+      field("API key", f.unshackle_api_key, ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml.", unshackleKeyFound])),
+    field(optional("Downloads folder"), f.downloads, "Where episodes land before Sonarr imports them, as Unshacklarr sees it."),
+    el("div", { className: "only-remote" }, field(optional("Downloads folder, as Unshackle sees it"), f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
   const showMode = () => {
     uPanel.dataset.mode = f.unshackle_mode.value;
     tiles.querySelectorAll(".wz-tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.value === f.unshackle_mode.value)));
@@ -262,6 +270,7 @@ function showSetup(found) {
     el("button", { type: "button", className: "btn small", textContent: "Restore from a backup", onclick: openRestore }), restoreFile, restoreSay);
   function restored(r) {
     reached = steps.length;
+    document.title = tr("Settings restored");
     drawRail(null);
     progress.firstChild.textContent = "Done";
     progress.querySelector("b").style.width = "100%";
@@ -284,7 +293,7 @@ function showSetup(found) {
   const steps = [
     { name: "Welcome", icon: "key", title: "Welcome to Unshacklarr", sub: "Setup code and password",
       body: [field("Setup code", f.setup_code, "Shown in Unshacklarr's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set."),
-        field("Password", f.password, "At least 8 characters.", meter), field("Confirm password", f.confirm, "", match), restoreBox],
+        field("Password", f.password, "At least 8 characters.", strength), field("Confirm password", f.confirm, "", match), restoreBox],
       check: async () => {
         if (!f.setup_code.value.trim()) return wrong("Enter the setup code", f.setup_code);
         if (!f.password.value && draft.step) return wrong("Type your password again: it is not kept when the page reloads", f.password);
@@ -297,8 +306,8 @@ function showSetup(found) {
         for (const k of ["sonarr_url", "sonarr_downloads", "unshackle_command", "unshackle_url", "downloads", "unshackle_downloads"]) {
           if (!f[k].value && more[k]) f[k].value = more[k];
         }
-        if (more.sonarr_api_key_set) f.sonarr_api_key.placeholder = "Found in the environment for the URL above. Leave empty to use it";
-        if (more.unshackle_api_key_set) f.unshackle_api_key.placeholder = "Found in the environment for the address above. Leave empty to use it";
+        if (more.sonarr_api_key_set) sonarrKeyFound.hidden = false;
+        if (more.unshackle_api_key_set) unshackleKeyFound.hidden = false;
       } },
     { name: "Unshackle", icon: "unshackle", title: "Connect Unshackle", sub: "What downloads the episodes",
       body: [uPanel], fields: () => f.unshackle_mode.value === "local" ? [f.unshackle_command] : [f.unshackle_url, f.unshackle_api_key],
@@ -313,9 +322,9 @@ function showSetup(found) {
       }, checking: "Testing… (a first start of Unshackle takes a few seconds)" },
     { name: "Sonarr", icon: "sonarr", title: "Connect Sonarr", sub: "Your library",
       body: [field("Sonarr URL", f.sonarr_url),
-        field("API key", f.sonarr_api_key, "In Sonarr: Settings, General."),
+        field("API key", f.sonarr_api_key, ["In Sonarr: Settings, General.", sonarrKeyFound]),
         field("Downloads folder, as Sonarr sees it", f.sonarr_downloads, "Its path on Sonarr's side, e.g. inside Sonarr's container."),
-        field("TMDB API key", f.tmdb_api_key, tmdbHint())],
+        field(optional("TMDB API key"), f.tmdb_api_key, tmdbHint())],
       fields: () => [f.sonarr_url, f.sonarr_api_key],
       check: async () => {
         if (!f.sonarr_url.value.trim()) return wrong("Enter Sonarr's URL", f.sonarr_url);
@@ -348,7 +357,8 @@ function showSetup(found) {
   function go(to, forward = to > at) {
     at = Math.max(0, Math.min(to, steps.length - 1));
     reached = Math.max(reached, at);
-    const s = steps[at];
+    const s = steps[at], moved = !!panel.firstChild;  // not the first draw: a step the person moved to
+    document.title = tr(s.title.includes("Unshacklarr") ? s.title : `${s.title} · Unshacklarr`);  // "Welcome to Unshacklarr" already names it
     drawRail(at);
     progress.firstChild.textContent = `Step ${at + 1} of ${steps.length}`;
     progress.querySelector("b").style.width = `${(at + 1) / steps.length * 100}%`;
@@ -359,22 +369,26 @@ function showSetup(found) {
     back.hidden = at === 0;
     const last = at === steps.length - 1;
     next.replaceChildren(last ? "Finish the setup" : "Next", el("span", { className: "arr", ariaHidden: "true" }, icon(last ? "check" : "arrow")));
-    const control = [...panel.querySelectorAll("input, select")].find((x) => x.getClientRects().length);  // not a hidden select
-    if (control) control.focus({ preventScroll: true }); else focusHeading(panel.querySelector("h2"));
+    if (moved) { panel.closest(".wz").scrollIntoView({ block: "start" }); focusHeading(panel.querySelector("h2")); }  // a step the page was scrolled down on
+    else {
+      const control = [...panel.querySelectorAll("input, select")].find((x) => x.getClientRects().length);  // not a hidden select
+      if (control) control.focus({ preventScroll: true }); else focusHeading(panel.querySelector("h2"));
+    }
     keep();
   }
   /* The end: what was checked, and the way in */
   function allSet() {
     reached = steps.length;
+    document.title = tr("Unshacklarr is set up");
     drawRail(null);
     progress.firstChild.textContent = "Done";
     progress.querySelector("b").style.width = "100%";
     const code = f.country.value.toUpperCase();
-    const c = /^[A-Z]{2}$/.test(code) ? { flag: flagOf(code), name: new Intl.DisplayNames([LOCALE, "en"], { type: "region" }).of(code) } : null;
+    const country = /^[A-Z]{2}$/.test(code) ? new Intl.DisplayNames([LOCALE, "en"], { type: "region" }).of(code) : null;
     panel.replaceChildren(el("div", { className: "wiz-step wz-done fwd" }, ico("check", "wz-done-ico"),
       el("h2", { textContent: "Unshacklarr is set up" }),
       el("p", { className: "lead", textContent: "Pick a service for your series in Series: Unshacklarr takes it from there." }),
-      el("ul", { className: "wz-sum" }, ...[oks[1], oks[2], `${c ? `${c.flag} ${c.name}` : f.country.value} · ${f.timezone.value.replaceAll("_", " ")}`]
+      el("ul", { className: "wz-sum" }, ...[oks[1], oks[2], `${country || f.country.value} · ${f.timezone.value.replaceAll("_", " ")}`]
         .filter(Boolean).map((t) => el("li", {}, ico("check", ""), el("span", { textContent: t })))),
       signInCheck()));
     note.replaceChildren();
@@ -389,11 +403,12 @@ function showSetup(found) {
      (under it on a narrow screen); with no field to point at, under the step. */
   function showWrong({ error, fields }) {
     const [first] = fields;
-    fields.forEach((x) => x.classList.add("bad"));
+    fields.forEach((x) => markInvalid(x));
     if (!first) return note.replaceChildren(failed(error));
     note.replaceChildren();  // said in the bubble
-    panel.querySelector(".field-error")?.remove();
+    clearBubble();
     const bubble = el("div", { className: "field-error", role: "alert", textContent: error });
+    markInvalid(first, bubble);  // the field the message is about says it too, when it is focused
     first.after(bubble);
     bubble.style.setProperty("--at", `${first.offsetTop + first.offsetHeight / 2}px`);
     bubble.style.setProperty("--x", `${first.offsetLeft + first.offsetWidth + 14}px`);  // by the input's own right edge
@@ -402,10 +417,16 @@ function showSetup(found) {
     first.classList.add("shake");
     first.focus({ preventScroll: true });
   }
+  function clearBubble() {
+    const bubble = panel.querySelector(".field-error");
+    if (!bubble) return;
+    panel.querySelectorAll(`[aria-describedby~="${bubble.id}"]`).forEach((x) => describedBy(x, bubble, false));
+    bubble.remove();
+  }
   panel.addEventListener("input", keep);
   panel.addEventListener("input", (e) => {  // a mistake being fixed: its red goes, its bubble and the message
-    if (e.target !== f.confirm) e.target.classList.remove("bad");
-    panel.querySelector(".field-error")?.remove();
+    if (e.target !== f.confirm) markInvalid(e.target, null, false);  // the match of the two passwords says its own
+    clearBubble();
     if (note.textContent) note.replaceChildren();
   });
   const logo = $("#gate .logo").cloneNode(true);
@@ -488,6 +509,7 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     const data = asked || await api("/api/state", { wait: 130 });
     S = { series: data.series, config: data.config, services: data.services, serviceNames: data.service_names || {}, authentication: data.authentication || {}, authenticationMethods: data.authentication_methods || {}, authenticationSetups: data.authentication_setups || [], authenticationLive: [], metadataLanguage: data.metadata_language || "", dlOptions: data.dl_options, health: data.health || {}, cdm: data.cdm || {}, domains: data.service_domains || {}, builtinLadders: data.builtin_ladders || [], networkServices: data.network_services || {}, backups: data.backups || null, news: data.news || {}, update: data.update || null, version: data.version, instances: data.instances || {}, sonarrsOf: data.sonarrs_of || {} };
     savedConfig = configKey(S.config);
+    savedSonarrsOf = JSON.stringify(S.sonarrsOf);
     savedUnits = configUnits(S.config);
     keepSonarrNames(sonarrNames());
     // a test build of a branch shows its branch and commit, not the release it started from

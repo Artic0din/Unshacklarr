@@ -194,6 +194,7 @@ async function showServeLog() {
   try { ({ log } = await api("/api/unshackle/log")); } catch (e) { return toast(e.message, true); }
   showTab("log");
   picked_run = "serve";
+  markPicked(picked_run);
   $("#con").classList.add("open");
   $("#cd-main").replaceChildren(el("div", { className: "cd-head" }, el("div", {}, el("h3", { textContent: "unshackle serve" }),
     el("small", { textContent: "Its log, last lines" }))));
@@ -212,7 +213,7 @@ async function openBulk() {
     .sort((a, b) => (a.status === "ended") - (b.status === "ended"));  // ended ones too, after the airing ones
   const rows = todo.map((s) => {
     const li = el("li", {}, el("img", { alt: "", loading: "lazy", src: posterSrc(s.poster, s.title), onerror: posterFail(s.title) }),
-      el("div", {}, el("b", { textContent: s.title }), el("div", { className: "opts" }, loading("Looking on TMDB…"))));
+      el("div", {}, el("b", { textContent: s.title }), el("div", { className: "opts", role: "group", ariaLabel: s.title }, loading("Looking on TMDB…"))));
     li.dataset.tvdb = s.tvdbId;
     return li;
   });

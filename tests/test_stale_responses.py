@@ -156,7 +156,7 @@ const ctx = { savedSonarr: (name) => name, $: (sel) => (boxes[sel] ??= { classLi
   } };
 vm.createContext(ctx);
 const lets = [/^let missingDays.*\n/m, /^let upgradeTimer.*\n/m, /^let upgradeLast\b.*\n/m].map((re) => src.match(re)[0]).join("");
-vm.runInContext(lets + ["sonarrPicker", "unsetNote", "showMissing", "showUpgrades"].map((n) => grab(n)).join(""), ctx);
+vm.runInContext(lets + ["markPicked", "sonarrPicker", "unsetNote", "showMissing", "showUpgrades"].map((n) => grab(n)).join(""), ctx);
 vm.runInContext("upgradePick.add(1); upgradePick.add(2); upgradePick.add(3);", ctx);
 const show = (sonarr, days) => { vm.runInContext(pane === "missing" ? `missingSonarr = ${JSON.stringify(sonarr)}; missingDays = ${days};` : `upgradeSonarr = ${JSON.stringify(sonarr)};`, ctx); return pane === "missing" ? ctx.showMissing() : ctx.showUpgrades(); };
 const goText = () => find(draws[draws.length - 1], (n) => n.className === "btn primary")?.textContent;
@@ -397,7 +397,7 @@ let hidden = false, onVisibility;
 const box = { hidden: false, open: true, replaceChildren() {}, classList: { add() {} }, textContent: "" };
 const ctx = { window: { Terminal: FakeTerminal }, Terminal: FakeTerminal, FitAddon: { FitAddon: class { proposeDimensions() {} } }, ResizeObserver: class { observe() {} },
   term: null, termFit: null, termSocket: null, termFor: null, termQuery: "", termResume: null, liveFeed: null, liveNext: null, picked_run: null, TERM_COLS: 110,
-  $: () => box, el: () => ({}), termFilter: () => (b) => b, WebSocket: FakeSocket, location: { protocol: "http:", host: "x" }, api: async () => ({ log: "serve line" }), showTab() {},
+  $: () => box, el: () => ({}), termFilter: () => (b) => b, WebSocket: FakeSocket, location: { protocol: "http:", host: "x" }, api: async () => ({ log: "serve line" }), showTab() {}, markPicked() {},
   openActivity() {}, document: { get hidden() { return hidden; }, addEventListener: (_, fn) => { onVisibility = fn; }, querySelectorAll: () => [] } };
 vm.createContext(ctx);
 vm.runInContext(["fitTerminal", "openTerm", "streamTerm"].map((n) => grab(n)).join(""), ctx);
