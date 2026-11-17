@@ -27,7 +27,7 @@ const ctx = {
   day: () => "", ago: () => "", duration: () => "", LOCALE: "en", S: { series: [] }, svcName: (tag) => tag, icon: () => ({}), COUNT: {}, posterSrc: () => "", posterFail: () => null, OUTCOME: {}, renderDock: () => {},
 };
 vm.createContext(ctx);
-vm.runInContext(`var picked_run = null;\n${grab("showLeftovers")}\n${grab("showStats")}`, ctx);
+vm.runInContext(`var picked_run = null;\n${grab("markPicked")}\n${grab("showLeftovers")}\n${grab("showStats")}`, ctx);
 const path = { stats: "/api/stats", left: "/api/leftovers" };
 const answer = { stats: { month: {}, weeks: [], services: [], since: null }, left: { items: [], days: 0 } };
 const open = { stats: ctx.showStats, left: ctx.showLeftovers };
@@ -154,7 +154,7 @@ const stub = { textContent: "", hidden: false, classList: { add() {} }, replaceC
 const ctx = { $: () => stub, document: { querySelectorAll: () => [] }, api: () => new Promise(() => {}),
   renderDock: (d) => docks.push(d), clearTimeout() {} };
 vm.createContext(ctx);
-vm.runInContext(`var picked_run = null, langTimer = null, langLast = null;\n${grab("showLanguages")}`, ctx);
+vm.runInContext(`var picked_run = null, langTimer = null, langLast = null;\n${grab("markPicked")}\n${grab("showLanguages")}`, ctx);
 ctx.showLanguages();
 console.log(JSON.stringify(docks));
 """, str(JS / "activity.js"))

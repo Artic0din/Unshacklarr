@@ -81,7 +81,7 @@ function renderHiddenButton() {
 $("#hidden-open").onclick = () => {
   const rows = S.config.hidden_series.map((tvdbId) => {
     const series = S.series.find((x) => x.tvdbId === tvdbId), name = series?.title || `TVDB ${tvdbId}`;
-    const input = el("input", { type: "checkbox", checked: false, ariaLabel: `Show ${name} in the schedule` });
+    const input = el("input", { type: "checkbox", checked: false, ariaLabel: trWith("In schedule: {0}", name) });
     const li = el("li", { className: "off" }, el("img", { alt: "", loading: "lazy", src: posterSrc(series?.poster, name), onerror: posterFail(name) }), el("span", { className: "n", textContent: name }),
       el("label", { className: "switch" }, "In schedule", input, el("i")));
     input.onchange = async () => {
@@ -503,15 +503,7 @@ function renderHealth(h) {
   if (h.authentication) S.authentication = h.authentication;
   if (h.authentication_methods) S.authenticationMethods = h.authentication_methods;
   if (h.authentication_setups) S.authenticationSetups = h.authentication_setups;
-  for (const [name, label] of [["unshackle", "Unshackle"], ["sonarr", "Sonarr"]]) {
-    const st = h[name] || {}, b = document.querySelector(`[data-health=${name}]`);
-    b.querySelector(".dot").className = "dot " + (st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "");
-    const state = st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "wait";
-    b.dataset.state = state;
-    b.querySelector("small").textContent = { warn: "Update available", down: "Unreachable", wait: "Checking…" }[state] || "";  // said in words, not by the colour alone
-    b.title = st.ok ? `${label} ${st.version || ""} is running${st.latest ? ` (${st.latest} is out)` : ""}`
-      : st.ok === false ? st.error || `${label} is unreachable` : `Checking ${label}…`;
-  }
+  paintLights(h);
   const detailed = h.unshackle && ("tools" in h.unshackle || h.unshackle.ok === false);
   if (detailed) unshackleDetails = {
     ...h.unshackle,
@@ -526,6 +518,18 @@ function renderHealth(h) {
   renderUnshackleState(h.unshackle);
   paintServers(h.servers);
   paintSonarrs(h.sonarrs);
+}
+/* The header's two lights alone: needs nothing but a status answer, so the page paints them before its state loads. */
+function paintLights(h) {
+  for (const [name, label] of [["unshackle", "Unshackle"], ["sonarr", "Sonarr"]]) {
+    const st = h[name] || {}, b = document.querySelector(`[data-health=${name}]`);
+    b.querySelector(".dot").className = "dot " + (st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "");
+    const state = st.ok ? (st.latest ? "warn" : "ok") : st.ok === false ? "down" : "wait";
+    b.dataset.state = state;
+    b.querySelector("small").textContent = { warn: "Update available", down: "Unreachable", wait: "Checking…" }[state] || "";  // said in words, not by the colour alone
+    b.title = st.ok ? `${label} ${st.version || ""} is running${st.latest ? ` (${st.latest} is out)` : ""}`
+      : st.ok === false ? st.error || `${label} is unreachable` : `Checking ${label}…`;
+  }
 }
 function renderUnshackleState(st = S.health?.unshackle || {}, tested = false) {
   const set = S.config.settings || {}, box = $("#ux-state");
