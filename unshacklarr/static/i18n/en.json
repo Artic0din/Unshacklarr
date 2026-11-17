@@ -1867,10 +1867,6 @@
  "Reading Unshackle's CDMs…": [],
  "Reading the history…": [],
  "Reading the notifications…": [],
- "Ready · {0}": [
-  "(observation.available_methods || []).map((item) => AUTH_METHOD_LABELS[item]).filter(Boolean).join(\", \")"
- ],
- "Reauthenticate": [],
  "Rebuilding an install?": [],
  "Recently sent": [],
  "Redownload": [],
@@ -4610,5 +4606,7 @@
   "current.title",
   "s.title",
   "PAGE_NAME[currentTab]"
- ]
+ ],
+ "Not signed in yet": [],
+ "Sign in again": []
 }

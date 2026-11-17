@@ -2384,8 +2384,6 @@
  "No authentication session is waiting": "待機中の認証セッションはありません",
  "Not checked yet": "未確認",
  "Open: {0}": "開く: {0}",
- "Ready · {0}": "準備完了 · {0}",
- "Reauthenticate": "再認証",
  "Renewing {0} session": "{0} のセッションを更新中",
  "Repairing {0} session": "{0} のセッションを修復中",
  "Service approval": "サービスの承認",
@@ -2452,5 +2450,7 @@
  "Esc, then Tab, leaves the editor.": "Esc、続けて Tab で、エディターから出られます。",
  "Results on {0}: {1}": "{0} の結果: {1} 件",
  "Settings: {0} · Unshacklarr": "設定: {0} · Unshacklarr",
- "{0} · Unshacklarr": "{0} · Unshacklarr"
+ "{0} · Unshacklarr": "{0} · Unshacklarr",
+ "Not signed in yet": "まだサインインしていません",
+ "Sign in again": "もう一度サインイン"
 }

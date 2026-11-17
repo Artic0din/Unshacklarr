@@ -1092,6 +1092,24 @@ const promptState = (input) => {
     }));
     console.log(JSON.stringify(rows));
   }
+  if (scenario === "sign_in_states") {  // one row per state in the Services table, as the person reads it
+    box.S.authentication = {
+      READY: { service: "READY", backend: "", state: "unknown" },
+      LIVE: { service: "LIVE", backend: "", state: "unknown" },
+      CONFIRMED: { service: "CONFIRMED", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
+      NEEDED: { service: "NEEDED", backend: "", state: "needs_user_action" },
+    };
+    box.S.authenticationMethods = { READY: ["pairing", "cookies"], LIVE: ["pairing"], CONFIRMED: ["pairing"], NEEDED: ["pairing"] };
+    box.S.authenticationLive = [{ service: "LIVE", backend: "", observation: { state: "authenticated", method: "pairing" } }];
+    box.S.authenticationSetups = [];
+    box.renderServices();
+    const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => [
+      find(row, (node) => node.className === "sv-name").textContent,
+      find(row, (node) => node.className === "sv-label").textContent,
+      findAll(row, (node) => node.tag === "button").map((button) => button.textContent).filter((t) => /Sign|Reauth/.test(t)),
+    ]);
+    console.log(JSON.stringify(rows));
+  }
   if (scenario === "setup_without_status") {
     box.S.authentication = {};
     box.S.authenticationMethods = { "PAIRED@vpn": [] };
@@ -1340,7 +1358,7 @@ def test_supported_methods_do_not_hide_classified_authentication_status():
 
 def test_only_the_selected_backend_authentication_row_is_actionable():
     assert run_authentication_ui("selected_backend_actions") == [
-        {"name": "PAIRED · vpn", "label": "Sign-in needed", "controls": ["Reauthenticate"]},
+        {"name": "PAIRED · vpn", "label": "Sign-in needed", "controls": ["Sign in again"]},
         {"name": "OPEN", "label": "No sign-in required", "controls": []},
         {"name": "PAIRED", "label": "Confirmed now", "controls": []},
     ]
@@ -1583,7 +1601,7 @@ def test_the_page_next_sync_is_the_servers_in_the_apps_zone(tmp_path, monkeypatc
 @pytest.mark.parametrize(
     ("observation", "label"),
     [
-        ({"state": "ready", "available_methods": ["pairing", "cookies"]}, "Ready · pairing, cookies"),
+        ({"state": "ready", "available_methods": ["pairing", "cookies"]}, "Not signed in yet"),  # the methods have their own column
         ({"state": "session_present", "method": "cookies"}, "Cookies session available"),
         ({"state": "session_expired", "method": "pairing"}, "Pairing session expired"),
         ({"state": "session_rejected", "method": "pairing"}, "Pairing session rejected"),
@@ -8704,3 +8722,11 @@ def test_a_single_download_is_not_a_sync_running(tmp_path, monkeypatch):
     finally:
         release.set()
     download.join(2)
+
+
+def test_the_sign_in_column_says_where_it_stands_once_and_offers_the_fitting_action():
+    rows = {name: (label, controls) for name, label, controls in run_authentication_ui("sign_in_states")}
+    assert rows["READY"] == ("Not signed in yet", ["Sign in"])  # not "Ready · pairing, cookies": the chips already say it
+    assert rows["LIVE"] == ("Signed in with pairing", ["Sign in again"])  # signed in: no plain "Sign in" to puzzle over
+    assert rows["CONFIRMED"] == ("Confirmed now", ["Sign in again"])
+    assert rows["NEEDED"] == ("Sign-in needed", ["Sign in again"])  # signed in before: again, not "Reauthenticate"

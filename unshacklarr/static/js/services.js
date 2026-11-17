@@ -7,7 +7,7 @@ function authenticationLabel(observation) {
   const method = AUTH_METHOD_LABELS[observation.method] || "sign-in";
   const next = AUTH_METHOD_LABELS[observation.next_method] || "sign-in";
   const named = method[0].toUpperCase() + method.slice(1);
-  if (observation.state === "ready") return `Ready · ${(observation.available_methods || []).map((item) => AUTH_METHOD_LABELS[item]).filter(Boolean).join(", ")}`;
+  if (observation.state === "ready") return "Not signed in yet";  // the ways in are in their own column
   if (observation.state === "session_present") return `${named} session available`;
   if (observation.state === "session_expired") return `${named} session expired`;
   if (observation.state === "session_rejected") return `${named} session rejected`;
@@ -111,6 +111,8 @@ function serviceModels() {
       : observation ? authenticationLabel(observation)
       : status.state === "needs_user_action" ? "Sign-in needed"
       : status.state === "validated" ? `Confirmed ${ago(status.validated_at)}` : "Not checked yet";
+    // signed in now, or confirmed and nothing newer says otherwise: its button signs in again, not for the first time
+    const signedIn = observation ? ["authenticated", "session_present"].includes(observation.state) : status.state === "validated";
     // Cookie files are Unshackle's own, on the main server: another backend's row has none to show
     const cookieFiles = backend ? null : (files[service] || []).map((f) => ({ ...f, st: cookieStatus(f) }));
     // the backend that downloads it: the one set for it, else the main one, else (only on another server) that one
@@ -127,7 +129,7 @@ function serviceModels() {
       && (used_method ? used_method !== "cookies" : listed && methods.some((m) => m !== "cookies")));
     const missing = Boolean(cookieFiles && !cookieFiles.length && !cookieless && used && servicesCookies?.folder && !signsInWithout);
     const attention = status.state === "needs_user_action" || Boolean(used && (missing || cookieFiles?.some((f) => f.st[0] === "bad")));
-    return { key, service, backend, name: svcName(service) + (backend ? ` · ${backend}` : ""), label, state: status.state, setup, listed,
+    return { key, service, backend, name: svcName(service) + (backend ? ` · ${backend}` : ""), label, state: status.state, signedIn, setup, listed,
       methods: listed ? methods : null, anonymous: status.state === "anonymous", cookieFiles, cookieless, missing, used, attention };
   }).sort((a, b) => b.attention - a.attention || (b.used || 0) - (a.used || 0) || a.name.localeCompare(b.name));
 }
@@ -159,7 +161,7 @@ function renderServices() {
         controls.push(el("button", { className: "btn small danger", textContent: "Cancel", onclick: () => cancelServiceAuthentication(m.service, m.backend) }));
       }
     } else if (m.listed && m.state !== "anonymous") {
-      controls.push(el("button", { className: "btn small", textContent: m.state === "needs_user_action" ? "Reauthenticate" : "Sign in",
+      controls.push(el("button", { className: "btn small", textContent: m.signedIn || m.state === "needs_user_action" ? "Sign in again" : "Sign in",
         onclick: () => startServiceAuthentication(m.service, m.backend) }));
     }
     return [el("small", { className: "sv-label", textContent: m.label }), ...(controls.length ? [el("div", { className: "sv-ctl" }, ...controls)] : [])];

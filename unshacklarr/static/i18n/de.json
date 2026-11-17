@@ -2373,8 +2373,6 @@
  "No authentication session is waiting": "Es wartet keine Authentifizierungssitzung",
  "Not checked yet": "Noch nicht geprüft",
  "Open: {0}": "Öffnen: {0}",
- "Ready · {0}": "Bereit · {0}",
- "Reauthenticate": "Erneut anmelden",
  "Renewing {0} session": "{0}-Sitzung wird erneuert",
  "Repairing {0} session": "{0}-Sitzung wird repariert",
  "Service approval": "Dienst-Genehmigung",
@@ -2441,5 +2439,7 @@
  "Esc, then Tab, leaves the editor.": "Esc, dann Tab, verlässt den Editor.",
  "Results on {0}: {1}": "Ergebnisse auf {0}: {1}",
  "Settings: {0} · Unshacklarr": "Einstellungen: {0} · Unshacklarr",
- "{0} · Unshacklarr": "{0} · Unshacklarr"
+ "{0} · Unshacklarr": "{0} · Unshacklarr",
+ "Not signed in yet": "Noch nicht angemeldet",
+ "Sign in again": "Erneut anmelden"
 }
