@@ -126,6 +126,10 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Four more visual slips are gone.** The demo's tour card follows the light or dark theme, where its heading and
+  subtitle were near-invisible in light mode; "Sign-in and cookies", "Open Sonarr" and "CDM devices" sit level with the
+  buttons beside them; the Local and Remote tiles line up their titles; and on a phone, Activity's history filters and
+  its Clear… are 36 px tall, easy to tap. (#280)
 - **The Services page says where each sign-in stands once.** "Ready · pairing, cookies" repeated the sign-in methods
   and read like a pairing in progress: a service nothing has checked yet now reads "Not checked yet", and one
   Unshackle reports as not signed in reads "Not signed in". A service already signed in or confirmed offers

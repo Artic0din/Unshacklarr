@@ -353,3 +353,9 @@ def test_a_wide_desktop_header_keeps_its_words():
     wide = css_at(1441)
     assert "#sync .sync-text" not in wide and ".health span:not(.dot)" not in wide and ".update-pill span" not in wide
     assert ".health { order: 10" not in wide
+
+
+def test_a_link_drawn_as_a_button_centres_its_text_and_still_hides():
+    """A display on a.btn itself would beat the browser's [hidden] and show "Open Sonarr" with nowhere to go."""
+    assert not any("display" in body for body in rules_of("a.btn"))
+    assert any("display: inline-flex" in body and "align-items: center" in body for body in rules_of("a.btn:not([hidden])"))

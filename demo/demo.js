@@ -468,7 +468,7 @@
       box-shadow: 0 0 0 9999px rgb(5 8 14 / .7); }
     @keyframes tour-pulse { 50% { box-shadow: 0 0 0 9999px rgb(5 8 14 / .58), 0 0 0 6px rgb(79 179 191 / .18), 0 0 30px rgb(79 179 191 / .55); } }
     #tour-card { position: fixed; z-index: 1002; width: min(400px, calc(100vw - 24px)); padding: 18px 18px 12px; border-radius: 16px;
-      background: linear-gradient(180deg, #243047, var(--panel)); border: 1px solid #3a4862; color: var(--text);
+      background: var(--panel); border: 1px solid var(--line); color: var(--text);
       box-shadow: 0 24px 60px rgb(0 0 0 / .55), inset 0 1px 0 rgb(255 255 255 / .05); font-size: 14px; line-height: 1.5;
       transition: left .3s cubic-bezier(.2,.8,.2,1), top .3s cubic-bezier(.2,.8,.2,1); }
     #tour-card.hero { width: min(620px, calc(100vw - 24px)); padding: 28px 28px 18px; text-align: center; }

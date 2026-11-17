@@ -104,3 +104,10 @@ def test_the_late_banner_puts_its_sentence_under_the_count_and_button_on_a_phone
 def test_a_posters_service_badge_stays_inside_its_poster_and_names_itself():
     has(CSS, ".poster .svc { display: block; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; }")
     assert "title: svcName(conf.service)" in (STATIC / "js" / "core.js").read_text()
+
+
+def test_activitys_history_filters_and_clear_are_big_enough_to_tap_on_a_phone():
+    phone = media("max-width: 700px")
+    has(phone, ".btn.small, .con-filters button { min-height: 36px; }")
+    has(phone, ".gh-act { min-height: 36px;")
+    has(CSS, ".con-gh { display: flex; justify-content: space-between; align-items: center;")  # its label level with Clear…
