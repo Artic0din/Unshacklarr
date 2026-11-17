@@ -81,6 +81,7 @@ section[hidden] { display: none; }
 .toolbar { display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-6); flex-wrap: wrap; }
 .toolbar input[type=search] { flex: 1; min-width: 200px; max-width: 360px; }
 .toolbar select { width: auto; }
+.toolbar-row { display: contents; }  /* its own row on a phone only */
 .ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .ico.inl { width: 1em; height: 1em; margin-right: .3em; vertical-align: -.15em; }  /* a tick or cross opening a line of text */
 /* The same paths as a mask, for an icon a ::before or ::after has to draw: in currentColor, as .ico */
@@ -922,6 +923,13 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .crow .chip.ask { white-space: normal; max-width: 7.5em; text-align: center; }  /* two short lines, not a row with no room for the series */
 .stats-ico { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .stats-ico svg { width: 17px; height: 17px; }
+/* The five shortcuts as two columns, their descriptions read aloud only: the history starts higher */
+.con-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 4px; }
+.con-tools .crow { position: relative; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; padding: 6px; }
+.con-tools .crow b { display: block; white-space: normal; line-height: 1.25; }
+.con-tools .crow b span { overflow: visible; }  /* a count wraps with its words, never cut */
+.con-tools #con-left { grid-column: 1 / -1; }  /* the one that can need you, and the longest name: a row of its own, two pairs under it */
+.con-tools .crow small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .left-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
 .left-row img { width: 30px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-sm); background: var(--bg); }
 .left-row b { display: block; } .left-row small { display: block; color: var(--muted); font-size: var(--fs-sub); overflow-wrap: anywhere; }
@@ -1554,9 +1562,13 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .ep-bar { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
   #ep-go-edit .long { display: none; } #ep-go-edit .short { display: inline; }
 
-  .sched-head { flex-wrap: wrap; }
-  .sched-tools { width: 100%; }
-  .sched-tools .seg.small { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  /* The sync line beside its button and the view beside its filter: the week starts on the first screen */
+  .sched-head p { flex: 1; min-width: 0; }
+  .sched-head .btn { flex: none; }
+  .sched-h { margin-top: 18px; }
+  .sched-tools { width: 100%; flex-wrap: nowrap; }
+  .sched-tools .seg.small { flex: none; width: auto; margin: 0; grid-template-columns: auto auto; }
+  .sched-tools .seg.small button { min-height: 34px; padding-inline: 12px; }  /* with its border, the pills' 40 px */
   .cal-cell { min-height: 56px; padding: 5px 4px; align-items: center; }
   .cal-eps { display: none; }
   .cal-count { display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; }
@@ -1567,9 +1579,8 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .sched-card .thumb { width: 34px; }
   .sc-foot .icon-hide { width: 36px; height: 36px; }
   .sd .cmd { flex-direction: column; } .sd .cmd code { width: 100%; }
-  .sched-filter { flex: 1; min-width: 0; overflow-x: auto; margin-left: -16px; padding-left: 16px; }
-  .sched-tools { flex-wrap: wrap; }
-  .sched-tools .seg { flex-basis: 100%; }
+  .sched-filter { flex: 1; min-width: 0; overflow-x: auto; margin: -4px -16px -4px 0; padding: 4px 16px 4px 0; }  /* runs off the right edge: more to scroll to */
+  .sched-filter:has(+ .hidden-btn:not([hidden])) { margin-right: 0; padding-right: 0; }  /* the Hidden button ends the row instead */
   .hidden-btn { flex: none; height: 40px; }
   .sched-filter::after { content: ""; flex: 0 0 4px; }  /* the last pill clears the edge once scrolled */
   .sched-filter .pill { flex: 1 0 auto; justify-content: center; min-height: 40px; white-space: nowrap; }
@@ -1621,6 +1632,15 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .toasts { left: 12px; right: 12px; top: calc(72px + env(safe-area-inset-top)); bottom: auto; align-items: center; }
   body.drawer-open .toasts { top: calc(128px + env(safe-area-inset-top)); }
   .toast { border-radius: var(--r-lg); padding: 10px 14px; font-size: var(--fs-callout); animation: toast-in .22s ease-out; }
+
+  /* Series: each choice on one line, and the filters under the search in one row that scrolls sideways
+     off the right edge, so the posters start on the first screen */
+  #tab-series .seg { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  #tab-series .seg button { white-space: nowrap; padding-inline: 10px; }
+  #tab-series .seg button span { display: inline; margin: 0 0 0 4px; }
+  .toolbar-row { position: relative; display: flex; flex: 0 0 calc(100% + 32px); gap: 8px; margin: -4px -16px; padding: 4px 16px; overflow-x: auto; }  /* relative: the pills' hidden checkboxes scroll with it, not widen the page */
+  .toolbar-row::after { content: ""; flex: 0 0 8px; }
+  .toolbar .toolbar-row > * { flex: none; }
 }
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: opacity .15s !important; animation: none !important; } }  /* a short cross-fade stays: it moves nothing; * alone skips ::before/::after */
 .fb-known { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: var(--fs-sub); color: var(--muted); }
