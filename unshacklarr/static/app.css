@@ -1990,7 +1990,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .sv-k { display: none; }
 .sv-table td small { display: block; color: var(--muted); font-size: var(--fs-sub); }
 /* the sign-in state as a pill, its button at the end of the line, as a cookie file's */
-.sv-label { justify-self: start; padding: 2px 9px; border-radius: 10px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.sv-table .sv-label { justify-self: start; padding: 2px 9px; border-radius: 10px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
 .sv-label[data-tone="ok"] { color: var(--ok); background: var(--ok-tint); }
 .sv-label[data-tone="bad"] { color: var(--err); background: var(--err-tint); }
 .sv-signin { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; align-items: center; column-gap: 12px; }

@@ -176,7 +176,7 @@ function renderServices() {
   };
   // a cookie-only service's sign-in check, beside its cookie file; none while a check runs
   const checking = (m) => m.setup && !["authenticated", "timed_out", "cancelled", "error"].includes(m.setup.state);
-  const checkButtons = (m) => m.cookiesOnly && !checking(m) ? [el("button", { className: "btn small", textContent: "Check",
+  const checkButtons = (m) => m.cookiesOnly && m.state !== "anonymous" && !checking(m) ? [el("button", { className: "btn small", textContent: "Check",
     ariaLabel: `Check the cookies for ${svcName(m.service)}`, onclick: () => startServiceAuthentication(m.service, m.backend) })] : [];
 
   const cookieCell = (m) => {
@@ -193,6 +193,7 @@ function renderServices() {
         el("div", { className: "sv-ctl" }, el("button", { className: `btn small${m.missing ? " primary" : ""}`, textContent: "Add", ariaLabel: `Add cookies for ${svcName(m.service)}`,
           onclick: () => openCookieDialog(m.service, "default", true) })))];
     }
+    const checkOn = m.cookieFiles.findIndex((f) => f.st[0] !== "bad");  // a broken file: Replace, not a check bound to fail
     return m.cookieFiles.map((f, i) => {
       const [cls, word, why] = f.st, file = f.profile ? `${f.profile}.txt` : `${m.service}.txt`, ask = `${m.service}/${f.profile}`;
       const del = el("button", { className: "btn small danger", textContent: "Delete", ariaLabel: `Delete ${file}`, dataset: { ask }, onclick: () => {
@@ -211,7 +212,7 @@ function renderServices() {
       return el("div", { className: "sv-file" },
         el("div", { className: "sv-file-top" }, el("b", { textContent: file }), hoverTip(el("span", { className: `ck-pill ${cls}`, textContent: word }), () => [why])),
         ...(f.unreadable ? [] : [el("small", { textContent: [f.count === 1 ? "1 cookie" : `${f.count} cookies`, `updated ${ago_days(f.updated)}`].join(" · ") })]),
-        ...(servicesAsked === ask ? [sure] : [el("div", { className: "sv-ctl" }, ...(i || cls === "bad" ? [] : check),
+        ...(servicesAsked === ask ? [sure] : [el("div", { className: "sv-ctl" }, ...(i === checkOn ? check : []),
           el("button", { className: `btn small${cls === "bad" || cls === "warn" ? " primary" : ""}`, textContent: "Replace", ariaLabel: `Replace ${file}`, onclick: () => openCookieDialog(m.service, f.profile) }), del)]));
     });
   };
