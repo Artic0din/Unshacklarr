@@ -60,6 +60,33 @@ def test_the_notifications_heading_keeps_its_own_width_and_the_row_may_wrap():
     has(media("max-width: 340px"), "#inbox-clear { order: 1; margin-left: auto; }")
 
 
+def test_a_phone_shows_the_apps_name_whole_or_its_labelled_logo_never_a_cut_name():
+    phone = media("max-width: 700px")
+    has(phone, ".version-chip { display: none; }")  # Settings has the version and what's new
+    has(phone, "header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; container-type: inline-size; }")
+    has(CSS, "@container (width < 9.25rem) { .brand span { display: none; } }")
+    assert "text-overflow: ellipsis" not in squash(phone[phone.index("header h1 {"):][:400])
+    assert 'id="home" aria-label="Unshacklarr, schedule"' in (STATIC / "index.html").read_text()
+    assert 'id="set-version"' in (STATIC / "index.html").read_text()
+
+
+def test_every_small_control_on_a_phone_is_44px_to_the_finger():
+    phone = media("max-width: 700px")
+    slop = phone[phone.index(":where(.brand a, #update, .btn.small"):]
+    has(slop, "::after { content: \"\"; position: absolute; inset: min(0px, (100% - 44px) / 2); }")
+    for target in ("#update", ".btn.small", ".seg.small button", ".pill", ".icon-hide", ".sc-open", "#d-meta a", ".ds-nav a", ".ax-seg button"):
+        assert target in slop[:slop.index("{")], target
+    has(phone, ".health button { min-width: 44px; min-height: 44px; padding: 0 8px;")
+    has(phone, ".seg button { min-height: 44px; }")
+    has(phone, ".ep-sel button { min-width: 44px; min-height: 44px; }")
+
+
+def test_the_series_back_button_sits_in_the_page_gutter_clear_of_the_notch():
+    phone = media("max-width: 700px")
+    has(phone, ".d-head { padding: calc(8px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));")
+    has(phone, "#d-back { display: grid; margin-left: 0; }")
+
+
 def test_the_series_shortcuts_stay_pinned_below_the_head_except_on_a_short_screen():
     has(media("max-width: 700px"), ".ds-nav { top: var(--d-head, 118px); }")
     has(media("max-width: 700px"), "html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: calc(var(--d-head, 118px) + 64px); }")
