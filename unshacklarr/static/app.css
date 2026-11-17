@@ -1655,7 +1655,10 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
 body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 96px; }
 @media (max-width: 700px) {
   .sel-bar { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
-  body:has(#savebar:not([hidden])) .sel-bar { bottom: calc(140px + env(safe-area-inset-bottom)); }
+  /* the save bar over the tab bar, and these on it, as tall as it is (two rows on a narrow phone) */
+  body:has(#savebar:not([hidden])) :is(.sel-bar, .dock) { bottom: calc(76px + env(safe-area-inset-bottom) + var(--save-h, 56px) + 8px); }
+  body:has(#savebar:not([hidden])) .dock.open > .cd-raw .term {  /* raised by the save bar: its output is that much shorter */
+    height: max(120px, calc(100dvh - var(--head-h, 65px) - 265px - env(safe-area-inset-bottom) - var(--save-h, 56px) - 8px)); min-height: 0; }  /* --head-h: its safe area and a status row included */
   body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 150px; }
 }
 .sel-bar #sel-count { margin-right: auto; font-weight: 600; color: var(--accent); }

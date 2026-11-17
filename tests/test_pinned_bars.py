@@ -64,7 +64,7 @@ NONE = {"#savebar": [0, "auto"], "#sel-bar": [0, "auto"], "#dock": [0, "auto"], 
 
 def test_phone_bars_reach_as_far_up_as_the_highest_one():
     tab = {'nav[aria-label="Main"]': [72, "0px"]}
-    assert measured({**NONE, **tab}) == {"--head-h": "65px", "--bars-h": "80px", "--dock-h": "28px"}
+    assert measured({**NONE, **tab}) == {"--head-h": "65px", "--save-h": "0px", "--bars-h": "80px", "--dock-h": "28px"}
     # the save bar over the tab bar, and the selection bar wrapped to two rows over both: the highest one counts
     shown = {**NONE, **tab, "#savebar": [56, "76px"], "#sel-bar": [104, "140px"]}
     assert measured(shown)["--bars-h"] == "252px"
@@ -125,3 +125,20 @@ def test_wide_dock_is_measured_as_tall_as_it_is():
 
 def test_phone_page_top_follows_the_header_when_a_status_row_makes_it_taller():
     assert '"--head-h"' in (STATIC / "js" / "navigation.js").read_text()
+
+
+def test_a_phone_bar_over_the_save_bar_stands_on_it_as_tall_as_it_is():
+    """The save bar wraps to two rows on a narrow phone: the dock and the selection bar go above it, not under it (#298)."""
+    tab = {'nav[aria-label="Main"]': [72, "0px"]}
+    assert measured({**NONE, **tab, "#savebar": [119, "76px"]})["--save-h"] == "119px"
+    phone = phone_blocks()
+    for bar in (".sel-bar", ".dock"):
+        rules = re.findall(r"body:has\(#savebar:not\(\[hidden\]\)\) ([^{]+)\{ bottom: ([^}]+); \}", phone)
+        assert any(bar in sel and "var(--save-h" in bottom for sel, bottom in rules), f"{bar}: not stacked on the save bar"
+
+
+def test_an_open_dock_on_the_save_bar_gives_its_output_the_save_bars_height():
+    """Raised onto the save bar, the dock's open output would reach behind the header: it loses the save bar's height."""
+    rule = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\) \.dock\.open > \.cd-raw \.term \{([^}]*)\}", phone_blocks())
+    assert rule and "var(--save-h" in rule[1] and "min-height: 0" in rule[1]  # the 320px floor of .term would undo it
+    assert "var(--head-h" in rule[1]  # a header with a status row under it is taller
