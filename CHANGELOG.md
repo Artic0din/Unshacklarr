@@ -127,6 +127,17 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Every page tells the same story about a service, a download and a cookie file.** Settings, Services counts every
+  service whose sign-in failed, timed out or was rejected as needing attention, names them, and shows the count beside
+  Services in the Settings list. A cookie file's days left are counted the same way in Services and in the bell. A
+  failed download no longer shows its last steps as done. The setup's Unshackle test and Settings count the same
+  services (Unshackle's EXAMPLE left out).
+- **A failing series says why where it opens.** Its Episodes tab starts with the last error and, for a sign-in, a
+  button to that service in Settings, Services.
+- **The bell keeps one line per cookie file.** "Expires in 5 days", then "4 days" the next day, replaces its line
+  instead of adding one, and a click on it opens the service in Settings, Services.
+- **The setup picks the country of your time zone.** It started on United States whatever the time zone; it now starts
+  on the time zone's country (Australia for Australia/Melbourne) until you pick one.
 - **Four more visual slips are gone.** The demo's tour card follows the light or dark theme, where its heading and
   subtitle were near-invisible in light mode; "Sign-in and cookies", "Open Sonarr" and "CDM devices" sit level with the
   buttons beside them; the Local and Remote tiles line up their titles; and on a phone, Activity's history filters and

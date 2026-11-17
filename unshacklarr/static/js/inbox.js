@@ -60,10 +60,11 @@ function inboxRow(g, n) {
   const isNew = inboxSeenAt !== null && g.items.some((x) => x.at > inboxSeenAt);
   const props = { className: `inbox-item ${g.level}${isNew ? " new" : ""}`, style: `--i: ${n}` };
   // ponytail: a series is found by its exact title in Sonarr; a renamed one just isn't clickable
-  if (!g.series) return el("div", props, art, body, time);
+  // a service's (its cookies): its row in Settings, Services
+  if (!g.series && !i.service) return el("div", props, art, body, time);
   // not a <button>: its text can be selected (an error to copy); a click that selects doesn't open the series
-  const open = () => { if (String(getSelection()).trim()) return; $("#inbox-dialog").close(); openDrawer(g.series); };
-  return el("div", { ...props, className: `${props.className} link`, role: "button", tabIndex: 0, title: `Open ${g.name}`, onclick: open,
+  const open = () => { if (String(getSelection()).trim()) return; $("#inbox-dialog").close(); g.series ? openDrawer(g.series) : openServiceRow(i.service); };
+  return el("div", { ...props, className: `${props.className} link`, role: "button", tabIndex: 0, title: `Open ${g.series ? g.name : svcName(i.service)}`, onclick: open,
     onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } } }, art, body, time);
 }
 const clearable = (items) => items.filter((i) => !(i.action && !i.action.done));  // what the server clears: all but what still waits for you

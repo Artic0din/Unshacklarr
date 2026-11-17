@@ -1539,7 +1539,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
   .set-nav .ico { grid-row: 1 / 3; align-self: center; width: 30px; height: 30px; padding: 6px; border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
   .set-nav span { font-size: var(--fs-body); }
   .set-nav small { display: block; grid-column: 2; font-size: var(--fs-sub); font-weight: 400; color: var(--muted); }
-  .set-nav .new-dot { grid-column: 3; grid-row: 1 / 3; align-self: center; margin: 0; }
+  .set-nav .new-dot, .set-nav .sv-attn { grid-column: 3; grid-row: 1 / 3; align-self: center; margin: 0; }
   .set-nav button::after { content: ""; grid-column: 4; grid-row: 1 / 3; align-self: center; width: 18px; height: 18px; color: var(--muted); background: currentColor; -webkit-mask: var(--ic-chevron) center / contain no-repeat; mask: var(--ic-chevron) center / contain no-repeat; }
   .set-back { display: inline-flex; align-items: center; gap: 2px; margin: 0 0 10px -4px; padding: 6px 8px 6px 2px; min-height: 40px; border: 0; background: none;
     color: var(--accent); font: inherit; font-size: var(--fs-body); font-weight: 600; cursor: pointer; }
@@ -2011,6 +2011,8 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 #sv-note:not(:empty) { margin: 12px 10px 0; }
 .ds-fix { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; color: var(--muted); font-size: var(--fs-sub); overflow-wrap: anywhere; }
 .ds-fix[hidden] { display: none; }
+.d-fail { margin: 12px 0; } .d-fail[hidden] { display: none; }  /* a failing series, above its episodes */
+.set-nav button > .sv-attn { flex: none; margin-left: auto; font-variant-numeric: tabular-nums; }  /* services that need attention */
 .wz-signin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; color: var(--muted); font-size: var(--fs-callout); }
 .wz-signin p { margin: 0; }
 @media (max-width: 700px) { .sv-card { padding-inline: 16px; } }

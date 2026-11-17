@@ -90,6 +90,8 @@ let servicesDrawn = "";      // what the table was drawn from: a refresh that ch
 let servicesAsked = "";      // the cookie file whose deletion is being confirmed: "SERVICE/profile"
 let servicesReveal = "";     // a service to scroll to once the table is there
 
+// a sign-in that ended badly (cancelled is your own doing; waiting and renewing are under way)
+const SIGN_IN_FAILED = ["session_expired", "session_rejected", "fallback", "timed_out", "error"];
 /* One row a service, or a service and its backend: the sign-in status, setups and live logins, and the cookie files, joined. */
 function serviceModels() {
   const files = servicesCookies?.files || {};
@@ -128,7 +130,9 @@ function serviceModels() {
     const signsInWithout = status.state === "anonymous" || (status.state === "validated"
       && (used_method ? used_method !== "cookies" : listed && methods.some((m) => m !== "cookies")));
     const missing = Boolean(cookieFiles && !cookieFiles.length && !cookieless && used && servicesCookies?.folder && !signsInWithout);
-    const attention = status.state === "needs_user_action" || Boolean(used && (missing || cookieFiles?.some((f) => f.st[0] === "bad")));
+    // the one test of "needs attention": the rows, the count above them, the Settings badge and a failing series' banner
+    const attention = status.state === "needs_user_action" || SIGN_IN_FAILED.includes(observation?.state)
+      || Boolean(used && (missing || cookieFiles?.some((f) => f.st[0] === "bad")));
     return { key, service, backend, name: svcName(service) + (backend ? ` · ${backend}` : ""), label, state: status.state, signedIn, setup, listed,
       methods: listed ? methods : null, anonymous: status.state === "anonymous", cookieFiles, cookieless, missing, used, attention };
   }).sort((a, b) => b.attention - a.attention || (b.used || 0) - (a.used || 0) || a.name.localeCompare(b.name));
@@ -224,16 +228,25 @@ function renderServices() {
   if (activePromptReused) activePrompt.focus();
 
   // The top of the page: the cookies folder, and what the statuses add up to
-  const needing = models.filter((m) => m.attention).length, counts = signInCounts(S.authentication), summary = signInSummary(counts);
+  const needing = models.filter((m) => m.attention), counts = signInCounts(S.authentication), summary = signInSummary(counts);
   const state = $("#sv-state");
-  state.className = `sx-state ${needing ? "down" : counts.confirmed ? "ok" : ""}`;
-  state.querySelector("b").textContent = needing ? (needing === 1 ? "1 service needs attention" : `${needing} services need attention`) : summary || "No service known yet";
-  state.querySelector("small").textContent = needing ? summary : "";
+  state.className = `sx-state ${needing.length ? "down" : counts.confirmed ? "ok" : ""}`;
+  state.querySelector("b").textContent = needing.length ? needingText(needing.length) : summary || "No service known yet";
+  state.querySelector("small").textContent = needing.map((m) => m.name).join(", ");  // which ones: the count's own rows, by name
+  paintServicesBadge(needing.length);
   $("#sv-folder").textContent = cookies?.folder || "";
   $("#sv-note").textContent = !cookies ? "" : cookies.folder ? ""
     : S.config.settings.unshackle_mode === "remote" ? "To manage them here too, mount its Cookies folder and set its path in Settings, Unshackle, Folders."
     : cookies.error || "";
   revealService();
+}
+function needingText(n) { return n === 1 ? "1 service needs attention" : `${n} services need attention`; }
+/* The count of the rows that need attention, beside Services in the Settings list, from any page. */
+function paintServicesBadge(n = serviceModels().filter((m) => m.attention).length) {
+  const nav = document.querySelector('.set-nav [data-sec="services"]');
+  if (!nav) return;
+  nav.querySelector(":scope > .sv-attn")?.remove();
+  if (n) nav.querySelector(":scope > span").after(el("b", { className: "ck-pill bad sv-attn", textContent: String(n), title: needingText(n) }));
 }
 /* Scrolled to and focused, when another page sent you to one service's row. */
 function revealService() {

@@ -165,6 +165,7 @@ function showSetup(found) {
   const SECRET = ["password", "confirm", "sonarr_api_key", "unshackle_api_key", "tmdb_api_key"];
   f.unshackle_mode.value = found.unshackle_mode || "local";
   f.timezone.value = found.timezone !== "UTC" ? found.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;
+  f.country.value = found.zone_countries?.[f.timezone.value] || f.country.value;  // none chosen yet: the time zone's, not US
   for (const [k, v] of Object.entries(draft.values || {})) if (f[k] && !SECRET.includes(k)) f[k].value = v;
   setupDraft = () => ({ step: at, reached, secrets: SECRET.some((k) => f[k].value), values: Object.fromEntries(Object.entries(f).filter(([k]) => !SECRET.includes(k)).map(([k, x]) => [k, x.value])) });
   const keep = () => { try { sessionStorage.setItem("setup-draft", JSON.stringify(setupDraft())); } catch {} };

@@ -16,6 +16,7 @@ import hmac
 import itertools
 import ipaddress
 import json
+import math
 import ntpath
 import os
 import posixpath
@@ -28,6 +29,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 import unicodedata
 import zlib
+import zoneinfo
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode, parse_qs, unquote, urlparse
@@ -2371,7 +2373,7 @@ def unshackle_health(full: bool = False, jobs: bool = False) -> dict:
         h = UNSHACKLE.health()
         update = h.get("update_check") or {}
         state.update(ok=True, version=h.get("version"), latest=update.get("latest_version") if update.get("update_available") else None,
-                     services=len(UNSHACKLE.services()))
+                     services=service_count(UNSHACKLE.services()))
         if local and UNSHACKLE.local.started:
             state["since"] = UNSHACKLE.local.started.isoformat()
         if UNSHACKLE.proxy_refused:  # Unshackle 6 refused its proxies to Unshacklarr's key: Settings offers to allow it
@@ -2413,7 +2415,7 @@ def sonarr_get_version() -> str:
 def server_health(backend) -> dict:
     """Whether another unshackle serve answers: its version and how many services it has, or why not."""
     try:
-        return {"ok": True, "version": backend.health().get("version"), "services": len(backend.services())}
+        return {"ok": True, "version": backend.health().get("version"), "services": service_count(backend.services())}
     except UnshackleError as e:
         return {"ok": False, "error": no_credentials(e)}
 
@@ -2547,11 +2549,11 @@ def check_alerts(now: datetime | None = None) -> None:
                 name = f"{service} {f['profile']}".strip()
                 left = (f["expires"] - now.timestamp()) / 86400 if f.get("expires") else None
                 if f.get("expired"):
-                    problems[f"cookies:{name}"] = ("error", f"{name} cookies have expired", "Its downloads will fail: replace them in Settings › Services.")
+                    problems[f"cookies:{name}"] = ("error", f"{name} cookies have expired", "Its downloads will fail: replace them in Settings › Services.", service)
                 elif left is not None and 0 <= left < 7:
-                    days = max(1, round(left))
+                    days = max(1, math.floor(left + 0.5))  # as cookieStatus (cookies-cdm.js) counts them: Math.round, a half up
                     problems[f"cookies:{name}"] = ("warning", f"{name} cookies expire in {days} days" if days > 1 else f"{name} cookies expire in 1 day",
-                                                    "Replace them before they expire, in Settings › Services.")
+                                                    "Replace them before they expire, in Settings › Services.", service)
     if events.get("cdm", True):
         try:
             state = cdm_state()
@@ -2573,9 +2575,9 @@ def check_alerts(now: datetime | None = None) -> None:
                 word = "was revoked" if test.get("revoked") else "failed its test"
                 problems[f"cdm:{d['kind']}:{d['name']}"] = ("error", f"CDM {d['name']} {word}",
                                                              f"{test.get('error') or 'No license'}. Used by {', '.join(d['used_by'])}: see Settings, CDM.")
-    for key, (level, title, message) in problems.items():
+    for key, (level, title, message, *service) in problems.items():  # a cookie file's: the service it signs in to
         if told.get(key) != title:
-            sonarr_sync.notify(settings, level, title, message)
+            sonarr_sync.notify(settings, level, title, message, key=key, service=service[0] if service else None)
     kept = {key: title for key, title in told.items() if key.startswith(tuple(unknown))} if unknown else {}
     write_atomic(ALERTS_FILE, json.dumps(kept | {key: p[1] for key, p in problems.items()}))
 
@@ -6415,7 +6417,21 @@ async def session(request):
         body["api_key"] = {"set": bool(auth.get("api_key")), "created": auth.get("api_key_created")}
     if not body["configured"]:  # what the setup starts from; addresses and paths only with the setup code
         body["setup"] = {"country": settings["country"], "timezone": settings["timezone"], "unshackle_mode": UNSHACKLE.mode}
+        if not (config.get("settings") or {}).get("country"):  # not chosen yet: the page takes the time zone's country
+            body["setup"]["zone_countries"] = zone_countries()
     return web.json_response(body)
+
+
+def zone_countries() -> dict[str, str]:
+    """Each time zone's country ("Australia/Melbourne": "AU"), from the system's tz database."""
+    for folder in zoneinfo.TZPATH:
+        try:
+            lines = (Path(folder) / "zone.tab").read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        rows = (line.split("\t") for line in lines if line and not line.startswith("#"))
+        return {row[2]: row[0] for row in rows if len(row) >= 3}
+    return {}  # shortcut: no zone.tab on this system (Windows), the setup keeps US until picked; ship one if that matters
 
 
 async def setup_found(request):
@@ -6593,6 +6609,11 @@ async def test_sonarr(request):
     return web.json_response({"version": version})
 
 
+def service_count(services: list[dict]) -> int:
+    """The services a series can use: Unshackle's EXAMPLE left out, as the setup's test and Settings both count them."""
+    return sum(s["tag"] != "EXAMPLE" for s in services)
+
+
 def check_unshackle(settings: dict) -> int:
     """Reach Unshackle with these settings (starting a local serve if need be): its service
     count, its EXAMPLE left out. A connection of its own, so downloads and syncs on the saved one never meet the test."""
@@ -6600,7 +6621,7 @@ def check_unshackle(settings: dict) -> int:
     probe = Unshackle(sonarr_sync.DATA)
     probe.configure({**sonarr_sync.SETTINGS, **settings})
     try:
-        return sum(s["tag"] != "EXAMPLE" for s in probe.services())
+        return service_count(probe.services())
     finally:
         probe.stop()  # a local serve started for the test only
 

@@ -808,8 +808,9 @@ const STEPS = ["Queued", "Downloading", "Decrypting and muxing", "Joining parts"
 const STEPS_SHORT = ["Queued", "Download", "Mux", "Join", "Rename", "Import"];
 const STEP_STATE = { done: "Done", now: "Running", fail: "Failed", halt: "Stopped", "": "Waiting" };  // each step's state in words (warn: the outcome's own), the bar's colour aside
 function stepStates(c) {
-  const at = c.step === "downloading" && afterTracks(c) ? 2  // every track in: serve makes the file
-    : { queued: 0, downloading: 1, joining: 3, finishing: 3, renaming: 4, importing: 5, done: 6 }[c.step] ?? 0;
+  // past the last step ("done") only a success or a kept file gets here: anything else ended on the last step, not after it
+  const at = Math.min(STEPS.length - 1, c.step === "downloading" && afterTracks(c) ? 2  // every track in: serve makes the file
+    : { queued: 0, downloading: 1, joining: 3, finishing: 3, renaming: 4, importing: 5, done: 6 }[c.step] ?? 0);
   return STEPS.map((_, i) => {
     if (i === 3 && c.parts === 1) return "skip";  // one file: nothing to join
     if (c.outcome === "downloaded") return "done";

@@ -126,7 +126,7 @@
     const url = new URL(path, location.href), p = url.pathname.replace(/^.*?\/api\//, "/api/");
     let m;
     if (p === "/api/session") {
-      if (!mem.configured) return { configured: false, logged_in: false, setup: { country: "US", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, unshackle_mode: "remote" } };
+      if (!mem.configured) return { configured: false, logged_in: false, setup: { country: "US", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, unshackle_mode: "remote", zone_countries: data.zone_countries } };
       return mem.logged ? { ...R["/api/session"], configured: true, logged_in: true, expires: Math.floor(Date.now() / 1000) + 30 * 86400 } : { configured: true, logged_in: false };
     }
     if (p === "/api/login") { mem.logged = true; keep(); return { logged_in: true }; }
@@ -135,7 +135,7 @@
       return { sonarr_url: "http://sonarr:8989", sonarr_downloads: "/downloads", unshackle_url: "http://unshackle:8786", unshackle_command: "",
         downloads: "/downloads", unshackle_downloads: "", sonarr_api_key_set: true, unshackle_api_key_set: true };
     }
-    if (p === "/api/unshackle/test") return { services: 4 };
+    if (p === "/api/unshackle/test") return { services: R["/api/status?full=1"].unshackle.services };  // as many as Settings says
     if (p === "/api/sonarr/test") return { version: "4.0.15.2941" };
     if (p === "/api/setup") {
       mem.configured = mem.logged = true;
@@ -236,6 +236,11 @@
       const auth = url.searchParams.get("auth");
       const status = copy(R[url.searchParams.get("full") ? "/api/status?full=1" : auth ? "/api/status?auth=1" : "/api/status"]);
       if (status.authentication) status.authentication_setups = copy(setups());
+      if (status.unshackle?.queue) {  // Unshackle's queue: the downloads going on in this tab, as Activity shows them
+        const live = liveCards();
+        status.unshackle.queue = { downloading: live.length, queued: sim.filter((x) => x.card.waiting).length };
+        status.unshackle.jobs = live.map((c) => ({ id: c.id, service: c.service, title: c.series, status: "downloading", progress: Math.floor(c.live?.progress || 0) }));
+      }
       return status;
     }
     if (p.startsWith("/api/cdm") && method === "POST") {
