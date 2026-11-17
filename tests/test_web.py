@@ -1426,9 +1426,9 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     # a cookie-only sign-in only tests its cookie file: no sign-in button, a Check beside the file
     assert rows["ATVP"]["signIn"] == ["Not checked yet"] and rows["ATVP"]["tone"] == ""
     assert rows["ATVP"]["cookies"] == ["ATVP.txt", "Valid · 90 days left", "15 cookies · updated today", "Check", "Replace", "Delete"]
-    # its first file expired: Check goes on the first that works
+    # several files: the check uses its series' profile, so Check sits under them all, not beside one
     assert rows["ZONE"]["cookies"] == ["ZONE.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
-                                       "kids.txt", "Valid · 90 days left", "3 cookies · updated today", "Check", "Replace", "Delete"]
+                                       "kids.txt", "Valid · 90 days left", "3 cookies · updated today", "Replace", "Delete", "Check"]
     assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 90 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series", "Show series"]
     assert result["state"] == "sx-state down"

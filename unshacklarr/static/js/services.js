@@ -174,7 +174,7 @@ function renderServices() {
     return [el("div", { className: "sv-signin" }, el("small", { className: "sv-label", textContent: m.label, dataset: m.tone ? { tone: m.tone } : {} }),
       ...(controls.length ? [el("div", { className: "sv-ctl" }, ...controls)] : []))];
   };
-  // a cookie-only service's sign-in check, beside its cookie file; none while a check runs
+  // a cookie-only service's sign-in check, in the Cookies column; none while a check runs
   const checking = (m) => m.setup && !["authenticated", "timed_out", "cancelled", "error"].includes(m.setup.state);
   const checkButtons = (m) => m.cookiesOnly && m.state !== "anonymous" && !checking(m) ? [el("button", { className: "btn small", textContent: "Check",
     ariaLabel: `Check the cookies for ${svcName(m.service)}`, onclick: () => startServiceAuthentication(m.service, m.backend) })] : [];
@@ -193,8 +193,10 @@ function renderServices() {
         el("div", { className: "sv-ctl" }, el("button", { className: `btn small${m.missing ? " primary" : ""}`, textContent: "Add", ariaLabel: `Add cookies for ${svcName(m.service)}`,
           onclick: () => openCookieDialog(m.service, "default", true) })))];
     }
-    const checkOn = m.cookieFiles.findIndex((f) => f.st[0] !== "bad");  // a broken file: Replace, not a check bound to fail
-    return m.cookieFiles.map((f, i) => {
+    // the check signs in with the profile its series use, not a file picked here: beside the only file, else under them all
+    const single = m.cookieFiles.length === 1, working = m.cookieFiles.some((f) => f.st[0] !== "bad");  // a broken file: Replace, not a check bound to fail
+    const checkOn = single && working ? 0 : -1;
+    return [...m.cookieFiles.map((f, i) => {
       const [cls, word, why] = f.st, file = f.profile ? `${f.profile}.txt` : `${m.service}.txt`, ask = `${m.service}/${f.profile}`;
       const del = el("button", { className: "btn small danger", textContent: "Delete", ariaLabel: `Delete ${file}`, dataset: { ask }, onclick: () => {
         servicesAsked = ask;
@@ -214,7 +216,7 @@ function renderServices() {
         ...(f.unreadable ? [] : [el("small", { textContent: [f.count === 1 ? "1 cookie" : `${f.count} cookies`, `updated ${ago_days(f.updated)}`].join(" · ") })]),
         ...(servicesAsked === ask ? [sure] : [el("div", { className: "sv-ctl" }, ...(i === checkOn ? check : []),
           el("button", { className: `btn small${cls === "bad" || cls === "warn" ? " primary" : ""}`, textContent: "Replace", ariaLabel: `Replace ${file}`, onclick: () => openCookieDialog(m.service, f.profile) }), del)]));
-    });
+    }), ...(!single && working ? checkCtl : [])];
   };
 
   const methodsCell = (m) => m.methods === null ? [el("span", { className: "muted", textContent: "—" })]
