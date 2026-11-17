@@ -188,6 +188,7 @@
       return copy(R["/api/calendar"].filter((e) => e.airDateUtc && new Date(e.airDateUtc) >= from && new Date(e.airDateUtc) < to));
     }
     if (p === "/api/runs") return runs();
+    if (p === "/api/health") return copy(R["/api/state"].health);
     if (p === "/api/runs/clear") { mem.cleared = true; keep(); return { deleted: R["/api/runs"].length }; }
     if (p === "/api/busy") return { running: liveCards().length, queued: sim.filter((x) => x.card.waiting).length, approvals: [],
       authentication: copy(R["/api/busy"].authentication || []), authentication_setups: copy(setups()) };

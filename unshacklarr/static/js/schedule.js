@@ -488,7 +488,8 @@ async function refreshBusy() {
       S.authenticationLive = b.authentication || [];
       S.authenticationSetups = b.authentication_setups || [];
       if (currentTab === "settings" && settingsSec === "services") renderServices();  // a sign-in waiting for its answer moves on its own
-      else paintServicesBadge();
+      else if (servicesCookies) paintServicesBadge();
+      else loadServiceCookies();
     } catch { /* offline a moment: the next round */ }
   }
   setTimeout(refreshBusy, 5000);

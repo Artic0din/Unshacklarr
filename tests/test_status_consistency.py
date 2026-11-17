@@ -215,3 +215,63 @@ row.onclick();
 console.log(JSON.stringify({ role: row.role ?? null, title: row.title ?? null, opened }));
 """, str(JS / "inbox.js"))
     assert shown == {"role": "button", "title": "Open HULU name", "opened": ["HULU"]}
+
+
+# ---- review follow-ups ----
+
+def test_the_failing_series_can_be_asked_again_without_the_whole_state(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    web = fresh_web(tmp_path, monkeypatch)
+    web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
+    failed = [{"tvdbId": 7, "outcome": "failed", "ended": f"2026-11-1{d}", "started": f"2026-11-1{d}", "cause": "expired"} for d in (3, 2, 1)]
+    monkeypatch.setattr(web, "run_cards", lambda: failed)
+    web.sonarr_sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+
+    async def ask():
+        async with TestClient(TestServer(web.app)) as client:
+            return await (await client.get("/api/health", headers={"X-Unshackle": "1"})).json()
+
+    assert asyncio.run(ask()) == {"7": {"failing": 3, "cause": "expired", "since": "2026-11-11"}}
+
+
+def test_a_finished_download_redraws_the_series_failure_from_fresh_health():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const drawn = [];
+const s = { tvdbId: 7 };
+const ctx = sandbox({ S: { health: { 7: { failing: 3 } } }, current: s, isLive: () => true, picked: new Set(), epSonarr: "", epBusy: new Map([[1, {}]]),
+  document: { hidden: false }, loadEpisodes() {}, updateEpBar() {}, renderSeriesState: () => drawn.push(JSON.stringify(ctx.S.health)),
+  setTimeout() {}, clearTimeout() {},
+  api: async (path) => (path === "/api/health" ? {} : []) });
+vm.runInContext(grab(src, /^async function refreshEpBusy\(.*?^\}/ms), ctx);
+ctx.refreshEpBusy(s).then(() => setTimeout(() => console.log(JSON.stringify(drawn)), 10));
+""", str(JS / "series.js"))
+    assert shown == ["{}"]
+
+
+def test_the_settings_badge_reads_the_cookie_files_once_from_any_page():
+    shown = node(SERVICES + r"""
+const asked = [];
+ctx.api = async (path) => { asked.push(path); return { folder: "/c", files: { DSNP: [{ profile: "", expired: true }] } }; };
+vm.runInContext(grab(src, /^let servicesCookiesAsked = .*$/m), ctx);
+vm.runInContext(grab(src, /^function loadServiceCookies\(.*?^\}/ms), ctx);
+vm.runInContext("servicesCookies = null", ctx);
+Promise.all([ctx.loadServiceCookies(), ctx.loadServiceCookies()]).then(() => console.log(JSON.stringify({ asked, cookies: Object.keys(vm.runInContext("servicesCookies", ctx).files) })));
+""", str(JS / "services.js"))
+    assert shown == {"asked": ["/api/cookies"], "cookies": ["DSNP"]}
+
+
+def test_the_setup_country_follows_the_time_zone_until_one_is_picked():
+    shown = node(r"""
+const ctx = sandbox();
+vm.runInContext(grab(read(process.argv[1]), /^function countryFollowsZone\(.*?^\}/ms), ctx);
+const country = Object.assign(new EventTarget(), { value: "AU" }), zone = Object.assign(new EventTarget(), { value: "Australia/Melbourne" });
+let synced = 0;
+ctx.countryFollowsZone(country, zone, { "Europe/Paris": "FR", "Asia/Tokyo": "JP" }, () => synced++);
+zone.value = "Europe/Paris"; zone.dispatchEvent(new Event("change"));
+const followed = country.value;
+country.value = "GB"; country.dispatchEvent(new Event("input"));
+zone.value = "Asia/Tokyo"; zone.dispatchEvent(new Event("change"));
+console.log(JSON.stringify({ followed, kept: country.value, synced }));
+""", str(JS / "setup.js"))
+    assert shown == {"followed": "FR", "kept": "GB", "synced": 1}

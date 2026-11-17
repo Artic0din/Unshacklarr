@@ -130,6 +130,15 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
   return { input, list, sync };
 }
 let settingsCountry = null, settingsZone = null;
+/* The setup's country, guessed from its time zone, follows a time zone picked after it, until a country is picked. */
+function countryFollowsZone(country, timezone, zones, sync) {
+  let picked = false;
+  country.addEventListener("input", () => { picked = true; });
+  timezone.addEventListener("change", () => {
+    const code = zones?.[timezone.value];
+    if (code && !picked) { country.value = code; sync(); }
+  });
+}
 
 /* The first run, one step at a time: each is checked before the next (Unshackle and Sonarr answer, the
    password is typed twice), and a language change on the way keeps what was typed (secrets aside). */
@@ -210,6 +219,7 @@ function showSetup(found) {
     tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "On another machine"));
   const country = countryPicker(f.country);
   country.input.required = true;
+  countryFollowsZone(f.country, f.timezone, found.zone_countries, country.sync);
   const unshackleParams = () => Object.fromEntries(["unshackle_mode", "unshackle_command", "unshackle_url", "unshackle_api_key"].map((k) => [k, f[k].value]));
   f.unshackle_mode.hidden = true;
   const uPanel = el("div", { className: "wiz-group" },

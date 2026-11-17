@@ -5912,6 +5912,12 @@ async def busy(_):
                               "authentication_setups": setups})
 
 
+async def health_of_series(_):
+    """The failing series alone, as /api/state has them: a series' page asks again once one of its downloads ends."""
+    cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
+    return web.json_response({str(k): v for k, v in series_health(cards).items()})
+
+
 async def runs(request):
     """The history's cards; ?live=1: only those going on (a series' page asks every few seconds)."""
     cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
@@ -6884,6 +6890,7 @@ app.add_routes([
     web.get("/api/log", sync_log),
     web.get("/api/terminal", terminal),
     web.get("/api/runs", runs),
+    web.get("/api/health", health_of_series),
     web.get("/api/busy", busy),
     web.get("/api/runs/live", runs_live),
     web.get("/api/stats", stats),

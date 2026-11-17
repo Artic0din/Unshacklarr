@@ -375,7 +375,10 @@ async function refreshEpBusy(s) {
     const was = epBusy;
     epBusy = new Map(cards.filter((c) => isLive(c) && c.tvdbId === s.tvdbId && (c.instance || "") === epSonarr).map((c) => [c.episodeId, c]));
     epBusy.forEach((_, id) => picked.delete(id));
-    if ([...was.keys()].some((id) => !epBusy.has(id))) loadEpisodes(s, true);  // one ended: on disk now, or not
+    if ([...was.keys()].some((id) => !epBusy.has(id))) {  // one ended: on disk now, or not, and the series failing or mended
+      loadEpisodes(s, true);
+      api("/api/health").then((health) => { S.health = health; if (current === s) renderSeriesState(); }, () => {});  // its last state stands
+    }
     else if ($("#ep-list")) renderSeason();
     updateEpBar();
   }

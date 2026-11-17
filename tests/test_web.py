@@ -926,6 +926,8 @@ const source = [
   pick(services, /^function revealService\(.*?^\}/ms),
   pick(services, /^function needingText\(.*?^\}/ms),
   pick(services, /^function paintServicesBadge\(.*?^\}/ms),
+  pick(services, /^let servicesCookiesAsked = .*$/m),
+  pick(services, /^function loadServiceCookies\(.*?^\}/ms),
   pick(schedule, /^async function refreshBusy\(.*?^\}/ms),
   pick(schedule, /^async function refreshHealth\(.*?^\}/ms),
   pick(schedule, /^function renderHealth\(.*?^\}/ms),
