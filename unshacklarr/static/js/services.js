@@ -105,8 +105,8 @@ function serviceModels() {
     const live = (S.authenticationLive || []).find((item) => item.service === service && (item.backend || "") === backend);
     const listed = Object.hasOwn(S.authenticationMethods || {}, key);
     const methods = listed ? S.authenticationMethods[key] : [];
-    const observation = setup || live?.observation || status.authentication || (status.state === "unknown" && methods.length
-      ? { state: "ready", available_methods: methods } : null);
+    // nothing seen yet: "Not checked yet", not a "ready" of our own, which would say no session exists (cookies may work)
+    const observation = setup || live?.observation || status.authentication || null;
     const label = status.state === "anonymous" ? "No sign-in required"
       : observation ? authenticationLabel(observation)
       : status.state === "needs_user_action" ? "Sign-in needed"

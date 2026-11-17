@@ -1095,12 +1095,14 @@ const promptState = (input) => {
   if (scenario === "sign_in_states") {  // one row per state in the Services table, as the person reads it
     box.S.authentication = {
       READY: { service: "READY", backend: "", state: "unknown" },
+      CORE_READY: { service: "CORE_READY", backend: "", state: "unknown" },
       LIVE: { service: "LIVE", backend: "", state: "unknown" },
       CONFIRMED: { service: "CONFIRMED", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
       NEEDED: { service: "NEEDED", backend: "", state: "needs_user_action" },
     };
-    box.S.authenticationMethods = { READY: ["pairing", "cookies"], LIVE: ["pairing"], CONFIRMED: ["pairing"], NEEDED: ["pairing"] };
-    box.S.authenticationLive = [{ service: "LIVE", backend: "", observation: { state: "authenticated", method: "pairing" } }];
+    box.S.authenticationMethods = { READY: ["pairing", "cookies"], CORE_READY: ["pairing"], LIVE: ["pairing"], CONFIRMED: ["pairing"], NEEDED: ["pairing"] };
+    box.S.authenticationLive = [{ service: "LIVE", backend: "", observation: { state: "authenticated", method: "pairing" } },
+      { service: "CORE_READY", backend: "", observation: { state: "ready", available_methods: ["pairing"] } }];
     box.S.authenticationSetups = [];
     box.renderServices();
     const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => [
@@ -8726,7 +8728,9 @@ def test_a_single_download_is_not_a_sync_running(tmp_path, monkeypatch):
 
 def test_the_sign_in_column_says_where_it_stands_once_and_offers_the_fitting_action():
     rows = {name: (label, controls) for name, label, controls in run_authentication_ui("sign_in_states")}
-    assert rows["READY"] == ("Not signed in yet", ["Sign in"])  # not "Ready · pairing, cookies": the chips already say it
+    # not "Ready · pairing, cookies": the chips already say it. Nothing has checked it (its cookies may work): not checked
+    assert rows["READY"] == ("Not checked yet", ["Sign in"])
+    assert rows["CORE_READY"] == ("Not signed in yet", ["Sign in"])  # Unshackle itself says no session has started
     assert rows["LIVE"] == ("Signed in with pairing", ["Sign in again"])  # signed in: no plain "Sign in" to puzzle over
     assert rows["CONFIRMED"] == ("Confirmed now", ["Sign in again"])
     assert rows["NEEDED"] == ("Sign-in needed", ["Sign in again"])  # signed in before: again, not "Reauthenticate"
