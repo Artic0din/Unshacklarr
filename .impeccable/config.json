@@ -1,0 +1,53 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "unshacklarr/static/index.html"
+        ],
+        "createdAt": "2026-11-17T10:44:56.535Z",
+        "reason": "agent: #d-poster is a template img whose src js/series.js sets at runtime; the browser scan never flagged it"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "unshacklarr/static/index.html"
+        ],
+        "createdAt": "2026-11-17T10:44:56.551Z",
+        "reason": "agent (audit PR #311): measured open, every dialog.modal has 22px padding; #con panes pad themselves (12px, 20/24px)"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "unshacklarr/static/index.html"
+        ],
+        "createdAt": "2026-11-17T10:44:56.577Z",
+        "reason": "agent: .pulse is a live 'downloading' status dot; reduced-motion override at app.css turns it off"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          "unshacklarr/static/index.html"
+        ],
+        "createdAt": "2026-11-17T10:45:01.577Z",
+        "reason": "agent: deliberate Molt light-theme token --bg #f6f3ee shipped in #280 (CHANGELOG: warm neutrals with one teal)"
+      },
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "unshacklarr/static/index.html"
+        ],
+        "createdAt": "2026-11-17T10:46:14.733Z",
+        "reason": "user confirmed: keep current heading sizes (a larger phone header truncated the brand to 'Un…')"
+      }
+    ]
+  }
+}
