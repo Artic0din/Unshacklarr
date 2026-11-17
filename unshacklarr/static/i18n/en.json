@@ -4616,5 +4616,8 @@
  ],
  "{0}: checking": [
   "label"
+ ],
+ "Check the cookies for {0}": [
+  "svcName(m.service)"
  ]
 }

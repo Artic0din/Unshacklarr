@@ -2461,5 +2461,6 @@
  "{0}: running": "{0}：运行中",
  "{0}: update available": "{0}：有可用更新",
  "{0}: unreachable": "{0}：无法访问",
- "{0}: checking": "{0}：正在检查"
+ "{0}: checking": "{0}：正在检查",
+ "Check the cookies for {0}": "检查 {0} 的 Cookie"
 }

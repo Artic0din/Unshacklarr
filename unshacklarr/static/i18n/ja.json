@@ -2456,5 +2456,6 @@
  "{0}: running": "{0}: 実行中",
  "{0}: update available": "{0}: アップデートあり",
  "{0}: unreachable": "{0}: 接続不可",
- "{0}: checking": "{0}: 確認中"
+ "{0}: checking": "{0}: 確認中",
+ "Check the cookies for {0}": "{0} の Cookie を確認"
 }

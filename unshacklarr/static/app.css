@@ -1979,7 +1979,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 /* Settings, Services: a row a service; at phone width each row stacks, its cells named by their own labels */
 .sv-card { padding-inline: 12px; min-width: 0; } #sv-list { overflow-x: auto; }  /* on a narrow window the table scrolls inside its card, never the page */
 .sv-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sub); }
-.sv-table th, .sv-table td { text-align: left; vertical-align: top; padding: 12px 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.sv-table th, .sv-table td { text-align: left; vertical-align: middle; padding: 12px 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .sv-table thead th { border-top: 0; padding-top: 4px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; }
 .sv-table tbody th { font-weight: 600; font-size: var(--fs-callout); overflow-wrap: normal; }  /* a name breaks between words only */
 /* a row needing attention: framed in red all round, its cells drawing the frame (a row takes no border of its own) */
@@ -1988,8 +1988,14 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .sv-row[data-attention] > :last-child { box-shadow: inset -1px 0 var(--err), inset 0 1px var(--err), inset 0 -1px var(--err); }
 .sv-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sv-k { display: none; }
-.sv-label, .sv-table td small { display: block; color: var(--muted); font-size: var(--fs-sub); }
-.sv-label { margin-bottom: 6px; }
+.sv-table td small { display: block; color: var(--muted); font-size: var(--fs-sub); }
+/* the sign-in state as a pill, its button at the end of the line, as a cookie file's */
+.sv-label { justify-self: start; padding: 2px 9px; border-radius: 10px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.sv-label[data-tone="ok"] { color: var(--ok); background: var(--ok-tint); }
+.sv-label[data-tone="bad"] { color: var(--err); background: var(--err-tint); }
+.sv-signin { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; align-items: center; column-gap: 12px; }
+.sv-signin > .sv-ctl { margin-top: 0; }
+.sv-signin > .sv-ctl:has(input) { grid-column: 1 / -1; margin-top: 6px; }  /* a code to type: its own line */
 .sv-ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
 .sv-ctl input { min-width: 0; width: 100%; max-width: 16rem; }
 /* a cookie file on one line: its name, state and age, its buttons at the end */
@@ -2021,12 +2027,16 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .sv-k { display: block; margin-bottom: 2px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; }
   .sv-row[data-attention] > * { box-shadow: none !important; }
   .sv-file { grid-template-columns: minmax(0, 1fr); } .sv-file > .sv-ctl { grid-column: 1; grid-row: auto; margin-top: 6px; }  /* its buttons under it */
+  .sv-signin { grid-template-columns: minmax(0, 1fr); } .sv-signin > .sv-ctl { margin-top: 6px; }
   .sv-row[data-attention] { box-shadow: inset 0 0 0 1px var(--err); border-radius: var(--r-md); padding-inline: 10px; }
 }
 .sv-table td .btn, .sv-table td:nth-child(5) { white-space: nowrap; }
 .sv-table td .btn { min-width: 7.125rem; text-align: center; }  /* one width for every button in the table: Reauthenticate's */
 /* where the table has the room for it: a cell's buttons side by side, a cookie file's details never squeezed; narrower, they wrap */
 @media (min-width: 1440px) { .sv-table td .sv-ctl:not(:has(input)) { flex-wrap: nowrap; } }
+/* three buttons on a cookie file (Check, Replace, Delete) fit on one line from 1600px; narrower, they wrap */
+@media (min-width: 1440px) and (max-width: 1599px) { .sv-table td .sv-file > .sv-ctl:has(> :nth-child(3)) { flex-wrap: wrap; } }
+@media (min-width: 1181px) { .sv-table td .sv-signin > .sv-ctl:not(:has(input)) { flex-wrap: wrap; justify-content: flex-end; } }  /* Retry and Cancel stack: the table keeps its width */
 
 /* A ladder picker: Edit ladders after its chips; the options it takes over, and the video it picks under a command */
 .ladder-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: var(--gap-field); }

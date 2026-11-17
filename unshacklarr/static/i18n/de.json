@@ -2445,5 +2445,6 @@
  "{0}: running": "{0}: läuft",
  "{0}: update available": "{0}: Update verfügbar",
  "{0}: unreachable": "{0}: nicht erreichbar",
- "{0}: checking": "{0}: wird geprüft"
+ "{0}: checking": "{0}: wird geprüft",
+ "Check the cookies for {0}": "Cookies für {0} prüfen"
 }

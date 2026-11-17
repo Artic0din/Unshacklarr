@@ -2487,5 +2487,6 @@
  "{0}: running": "{0} : en marche",
  "{0}: update available": "{0} : mise à jour disponible",
  "{0}: unreachable": "{0} : injoignable",
- "{0}: checking": "{0} : vérification"
+ "{0}: checking": "{0} : vérification",
+ "Check the cookies for {0}": "Vérifier les cookies de {0}"
 }
