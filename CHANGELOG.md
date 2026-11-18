@@ -20,6 +20,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Added
 
+- Added the shared DevKit pull request check, which rejects non-conventional titles and commit messages, agent attribution and forbidden paths such as `node_modules`.
 **📦 Long jobs**
 - **A bar at the bottom of a job.** The episode going on stays in sight however long the job; one tap on the bar opens
   its output, a click beside folds it. On a phone, the job's buttons are in it too.
