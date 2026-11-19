@@ -4656,6 +4656,7 @@
  "Daily check skipped: relayed through another server": [],
  "Daily check skipped: its programmes are found one episode at a time": [],
  "Not run: the series' name is unknown": [],
+ "Not run: the service has no search": [],
  "A download is running: check again when it ends": [],
  "Unexpected {0} in the reply": [
   "what"

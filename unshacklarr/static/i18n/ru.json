@@ -2539,6 +2539,7 @@
  "Daily check skipped: relayed through another server": "Ежедневная проверка пропущена: идёт через другой сервер",
  "Daily check skipped: its programmes are found one episode at a time": "Ежедневная проверка пропущена: её передачи ищутся по одному эпизоду",
  "Not run: the series' name is unknown": "Не выполнялось: название сериала неизвестно",
+ "Not run: the service has no search": "Не выполнялось: у сервиса нет поиска",
  "A download is running: check again when it ends": "Идёт загрузка: повторите проверку, когда она закончится",
  "Unexpected {0} in the reply": "Неожиданные {0} в ответе",
  "search results": "результаты поиска"

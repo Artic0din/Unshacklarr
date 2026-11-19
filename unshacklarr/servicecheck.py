@@ -85,6 +85,13 @@ def listed(reply, key: str, what: str) -> list[dict]:
     return dicts([] if reply.get(key) is None else reply[key], what)  # none listed is an empty list, not false or 0
 
 
+def has_search(backend, tag: str) -> bool:
+    """False only when the serve says the service has none: one that does not say (an older serve, or one that
+    cannot be asked) is searched, and answers for itself."""
+    told, _ = attempt(lambda: next((s.get("has_search") for s in backend.services() if s.get("tag") == tag), None))
+    return told is not False
+
+
 def check_series(backend, tag: str, control: dict, config: dict, query: str | None, search: bool) -> dict:
     """The stages of one series on its service: the search only when asked, then the listing and the tracks."""
     # never a relay: a relayed listing can open a session, and a pairing prompt, on the other server
@@ -99,7 +106,9 @@ def check_series(backend, tag: str, control: dict, config: dict, query: str | No
                         for r in results)
             return {"ok": True, "count": len(results), "found": found}
 
-        if query:
+        if not has_search(backend, tag):
+            stages["search"] = {"ok": None, "code": "UNSUPPORTED", "message": "Not run: the service has no search"}
+        elif query:
             looked, error = attempt(look)
             stages["search"] = error or looked
         else:  # Sonarr did not answer: that says nothing of the service
@@ -137,8 +146,7 @@ def check_service(tag: str, picks: list[tuple[int, dict]], ring: list[int], conf
     failure ends the tries (it is the session, not the title) and its stages stand; else the first series' stages
     stand. A failure says which series tomorrow's probe is: the next in config order, the same after a sign-in failure."""
     serve = sync.backend_for(tag, config)
-    backend = Bounded(serve)
-    on = next((name for name, other in sync.BACKENDS.items() if other is serve), "")  # which unshackle serve: the page shows a result on its row only
+    backend, on = Bounded(serve), backend_name(serve)
     first = None
     for tried, (tvdb, control) in enumerate(picks, 1):
         stages = check_series(backend, tag, control, config, series_name(tvdb) if tried == 1 else None, search=tried == 1)
@@ -151,14 +159,19 @@ def check_service(tag: str, picks: list[tuple[int, dict]], ring: list[int], conf
     return result_of(now, first[0], tried, first[1], probe=ring[(ring.index(tvdb) + 1) % len(ring)], backend=on)
 
 
+def backend_name(serve) -> str:
+    """Which unshackle serve ("" the main one): a result is its backend's, on the page and as a failure kept."""
+    return next((name for name, other in sync.BACKENDS.items() if other is serve), "")
+
+
 def result_of(now: datetime, tvdb: int, tried: int, stages: dict, probe: int | None = None, backend: str = "") -> dict:
     failed = [stage for stage in STAGES if stages[stage]["ok"] is False]
     return {"checked": now.isoformat(), "ok": not failed, "failed": failed, "tvdb": tvdb, "tried": tried, "backend": backend, "stages": stages,
             **({"next": probe} if failed and probe is not None else {})}
 
 
-def skipped(now: datetime, why: str) -> dict:
-    return {"checked": now.isoformat(), "ok": None, "failed": [], "skipped": why, "stages": {}}
+def skipped(now: datetime, why: str, backend: str) -> dict:
+    return {"checked": now.isoformat(), "ok": None, "failed": [], "skipped": why, "backend": backend, "stages": {}}
 
 
 def picked_controls(config: dict, before: dict) -> dict[str, tuple[list[tuple[int, dict]], list[int], str]]:
@@ -211,12 +224,13 @@ def unresolved_of(last: dict) -> dict:
 
 def settled(last: dict, result: dict) -> dict:
     """The result as it is kept: a stage that was failing and could not be checked now (it is skipped, the stage
-    before it failed, or the whole service is skipped) keeps its failure, for it has not passed. So the page, the next run's baseline and the notifications
-    agree. `unresolved` holds those failures by stage."""
-    was = unresolved_of(last)
+    before it failed, or the whole service is skipped) keeps its failure, for it has not passed. So the page, the
+    next run's baseline and the notifications agree. `unresolved` holds those failures by stage. A failure is its
+    serve's: none is kept from the one the service was on before."""
+    was = unresolved_of(last) if (last.get("backend") or "") == (result.get("backend") or "") else {}
     if result.get("skipped"):
         return {**result, "unresolved": was}
-    unchecked = lambda stage: stage["ok"] is None or stage.get("code") == "NOT_RUN"  # skipped, or the stage before it failed
+    unchecked = lambda stage: stage.get("code") in ("SKIPPED", "NOT_RUN")  # no name to search with, or the stage before it failed
     stages = {stage: was[stage] if stage in was and unchecked(result["stages"][stage]) else result["stages"][stage] for stage in STAGES}
     failed = [stage for stage in STAGES if stages[stage]["ok"] is False]
     return {**result, "stages": stages, "failed": failed, "ok": not failed, "unresolved": {stage: stages[stage] for stage in failed}}
@@ -249,13 +263,11 @@ def run_check(now: datetime | None = None, reserved: bool = False) -> dict | Non
         before = read_results().get("services") or {}
         results = {}
         for tag, (picks, ring, why) in picked_controls(config, before).items():
-            if not picks:
-                results[tag] = skipped(now, why)
-            else:
-                try:
-                    results[tag] = check_service(tag, picks, ring, config, now)
-                except Exception as e:  # one service's unexpected failure must not stop the others or the save
-                    results[tag] = result_of(now, picks[0][0], 0, dict.fromkeys(STAGES, failure(e)))
+            try:
+                results[tag] = (check_service(tag, picks, ring, config, now) if picks
+                                else skipped(now, why, backend_name(sync.backend_for(tag, config))))
+            except Exception as e:  # one service's unexpected failure must not stop the others or the save
+                results[tag] = result_of(now, picks[0][0] if picks else 0, 0, dict.fromkeys(STAGES, failure(e)))
             results[tag] = settled(before.get(tag) or {}, results[tag])
         done = {"last_run": now.isoformat(), "services": results}
         try:

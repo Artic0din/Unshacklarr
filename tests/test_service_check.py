@@ -514,6 +514,43 @@ def test_a_result_says_which_backend_it_was_checked_on(check, monkeypatch):
     assert check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]["backend"] == "vpn"
 
 
+def test_a_skipped_service_says_which_backend_it_is_on_too(check, tmp_path, monkeypatch):
+    several(tmp_path, (111, ", options: {--remote: true}"))  # RTLP only relayed
+    monkeypatch.setattr(check.sync, "BACKENDS", {"vpn": check.serve})
+
+    kept = check.run_check(NOW)["services"]["RTLP"]
+
+    assert (kept["skipped"], kept["backend"]) == ("relay", "vpn")  # the page shows a result on its backend's row only
+
+
+def test_a_failure_kept_from_another_backend_is_not_the_new_ones(check, tmp_path, monkeypatch):
+    several(tmp_path, (111, ""))
+    check.serve.replies["/api/search"] = UnshackleError("search is down")
+    assert check.run_check(NOW)["services"]["RTLP"]["failed"] == ["search"]  # on the main unshackle serve
+
+    def down(wanted, keep=3600):
+        raise check.requests.ConnectionError("sonarr is down")
+    monkeypatch.setattr(check.sync, "BACKENDS", {"vpn": check.serve})  # the service is moved to another serve
+    monkeypatch.setattr(check.sync, "sonarr_series", down)  # and its search cannot run today
+    moved = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+
+    assert (moved["ok"], moved["failed"], moved["unresolved"]) == (True, [], {})  # that serve never failed a search
+
+
+def test_a_service_that_has_no_search_is_not_asked_to_search(check, tmp_path):
+    several(tmp_path, (111, ""))
+    check.serve.replies["/api/search"] = UnshackleError("RTLP through Unshackle: HTTP 400: search is not supported")
+    assert check.run_check(NOW)["services"]["RTLP"]["failed"] == ["search"]  # a serve that does not say: asked
+
+    check.serve.services = lambda: [{"tag": "RTLP", "cli_params": [], "has_search": False}]
+    asked = len(check.serve.calls)
+    result = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+
+    assert "/api/search" not in [path for _, path, _ in check.serve.calls[asked:]]
+    assert result["stages"]["search"] == {"ok": None, "code": "UNSUPPORTED", "message": "Not run: the service has no search"}
+    assert (result["ok"], result["unresolved"]) == (True, {})  # nothing to search: no failure of it is kept
+
+
 def test_a_run_that_cannot_start_frees_its_reservation_and_is_not_called_a_download(check, monkeypatch):
     def no_thread(self):
         raise RuntimeError("can't start new thread")
@@ -624,6 +661,22 @@ def test_an_unexpected_exception_in_one_service_leaves_the_others_and_the_save(c
             raise KeyError("odd")
         return real(backend, tag, *args, **kwargs)
     monkeypatch.setattr(check, "check_series", boom)
+
+    done = check.run_check(NOW)
+
+    assert done["services"]["RTLP"]["failed"] == ["search", "list", "tracks"] and done["services"]["MLT"]["ok"] is True
+    assert check.read_results() == done
+
+
+def test_an_unexpected_exception_for_a_skipped_service_leaves_the_others_and_the_save(check, tmp_path, monkeypatch):
+    (tmp_path / "config.yaml").write_text("series:\n  111: {service: RTLP, title: show-1, options: {--remote: true}}\n"
+                                         "  222: {service: MLT, title: show-2}\nnotifications: {urls: []}\n")
+
+    def which(tag, config=None):
+        if tag == "RTLP":
+            raise KeyError("services")  # a catalogue that is not one
+        return check.serve
+    monkeypatch.setattr(check.sync, "backend_for", which)
 
     done = check.run_check(NOW)
 

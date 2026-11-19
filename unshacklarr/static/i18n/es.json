@@ -2450,6 +2450,7 @@
  "Daily check skipped: relayed through another server": "Comprobación diaria omitida: pasa por otro servidor",
  "Daily check skipped: its programmes are found one episode at a time": "Comprobación diaria omitida: sus programas se buscan episodio por episodio",
  "Not run: the series' name is unknown": "No se ejecutó: se desconoce el nombre de la serie",
+ "Not run: the service has no search": "No se ejecutó: el servicio no tiene búsqueda",
  "A download is running: check again when it ends": "Hay una descarga en curso: comprueba de nuevo cuando termine",
  "Unexpected {0} in the reply": "{0} inesperados en la respuesta",
  "search results": "resultados de búsqueda"
