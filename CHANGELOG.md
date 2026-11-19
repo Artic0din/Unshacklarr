@@ -132,6 +132,12 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **An episode whose title joins stories with "/" is found whichever way round they are written.** The First 48 on
+  Binge lists "Night Shift / Mobbed" for Sonarr's S12E13 "Mobbed/Night Shift", and "Runaround / The Night Cap" for
+  S04E07 "The Run Around/Night Cap": neither was matched, so downloads asked Binge for Sonarr's own number. A title
+  of two or more stories is now compared with each Sonarr title story by story, in any order and as close as a
+  single title must be, or spelt with other spaces, before the whole title and the first story are tried as
+  before. (#322)
 - **An episode whose title joins two stories is found by the first.** 9Now's RBT names its Ep 166 "Pretty Little
   Penny/Passed in Not Passed Out": both halves were Sonarr titles (S21E06, and S19E07 from 2024), so the episode was
   matched to neither and every download asked 9Now for Sonarr's own number, which it doesn't have. The first story

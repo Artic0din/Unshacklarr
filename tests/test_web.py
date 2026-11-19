@@ -6422,6 +6422,33 @@ def test_two_stories_joined_by_a_slash_are_the_episode_the_first_names():
     assert {k: m["episodeId"] for k, m in match.items()} == {"S22E01": 87030}
 
 
+def test_stories_joined_by_a_slash_are_found_in_any_order_and_spelling():
+    from unshacklarr.web import match_by_title, stories
+    assert stories("24/7") == stories("Le tueur (1/2)") == stories("Pretty Little Penny") == ()  # one story each
+    assert stories("The 24/7 Diner/Ep 3 Night Shift") == ("the 24 7 diner", "night shift")  # a slash between digits joins none
+    # The First 48 on Binge: Sonarr S12E13 "Mobbed/Night Shift" is the service's "Night Shift / Mobbed"; S04E07 is spelt
+    # "The Run Around/Night Cap" there; S11E15 is the service's "One Shot / The Chase" the other way round
+    sonarr = [{"id": 1, "seasonNumber": 12, "episodeNumber": 13, "title": "Mobbed/Night Shift", "airDate": "2012-06-28"},
+              {"id": 2, "seasonNumber": 4, "episodeNumber": 7, "title": "The Run Around/Night Cap", "airDate": "2006-08-24"},
+              {"id": 3, "seasonNumber": 11, "episodeNumber": 15, "title": "The Chase/One Shot", "airDate": "2011-10-20"},
+              {"id": 4, "seasonNumber": 10, "episodeNumber": 23, "title": "Night Out/One Gram", "airDate": "2011-04-07"},
+              {"id": 5, "seasonNumber": 12, "episodeNumber": 14, "title": "House of Pain/Into the Night", "airDate": "2012-06-28"}]
+    found = lambda name, eps=sonarr: {k: m["episodeId"] for k, m in match_by_title([{"season": 3, "number": 9, "name": name}], eps, []).items()}
+    assert found("Night Shift / Mobbed") == {"S03E09": 1}  # the stories the other way round
+    assert found("Runaround / The Night Cap") == {"S03E09": 2}  # one story spelt a little differently
+    assert found("One Shot / The Chase") == {"S03E09": 3}
+    assert found("Night Shift / One Gram") == {}  # one story from each of two episodes is neither
+    three = [{"id": 6, "seasonNumber": 1, "episodeNumber": 8, "title": "Hells Angels/Fishy Drivers/A Race Against Time", "airDate": "2012-01-01"},
+             {"id": 7, "seasonNumber": 1, "episodeNumber": 9, "title": "Hells Angels/Fishy Drivers", "airDate": "2012-01-08"}]
+    assert found("Fishy Drivers/A Race Against Time/Hells Angels", three) == {"S03E09": 6}  # three stories, in any order
+    # the first story of the service's name names an older episode (RBT), yet the episode titled with both, reversed, is the one
+    older = [*RBT_SONARR, {"id": 87030, "seasonNumber": 22, "episodeNumber": 1, "title": "Pretty Little Penny/Passed in Not Passed Out", "airDate": "2027-02-04"}]
+    assert found("Ep 166 Passed in Not Passed Out/Pretty Little Penny", older) == {"S03E09": 87030}  # not the 2024 S19E07
+    digits = [{"id": 8, "seasonNumber": 1, "episodeNumber": 1, "title": "Night Shift/The 24/7 Diner", "airDate": "2012-01-01"}]
+    assert found("The 24/7 Diner / Night Shift", digits) == {"S03E09": 8}  # the 24/7 is one story, not two
+    assert found("Night Shift/24/7", digits) == {}  # no slash here joins two stories: it is one title, and not that one
+
+
 def test_a_year_in_brackets_is_not_a_part():
     from unshacklarr.web import plain_title, same_title
     assert plain_title("The Ambush (2)") == "the ambush part 2"
