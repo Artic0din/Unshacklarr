@@ -21,6 +21,9 @@ Every change worth knowing, newest first. The format follows
 ### Added
 
 - Added the shared DevKit pull request check, which rejects non-conventional titles and commit messages, agent attribution and forbidden paths such as `node_modules`.
+- Added six Australian series to the matching corpus, one each on 9Now, 7plus, ABC iview, SBS On Demand, Stan and
+  Binge, so their numbering is tested: RBT's S05E166 on 9Now, Bluey's Auslan S01E01 (Sonarr's S01E16), Stan's Will &
+  Grace Christmas collection and Binge's reordered Crimes That Shook Australia. (#317)
 **📦 Long jobs**
 - **A bar at the bottom of a job.** The episode going on stays in sight however long the job; one tap on the bar opens
   its output, a click beside folds it. On a phone, the job's buttons are in it too.
