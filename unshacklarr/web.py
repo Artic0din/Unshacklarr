@@ -4288,29 +4288,17 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
     """The service's episodes found in Sonarr by their title: service episode ("S26E11", or "S26E12" for all
     its parts) -> {"episodeId", "name"}. The title is looked for in Sonarr's own titles (TVDB's) and in TMDB's,
     whose air date gives the episode in Sonarr. A title that fits two episodes, or that two of the service's
-    episodes share, finds nothing. A title TMDB dates to an episode is not that episode's when another is itself
-    titled so (#321). Of several that fit a title joining stories with "/", the one its first story names is taken.
-    A title that joins stories and finds no episode so is then looked for by its stories, among the episodes still
-    free, by the most exact evidence there is: the same stories in any order, else stories that are alike, else
-    stories spelt with other spaces (#322). So the stories only add to what the whole titles find."""
+    episodes share, finds nothing; of several that fit a title joining stories with "/", the one its first story
+    names is taken. Two more rules then name an episode for a title that found none so, among the episodes still
+    free, so they only add to what the whole titles find. A title that is exactly what Sonarr itself calls one
+    episode names it, when the others fit only through a title TMDB dates to them (#321). And a title that joins
+    stories is looked for by them, by the most exact evidence there is: the same stories in any order, else stories
+    that are alike, else stories spelt with other spaces (#322)."""
+    named = [(title, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps).items() for title in titles]
     key = lambda t: f"S{t['season']:02}E{t['number']:02}"
     keys_by_name: dict[str, set] = {}
     for t in service_eps:
         keys_by_name.setdefault(usable_title(t.get("name")), set()).add(key(t))
-    both = lambda name: (usable_title(name), stories(name))  # a title with its stories, to be dropped together
-    # what Sonarr itself calls an episode: its title, and TVDB's for that very episode, never TMDB's guess by air date
-    sure = [t for t in tmdb_eps if t.get("episodeId")]
-    own = {id_: {title for title, _ in titles} for id_, titles in titles_of(sonarr_eps, sure, plain=both).items()}
-    owned = set().union(*own.values()) - {""}
-    # the guess is dropped where it is another episode's own title: wrong there, it would claim two episodes for one
-    # name, or keep the dated one from the name that is its own
-    kept = [(title, story, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps, plain=both).items()
-            for title, story in titles if title and (title in own[id_] or title not in owned)]
-    named = list(dict.fromkeys((title, id_) for title, _, id_ in kept))
-    told = list(dict.fromkeys((story, id_) for _, story, id_ in kept if story))
-    by_stories: dict[tuple, list] = {}
-    for story, id_ in told:
-        by_stories.setdefault(tuple(sorted(story)), []).append(id_)
     exact: dict[int, set] = {}  # a Sonarr episode -> the service's names that are its very title
     for title, id_ in named:
         if title in keys_by_name:
@@ -4331,23 +4319,38 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
             ids = next((pick for want in (name, first) if (pick := {i for title, i in named if title == want and i in ids})), ids)
         return ids
 
+    # what Sonarr itself calls an episode: its title, and TVDB's for that very episode, never TMDB's guess by air date
+    own = titles_of(sonarr_eps, [t for t in tmdb_eps if t.get("episodeId")])
+    told = [(story, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps, plain=stories).items() for story in titles]
+    by_stories: dict[tuple, list] = {}
+    for story, id_ in told:
+        by_stories.setdefault(tuple(sorted(story)), []).append(id_)
     listed = [(t, name) for t in service_eps if (name := usable_title(t.get("name"))) and len(keys_by_name[name]) == 1]
-    whole = [one_of(t, name, {id_ for other, id_ in named if same_title(name, other)}) for t, name in listed]
+    fits = [[(other, id_) for other, id_ in named if same_title(name, other)] for _, name in listed]
+    whole = [one_of(t, name, {id_ for _, id_ in hits}) for (t, name), hits in zip(listed, fits)]
+    # what follows only adds: not for a service episode one of whose parts is found, nor an episode already found
+    settled = {key(t) for (t, _), ids in zip(listed, whole) if len(ids) == 1}
     taken = {next(iter(ids)) for ids in whole if len(ids) == 1}
-    settled = {key(t) for (t, _), ids in zip(listed, whole) if len(ids) == 1}  # one part found: its other parts add none
-    found: dict[str, list] = {}
-    for (t, name), ids in zip(listed, whole):
-        if len(ids) != 1 and key(t) not in settled and (mine := stories(t.get("name"))):
+    open_ = [i for i, ((t, _), ids) in enumerate(zip(listed, whole)) if len(ids) != 1 and key(t) not in settled]
+    for i in open_:  # the one fit through Sonarr's own title, when that title is the name itself (#321)
+        name, sure = listed[i][1], whole[i] & {id_ for other, id_ in fits[i] if other in own[id_]}
+        if len(sure) == 1 and name in own[next(iter(sure))] and not sure & taken:
+            whole[i] = sure
+    free = taken | {next(iter(whole[i])) for i in open_ if len(whole[i]) == 1}
+    for i in open_:
+        (t, name), mine = listed[i], stories(listed[i][0].get("name"))
+        if len(whole[i]) != 1 and mine:
             # by its stories, at the first level that finds any: an alike spelling never replaces an exact one. Not an
-            # episode a whole title found, nor one whose very title is another of the service's: both claiming it
-            # would lose it for both
-            free = lambda id_: id_ not in taken and not elsewhere(id_, name)
+            # episode whose very title is another of the service's: both claiming it would lose it for both
             levels = (
                 lambda: by_stories.get(tuple(sorted(mine)), []),
                 lambda: [id_ for story, id_ in told if same_stories(mine, story, same_title)],
                 lambda: [id_ for story, id_ in told if same_stories(mine, story, spelt_alike)],
             )
-            ids = one_of(t, name, set(next((hits for level in levels if (hits := [id_ for id_ in level() if free(id_)])), [])))
+            can = lambda id_: id_ not in free and not elsewhere(id_, name)
+            whole[i] = one_of(t, name, set(next((hits for level in levels if (hits := [id_ for id_ in level() if can(id_)])), [])))
+    found: dict[str, list] = {}
+    for (t, _), ids in zip(listed, whole):
         if len(ids) == 1:
             found.setdefault(key(t), []).append((t.get("part"), next(iter(ids)), t.get("name")))
     matches = {}

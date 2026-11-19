@@ -6565,10 +6565,18 @@ def test_the_story_rules_never_replace_what_the_whole_title_finds():
     # a slash with spaces joins stories even between two numbers; only a part marker, "(1 / 2)", joins none
     assert got(["Flight 182 / 48 Hours"], [ep(1, "Flight 182"), ep(2, "48 Hours")]) == {"S09E01": 1}
     assert got(["Night Shift (1 / 2) / Mobbed"], [ep(1, "Mobbed/Night Shift (1/2)")]) == {"S09E01": 1}
-    # RBT: TMDB dates the next episode's title to this one's day; the first story still names this one
+    # RBT: a title TMDB dates to another day, with the same stories the other way round, does not take the name
     rbt = [ep(1, "Passed in Not Passed Out", "2024-05-01"), ep(2, "Pretty Little Penny", "2026-11-05"), ep(3, "Not Old and Silly", "2026-11-12")]
-    dated = [{"names": ["Not Old and Silly"], "air_date": "2026-11-05", "season": 21, "number": 6}]
-    assert got(["Pretty Little Penny/Passed in Not Passed Out", "Not Old and Silly"], rbt, dated) == {"S09E01": 2, "S09E02": 3}
+    turned = [{"names": ["Passed in Not Passed Out / Pretty Little Penny"], "air_date": "2026-11-12", "season": 21, "number": 7}]
+    assert got(["Pretty Little Penny/Passed in Not Passed Out"], rbt, turned) == {"S09E01": 2}
+    # a title TMDB dates to an episode still names it where the whole titles settle it, though another is titled so
+    late = [ep(1, "A Late Call", "2020-01-01"), ep(2, "Night Shift", "2020-01-08")]
+    names = [{"names": ["Night Shift"], "air_date": "2020-01-01", "season": 1, "number": 1}, {"episodeId": 2, "names": ["Overtime"]}]
+    assert got(["The Night Shift", "Overtime"], late, names) == {"S09E01": 1, "S09E02": 2}
+    # an exact title of Sonarr's own names its episode when the only rival has a title TMDB dates to it that is alike
+    cold = [ep(1, "Cold Betrayal", "2014-07-10"), ep(2, "Betrayed", "2026-01-08")]
+    assert got(["Cold Betrayal"], cold, [{"names": ["Betrayal"], "air_date": "2026-01-08", "season": 29, "number": 2}]) == {"S09E01": 1}
+    assert got(["Cold Betrayal"], [cold[0], ep(2, "A Cold Betrayal")]) == {}  # two of Sonarr's own titles fit: neither, as before
 
 
 def test_many_stories_that_are_alike_are_paired_without_trying_every_order():

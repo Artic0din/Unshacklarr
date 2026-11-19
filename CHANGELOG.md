@@ -134,9 +134,10 @@ Every change worth knowing, newest first. The format follows
 
 - **A title TMDB dates to another episode no longer blocks the episode Sonarr itself gives it to.** Binge's "Killer
   Connection / Bloody Birthday" is Sonarr's S15E08, but TMDB gives the same name to the episode aired on 2014-05-01,
-  S15E06: the title fitted two episodes, so it was matched to neither. A title TMDB dates to an episode is no longer
-  counted for it when another episode's own title (Sonarr's, or TVDB's in your language) is that very title; a name
-  only TMDB gives is found as before. (#321)
+  S15E06: the title fitted two episodes, so it was matched to neither. When a title is exactly one episode's own
+  title (Sonarr's, or TVDB's in your language) and the others fit only through a title TMDB dates to them, that
+  episode is now the one; a name only TMDB gives is found as before, and what was matched before stays as it was.
+  (#321)
 - **An episode whose title joins stories with "/" is found whichever way round they are written.** The First 48 on
   Binge lists "Night Shift / Mobbed" for Sonarr's S12E13 "Mobbed/Night Shift", and "Runaround / The Night Cap" for
   S04E07 "The Run Around/Night Cap": neither was matched, so downloads asked Binge for Sonarr's own number. A title
