@@ -3105,6 +3105,26 @@ def test_an_episode_named_by_the_first_of_its_stories_is_available_by_its_very_t
     assert probed["titled"] == ["S05E166"]
 
 
+def test_the_same_stories_in_another_order_are_the_episodes_very_title_and_alike_ones_are_not(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    # The First 48 on Binge: the same two stories the other way round, and two stories spelt a little differently
+    service = [{"type": "episode", "season": 12, "number": 17, "name": "Night Shift / Mobbed"},
+               {"type": "episode", "season": 4, "number": 9, "name": "Runaround / The Night Cap"}]
+    sonarr = [{"id": 1, "seasonNumber": 12, "episodeNumber": 13, "title": "Mobbed/Night Shift", "airDate": "2012-06-28", "airDateUtc": "2012-06-28T09:00:00Z"},
+              {"id": 2, "seasonNumber": 4, "episodeNumber": 7, "title": "The Run Around/Night Cap", "airDate": "2006-08-24", "airDateUtc": "2006-08-24T09:00:00Z"}]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "BINGE", "cli_params": []}]})
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {})
+    monkeypatch.setattr(web, "tmdb_key", lambda: "")
+    probed = web.probe_series({"service": "BINGE", "title": "x"}, 1)
+    # an upgrade or an unlisted number may trust the first (its very stories); the second is found, yet only alike
+    assert probed["available"] == {1: {"service": "S12E17", "name": "Night Shift / Mobbed", "match": "title", "same": True},
+                                   2: {"service": "S04E09", "name": "Runaround / The Night Cap", "match": "title"}}
+
+
 def test_the_schedule_knows_each_episodes_latest_download(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -6468,6 +6488,18 @@ def test_the_most_exact_evidence_names_the_episode():
     # a name TMDB gives exactly (to the episode of that date) outranks an episode whose own title is only alike
     alias = [{"names": ["Long Night Shift / Mobbed"], "air_date": "2012-01-02", "season": 9, "number": 9}]
     assert found("Long Night Shift / Mobbed", [ep(1, "The Long Night Shift / Mobbed"), ep(2, "Something Else")], alias) == {"S03E09": 2}
+    # an episode whose very title is on the service is not also the one a reordered name finds: both would claim it, and lose it
+    twice = match_by_title([{"season": 1, "number": 1, "name": "Mobbed / Night Shift"}, {"season": 1, "number": 2, "name": "Night Shift / Mobbed"}],
+                           [ep(1, "Mobbed/Night Shift")], [])
+    assert {k: m["episodeId"] for k, m in twice.items()} == {"S01E01": 1}
+    # a slash beside one digit joins stories ("The First 48/Mobbed"); between two digits it does not ("24/7")
+    assert stories("The First 48/Mobbed") == ("the first 48", "mobbed") and stories("Mobbed/48 Hours") == ("mobbed", "48 hours")
+    assert found("Mobbed / The First 48", [ep(1, "The First 48/Mobbed")]) == {"S03E09": 1}
+    # stories are found through the titles TMDB and TVDB give too: TVDB's for that very episode, TMDB's by its air date
+    by_id = [{"episodeId": 1, "names": ["Mobbed/Night Shift"]}]
+    by_date = [{"names": ["Mobbed/Night Shift"], "air_date": "2012-01-02", "season": 9, "number": 9}]
+    assert found("Night Shift / Mobbed", [ep(1, "Episode 1"), ep(2, "Episode 2")], by_id) == {"S03E09": 1}
+    assert found("Night Shift / Mobbed", [ep(1, "Episode 1"), ep(2, "Episode 2")], by_date) == {"S03E09": 2}
     # a title of one story is found as before: an exact title does not outrank another that holds it (a special's)
     assert found("Cap-Vert", [ep(1, "Cap-Vert"), ep(2, "Spéciale - Cap-Vert")]) == {}
 

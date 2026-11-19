@@ -4131,17 +4131,20 @@ def usable_title(text: str | None) -> str:
     return re.sub(r"^(e|ep|episode|page|chapter|chapitre|capitulo|kapitel) ?\d+ (?=\w)", "", plain)
 
 
+STORIES = re.compile(r"(?<!\d)/|/(?!\d)")  # a slash joins stories, save between two digits ("24/7", "(1/2)")
+
+
 def first_story(text: str | None) -> str:
     """The first of the stories a title joins with "/", plain: 9Now's "Ep 166 Pretty Little Penny/Passed in Not
     Passed Out" is "pretty little penny"; "" for a title of one story ("24/7" and "(1/2)" join none)."""
-    parts = re.split(r"(?<!\d)/(?!\d)", text or "")
+    parts = STORIES.split(text or "")
     return usable_title(parts[0]) if len(parts) > 1 else ""
 
 
 def stories(text: str | None) -> tuple[str, ...]:
     """The stories a title joins with "/", plain: ("night shift", "mobbed") for "Night Shift / Mobbed"; () for a title
     of one story."""
-    plain = tuple(usable_title(part) for part in re.split(r"(?<!\d)/(?!\d)", text or ""))
+    plain = tuple(usable_title(part) for part in STORIES.split(text or ""))
     return plain if len(plain) > 1 and all(plain) else ()  # a part that names no story ("Episode 3"): its stories are not known
 
 
@@ -4305,7 +4308,10 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
             + [(id_, (story, id_) in own_told) for story, id_ in told if same_stories(mine, story, same_title)],
             lambda: [(id_, (story, id_) in own_told) for story, id_ in told if same_stories(mine, story, spelt_alike)],
         )
-        hits = next((found for level in levels if (found := level())), [])
+        # an episode whose very title is another of the service's is that one, however its stories are ordered here:
+        # both claiming it would lose it for both
+        elsewhere = lambda id_: bool(exact.get(id_)) and name not in exact[id_]
+        hits = next((found for level in levels if (found := [hit for hit in level() if not elsewhere(hit[0])])), [])
         return {id_ for id_, _ in hits}, {id_ for id_, own in hits if own}
 
     exact: dict[int, set] = {}  # a Sonarr episode -> the service's names that are its very title
@@ -4548,6 +4554,7 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
     ours = {usable_title(e.get("title")) for e in every} - {""}
     known = titles_of(every, tmdb_eps, own=agreeing and enough(sum(any(same_title(n, o) for o in ours) for n in names)))
     own_titles = titles_of(every, tmdb_eps)  # for "same": a title match that is the episode's very title, once plain
+    own_stories = titles_of(every, tmdb_eps, plain=lambda name: tuple(sorted(stories(name))))  # and its very stories, in any order
     mapped = show.get("episode_map") or {}
     available = {}  # every Sonarr episode the service has, for the Episodes tab: by number and title, by title, by number
     # A season of the service the numbering gives another Sonarr season (Koh-Lanta's S34 as MyTF1's S29) is that one's:
@@ -4562,8 +4569,11 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         hit = by_key.get(theirs or "")
         if e["id"] in titled:
             key = titled[e["id"]]
-            # not merely close (by mj23au, #12); the first of its stories counts as its very title too
-            same = bool({usable_title(by_title[key]["name"]), first_story(by_title[key]["name"])} & own_titles.get(e["id"], set()))
+            # not merely close (by mj23au, #12); the first of its stories counts as its very title too, and so do the
+            # same stories in another order (stories only alike do not)
+            theirs_name = by_title[key]["name"]
+            same = bool({usable_title(theirs_name), first_story(theirs_name)} & own_titles.get(e["id"], set())
+                        or tuple(sorted(stories(theirs_name))) in own_stories.get(e["id"], set()))
             available[e["id"]] = {"service": key, "name": by_title[key]["name"], "match": "title", **({"same": True} if same else {})}
         elif hit and (theirs or "").split(".")[0] not in by_title \
                 and claimed.get(int(theirs[1:].split("E")[0]), e["seasonNumber"]) == e["seasonNumber"]:  # nor another season's
