@@ -134,15 +134,15 @@ Every change worth knowing, newest first. The format follows
 
 - **A title TMDB dates to another episode no longer blocks the episode Sonarr itself gives it to.** Binge's "Killer
   Connection / Bloody Birthday" is Sonarr's S15E08, but TMDB gives the same name to the episode aired on 2014-05-01,
-  S15E06: the title fitted two episodes, so it was matched to neither. When several fit, the one whose own title
-  (Sonarr's, or TVDB's in your language) is the name is now the episode; a name only TMDB gives is found as before.
-  (#321)
+  S15E06: the title fitted two episodes, so it was matched to neither. A title TMDB dates to an episode is no longer
+  counted for it when another episode's own title (Sonarr's, or TVDB's in your language) is that very title; a name
+  only TMDB gives is found as before. (#321)
 - **An episode whose title joins stories with "/" is found whichever way round they are written.** The First 48 on
   Binge lists "Night Shift / Mobbed" for Sonarr's S12E13 "Mobbed/Night Shift", and "Runaround / The Night Cap" for
   S04E07 "The Run Around/Night Cap": neither was matched, so downloads asked Binge for Sonarr's own number. A title
-  of two or more stories is now compared with each Sonarr title story by story, in any order and as close as a
-  single title must be, or spelt with other spaces, before the whole title and the first story are tried as
-  before. (#322)
+  of two or more stories that the whole title and the first story leave unmatched is now compared with each Sonarr
+  title story by story, in any order and as close as a single title must be, or spelt with other spaces. What was
+  matched before stays matched as it was. (#322)
 - **An episode whose title joins two stories is found by the first.** 9Now's RBT names its Ep 166 "Pretty Little
   Penny/Passed in Not Passed Out": both halves were Sonarr titles (S21E06, and S19E07 from 2024), so the episode was
   matched to neither and every download asked 9Now for Sonarr's own number, which it doesn't have. The first story
