@@ -3179,6 +3179,84 @@ def test_an_episode_named_by_the_first_of_its_stories_is_available_by_its_very_t
     assert probed["titled"] == ["S05E166"]
 
 
+def test_the_same_stories_in_another_order_are_the_episodes_very_title_and_alike_ones_are_not(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    # The First 48 on Binge: the same two stories the other way round, and two stories spelt a little differently
+    service = [{"type": "episode", "season": 12, "number": 17, "name": "Night Shift / Mobbed"},
+               {"type": "episode", "season": 4, "number": 9, "name": "Runaround / The Night Cap"}]
+    sonarr = [{"id": 1, "seasonNumber": 12, "episodeNumber": 13, "title": "Mobbed/Night Shift", "airDate": "2012-06-28", "airDateUtc": "2012-06-28T09:00:00Z"},
+              {"id": 2, "seasonNumber": 4, "episodeNumber": 7, "title": "The Run Around/Night Cap", "airDate": "2006-08-24", "airDateUtc": "2006-08-24T09:00:00Z"}]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "BINGE", "cli_params": []}]})
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {})
+    monkeypatch.setattr(web, "tmdb_key", lambda: "")
+    probed = web.probe_series({"service": "BINGE", "title": "x"}, 1)
+    # an upgrade or an unlisted number may trust the first (its very stories); the second is found, yet only alike
+    assert probed["available"] == {1: {"service": "S12E17", "name": "Night Shift / Mobbed", "match": "title", "same": True},
+                                   2: {"service": "S04E09", "name": "Runaround / The Night Cap", "match": "title"}}
+
+
+def test_a_title_added_by_its_stories_does_not_change_how_the_other_episodes_are_found(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    # two titles meet ours: too few to say a title that differs under the same number is another episode, so the
+    # third is found by its number. A fourth found only by its stories must not tip that over
+    service = [{"type": "episode", "season": 1, "number": n, "name": name} for n, name in
+               [(1, "Opening Night"), (2, "Last Call"), (3, "Case Closed"), (4, "Night Shift / Mobbed")]]
+    sonarr = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "title": name, "airDate": f"2020-01-0{n}", "airDateUtc": f"2020-01-0{n}T09:00:00Z"}
+              for n, name in [(1, "Opening Night"), (2, "Last Call"), (3, "The Long Goodbye"), (4, "Mobbed/Night Shift")]]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "BINGE", "cli_params": []}]})
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {"tmdbId": 5})
+    monkeypatch.setattr(web, "tmdb_key", lambda: "key")
+    monkeypatch.setattr(web, "tmdb_episodes", lambda tmdb_id: [{"names": ["The Long Goodbye"], "air_date": "2020-01-03", "season": 1, "number": 3}])
+    probed = web.probe_series({"service": "BINGE", "title": "x"}, 1)
+    assert probed["available"][3] == {"service": "S01E03", "name": "Case Closed"}  # by its number, as before
+    assert probed["available"][4] == {"service": "S01E04", "name": "Night Shift / Mobbed", "match": "title", "same": True}
+
+
+def test_a_title_added_by_its_stories_does_not_hand_its_old_number_to_another_episode(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    # Sonarr's S02E13 is the service's S02E15 by its stories, no longer its S02E13 by number. That number, now free,
+    # is not given to Sonarr's S02E01 (the 13th episode), which stays where it was found before
+    service = [{"type": "episode", "season": s, "number": n, "name": name} for s, n, name in
+               [(1, 13, "The New Case"), (2, 13, "Fire on the Waterfront"), (2, 15, "Night Shift / Mobbed")]]
+    sonarr = [{"id": 1, "seasonNumber": 2, "episodeNumber": 1, "absoluteEpisodeNumber": 13, "title": "The New Investigation",
+               "airDate": "2020-01-01", "airDateUtc": "2020-01-01T09:00:00Z"},
+              {"id": 2, "seasonNumber": 2, "episodeNumber": 13, "absoluteEpisodeNumber": 25, "title": "Mobbed / Night Shift",
+               "airDate": "2020-04-01", "airDateUtc": "2020-04-01T09:00:00Z"}]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "BINGE", "cli_params": []}]})
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {})
+    monkeypatch.setattr(web, "tmdb_key", lambda: "")
+    probed = web.probe_series({"service": "BINGE", "title": "x"}, 1)
+    assert probed["available"] == {1: {"service": "S01E13", "name": "The New Case", "match": "absolute"},
+                                   2: {"service": "S02E15", "name": "Night Shift / Mobbed", "match": "title", "same": True}}
+    assert probed["titled"] == ["S02E15"]
+    # the service's S01E04 is Sonarr's S01E09 by its stories: Sonarr's own S01E04, another title, no longer has it
+    service = [{"type": "episode", "season": 1, "number": 4, "name": "Night Shift / Mobbed"}]
+    sonarr[:] = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "title": name, "airDate": f"2020-01-0{n}", "airDateUtc": f"2020-01-0{n}T09:00:00Z"}
+                 for n, name in [(4, "Something Else"), (5, "Another Thing"), (9, "Mobbed/Night Shift")]]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "BINGE", "cli_params": []}]})
+    moved = {9: {"service": "S01E04", "name": "Night Shift / Mobbed", "match": "title", "same": True}}
+    assert web.probe_series({"service": "BINGE", "title": "x"}, 1)["available"] == moved
+    # unless an episode was given that number by hand: then all stays as it was found before, and the title adds nothing
+    by_hand = web.probe_series({"service": "BINGE", "title": "x", "episode_map": {"S01E05": "S01E04"}}, 1)
+    assert by_hand["available"] == {4: {"service": "S01E04", "name": "Night Shift / Mobbed"}, 5: {"service": "S01E04", "name": "Night Shift / Mobbed"}}
+    assert by_hand["titled"] == []  # the title that was not added is not told as one
+    # nor does it move an episode whose own number was given by hand
+    own = web.probe_series({"service": "BINGE", "title": "x", "episode_map": {"S01E09": "S01E07"}}, 1)
+    assert own["available"] == {4: {"service": "S01E04", "name": "Night Shift / Mobbed"}} and own["titled"] == []
+
+
 def test_the_schedule_knows_each_episodes_latest_download(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -6494,6 +6572,179 @@ def test_two_stories_joined_by_a_slash_are_the_episode_the_first_names():
     whole = [*RBT_SONARR, {"id": 87030, "seasonNumber": 22, "episodeNumber": 1, "title": "Pretty Little Penny/Passed in Not Passed Out", "airDate": "2027-02-04"}]
     match = match_by_title([{"season": 22, "number": 1, "name": "Pretty Little Penny/Passed in Not Passed Out"}], whole, [])
     assert {k: m["episodeId"] for k, m in match.items()} == {"S22E01": 87030}
+
+
+def test_stories_joined_by_a_slash_are_found_in_any_order_and_spelling():
+    from unshacklarr.web import match_by_title, stories
+    assert stories("24/7") == stories("Le tueur (1/2)") == stories("Pretty Little Penny") == ()  # one story each
+    assert stories("The 24/7 Diner/Ep 3 Night Shift") == ("the 24 7 diner", "night shift")  # a slash between digits joins none
+    # The First 48 on Binge: Sonarr S12E13 "Mobbed/Night Shift" is the service's "Night Shift / Mobbed"; S04E07 is spelt
+    # "The Run Around/Night Cap" there; S11E15 is the service's "One Shot / The Chase" the other way round
+    sonarr = [{"id": 1, "seasonNumber": 12, "episodeNumber": 13, "title": "Mobbed/Night Shift", "airDate": "2012-06-28"},
+              {"id": 2, "seasonNumber": 4, "episodeNumber": 7, "title": "The Run Around/Night Cap", "airDate": "2006-08-24"},
+              {"id": 3, "seasonNumber": 11, "episodeNumber": 15, "title": "The Chase/One Shot", "airDate": "2011-10-20"},
+              {"id": 4, "seasonNumber": 10, "episodeNumber": 23, "title": "Night Out/One Gram", "airDate": "2011-04-07"},
+              {"id": 5, "seasonNumber": 12, "episodeNumber": 14, "title": "House of Pain/Into the Night", "airDate": "2012-06-28"}]
+    found = lambda name, eps=sonarr: {k: m["episodeId"] for k, m in match_by_title([{"season": 3, "number": 9, "name": name}], eps, []).items()}
+    assert found("Night Shift / Mobbed") == {"S03E09": 1}  # the stories the other way round
+    assert found("Runaround / The Night Cap") == {"S03E09": 2}  # one story spelt a little differently
+    assert found("One Shot / The Chase") == {"S03E09": 3}
+    assert found("Night Shift / One Gram") == {}  # one story from each of two episodes is neither
+    three = [{"id": 6, "seasonNumber": 1, "episodeNumber": 8, "title": "Hells Angels/Fishy Drivers/A Race Against Time", "airDate": "2012-01-01"},
+             {"id": 7, "seasonNumber": 1, "episodeNumber": 9, "title": "Hells Angels/Fishy Drivers", "airDate": "2012-01-08"}]
+    assert found("Fishy Drivers/A Race Against Time/Hells Angels", three) == {"S03E09": 6}  # three stories, in any order
+    # the first story of the service's name names an older episode (RBT): it stays the one, as before, though another
+    # is titled with both stories the other way round. The stories only add to what the whole titles find
+    older = [*RBT_SONARR, {"id": 87030, "seasonNumber": 22, "episodeNumber": 1, "title": "Pretty Little Penny/Passed in Not Passed Out", "airDate": "2027-02-04"}]
+    assert found("Ep 166 Passed in Not Passed Out/Pretty Little Penny", older) == {"S03E09": 86998}
+    digits = [{"id": 8, "seasonNumber": 1, "episodeNumber": 1, "title": "Night Shift/The 24/7 Diner", "airDate": "2012-01-01"}]
+    assert found("The 24/7 Diner / Night Shift", digits) == {"S03E09": 8}  # the 24/7 is one story, not two
+    assert found("Night Shift/24/7", digits) == {}  # no slash here joins two stories: it is one title, and not that one
+
+
+def test_the_most_exact_evidence_names_the_episode():
+    from unshacklarr.web import match_by_title, same_stories, same_title, stories
+    ep = lambda i, title, date=None: {"id": i, "seasonNumber": 1, "episodeNumber": i, "title": title, "airDate": date or f"2012-01-{i:02}"}
+    found = lambda name, eps, tmdb=(): {k: m["episodeId"] for k, m in match_by_title([{"season": 3, "number": 9, "name": name}], eps, list(tmdb)).items()}
+    # an episode titled with the whole name, exactly, is not replaced by one that joins the same stories
+    assert found("The Long Night Shift / Mobbed", [ep(1, "The Long Night Shift Mobbed"), ep(2, "Mobbed / Long Night Shift")]) == {"S03E09": 1}
+    # the same stories exactly outrank stories that are only alike, and those outrank a spelling with other spaces
+    assert found("Now Here / Long Night Shift", [ep(1, "Long Night Shift / Nowhere"), ep(2, "Long Night Shift / Now Here")]) == {"S03E09": 2}
+    assert found("Now Here / Long Night Shift", [ep(1, "Long Night Shift / Nowhere"), ep(2, "The Long Night Shift / Now Here!")]) == {"S03E09": 2}
+    # each story answers one story of the other title: two alike do not share one, and the counts are the same
+    assert not same_stories(("the long night shift", "long night shift", "murder at dawn"), ("murder at dawn", "the murder at dawn", "long night shift"), same_title)
+    assert not same_stories(("mobbed", "night shift"), ("mobbed", "mobbed", "night shift"), same_title)
+    assert same_stories(("mobbed", "night shift"), ("night shift", "mobbed"), same_title)
+    # a part that names no story ("Episode 3") leaves the stories unknown: none is dropped to make two titles agree
+    assert stories("Long Night Shift / Episode 3 / Mobbed") == ()
+    assert found("Long Night Shift / Episode 3 / Mobbed", [ep(1, "Mobbed / Long Night Shift")]) == {}
+    # a name TMDB gives exactly (to the episode of that date) outranks an episode whose own title is only alike
+    alias = [{"names": ["Long Night Shift / Mobbed"], "air_date": "2012-01-02", "season": 9, "number": 9}]
+    assert found("Long Night Shift / Mobbed", [ep(1, "The Long Night Shift / Mobbed"), ep(2, "Something Else")], alias) == {"S03E09": 2}
+    # an episode whose very title is on the service is not also the one a reordered name finds: both would claim it, and lose it
+    twice = match_by_title([{"season": 1, "number": 1, "name": "Mobbed / Night Shift"}, {"season": 1, "number": 2, "name": "Night Shift / Mobbed"}],
+                           [ep(1, "Mobbed/Night Shift")], [])
+    assert {k: m["episodeId"] for k, m in twice.items()} == {"S01E01": 1}
+    # a slash beside one digit joins stories ("The First 48/Mobbed"); between two digits it does not ("24/7")
+    assert stories("The First 48/Mobbed") == ("the first 48", "mobbed") and stories("Mobbed/48 Hours") == ("mobbed", "48 hours")
+    assert found("Mobbed / The First 48", [ep(1, "The First 48/Mobbed")]) == {"S03E09": 1}
+    # stories are found through the titles TMDB and TVDB give too: TVDB's for that very episode, TMDB's by its air date
+    by_id = [{"episodeId": 1, "names": ["Mobbed/Night Shift"]}]
+    by_date = [{"names": ["Mobbed/Night Shift"], "air_date": "2012-01-02", "season": 9, "number": 9}]
+    assert found("Night Shift / Mobbed", [ep(1, "Episode 1"), ep(2, "Episode 2")], by_id) == {"S03E09": 1}
+    assert found("Night Shift / Mobbed", [ep(1, "Episode 1"), ep(2, "Episode 2")], by_date) == {"S03E09": 2}
+    # a part marker written with spaces is not a join: "(1 / 2)" is "(1/2)"
+    assert stories("Night Shift (1 / 2) / Mobbed") == stories("Night Shift (1/2)/Mobbed") != ()
+    assert found("Night Shift (1 / 2) / Mobbed", [ep(1, "Mobbed / Night Shift (1/2)")]) == {"S03E09": 1}
+    # an own title that is only alike does not outrank the episode a TMDB title names exactly (iPlayer's Psych Ward): the
+    # service lists both, each is its own episode
+    ward = [ep(1, "On the Psych Ward"), ep(2, "Episode 2")]
+    dated = [{"names": ["Back on the Psych Ward"], "air_date": "2012-01-02", "season": 9, "number": 9}]
+    both = match_by_title([{"season": 1, "number": 17, "name": "On the Psych Ward"}, {"season": 1, "number": 18, "name": "Back on the Psych Ward"}], ward, dated)
+    assert {k: m["episodeId"] for k, m in both.items()} == {"S01E17": 1, "S01E18": 2}
+    # a title of one story is found as before: an exact title does not outrank another that holds it (a special's)
+    assert found("Cap-Vert", [ep(1, "Cap-Vert"), ep(2, "Spéciale - Cap-Vert")]) == {}
+
+
+def test_the_episode_titled_with_the_name_outranks_one_that_has_it_through_tmdb():
+    from unshacklarr.web import match_by_title
+    # The First 48 on Binge: Sonarr's S15E08 is "Killer Connection/Bloody Birthday"; TMDB gives the same name to the episode
+    # it airs on 2014-05-01, which Sonarr's S15E06 "Million Dollar Question" aired on
+    sonarr = [{"id": 24969, "seasonNumber": 15, "episodeNumber": 6, "title": "Million Dollar Question", "airDate": "2014-05-01"},
+              {"id": 24971, "seasonNumber": 15, "episodeNumber": 8, "title": "Killer Connection/Bloody Birthday", "airDate": "2014-05-29"}]
+    alias = lambda name: [{"names": [name], "air_date": "2014-05-01", "season": 13, "number": 34}]
+    found = lambda name, eps, tmdb: {k: m["episodeId"] for k, m in match_by_title([{"season": 16, "number": 16, "name": name}], eps, tmdb).items()}
+    assert found("Killer Connection / Bloody Birthday", sonarr, alias("Killer Connection/Bloody Birthday")) == {"S16E16": 24971}
+    one_story = [sonarr[0], {**sonarr[1], "title": "Killer Connection"}]
+    assert found("Killer Connection", one_story, alias("Killer Connection")) == {"S16E16": 24971}
+    # a name only TMDB gives (to S15E06) is still found there
+    assert found("Bloody Birthday", sonarr[:1], alias("Bloody Birthday")) == {"S16E16": 24969}
+
+
+def test_a_tmdb_date_that_loses_a_title_does_not_keep_its_episode_from_another_name():
+    from unshacklarr.web import match_by_title
+    # TMDB dates "Killer Connection/Bloody Birthday" to the day of another episode: that one is still found by its own name
+    sonarr = [{"id": 1, "seasonNumber": 1, "episodeNumber": 1, "title": "Killer Connection/Bloody Birthday", "airDate": "2020-01-01"},
+              {"id": 2, "seasonNumber": 1, "episodeNumber": 2, "title": "Night Shifts/Mobbed", "airDate": "2020-01-08"}]
+    tmdb = [{"names": ["Killer Connection/Bloody Birthday"], "air_date": "2020-01-08", "season": 1, "number": 2}]
+    service = [{"season": 9, "number": 1, "name": "Killer Connection / Bloody Birthday"}, {"season": 9, "number": 2, "name": "Night Shift / Mobbed"}]
+    assert {k: m["episodeId"] for k, m in match_by_title(service, sonarr, tmdb).items()} == {"S09E01": 1, "S09E02": 2}
+
+
+def test_a_title_tmdb_dates_to_an_episode_is_not_its_when_another_is_itself_titled_so():
+    from unshacklarr.web import match_by_title
+    ep = lambda id_, title, date: {"id": id_, "seasonNumber": 1, "episodeNumber": id_, "title": title, "airDate": date}
+    got = lambda names, sonarr, tmdb: {k: m["episodeId"] for k, m in match_by_title(
+        [{"season": 9, "number": n, "name": name} for n, name in enumerate(names, 1)], sonarr, tmdb).items()}
+    dated = lambda name: [{"names": [name], "air_date": "2020-01-08", "season": 1, "number": 2}]  # to episode 2's day
+    # a one-story name that is only like Sonarr's own title is still the episode TMDB names, when its own is elsewhere
+    ward = [ep(1, "On the Psych Ward", "2020-01-01"), ep(2, "Episode 2", "2020-01-08")]
+    assert got(["On the Psych Ward", "Back on the Psych Ward"], ward, dated("Back in the Psych Ward")) == {"S09E01": 1, "S09E02": 2}
+    # TMDB dates one episode's very title to another: that other is not found by it, in any order of its stories
+    shift = [ep(1, "Night Shift/Mobbed", "2020-01-01"), ep(2, "Something Else", "2020-01-08")]
+    assert got(["Night Shift / Mobbed", "Mobbed / Night Shift"], shift, dated("Night Shift/Mobbed")) == {"S09E01": 1}
+    # a title only TMDB gives is the episode's: it keeps it from the same stories in another order
+    assert got(["Night Shift / Mobbed", "Mobbed / Night Shift"], shift[1:], dated("Night Shift/Mobbed")) == {"S09E01": 2}
+
+
+def test_the_story_rules_never_replace_what_the_whole_title_finds():
+    from unshacklarr.web import match_by_title, stories
+    ep = lambda id_, title, date=None: {"id": id_, "seasonNumber": 1, "episodeNumber": id_, "title": title, "airDate": date}
+    got = lambda names, sonarr, tmdb=(): {k: m["episodeId"] for k, m in match_by_title(
+        [{"season": 9, "number": n, "name": name} for n, name in enumerate(names, 1)], sonarr, list(tmdb)).items()}
+    # the whole title is like one episode's: a follow-up with the same stories in another order does not contest it
+    assert got(["Night Shift / Mobbed"], [ep(1, "The Night Shift/Mobbed"), ep(2, "Mobbed/Night Shift Revisited")]) == {"S09E01": 1}
+    # a slash with spaces joins stories even between two numbers; only a part marker, "(1 / 2)", joins none
+    assert got(["Flight 182 / 48 Hours"], [ep(1, "Flight 182"), ep(2, "48 Hours")]) == {"S09E01": 1}
+    assert stories("Flight 182 / 48 Hours") == ("flight 182", "48 hours") and stories("Night Shift (1 / 2)") == ()
+    assert got(["Night Shift (1 / 2) / Mobbed"], [ep(1, "Mobbed/Night Shift (1/2)")]) == {"S09E01": 1}
+    # RBT: a title TMDB dates to another day, with the same stories the other way round, does not take the name
+    rbt = [ep(1, "Passed in Not Passed Out", "2024-05-01"), ep(2, "Pretty Little Penny", "2026-11-05"), ep(3, "Not Old and Silly", "2026-11-12")]
+    turned = [{"names": ["Passed in Not Passed Out / Pretty Little Penny"], "air_date": "2026-11-12", "season": 21, "number": 7}]
+    assert got(["Pretty Little Penny/Passed in Not Passed Out"], rbt, turned) == {"S09E01": 2}
+    # a title TMDB dates to an episode still names it where the whole titles settle it, though another is titled so
+    late = [ep(1, "A Late Call", "2020-01-01"), ep(2, "Night Shift", "2020-01-08")]
+    names = [{"names": ["Night Shift"], "air_date": "2020-01-01", "season": 1, "number": 1}, {"episodeId": 2, "names": ["Overtime"]}]
+    assert got(["The Night Shift", "Overtime"], late, names) == {"S09E01": 1, "S09E02": 2}
+    # an exact title of Sonarr's own names its episode when the only rival has a title TMDB dates to it that is alike
+    cold = [ep(1, "Cold Betrayal", "2014-07-10"), ep(2, "Betrayed", "2026-01-08")]
+    assert got(["Cold Betrayal"], cold, [{"names": ["Betrayal"], "air_date": "2026-01-08", "season": 29, "number": 2}]) == {"S09E01": 1}
+    assert got(["Cold Betrayal"], [cold[0], ep(2, "A Cold Betrayal")]) == {}  # two of Sonarr's own titles fit: neither, as before
+    # a title found by its last part, after a colon, keeps its episode from the same stories the other way round
+    assert got(["Documentary: Hit/Run", "Run/Hit"], [ep(1, "Hit/Run")]) == {"S09E01": 1}
+    assert got(["Night Shift / True Crime: Mobbed"], [ep(1, "Mobbed"), ep(2, "True Crime Mobbed / Night Shift")]) == {"S09E01": 1}
+    # the episode with the very same stories is already found: a follow-up that is only alike is not taken in its place
+    again = [ep(1, "Night Shift/Mobbed"), ep(2, "Night Shift Revisited/Mobbed")]
+    assert got(["Night Shift / Mobbed", "Mobbed / Night Shift"], again) == {"S09E01": 1}
+    # one part of a service episode is found by its whole title: its other part adds no episode by its stories
+    parts = [{"season": 9, "number": 1, "name": "Alpha Road", "part": 1}, {"season": 9, "number": 1, "name": "Bravo Lane / Charlie Hill", "part": 2}]
+    two = match_by_title(parts, [ep(1, "Alpha Road"), ep(2, "Charlie Hill/Bravo Lane")], [])
+    assert {k: m["episodeId"] for k, m in two.items()} == {"S09E01": 1}
+    # an exact title of Sonarr's own does not take an episode another title already found
+    port = [ep(1, "The Long Night Shift", "2020-01-01"), ep(2, "Episode 2", "2020-01-08")]
+    names = [{"episodeId": 1, "names": ["Le Port Nord"]}, {"names": ["Long Night Shift"], "air_date": "2020-01-08", "season": 1, "number": 2}]
+    assert got(["Le Port du Nord", "The Long Night Shift"], port, names) == {"S09E01": 1}
+
+
+def test_many_stories_that_are_alike_are_paired_without_trying_every_order():
+    import time
+    from unshacklarr.web import same_stories, same_title
+    alike, start = ("night watch",) * 10, time.monotonic()
+    assert not same_stories(alike + ("alpha",), alike + ("zulu bravo",), same_title)
+    assert time.monotonic() - start < 1  # was 3.6 s, ten times more for each story added
+    # each story answers one of the other title, none two: the pairing may have to be undone to find it
+    like = lambda a, b: (a, b) in {("x", "p"), ("x", "q"), ("y", "p")}
+    assert same_stories(("x", "y"), ("p", "q"), like) and not same_stories(("x", "y"), ("p", "p"), lambda a, b: a == "x")
+
+
+def test_tvdbs_title_for_the_very_episode_outranks_a_tmdb_date():
+    from unshacklarr.web import match_by_title
+    # Sonarr's title says nothing ("Episode 1"); TVDB's website names that very episode, TMDB dates the name to another
+    sonarr = [{"id": 1, "seasonNumber": 1, "episodeNumber": 1, "title": "Episode 1", "airDate": "2020-01-01"},
+              {"id": 2, "seasonNumber": 1, "episodeNumber": 2, "title": "Episode 2", "airDate": "2020-01-08"}]
+    tmdb = [{"episodeId": 1, "names": ["Le Port"]}, {"names": ["Le Port"], "air_date": "2020-01-08", "season": 1, "number": 2}]
+    found = match_by_title([{"season": 9, "number": 1, "name": "Le Port"}], sonarr, tmdb)
+    assert {k: m["episodeId"] for k, m in found.items()} == {"S09E01": 1}
 
 
 def test_a_year_in_brackets_is_not_a_part():

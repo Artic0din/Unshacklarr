@@ -4131,11 +4131,23 @@ def usable_title(text: str | None) -> str:
     return re.sub(r"^(e|ep|episode|page|chapter|chapitre|capitulo|kapitel) ?\d+ (?=\w)", "", plain)
 
 
+PART_MARKER = re.compile(r"\(\s*\d+\s*/\s*\d+\s*\)")  # "(1 / 2)": a part of an episode, its slash joins no stories
+
+
 def first_story(text: str | None) -> str:
     """The first of the stories a title joins with "/", plain: 9Now's "Ep 166 Pretty Little Penny/Passed in Not
     Passed Out" is "pretty little penny"; "" for a title of one story ("24/7" and "(1/2)" join none)."""
     stories = re.split(r"(?<!\d)/(?!\d)", text or "")
     return usable_title(stories[0]) if len(stories) > 1 else ""
+
+
+def stories(text: str | None) -> tuple[str, ...]:
+    """The stories a title joins with "/", plain: ("night shift", "mobbed") for "Night Shift / Mobbed"; () for a title
+    of one story."""
+    # cut at the slashes that join stories: not one between two digits ("24/7", "(1/2)"), nor a part marker's ("(1 / 2)")
+    marked = PART_MARKER.sub(lambda m: m[0].replace("/", "\0"), text or "")
+    plain = tuple(usable_title(part.replace("\0", "/")) for part in re.split(r"(?<!\d)/|/(?!\d)", marked))
+    return plain if len(plain) > 1 and all(plain) else ()  # a part that names no story ("Episode 3"): its stories are not known
 
 
 TVDB_TITLES = sonarr_sync.DATA / "tvdb_titles.json"
@@ -4213,6 +4225,32 @@ def same_title(a: str, b: str) -> bool:
     return difflib.SequenceMatcher(None, a, b).ratio() >= at
 
 
+def same_stories(a: tuple[str, ...], b: tuple[str, ...], like) -> bool:
+    """Two titles joining the same stories, in any order: as many, each story of one answering one story of the other
+    (`like` says when two stories are one), none answering two."""
+    if len(a) != len(b):
+        return False
+    answers: dict[int, int] = {}  # a story of b -> the story of a it answers
+
+    def place(i: int, tried: set[int]) -> bool:
+        """Give a's story i one of b's: a free one, or one whose story of a can take another. Each of b's is tried
+        once a story, not once an order: many stories alike cost their square, not their factorial."""
+        for j, story in enumerate(b):
+            if j not in tried and like(a[i], story):
+                tried.add(j)
+                if j not in answers or place(answers[j], tried):
+                    answers[j] = i
+                    return True
+        return False
+
+    return all(place(i, set()) for i in range(len(a)))
+
+
+def spelt_alike(a: str, b: str) -> bool:
+    """Two stories that are one once their spaces are set aside: "runaround" is "the run around"."""
+    return same_title(a, b) or last_number(a) == last_number(b) and same_title(a.replace(" ", ""), b.replace(" ", ""))
+
+
 @functools.lru_cache(maxsize=1 << 14)
 def letters(title: str) -> collections.Counter:
     return collections.Counter(title)
@@ -4225,33 +4263,37 @@ def last_number(title: str) -> int | None:
     return NUMBER_WORDS.index(m[2]) + 1 if (m := TITLE_NUMBER_WORD.search(title)) and not m[1] else None
 
 
-def titles_of(sonarr_eps: list[dict], tmdb_eps: list[dict], own: bool = True) -> dict[int, set]:
-    """Every title a Sonarr episode goes by, plain: Sonarr's (unless own is false), and TMDB's in each language
-    for the episode TMDB airs that day; two aired the same day (Futurama's S11E01 and E02) are told apart by
-    TMDB's number."""
+def titles_of(sonarr_eps: list[dict], tmdb_eps: list[dict], own: bool = True, plain=usable_title) -> dict[int, set]:
+    """Every title a Sonarr episode goes by, plain (or as `plain` makes it, `stories` for their stories): Sonarr's
+    (unless own is false), and TMDB's in each language for the episode TMDB airs that day; two aired the same day
+    (Futurama's S11E01 and E02) are told apart by TMDB's number."""
     by_date: dict[str, list[dict]] = {}
     for e in sonarr_eps:
         if e.get("airDate"):
             by_date.setdefault(e["airDate"], []).append(e)
-    titles = {e["id"]: {usable_title(e.get("title"))} if own else set() for e in sonarr_eps}
+    titles = {e["id"]: {plain(e.get("title"))} if own else set() for e in sonarr_eps}
     for t in tmdb_eps:
         if t.get("episodeId") in titles:  # a title for that very episode (TVDB's website, in your language)
-            titles[t["episodeId"]] |= {usable_title(n) for n in t.get("names") or []}
+            titles[t["episodeId"]] |= {plain(n) for n in t.get("names") or []}
             continue
         same_day = by_date.get(t.get("air_date") or "") or []
         if len(same_day) > 1:
             same_day = [e for e in same_day if (e.get("seasonNumber"), e.get("episodeNumber")) == (t.get("season"), t.get("number"))]
         if len(same_day) == 1:
-            titles[same_day[0]["id"]] |= {usable_title(n) for n in t.get("names") or [t.get("name")]}
+            titles[same_day[0]["id"]] |= {plain(n) for n in t.get("names") or [t.get("name")]}
     return {id_: {t for t in names if t} for id_, names in titles.items()}
 
 
 def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: list[dict]) -> dict[str, dict]:
     """The service's episodes found in Sonarr by their title: service episode ("S26E11", or "S26E12" for all
-    its parts) -> {"episodeId", "name"}. The title is looked for in Sonarr's own titles (TVDB's) and in TMDB's,
+    its parts) -> {"episodeId", "name"}, and "added" for one only the two last rules below found. The title is looked for in Sonarr's own titles (TVDB's) and in TMDB's,
     whose air date gives the episode in Sonarr. A title that fits two episodes, or that two of the service's
-    episodes share, finds nothing; but stories joined by "/" that fit several are the episode with the whole
-    title, else the one the first story names."""
+    episodes share, finds nothing; of several that fit a title joining stories with "/", the one its first story
+    names is taken. Two more rules then name an episode for a title that found none so, among the episodes still
+    free, so they only add to what the whole titles find. A title that is exactly what Sonarr itself calls one
+    episode names it, when the others fit only through a title TMDB dates to them (#321). And a title that joins
+    stories is looked for by them, by the most exact evidence there is: the same stories in any order, else stories
+    that are alike, else stories spelt with other spaces (#322)."""
     named = [(title, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps).items() for title in titles]
     key = lambda t: f"S{t['season']:02}E{t['number']:02}"
     keys_by_name: dict[str, set] = {}
@@ -4261,32 +4303,40 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
     for title, id_ in named:
         if title in keys_by_name:
             exact.setdefault(id_, set()).add(title)
-    found: dict[str, list] = {}
-    for t in service_eps:
-        name = usable_title(t.get("name"))
-        if not name or len(keys_by_name[name]) > 1:
-            continue
-        ids = {id_ for other, id_ in named if same_title(name, other)}
+    elsewhere = lambda id_, name: bool(exact.get(id_)) and name not in exact[id_]
+
+    def one_of(t: dict, name: str, ids: set[int]) -> set[int]:
+        """Of several episodes a title fits, the one it names, when it names one."""
         if len(ids) > 1:
             # one that has its very title elsewhere on the service is that one, not this: iPlayer's "Back on the
             # Psych Ward" fits Sonarr's "Back in the Psych Ward" and "On the Psych Ward", the latter its own S01E17
             # (by mj23au)
-            ids = {i for i in ids if not (exact.get(i) and name not in exact[i])}
+            ids = {i for i in ids if not elsewhere(i, name)}
         if len(ids) > 1 and (first := first_story(t.get("name"))):
             # stories joined by "/" hold both their titles: the first names the episode (9Now's RBT Ep 166 is
             # "Pretty Little Penny", its second story a 2024 episode's); none so named, nothing is picked as before.
             # An episode titled with the whole of it comes first: it is that one, not an older one named by a story
             ids = next((pick for want in (name, first) if (pick := {i for title, i in named if title == want and i in ids})), ids)
-        if len(ids) == 1:
-            found.setdefault(key(t), []).append((t.get("part"), ids.pop(), t.get("name")))
-    matches = {}
-    for k, hits in found.items():
-        if len({h[1] for h in hits}) == 1:  # every part of it: the same Sonarr episode, taken whole
-            matches[k] = {"episodeId": hits[0][1], "name": re.sub(r"\s*\(\s*\d+\s*/\s*\d+\s*\)$", "", (hits[0][2] or "")[:300].rstrip())}
-    claims: dict[int, int] = {}
-    for m in matches.values():
-        claims[m["episodeId"]] = claims.get(m["episodeId"], 0) + 1
-    matches = {k: m for k, m in matches.items() if claims[m["episodeId"]] == 1}  # one Sonarr episode, two of theirs: neither
+        return ids
+
+    def agreed(found: dict[str, list]) -> dict[str, dict]:
+        """The service episodes found: every part of one names the same Sonarr episode, which no other one names."""
+        matches = {k: {"episodeId": hits[0][1], "name": re.sub(r"\s*\(\s*\d+\s*/\s*\d+\s*\)$", "", (hits[0][2] or "")[:300].rstrip())}
+                   for k, hits in found.items() if len({h[1] for h in hits}) == 1}
+        claims = collections.Counter(m["episodeId"] for m in matches.values())
+        return {k: m for k, m in matches.items() if claims[m["episodeId"]] == 1}  # one Sonarr episode, two of theirs: neither
+
+    def found_in(ids_by_title) -> dict[str, list]:
+        found: dict[str, list] = {}
+        for t, ids in ids_by_title:
+            if len(ids) == 1:
+                found.setdefault(key(t), []).append((t.get("part"), next(iter(ids)), t.get("name")))
+        return found
+
+    listed = [(t, name) for t in service_eps if (name := usable_title(t.get("name"))) and len(keys_by_name[name]) == 1]
+    fits = [[(other, id_) for other, id_ in named if same_title(name, other)] for _, name in listed]
+    whole = [one_of(t, name, {id_ for _, id_ in hits}) for (t, name), hits in zip(listed, fits)]
+    matches = agreed(found_in((t, ids) for (t, _), ids in zip(listed, whole)))
     # Left over: Sonarr's title as the last part of the service's ("Brazil" for iPlayer's "Investigates: Sex in
     # Strange Places: Brazil"), when that part is the whole of one Sonarr title still unmatched, no number in it, and
     # no other service title ends so (by mj23au)
@@ -4304,7 +4354,38 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
     for id_, ts in tails.items():
         if len({key(t) for t in ts}) == 1:
             matches[key(ts[0])] = {"episodeId": id_, "name": str(ts[0].get("name") or "")[:300].rstrip()}
-    return matches
+
+    # What follows only adds to the above: for a service episode none of whose parts named an episode, and never an
+    # episode already named, even by a title that lost it to another
+    settled = set(matches) | {key(t) for (t, _), ids in zip(listed, whole) if len(ids) == 1}
+    taken = {m["episodeId"] for m in matches.values()} | {next(iter(ids)) for ids in whole if len(ids) == 1}
+    open_ = [i for i, ((t, _), ids) in enumerate(zip(listed, whole)) if len(ids) != 1 and key(t) not in settled]
+    # what Sonarr itself calls an episode: its title, and TVDB's for that very episode, never TMDB's guess by air date
+    own = titles_of(sonarr_eps, [t for t in tmdb_eps if t.get("episodeId")])
+    for i in open_:  # the one fit through Sonarr's own title, when that title is the name itself (#321)
+        name, sure = listed[i][1], whole[i] & {id_ for other, id_ in fits[i] if other in own[id_]}
+        if len(sure) == 1 and name in own[next(iter(sure))] and not sure & taken:
+            whole[i] = sure
+    taken |= {next(iter(whole[i])) for i in open_ if len(whole[i]) == 1}
+    told = [(story, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps, plain=stories).items() for story in titles]
+    by_stories: dict[tuple, list] = {}
+    for story, id_ in told:
+        by_stories.setdefault(tuple(sorted(story)), []).append(id_)
+    for i in open_:
+        (t, name), mine = listed[i], stories(listed[i][0].get("name"))
+        if len(whole[i]) != 1 and mine:
+            # by its stories, at the first level that finds any: an alike spelling never replaces an exact one, even
+            # one that is not free (already named, or its very title another of the service's: both claiming it would
+            # lose it for both). Then nothing is taken in its place
+            levels = (
+                lambda: by_stories.get(tuple(sorted(mine)), []),
+                lambda: [id_ for story, id_ in told if same_stories(mine, story, same_title)],
+                lambda: [id_ for story, id_ in told if same_stories(mine, story, spelt_alike)],
+            )
+            best = next((hits for level in levels if (hits := level())), [])
+            whole[i] = one_of(t, name, {id_ for id_ in best if id_ not in taken and not elsewhere(id_, name)})
+    # marked, so the caller can tell what it knew before from what was added
+    return {**matches, **{k: {**m, "added": True} for k, m in agreed(found_in((listed[i][0], whole[i]) for i in open_)).items()}}
 
 
 def list_titles(show: dict) -> list[dict]:
@@ -4473,7 +4554,11 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         except (requests.RequestException, ValueError) as e:  # SkyHook down or answering otherwise: without them
             print(f"TVDB: no titles for {title}: {type(e).__name__}", flush=True)
     tmdb_eps = tmdb_eps + [{"episodeId": i, "names": [n]} for i, n in local.items()]
-    by_title = match_by_title(service_eps, every, tmdb_eps)  # the service's episodes found by their title, whatever their number
+    found = match_by_title(service_eps, every, tmdb_eps)  # the service's episodes found by their title, whatever their number
+    # the titles its two last rules added are laid over the result at the end: until then every episode is found as
+    # before them, so an added title names its own episode and changes how no other is found
+    added = {key: m for key, m in found.items() if m.get("added")}
+    by_title = {key: m for key, m in found.items() if key not in added}
     titled = {m["episodeId"]: key for key, m in by_title.items()}
     # The service's titles meet ours often enough (a language in common): one that meets none of an episode's
     # titles then says another episode, whatever its number (RMC+'s S01E03 "France" is not TVDB's "Mali").
@@ -4495,8 +4580,18 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
     ours = {usable_title(e.get("title")) for e in every} - {""}
     known = titles_of(every, tmdb_eps, own=agreeing and enough(sum(any(same_title(n, o) for o in ours) for n in names)))
     own_titles = titles_of(every, tmdb_eps)  # for "same": a title match that is the episode's very title, once plain
+    own_stories = titles_of(every, tmdb_eps, plain=lambda name: tuple(sorted(stories(name))))  # and its very stories, in any order
     mapped = show.get("episode_map") or {}
     available = {}  # every Sonarr episode the service has, for the Episodes tab: by number and title, by title, by number
+
+    def by_its_title(key: str, match: dict) -> dict:
+        # "same": not merely close (by mj23au, #12); the first of its stories counts as its very title too, and so do
+        # the same stories in another order (stories only alike do not)
+        theirs_name, id_ = match["name"], match["episodeId"]
+        same = bool({usable_title(theirs_name), first_story(theirs_name)} & own_titles.get(id_, set())
+                    or tuple(sorted(stories(theirs_name))) in own_stories.get(id_, set()))
+        return {"service": key, "name": theirs_name, "match": "title", **({"same": True} if same else {})}
+
     # A season of the service the numbering gives another Sonarr season (Koh-Lanta's S34 as MyTF1's S29) is that one's:
     # Sonarr's own S29 (2023) is not asked there by its number
     claimed = {}
@@ -4509,9 +4604,7 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         hit = by_key.get(theirs or "")
         if e["id"] in titled:
             key = titled[e["id"]]
-            # not merely close (by mj23au, #12); the first of its stories counts as its very title too
-            same = bool({usable_title(by_title[key]["name"]), first_story(by_title[key]["name"])} & own_titles.get(e["id"], set()))
-            available[e["id"]] = {"service": key, "name": by_title[key]["name"], "match": "title", **({"same": True} if same else {})}
+            available[e["id"]] = by_its_title(key, by_title[key])
         elif hit and (theirs or "").split(".")[0] not in by_title \
                 and claimed.get(int(theirs[1:].split("E")[0]), e["seasonNumber"]) == e["seasonNumber"]:  # nor another season's
             theirs_name = usable_title(hit.get("name"))
@@ -4534,6 +4627,14 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
                 available[e["id"]] = {"service": key, "name": hit.get("name"), "match": "absolute"}
                 taken.add(key)
                 break
+    by_hand = {e["id"] for e in every if f"S{e['seasonNumber']:02}E{e['episodeNumber']:02}" in mapped}
+    for key, match in added.items():  # its service episode is that Sonarr episode's now, and no other's by its number
+        had = [id_ for id_, have in available.items() if have["service"].split(".")[0] == key]
+        if by_hand & {match["episodeId"], *had}:
+            continue  # a number given by hand stands: an added title does not take it, nor move that episode
+        for id_ in had:
+            del available[id_]
+        available[match["episodeId"]] = by_its_title(key, match)
     checks = []
     for e in checked:  # as the sync and the Episodes tab find them: by title too, not by number alone (by mj23au)
         sxxeyy = f"S{e['seasonNumber']:02}E{e['episodeNumber']:02}"
@@ -4553,7 +4654,8 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         # whether the service's titles and Sonarr's agree where both number an episode alike: when they don't, the
         # page offers Sonarr's titles in your language (Sonarr 5)
         "titlesAgree": agreeing,
-        "titled": sorted(by_title),  # the service's numbers some Sonarr episode's title points to
+        # the service's numbers some Sonarr episode's title points to
+        "titled": sorted(set(by_title) | {a["service"].split(".")[0] for a in available.values() if a.get("match") == "title"}),
         "local_titles": local,  # TVDB's titles in your language, for the page to show over Sonarr's "TBA"
         # everything the service lists, as it numbers it: what a download's own numbering can ask for
         "titles": [{"key": f"S{t['season']:02}E{t['number']:02}", "part": t.get("part"), "name": t.get("name")} for t in service_eps],
