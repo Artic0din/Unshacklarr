@@ -193,7 +193,7 @@ def extract(page: str) -> dict[str, list[str]]:
     return {t: holes.get(t, []) for t in sorted(found)}
 
 
-SERVER = ["sync.py", "web.py", "backend.py", "cdm.py", "cookies.py", "options.py", "push.py", "offsite.py"]
+SERVER = ["sync.py", "web.py", "backend.py", "cdm.py", "cookies.py", "options.py", "push.py", "offsite.py", "servicecheck.py"]
 
 
 def said(text: str) -> bool:
