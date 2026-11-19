@@ -1,0 +1,471 @@
+{
+ "title": "Daddy Issues",
+ "tvdb": 443250,
+ "show": {
+  "service": "SBS",
+  "title": "https://www.sbs.com.au/ondemand/tv-series/daddy-issues"
+ },
+ "tmdb_key": true,
+ "country": "AU",
+ "inputs": {
+  "service": [
+   {
+    "type": "episode",
+    "name": "Happy Tears",
+    "id": "2391802435825",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 1,
+    "number": 1
+   },
+   {
+    "type": "episode",
+    "name": "Normal Men",
+    "id": "2391802435826",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 1,
+    "number": 2
+   },
+   {
+    "type": "episode",
+    "name": "Sugar Daddies",
+    "id": "2391802435827",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 1,
+    "number": 3
+   },
+   {
+    "type": "episode",
+    "name": "Garden Sliders",
+    "id": "2391802435828",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 1,
+    "number": 4
+   },
+   {
+    "type": "episode",
+    "name": "Man Mess",
+    "id": "2391802435829",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 1,
+    "number": 5
+   },
+   {
+    "type": "episode",
+    "name": "Sadie",
+    "id": "2391802435830",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 1,
+    "number": 6
+   },
+   {
+    "type": "episode",
+    "name": "Back for Good",
+    "id": "2474793027827",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 2,
+    "number": 1
+   },
+   {
+    "type": "episode",
+    "name": "Pine Cones and Litter",
+    "id": "2474793027828",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 2,
+    "number": 2
+   },
+   {
+    "type": "episode",
+    "name": "It's a Plum",
+    "id": "2474793027829",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 2,
+    "number": 3
+   },
+   {
+    "type": "episode",
+    "name": "We Don't Like Sigmas",
+    "id": "2474793027830",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 2,
+    "number": 4
+   },
+   {
+    "type": "episode",
+    "name": "I'm Your Man",
+    "id": "2474793027831",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 2,
+    "number": 5
+   },
+   {
+    "type": "episode",
+    "name": "For Future Reference, Trousers Stay On",
+    "id": "2474793027832",
+    "language": "en",
+    "description": null,
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Daddy Issues",
+    "season": 2,
+    "number": 6
+   }
+  ],
+  "episodes": [
+   {
+    "id": 63946,
+    "seasonNumber": 1,
+    "episodeNumber": 1,
+    "title": "Happy Tears",
+    "airDate": "2024-08-15",
+    "airDateUtc": "2024-08-15T20:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 63947,
+    "seasonNumber": 1,
+    "episodeNumber": 2,
+    "title": "Normal Men",
+    "airDate": "2024-08-15",
+    "airDateUtc": "2024-08-15T20:24:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 63948,
+    "seasonNumber": 1,
+    "episodeNumber": 3,
+    "title": "Sugar Daddies",
+    "airDate": "2024-08-22",
+    "airDateUtc": "2024-08-22T20:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 63949,
+    "seasonNumber": 1,
+    "episodeNumber": 4,
+    "title": "Garden Sliders",
+    "airDate": "2024-08-22",
+    "airDateUtc": "2024-08-22T20:24:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 63950,
+    "seasonNumber": 1,
+    "episodeNumber": 5,
+    "title": "Man Mess",
+    "airDate": "2024-08-29",
+    "airDateUtc": "2024-08-29T20:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 63951,
+    "seasonNumber": 1,
+    "episodeNumber": 6,
+    "title": "Sadie",
+    "airDate": "2024-08-29",
+    "airDateUtc": "2024-08-29T20:24:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76608,
+    "seasonNumber": 2,
+    "episodeNumber": 1,
+    "title": "Back for Good",
+    "airDate": "2025-11-21",
+    "airDateUtc": "2025-11-21T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76747,
+    "seasonNumber": 2,
+    "episodeNumber": 2,
+    "title": "Pine Cones and Litter",
+    "airDate": "2025-11-28",
+    "airDateUtc": "2025-11-28T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76748,
+    "seasonNumber": 2,
+    "episodeNumber": 3,
+    "title": "It’s a Plum",
+    "airDate": "2025-12-05",
+    "airDateUtc": "2025-12-05T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76749,
+    "seasonNumber": 2,
+    "episodeNumber": 4,
+    "title": "We Don’t Like Sigmas",
+    "airDate": "2025-12-12",
+    "airDateUtc": "2025-12-12T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76750,
+    "seasonNumber": 2,
+    "episodeNumber": 5,
+    "title": "I’m Your Man",
+    "airDate": "2025-12-18",
+    "airDateUtc": "2025-12-18T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76751,
+    "seasonNumber": 2,
+    "episodeNumber": 6,
+    "title": "For Future Reference, Trousers Stay On",
+    "airDate": "2025-12-18",
+    "airDateUtc": "2025-12-18T21:24:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   }
+  ],
+  "series": {
+   "tvdbId": 443250,
+   "tmdbId": 241337,
+   "title": "Daddy Issues"
+  },
+  "tmdb": [
+   {
+    "names": [
+     "Happy Tears"
+    ],
+    "air_date": "2024-08-15",
+    "season": 1,
+    "number": 1
+   },
+   {
+    "names": [
+     "Normal Men"
+    ],
+    "air_date": "2024-08-15",
+    "season": 1,
+    "number": 2
+   },
+   {
+    "names": [
+     "Sugar Daddies"
+    ],
+    "air_date": "2024-08-22",
+    "season": 1,
+    "number": 3
+   },
+   {
+    "names": [
+     "Garden Sliders"
+    ],
+    "air_date": "2024-08-22",
+    "season": 1,
+    "number": 4
+   },
+   {
+    "names": [
+     "Man Mess"
+    ],
+    "air_date": "2024-08-29",
+    "season": 1,
+    "number": 5
+   },
+   {
+    "names": [
+     "Sadie"
+    ],
+    "air_date": "2024-08-29",
+    "season": 1,
+    "number": 6
+   },
+   {
+    "names": [
+     "Back for Good"
+    ],
+    "air_date": "2025-11-21",
+    "season": 2,
+    "number": 1
+   },
+   {
+    "names": [
+     "Pine Cones and Litter"
+    ],
+    "air_date": "2025-11-28",
+    "season": 2,
+    "number": 2
+   },
+   {
+    "names": [
+     "It’s a Plum"
+    ],
+    "air_date": "2025-12-05",
+    "season": 2,
+    "number": 3
+   },
+   {
+    "names": [
+     "We Don’t Like Sigmas"
+    ],
+    "air_date": "2025-12-12",
+    "season": 2,
+    "number": 4
+   },
+   {
+    "names": [
+     "I’m Your Man"
+    ],
+    "air_date": "2025-12-18",
+    "season": 2,
+    "number": 5
+   },
+   {
+    "names": [
+     "For Future Reference, Trousers Stay On"
+    ],
+    "air_date": "2025-12-18",
+    "season": 2,
+    "number": 6
+   }
+  ],
+  "tvdb": {}
+ },
+ "expect": {
+  "available": {
+   "63946": {
+    "service": "S01E01",
+    "name": "Happy Tears",
+    "match": "title",
+    "same": true
+   },
+   "63947": {
+    "service": "S01E02",
+    "name": "Normal Men",
+    "match": "title",
+    "same": true
+   },
+   "63948": {
+    "service": "S01E03",
+    "name": "Sugar Daddies",
+    "match": "title",
+    "same": true
+   },
+   "63949": {
+    "service": "S01E04",
+    "name": "Garden Sliders",
+    "match": "title",
+    "same": true
+   },
+   "63950": {
+    "service": "S01E05",
+    "name": "Man Mess",
+    "match": "title",
+    "same": true
+   },
+   "63951": {
+    "service": "S01E06",
+    "name": "Sadie",
+    "match": "title",
+    "same": true
+   },
+   "76608": {
+    "service": "S02E01",
+    "name": "Back for Good",
+    "match": "title",
+    "same": true
+   },
+   "76747": {
+    "service": "S02E02",
+    "name": "Pine Cones and Litter",
+    "match": "title",
+    "same": true
+   },
+   "76748": {
+    "service": "S02E03",
+    "name": "It's a Plum",
+    "match": "title"
+   },
+   "76749": {
+    "service": "S02E04",
+    "name": "We Don't Like Sigmas",
+    "match": "title"
+   },
+   "76750": {
+    "service": "S02E05",
+    "name": "I'm Your Man",
+    "match": "title"
+   },
+   "76751": {
+    "service": "S02E06",
+    "name": "For Future Reference, Trousers Stay On",
+    "match": "title",
+    "same": true
+   }
+  },
+  "titlesAgree": true,
+  "season_map": {}
+ }
+}

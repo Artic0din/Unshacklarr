@@ -1,0 +1,898 @@
+{
+ "title": "Crimes That Shook Australia",
+ "tvdb": 280128,
+ "show": {
+  "service": "BINGE",
+  "title": "https://binge.com.au/en-AU/show-detail/crimes-that-shook-australia/ArticleId:wmcvvbuq0u58r0wph1v9obp2gi/wmcvvbuq0u58r0wph1v9obp2gi"
+ },
+ "tmdb_key": true,
+ "country": "AU",
+ "inputs": {
+  "service": [
+   {
+    "type": "episode",
+    "name": "The Murder Of Ebony Simpson",
+    "id": "6qs2v6rg6jk6rg1wc2p5bfhz8",
+    "language": null,
+    "description": "In 1992, the small town of Bargo is shocked to its core when it becomes the scene of the murder of nine-year-old Ebony Simpson.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 1,
+    "number": 1
+   },
+   {
+    "type": "episode",
+    "name": "The Port Arthur Tragedy",
+    "id": "12ykw026b1w3mw4k6rbhm9wyg",
+    "language": null,
+    "description": "In April 1996, a mentally ill young man murders 35 people and injures 23 others in the sleepy tourist town of Port Arthur, in an act that will forever change Australia.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 1,
+    "number": 2
+   },
+   {
+    "type": "episode",
+    "name": "Peter Dupas",
+    "id": "b9phunnxr0at8xam6ovbkf1a6",
+    "language": null,
+    "description": "For four decades, one of Australia's most prolific serial killers, Peter Dupas, preyed on the women of Victoria. With the help of the police, Stan Grant examines how he was caught.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 1,
+    "number": 3
+   },
+   {
+    "type": "episode",
+    "name": "Jason Downie",
+    "id": "8pl7v6s3xja9yq43e5ay7hvh2",
+    "language": null,
+    "description": "Examines the murder of 16-year-old Chantelle Rowe and her family by her boyfriend's obsessed best friend, Jason Downie, which would forever change the sleepy town of Kapunda.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 1,
+    "number": 4
+   },
+   {
+    "type": "episode",
+    "name": "Katherine Mary Knight",
+    "id": "61hyfhe546gsmybij3oz4tlt5",
+    "language": null,
+    "description": "Katherine Mary Knight becomes one of Australia's most disturbing killers and cannibals when she murders her de facto husband in 2000.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 1,
+    "number": 5
+   },
+   {
+    "type": "episode",
+    "name": "Derek Percy",
+    "id": "e03p87qjc20l8ev71y00dx3k4",
+    "language": null,
+    "description": "Recounting the crimes of Derek Percy, who savagely murdered 12 year old Yvonne Tuohy and has been linked to many more notorious child killings.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 1,
+    "number": 6
+   },
+   {
+    "type": "episode",
+    "name": "Robert Farquharson",
+    "id": "byjoyi7w9dkpnftzrdhla48sx",
+    "language": null,
+    "description": "The story of how a supposedly loving father suffering from mental health issues drove his car into a dam on Father's Day, drowning his three young sons.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 2,
+    "number": 1
+   },
+   {
+    "type": "episode",
+    "name": "Peter Falconio",
+    "id": "9zsqli7fqnt5kusv8vanz7hmm",
+    "language": null,
+    "description": "The story of the disappearance and murder of British backpacker Peter Falconio on a remote stretch of highway in the Northern Territory.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 2,
+    "number": 2
+   },
+   {
+    "type": "episode",
+    "name": "The Strathfield Massacre",
+    "id": "5t3ra9lzr23biu8kd9qaj5hpz",
+    "language": null,
+    "description": "The story behind one of Australia's most shocking violent shooting rampages which left eight dead and six injured in the middle of a suburban shopping centre in the heart of Sydney.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 2,
+    "number": 3
+   },
+   {
+    "type": "episode",
+    "name": "Darcey Freeman",
+    "id": "8e1t5r9pb1vu2oydes2q3p6td",
+    "language": null,
+    "description": "On January 29, 2009, Darcey Freeman, an innocent five-year-old girl, become the victim of a bitter custody battle.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 2,
+    "number": 4
+   },
+   {
+    "type": "episode",
+    "name": "Raechel Betts",
+    "id": "93jqxk5ea99akbaz2xfwnct5r",
+    "language": null,
+    "description": "Stan Grant investigates the gruesome murder of childcare worker Raechel Betts; whose dismembered leg washed up on a Phillip Island beach.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 2,
+    "number": 6
+   },
+   {
+    "type": "episode",
+    "name": "The Hoddle Street Massacre",
+    "id": "44g33lxsi6vcrkon8ouww9ogw",
+    "language": null,
+    "description": "In August 1997, a quiet street in suburban Melbourne became the scene of horror as an ex-Army cadet, Julian Knight shot and killed seven people and injured another nineteen.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 2,
+    "number": 7
+   },
+   {
+    "type": "episode",
+    "name": "Gerard Baden-Clay",
+    "id": "2vlgm0n44exwo0bkbhbl57y9l",
+    "language": null,
+    "description": "Examines the murder of former beauty queen Allison Baden-Clay, whose seemingly perfect life was riddled with secrets and horrors.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 2,
+    "number": 8
+   },
+   {
+    "type": "episode",
+    "name": "Snowtown: The Bodies In The Barrels Murders",
+    "id": "7somkrvt8rqp0errxzvnsabnh",
+    "language": null,
+    "description": "Chronicles the story of John Bunting and his trio who were responsible for the horrifying deaths of 12 people in Adelaide, South Australia in the 1990s.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 1
+   },
+   {
+    "type": "episode",
+    "name": "The Bega Schoolgirl Murders",
+    "id": "9bmvn8qd1x2ezapyqva949kq4",
+    "language": null,
+    "description": "A look at the murder of teenagers Lauren Barry and Nichole Collins in 1997.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 2
+   },
+   {
+    "type": "episode",
+    "name": "The Queen Street Massacre",
+    "id": "53uze9vkfe2vsjasmpq3a2vrz",
+    "language": null,
+    "description": "On 8 December 1987, Frank Vitkovic kills nine people in Melbourne's Australia Post headquarters. The day becomes a milestone along the road to stricter gun controls in Australia.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 3
+   },
+   {
+    "type": "episode",
+    "name": "Matthew Milat",
+    "id": "7dtnu02d8t5gxxw3c8l00ycz0",
+    "language": null,
+    "description": "In the Belanglo State Forest, in November 2010, Matthew Milat kills a school friend in cold blood. In doing so, he satisfies his desire to follow in the footsteps of his notorious uncle, Ivan.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 4
+   },
+   {
+    "type": "episode",
+    "name": "Anu Singh",
+    "id": "8afkjgjwz6paa8dzvyc4fg2km",
+    "language": null,
+    "description": "Anu Singh informs her friends of a suicide pact made between her and Joe Cinque, her boyfriend, but only Joe winds up dead.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 5
+   },
+   {
+    "type": "episode",
+    "name": "Jill Meagher",
+    "id": "29ehgapw6pubx7lx7iy0v65nq",
+    "language": null,
+    "description": "After a night out with the girls, 29-year-old Jill Meagher was raped and murdered on the walk back home. It was the crime that left the nation outraged by a flawed parole system.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 6
+   },
+   {
+    "type": "episode",
+    "name": "Raymond Edmunds",
+    "id": "ewtui9y0c9c9752d0rdwfv6pz",
+    "language": null,
+    "description": "Raymond Edmunds is a notorious rapist and murderer who was active in Victoria, Australia for over two decades.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 7
+   },
+   {
+    "type": "episode",
+    "name": "Patricia Byers",
+    "id": "4j24b7nn10n642h3c9yyjcfpx",
+    "language": null,
+    "description": "Patricia Byers shot her lover, John Asquith. John survived a bullet to the head, and the ensuing investigation would lead to her infamous nickname as The Black Widow.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 8
+   },
+   {
+    "type": "episode",
+    "name": "The Walsh Street Massacre",
+    "id": "dft0bbym6kdmnngh24khwtxz",
+    "language": null,
+    "description": "A chain of events are set off when Constables Steven Tynan and Damian Eyre are ambushed and murdered, revealing a tale of lies and revenge.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 9
+   },
+   {
+    "type": "episode",
+    "name": "Morgan Huxley",
+    "id": "6uwlj7wm754v05ewexqrm9iuk",
+    "language": null,
+    "description": "Morgan Huxley's decision to have one last beer lands him in the deadly hands of Daniel Kelsall, a disturbed young man who wants to act out his fantasies.",
+    "date": null,
+    "cover_url": null,
+    "year": 2018,
+    "series_title": "Crimes That Shook Australia",
+    "season": 3,
+    "number": 10
+   }
+  ],
+  "episodes": [
+   {
+    "id": 54063,
+    "seasonNumber": 1,
+    "episodeNumber": 1,
+    "title": "Ebony Simpson",
+    "airDate": "2014-04-16",
+    "airDateUtc": "2014-04-16T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54064,
+    "seasonNumber": 1,
+    "episodeNumber": 2,
+    "title": "The Port Arthur Tragedy",
+    "airDate": "2014-04-23",
+    "airDateUtc": "2014-04-23T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54065,
+    "seasonNumber": 1,
+    "episodeNumber": 3,
+    "title": "Peter Dupas",
+    "airDate": "2014-04-30",
+    "airDateUtc": "2014-04-30T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54066,
+    "seasonNumber": 1,
+    "episodeNumber": 4,
+    "title": "Jason Downie",
+    "airDate": "2014-05-07",
+    "airDateUtc": "2014-05-07T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54067,
+    "seasonNumber": 1,
+    "episodeNumber": 5,
+    "title": "Katherine Mary Knight",
+    "airDate": "2014-05-14",
+    "airDateUtc": "2014-05-14T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54068,
+    "seasonNumber": 1,
+    "episodeNumber": 6,
+    "title": "Derek Percy",
+    "airDate": "2014-05-21",
+    "airDateUtc": "2014-05-21T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54069,
+    "seasonNumber": 2,
+    "episodeNumber": 1,
+    "title": "Robert Farquharson",
+    "airDate": "2016-05-29",
+    "airDateUtc": "2016-05-29T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54070,
+    "seasonNumber": 2,
+    "episodeNumber": 2,
+    "title": "Peter Falconio",
+    "airDate": "2016-06-05",
+    "airDateUtc": "2016-06-05T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54071,
+    "seasonNumber": 2,
+    "episodeNumber": 3,
+    "title": "The Strathfield Massacre",
+    "airDate": "2016-06-12",
+    "airDateUtc": "2016-06-12T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54072,
+    "seasonNumber": 2,
+    "episodeNumber": 4,
+    "title": "Darcey Freeman",
+    "airDate": "2016-06-19",
+    "airDateUtc": "2016-06-19T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54073,
+    "seasonNumber": 2,
+    "episodeNumber": 5,
+    "title": "The Russell Street Bombing",
+    "airDate": "2016-06-26",
+    "airDateUtc": "2016-06-26T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54074,
+    "seasonNumber": 2,
+    "episodeNumber": 6,
+    "title": "Raechel Betts",
+    "airDate": "2016-07-03",
+    "airDateUtc": "2016-07-03T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54075,
+    "seasonNumber": 2,
+    "episodeNumber": 7,
+    "title": "The Hoddle Street Massacre",
+    "airDate": "2016-07-10",
+    "airDateUtc": "2016-07-10T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54076,
+    "seasonNumber": 2,
+    "episodeNumber": 8,
+    "title": "Gerard Baden-Clay",
+    "airDate": "2016-07-17",
+    "airDateUtc": "2016-07-17T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54077,
+    "seasonNumber": 3,
+    "episodeNumber": 1,
+    "title": "Snowtown: The Bodies In The Barrels Murders",
+    "airDate": "2018-02-18",
+    "airDateUtc": "2018-02-18T08:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54078,
+    "seasonNumber": 3,
+    "episodeNumber": 2,
+    "title": "The Bega Schoolgirl Murders",
+    "airDate": "2018-02-25",
+    "airDateUtc": "2018-02-25T08:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54079,
+    "seasonNumber": 3,
+    "episodeNumber": 3,
+    "title": "The Queen Street Massacre",
+    "airDate": "2018-03-04",
+    "airDateUtc": "2018-03-04T08:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54080,
+    "seasonNumber": 3,
+    "episodeNumber": 4,
+    "title": "Matthew Milat",
+    "airDate": "2018-03-11",
+    "airDateUtc": "2018-03-11T08:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54081,
+    "seasonNumber": 3,
+    "episodeNumber": 5,
+    "title": "Anu Singh",
+    "airDate": "2018-03-18",
+    "airDateUtc": "2018-03-18T08:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54082,
+    "seasonNumber": 3,
+    "episodeNumber": 6,
+    "title": "Morgan Huxley",
+    "airDate": "2018-03-25",
+    "airDateUtc": "2018-03-25T08:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54083,
+    "seasonNumber": 3,
+    "episodeNumber": 7,
+    "title": "Raymund Edmunds",
+    "airDate": "2018-04-01",
+    "airDateUtc": "2018-04-01T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54084,
+    "seasonNumber": 3,
+    "episodeNumber": 8,
+    "title": "Patricia Byers",
+    "airDate": "2018-04-08",
+    "airDateUtc": "2018-04-08T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54085,
+    "seasonNumber": 3,
+    "episodeNumber": 9,
+    "title": "The Walsh Street Massacre",
+    "airDate": "2018-04-15",
+    "airDateUtc": "2018-04-15T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54086,
+    "seasonNumber": 3,
+    "episodeNumber": 10,
+    "title": "Jill Meagher",
+    "airDate": "2018-04-22",
+    "airDateUtc": "2018-04-22T09:30:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   }
+  ],
+  "series": {
+   "tvdbId": 280128,
+   "tmdbId": 67128,
+   "title": "Crimes That Shook Australia"
+  },
+  "tmdb": [
+   {
+    "names": [
+     "The Murder of Ebony Simpson"
+    ],
+    "air_date": "2013-07-01",
+    "season": 1,
+    "number": 1
+   },
+   {
+    "names": [
+     "The Port Arthur Tragedy"
+    ],
+    "air_date": "2013-07-08",
+    "season": 1,
+    "number": 2
+   },
+   {
+    "names": [
+     "Peter Dupas"
+    ],
+    "air_date": "2013-07-15",
+    "season": 1,
+    "number": 3
+   },
+   {
+    "names": [
+     "Jason Downie"
+    ],
+    "air_date": "2013-07-22",
+    "season": 1,
+    "number": 4
+   },
+   {
+    "names": [
+     "Katherine Mary Knight"
+    ],
+    "air_date": "2013-07-29",
+    "season": 1,
+    "number": 5
+   },
+   {
+    "names": [
+     "Derek Percy"
+    ],
+    "air_date": "2013-08-05",
+    "season": 1,
+    "number": 6
+   },
+   {
+    "names": [
+     "Robert Farquharson"
+    ],
+    "air_date": "2016-07-24",
+    "season": 2,
+    "number": 1
+   },
+   {
+    "names": [
+     "Peter Falconio"
+    ],
+    "air_date": "2016-07-24",
+    "season": 2,
+    "number": 2
+   },
+   {
+    "names": [
+     "The Strathfield Massacre"
+    ],
+    "air_date": "2016-07-24",
+    "season": 2,
+    "number": 3
+   },
+   {
+    "names": [
+     "Darcey Freeman"
+    ],
+    "air_date": "2016-07-24",
+    "season": 2,
+    "number": 4
+   },
+   {
+    "names": [
+     "The Russell Street Bombing"
+    ],
+    "air_date": "2016-07-24",
+    "season": 2,
+    "number": 5
+   },
+   {
+    "names": [
+     "Raechel Betts"
+    ],
+    "air_date": "2016-07-24",
+    "season": 2,
+    "number": 6
+   },
+   {
+    "names": [
+     "Hoddle Street Massacre"
+    ],
+    "air_date": "2016-07-24",
+    "season": 2,
+    "number": 7
+   },
+   {
+    "names": [
+     "Gerard Baden-Clay"
+    ],
+    "air_date": "2016-07-17",
+    "season": 2,
+    "number": 8
+   },
+   {
+    "names": [
+     "Snowtown"
+    ],
+    "air_date": "2018-02-18",
+    "season": 3,
+    "number": 1
+   },
+   {
+    "names": [
+     "The Bega Schoolgirl Murders"
+    ],
+    "air_date": "2018-02-25",
+    "season": 3,
+    "number": 2
+   },
+   {
+    "names": [
+     "The Queen Street Massacre"
+    ],
+    "air_date": "2018-03-04",
+    "season": 3,
+    "number": 3
+   },
+   {
+    "names": [
+     "Matthew Milat"
+    ],
+    "air_date": "2018-03-11",
+    "season": 3,
+    "number": 4
+   },
+   {
+    "names": [
+     "Anu Singh"
+    ],
+    "air_date": "2018-03-18",
+    "season": 3,
+    "number": 5
+   },
+   {
+    "names": [
+     "Morgan Huxley"
+    ],
+    "air_date": "2018-03-25",
+    "season": 3,
+    "number": 6
+   },
+   {
+    "names": [
+     "Raymond Edmunds"
+    ],
+    "air_date": "2018-04-01",
+    "season": 3,
+    "number": 7
+   },
+   {
+    "names": [
+     "Patricia Byers"
+    ],
+    "air_date": "2018-04-08",
+    "season": 3,
+    "number": 8
+   },
+   {
+    "names": [
+     "The Walsh Street Massacre"
+    ],
+    "air_date": "2018-04-15",
+    "season": 3,
+    "number": 9
+   },
+   {
+    "names": [
+     "Jill Meagher"
+    ],
+    "air_date": "2018-04-22",
+    "season": 3,
+    "number": 10
+   }
+  ],
+  "tvdb": {}
+ },
+ "expect": {
+  "available": {
+   "54063": {
+    "service": "S01E01",
+    "name": "The Murder Of Ebony Simpson",
+    "match": "title"
+   },
+   "54064": {
+    "service": "S01E02",
+    "name": "The Port Arthur Tragedy",
+    "match": "title",
+    "same": true
+   },
+   "54065": {
+    "service": "S01E03",
+    "name": "Peter Dupas",
+    "match": "title",
+    "same": true
+   },
+   "54066": {
+    "service": "S01E04",
+    "name": "Jason Downie",
+    "match": "title",
+    "same": true
+   },
+   "54067": {
+    "service": "S01E05",
+    "name": "Katherine Mary Knight",
+    "match": "title",
+    "same": true
+   },
+   "54068": {
+    "service": "S01E06",
+    "name": "Derek Percy",
+    "match": "title",
+    "same": true
+   },
+   "54069": {
+    "service": "S02E01",
+    "name": "Robert Farquharson",
+    "match": "title",
+    "same": true
+   },
+   "54070": {
+    "service": "S02E02",
+    "name": "Peter Falconio",
+    "match": "title",
+    "same": true
+   },
+   "54071": {
+    "service": "S02E03",
+    "name": "The Strathfield Massacre",
+    "match": "title",
+    "same": true
+   },
+   "54072": {
+    "service": "S02E04",
+    "name": "Darcey Freeman",
+    "match": "title",
+    "same": true
+   },
+   "54074": {
+    "service": "S02E06",
+    "name": "Raechel Betts",
+    "match": "title",
+    "same": true
+   },
+   "54075": {
+    "service": "S02E07",
+    "name": "The Hoddle Street Massacre",
+    "match": "title",
+    "same": true
+   },
+   "54076": {
+    "service": "S02E08",
+    "name": "Gerard Baden-Clay",
+    "match": "title",
+    "same": true
+   },
+   "54077": {
+    "service": "S03E01",
+    "name": "Snowtown: The Bodies In The Barrels Murders",
+    "match": "title",
+    "same": true
+   },
+   "54078": {
+    "service": "S03E02",
+    "name": "The Bega Schoolgirl Murders",
+    "match": "title",
+    "same": true
+   },
+   "54079": {
+    "service": "S03E03",
+    "name": "The Queen Street Massacre",
+    "match": "title",
+    "same": true
+   },
+   "54080": {
+    "service": "S03E04",
+    "name": "Matthew Milat",
+    "match": "title",
+    "same": true
+   },
+   "54081": {
+    "service": "S03E05",
+    "name": "Anu Singh",
+    "match": "title",
+    "same": true
+   },
+   "54082": {
+    "service": "S03E10",
+    "name": "Morgan Huxley",
+    "match": "title",
+    "same": true
+   },
+   "54083": {
+    "service": "S03E07",
+    "name": "Raymond Edmunds",
+    "match": "title",
+    "same": true
+   },
+   "54084": {
+    "service": "S03E08",
+    "name": "Patricia Byers",
+    "match": "title",
+    "same": true
+   },
+   "54085": {
+    "service": "S03E09",
+    "name": "The Walsh Street Massacre",
+    "match": "title",
+    "same": true
+   },
+   "54086": {
+    "service": "S03E06",
+    "name": "Jill Meagher",
+    "match": "title",
+    "same": true
+   }
+  },
+  "titlesAgree": true,
+  "season_map": {}
+ }
+}

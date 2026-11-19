@@ -1,0 +1,1483 @@
+{
+ "title": "St. Denis Medical",
+ "tvdb": 435916,
+ "show": {
+  "service": "SEVEN",
+  "title": "https://7plus.com.au/st-denis-medical"
+ },
+ "tmdb_key": true,
+ "country": "AU",
+ "inputs": {
+  "service": [
+   {
+    "type": "episode",
+    "name": "Welcome To St. Denis",
+    "id": "SDME01-001",
+    "language": "en",
+    "description": "Alex is torn between her daughter’s school play and an \"all-hands\" situation in the Emergency Department. Joyce spends the hospital’s limited funds on a fancy mammography machine.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 1
+   },
+   {
+    "type": "episode",
+    "name": "A Very Robust Personal Life",
+    "id": "SDME01-002",
+    "language": "en",
+    "description": "Joyce’s belief that personal life should stay out of the workplace is tested by unexpected news. Ron thinks a patient has a crush on him. Bruce tries to demonstrate the value of his important work.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 2
+   },
+   {
+    "type": "episode",
+    "name": "Weird Stuff You Can't Explain",
+    "id": "SDME01-003",
+    "language": "en",
+    "description": "When Ron hexes the day to prove superstitions aren’t real, things at the hospital start getting weird. Joyce and Matt discover an employee’s secret.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 3
+   },
+   {
+    "type": "episode",
+    "name": "Salamat You Too",
+    "id": "SDME01-004",
+    "language": "en",
+    "description": "Alex accidentally provokes the Emergency Department’s mean girls. Ron and Serena battle over parking etiquette. Bruce has a hard time letting go of the spotlight.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 4
+   },
+   {
+    "type": "episode",
+    "name": "A Peanut & Caramel-Filled Miracle",
+    "id": "SDME01-005",
+    "language": "en",
+    "description": "Ron and Bruce butt heads over a candy bar. Alex is forced to fire an incompetent employee. Matt seeks appreciation for saving a patient’s life",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 5
+   },
+   {
+    "type": "episode",
+    "name": "Ho-Ho-Hollo",
+    "id": "SDME01-006",
+    "language": "en",
+    "description": "It’s the holiday season at St. Denis. Alex and Ron care for a patient whose diagnosis is not what it seems. Joyce enlists Serena’s help to boost St. Denis’ online presence.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 6
+   },
+   {
+    "type": "episode",
+    "name": "50 CC's Of Kindness",
+    "id": "SDME01-007",
+    "language": "en",
+    "description": "Ron mocks Alex and Matt's attempts to resolve a conflict between two prison inmates who stabbed each other in a gang fight. Serena helps Bruce address his fear of needles. Joyce finds herself smitten.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 7
+   },
+   {
+    "type": "episode",
+    "name": "Gimme The Scuttlebutt?",
+    "id": "SDME01-008",
+    "language": "en",
+    "description": "An \"intimacy in the workplace\" discussion leads Joyce to discover she's out of the loop on office gossip. Alex gets self-conscious about her sex life. Bruce tries to fight a new policy about dating.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 8
+   },
+   {
+    "type": "episode",
+    "name": "You Gotta Have A Plan",
+    "id": "SDME01-009",
+    "language": "en",
+    "description": "Joyce asks Alex to be the executor of her estate. Matt and Serena are forced to keep watch over a bickering family. Bruce grapples with unexpected DNA test results.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 9
+   },
+   {
+    "type": "episode",
+    "name": "People Just Say Stuff Online",
+    "id": "SDME01-010",
+    "language": "en",
+    "description": "Ron's bedside manner earns him a complaint from a frustrated patient. Alex insists an unflattering online review was not about her. Bruce confronts his high-school bully.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 10
+   },
+   {
+    "type": "episode",
+    "name": "Nobody Even Mentions The Brownies!",
+    "id": "SDME01-011",
+    "language": "en",
+    "description": "Joyce pushes the staff to upsell patients on hospital procedures, kicking off some fierce competition and a case of mistaken identity. Bruce and Ron try to play plumber for a day.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 11
+   },
+   {
+    "type": "episode",
+    "name": "Buffalo Bruce & Matty The Kid",
+    "id": "SDME01-012",
+    "language": "en",
+    "description": "An emotional support animal is loose in the halls of St. Denis. Alex goes big for Serena's birthday to mixed results.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 12
+   },
+   {
+    "type": "episode",
+    "name": "Some Famous Internet Guy",
+    "id": "SDME01-013",
+    "language": "en",
+    "description": "When a famous musician's performance at the hospital is delayed, Joyce throws an impromptu talent show with the St. Denis staff. Alex attempts to connect with her daughter, Ella.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 13
+   },
+   {
+    "type": "episode",
+    "name": "Listen To Your Ladybugs",
+    "id": "SDME01-014",
+    "language": "en",
+    "description": "Joyce launches a women's health initiative to unexpected results. Ron treats a patient who has all the answers. Bruce has an existential crisis.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 14
+   },
+   {
+    "type": "episode",
+    "name": "Sometimes It's Good To Be Cautious",
+    "id": "SDME01-015",
+    "language": "en",
+    "description": "Bruce and Alex give conflicting medical advice to a young athlete. Joyce competes with Tiger Woods in her alumni magazine. Matt and Serena (almost) drop an unconscious patient.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 15
+   },
+   {
+    "type": "episode",
+    "name": "Anything To Push Zaluva",
+    "id": "SDME01-016",
+    "language": "en",
+    "description": "Ron's teasing makes Joyce question whether her friendship with a pharmaceutical rep is genuine. Alex has trouble letting Serena take on a new task. Matt finds a mentor in Bruce.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 16
+   },
+   {
+    "type": "episode",
+    "name": "Bruce-IC & The Mus-IC",
+    "id": "SDME01-017",
+    "language": "en",
+    "description": "At the annual fundraiser, Alex & her husband, Tim, try to have a wild, kid-free night. Ron & Joyce butt heads over hosting duties. Bruce sets out to win this year's \"Dancing with the Caregivers\" comp.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 17
+   },
+   {
+    "type": "episode",
+    "name": "This Place Is Our Everything",
+    "id": "SDME01-018",
+    "language": "en",
+    "description": "A storm causes chaos in the Emergency Department. Alex is torn between an obligation to her husband and her co-workers' needs. Joyce goes on a spending spree with found money.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 1,
+    "number": 18
+   },
+   {
+    "type": "episode",
+    "name": "Aloha, Everyone",
+    "id": "SDME02-001",
+    "language": "en",
+    "description": "Alex tries to hold on to her peaceful vacation vibes. Joyce faces a design crisis in the birthing center. Matt and Serena reassess their working relationship.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 1
+   },
+   {
+    "type": "episode",
+    "name": "Mama Bear Activated",
+    "id": "SDME02-002",
+    "language": "en",
+    "description": "After Bruce is attacked at the hospital, Matt helps him deal with the aftermath. Alex motivates Joyce to amp up security while Ron and Serena debate who is more qualified to defend themselves.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 2
+   },
+   {
+    "type": "episode",
+    "name": "Get Me In The Pod, Brother",
+    "id": "SDME02-003",
+    "language": "en",
+    "description": "Alex and Ron spar over the wisdom of open communication. Joyce brings in a body scanner that proves overly distracting.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 3
+   },
+   {
+    "type": "episode",
+    "name": "Two Docs, One Conf",
+    "id": "SDME02-004",
+    "language": "en",
+    "description": "Ron and Bruce butt heads at a medical conference. Joyce tries to show her nurses some love for Nurse Appreciation Week.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 4
+   },
+   {
+    "type": "episode",
+    "name": "A Strong Cup Of Coffee",
+    "id": "SDME02-005",
+    "language": "en",
+    "description": "Alex is eager to impress her old charge nurse, Pam, who comes back to St. Denis. Serena and Matt try to solve a patient’s mystery illness.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 5
+   },
+   {
+    "type": "episode",
+    "name": "I Left A Woman On The Table",
+    "id": "SDME02-006",
+    "language": "en",
+    "description": "Matt struggles to deal with a patient from his past. Bruce tries to rekindle romance with a former flame. Joyce treats patients to cover a nursing shortage.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 6
+   },
+   {
+    "type": "episode",
+    "name": "No Wonder His Kidney Wants Out",
+    "id": "SDME02-007",
+    "language": "en",
+    "description": "Ron and Alex react very differently to a seemingly selfless patient. Joyce runs into an old flame. Matt helps Bruce find a new best friend.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 7
+   },
+   {
+    "type": "episode",
+    "name": "A Waste Of Time And Marble",
+    "id": "SDME02-008",
+    "language": "en",
+    "description": "With the threat of a nurse walkout, Alex is caught between her colleagues and Joyce. Ron and Bruce go above and beyond to help an unexpected patient.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 8
+   },
+   {
+    "type": "episode",
+    "name": "You're In His Bubble Space",
+    "id": "SDME02-009",
+    "language": "en",
+    "description": "Ron and Matt try to convince a child to get his shot. Alex helps Joyce with wedding planning. Bruce and Serena butt heads over Matt.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 9
+   },
+   {
+    "type": "episode",
+    "name": "This Is From Joyce",
+    "id": "SDME02-010",
+    "language": "en",
+    "description": "Serena and Alex work a “Botox and Bubbly” party; Joyce enlists Matt’s help with a personal issue; Bruce introduces Ron to the world of memecoins.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 10
+   },
+   {
+    "type": "episode",
+    "name": "This Isn't Bingo",
+    "id": "SDME02-011",
+    "language": "en",
+    "description": "Alex hosts a senior health fair. Bruce resuscitates a patient with a DNR. Ron competes with Matt over a patient's homemade fudge.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 11
+   },
+   {
+    "type": "episode",
+    "name": "Nod And Agree",
+    "id": "SDME02-012",
+    "language": "en",
+    "description": "Ron tries to wrap up a perfect visit from his son, Michael. Alex questions Val's return from jury duty. Bruce feels iced out of a juicy business opportunity.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 12
+   },
+   {
+    "type": "episode",
+    "name": "A New Best Friend",
+    "id": "SDME02-013",
+    "language": "en",
+    "description": "Alex's husband gets treated by Bruce. Joyce goes on an accidental journey. Ron's shoes squeak.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 13
+   },
+   {
+    "type": "episode",
+    "name": "Happy Birthday, Matty",
+    "id": "SDME02-014",
+    "language": "en",
+    "description": "Matt's first birthday party gets crashed by a rival. Joyce decides to \"get back out there.\"",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 14
+   },
+   {
+    "type": "episode",
+    "name": "Everyone Loves Portland General",
+    "id": "SDME02-015",
+    "language": "en",
+    "description": "Bruce considers a new chapter in his career. Serena uses a baby to get out of work. Matt helps Ron log onto his computer.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 15
+   },
+   {
+    "type": "episode",
+    "name": "Experience With Human Babies",
+    "id": "SDME02-016",
+    "language": "en",
+    "description": "Alex helps Joyce hire a midwife. Bruce joins Matt for an ambulance ride along. Serena and Ron butt heads over a pen.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 16
+   },
+   {
+    "type": "episode",
+    "name": "Here A Righteous Woman Comes",
+    "id": "SDME02-017",
+    "language": "en",
+    "description": "Joyce hosts a ribbon-cutting for the birthing center. Matt and Serena take on an awkward assignment. Ron tries to knock out a quick physical before his fishing trip.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 17
+   },
+   {
+    "type": "episode",
+    "name": "We Make Time",
+    "id": "SDME02-018",
+    "language": "en",
+    "description": "When a doctor becomes a patient, his co-workers rally around him, whether he likes it or not. Matt and Serena need to talk.",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "St. Denis Medical",
+    "season": 2,
+    "number": 18
+   }
+  ],
+  "episodes": [
+   {
+    "id": 60356,
+    "seasonNumber": 1,
+    "episodeNumber": 1,
+    "title": "Welcome to St. Denis",
+    "airDate": "2024-11-12",
+    "airDateUtc": "2024-11-13T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 60357,
+    "seasonNumber": 1,
+    "episodeNumber": 2,
+    "title": "A Very Robust Personal Life",
+    "airDate": "2024-11-12",
+    "airDateUtc": "2024-11-13T01:22:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62314,
+    "seasonNumber": 1,
+    "episodeNumber": 3,
+    "title": "Weird Stuff You Can't Explain",
+    "airDate": "2024-11-19",
+    "airDateUtc": "2024-11-20T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62332,
+    "seasonNumber": 1,
+    "episodeNumber": 4,
+    "title": "Salamat You Too",
+    "airDate": "2024-11-26",
+    "airDateUtc": "2024-11-27T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62333,
+    "seasonNumber": 1,
+    "episodeNumber": 5,
+    "title": "A Peanut and Caramel-Filled Miracle",
+    "airDate": "2024-12-03",
+    "airDateUtc": "2024-12-04T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62334,
+    "seasonNumber": 1,
+    "episodeNumber": 6,
+    "title": "Ho-Ho-Hollo",
+    "airDate": "2024-12-17",
+    "airDateUtc": "2024-12-18T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62863,
+    "seasonNumber": 1,
+    "episodeNumber": 7,
+    "title": "50 CC's of Kindness",
+    "airDate": "2025-01-14",
+    "airDateUtc": "2025-01-15T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 63871,
+    "seasonNumber": 1,
+    "episodeNumber": 8,
+    "title": "Gimme the Scuttlebutt",
+    "airDate": "2025-01-21",
+    "airDateUtc": "2025-01-22T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 64030,
+    "seasonNumber": 1,
+    "episodeNumber": 9,
+    "title": "You Gotta Have a Plan",
+    "airDate": "2025-01-28",
+    "airDateUtc": "2025-01-29T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 64234,
+    "seasonNumber": 1,
+    "episodeNumber": 10,
+    "title": "People Just Say Stuff Online",
+    "airDate": "2025-02-04",
+    "airDateUtc": "2025-02-05T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 64384,
+    "seasonNumber": 1,
+    "episodeNumber": 11,
+    "title": "Nobody Even Mentions the Brownies!",
+    "airDate": "2025-02-11",
+    "airDateUtc": "2025-02-12T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 64789,
+    "seasonNumber": 1,
+    "episodeNumber": 12,
+    "title": "Buffalo Bruce and Matty the Kid",
+    "airDate": "2025-02-18",
+    "airDateUtc": "2025-02-19T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 64861,
+    "seasonNumber": 1,
+    "episodeNumber": 13,
+    "title": "Some Famous Internet Guy",
+    "airDate": "2025-02-25",
+    "airDateUtc": "2025-02-26T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 64862,
+    "seasonNumber": 1,
+    "episodeNumber": 14,
+    "title": "Listen to Your Ladybugs",
+    "airDate": "2025-03-11",
+    "airDateUtc": "2025-03-12T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 65361,
+    "seasonNumber": 1,
+    "episodeNumber": 15,
+    "title": "Sometimes It's Good to Be Cautious",
+    "airDate": "2025-03-25",
+    "airDateUtc": "2025-03-26T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 65417,
+    "seasonNumber": 1,
+    "episodeNumber": 16,
+    "title": "Anything to Push Zaluva",
+    "airDate": "2025-04-01",
+    "airDateUtc": "2025-04-02T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 65418,
+    "seasonNumber": 1,
+    "episodeNumber": 17,
+    "title": "Bruce-ic and the Mus-ic",
+    "airDate": "2025-04-22",
+    "airDateUtc": "2025-04-23T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 65419,
+    "seasonNumber": 1,
+    "episodeNumber": 18,
+    "title": "This Place Is Our Everything",
+    "airDate": "2025-04-29",
+    "airDateUtc": "2025-04-30T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 70356,
+    "seasonNumber": 2,
+    "episodeNumber": 1,
+    "title": "Aloha, Everyone",
+    "airDate": "2025-11-03",
+    "airDateUtc": "2025-11-04T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 70357,
+    "seasonNumber": 2,
+    "episodeNumber": 2,
+    "title": "Mama Bear Activated",
+    "airDate": "2025-11-03",
+    "airDateUtc": "2025-11-04T01:22:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 75808,
+    "seasonNumber": 2,
+    "episodeNumber": 3,
+    "title": "Get Me in the Pod, Brother",
+    "airDate": "2025-11-10",
+    "airDateUtc": "2025-11-11T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76020,
+    "seasonNumber": 2,
+    "episodeNumber": 4,
+    "title": "Two Docs, One Conf",
+    "airDate": "2025-11-17",
+    "airDateUtc": "2025-11-18T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76021,
+    "seasonNumber": 2,
+    "episodeNumber": 5,
+    "title": "A Strong Cup of Coffee",
+    "airDate": "2025-11-24",
+    "airDateUtc": "2025-11-25T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76799,
+    "seasonNumber": 2,
+    "episodeNumber": 6,
+    "title": "I Left a Woman on the Table",
+    "airDate": "2025-12-01",
+    "airDateUtc": "2025-12-02T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76806,
+    "seasonNumber": 2,
+    "episodeNumber": 7,
+    "title": "No Wonder His Kidney Wants Out",
+    "airDate": "2025-12-08",
+    "airDateUtc": "2025-12-09T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76807,
+    "seasonNumber": 2,
+    "episodeNumber": 8,
+    "title": "A Waste of Time and Marble",
+    "airDate": "2025-12-15",
+    "airDateUtc": "2025-12-16T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76808,
+    "seasonNumber": 2,
+    "episodeNumber": 9,
+    "title": "You're in His Bubble Space",
+    "airDate": "2026-01-05",
+    "airDateUtc": "2026-01-06T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76809,
+    "seasonNumber": 2,
+    "episodeNumber": 10,
+    "title": "This Is from Joyce",
+    "airDate": "2026-01-12",
+    "airDateUtc": "2026-01-13T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 77165,
+    "seasonNumber": 2,
+    "episodeNumber": 11,
+    "title": "This Isn't Bingo",
+    "airDate": "2026-01-26",
+    "airDateUtc": "2026-01-27T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 77166,
+    "seasonNumber": 2,
+    "episodeNumber": 12,
+    "title": "Nod and Agree",
+    "airDate": "2026-02-02",
+    "airDateUtc": "2026-02-03T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 77167,
+    "seasonNumber": 2,
+    "episodeNumber": 13,
+    "title": "A New Best Friend",
+    "airDate": "2026-03-02",
+    "airDateUtc": "2026-03-03T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 77168,
+    "seasonNumber": 2,
+    "episodeNumber": 14,
+    "title": "Happy Birthday, Matty",
+    "airDate": "2026-03-09",
+    "airDateUtc": "2026-03-10T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 77169,
+    "seasonNumber": 2,
+    "episodeNumber": 15,
+    "title": "Everyone Loves Portland General",
+    "airDate": "2026-03-16",
+    "airDateUtc": "2026-03-17T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 77170,
+    "seasonNumber": 2,
+    "episodeNumber": 16,
+    "title": "Experience with Human Babies",
+    "airDate": "2026-03-23",
+    "airDateUtc": "2026-03-24T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 77171,
+    "seasonNumber": 2,
+    "episodeNumber": 17,
+    "title": "Here Comes Our Righteous Woman",
+    "airDate": "2026-03-30",
+    "airDateUtc": "2026-03-31T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 77172,
+    "seasonNumber": 2,
+    "episodeNumber": 18,
+    "title": "We Make Time",
+    "airDate": "2026-04-06",
+    "airDateUtc": "2026-04-07T00:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 83856,
+    "seasonNumber": 3,
+    "episodeNumber": 1,
+    "title": "He Ain't Noah Wyle",
+    "airDate": "2026-11-02",
+    "airDateUtc": "2026-11-03T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 84793,
+    "seasonNumber": 3,
+    "episodeNumber": 2,
+    "title": "Is That a Dinosaur?",
+    "airDate": "2026-11-09",
+    "airDateUtc": "2026-11-10T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 85989,
+    "seasonNumber": 3,
+    "episodeNumber": 3,
+    "title": "Yo! St. D",
+    "airDate": "2026-11-16",
+    "airDateUtc": "2026-11-17T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 86570,
+    "seasonNumber": 3,
+    "episodeNumber": 4,
+    "title": "The Intoxicating Aroma of True Love",
+    "airDate": "2026-11-23",
+    "airDateUtc": "2026-11-24T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 86632,
+    "seasonNumber": 3,
+    "episodeNumber": 5,
+    "title": "Hand of Gold",
+    "airDate": "2026-11-30",
+    "airDateUtc": "2026-12-01T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 86707,
+    "seasonNumber": 3,
+    "episodeNumber": 6,
+    "title": "Roads Not Taken",
+    "airDate": "2026-12-07",
+    "airDateUtc": "2026-12-08T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   }
+  ],
+  "series": {
+   "tvdbId": 435916,
+   "tmdbId": 251941,
+   "title": "St. Denis Medical"
+  },
+  "tmdb": [
+   {
+    "names": [
+     "Welcome to St. Denis"
+    ],
+    "air_date": "2024-11-12",
+    "season": 1,
+    "number": 1
+   },
+   {
+    "names": [
+     "A Very Robust Personal Life"
+    ],
+    "air_date": "2024-11-12",
+    "season": 1,
+    "number": 2
+   },
+   {
+    "names": [
+     "Weird Stuff You Can't Explain"
+    ],
+    "air_date": "2024-11-19",
+    "season": 1,
+    "number": 3
+   },
+   {
+    "names": [
+     "Salamat You Too"
+    ],
+    "air_date": "2024-11-26",
+    "season": 1,
+    "number": 4
+   },
+   {
+    "names": [
+     "A Peanut and Caramel-Filled Miracle"
+    ],
+    "air_date": "2024-12-03",
+    "season": 1,
+    "number": 5
+   },
+   {
+    "names": [
+     "Ho-Ho-Hollo"
+    ],
+    "air_date": "2024-12-17",
+    "season": 1,
+    "number": 6
+   },
+   {
+    "names": [
+     "50 cc's of Kindness"
+    ],
+    "air_date": "2025-01-14",
+    "season": 1,
+    "number": 7
+   },
+   {
+    "names": [
+     "Gimme the Scuttlebutt"
+    ],
+    "air_date": "2025-01-21",
+    "season": 1,
+    "number": 8
+   },
+   {
+    "names": [
+     "You Gotta Have a Plan"
+    ],
+    "air_date": "2025-01-28",
+    "season": 1,
+    "number": 9
+   },
+   {
+    "names": [
+     "People Just Say Stuff Online"
+    ],
+    "air_date": "2025-02-04",
+    "season": 1,
+    "number": 10
+   },
+   {
+    "names": [
+     "Nobody Even Mentions the Brownies!"
+    ],
+    "air_date": "2025-02-11",
+    "season": 1,
+    "number": 11
+   },
+   {
+    "names": [
+     "Buffalo Bruce and Matty the Kid"
+    ],
+    "air_date": "2025-02-18",
+    "season": 1,
+    "number": 12
+   },
+   {
+    "names": [
+     "Some Famous Internet Guy"
+    ],
+    "air_date": "2025-02-25",
+    "season": 1,
+    "number": 13
+   },
+   {
+    "names": [
+     "Listen to Your Ladybugs"
+    ],
+    "air_date": "2025-03-11",
+    "season": 1,
+    "number": 14
+   },
+   {
+    "names": [
+     "Sometimes It's Good to Be Cautious"
+    ],
+    "air_date": "2025-03-25",
+    "season": 1,
+    "number": 15
+   },
+   {
+    "names": [
+     "Anything to Push Zaluva"
+    ],
+    "air_date": "2025-04-01",
+    "season": 1,
+    "number": 16
+   },
+   {
+    "names": [
+     "Bruce-ic and the Mus-ic"
+    ],
+    "air_date": "2025-04-22",
+    "season": 1,
+    "number": 17
+   },
+   {
+    "names": [
+     "This Place Is Our Everything"
+    ],
+    "air_date": "2025-04-29",
+    "season": 1,
+    "number": 18
+   },
+   {
+    "names": [
+     "Aloha, Everyone"
+    ],
+    "air_date": "2025-11-03",
+    "season": 2,
+    "number": 1
+   },
+   {
+    "names": [
+     "Mama Bear Activated"
+    ],
+    "air_date": "2025-11-03",
+    "season": 2,
+    "number": 2
+   },
+   {
+    "names": [
+     "Get Me in the Pod, Brother"
+    ],
+    "air_date": "2025-11-10",
+    "season": 2,
+    "number": 3
+   },
+   {
+    "names": [
+     "Two Docs, One Conf"
+    ],
+    "air_date": "2025-11-17",
+    "season": 2,
+    "number": 4
+   },
+   {
+    "names": [
+     "A Strong Cup of Coffee"
+    ],
+    "air_date": "2025-11-24",
+    "season": 2,
+    "number": 5
+   },
+   {
+    "names": [
+     "I Left a Woman on the Table"
+    ],
+    "air_date": "2025-12-01",
+    "season": 2,
+    "number": 6
+   },
+   {
+    "names": [
+     "No Wonder His Kidney Wants Out"
+    ],
+    "air_date": "2025-12-08",
+    "season": 2,
+    "number": 7
+   },
+   {
+    "names": [
+     "A Waste of Time and Marble"
+    ],
+    "air_date": "2025-12-15",
+    "season": 2,
+    "number": 8
+   },
+   {
+    "names": [
+     "You're in His Bubble Space"
+    ],
+    "air_date": "2026-01-05",
+    "season": 2,
+    "number": 9
+   },
+   {
+    "names": [
+     "This Is from Joyce"
+    ],
+    "air_date": "2026-01-12",
+    "season": 2,
+    "number": 10
+   },
+   {
+    "names": [
+     "This Isn't Bingo"
+    ],
+    "air_date": "2026-01-26",
+    "season": 2,
+    "number": 11
+   },
+   {
+    "names": [
+     "Nod and Agree"
+    ],
+    "air_date": "2026-02-02",
+    "season": 2,
+    "number": 12
+   },
+   {
+    "names": [
+     "A New Best Friend"
+    ],
+    "air_date": "2026-03-02",
+    "season": 2,
+    "number": 13
+   },
+   {
+    "names": [
+     "Happy Birthday, Matty"
+    ],
+    "air_date": "2026-03-09",
+    "season": 2,
+    "number": 14
+   },
+   {
+    "names": [
+     "Everyone Loves Portland General"
+    ],
+    "air_date": "2026-03-16",
+    "season": 2,
+    "number": 15
+   },
+   {
+    "names": [
+     "Experience with Human Babies"
+    ],
+    "air_date": "2026-03-23",
+    "season": 2,
+    "number": 16
+   },
+   {
+    "names": [
+     "Here a Righteous Woman Comes"
+    ],
+    "air_date": "2026-03-30",
+    "season": 2,
+    "number": 17
+   },
+   {
+    "names": [
+     "We Make Time"
+    ],
+    "air_date": "2026-04-06",
+    "season": 2,
+    "number": 18
+   },
+   {
+    "names": [
+     "He Ain't Noah Wyle"
+    ],
+    "air_date": "2026-11-02",
+    "season": 3,
+    "number": 1
+   },
+   {
+    "names": [
+     "Is That A Dinosaur?"
+    ],
+    "air_date": "2026-11-09",
+    "season": 3,
+    "number": 2
+   },
+   {
+    "names": [
+     "Yo! St. D"
+    ],
+    "air_date": "2026-11-16",
+    "season": 3,
+    "number": 3
+   },
+   {
+    "names": [
+     "The Intoxication Aroma of True Love"
+    ],
+    "air_date": "2026-11-23",
+    "season": 3,
+    "number": 4
+   },
+   {
+    "names": [
+     "Hand of Gold"
+    ],
+    "air_date": "2026-11-30",
+    "season": 3,
+    "number": 5
+   },
+   {
+    "names": [
+     "Roads Not Taken"
+    ],
+    "air_date": "2026-12-07",
+    "season": 3,
+    "number": 6
+   },
+   {
+    "names": [
+     "Episode 7"
+    ],
+    "air_date": "2026-12-14",
+    "season": 3,
+    "number": 7
+   },
+   {
+    "names": [
+     "Episode 8"
+    ],
+    "air_date": "2026-12-21",
+    "season": 3,
+    "number": 8
+   }
+  ],
+  "tvdb": {}
+ },
+ "expect": {
+  "available": {
+   "60356": {
+    "service": "S01E01",
+    "name": "Welcome To St. Denis",
+    "match": "title",
+    "same": true
+   },
+   "60357": {
+    "service": "S01E02",
+    "name": "A Very Robust Personal Life",
+    "match": "title",
+    "same": true
+   },
+   "62314": {
+    "service": "S01E03",
+    "name": "Weird Stuff You Can't Explain",
+    "match": "title",
+    "same": true
+   },
+   "62332": {
+    "service": "S01E04",
+    "name": "Salamat You Too",
+    "match": "title",
+    "same": true
+   },
+   "62333": {
+    "service": "S01E05",
+    "name": "A Peanut & Caramel-Filled Miracle",
+    "match": "title"
+   },
+   "62334": {
+    "service": "S01E06",
+    "name": "Ho-Ho-Hollo",
+    "match": "title",
+    "same": true
+   },
+   "62863": {
+    "service": "S01E07",
+    "name": "50 CC's Of Kindness",
+    "match": "title",
+    "same": true
+   },
+   "63871": {
+    "service": "S01E08",
+    "name": "Gimme The Scuttlebutt?",
+    "match": "title",
+    "same": true
+   },
+   "64030": {
+    "service": "S01E09",
+    "name": "You Gotta Have A Plan",
+    "match": "title",
+    "same": true
+   },
+   "64234": {
+    "service": "S01E10",
+    "name": "People Just Say Stuff Online",
+    "match": "title",
+    "same": true
+   },
+   "64384": {
+    "service": "S01E11",
+    "name": "Nobody Even Mentions The Brownies!",
+    "match": "title",
+    "same": true
+   },
+   "64789": {
+    "service": "S01E12",
+    "name": "Buffalo Bruce & Matty The Kid",
+    "match": "title"
+   },
+   "64861": {
+    "service": "S01E13",
+    "name": "Some Famous Internet Guy",
+    "match": "title",
+    "same": true
+   },
+   "64862": {
+    "service": "S01E14",
+    "name": "Listen To Your Ladybugs",
+    "match": "title",
+    "same": true
+   },
+   "65361": {
+    "service": "S01E15",
+    "name": "Sometimes It's Good To Be Cautious",
+    "match": "title",
+    "same": true
+   },
+   "65417": {
+    "service": "S01E16",
+    "name": "Anything To Push Zaluva",
+    "match": "title",
+    "same": true
+   },
+   "65418": {
+    "service": "S01E17",
+    "name": "Bruce-IC & The Mus-IC",
+    "match": "title"
+   },
+   "65419": {
+    "service": "S01E18",
+    "name": "This Place Is Our Everything",
+    "match": "title",
+    "same": true
+   },
+   "70356": {
+    "service": "S02E01",
+    "name": "Aloha, Everyone",
+    "match": "title",
+    "same": true
+   },
+   "70357": {
+    "service": "S02E02",
+    "name": "Mama Bear Activated",
+    "match": "title",
+    "same": true
+   },
+   "75808": {
+    "service": "S02E03",
+    "name": "Get Me In The Pod, Brother",
+    "match": "title",
+    "same": true
+   },
+   "76020": {
+    "service": "S02E04",
+    "name": "Two Docs, One Conf",
+    "match": "title",
+    "same": true
+   },
+   "76021": {
+    "service": "S02E05",
+    "name": "A Strong Cup Of Coffee",
+    "match": "title",
+    "same": true
+   },
+   "76799": {
+    "service": "S02E06",
+    "name": "I Left A Woman On The Table",
+    "match": "title",
+    "same": true
+   },
+   "76806": {
+    "service": "S02E07",
+    "name": "No Wonder His Kidney Wants Out",
+    "match": "title",
+    "same": true
+   },
+   "76807": {
+    "service": "S02E08",
+    "name": "A Waste Of Time And Marble",
+    "match": "title",
+    "same": true
+   },
+   "76808": {
+    "service": "S02E09",
+    "name": "You're In His Bubble Space",
+    "match": "title",
+    "same": true
+   },
+   "76809": {
+    "service": "S02E10",
+    "name": "This Is From Joyce",
+    "match": "title",
+    "same": true
+   },
+   "77165": {
+    "service": "S02E11",
+    "name": "This Isn't Bingo",
+    "match": "title",
+    "same": true
+   },
+   "77166": {
+    "service": "S02E12",
+    "name": "Nod And Agree",
+    "match": "title",
+    "same": true
+   },
+   "77167": {
+    "service": "S02E13",
+    "name": "A New Best Friend",
+    "match": "title",
+    "same": true
+   },
+   "77168": {
+    "service": "S02E14",
+    "name": "Happy Birthday, Matty",
+    "match": "title",
+    "same": true
+   },
+   "77169": {
+    "service": "S02E15",
+    "name": "Everyone Loves Portland General",
+    "match": "title",
+    "same": true
+   },
+   "77170": {
+    "service": "S02E16",
+    "name": "Experience With Human Babies",
+    "match": "title",
+    "same": true
+   },
+   "77171": {
+    "service": "S02E17",
+    "name": "Here A Righteous Woman Comes",
+    "match": "title",
+    "same": true
+   },
+   "77172": {
+    "service": "S02E18",
+    "name": "We Make Time",
+    "match": "title",
+    "same": true
+   }
+  },
+  "titlesAgree": true,
+  "season_map": {}
+ }
+}

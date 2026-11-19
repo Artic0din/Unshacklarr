@@ -1,0 +1,3791 @@
+{
+ "title": "Bluey (2018)",
+ "tvdb": 353546,
+ "show": {
+  "service": "AUBC",
+  "title": "https://iview.abc.net.au/show/bluey-auslan/series/1/video/CZ1702Q001S00"
+ },
+ "tmdb_key": true,
+ "country": "AU",
+ "inputs": {
+  "service": [
+   {
+    "type": "episode",
+    "name": "Yoga Ball",
+    "id": "CZ1702Q001S00",
+    "language": "en-AU",
+    "description": "Bingo loves horsing around with Dad, but sometimes he forgets Bingo is smaller than her sister. Mum teaches Bingo how to use her big girl bark to keep their fun within her limits. (Auslan)",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Bluey (Auslan)",
+    "season": 1,
+    "number": 1
+   }
+  ],
+  "episodes": [
+   {
+    "id": 2668,
+    "seasonNumber": 0,
+    "episodeNumber": 1,
+    "title": "Silent Night (Before Christmas)",
+    "airDate": "2019-12-17",
+    "airDateUtc": "2019-12-16T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2669,
+    "seasonNumber": 0,
+    "episodeNumber": 2,
+    "title": "Crazy Christmas Lights",
+    "airDate": "2019-12-21",
+    "airDateUtc": "2019-12-20T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2670,
+    "seasonNumber": 0,
+    "episodeNumber": 3,
+    "title": "Jingle Bells",
+    "airDate": "2020-12-10",
+    "airDateUtc": "2020-12-09T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2671,
+    "seasonNumber": 0,
+    "episodeNumber": 4,
+    "title": "Lollipop Song",
+    "airDate": "2021-01-11",
+    "airDateUtc": "2021-01-10T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2672,
+    "seasonNumber": 0,
+    "episodeNumber": 5,
+    "title": "Tea Party",
+    "airDate": "2021-03-05",
+    "airDateUtc": "2021-03-04T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2673,
+    "seasonNumber": 0,
+    "episodeNumber": 6,
+    "title": "Humpty Dumpty",
+    "airDate": "2021-03-12",
+    "airDateUtc": "2021-03-11T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2674,
+    "seasonNumber": 0,
+    "episodeNumber": 7,
+    "title": "Flying Saucer",
+    "airDate": "2021-03-17",
+    "airDateUtc": "2021-03-16T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2675,
+    "seasonNumber": 0,
+    "episodeNumber": 8,
+    "title": "Pea Pod Sausages",
+    "airDate": "2021-03-25",
+    "airDateUtc": "2021-03-24T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2676,
+    "seasonNumber": 0,
+    "episodeNumber": 9,
+    "title": "Cinderella",
+    "airDate": "2021-04-08",
+    "airDateUtc": "2021-04-07T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2677,
+    "seasonNumber": 0,
+    "episodeNumber": 10,
+    "title": "Green Bottles",
+    "airDate": "2021-04-21",
+    "airDateUtc": "2021-04-20T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2678,
+    "seasonNumber": 0,
+    "episodeNumber": 11,
+    "title": "Old MacDonald",
+    "airDate": "2021-05-20",
+    "airDateUtc": "2021-05-19T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2679,
+    "seasonNumber": 0,
+    "episodeNumber": 12,
+    "title": "Make Mum Laugh",
+    "airDate": "2021-06-01",
+    "airDateUtc": "2021-05-31T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2680,
+    "seasonNumber": 0,
+    "episodeNumber": 13,
+    "title": "Mower",
+    "airDate": "2021-06-10",
+    "airDateUtc": "2021-06-09T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2681,
+    "seasonNumber": 0,
+    "episodeNumber": 14,
+    "title": "Honk",
+    "airDate": "2021-06-18",
+    "airDateUtc": "2021-06-17T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2682,
+    "seasonNumber": 0,
+    "episodeNumber": 15,
+    "title": "High Ball",
+    "airDate": "2021-07-02",
+    "airDateUtc": "2021-07-01T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2683,
+    "seasonNumber": 0,
+    "episodeNumber": 16,
+    "title": "K9 News",
+    "airDate": "2021-09-24",
+    "airDateUtc": "2021-09-23T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2684,
+    "seasonNumber": 0,
+    "episodeNumber": 17,
+    "title": "In the Garden",
+    "airDate": "2021-09-10",
+    "airDateUtc": "2021-09-09T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2685,
+    "seasonNumber": 0,
+    "episodeNumber": 18,
+    "title": "Outdoor Adventures",
+    "airDate": "2021-09-11",
+    "airDateUtc": "2021-09-10T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2686,
+    "seasonNumber": 0,
+    "episodeNumber": 19,
+    "title": "Archaeology",
+    "airDate": "2022-04-01",
+    "airDateUtc": "2022-03-31T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2687,
+    "seasonNumber": 0,
+    "episodeNumber": 20,
+    "title": "One Man Went to Mow",
+    "airDate": "2022-05-30",
+    "airDateUtc": "2022-05-29T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2688,
+    "seasonNumber": 0,
+    "episodeNumber": 21,
+    "title": "Tongue Twisters",
+    "airDate": "2021-03-24",
+    "airDateUtc": "2021-03-23T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 2689,
+    "seasonNumber": 1,
+    "episodeNumber": 1,
+    "title": "Magic Xylophone",
+    "airDate": "2018-10-01",
+    "airDateUtc": "2018-09-30T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 1
+   },
+   {
+    "id": 2690,
+    "seasonNumber": 1,
+    "episodeNumber": 2,
+    "title": "Hospital",
+    "airDate": "2018-10-02",
+    "airDateUtc": "2018-10-01T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 2
+   },
+   {
+    "id": 2691,
+    "seasonNumber": 1,
+    "episodeNumber": 3,
+    "title": "Keepy Uppy",
+    "airDate": "2018-10-03",
+    "airDateUtc": "2018-10-02T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 3
+   },
+   {
+    "id": 2692,
+    "seasonNumber": 1,
+    "episodeNumber": 4,
+    "title": "Daddy Robot",
+    "airDate": "2018-10-04",
+    "airDateUtc": "2018-10-03T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 4
+   },
+   {
+    "id": 2693,
+    "seasonNumber": 1,
+    "episodeNumber": 5,
+    "title": "Shadowlands",
+    "airDate": "2018-10-05",
+    "airDateUtc": "2018-10-04T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 5
+   },
+   {
+    "id": 2694,
+    "seasonNumber": 1,
+    "episodeNumber": 6,
+    "title": "The Weekend",
+    "airDate": "2018-10-06",
+    "airDateUtc": "2018-10-05T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 6
+   },
+   {
+    "id": 2695,
+    "seasonNumber": 1,
+    "episodeNumber": 7,
+    "title": "BBQ",
+    "airDate": "2018-10-07",
+    "airDateUtc": "2018-10-06T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 7
+   },
+   {
+    "id": 2696,
+    "seasonNumber": 1,
+    "episodeNumber": 8,
+    "title": "Fruitbat",
+    "airDate": "2018-10-08",
+    "airDateUtc": "2018-10-07T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 8
+   },
+   {
+    "id": 2697,
+    "seasonNumber": 1,
+    "episodeNumber": 9,
+    "title": "Horsey Ride",
+    "airDate": "2018-10-09",
+    "airDateUtc": "2018-10-08T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 9
+   },
+   {
+    "id": 2698,
+    "seasonNumber": 1,
+    "episodeNumber": 10,
+    "title": "Hotel",
+    "airDate": "2018-10-10",
+    "airDateUtc": "2018-10-09T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 10
+   },
+   {
+    "id": 2699,
+    "seasonNumber": 1,
+    "episodeNumber": 11,
+    "title": "Bike",
+    "airDate": "2018-10-11",
+    "airDateUtc": "2018-10-10T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 11
+   },
+   {
+    "id": 2700,
+    "seasonNumber": 1,
+    "episodeNumber": 12,
+    "title": "Bob Bilby",
+    "airDate": "2018-10-12",
+    "airDateUtc": "2018-10-11T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 12
+   },
+   {
+    "id": 2701,
+    "seasonNumber": 1,
+    "episodeNumber": 13,
+    "title": "Spygame",
+    "airDate": "2018-10-13",
+    "airDateUtc": "2018-10-12T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 13
+   },
+   {
+    "id": 2702,
+    "seasonNumber": 1,
+    "episodeNumber": 14,
+    "title": "Takeaway",
+    "airDate": "2018-10-14",
+    "airDateUtc": "2018-10-13T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 14
+   },
+   {
+    "id": 2703,
+    "seasonNumber": 1,
+    "episodeNumber": 15,
+    "title": "Butterflies",
+    "airDate": "2018-10-15",
+    "airDateUtc": "2018-10-14T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 15
+   },
+   {
+    "id": 2704,
+    "seasonNumber": 1,
+    "episodeNumber": 16,
+    "title": "Yoga Ball",
+    "airDate": "2018-10-16",
+    "airDateUtc": "2018-10-15T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 16
+   },
+   {
+    "id": 2705,
+    "seasonNumber": 1,
+    "episodeNumber": 17,
+    "title": "Calypso",
+    "airDate": "2018-10-17",
+    "airDateUtc": "2018-10-16T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 17
+   },
+   {
+    "id": 2706,
+    "seasonNumber": 1,
+    "episodeNumber": 18,
+    "title": "The Doctor",
+    "airDate": "2018-10-18",
+    "airDateUtc": "2018-10-17T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 18
+   },
+   {
+    "id": 2707,
+    "seasonNumber": 1,
+    "episodeNumber": 19,
+    "title": "The Claw",
+    "airDate": "2018-10-19",
+    "airDateUtc": "2018-10-18T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 19
+   },
+   {
+    "id": 2708,
+    "seasonNumber": 1,
+    "episodeNumber": 20,
+    "title": "Markets",
+    "airDate": "2018-10-20",
+    "airDateUtc": "2018-10-19T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 20
+   },
+   {
+    "id": 2709,
+    "seasonNumber": 1,
+    "episodeNumber": 21,
+    "title": "Blue Mountains",
+    "airDate": "2018-10-21",
+    "airDateUtc": "2018-10-20T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 21
+   },
+   {
+    "id": 2710,
+    "seasonNumber": 1,
+    "episodeNumber": 22,
+    "title": "The Pool",
+    "airDate": "2018-10-22",
+    "airDateUtc": "2018-10-21T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 22
+   },
+   {
+    "id": 2711,
+    "seasonNumber": 1,
+    "episodeNumber": 23,
+    "title": "Shops",
+    "airDate": "2018-10-23",
+    "airDateUtc": "2018-10-22T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 23
+   },
+   {
+    "id": 2712,
+    "seasonNumber": 1,
+    "episodeNumber": 24,
+    "title": "Wagon Ride",
+    "airDate": "2018-10-24",
+    "airDateUtc": "2018-10-23T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 24
+   },
+   {
+    "id": 2713,
+    "seasonNumber": 1,
+    "episodeNumber": 25,
+    "title": "Taxi",
+    "airDate": "2018-10-25",
+    "airDateUtc": "2018-10-24T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 25
+   },
+   {
+    "id": 2714,
+    "seasonNumber": 1,
+    "episodeNumber": 26,
+    "title": "The Beach",
+    "airDate": "2018-10-26",
+    "airDateUtc": "2018-10-25T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 26
+   },
+   {
+    "id": 2715,
+    "seasonNumber": 1,
+    "episodeNumber": 27,
+    "title": "Pirates",
+    "airDate": "2019-04-01",
+    "airDateUtc": "2019-03-31T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 27
+   },
+   {
+    "id": 2716,
+    "seasonNumber": 1,
+    "episodeNumber": 28,
+    "title": "Grannies",
+    "airDate": "2019-04-02",
+    "airDateUtc": "2019-04-01T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 28
+   },
+   {
+    "id": 2717,
+    "seasonNumber": 1,
+    "episodeNumber": 29,
+    "title": "The Creek",
+    "airDate": "2019-04-03",
+    "airDateUtc": "2019-04-02T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 29
+   },
+   {
+    "id": 2718,
+    "seasonNumber": 1,
+    "episodeNumber": 30,
+    "title": "Fairies",
+    "airDate": "2019-04-04",
+    "airDateUtc": "2019-04-03T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 30
+   },
+   {
+    "id": 2719,
+    "seasonNumber": 1,
+    "episodeNumber": 31,
+    "title": "Work",
+    "airDate": "2019-04-05",
+    "airDateUtc": "2019-04-04T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 31
+   },
+   {
+    "id": 2720,
+    "seasonNumber": 1,
+    "episodeNumber": 32,
+    "title": "Bumpy and the Wise Old Wolfhound",
+    "airDate": "2019-04-06",
+    "airDateUtc": "2019-04-05T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 32
+   },
+   {
+    "id": 2721,
+    "seasonNumber": 1,
+    "episodeNumber": 33,
+    "title": "Trampoline",
+    "airDate": "2019-04-07",
+    "airDateUtc": "2019-04-06T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 33
+   },
+   {
+    "id": 2722,
+    "seasonNumber": 1,
+    "episodeNumber": 34,
+    "title": "The Dump",
+    "airDate": "2019-04-08",
+    "airDateUtc": "2019-04-07T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 34
+   },
+   {
+    "id": 2723,
+    "seasonNumber": 1,
+    "episodeNumber": 35,
+    "title": "Zoo",
+    "airDate": "2019-04-09",
+    "airDateUtc": "2019-04-08T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 35
+   },
+   {
+    "id": 2724,
+    "seasonNumber": 1,
+    "episodeNumber": 36,
+    "title": "Backpackers",
+    "airDate": "2019-04-10",
+    "airDateUtc": "2019-04-09T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 36
+   },
+   {
+    "id": 2725,
+    "seasonNumber": 1,
+    "episodeNumber": 37,
+    "title": "The Adventure",
+    "airDate": "2019-04-11",
+    "airDateUtc": "2019-04-10T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 37
+   },
+   {
+    "id": 2726,
+    "seasonNumber": 1,
+    "episodeNumber": 38,
+    "title": "Copycat",
+    "airDate": "2019-04-12",
+    "airDateUtc": "2019-04-11T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 38
+   },
+   {
+    "id": 2727,
+    "seasonNumber": 1,
+    "episodeNumber": 39,
+    "title": "The Sleepover",
+    "airDate": "2019-04-13",
+    "airDateUtc": "2019-04-12T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 39
+   },
+   {
+    "id": 2728,
+    "seasonNumber": 1,
+    "episodeNumber": 40,
+    "title": "Early Baby",
+    "airDate": "2019-04-14",
+    "airDateUtc": "2019-04-13T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 40
+   },
+   {
+    "id": 2729,
+    "seasonNumber": 1,
+    "episodeNumber": 41,
+    "title": "Mums and Dads",
+    "airDate": "2019-04-15",
+    "airDateUtc": "2019-04-14T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 41
+   },
+   {
+    "id": 2730,
+    "seasonNumber": 1,
+    "episodeNumber": 42,
+    "title": "Hide and Seek",
+    "airDate": "2019-04-16",
+    "airDateUtc": "2019-04-15T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 42
+   },
+   {
+    "id": 2731,
+    "seasonNumber": 1,
+    "episodeNumber": 43,
+    "title": "Camping",
+    "airDate": "2019-04-17",
+    "airDateUtc": "2019-04-16T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 43
+   },
+   {
+    "id": 2732,
+    "seasonNumber": 1,
+    "episodeNumber": 44,
+    "title": "Mount Mumandad",
+    "airDate": "2019-04-18",
+    "airDateUtc": "2019-04-17T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 44
+   },
+   {
+    "id": 2733,
+    "seasonNumber": 1,
+    "episodeNumber": 45,
+    "title": "Kids",
+    "airDate": "2019-04-19",
+    "airDateUtc": "2019-04-18T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 45
+   },
+   {
+    "id": 2734,
+    "seasonNumber": 1,
+    "episodeNumber": 46,
+    "title": "Chickenrat",
+    "airDate": "2019-04-20",
+    "airDateUtc": "2019-04-19T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 46
+   },
+   {
+    "id": 2735,
+    "seasonNumber": 1,
+    "episodeNumber": 47,
+    "title": "Neighbours",
+    "airDate": "2019-04-21",
+    "airDateUtc": "2019-04-20T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 47
+   },
+   {
+    "id": 2736,
+    "seasonNumber": 1,
+    "episodeNumber": 48,
+    "title": "Teasing",
+    "airDate": "2019-04-22",
+    "airDateUtc": "2019-04-21T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 48
+   },
+   {
+    "id": 2737,
+    "seasonNumber": 1,
+    "episodeNumber": 49,
+    "title": "Asparagus",
+    "airDate": "2019-04-23",
+    "airDateUtc": "2019-04-22T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 49
+   },
+   {
+    "id": 2738,
+    "seasonNumber": 1,
+    "episodeNumber": 50,
+    "title": "Shaun",
+    "airDate": "2019-04-24",
+    "airDateUtc": "2019-04-23T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 50
+   },
+   {
+    "id": 2739,
+    "seasonNumber": 1,
+    "episodeNumber": 51,
+    "title": "Daddy Putdown",
+    "airDate": "2019-04-25",
+    "airDateUtc": "2019-04-24T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 51
+   },
+   {
+    "id": 2740,
+    "seasonNumber": 1,
+    "episodeNumber": 52,
+    "title": "Verandah Santa",
+    "airDate": "2019-12-12",
+    "airDateUtc": "2019-12-11T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 52
+   },
+   {
+    "id": 2741,
+    "seasonNumber": 2,
+    "episodeNumber": 1,
+    "title": "Dance Mode",
+    "airDate": "2020-03-17",
+    "airDateUtc": "2020-03-16T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 53
+   },
+   {
+    "id": 2742,
+    "seasonNumber": 2,
+    "episodeNumber": 2,
+    "title": "Hammerbarn",
+    "airDate": "2020-03-18",
+    "airDateUtc": "2020-03-17T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 54
+   },
+   {
+    "id": 2743,
+    "seasonNumber": 2,
+    "episodeNumber": 3,
+    "title": "Featherwand",
+    "airDate": "2020-03-19",
+    "airDateUtc": "2020-03-18T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 55
+   },
+   {
+    "id": 2744,
+    "seasonNumber": 2,
+    "episodeNumber": 4,
+    "title": "Squash",
+    "airDate": "2020-03-20",
+    "airDateUtc": "2020-03-19T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 56
+   },
+   {
+    "id": 2745,
+    "seasonNumber": 2,
+    "episodeNumber": 5,
+    "title": "Hairdressers",
+    "airDate": "2020-03-21",
+    "airDateUtc": "2020-03-20T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 57
+   },
+   {
+    "id": 2746,
+    "seasonNumber": 2,
+    "episodeNumber": 6,
+    "title": "Stumpfest",
+    "airDate": "2020-03-22",
+    "airDateUtc": "2020-03-21T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 58
+   },
+   {
+    "id": 2747,
+    "seasonNumber": 2,
+    "episodeNumber": 7,
+    "title": "Favourite Thing",
+    "airDate": "2020-03-23",
+    "airDateUtc": "2020-03-22T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 59
+   },
+   {
+    "id": 2748,
+    "seasonNumber": 2,
+    "episodeNumber": 8,
+    "title": "Daddy Dropoff",
+    "airDate": "2020-03-24",
+    "airDateUtc": "2020-03-23T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 60
+   },
+   {
+    "id": 2749,
+    "seasonNumber": 2,
+    "episodeNumber": 9,
+    "title": "Bingo",
+    "airDate": "2020-03-25",
+    "airDateUtc": "2020-03-24T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 61
+   },
+   {
+    "id": 2750,
+    "seasonNumber": 2,
+    "episodeNumber": 10,
+    "title": "Rug Island",
+    "airDate": "2020-03-26",
+    "airDateUtc": "2020-03-25T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 62
+   },
+   {
+    "id": 2751,
+    "seasonNumber": 2,
+    "episodeNumber": 11,
+    "title": "Charades",
+    "airDate": "2020-03-27",
+    "airDateUtc": "2020-03-26T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 63
+   },
+   {
+    "id": 2752,
+    "seasonNumber": 2,
+    "episodeNumber": 12,
+    "title": "Sticky Gecko",
+    "airDate": "2020-03-28",
+    "airDateUtc": "2020-03-27T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 64
+   },
+   {
+    "id": 2753,
+    "seasonNumber": 2,
+    "episodeNumber": 13,
+    "title": "Dad Baby",
+    "airDate": "2020-03-29",
+    "airDateUtc": "2020-03-28T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 65
+   },
+   {
+    "id": 2754,
+    "seasonNumber": 2,
+    "episodeNumber": 14,
+    "title": "Mum School",
+    "airDate": "2020-03-30",
+    "airDateUtc": "2020-03-29T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 66
+   },
+   {
+    "id": 2755,
+    "seasonNumber": 2,
+    "episodeNumber": 15,
+    "title": "Trains",
+    "airDate": "2020-03-31",
+    "airDateUtc": "2020-03-30T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 67
+   },
+   {
+    "id": 2756,
+    "seasonNumber": 2,
+    "episodeNumber": 16,
+    "title": "Army",
+    "airDate": "2020-04-01",
+    "airDateUtc": "2020-03-31T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 68
+   },
+   {
+    "id": 2757,
+    "seasonNumber": 2,
+    "episodeNumber": 17,
+    "title": "Fancy Restaurant",
+    "airDate": "2020-04-02",
+    "airDateUtc": "2020-04-01T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 69
+   },
+   {
+    "id": 2758,
+    "seasonNumber": 2,
+    "episodeNumber": 18,
+    "title": "Piggyback",
+    "airDate": "2020-04-03",
+    "airDateUtc": "2020-04-02T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 70
+   },
+   {
+    "id": 2759,
+    "seasonNumber": 2,
+    "episodeNumber": 19,
+    "title": "The Show",
+    "airDate": "2020-04-04",
+    "airDateUtc": "2020-04-03T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 71
+   },
+   {
+    "id": 2760,
+    "seasonNumber": 2,
+    "episodeNumber": 20,
+    "title": "Tickle Crabs",
+    "airDate": "2020-04-05",
+    "airDateUtc": "2020-04-04T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 72
+   },
+   {
+    "id": 2761,
+    "seasonNumber": 2,
+    "episodeNumber": 21,
+    "title": "Escape",
+    "airDate": "2020-04-06",
+    "airDateUtc": "2020-04-05T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 73
+   },
+   {
+    "id": 2762,
+    "seasonNumber": 2,
+    "episodeNumber": 22,
+    "title": "Bus",
+    "airDate": "2020-04-07",
+    "airDateUtc": "2020-04-06T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 74
+   },
+   {
+    "id": 2763,
+    "seasonNumber": 2,
+    "episodeNumber": 23,
+    "title": "Queens",
+    "airDate": "2020-04-08",
+    "airDateUtc": "2020-04-07T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 75
+   },
+   {
+    "id": 2764,
+    "seasonNumber": 2,
+    "episodeNumber": 24,
+    "title": "Flat Pack",
+    "airDate": "2020-04-09",
+    "airDateUtc": "2020-04-08T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 76
+   },
+   {
+    "id": 2765,
+    "seasonNumber": 2,
+    "episodeNumber": 25,
+    "title": "Helicopter",
+    "airDate": "2020-04-10",
+    "airDateUtc": "2020-04-09T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 77
+   },
+   {
+    "id": 2766,
+    "seasonNumber": 2,
+    "episodeNumber": 26,
+    "title": "Sleepytime",
+    "airDate": "2020-04-11",
+    "airDateUtc": "2020-04-10T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 78
+   },
+   {
+    "id": 2767,
+    "seasonNumber": 2,
+    "episodeNumber": 27,
+    "title": "Grandad",
+    "airDate": "2020-10-25",
+    "airDateUtc": "2020-10-24T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 79
+   },
+   {
+    "id": 2768,
+    "seasonNumber": 2,
+    "episodeNumber": 28,
+    "title": "Seesaw",
+    "airDate": "2020-10-26",
+    "airDateUtc": "2020-10-25T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 80
+   },
+   {
+    "id": 2769,
+    "seasonNumber": 2,
+    "episodeNumber": 29,
+    "title": "Movies",
+    "airDate": "2020-10-27",
+    "airDateUtc": "2020-10-26T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 81
+   },
+   {
+    "id": 2770,
+    "seasonNumber": 2,
+    "episodeNumber": 30,
+    "title": "Library",
+    "airDate": "2020-10-28",
+    "airDateUtc": "2020-10-27T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 82
+   },
+   {
+    "id": 2771,
+    "seasonNumber": 2,
+    "episodeNumber": 31,
+    "title": "Barky Boats",
+    "airDate": "2020-10-29",
+    "airDateUtc": "2020-10-28T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 83
+   },
+   {
+    "id": 2772,
+    "seasonNumber": 2,
+    "episodeNumber": 32,
+    "title": "Burger Shop",
+    "airDate": "2020-10-30",
+    "airDateUtc": "2020-10-29T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 84
+   },
+   {
+    "id": 2773,
+    "seasonNumber": 2,
+    "episodeNumber": 33,
+    "title": "Circus",
+    "airDate": "2020-10-31",
+    "airDateUtc": "2020-10-30T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 85
+   },
+   {
+    "id": 2774,
+    "seasonNumber": 2,
+    "episodeNumber": 34,
+    "title": "Swim School",
+    "airDate": "2020-11-01",
+    "airDateUtc": "2020-10-31T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 86
+   },
+   {
+    "id": 2775,
+    "seasonNumber": 2,
+    "episodeNumber": 35,
+    "title": "Café",
+    "airDate": "2020-11-02",
+    "airDateUtc": "2020-11-01T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 87
+   },
+   {
+    "id": 2776,
+    "seasonNumber": 2,
+    "episodeNumber": 36,
+    "title": "Postman",
+    "airDate": "2020-11-03",
+    "airDateUtc": "2020-11-02T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 88
+   },
+   {
+    "id": 2777,
+    "seasonNumber": 2,
+    "episodeNumber": 37,
+    "title": "The Quiet Game",
+    "airDate": "2020-11-04",
+    "airDateUtc": "2020-11-03T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 89
+   },
+   {
+    "id": 2778,
+    "seasonNumber": 2,
+    "episodeNumber": 38,
+    "title": "Mr Monkeyjocks",
+    "airDate": "2020-11-05",
+    "airDateUtc": "2020-11-04T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 90
+   },
+   {
+    "id": 2779,
+    "seasonNumber": 2,
+    "episodeNumber": 39,
+    "title": "Double Babysitter",
+    "airDate": "2020-11-06",
+    "airDateUtc": "2020-11-05T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 91
+   },
+   {
+    "id": 2780,
+    "seasonNumber": 2,
+    "episodeNumber": 40,
+    "title": "Bad Mood",
+    "airDate": "2020-11-07",
+    "airDateUtc": "2020-11-06T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 92
+   },
+   {
+    "id": 2781,
+    "seasonNumber": 2,
+    "episodeNumber": 41,
+    "title": "Octopus",
+    "airDate": "2020-11-08",
+    "airDateUtc": "2020-11-07T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 93
+   },
+   {
+    "id": 2782,
+    "seasonNumber": 2,
+    "episodeNumber": 42,
+    "title": "Bin Night",
+    "airDate": "2020-11-09",
+    "airDateUtc": "2020-11-08T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 94
+   },
+   {
+    "id": 2783,
+    "seasonNumber": 2,
+    "episodeNumber": 43,
+    "title": "Muffin Cone",
+    "airDate": "2020-11-10",
+    "airDateUtc": "2020-11-09T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 95
+   },
+   {
+    "id": 2784,
+    "seasonNumber": 2,
+    "episodeNumber": 44,
+    "title": "Duck Cake",
+    "airDate": "2020-11-11",
+    "airDateUtc": "2020-11-10T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 96
+   },
+   {
+    "id": 2785,
+    "seasonNumber": 2,
+    "episodeNumber": 45,
+    "title": "Handstand",
+    "airDate": "2020-11-12",
+    "airDateUtc": "2020-11-11T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 97
+   },
+   {
+    "id": 2786,
+    "seasonNumber": 2,
+    "episodeNumber": 46,
+    "title": "Road Trip",
+    "airDate": "2020-11-13",
+    "airDateUtc": "2020-11-12T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 98
+   },
+   {
+    "id": 2787,
+    "seasonNumber": 2,
+    "episodeNumber": 47,
+    "title": "Ice Cream",
+    "airDate": "2020-11-14",
+    "airDateUtc": "2020-11-13T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 99
+   },
+   {
+    "id": 2788,
+    "seasonNumber": 2,
+    "episodeNumber": 48,
+    "title": "Dunny",
+    "airDate": "2020-11-15",
+    "airDateUtc": "2020-11-14T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 100
+   },
+   {
+    "id": 2789,
+    "seasonNumber": 2,
+    "episodeNumber": 49,
+    "title": "Typewriter",
+    "airDate": "2020-11-16",
+    "airDateUtc": "2020-11-15T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 101
+   },
+   {
+    "id": 2790,
+    "seasonNumber": 2,
+    "episodeNumber": 50,
+    "title": "Baby Race",
+    "airDate": "2020-11-17",
+    "airDateUtc": "2020-11-16T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 102
+   },
+   {
+    "id": 2791,
+    "seasonNumber": 2,
+    "episodeNumber": 51,
+    "title": "Christmas Swim",
+    "airDate": "2020-12-01",
+    "airDateUtc": "2020-11-30T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 103
+   },
+   {
+    "id": 2792,
+    "seasonNumber": 2,
+    "episodeNumber": 52,
+    "title": "Easter",
+    "airDate": "2021-04-04",
+    "airDateUtc": "2021-04-03T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 104
+   },
+   {
+    "id": 2793,
+    "seasonNumber": 3,
+    "episodeNumber": 1,
+    "title": "Perfect",
+    "airDate": "2021-09-05",
+    "airDateUtc": "2021-09-04T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 105
+   },
+   {
+    "id": 2794,
+    "seasonNumber": 3,
+    "episodeNumber": 2,
+    "title": "Bedroom",
+    "airDate": "2021-11-22",
+    "airDateUtc": "2021-11-21T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 106
+   },
+   {
+    "id": 2795,
+    "seasonNumber": 3,
+    "episodeNumber": 3,
+    "title": "Obstacle Course",
+    "airDate": "2021-11-23",
+    "airDateUtc": "2021-11-22T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 107
+   },
+   {
+    "id": 2796,
+    "seasonNumber": 3,
+    "episodeNumber": 4,
+    "title": "Promises",
+    "airDate": "2021-11-24",
+    "airDateUtc": "2021-11-23T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 108
+   },
+   {
+    "id": 2797,
+    "seasonNumber": 3,
+    "episodeNumber": 5,
+    "title": "Omelette",
+    "airDate": "2021-11-25",
+    "airDateUtc": "2021-11-24T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 109
+   },
+   {
+    "id": 2798,
+    "seasonNumber": 3,
+    "episodeNumber": 6,
+    "title": "Born Yesterday",
+    "airDate": "2021-11-26",
+    "airDateUtc": "2021-11-25T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 110
+   },
+   {
+    "id": 2799,
+    "seasonNumber": 3,
+    "episodeNumber": 7,
+    "title": "Mini Bluey",
+    "airDate": "2021-11-27",
+    "airDateUtc": "2021-11-26T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 111
+   },
+   {
+    "id": 2800,
+    "seasonNumber": 3,
+    "episodeNumber": 8,
+    "title": "Unicorse",
+    "airDate": "2021-11-28",
+    "airDateUtc": "2021-11-27T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 112
+   },
+   {
+    "id": 2801,
+    "seasonNumber": 3,
+    "episodeNumber": 9,
+    "title": "Curry Quest",
+    "airDate": "2021-11-29",
+    "airDateUtc": "2021-11-28T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 113
+   },
+   {
+    "id": 2802,
+    "seasonNumber": 3,
+    "episodeNumber": 10,
+    "title": "Magic",
+    "airDate": "2021-11-30",
+    "airDateUtc": "2021-11-29T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 114
+   },
+   {
+    "id": 2803,
+    "seasonNumber": 3,
+    "episodeNumber": 11,
+    "title": "Chest",
+    "airDate": "2021-12-01",
+    "airDateUtc": "2021-11-30T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 115
+   },
+   {
+    "id": 2804,
+    "seasonNumber": 3,
+    "episodeNumber": 12,
+    "title": "Sheep Dog",
+    "airDate": "2021-12-02",
+    "airDateUtc": "2021-12-01T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 116
+   },
+   {
+    "id": 2805,
+    "seasonNumber": 3,
+    "episodeNumber": 13,
+    "title": "Housework",
+    "airDate": "2021-12-03",
+    "airDateUtc": "2021-12-02T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 117
+   },
+   {
+    "id": 2806,
+    "seasonNumber": 3,
+    "episodeNumber": 14,
+    "title": "Pass the Parcel",
+    "airDate": "2021-12-04",
+    "airDateUtc": "2021-12-03T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 118
+   },
+   {
+    "id": 2807,
+    "seasonNumber": 3,
+    "episodeNumber": 15,
+    "title": "Explorers",
+    "airDate": "2021-12-05",
+    "airDateUtc": "2021-12-04T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 119
+   },
+   {
+    "id": 2808,
+    "seasonNumber": 3,
+    "episodeNumber": 16,
+    "title": "Phones",
+    "airDate": "2021-12-06",
+    "airDateUtc": "2021-12-05T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 120
+   },
+   {
+    "id": 2809,
+    "seasonNumber": 3,
+    "episodeNumber": 17,
+    "title": "Pavlova",
+    "airDate": "2021-12-07",
+    "airDateUtc": "2021-12-06T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 121
+   },
+   {
+    "id": 2810,
+    "seasonNumber": 3,
+    "episodeNumber": 18,
+    "title": "Rain",
+    "airDate": "2021-12-08",
+    "airDateUtc": "2021-12-07T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 122
+   },
+   {
+    "id": 2811,
+    "seasonNumber": 3,
+    "episodeNumber": 19,
+    "title": "Pizza Girls",
+    "airDate": "2021-12-09",
+    "airDateUtc": "2021-12-08T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 123
+   },
+   {
+    "id": 2812,
+    "seasonNumber": 3,
+    "episodeNumber": 20,
+    "title": "Driving",
+    "airDate": "2021-12-10",
+    "airDateUtc": "2021-12-09T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 124
+   },
+   {
+    "id": 2813,
+    "seasonNumber": 3,
+    "episodeNumber": 21,
+    "title": "Tina",
+    "airDate": "2021-12-11",
+    "airDateUtc": "2021-12-10T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 125
+   },
+   {
+    "id": 2814,
+    "seasonNumber": 3,
+    "episodeNumber": 22,
+    "title": "Whale Watching",
+    "airDate": "2021-12-12",
+    "airDateUtc": "2021-12-11T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 126
+   },
+   {
+    "id": 2815,
+    "seasonNumber": 3,
+    "episodeNumber": 23,
+    "title": "Family Meeting",
+    "airDate": "2021-12-13",
+    "airDateUtc": "2021-12-12T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 127
+   },
+   {
+    "id": 2816,
+    "seasonNumber": 3,
+    "episodeNumber": 24,
+    "title": "Faceytalk",
+    "airDate": "2021-12-14",
+    "airDateUtc": "2021-12-13T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 128
+   },
+   {
+    "id": 2817,
+    "seasonNumber": 3,
+    "episodeNumber": 25,
+    "title": "Ragdoll",
+    "airDate": "2021-12-15",
+    "airDateUtc": "2021-12-14T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 129
+   },
+   {
+    "id": 2818,
+    "seasonNumber": 3,
+    "episodeNumber": 26,
+    "title": "Fairytale",
+    "airDate": "2021-12-16",
+    "airDateUtc": "2021-12-15T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 130
+   },
+   {
+    "id": 2819,
+    "seasonNumber": 3,
+    "episodeNumber": 27,
+    "title": "Musical Statues",
+    "airDate": "2022-06-13",
+    "airDateUtc": "2022-06-12T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 131
+   },
+   {
+    "id": 2820,
+    "seasonNumber": 3,
+    "episodeNumber": 28,
+    "title": "Stories",
+    "airDate": "2022-06-14",
+    "airDateUtc": "2022-06-13T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 132
+   },
+   {
+    "id": 2821,
+    "seasonNumber": 3,
+    "episodeNumber": 29,
+    "title": "Puppets",
+    "airDate": "2022-06-15",
+    "airDateUtc": "2022-06-14T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 133
+   },
+   {
+    "id": 2822,
+    "seasonNumber": 3,
+    "episodeNumber": 30,
+    "title": "Turtleboy",
+    "airDate": "2022-06-16",
+    "airDateUtc": "2022-06-15T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 134
+   },
+   {
+    "id": 2823,
+    "seasonNumber": 3,
+    "episodeNumber": 31,
+    "title": "Onesies",
+    "airDate": "2022-06-17",
+    "airDateUtc": "2022-06-16T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 135
+   },
+   {
+    "id": 2824,
+    "seasonNumber": 3,
+    "episodeNumber": 32,
+    "title": "Tradies",
+    "airDate": "2022-06-18",
+    "airDateUtc": "2022-06-17T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 136
+   },
+   {
+    "id": 2825,
+    "seasonNumber": 3,
+    "episodeNumber": 33,
+    "title": "Granny Mobile",
+    "airDate": "2022-06-19",
+    "airDateUtc": "2022-06-18T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 137
+   },
+   {
+    "id": 2826,
+    "seasonNumber": 3,
+    "episodeNumber": 34,
+    "title": "Space",
+    "airDate": "2022-06-20",
+    "airDateUtc": "2022-06-19T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 138
+   },
+   {
+    "id": 2827,
+    "seasonNumber": 3,
+    "episodeNumber": 35,
+    "title": "Smoochy Kiss",
+    "airDate": "2022-06-21",
+    "airDateUtc": "2022-06-20T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 139
+   },
+   {
+    "id": 2828,
+    "seasonNumber": 3,
+    "episodeNumber": 36,
+    "title": "Dirt",
+    "airDate": "2022-06-22",
+    "airDateUtc": "2022-06-21T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 140
+   },
+   {
+    "id": 2829,
+    "seasonNumber": 3,
+    "episodeNumber": 37,
+    "title": "The Decider",
+    "airDate": "2022-06-23",
+    "airDateUtc": "2022-06-22T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 141
+   },
+   {
+    "id": 28876,
+    "seasonNumber": 0,
+    "episodeNumber": 22,
+    "title": "Fun in the Car",
+    "airDate": "2021-05-23",
+    "airDateUtc": "2021-05-22T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 28877,
+    "seasonNumber": 0,
+    "episodeNumber": 23,
+    "title": "Let's Play Hide and Seek",
+    "airDate": "2021-05-30",
+    "airDateUtc": "2021-05-29T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 28878,
+    "seasonNumber": 0,
+    "episodeNumber": 24,
+    "title": "Scooter Fun",
+    "airDate": "2021-11-16",
+    "airDateUtc": "2021-11-15T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 32166,
+    "seasonNumber": 0,
+    "episodeNumber": 25,
+    "title": "School Friends",
+    "airDate": "2022-09-16",
+    "airDateUtc": "2022-09-15T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 32167,
+    "seasonNumber": 0,
+    "episodeNumber": 26,
+    "title": "Let's Dance",
+    "airDate": "2022-10-10",
+    "airDateUtc": "2022-10-09T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 35600,
+    "seasonNumber": 3,
+    "episodeNumber": 38,
+    "title": "Cubby",
+    "airDate": "2023-04-09",
+    "airDateUtc": "2023-04-08T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 35601,
+    "seasonNumber": 3,
+    "episodeNumber": 39,
+    "title": "Exercise",
+    "airDate": "2023-04-16",
+    "airDateUtc": "2023-04-15T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 35602,
+    "seasonNumber": 3,
+    "episodeNumber": 40,
+    "title": "Relax",
+    "airDate": "2023-04-23",
+    "airDateUtc": "2023-04-22T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 35603,
+    "seasonNumber": 3,
+    "episodeNumber": 41,
+    "title": "Stickbird",
+    "airDate": "2023-04-30",
+    "airDateUtc": "2023-04-29T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 35604,
+    "seasonNumber": 3,
+    "episodeNumber": 42,
+    "title": "Show and Tell",
+    "airDate": "2023-05-07",
+    "airDateUtc": "2023-05-06T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 35605,
+    "seasonNumber": 3,
+    "episodeNumber": 43,
+    "title": "Dragon",
+    "airDate": "2023-05-14",
+    "airDateUtc": "2023-05-13T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 35606,
+    "seasonNumber": 3,
+    "episodeNumber": 44,
+    "title": "Wild Girls",
+    "airDate": "2023-05-21",
+    "airDateUtc": "2023-05-20T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 35607,
+    "seasonNumber": 3,
+    "episodeNumber": 45,
+    "title": "TV Shop",
+    "airDate": "2023-05-28",
+    "airDateUtc": "2023-05-27T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 35608,
+    "seasonNumber": 3,
+    "episodeNumber": 46,
+    "title": "Slide",
+    "airDate": "2023-06-04",
+    "airDateUtc": "2023-06-03T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 48225,
+    "seasonNumber": 3,
+    "episodeNumber": 47,
+    "title": "Cricket",
+    "airDate": "2023-06-11",
+    "airDateUtc": "2023-06-10T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 48243,
+    "seasonNumber": 0,
+    "episodeNumber": 27,
+    "title": "Animation Sample",
+    "airDate": "2016-01-01",
+    "airDateUtc": "2015-12-31T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 48244,
+    "seasonNumber": 0,
+    "episodeNumber": 28,
+    "title": "Unaired Pilot",
+    "airDate": "2017-01-01",
+    "airDateUtc": "2016-12-31T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 49142,
+    "seasonNumber": 0,
+    "episodeNumber": 29,
+    "title": "Bingo's Dance Lesson",
+    "airDate": "2023-05-12",
+    "airDateUtc": "2023-05-11T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 49929,
+    "seasonNumber": 0,
+    "episodeNumber": 30,
+    "title": "Stop Motion Treehouse",
+    "airDate": "2023-05-24",
+    "airDateUtc": "2023-05-23T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 49930,
+    "seasonNumber": 0,
+    "episodeNumber": 31,
+    "title": "Stop Motion Treehouse BTS",
+    "airDate": "2023-05-24",
+    "airDateUtc": "2023-05-23T22:07:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 52811,
+    "seasonNumber": 0,
+    "episodeNumber": 32,
+    "title": "Behind the Scenes with Bluey!",
+    "airDate": "2022-05-17",
+    "airDateUtc": "2022-05-16T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 52929,
+    "seasonNumber": 0,
+    "episodeNumber": 33,
+    "title": "Beach",
+    "airDate": "2023-07-01",
+    "airDateUtc": "2023-06-30T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 53439,
+    "seasonNumber": 0,
+    "episodeNumber": 34,
+    "title": "Happy Heelerween!",
+    "airDate": null,
+    "airDateUtc": null,
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54585,
+    "seasonNumber": 3,
+    "episodeNumber": 48,
+    "title": "Ghostbasket",
+    "airDate": "2024-04-07",
+    "airDateUtc": "2024-04-06T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 54586,
+    "seasonNumber": 3,
+    "episodeNumber": 49,
+    "title": "The Sign",
+    "airDate": "2024-04-14",
+    "airDateUtc": "2024-04-13T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 55588,
+    "seasonNumber": 0,
+    "episodeNumber": 37,
+    "title": "Beach Stop Motion",
+    "airDate": "2023-08-11",
+    "airDateUtc": "2023-08-10T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 55589,
+    "seasonNumber": 0,
+    "episodeNumber": 38,
+    "title": "Beach Stop Motion BTS",
+    "airDate": "2023-08-12",
+    "airDateUtc": "2023-08-11T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 55601,
+    "seasonNumber": 0,
+    "episodeNumber": 39,
+    "title": "Bandit's No Swearing Guide",
+    "airDate": "2021-06-20",
+    "airDateUtc": "2021-06-19T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 56464,
+    "seasonNumber": 0,
+    "episodeNumber": 42,
+    "title": "Exploring Bluey's House - Airbnb",
+    "airDate": "2022-05-15",
+    "airDateUtc": "2022-05-14T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 57290,
+    "seasonNumber": 0,
+    "episodeNumber": 43,
+    "title": "Burger Dog",
+    "airDate": "2024-07-03",
+    "airDateUtc": "2024-07-02T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 57291,
+    "seasonNumber": 0,
+    "episodeNumber": 44,
+    "title": "Bingo 3000",
+    "airDate": "2024-07-03",
+    "airDateUtc": "2024-07-02T22:07:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 57292,
+    "seasonNumber": 0,
+    "episodeNumber": 45,
+    "title": "Muffin Unboxing",
+    "airDate": "2024-07-03",
+    "airDateUtc": "2024-07-02T22:14:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 57293,
+    "seasonNumber": 0,
+    "episodeNumber": 46,
+    "title": "Letter",
+    "airDate": "2024-07-03",
+    "airDateUtc": "2024-07-02T22:21:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 57294,
+    "seasonNumber": 0,
+    "episodeNumber": 47,
+    "title": "Hungry",
+    "airDate": "2024-07-03",
+    "airDateUtc": "2024-07-02T22:28:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 57295,
+    "seasonNumber": 0,
+    "episodeNumber": 48,
+    "title": "Three Pigs",
+    "airDate": "2024-07-03",
+    "airDateUtc": "2024-07-02T22:35:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 57303,
+    "seasonNumber": 0,
+    "episodeNumber": 49,
+    "title": "Animals",
+    "airDate": "2024-07-03",
+    "airDateUtc": "2024-07-02T22:42:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 57572,
+    "seasonNumber": 0,
+    "episodeNumber": 50,
+    "title": "Bluey Meets The Simpsons",
+    "airDate": "2024-06-10",
+    "airDateUtc": "2024-06-09T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 60653,
+    "seasonNumber": 0,
+    "episodeNumber": 51,
+    "title": "Tattoo Shop",
+    "airDate": "2024-10-04",
+    "airDateUtc": "2024-10-03T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 60654,
+    "seasonNumber": 0,
+    "episodeNumber": 52,
+    "title": "Phoney",
+    "airDate": "2024-10-04",
+    "airDateUtc": "2024-10-03T22:07:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 60655,
+    "seasonNumber": 0,
+    "episodeNumber": 53,
+    "title": "Blocks",
+    "airDate": "2024-10-04",
+    "airDateUtc": "2024-10-03T22:14:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 60656,
+    "seasonNumber": 0,
+    "episodeNumber": 54,
+    "title": "Government",
+    "airDate": "2024-10-04",
+    "airDateUtc": "2024-10-03T22:21:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 60657,
+    "seasonNumber": 0,
+    "episodeNumber": 55,
+    "title": "Drums",
+    "airDate": "2024-10-04",
+    "airDateUtc": "2024-10-03T22:28:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 60658,
+    "seasonNumber": 0,
+    "episodeNumber": 56,
+    "title": "Browny Bear",
+    "airDate": "2024-10-04",
+    "airDateUtc": "2024-10-03T22:35:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 60659,
+    "seasonNumber": 0,
+    "episodeNumber": 57,
+    "title": "Whirlpool",
+    "airDate": "2024-10-04",
+    "airDateUtc": "2024-10-03T22:42:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 61020,
+    "seasonNumber": 0,
+    "episodeNumber": 58,
+    "title": "Family Trip",
+    "airDate": null,
+    "airDateUtc": null,
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 61021,
+    "seasonNumber": 0,
+    "episodeNumber": 59,
+    "title": "Family Fun Together",
+    "airDate": null,
+    "airDateUtc": null,
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62887,
+    "seasonNumber": 0,
+    "episodeNumber": 60,
+    "title": "Strong Potion",
+    "airDate": "2024-12-08",
+    "airDateUtc": "2024-12-07T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62888,
+    "seasonNumber": 0,
+    "episodeNumber": 61,
+    "title": "Robo Bingo",
+    "airDate": "2024-12-08",
+    "airDateUtc": "2024-12-07T21:07:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62889,
+    "seasonNumber": 0,
+    "episodeNumber": 62,
+    "title": "Butlers",
+    "airDate": "2024-12-08",
+    "airDateUtc": "2024-12-07T21:14:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62890,
+    "seasonNumber": 0,
+    "episodeNumber": 63,
+    "title": "Where's Bingo?",
+    "airDate": "2024-12-08",
+    "airDateUtc": "2024-12-07T21:21:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62891,
+    "seasonNumber": 0,
+    "episodeNumber": 64,
+    "title": "Goldilocks",
+    "airDate": "2024-12-08",
+    "airDateUtc": "2024-12-07T21:28:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 62892,
+    "seasonNumber": 0,
+    "episodeNumber": 65,
+    "title": "Alongside",
+    "airDate": "2024-12-08",
+    "airDateUtc": "2024-12-07T21:35:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 63796,
+    "seasonNumber": 0,
+    "episodeNumber": 66,
+    "title": "Christmas Xylophone",
+    "airDate": "2024-12-23",
+    "airDateUtc": "2024-12-22T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 66540,
+    "seasonNumber": 0,
+    "episodeNumber": 67,
+    "title": "Burger Dog (Music Video)",
+    "airDate": "2025-04-11",
+    "airDateUtc": "2025-04-10T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 66562,
+    "seasonNumber": 0,
+    "episodeNumber": 68,
+    "title": "Bluey's Big Play",
+    "airDate": "2025-04-19",
+    "airDateUtc": "2025-04-18T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76601,
+    "seasonNumber": 0,
+    "episodeNumber": 69,
+    "title": "Let's Play Chef",
+    "airDate": "2025-11-01",
+    "airDateUtc": "2025-10-31T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76602,
+    "seasonNumber": 0,
+    "episodeNumber": 70,
+    "title": "The Sign",
+    "airDate": "2024-04-14",
+    "airDateUtc": "2024-04-13T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 76611,
+    "seasonNumber": 3,
+    "episodeNumber": 50,
+    "title": "Surprise!",
+    "airDate": "2024-04-21",
+    "airDateUtc": "2024-04-20T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 77196,
+    "seasonNumber": 0,
+    "episodeNumber": 71,
+    "title": "Christmas Cricket",
+    "airDate": "2025-12-21",
+    "airDateUtc": "2025-12-20T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 81368,
+    "seasonNumber": 0,
+    "episodeNumber": 82,
+    "title": "Bluey's Christmas Bundle",
+    "airDate": "2025-12-25",
+    "airDateUtc": "2025-12-24T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 82500,
+    "seasonNumber": 0,
+    "episodeNumber": 83,
+    "title": "Bluey's Brisbane Ep1 - Newfarm Park",
+    "airDate": "2026-03-24",
+    "airDateUtc": "2026-03-23T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 82501,
+    "seasonNumber": 0,
+    "episodeNumber": 84,
+    "title": "Bluey's Brisbane Ep2 - South Bank",
+    "airDate": "2026-03-25",
+    "airDateUtc": "2026-03-24T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 82502,
+    "seasonNumber": 0,
+    "episodeNumber": 85,
+    "title": "Bluey's Brisbane Ep3 - The Wheel",
+    "airDate": "2026-03-26",
+    "airDateUtc": "2026-03-25T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 82503,
+    "seasonNumber": 0,
+    "episodeNumber": 86,
+    "title": "Bluey's Brisbane Ep4 - Mt Coot-Tha",
+    "airDate": "2026-03-31",
+    "airDateUtc": "2026-03-30T21:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 84875,
+    "seasonNumber": 0,
+    "episodeNumber": 87,
+    "title": "Playdates with Friends",
+    "airDate": "2026-07-08",
+    "airDateUtc": "2026-07-07T22:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   }
+  ],
+  "series": {
+   "tvdbId": 353546,
+   "tmdbId": 82728,
+   "title": "Bluey (2018)"
+  },
+  "tmdb": [
+   {
+    "names": [
+     "Christmas Clips - The Countdown Is On!"
+    ],
+    "air_date": "2019-12-14",
+    "season": 0,
+    "number": 1
+   },
+   {
+    "names": [
+     "Crazy Christmas Lights"
+    ],
+    "air_date": "2019-12-21",
+    "season": 0,
+    "number": 2
+   },
+   {
+    "names": [
+     "Silent Night (Before Christmas)"
+    ],
+    "air_date": "2019-12-17",
+    "season": 0,
+    "number": 3
+   },
+   {
+    "names": [
+     "Jingle Bells"
+    ],
+    "air_date": "2020-12-10",
+    "season": 0,
+    "number": 4
+   },
+   {
+    "names": [
+     "Lollipop Song"
+    ],
+    "air_date": "2021-01-11",
+    "season": 0,
+    "number": 5
+   },
+   {
+    "names": [
+     "Tea Party"
+    ],
+    "air_date": "2021-03-05",
+    "season": 0,
+    "number": 6
+   },
+   {
+    "names": [
+     "Humpty Dumpty"
+    ],
+    "air_date": "2021-03-12",
+    "season": 0,
+    "number": 7
+   },
+   {
+    "names": [
+     "Flying Saucer"
+    ],
+    "air_date": "2021-03-17",
+    "season": 0,
+    "number": 8
+   },
+   {
+    "names": [
+     "Pea Pod Sausages"
+    ],
+    "air_date": "2021-03-25",
+    "season": 0,
+    "number": 9
+   },
+   {
+    "names": [
+     "Easter"
+    ],
+    "air_date": "2021-04-04",
+    "season": 0,
+    "number": 10
+   },
+   {
+    "names": [
+     "Cinderella"
+    ],
+    "air_date": "2021-04-09",
+    "season": 0,
+    "number": 11
+   },
+   {
+    "names": [
+     "Green Bottles"
+    ],
+    "air_date": "2021-04-21",
+    "season": 0,
+    "number": 12
+   },
+   {
+    "names": [
+     "Old Macdonald"
+    ],
+    "air_date": "2021-05-19",
+    "season": 0,
+    "number": 13
+   },
+   {
+    "names": [
+     "Make Mum Laugh"
+    ],
+    "air_date": "2021-06-01",
+    "season": 0,
+    "number": 14
+   },
+   {
+    "names": [
+     "Mower"
+    ],
+    "air_date": "2021-06-09",
+    "season": 0,
+    "number": 15
+   },
+   {
+    "names": [
+     "Honk"
+    ],
+    "air_date": "2021-06-18",
+    "season": 0,
+    "number": 16
+   },
+   {
+    "names": [
+     "High Ball"
+    ],
+    "air_date": "2021-07-02",
+    "season": 0,
+    "number": 17
+   },
+   {
+    "names": [
+     "K9 News"
+    ],
+    "air_date": "2021-09-24",
+    "season": 0,
+    "number": 18
+   },
+   {
+    "names": [
+     "Tongue Twisters"
+    ],
+    "air_date": "2021-09-25",
+    "season": 0,
+    "number": 19
+   },
+   {
+    "names": [
+     "Crazy Lights"
+    ],
+    "air_date": "2021-09-26",
+    "season": 0,
+    "number": 20
+   },
+   {
+    "names": [
+     "Fun in the Car"
+    ],
+    "air_date": "2021-09-27",
+    "season": 0,
+    "number": 21
+   },
+   {
+    "names": [
+     "Let's Play Hide and Seek!"
+    ],
+    "air_date": "2021-09-28",
+    "season": 0,
+    "number": 22
+   },
+   {
+    "names": [
+     "Scooter Fun"
+    ],
+    "air_date": "2021-09-29",
+    "season": 0,
+    "number": 23
+   },
+   {
+    "names": [
+     "One Man Went to Mow"
+    ],
+    "air_date": "2021-09-30",
+    "season": 0,
+    "number": 24
+   },
+   {
+    "names": [
+     "Archaeology"
+    ],
+    "air_date": "2021-10-01",
+    "season": 0,
+    "number": 25
+   },
+   {
+    "names": [
+     "Bingo's Dance Lesson"
+    ],
+    "air_date": "2023-05-12",
+    "season": 0,
+    "number": 26
+   },
+   {
+    "names": [
+     "The Sign"
+    ],
+    "air_date": "2024-04-14",
+    "season": 0,
+    "number": 27
+   },
+   {
+    "names": [
+     "The Christmas Xylophone"
+    ],
+    "air_date": "2024-12-23",
+    "season": 0,
+    "number": 28
+   },
+   {
+    "names": [
+     "Bluey: Christmas Cricket"
+    ],
+    "air_date": "2025-12-21",
+    "season": 0,
+    "number": 29
+   },
+   {
+    "names": [
+     "Animation Sample"
+    ],
+    "air_date": null,
+    "season": 0,
+    "number": 30
+   },
+   {
+    "names": [
+     "Unaired Pilot"
+    ],
+    "air_date": null,
+    "season": 0,
+    "number": 31
+   },
+   {
+    "names": [
+     "The Magic Xylophone"
+    ],
+    "air_date": "2018-10-01",
+    "season": 1,
+    "number": 1
+   },
+   {
+    "names": [
+     "Hospital"
+    ],
+    "air_date": "2018-10-02",
+    "season": 1,
+    "number": 2
+   },
+   {
+    "names": [
+     "Keepy Uppy"
+    ],
+    "air_date": "2018-10-03",
+    "season": 1,
+    "number": 3
+   },
+   {
+    "names": [
+     "Daddy Robot"
+    ],
+    "air_date": "2018-10-04",
+    "season": 1,
+    "number": 4
+   },
+   {
+    "names": [
+     "Shadowlands"
+    ],
+    "air_date": "2018-10-05",
+    "season": 1,
+    "number": 5
+   },
+   {
+    "names": [
+     "The Weekend"
+    ],
+    "air_date": "2018-10-06",
+    "season": 1,
+    "number": 6
+   },
+   {
+    "names": [
+     "BBQ"
+    ],
+    "air_date": "2018-10-07",
+    "season": 1,
+    "number": 7
+   },
+   {
+    "names": [
+     "Fruitbat"
+    ],
+    "air_date": "2018-10-08",
+    "season": 1,
+    "number": 8
+   },
+   {
+    "names": [
+     "Horsey Ride"
+    ],
+    "air_date": "2018-10-09",
+    "season": 1,
+    "number": 9
+   },
+   {
+    "names": [
+     "Hotel"
+    ],
+    "air_date": "2018-10-10",
+    "season": 1,
+    "number": 10
+   },
+   {
+    "names": [
+     "Bike"
+    ],
+    "air_date": "2018-10-11",
+    "season": 1,
+    "number": 11
+   },
+   {
+    "names": [
+     "Bob Bilby"
+    ],
+    "air_date": "2018-10-12",
+    "season": 1,
+    "number": 12
+   },
+   {
+    "names": [
+     "Spy Game"
+    ],
+    "air_date": "2018-10-13",
+    "season": 1,
+    "number": 13
+   },
+   {
+    "names": [
+     "Takeaway"
+    ],
+    "air_date": "2018-10-14",
+    "season": 1,
+    "number": 14
+   },
+   {
+    "names": [
+     "Butterflies"
+    ],
+    "air_date": "2018-10-15",
+    "season": 1,
+    "number": 15
+   },
+   {
+    "names": [
+     "Yoga Ball"
+    ],
+    "air_date": "2018-10-16",
+    "season": 1,
+    "number": 16
+   },
+   {
+    "names": [
+     "Calypso"
+    ],
+    "air_date": "2018-10-17",
+    "season": 1,
+    "number": 17
+   },
+   {
+    "names": [
+     "The Doctor"
+    ],
+    "air_date": "2018-10-18",
+    "season": 1,
+    "number": 18
+   },
+   {
+    "names": [
+     "The Claw"
+    ],
+    "air_date": "2018-10-19",
+    "season": 1,
+    "number": 19
+   },
+   {
+    "names": [
+     "Markets"
+    ],
+    "air_date": "2018-10-20",
+    "season": 1,
+    "number": 20
+   },
+   {
+    "names": [
+     "Blue Mountains"
+    ],
+    "air_date": "2018-10-21",
+    "season": 1,
+    "number": 21
+   },
+   {
+    "names": [
+     "The Pool"
+    ],
+    "air_date": "2018-10-22",
+    "season": 1,
+    "number": 22
+   },
+   {
+    "names": [
+     "Shops"
+    ],
+    "air_date": "2018-10-23",
+    "season": 1,
+    "number": 23
+   },
+   {
+    "names": [
+     "Wagonride"
+    ],
+    "air_date": "2018-10-24",
+    "season": 1,
+    "number": 24
+   },
+   {
+    "names": [
+     "Taxi"
+    ],
+    "air_date": "2018-10-25",
+    "season": 1,
+    "number": 25
+   },
+   {
+    "names": [
+     "The Beach"
+    ],
+    "air_date": "2018-10-26",
+    "season": 1,
+    "number": 26
+   },
+   {
+    "names": [
+     "Pirates"
+    ],
+    "air_date": "2019-04-01",
+    "season": 1,
+    "number": 27
+   },
+   {
+    "names": [
+     "Grannies"
+    ],
+    "air_date": "2019-04-02",
+    "season": 1,
+    "number": 28
+   },
+   {
+    "names": [
+     "The Creek"
+    ],
+    "air_date": "2019-04-03",
+    "season": 1,
+    "number": 29
+   },
+   {
+    "names": [
+     "Fairies"
+    ],
+    "air_date": "2019-04-04",
+    "season": 1,
+    "number": 30
+   },
+   {
+    "names": [
+     "Work"
+    ],
+    "air_date": "2019-04-05",
+    "season": 1,
+    "number": 31
+   },
+   {
+    "names": [
+     "Bumpy and the Wise Old Wolfhound"
+    ],
+    "air_date": "2019-04-06",
+    "season": 1,
+    "number": 32
+   },
+   {
+    "names": [
+     "Trampoline"
+    ],
+    "air_date": "2019-04-07",
+    "season": 1,
+    "number": 33
+   },
+   {
+    "names": [
+     "The Dump"
+    ],
+    "air_date": "2019-04-08",
+    "season": 1,
+    "number": 34
+   },
+   {
+    "names": [
+     "Zoo"
+    ],
+    "air_date": "2019-04-09",
+    "season": 1,
+    "number": 35
+   },
+   {
+    "names": [
+     "Backpackers"
+    ],
+    "air_date": "2019-04-10",
+    "season": 1,
+    "number": 36
+   },
+   {
+    "names": [
+     "The Adventure"
+    ],
+    "air_date": "2019-04-11",
+    "season": 1,
+    "number": 37
+   },
+   {
+    "names": [
+     "Copycat"
+    ],
+    "air_date": "2019-04-12",
+    "season": 1,
+    "number": 38
+   },
+   {
+    "names": [
+     "The Sleepover"
+    ],
+    "air_date": "2019-04-13",
+    "season": 1,
+    "number": 39
+   },
+   {
+    "names": [
+     "Early Baby"
+    ],
+    "air_date": "2019-04-14",
+    "season": 1,
+    "number": 40
+   },
+   {
+    "names": [
+     "Mums and Dads"
+    ],
+    "air_date": "2019-04-15",
+    "season": 1,
+    "number": 41
+   },
+   {
+    "names": [
+     "Hide and Seek"
+    ],
+    "air_date": "2019-04-16",
+    "season": 1,
+    "number": 42
+   },
+   {
+    "names": [
+     "Camping"
+    ],
+    "air_date": "2019-04-17",
+    "season": 1,
+    "number": 43
+   },
+   {
+    "names": [
+     "Mount Mumandad"
+    ],
+    "air_date": "2019-04-18",
+    "season": 1,
+    "number": 44
+   },
+   {
+    "names": [
+     "Kids"
+    ],
+    "air_date": "2019-04-19",
+    "season": 1,
+    "number": 45
+   },
+   {
+    "names": [
+     "Chickenrat"
+    ],
+    "air_date": "2019-04-20",
+    "season": 1,
+    "number": 46
+   },
+   {
+    "names": [
+     "Neighbours"
+    ],
+    "air_date": "2019-04-21",
+    "season": 1,
+    "number": 47
+   },
+   {
+    "names": [
+     "Teasing"
+    ],
+    "air_date": "2019-04-22",
+    "season": 1,
+    "number": 48
+   },
+   {
+    "names": [
+     "Asparagus"
+    ],
+    "air_date": "2019-04-23",
+    "season": 1,
+    "number": 49
+   },
+   {
+    "names": [
+     "Shaun"
+    ],
+    "air_date": "2019-04-24",
+    "season": 1,
+    "number": 50
+   },
+   {
+    "names": [
+     "Daddy Putdown"
+    ],
+    "air_date": "2019-04-25",
+    "season": 1,
+    "number": 51
+   },
+   {
+    "names": [
+     "Verandah Santa"
+    ],
+    "air_date": "2019-12-12",
+    "season": 1,
+    "number": 52
+   },
+   {
+    "names": [
+     "Dance Mode"
+    ],
+    "air_date": "2020-03-17",
+    "season": 2,
+    "number": 1
+   },
+   {
+    "names": [
+     "Hammerbarn"
+    ],
+    "air_date": "2020-03-18",
+    "season": 2,
+    "number": 2
+   },
+   {
+    "names": [
+     "Featherwand"
+    ],
+    "air_date": "2020-03-19",
+    "season": 2,
+    "number": 3
+   },
+   {
+    "names": [
+     "Squash"
+    ],
+    "air_date": "2020-03-20",
+    "season": 2,
+    "number": 4
+   },
+   {
+    "names": [
+     "Hairdressers"
+    ],
+    "air_date": "2020-03-21",
+    "season": 2,
+    "number": 5
+   },
+   {
+    "names": [
+     "Stumpfest"
+    ],
+    "air_date": "2020-03-22",
+    "season": 2,
+    "number": 6
+   },
+   {
+    "names": [
+     "Favourite Thing"
+    ],
+    "air_date": "2020-03-23",
+    "season": 2,
+    "number": 7
+   },
+   {
+    "names": [
+     "Daddy Dropoff"
+    ],
+    "air_date": "2020-03-24",
+    "season": 2,
+    "number": 8
+   },
+   {
+    "names": [
+     "Bingo"
+    ],
+    "air_date": "2020-03-25",
+    "season": 2,
+    "number": 9
+   },
+   {
+    "names": [
+     "Rug Island"
+    ],
+    "air_date": "2020-03-26",
+    "season": 2,
+    "number": 10
+   },
+   {
+    "names": [
+     "Charades"
+    ],
+    "air_date": "2020-03-27",
+    "season": 2,
+    "number": 11
+   },
+   {
+    "names": [
+     "Sticky Gecko"
+    ],
+    "air_date": "2020-03-28",
+    "season": 2,
+    "number": 12
+   },
+   {
+    "names": [
+     "Dad Baby"
+    ],
+    "air_date": "2020-03-29",
+    "season": 2,
+    "number": 13
+   },
+   {
+    "names": [
+     "Mum School"
+    ],
+    "air_date": "2020-03-30",
+    "season": 2,
+    "number": 14
+   },
+   {
+    "names": [
+     "Trains"
+    ],
+    "air_date": "2020-03-31",
+    "season": 2,
+    "number": 15
+   },
+   {
+    "names": [
+     "Army"
+    ],
+    "air_date": "2020-04-01",
+    "season": 2,
+    "number": 16
+   },
+   {
+    "names": [
+     "Fancy Restaurant"
+    ],
+    "air_date": "2020-04-02",
+    "season": 2,
+    "number": 17
+   },
+   {
+    "names": [
+     "Piggyback"
+    ],
+    "air_date": "2020-04-03",
+    "season": 2,
+    "number": 18
+   },
+   {
+    "names": [
+     "The Show"
+    ],
+    "air_date": "2020-04-04",
+    "season": 2,
+    "number": 19
+   },
+   {
+    "names": [
+     "Ticklecrabs"
+    ],
+    "air_date": "2020-04-05",
+    "season": 2,
+    "number": 20
+   },
+   {
+    "names": [
+     "Escape"
+    ],
+    "air_date": "2020-04-06",
+    "season": 2,
+    "number": 21
+   },
+   {
+    "names": [
+     "Bus"
+    ],
+    "air_date": "2020-04-07",
+    "season": 2,
+    "number": 22
+   },
+   {
+    "names": [
+     "Queens"
+    ],
+    "air_date": "2020-04-08",
+    "season": 2,
+    "number": 23
+   },
+   {
+    "names": [
+     "Flat Pack"
+    ],
+    "air_date": "2020-04-09",
+    "season": 2,
+    "number": 24
+   },
+   {
+    "names": [
+     "Helicopter"
+    ],
+    "air_date": "2020-04-10",
+    "season": 2,
+    "number": 25
+   },
+   {
+    "names": [
+     "Sleepytime"
+    ],
+    "air_date": "2020-04-11",
+    "season": 2,
+    "number": 26
+   },
+   {
+    "names": [
+     "Grandad"
+    ],
+    "air_date": "2020-10-25",
+    "season": 2,
+    "number": 27
+   },
+   {
+    "names": [
+     "Seesaw"
+    ],
+    "air_date": "2020-10-26",
+    "season": 2,
+    "number": 28
+   },
+   {
+    "names": [
+     "Movies"
+    ],
+    "air_date": "2020-10-27",
+    "season": 2,
+    "number": 29
+   },
+   {
+    "names": [
+     "Library"
+    ],
+    "air_date": "2020-10-28",
+    "season": 2,
+    "number": 30
+   },
+   {
+    "names": [
+     "Barky Boats"
+    ],
+    "air_date": "2020-10-29",
+    "season": 2,
+    "number": 31
+   },
+   {
+    "names": [
+     "Burger Shop"
+    ],
+    "air_date": "2020-10-30",
+    "season": 2,
+    "number": 32
+   },
+   {
+    "names": [
+     "Circus"
+    ],
+    "air_date": "2020-10-31",
+    "season": 2,
+    "number": 33
+   },
+   {
+    "names": [
+     "Swim School"
+    ],
+    "air_date": "2020-11-01",
+    "season": 2,
+    "number": 34
+   },
+   {
+    "names": [
+     "Cafe"
+    ],
+    "air_date": "2020-11-02",
+    "season": 2,
+    "number": 35
+   },
+   {
+    "names": [
+     "Postman"
+    ],
+    "air_date": "2020-11-03",
+    "season": 2,
+    "number": 36
+   },
+   {
+    "names": [
+     "The Quiet Game"
+    ],
+    "air_date": "2020-11-04",
+    "season": 2,
+    "number": 37
+   },
+   {
+    "names": [
+     "Mr Monkeyjocks"
+    ],
+    "air_date": "2020-11-05",
+    "season": 2,
+    "number": 38
+   },
+   {
+    "names": [
+     "Double Babysitter"
+    ],
+    "air_date": "2020-11-06",
+    "season": 2,
+    "number": 39
+   },
+   {
+    "names": [
+     "Bad Mood"
+    ],
+    "air_date": "2020-11-07",
+    "season": 2,
+    "number": 40
+   },
+   {
+    "names": [
+     "Octopus"
+    ],
+    "air_date": "2020-11-08",
+    "season": 2,
+    "number": 41
+   },
+   {
+    "names": [
+     "Bin Night"
+    ],
+    "air_date": "2020-11-09",
+    "season": 2,
+    "number": 42
+   },
+   {
+    "names": [
+     "Muffin Cone"
+    ],
+    "air_date": "2020-11-10",
+    "season": 2,
+    "number": 43
+   },
+   {
+    "names": [
+     "Duck Cake"
+    ],
+    "air_date": "2020-11-11",
+    "season": 2,
+    "number": 44
+   },
+   {
+    "names": [
+     "Handstand"
+    ],
+    "air_date": "2020-11-12",
+    "season": 2,
+    "number": 45
+   },
+   {
+    "names": [
+     "Road Trip"
+    ],
+    "air_date": "2020-11-13",
+    "season": 2,
+    "number": 46
+   },
+   {
+    "names": [
+     "Ice Cream"
+    ],
+    "air_date": "2020-11-14",
+    "season": 2,
+    "number": 47
+   },
+   {
+    "names": [
+     "Dunny"
+    ],
+    "air_date": "2020-11-15",
+    "season": 2,
+    "number": 48
+   },
+   {
+    "names": [
+     "Typewriter"
+    ],
+    "air_date": "2020-11-16",
+    "season": 2,
+    "number": 49
+   },
+   {
+    "names": [
+     "Baby Race"
+    ],
+    "air_date": "2020-10-25",
+    "season": 2,
+    "number": 50
+   },
+   {
+    "names": [
+     "Christmas Swim"
+    ],
+    "air_date": "2020-12-01",
+    "season": 2,
+    "number": 51
+   },
+   {
+    "names": [
+     "Easter"
+    ],
+    "air_date": "2021-04-04",
+    "season": 2,
+    "number": 52
+   },
+   {
+    "names": [
+     "Perfect"
+    ],
+    "air_date": "2021-09-05",
+    "season": 3,
+    "number": 1
+   },
+   {
+    "names": [
+     "Bedroom"
+    ],
+    "air_date": "2021-11-22",
+    "season": 3,
+    "number": 2
+   },
+   {
+    "names": [
+     "Obstacle Course"
+    ],
+    "air_date": "2021-11-23",
+    "season": 3,
+    "number": 3
+   },
+   {
+    "names": [
+     "Promises"
+    ],
+    "air_date": "2021-11-24",
+    "season": 3,
+    "number": 4
+   },
+   {
+    "names": [
+     "Omelette"
+    ],
+    "air_date": "2021-11-25",
+    "season": 3,
+    "number": 5
+   },
+   {
+    "names": [
+     "Born Yesterday"
+    ],
+    "air_date": "2021-11-26",
+    "season": 3,
+    "number": 6
+   },
+   {
+    "names": [
+     "Mini Bluey"
+    ],
+    "air_date": "2021-11-27",
+    "season": 3,
+    "number": 7
+   },
+   {
+    "names": [
+     "Unicorse"
+    ],
+    "air_date": "2021-11-28",
+    "season": 3,
+    "number": 8
+   },
+   {
+    "names": [
+     "Curry Quest"
+    ],
+    "air_date": "2021-11-29",
+    "season": 3,
+    "number": 9
+   },
+   {
+    "names": [
+     "Magic"
+    ],
+    "air_date": "2021-11-30",
+    "season": 3,
+    "number": 10
+   },
+   {
+    "names": [
+     "Chest"
+    ],
+    "air_date": "2021-12-01",
+    "season": 3,
+    "number": 11
+   },
+   {
+    "names": [
+     "Sheep Dog"
+    ],
+    "air_date": "2021-12-02",
+    "season": 3,
+    "number": 12
+   },
+   {
+    "names": [
+     "Housework"
+    ],
+    "air_date": "2021-12-03",
+    "season": 3,
+    "number": 13
+   },
+   {
+    "names": [
+     "Pass the Parcel"
+    ],
+    "air_date": "2021-12-04",
+    "season": 3,
+    "number": 14
+   },
+   {
+    "names": [
+     "Explorers"
+    ],
+    "air_date": "2021-12-05",
+    "season": 3,
+    "number": 15
+   },
+   {
+    "names": [
+     "Phones"
+    ],
+    "air_date": "2021-12-06",
+    "season": 3,
+    "number": 16
+   },
+   {
+    "names": [
+     "Pavlova"
+    ],
+    "air_date": "2021-12-07",
+    "season": 3,
+    "number": 17
+   },
+   {
+    "names": [
+     "Rain"
+    ],
+    "air_date": "2021-12-08",
+    "season": 3,
+    "number": 18
+   },
+   {
+    "names": [
+     "Pizza Girls"
+    ],
+    "air_date": "2021-12-09",
+    "season": 3,
+    "number": 19
+   },
+   {
+    "names": [
+     "Driving"
+    ],
+    "air_date": "2021-12-10",
+    "season": 3,
+    "number": 20
+   },
+   {
+    "names": [
+     "Tina"
+    ],
+    "air_date": "2021-12-11",
+    "season": 3,
+    "number": 21
+   },
+   {
+    "names": [
+     "Whale Watching"
+    ],
+    "air_date": "2021-12-12",
+    "season": 3,
+    "number": 22
+   },
+   {
+    "names": [
+     "Family Meeting"
+    ],
+    "air_date": "2021-12-13",
+    "season": 3,
+    "number": 23
+   },
+   {
+    "names": [
+     "Faceytalk"
+    ],
+    "air_date": "2021-12-14",
+    "season": 3,
+    "number": 24
+   },
+   {
+    "names": [
+     "Ragdoll"
+    ],
+    "air_date": "2021-12-15",
+    "season": 3,
+    "number": 25
+   },
+   {
+    "names": [
+     "Fairytale"
+    ],
+    "air_date": "2021-12-16",
+    "season": 3,
+    "number": 26
+   },
+   {
+    "names": [
+     "Musical Statues"
+    ],
+    "air_date": "2022-06-13",
+    "season": 3,
+    "number": 27
+   },
+   {
+    "names": [
+     "Stories"
+    ],
+    "air_date": "2022-06-14",
+    "season": 3,
+    "number": 28
+   },
+   {
+    "names": [
+     "Puppets"
+    ],
+    "air_date": "2022-06-15",
+    "season": 3,
+    "number": 29
+   },
+   {
+    "names": [
+     "Turtleboy"
+    ],
+    "air_date": "2022-06-16",
+    "season": 3,
+    "number": 30
+   },
+   {
+    "names": [
+     "Onesies"
+    ],
+    "air_date": "2022-06-17",
+    "season": 3,
+    "number": 31
+   },
+   {
+    "names": [
+     "Tradies"
+    ],
+    "air_date": "2022-06-18",
+    "season": 3,
+    "number": 32
+   },
+   {
+    "names": [
+     "Granny Mobile"
+    ],
+    "air_date": "2022-06-19",
+    "season": 3,
+    "number": 33
+   },
+   {
+    "names": [
+     "Space"
+    ],
+    "air_date": "2022-06-20",
+    "season": 3,
+    "number": 34
+   },
+   {
+    "names": [
+     "Smoochy Kiss"
+    ],
+    "air_date": "2022-06-21",
+    "season": 3,
+    "number": 35
+   },
+   {
+    "names": [
+     "Dirt"
+    ],
+    "air_date": "2022-06-22",
+    "season": 3,
+    "number": 36
+   },
+   {
+    "names": [
+     "The Decider"
+    ],
+    "air_date": "2022-06-23",
+    "season": 3,
+    "number": 37
+   },
+   {
+    "names": [
+     "Cubby"
+    ],
+    "air_date": "2023-04-09",
+    "season": 3,
+    "number": 38
+   },
+   {
+    "names": [
+     "Exercise"
+    ],
+    "air_date": "2023-04-16",
+    "season": 3,
+    "number": 39
+   },
+   {
+    "names": [
+     "Relax"
+    ],
+    "air_date": "2023-04-23",
+    "season": 3,
+    "number": 40
+   },
+   {
+    "names": [
+     "Stickbird"
+    ],
+    "air_date": "2023-04-30",
+    "season": 3,
+    "number": 41
+   },
+   {
+    "names": [
+     "Show & Tell"
+    ],
+    "air_date": "2023-05-07",
+    "season": 3,
+    "number": 42
+   },
+   {
+    "names": [
+     "Dragon"
+    ],
+    "air_date": "2023-05-14",
+    "season": 3,
+    "number": 43
+   },
+   {
+    "names": [
+     "Wild Girls"
+    ],
+    "air_date": "2023-05-21",
+    "season": 3,
+    "number": 44
+   },
+   {
+    "names": [
+     "TV Shop"
+    ],
+    "air_date": "2023-05-28",
+    "season": 3,
+    "number": 45
+   },
+   {
+    "names": [
+     "Slide"
+    ],
+    "air_date": "2023-06-04",
+    "season": 3,
+    "number": 46
+   },
+   {
+    "names": [
+     "Cricket"
+    ],
+    "air_date": "2023-06-11",
+    "season": 3,
+    "number": 47
+   },
+   {
+    "names": [
+     "Ghostbasket"
+    ],
+    "air_date": "2024-04-07",
+    "season": 3,
+    "number": 48
+   },
+   {
+    "names": [
+     "Surprise!"
+    ],
+    "air_date": "2024-04-21",
+    "season": 3,
+    "number": 49
+   }
+  ],
+  "tvdb": {}
+ },
+ "expect": {
+  "available": {
+   "2704": {
+    "service": "S01E01",
+    "name": "Yoga Ball",
+    "match": "title",
+    "same": true
+   }
+  },
+  "titlesAgree": true,
+  "season_map": {}
+ }
+}

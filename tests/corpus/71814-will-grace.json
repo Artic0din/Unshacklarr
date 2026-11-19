@@ -1,0 +1,4383 @@
+{
+ "title": "Will & Grace",
+ "tvdb": 71814,
+ "show": {
+  "service": "STAN",
+  "title": "https://play.stan.com.au/programs/945388"
+ },
+ "tmdb_key": true,
+ "country": "AU",
+ "inputs": {
+  "service": [
+   {
+    "type": "episode",
+    "name": "Homo for the Holidays",
+    "id": "945388",
+    "language": "en",
+    "description": "When Will and Grace meet Jack's mother and learn that not only is she unaware that her son is gay, she believes he has had a romantic relationship with Grace, they invite her to Thanksgiving hoping to force the issue into the open. (S2 E7)",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Will and Grace Christmas",
+    "season": 1,
+    "number": 1
+   },
+   {
+    "type": "episode",
+    "name": "Jingle Balls",
+    "id": "945389",
+    "language": "en",
+    "description": "During the holidays, Grace is hired as seasonal help to decorate the display windows of fashionable Barney's while Will meets a ballet dancer but is too embarrassed to introduce his friends. (S4 E12)",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Will and Grace Christmas",
+    "season": 1,
+    "number": 2
+   },
+   {
+    "type": "episode",
+    "name": "All About Christmas Eve",
+    "id": "945390",
+    "language": "en",
+    "description": "On Christmas Eve, Grace (Debra Messing) is torn when she has only two tickets to \"The Nutcracker\" musical and can't take both her best friend Will (Eric McCormack) and new husband Leo (guest star Harry Connick Jr.). (S5 E11)",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Will and Grace Christmas",
+    "season": 1,
+    "number": 3
+   },
+   {
+    "type": "episode",
+    "name": "Fanilow",
+    "id": "945391",
+    "language": "en",
+    "description": "Ultimate \"Fanilow\" Will spends the night waiting in line for tickets to a special Barry Manilow concert -- only to have his weak bladder force him to make a quick pit stop and entrust Grace to hold his place. (S6 E10)",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Will and Grace Christmas",
+    "season": 1,
+    "number": 4
+   },
+   {
+    "type": "episode",
+    "name": "Christmas Break",
+    "id": "945392",
+    "language": "en",
+    "description": "Grace attends a holiday party at Will's mother Marilyn's (Blythe Danner) home and accidentally breaks a treasured Lladro figurine. Will convinces Grace not to tell his mother and to blame the accident on one of the other guests at the party. (S7 E12)",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Will and Grace Christmas",
+    "season": 1,
+    "number": 5
+   },
+   {
+    "type": "episode",
+    "name": "A Little Christmas Queer",
+    "id": "945393",
+    "language": "en",
+    "description": "While spending the holidays at Will’s mother Marilyn’s house, Grace gets cozy with Will’s brother and old flame Sam (guest star Steven Weber). Sam’s adopted daughter finds a fan in Karen who is intrigued by the little girl. (S8 E9)",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Will and Grace Christmas",
+    "season": 1,
+    "number": 6
+   },
+   {
+    "type": "episode",
+    "name": "A Gay Olde Christmas",
+    "id": "2376447",
+    "language": "en",
+    "description": "Will, Grace, Karen, and Jack wish they could have experienced Christmas in old New York City, but realise the past was not quite as romantic -- or open to diversity -- as they pictured it. (2017 S1 E7)",
+    "date": null,
+    "cover_url": null,
+    "year": null,
+    "series_title": "Will and Grace Christmas",
+    "season": 1,
+    "number": 7
+   }
+  ],
+  "episodes": [
+   {
+    "id": 27561,
+    "seasonNumber": 0,
+    "episodeNumber": 1,
+    "title": "The Clip Show",
+    "airDate": "2002-11-21",
+    "airDateUtc": "2002-11-22T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27562,
+    "seasonNumber": 0,
+    "episodeNumber": 2,
+    "title": "Guest Star Clip Show",
+    "airDate": "2003-04-24",
+    "airDateUtc": "2003-04-25T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27563,
+    "seasonNumber": 0,
+    "episodeNumber": 3,
+    "title": "Say Goodnight Gracie",
+    "airDate": "2006-05-18",
+    "airDateUtc": "2006-05-19T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27564,
+    "seasonNumber": 0,
+    "episodeNumber": 4,
+    "title": "Will On Will & Grace",
+    "airDate": "2003-09-03",
+    "airDateUtc": "2003-09-04T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27565,
+    "seasonNumber": 0,
+    "episodeNumber": 5,
+    "title": "The Last Great Sitcom Standing",
+    "airDate": "2005-08-15",
+    "airDateUtc": "2005-08-16T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27566,
+    "seasonNumber": 0,
+    "episodeNumber": 6,
+    "title": "Inside the Actors Studio",
+    "airDate": "2003-11-16",
+    "airDateUtc": "2003-11-17T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27567,
+    "seasonNumber": 0,
+    "episodeNumber": 7,
+    "title": "Alive and Schticking - West Coast Feed",
+    "airDate": "2005-09-29",
+    "airDateUtc": "2005-09-30T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27568,
+    "seasonNumber": 0,
+    "episodeNumber": 8,
+    "title": "Bathroom Humor - West Coast Feed",
+    "airDate": "2006-01-12",
+    "airDateUtc": "2006-01-13T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27569,
+    "seasonNumber": 0,
+    "episodeNumber": 9,
+    "title": "Backstage Pass",
+    "airDate": "2005-09-19",
+    "airDateUtc": "2005-09-20T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27570,
+    "seasonNumber": 0,
+    "episodeNumber": 10,
+    "title": "#VoteHoney",
+    "airDate": "2016-09-26",
+    "airDateUtc": "2016-09-27T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27571,
+    "seasonNumber": 0,
+    "episodeNumber": 11,
+    "title": "The Paley Center Salutes Will and Grace",
+    "airDate": "2017-09-19",
+    "airDateUtc": "2017-09-20T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27572,
+    "seasonNumber": 0,
+    "episodeNumber": 12,
+    "title": "A Will & Graceful Goodbye",
+    "airDate": "2020-04-23",
+    "airDateUtc": "2020-04-24T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": null
+   },
+   {
+    "id": 27573,
+    "seasonNumber": 1,
+    "episodeNumber": 1,
+    "title": "Love and Marriage",
+    "airDate": "1998-09-21",
+    "airDateUtc": "1998-09-22T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 1
+   },
+   {
+    "id": 27574,
+    "seasonNumber": 1,
+    "episodeNumber": 2,
+    "title": "A New Lease on Life",
+    "airDate": "1998-09-28",
+    "airDateUtc": "1998-09-29T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 2
+   },
+   {
+    "id": 27575,
+    "seasonNumber": 1,
+    "episodeNumber": 3,
+    "title": "Head Case",
+    "airDate": "1998-10-05",
+    "airDateUtc": "1998-10-06T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 3
+   },
+   {
+    "id": 27576,
+    "seasonNumber": 1,
+    "episodeNumber": 4,
+    "title": "Between a Rock and Harlin's Place",
+    "airDate": "1998-10-12",
+    "airDateUtc": "1998-10-13T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 4
+   },
+   {
+    "id": 27577,
+    "seasonNumber": 1,
+    "episodeNumber": 5,
+    "title": "Boo! Humbug",
+    "airDate": "1998-10-26",
+    "airDateUtc": "1998-10-27T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 5
+   },
+   {
+    "id": 27578,
+    "seasonNumber": 1,
+    "episodeNumber": 6,
+    "title": "William, Tell",
+    "airDate": "1998-11-09",
+    "airDateUtc": "1998-11-10T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 6
+   },
+   {
+    "id": 27579,
+    "seasonNumber": 1,
+    "episodeNumber": 7,
+    "title": "Where There's a Will, There's No Way",
+    "airDate": "1998-11-16",
+    "airDateUtc": "1998-11-17T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 7
+   },
+   {
+    "id": 27580,
+    "seasonNumber": 1,
+    "episodeNumber": 8,
+    "title": "The Buying Game",
+    "airDate": "1998-11-30",
+    "airDateUtc": "1998-12-01T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 8
+   },
+   {
+    "id": 27581,
+    "seasonNumber": 1,
+    "episodeNumber": 9,
+    "title": "The Truth About Will and Dogs",
+    "airDate": "1998-12-15",
+    "airDateUtc": "1998-12-16T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 9
+   },
+   {
+    "id": 27582,
+    "seasonNumber": 1,
+    "episodeNumber": 10,
+    "title": "The Big Vent",
+    "airDate": "1999-01-05",
+    "airDateUtc": "1999-01-06T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 10
+   },
+   {
+    "id": 27583,
+    "seasonNumber": 1,
+    "episodeNumber": 11,
+    "title": "Will on Ice",
+    "airDate": "1999-01-12",
+    "airDateUtc": "1999-01-13T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 11
+   },
+   {
+    "id": 27584,
+    "seasonNumber": 1,
+    "episodeNumber": 12,
+    "title": "My Fair Maid-y",
+    "airDate": "1999-02-02",
+    "airDateUtc": "1999-02-03T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 12
+   },
+   {
+    "id": 27585,
+    "seasonNumber": 1,
+    "episodeNumber": 13,
+    "title": "The Unsinkable Mommy Adler",
+    "airDate": "1999-02-09",
+    "airDateUtc": "1999-02-10T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 13
+   },
+   {
+    "id": 27586,
+    "seasonNumber": 1,
+    "episodeNumber": 14,
+    "title": "Big Brother is Coming (1)",
+    "airDate": "1999-02-16",
+    "airDateUtc": "1999-02-17T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 14
+   },
+   {
+    "id": 27587,
+    "seasonNumber": 1,
+    "episodeNumber": 15,
+    "title": "Big Brother is Coming (2)",
+    "airDate": "1999-02-23",
+    "airDateUtc": "1999-02-24T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 15
+   },
+   {
+    "id": 27588,
+    "seasonNumber": 1,
+    "episodeNumber": 16,
+    "title": "Yours, Mine or Ours",
+    "airDate": "1999-03-02",
+    "airDateUtc": "1999-03-03T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 16
+   },
+   {
+    "id": 27589,
+    "seasonNumber": 1,
+    "episodeNumber": 17,
+    "title": "Secrets and Lays",
+    "airDate": "1999-03-23",
+    "airDateUtc": "1999-03-24T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 17
+   },
+   {
+    "id": 27590,
+    "seasonNumber": 1,
+    "episodeNumber": 18,
+    "title": "Grace, Replaced",
+    "airDate": "1999-04-08",
+    "airDateUtc": "1999-04-09T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 18
+   },
+   {
+    "id": 27591,
+    "seasonNumber": 1,
+    "episodeNumber": 19,
+    "title": "Will Works Out",
+    "airDate": "1999-04-22",
+    "airDateUtc": "1999-04-23T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 19
+   },
+   {
+    "id": 27592,
+    "seasonNumber": 1,
+    "episodeNumber": 20,
+    "title": "Saving Grace",
+    "airDate": "1999-04-29",
+    "airDateUtc": "1999-04-30T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 20
+   },
+   {
+    "id": 27593,
+    "seasonNumber": 1,
+    "episodeNumber": 21,
+    "title": "Alley Cats",
+    "airDate": "1999-05-06",
+    "airDateUtc": "1999-05-07T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 21
+   },
+   {
+    "id": 27594,
+    "seasonNumber": 1,
+    "episodeNumber": 22,
+    "title": "Object of My Rejection",
+    "airDate": "1999-05-13",
+    "airDateUtc": "1999-05-14T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 22
+   },
+   {
+    "id": 27595,
+    "seasonNumber": 2,
+    "episodeNumber": 1,
+    "title": "Guess Who's Not Coming to Dinner",
+    "airDate": "1999-09-21",
+    "airDateUtc": "1999-09-22T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 23
+   },
+   {
+    "id": 27596,
+    "seasonNumber": 2,
+    "episodeNumber": 2,
+    "title": "Election",
+    "airDate": "1999-09-28",
+    "airDateUtc": "1999-09-29T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 24
+   },
+   {
+    "id": 27597,
+    "seasonNumber": 2,
+    "episodeNumber": 3,
+    "title": "Das Boob",
+    "airDate": "1999-11-02",
+    "airDateUtc": "1999-11-03T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 25
+   },
+   {
+    "id": 27598,
+    "seasonNumber": 2,
+    "episodeNumber": 4,
+    "title": "Whose Mom is it Anyway?",
+    "airDate": "1999-11-09",
+    "airDateUtc": "1999-11-10T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 26
+   },
+   {
+    "id": 27599,
+    "seasonNumber": 2,
+    "episodeNumber": 5,
+    "title": "Polk Defeats Truman",
+    "airDate": "1999-11-16",
+    "airDateUtc": "1999-11-17T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 27
+   },
+   {
+    "id": 27600,
+    "seasonNumber": 2,
+    "episodeNumber": 6,
+    "title": "To Serve and Disinfect",
+    "airDate": "1999-11-23",
+    "airDateUtc": "1999-11-24T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 28
+   },
+   {
+    "id": 27601,
+    "seasonNumber": 2,
+    "episodeNumber": 7,
+    "title": "Homo for the Holidays",
+    "airDate": "1999-11-25",
+    "airDateUtc": "1999-11-26T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 29
+   },
+   {
+    "id": 27602,
+    "seasonNumber": 2,
+    "episodeNumber": 8,
+    "title": "Terms of Employment",
+    "airDate": "1999-11-30",
+    "airDateUtc": "1999-12-01T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 30
+   },
+   {
+    "id": 27603,
+    "seasonNumber": 2,
+    "episodeNumber": 9,
+    "title": "I Never Promised You an Olive Garden",
+    "airDate": "1999-12-14",
+    "airDateUtc": "1999-12-15T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 31
+   },
+   {
+    "id": 27604,
+    "seasonNumber": 2,
+    "episodeNumber": 10,
+    "title": "Tea and a Total Lack of Sympathy",
+    "airDate": "2000-01-11",
+    "airDateUtc": "2000-01-12T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 32
+   },
+   {
+    "id": 27605,
+    "seasonNumber": 2,
+    "episodeNumber": 11,
+    "title": "Seeds of Discontent",
+    "airDate": "2000-01-25",
+    "airDateUtc": "2000-01-26T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 33
+   },
+   {
+    "id": 27606,
+    "seasonNumber": 2,
+    "episodeNumber": 12,
+    "title": "He's Come Undone",
+    "airDate": "2000-02-08",
+    "airDateUtc": "2000-02-09T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 34
+   },
+   {
+    "id": 27607,
+    "seasonNumber": 2,
+    "episodeNumber": 13,
+    "title": "Oh Dad, Poor Dad, He's Kept Me in the Closet and I'm So Sad",
+    "airDate": "2000-02-15",
+    "airDateUtc": "2000-02-16T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 35
+   },
+   {
+    "id": 27608,
+    "seasonNumber": 2,
+    "episodeNumber": 14,
+    "title": "Acting Out",
+    "airDate": "2000-02-22",
+    "airDateUtc": "2000-02-23T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 36
+   },
+   {
+    "id": 27609,
+    "seasonNumber": 2,
+    "episodeNumber": 15,
+    "title": "Advise and Resent",
+    "airDate": "2000-02-29",
+    "airDateUtc": "2000-03-01T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 37
+   },
+   {
+    "id": 27610,
+    "seasonNumber": 2,
+    "episodeNumber": 16,
+    "title": "Hey La, Hey La, My Ex-Boyfriend's Back",
+    "airDate": "2000-03-14",
+    "airDateUtc": "2000-03-15T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 38
+   },
+   {
+    "id": 27611,
+    "seasonNumber": 2,
+    "episodeNumber": 17,
+    "title": "The Hospital Show",
+    "airDate": "2000-03-28",
+    "airDateUtc": "2000-03-29T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 39
+   },
+   {
+    "id": 27612,
+    "seasonNumber": 2,
+    "episodeNumber": 18,
+    "title": "Sweet and Sour Charity",
+    "airDate": "2000-04-04",
+    "airDateUtc": "2000-04-05T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 40
+   },
+   {
+    "id": 27613,
+    "seasonNumber": 2,
+    "episodeNumber": 19,
+    "title": "An Affair to Forget",
+    "airDate": "2000-04-18",
+    "airDateUtc": "2000-04-19T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 41
+   },
+   {
+    "id": 27614,
+    "seasonNumber": 2,
+    "episodeNumber": 20,
+    "title": "Girls, Interrupted",
+    "airDate": "2000-05-02",
+    "airDateUtc": "2000-05-03T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 42
+   },
+   {
+    "id": 27615,
+    "seasonNumber": 2,
+    "episodeNumber": 21,
+    "title": "There But for the Grace of Grace",
+    "airDate": "2000-05-09",
+    "airDateUtc": "2000-05-10T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 43
+   },
+   {
+    "id": 27616,
+    "seasonNumber": 2,
+    "episodeNumber": 22,
+    "title": "My Best Friend's Tush",
+    "airDate": "2000-05-16",
+    "airDateUtc": "2000-05-17T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 44
+   },
+   {
+    "id": 27617,
+    "seasonNumber": 2,
+    "episodeNumber": 23,
+    "title": "Ben? Her? (1)",
+    "airDate": "2000-05-23",
+    "airDateUtc": "2000-05-24T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 45
+   },
+   {
+    "id": 27618,
+    "seasonNumber": 2,
+    "episodeNumber": 24,
+    "title": "Ben? Her? (2)",
+    "airDate": "2000-05-23",
+    "airDateUtc": "2000-05-24T01:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 46
+   },
+   {
+    "id": 27619,
+    "seasonNumber": 3,
+    "episodeNumber": 1,
+    "title": "New Will City",
+    "airDate": "2000-10-12",
+    "airDateUtc": "2000-10-13T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 47
+   },
+   {
+    "id": 27620,
+    "seasonNumber": 3,
+    "episodeNumber": 2,
+    "title": "Fear and Clothing",
+    "airDate": "2000-10-19",
+    "airDateUtc": "2000-10-20T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 48
+   },
+   {
+    "id": 27621,
+    "seasonNumber": 3,
+    "episodeNumber": 3,
+    "title": "Husbands and Trophy Wives",
+    "airDate": "2000-10-19",
+    "airDateUtc": "2000-10-20T01:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 49
+   },
+   {
+    "id": 27622,
+    "seasonNumber": 3,
+    "episodeNumber": 4,
+    "title": "Girl Trouble",
+    "airDate": "2000-10-26",
+    "airDateUtc": "2000-10-27T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 50
+   },
+   {
+    "id": 27623,
+    "seasonNumber": 3,
+    "episodeNumber": 5,
+    "title": "Grace 0, Jack 2000",
+    "airDate": "2000-11-02",
+    "airDateUtc": "2000-11-03T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 51
+   },
+   {
+    "id": 27624,
+    "seasonNumber": 3,
+    "episodeNumber": 6,
+    "title": "Love Plus One",
+    "airDate": "2000-11-09",
+    "airDateUtc": "2000-11-10T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 52
+   },
+   {
+    "id": 27625,
+    "seasonNumber": 3,
+    "episodeNumber": 7,
+    "title": "Gypsies, Tramps and Weed",
+    "airDate": "2000-11-16",
+    "airDateUtc": "2000-11-17T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 53
+   },
+   {
+    "id": 27626,
+    "seasonNumber": 3,
+    "episodeNumber": 8,
+    "title": "Lows in the Mid-Eighties (1)",
+    "airDate": "2000-11-23",
+    "airDateUtc": "2000-11-24T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 54
+   },
+   {
+    "id": 27627,
+    "seasonNumber": 3,
+    "episodeNumber": 9,
+    "title": "Lows in the Mid-Eighties (2)",
+    "airDate": "2000-11-23",
+    "airDateUtc": "2000-11-24T02:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 55
+   },
+   {
+    "id": 27628,
+    "seasonNumber": 3,
+    "episodeNumber": 10,
+    "title": "Three's a Crowd, Six is a Freak Show",
+    "airDate": "2000-12-14",
+    "airDateUtc": "2000-12-15T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 56
+   },
+   {
+    "id": 27629,
+    "seasonNumber": 3,
+    "episodeNumber": 11,
+    "title": "Coffee and Commitment",
+    "airDate": "2001-01-04",
+    "airDateUtc": "2001-01-05T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 57
+   },
+   {
+    "id": 27630,
+    "seasonNumber": 3,
+    "episodeNumber": 12,
+    "title": "Swimming Pools... Movie Stars",
+    "airDate": "2001-01-11",
+    "airDateUtc": "2001-01-12T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 58
+   },
+   {
+    "id": 27631,
+    "seasonNumber": 3,
+    "episodeNumber": 13,
+    "title": "Crazy in Love",
+    "airDate": "2001-02-01",
+    "airDateUtc": "2001-02-02T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 59
+   },
+   {
+    "id": 27632,
+    "seasonNumber": 3,
+    "episodeNumber": 14,
+    "title": "Brothers, A Love Story",
+    "airDate": "2001-02-08",
+    "airDateUtc": "2001-02-09T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 60
+   },
+   {
+    "id": 27633,
+    "seasonNumber": 3,
+    "episodeNumber": 15,
+    "title": "My Uncle the Car",
+    "airDate": "2001-02-15",
+    "airDateUtc": "2001-02-16T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 61
+   },
+   {
+    "id": 27634,
+    "seasonNumber": 3,
+    "episodeNumber": 16,
+    "title": "Cheaters (1)",
+    "airDate": "2001-02-22",
+    "airDateUtc": "2001-02-23T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 62
+   },
+   {
+    "id": 27635,
+    "seasonNumber": 3,
+    "episodeNumber": 17,
+    "title": "Cheaters (2)",
+    "airDate": "2001-02-22",
+    "airDateUtc": "2001-02-23T02:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 63
+   },
+   {
+    "id": 27636,
+    "seasonNumber": 3,
+    "episodeNumber": 18,
+    "title": "Mad Dogs and Average Men",
+    "airDate": "2001-03-15",
+    "airDateUtc": "2001-03-16T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 64
+   },
+   {
+    "id": 27637,
+    "seasonNumber": 3,
+    "episodeNumber": 19,
+    "title": "Poker? I Don't Even Like Her",
+    "airDate": "2001-03-29",
+    "airDateUtc": "2001-03-30T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 65
+   },
+   {
+    "id": 27638,
+    "seasonNumber": 3,
+    "episodeNumber": 20,
+    "title": "An Old-Fashioned Piano Party",
+    "airDate": "2001-04-19",
+    "airDateUtc": "2001-04-20T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 66
+   },
+   {
+    "id": 27639,
+    "seasonNumber": 3,
+    "episodeNumber": 21,
+    "title": "The Young and the Tactless",
+    "airDate": "2001-04-26",
+    "airDateUtc": "2001-04-27T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 67
+   },
+   {
+    "id": 27640,
+    "seasonNumber": 3,
+    "episodeNumber": 22,
+    "title": "Alice Doesn't Lisp Here Anymore",
+    "airDate": "2001-05-03",
+    "airDateUtc": "2001-05-04T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 68
+   },
+   {
+    "id": 27641,
+    "seasonNumber": 3,
+    "episodeNumber": 23,
+    "title": "Last of the Really Odd Lovers",
+    "airDate": "2001-05-10",
+    "airDateUtc": "2001-05-11T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 69
+   },
+   {
+    "id": 27642,
+    "seasonNumber": 3,
+    "episodeNumber": 24,
+    "title": "Sons and Lovers (1)",
+    "airDate": "2001-05-17",
+    "airDateUtc": "2001-05-18T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 70
+   },
+   {
+    "id": 27643,
+    "seasonNumber": 3,
+    "episodeNumber": 25,
+    "title": "Sons and Lovers (2)",
+    "airDate": "2001-05-17",
+    "airDateUtc": "2001-05-18T01:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 71
+   },
+   {
+    "id": 27644,
+    "seasonNumber": 4,
+    "episodeNumber": 1,
+    "title": "The Third Wheel Gets the Grace",
+    "airDate": "2001-09-27",
+    "airDateUtc": "2001-09-28T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 72
+   },
+   {
+    "id": 27645,
+    "seasonNumber": 4,
+    "episodeNumber": 2,
+    "title": "Past and Presents",
+    "airDate": "2001-10-04",
+    "airDateUtc": "2001-10-05T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 73
+   },
+   {
+    "id": 27646,
+    "seasonNumber": 4,
+    "episodeNumber": 3,
+    "title": "Crouching Father, Hidden Husband",
+    "airDate": "2001-10-11",
+    "airDateUtc": "2001-10-12T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 74
+   },
+   {
+    "id": 27647,
+    "seasonNumber": 4,
+    "episodeNumber": 4,
+    "title": "Prison Blues",
+    "airDate": "2001-10-18",
+    "airDateUtc": "2001-10-19T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 75
+   },
+   {
+    "id": 27648,
+    "seasonNumber": 4,
+    "episodeNumber": 5,
+    "title": "Loose Lips Sink Relationships",
+    "airDate": "2001-10-25",
+    "airDateUtc": "2001-10-26T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 76
+   },
+   {
+    "id": 27649,
+    "seasonNumber": 4,
+    "episodeNumber": 6,
+    "title": "Rules of Engagement",
+    "airDate": "2001-11-01",
+    "airDateUtc": "2001-11-02T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 77
+   },
+   {
+    "id": 27650,
+    "seasonNumber": 4,
+    "episodeNumber": 7,
+    "title": "Bed, Bath, and Beyond",
+    "airDate": "2001-11-08",
+    "airDateUtc": "2001-11-09T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 78
+   },
+   {
+    "id": 27651,
+    "seasonNumber": 4,
+    "episodeNumber": 8,
+    "title": "Star-Spangled Banter",
+    "airDate": "2001-11-15",
+    "airDateUtc": "2001-11-16T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 79
+   },
+   {
+    "id": 27652,
+    "seasonNumber": 4,
+    "episodeNumber": 9,
+    "title": "Moveable Feast (1)",
+    "airDate": "2001-11-22",
+    "airDateUtc": "2001-11-23T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 80
+   },
+   {
+    "id": 27653,
+    "seasonNumber": 4,
+    "episodeNumber": 10,
+    "title": "Moveable Feast (2)",
+    "airDate": "2001-11-22",
+    "airDateUtc": "2001-11-23T02:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 81
+   },
+   {
+    "id": 27654,
+    "seasonNumber": 4,
+    "episodeNumber": 11,
+    "title": "Stakin' Care of Business",
+    "airDate": "2001-12-06",
+    "airDateUtc": "2001-12-07T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 82
+   },
+   {
+    "id": 27655,
+    "seasonNumber": 4,
+    "episodeNumber": 12,
+    "title": "Jingle Balls",
+    "airDate": "2001-12-13",
+    "airDateUtc": "2001-12-14T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 83
+   },
+   {
+    "id": 27656,
+    "seasonNumber": 4,
+    "episodeNumber": 13,
+    "title": "Whoa, Nelly",
+    "airDate": "2002-01-10",
+    "airDateUtc": "2002-01-11T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 84
+   },
+   {
+    "id": 27657,
+    "seasonNumber": 4,
+    "episodeNumber": 14,
+    "title": "Grace in the Hole",
+    "airDate": "2002-01-17",
+    "airDateUtc": "2002-01-18T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 85
+   },
+   {
+    "id": 27658,
+    "seasonNumber": 4,
+    "episodeNumber": 15,
+    "title": "Dyeing is Easy, Comedy is Hard",
+    "airDate": "2002-01-31",
+    "airDateUtc": "2002-02-01T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 86
+   },
+   {
+    "id": 27659,
+    "seasonNumber": 4,
+    "episodeNumber": 16,
+    "title": "A Chorus Lie",
+    "airDate": "2002-02-07",
+    "airDateUtc": "2002-02-08T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 87
+   },
+   {
+    "id": 27660,
+    "seasonNumber": 4,
+    "episodeNumber": 17,
+    "title": "Someone Old, Someplace New",
+    "airDate": "2002-02-28",
+    "airDateUtc": "2002-03-01T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 88
+   },
+   {
+    "id": 27661,
+    "seasonNumber": 4,
+    "episodeNumber": 18,
+    "title": "Something Borrowed, Someone's Due",
+    "airDate": "2002-03-07",
+    "airDateUtc": "2002-03-08T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 89
+   },
+   {
+    "id": 27662,
+    "seasonNumber": 4,
+    "episodeNumber": 19,
+    "title": "Cheatin' Trouble Blues",
+    "airDate": "2002-03-28",
+    "airDateUtc": "2002-03-29T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 90
+   },
+   {
+    "id": 27663,
+    "seasonNumber": 4,
+    "episodeNumber": 20,
+    "title": "Went to a Garden Potty",
+    "airDate": "2002-04-04",
+    "airDateUtc": "2002-04-05T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 91
+   },
+   {
+    "id": 27664,
+    "seasonNumber": 4,
+    "episodeNumber": 21,
+    "title": "He Shoots, They Snore",
+    "airDate": "2002-04-11",
+    "airDateUtc": "2002-04-12T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 92
+   },
+   {
+    "id": 27665,
+    "seasonNumber": 4,
+    "episodeNumber": 22,
+    "title": "Wedding Balls",
+    "airDate": "2002-04-18",
+    "airDateUtc": "2002-04-19T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 93
+   },
+   {
+    "id": 27666,
+    "seasonNumber": 4,
+    "episodeNumber": 23,
+    "title": "Fagel Attraction",
+    "airDate": "2002-04-25",
+    "airDateUtc": "2002-04-26T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 94
+   },
+   {
+    "id": 27667,
+    "seasonNumber": 4,
+    "episodeNumber": 24,
+    "title": "Hocus Focus",
+    "airDate": "2002-05-02",
+    "airDateUtc": "2002-05-03T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 95
+   },
+   {
+    "id": 27668,
+    "seasonNumber": 4,
+    "episodeNumber": 25,
+    "title": "A Buncha White Chicks Sittin' Around Talkin'",
+    "airDate": "2002-05-09",
+    "airDateUtc": "2002-05-10T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 96
+   },
+   {
+    "id": 27669,
+    "seasonNumber": 4,
+    "episodeNumber": 26,
+    "title": "A.I.: Artificial Insemination (1)",
+    "airDate": "2002-05-16",
+    "airDateUtc": "2002-05-17T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 97
+   },
+   {
+    "id": 27670,
+    "seasonNumber": 4,
+    "episodeNumber": 27,
+    "title": "A.I.: Artificial Insemination (2)",
+    "airDate": "2002-05-16",
+    "airDateUtc": "2002-05-17T01:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 98
+   },
+   {
+    "id": 27671,
+    "seasonNumber": 5,
+    "episodeNumber": 1,
+    "title": "...And the Horse He Rode in On",
+    "airDate": "2002-09-26",
+    "airDateUtc": "2002-09-27T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 99
+   },
+   {
+    "id": 27672,
+    "seasonNumber": 5,
+    "episodeNumber": 2,
+    "title": "Bacon and Eggs",
+    "airDate": "2002-10-03",
+    "airDateUtc": "2002-10-04T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 100
+   },
+   {
+    "id": 27673,
+    "seasonNumber": 5,
+    "episodeNumber": 3,
+    "title": "The Kid Stays Out of the Picture",
+    "airDate": "2002-10-10",
+    "airDateUtc": "2002-10-11T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 101
+   },
+   {
+    "id": 27674,
+    "seasonNumber": 5,
+    "episodeNumber": 4,
+    "title": "Humongous Growth",
+    "airDate": "2002-10-17",
+    "airDateUtc": "2002-10-18T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 102
+   },
+   {
+    "id": 27675,
+    "seasonNumber": 5,
+    "episodeNumber": 5,
+    "title": "It's the Gay Pumpkin, Charlie Brown",
+    "airDate": "2002-10-31",
+    "airDateUtc": "2002-11-01T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 103
+   },
+   {
+    "id": 27676,
+    "seasonNumber": 5,
+    "episodeNumber": 6,
+    "title": "Boardroom & A Parked Place",
+    "airDate": "2002-11-07",
+    "airDateUtc": "2002-11-08T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 104
+   },
+   {
+    "id": 27677,
+    "seasonNumber": 5,
+    "episodeNumber": 7,
+    "title": "The Needle & Omelet's Done",
+    "airDate": "2002-11-14",
+    "airDateUtc": "2002-11-15T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 105
+   },
+   {
+    "id": 27678,
+    "seasonNumber": 5,
+    "episodeNumber": 8,
+    "title": "Marry Me a Little (1)",
+    "airDate": "2002-11-21",
+    "airDateUtc": "2002-11-22T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 106
+   },
+   {
+    "id": 27679,
+    "seasonNumber": 5,
+    "episodeNumber": 9,
+    "title": "Marry Me a Little More (2)",
+    "airDate": "2002-11-21",
+    "airDateUtc": "2002-11-22T02:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 107
+   },
+   {
+    "id": 27680,
+    "seasonNumber": 5,
+    "episodeNumber": 10,
+    "title": "The Honeymoon's Over",
+    "airDate": "2002-12-05",
+    "airDateUtc": "2002-12-06T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 108
+   },
+   {
+    "id": 27681,
+    "seasonNumber": 5,
+    "episodeNumber": 11,
+    "title": "All About Christmas Eve",
+    "airDate": "2002-12-12",
+    "airDateUtc": "2002-12-13T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 109
+   },
+   {
+    "id": 27682,
+    "seasonNumber": 5,
+    "episodeNumber": 12,
+    "title": "Field of Queens",
+    "airDate": "2003-01-09",
+    "airDateUtc": "2003-01-10T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 110
+   },
+   {
+    "id": 27683,
+    "seasonNumber": 5,
+    "episodeNumber": 13,
+    "title": "Fagmalion Part One: Gay it Forward",
+    "airDate": "2003-01-16",
+    "airDateUtc": "2003-01-17T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 111
+   },
+   {
+    "id": 27684,
+    "seasonNumber": 5,
+    "episodeNumber": 14,
+    "title": "Fagmalion Part Two: Attack of the Clones",
+    "airDate": "2003-01-30",
+    "airDateUtc": "2003-01-31T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 112
+   },
+   {
+    "id": 27685,
+    "seasonNumber": 5,
+    "episodeNumber": 15,
+    "title": "Homojo",
+    "airDate": "2003-02-06",
+    "airDateUtc": "2003-02-07T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 113
+   },
+   {
+    "id": 27686,
+    "seasonNumber": 5,
+    "episodeNumber": 16,
+    "title": "Women & Children First",
+    "airDate": "2003-02-13",
+    "airDateUtc": "2003-02-14T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 114
+   },
+   {
+    "id": 27687,
+    "seasonNumber": 5,
+    "episodeNumber": 17,
+    "title": "Fagmalion Part Three: Bye, Bye, Beardy",
+    "airDate": "2003-02-20",
+    "airDateUtc": "2003-02-21T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 115
+   },
+   {
+    "id": 27688,
+    "seasonNumber": 5,
+    "episodeNumber": 18,
+    "title": "Fagmalion Part Four: The Guy Who Loved Me",
+    "airDate": "2003-03-13",
+    "airDateUtc": "2003-03-14T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 116
+   },
+   {
+    "id": 27689,
+    "seasonNumber": 5,
+    "episodeNumber": 19,
+    "title": "Sex, Losers, & Videotape",
+    "airDate": "2003-04-03",
+    "airDateUtc": "2003-04-04T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 117
+   },
+   {
+    "id": 27690,
+    "seasonNumber": 5,
+    "episodeNumber": 20,
+    "title": "Leo Unwrapped",
+    "airDate": "2003-04-17",
+    "airDateUtc": "2003-04-18T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 118
+   },
+   {
+    "id": 27691,
+    "seasonNumber": 5,
+    "episodeNumber": 21,
+    "title": "Dolls and Dolls",
+    "airDate": "2003-04-24",
+    "airDateUtc": "2003-04-25T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 119
+   },
+   {
+    "id": 27692,
+    "seasonNumber": 5,
+    "episodeNumber": 22,
+    "title": "May Divorce Be with You",
+    "airDate": "2003-05-01",
+    "airDateUtc": "2003-05-02T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 120
+   },
+   {
+    "id": 27693,
+    "seasonNumber": 5,
+    "episodeNumber": 23,
+    "title": "23",
+    "airDate": "2003-05-08",
+    "airDateUtc": "2003-05-09T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 121
+   },
+   {
+    "id": 27694,
+    "seasonNumber": 5,
+    "episodeNumber": 24,
+    "title": "24",
+    "airDate": "2003-05-15",
+    "airDateUtc": "2003-05-16T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 122
+   },
+   {
+    "id": 27695,
+    "seasonNumber": 6,
+    "episodeNumber": 1,
+    "title": "Dames at Sea",
+    "airDate": "2003-09-25",
+    "airDateUtc": "2003-09-26T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 123
+   },
+   {
+    "id": 27696,
+    "seasonNumber": 6,
+    "episodeNumber": 2,
+    "title": "Last Ex to Brooklyn",
+    "airDate": "2003-10-02",
+    "airDateUtc": "2003-10-03T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 124
+   },
+   {
+    "id": 27697,
+    "seasonNumber": 6,
+    "episodeNumber": 3,
+    "title": "Home Court Disadvantage",
+    "airDate": "2003-10-09",
+    "airDateUtc": "2003-10-10T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 125
+   },
+   {
+    "id": 27698,
+    "seasonNumber": 6,
+    "episodeNumber": 4,
+    "title": "Me and Mr. Jones",
+    "airDate": "2003-10-23",
+    "airDateUtc": "2003-10-24T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 126
+   },
+   {
+    "id": 27699,
+    "seasonNumber": 6,
+    "episodeNumber": 5,
+    "title": "A-Story, Bee-Story",
+    "airDate": "2003-10-30",
+    "airDateUtc": "2003-10-31T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 127
+   },
+   {
+    "id": 27700,
+    "seasonNumber": 6,
+    "episodeNumber": 6,
+    "title": "Heart Like a Wheelchair",
+    "airDate": "2003-11-06",
+    "airDateUtc": "2003-11-07T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 128
+   },
+   {
+    "id": 27701,
+    "seasonNumber": 6,
+    "episodeNumber": 7,
+    "title": "Nice in White Satin",
+    "airDate": "2003-11-13",
+    "airDateUtc": "2003-11-14T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 129
+   },
+   {
+    "id": 27702,
+    "seasonNumber": 6,
+    "episodeNumber": 8,
+    "title": "Swimming from Cambodia",
+    "airDate": "2003-11-20",
+    "airDateUtc": "2003-11-21T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 130
+   },
+   {
+    "id": 27703,
+    "seasonNumber": 6,
+    "episodeNumber": 9,
+    "title": "Strangers with Candice",
+    "airDate": "2003-12-04",
+    "airDateUtc": "2003-12-05T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 131
+   },
+   {
+    "id": 27704,
+    "seasonNumber": 6,
+    "episodeNumber": 10,
+    "title": "Fanilow",
+    "airDate": "2003-12-11",
+    "airDateUtc": "2003-12-12T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 132
+   },
+   {
+    "id": 27705,
+    "seasonNumber": 6,
+    "episodeNumber": 11,
+    "title": "The Accidental Tsuris",
+    "airDate": "2004-01-15",
+    "airDateUtc": "2004-01-16T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 133
+   },
+   {
+    "id": 27706,
+    "seasonNumber": 6,
+    "episodeNumber": 12,
+    "title": "A Gay/December Romance",
+    "airDate": "2004-01-22",
+    "airDateUtc": "2004-01-23T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 134
+   },
+   {
+    "id": 27707,
+    "seasonNumber": 6,
+    "episodeNumber": 13,
+    "title": "Ice Cream Balls",
+    "airDate": "2004-02-10",
+    "airDateUtc": "2004-02-11T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 135
+   },
+   {
+    "id": 27708,
+    "seasonNumber": 6,
+    "episodeNumber": 14,
+    "title": "Looking for Mr. Good Enough",
+    "airDate": "2004-02-19",
+    "airDateUtc": "2004-02-20T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 136
+   },
+   {
+    "id": 27709,
+    "seasonNumber": 6,
+    "episodeNumber": 15,
+    "title": "Flip-Flop (1)",
+    "airDate": "2004-02-26",
+    "airDateUtc": "2004-02-27T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 137
+   },
+   {
+    "id": 27710,
+    "seasonNumber": 6,
+    "episodeNumber": 16,
+    "title": "Flip-Flop (2)",
+    "airDate": "2004-03-04",
+    "airDateUtc": "2004-03-05T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 138
+   },
+   {
+    "id": 27711,
+    "seasonNumber": 6,
+    "episodeNumber": 17,
+    "title": "East Side Story",
+    "airDate": "2004-03-11",
+    "airDateUtc": "2004-03-12T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 139
+   },
+   {
+    "id": 27712,
+    "seasonNumber": 6,
+    "episodeNumber": 18,
+    "title": "Courting Disaster",
+    "airDate": "2004-03-18",
+    "airDateUtc": "2004-03-19T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 140
+   },
+   {
+    "id": 27713,
+    "seasonNumber": 6,
+    "episodeNumber": 19,
+    "title": "No Sex 'n the City",
+    "airDate": "2004-03-25",
+    "airDateUtc": "2004-03-26T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 141
+   },
+   {
+    "id": 27714,
+    "seasonNumber": 6,
+    "episodeNumber": 20,
+    "title": "Fred Astaire and Ginger Chicken",
+    "airDate": "2004-04-01",
+    "airDateUtc": "2004-04-02T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 142
+   },
+   {
+    "id": 27715,
+    "seasonNumber": 6,
+    "episodeNumber": 21,
+    "title": "I Never Cheered for My Father",
+    "airDate": "2004-04-08",
+    "airDateUtc": "2004-04-09T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 143
+   },
+   {
+    "id": 27716,
+    "seasonNumber": 6,
+    "episodeNumber": 22,
+    "title": "Speechless",
+    "airDate": "2004-04-22",
+    "airDateUtc": "2004-04-23T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 144
+   },
+   {
+    "id": 27717,
+    "seasonNumber": 6,
+    "episodeNumber": 23,
+    "title": "I Do (1)",
+    "airDate": "2004-04-29",
+    "airDateUtc": "2004-04-30T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 145
+   },
+   {
+    "id": 27718,
+    "seasonNumber": 6,
+    "episodeNumber": 24,
+    "title": "Oh, No, You Di-In't (2)",
+    "airDate": "2004-04-29",
+    "airDateUtc": "2004-04-30T01:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 146
+   },
+   {
+    "id": 27719,
+    "seasonNumber": 7,
+    "episodeNumber": 1,
+    "title": "FYI: I Hurt Too",
+    "airDate": "2004-09-16",
+    "airDateUtc": "2004-09-17T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 147
+   },
+   {
+    "id": 27720,
+    "seasonNumber": 7,
+    "episodeNumber": 2,
+    "title": "Backup Dancer",
+    "airDate": "2004-09-23",
+    "airDateUtc": "2004-09-24T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 148
+   },
+   {
+    "id": 27721,
+    "seasonNumber": 7,
+    "episodeNumber": 3,
+    "title": "One Gay at a Time",
+    "airDate": "2004-09-30",
+    "airDateUtc": "2004-10-01T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 149
+   },
+   {
+    "id": 27722,
+    "seasonNumber": 7,
+    "episodeNumber": 4,
+    "title": "Company",
+    "airDate": "2004-10-07",
+    "airDateUtc": "2004-10-08T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 150
+   },
+   {
+    "id": 27723,
+    "seasonNumber": 7,
+    "episodeNumber": 5,
+    "title": "Key Party",
+    "airDate": "2004-10-14",
+    "airDateUtc": "2004-10-15T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 151
+   },
+   {
+    "id": 27724,
+    "seasonNumber": 7,
+    "episodeNumber": 6,
+    "title": "The Newlydreads",
+    "airDate": "2004-10-21",
+    "airDateUtc": "2004-10-22T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 152
+   },
+   {
+    "id": 27725,
+    "seasonNumber": 7,
+    "episodeNumber": 7,
+    "title": "Will & Grace & Vince & Nadine",
+    "airDate": "2004-11-04",
+    "airDateUtc": "2004-11-05T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 153
+   },
+   {
+    "id": 27726,
+    "seasonNumber": 7,
+    "episodeNumber": 8,
+    "title": "Saving Grace, Again (1)",
+    "airDate": "2004-11-11",
+    "airDateUtc": "2004-11-12T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 154
+   },
+   {
+    "id": 27727,
+    "seasonNumber": 7,
+    "episodeNumber": 9,
+    "title": "Saving Grace, Again (2)",
+    "airDate": "2004-11-18",
+    "airDateUtc": "2004-11-19T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 155
+   },
+   {
+    "id": 27728,
+    "seasonNumber": 7,
+    "episodeNumber": 10,
+    "title": "Queens for a Day (1)",
+    "airDate": "2004-11-25",
+    "airDateUtc": "2004-11-26T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 156
+   },
+   {
+    "id": 27729,
+    "seasonNumber": 7,
+    "episodeNumber": 11,
+    "title": "Queens for a Day (2)",
+    "airDate": "2004-11-25",
+    "airDateUtc": "2004-11-26T02:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 157
+   },
+   {
+    "id": 27730,
+    "seasonNumber": 7,
+    "episodeNumber": 12,
+    "title": "Christmas Break",
+    "airDate": "2004-12-09",
+    "airDateUtc": "2004-12-10T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 158
+   },
+   {
+    "id": 27731,
+    "seasonNumber": 7,
+    "episodeNumber": 13,
+    "title": "Board Games",
+    "airDate": "2005-01-06",
+    "airDateUtc": "2005-01-07T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 159
+   },
+   {
+    "id": 27732,
+    "seasonNumber": 7,
+    "episodeNumber": 14,
+    "title": "Partners",
+    "airDate": "2005-01-13",
+    "airDateUtc": "2005-01-14T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 160
+   },
+   {
+    "id": 27733,
+    "seasonNumber": 7,
+    "episodeNumber": 15,
+    "title": "Bully Woolley",
+    "airDate": "2005-02-03",
+    "airDateUtc": "2005-02-04T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 161
+   },
+   {
+    "id": 27734,
+    "seasonNumber": 7,
+    "episodeNumber": 16,
+    "title": "Dance Cards and Greeting Cards",
+    "airDate": "2005-02-10",
+    "airDateUtc": "2005-02-11T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 162
+   },
+   {
+    "id": 27735,
+    "seasonNumber": 7,
+    "episodeNumber": 17,
+    "title": "The Birds and the Bees",
+    "airDate": "2005-02-17",
+    "airDateUtc": "2005-02-18T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 163
+   },
+   {
+    "id": 27736,
+    "seasonNumber": 7,
+    "episodeNumber": 18,
+    "title": "The Fabulous Baker Boy",
+    "airDate": "2005-02-24",
+    "airDateUtc": "2005-02-25T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 164
+   },
+   {
+    "id": 27737,
+    "seasonNumber": 7,
+    "episodeNumber": 19,
+    "title": "Sour Balls",
+    "airDate": "2005-03-17",
+    "airDateUtc": "2005-03-18T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 165
+   },
+   {
+    "id": 27738,
+    "seasonNumber": 7,
+    "episodeNumber": 20,
+    "title": "The Blonde Leading the Blind",
+    "airDate": "2005-04-21",
+    "airDateUtc": "2005-04-22T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 166
+   },
+   {
+    "id": 27739,
+    "seasonNumber": 7,
+    "episodeNumber": 21,
+    "title": "It's a Dad, Dad, Dad, Dad World",
+    "airDate": "2005-05-05",
+    "airDateUtc": "2005-05-06T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 167
+   },
+   {
+    "id": 27740,
+    "seasonNumber": 7,
+    "episodeNumber": 22,
+    "title": "From Queer to Eternity",
+    "airDate": "2005-05-10",
+    "airDateUtc": "2005-05-11T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 168
+   },
+   {
+    "id": 27741,
+    "seasonNumber": 7,
+    "episodeNumber": 23,
+    "title": "Friends with Benefits",
+    "airDate": "2005-05-19",
+    "airDateUtc": "2005-05-20T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 169
+   },
+   {
+    "id": 27742,
+    "seasonNumber": 7,
+    "episodeNumber": 24,
+    "title": "Kiss and Tell",
+    "airDate": "2005-05-19",
+    "airDateUtc": "2005-05-20T01:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 170
+   },
+   {
+    "id": 27743,
+    "seasonNumber": 8,
+    "episodeNumber": 1,
+    "title": "Alive and Schticking",
+    "airDate": "2005-09-29",
+    "airDateUtc": "2005-09-30T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 171
+   },
+   {
+    "id": 27744,
+    "seasonNumber": 8,
+    "episodeNumber": 2,
+    "title": "I Second That Emotion",
+    "airDate": "2005-10-06",
+    "airDateUtc": "2005-10-07T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 172
+   },
+   {
+    "id": 27745,
+    "seasonNumber": 8,
+    "episodeNumber": 3,
+    "title": "The Old Man and the Sea",
+    "airDate": "2005-10-13",
+    "airDateUtc": "2005-10-14T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 173
+   },
+   {
+    "id": 27746,
+    "seasonNumber": 8,
+    "episodeNumber": 4,
+    "title": "Steams Like Old Times",
+    "airDate": "2005-10-20",
+    "airDateUtc": "2005-10-21T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 174
+   },
+   {
+    "id": 27747,
+    "seasonNumber": 8,
+    "episodeNumber": 5,
+    "title": "The Hole Truth",
+    "airDate": "2005-11-03",
+    "airDateUtc": "2005-11-04T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 175
+   },
+   {
+    "id": 27748,
+    "seasonNumber": 8,
+    "episodeNumber": 6,
+    "title": "Love is in the Airplane",
+    "airDate": "2005-11-10",
+    "airDateUtc": "2005-11-11T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 176
+   },
+   {
+    "id": 27749,
+    "seasonNumber": 8,
+    "episodeNumber": 7,
+    "title": "Birds of a Feather Boa",
+    "airDate": "2005-11-17",
+    "airDateUtc": "2005-11-18T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 177
+   },
+   {
+    "id": 27750,
+    "seasonNumber": 8,
+    "episodeNumber": 8,
+    "title": "Swish Out of Water",
+    "airDate": "2005-11-24",
+    "airDateUtc": "2005-11-25T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 178
+   },
+   {
+    "id": 27751,
+    "seasonNumber": 8,
+    "episodeNumber": 9,
+    "title": "A Little Christmas Queer",
+    "airDate": "2005-12-08",
+    "airDateUtc": "2005-12-09T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 179
+   },
+   {
+    "id": 27752,
+    "seasonNumber": 8,
+    "episodeNumber": 10,
+    "title": "Von Trapped",
+    "airDate": "2006-01-05",
+    "airDateUtc": "2006-01-06T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 180
+   },
+   {
+    "id": 27753,
+    "seasonNumber": 8,
+    "episodeNumber": 11,
+    "title": "Bathroom Humor",
+    "airDate": "2006-01-12",
+    "airDateUtc": "2006-01-13T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 181
+   },
+   {
+    "id": 27754,
+    "seasonNumber": 8,
+    "episodeNumber": 12,
+    "title": "Forbidden Fruit",
+    "airDate": "2006-01-19",
+    "airDateUtc": "2006-01-20T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 182
+   },
+   {
+    "id": 27755,
+    "seasonNumber": 8,
+    "episodeNumber": 13,
+    "title": "Cop to It",
+    "airDate": "2006-01-26",
+    "airDateUtc": "2006-01-27T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 183
+   },
+   {
+    "id": 27756,
+    "seasonNumber": 8,
+    "episodeNumber": 14,
+    "title": "I Love L. Gay",
+    "airDate": "2006-02-02",
+    "airDateUtc": "2006-02-03T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 184
+   },
+   {
+    "id": 27757,
+    "seasonNumber": 8,
+    "episodeNumber": 15,
+    "title": "The Definition of Marriage",
+    "airDate": "2006-02-09",
+    "airDateUtc": "2006-02-10T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 185
+   },
+   {
+    "id": 27758,
+    "seasonNumber": 8,
+    "episodeNumber": 16,
+    "title": "Grace Expectations",
+    "airDate": "2006-03-16",
+    "airDateUtc": "2006-03-17T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 186
+   },
+   {
+    "id": 27759,
+    "seasonNumber": 8,
+    "episodeNumber": 17,
+    "title": "Cowboys and Iranians",
+    "airDate": "2006-03-23",
+    "airDateUtc": "2006-03-24T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 187
+   },
+   {
+    "id": 27760,
+    "seasonNumber": 8,
+    "episodeNumber": 18,
+    "title": "Buy, Buy Baby",
+    "airDate": "2006-03-30",
+    "airDateUtc": "2006-03-31T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 188
+   },
+   {
+    "id": 27761,
+    "seasonNumber": 8,
+    "episodeNumber": 19,
+    "title": "Blanket Apology",
+    "airDate": "2006-04-06",
+    "airDateUtc": "2006-04-07T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 189
+   },
+   {
+    "id": 27762,
+    "seasonNumber": 8,
+    "episodeNumber": 20,
+    "title": "The Mourning Son",
+    "airDate": "2006-04-27",
+    "airDateUtc": "2006-04-28T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 190
+   },
+   {
+    "id": 27763,
+    "seasonNumber": 8,
+    "episodeNumber": 21,
+    "title": "Partners 'n Crime",
+    "airDate": "2006-05-04",
+    "airDateUtc": "2006-05-05T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 191
+   },
+   {
+    "id": 27764,
+    "seasonNumber": 8,
+    "episodeNumber": 22,
+    "title": "Whatever Happened to Baby Gin?",
+    "airDate": "2006-05-11",
+    "airDateUtc": "2006-05-12T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 192
+   },
+   {
+    "id": 27765,
+    "seasonNumber": 8,
+    "episodeNumber": 23,
+    "title": "The Finale (1)",
+    "airDate": "2006-05-18",
+    "airDateUtc": "2006-05-19T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 193
+   },
+   {
+    "id": 27766,
+    "seasonNumber": 8,
+    "episodeNumber": 24,
+    "title": "The Finale (2)",
+    "airDate": "2006-05-18",
+    "airDateUtc": "2006-05-19T01:25:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 194
+   },
+   {
+    "id": 27767,
+    "seasonNumber": 9,
+    "episodeNumber": 1,
+    "title": "Eleven Years Later",
+    "airDate": "2017-09-28",
+    "airDateUtc": "2017-09-29T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 195
+   },
+   {
+    "id": 27768,
+    "seasonNumber": 9,
+    "episodeNumber": 2,
+    "title": "Who's Your Daddy",
+    "airDate": "2017-10-05",
+    "airDateUtc": "2017-10-06T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 196
+   },
+   {
+    "id": 27769,
+    "seasonNumber": 9,
+    "episodeNumber": 3,
+    "title": "Emergency Contact",
+    "airDate": "2017-10-12",
+    "airDateUtc": "2017-10-13T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 197
+   },
+   {
+    "id": 27770,
+    "seasonNumber": 9,
+    "episodeNumber": 4,
+    "title": "Grandpa Jack",
+    "airDate": "2017-10-19",
+    "airDateUtc": "2017-10-20T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 198
+   },
+   {
+    "id": 27771,
+    "seasonNumber": 9,
+    "episodeNumber": 5,
+    "title": "How to Succeed in Business Without Really Crying",
+    "airDate": "2017-10-26",
+    "airDateUtc": "2017-10-27T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 199
+   },
+   {
+    "id": 27772,
+    "seasonNumber": 9,
+    "episodeNumber": 6,
+    "title": "Rosario's Quinceañera",
+    "airDate": "2017-11-02",
+    "airDateUtc": "2017-11-03T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 200
+   },
+   {
+    "id": 27773,
+    "seasonNumber": 9,
+    "episodeNumber": 7,
+    "title": "A Gay Olde Christmas",
+    "airDate": "2017-12-05",
+    "airDateUtc": "2017-12-06T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 201
+   },
+   {
+    "id": 27774,
+    "seasonNumber": 9,
+    "episodeNumber": 8,
+    "title": "Friends and Lover",
+    "airDate": "2018-01-04",
+    "airDateUtc": "2018-01-05T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 202
+   },
+   {
+    "id": 27775,
+    "seasonNumber": 9,
+    "episodeNumber": 9,
+    "title": "There's Something About Larry",
+    "airDate": "2018-01-11",
+    "airDateUtc": "2018-01-12T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 203
+   },
+   {
+    "id": 27776,
+    "seasonNumber": 9,
+    "episodeNumber": 10,
+    "title": "The Wedding",
+    "airDate": "2018-01-18",
+    "airDateUtc": "2018-01-19T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 204
+   },
+   {
+    "id": 27777,
+    "seasonNumber": 9,
+    "episodeNumber": 11,
+    "title": "Staten Island Fairy",
+    "airDate": "2018-02-01",
+    "airDateUtc": "2018-02-02T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 205
+   },
+   {
+    "id": 27778,
+    "seasonNumber": 9,
+    "episodeNumber": 12,
+    "title": "Three Wise Men",
+    "airDate": "2018-03-01",
+    "airDateUtc": "2018-03-02T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 206
+   },
+   {
+    "id": 27779,
+    "seasonNumber": 9,
+    "episodeNumber": 13,
+    "title": "Sweatshop Annie & the Annoying Baby Shower",
+    "airDate": "2018-03-08",
+    "airDateUtc": "2018-03-09T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 207
+   },
+   {
+    "id": 27780,
+    "seasonNumber": 9,
+    "episodeNumber": 14,
+    "title": "The Beefcake & the Cake Beef",
+    "airDate": "2018-03-15",
+    "airDateUtc": "2018-03-16T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 208
+   },
+   {
+    "id": 27781,
+    "seasonNumber": 9,
+    "episodeNumber": 15,
+    "title": "One Job",
+    "airDate": "2018-03-29",
+    "airDateUtc": "2018-03-30T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 209
+   },
+   {
+    "id": 27782,
+    "seasonNumber": 9,
+    "episodeNumber": 16,
+    "title": "It's a Family Affair",
+    "airDate": "2018-04-05",
+    "airDateUtc": "2018-04-06T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 210
+   },
+   {
+    "id": 27783,
+    "seasonNumber": 10,
+    "episodeNumber": 1,
+    "title": "The West Side Curmudgeon",
+    "airDate": "2018-10-04",
+    "airDateUtc": "2018-10-05T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 211
+   },
+   {
+    "id": 27784,
+    "seasonNumber": 10,
+    "episodeNumber": 2,
+    "title": "Where in the World is Karen Walker?",
+    "airDate": "2018-10-11",
+    "airDateUtc": "2018-10-12T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 212
+   },
+   {
+    "id": 27785,
+    "seasonNumber": 10,
+    "episodeNumber": 3,
+    "title": "Tex and the City",
+    "airDate": "2018-10-18",
+    "airDateUtc": "2018-10-19T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 213
+   },
+   {
+    "id": 27786,
+    "seasonNumber": 10,
+    "episodeNumber": 4,
+    "title": "Who's Sorry Now?",
+    "airDate": "2018-10-25",
+    "airDateUtc": "2018-10-26T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 214
+   },
+   {
+    "id": 27787,
+    "seasonNumber": 10,
+    "episodeNumber": 5,
+    "title": "Grace's Secret",
+    "airDate": "2018-11-01",
+    "airDateUtc": "2018-11-02T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 215
+   },
+   {
+    "id": 27788,
+    "seasonNumber": 10,
+    "episodeNumber": 6,
+    "title": "Kid 'n Play",
+    "airDate": "2018-11-15",
+    "airDateUtc": "2018-11-16T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 216
+   },
+   {
+    "id": 27789,
+    "seasonNumber": 10,
+    "episodeNumber": 7,
+    "title": "So Long, Division",
+    "airDate": "2018-11-29",
+    "airDateUtc": "2018-11-30T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 217
+   },
+   {
+    "id": 27790,
+    "seasonNumber": 10,
+    "episodeNumber": 8,
+    "title": "Anchor Away",
+    "airDate": "2018-12-06",
+    "airDateUtc": "2018-12-07T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 218
+   },
+   {
+    "id": 27791,
+    "seasonNumber": 10,
+    "episodeNumber": 9,
+    "title": "Family, Trip",
+    "airDate": "2019-01-31",
+    "airDateUtc": "2019-02-01T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 219
+   },
+   {
+    "id": 27792,
+    "seasonNumber": 10,
+    "episodeNumber": 10,
+    "title": "Dead Man Texting",
+    "airDate": "2019-02-07",
+    "airDateUtc": "2019-02-08T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 220
+   },
+   {
+    "id": 27793,
+    "seasonNumber": 10,
+    "episodeNumber": 11,
+    "title": "The Scales of Justice",
+    "airDate": "2019-02-14",
+    "airDateUtc": "2019-02-15T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 221
+   },
+   {
+    "id": 27794,
+    "seasonNumber": 10,
+    "episodeNumber": 12,
+    "title": "The Pursuit of Happiness",
+    "airDate": "2019-02-21",
+    "airDateUtc": "2019-02-22T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 222
+   },
+   {
+    "id": 27795,
+    "seasonNumber": 10,
+    "episodeNumber": 13,
+    "title": "The Real McCoy",
+    "airDate": "2019-02-28",
+    "airDateUtc": "2019-03-01T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 223
+   },
+   {
+    "id": 27796,
+    "seasonNumber": 10,
+    "episodeNumber": 14,
+    "title": "Supreme Courtship",
+    "airDate": "2019-03-07",
+    "airDateUtc": "2019-03-08T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 224
+   },
+   {
+    "id": 27797,
+    "seasonNumber": 10,
+    "episodeNumber": 15,
+    "title": "Bad Blood",
+    "airDate": "2019-03-14",
+    "airDateUtc": "2019-03-15T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 225
+   },
+   {
+    "id": 27798,
+    "seasonNumber": 10,
+    "episodeNumber": 16,
+    "title": "Conscious Coupling",
+    "airDate": "2019-03-21",
+    "airDateUtc": "2019-03-22T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 226
+   },
+   {
+    "id": 27799,
+    "seasonNumber": 10,
+    "episodeNumber": 17,
+    "title": "The Things We Do for Love",
+    "airDate": "2019-03-28",
+    "airDateUtc": "2019-03-29T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 227
+   },
+   {
+    "id": 27800,
+    "seasonNumber": 10,
+    "episodeNumber": 18,
+    "title": "Jack's Big Gay Wedding",
+    "airDate": "2019-04-04",
+    "airDateUtc": "2019-04-05T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 228
+   },
+   {
+    "id": 27801,
+    "seasonNumber": 11,
+    "episodeNumber": 1,
+    "title": "Eat, Pray, Love, Phone, Sex",
+    "airDate": "2019-10-24",
+    "airDateUtc": "2019-10-25T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 229
+   },
+   {
+    "id": 27802,
+    "seasonNumber": 11,
+    "episodeNumber": 2,
+    "title": "Pappa Mia",
+    "airDate": "2019-10-31",
+    "airDateUtc": "2019-11-01T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 230
+   },
+   {
+    "id": 27803,
+    "seasonNumber": 11,
+    "episodeNumber": 3,
+    "title": "With Enemies Like These",
+    "airDate": "2019-11-07",
+    "airDateUtc": "2019-11-08T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 231
+   },
+   {
+    "id": 27804,
+    "seasonNumber": 11,
+    "episodeNumber": 4,
+    "title": "The Chick and the Egg Donor",
+    "airDate": "2019-11-14",
+    "airDateUtc": "2019-11-15T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 232
+   },
+   {
+    "id": 27805,
+    "seasonNumber": 11,
+    "episodeNumber": 5,
+    "title": "The Grief Panda",
+    "airDate": "2019-11-21",
+    "airDateUtc": "2019-11-22T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 233
+   },
+   {
+    "id": 27806,
+    "seasonNumber": 11,
+    "episodeNumber": 6,
+    "title": "Performance Anxiety",
+    "airDate": "2020-01-09",
+    "airDateUtc": "2020-01-10T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 234
+   },
+   {
+    "id": 27807,
+    "seasonNumber": 11,
+    "episodeNumber": 7,
+    "title": "What a Dump",
+    "airDate": "2020-01-16",
+    "airDateUtc": "2020-01-17T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 235
+   },
+   {
+    "id": 27808,
+    "seasonNumber": 11,
+    "episodeNumber": 8,
+    "title": "Lies & Whispers",
+    "airDate": "2020-01-23",
+    "airDateUtc": "2020-01-24T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 236
+   },
+   {
+    "id": 27809,
+    "seasonNumber": 11,
+    "episodeNumber": 9,
+    "title": "Bi-Plane",
+    "airDate": "2020-02-06",
+    "airDateUtc": "2020-02-07T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 237
+   },
+   {
+    "id": 27810,
+    "seasonNumber": 11,
+    "episodeNumber": 10,
+    "title": "Of Mouse and Men",
+    "airDate": "2020-02-13",
+    "airDateUtc": "2020-02-14T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 238
+   },
+   {
+    "id": 27811,
+    "seasonNumber": 11,
+    "episodeNumber": 11,
+    "title": "Accidentally on Porpoise",
+    "airDate": "2020-02-20",
+    "airDateUtc": "2020-02-21T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 239
+   },
+   {
+    "id": 27812,
+    "seasonNumber": 11,
+    "episodeNumber": 12,
+    "title": "Filthy Phil (1)",
+    "airDate": "2020-02-27",
+    "airDateUtc": "2020-02-28T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 240
+   },
+   {
+    "id": 27813,
+    "seasonNumber": 11,
+    "episodeNumber": 13,
+    "title": "Filthy Phil (2)",
+    "airDate": "2020-03-05",
+    "airDateUtc": "2020-03-06T02:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 241
+   },
+   {
+    "id": 27814,
+    "seasonNumber": 11,
+    "episodeNumber": 14,
+    "title": "The Favourite",
+    "airDate": "2020-03-12",
+    "airDateUtc": "2020-03-13T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 242
+   },
+   {
+    "id": 27815,
+    "seasonNumber": 11,
+    "episodeNumber": 15,
+    "title": "Broadway Boundaries",
+    "airDate": "2020-03-19",
+    "airDateUtc": "2020-03-20T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 243
+   },
+   {
+    "id": 27816,
+    "seasonNumber": 11,
+    "episodeNumber": 16,
+    "title": "We Love Lucy",
+    "airDate": "2020-04-09",
+    "airDateUtc": "2020-04-10T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 244
+   },
+   {
+    "id": 27817,
+    "seasonNumber": 11,
+    "episodeNumber": 17,
+    "title": "New Crib",
+    "airDate": "2020-04-16",
+    "airDateUtc": "2020-04-17T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 245
+   },
+   {
+    "id": 27818,
+    "seasonNumber": 11,
+    "episodeNumber": 18,
+    "title": "It's Time",
+    "airDate": "2020-04-23",
+    "airDateUtc": "2020-04-24T01:00:00Z",
+    "hasFile": false,
+    "absoluteEpisodeNumber": 246
+   }
+  ],
+  "series": {
+   "tvdbId": 71814,
+   "tmdbId": 4454,
+   "title": "Will & Grace"
+  },
+  "tmdb": [
+   {
+    "names": [
+     "The Clip Show"
+    ],
+    "air_date": "2002-11-21",
+    "season": 0,
+    "number": 1
+   },
+   {
+    "names": [
+     "Guest Star Clip Show"
+    ],
+    "air_date": "2003-04-24",
+    "season": 0,
+    "number": 2
+   },
+   {
+    "names": [
+     "Say Goodnight Gracie"
+    ],
+    "air_date": "2006-05-18",
+    "season": 0,
+    "number": 3
+   },
+   {
+    "names": [
+     "Will on Will & Grace"
+    ],
+    "air_date": "2003-09-03",
+    "season": 0,
+    "number": 4
+   },
+   {
+    "names": [
+     "The Last Great Sitcom Standing"
+    ],
+    "air_date": "2005-08-15",
+    "season": 0,
+    "number": 5
+   },
+   {
+    "names": [
+     "Inside the Actors Studio"
+    ],
+    "air_date": "2003-11-16",
+    "season": 0,
+    "number": 6
+   },
+   {
+    "names": [
+     "Alive and Schticking - West Coast Feed"
+    ],
+    "air_date": "2005-09-29",
+    "season": 0,
+    "number": 7
+   },
+   {
+    "names": [
+     "Bathroom Humor - West Coast Feed"
+    ],
+    "air_date": "2006-01-12",
+    "season": 0,
+    "number": 8
+   },
+   {
+    "names": [
+     "Backstage Pass"
+    ],
+    "air_date": "2005-09-19",
+    "season": 0,
+    "number": 9
+   },
+   {
+    "names": [
+     "Series 6 Bloopers"
+    ],
+    "air_date": null,
+    "season": 0,
+    "number": 10
+   },
+   {
+    "names": [
+     "Series 7 Bloopers"
+    ],
+    "air_date": null,
+    "season": 0,
+    "number": 11
+   },
+   {
+    "names": [
+     "The Pilot (Love & Marriage)"
+    ],
+    "air_date": "1998-09-21",
+    "season": 1,
+    "number": 1
+   },
+   {
+    "names": [
+     "A New Lease on Life"
+    ],
+    "air_date": "1998-09-28",
+    "season": 1,
+    "number": 2
+   },
+   {
+    "names": [
+     "Head Case"
+    ],
+    "air_date": "1998-10-05",
+    "season": 1,
+    "number": 3
+   },
+   {
+    "names": [
+     "Between a Rock and Harlin's Place"
+    ],
+    "air_date": "1998-10-12",
+    "season": 1,
+    "number": 4
+   },
+   {
+    "names": [
+     "Boo! Humbug"
+    ],
+    "air_date": "1998-10-26",
+    "season": 1,
+    "number": 5
+   },
+   {
+    "names": [
+     "William, Tell"
+    ],
+    "air_date": "1998-11-09",
+    "season": 1,
+    "number": 6
+   },
+   {
+    "names": [
+     "Where There's a Will, There's No Way"
+    ],
+    "air_date": "1998-11-16",
+    "season": 1,
+    "number": 7
+   },
+   {
+    "names": [
+     "The Buying Game"
+    ],
+    "air_date": "1998-11-30",
+    "season": 1,
+    "number": 8
+   },
+   {
+    "names": [
+     "The Truth About Will and Dogs"
+    ],
+    "air_date": "1998-12-15",
+    "season": 1,
+    "number": 9
+   },
+   {
+    "names": [
+     "The Big Vent"
+    ],
+    "air_date": "1999-01-05",
+    "season": 1,
+    "number": 10
+   },
+   {
+    "names": [
+     "Will On Ice"
+    ],
+    "air_date": "1999-01-12",
+    "season": 1,
+    "number": 11
+   },
+   {
+    "names": [
+     "My Fair Maid-y"
+    ],
+    "air_date": "1999-02-02",
+    "season": 1,
+    "number": 12
+   },
+   {
+    "names": [
+     "The Unsinkable Mommy Adler"
+    ],
+    "air_date": "1999-02-09",
+    "season": 1,
+    "number": 13
+   },
+   {
+    "names": [
+     "Big Brother Is Coming (1)"
+    ],
+    "air_date": "1999-02-16",
+    "season": 1,
+    "number": 14
+   },
+   {
+    "names": [
+     "Big Brother Is Coming (2)"
+    ],
+    "air_date": "1999-02-23",
+    "season": 1,
+    "number": 15
+   },
+   {
+    "names": [
+     "Yours, Mine or Ours"
+    ],
+    "air_date": "1999-03-02",
+    "season": 1,
+    "number": 16
+   },
+   {
+    "names": [
+     "Secrets and Lays"
+    ],
+    "air_date": "1999-03-23",
+    "season": 1,
+    "number": 17
+   },
+   {
+    "names": [
+     "Grace, Replaced"
+    ],
+    "air_date": "1999-04-08",
+    "season": 1,
+    "number": 18
+   },
+   {
+    "names": [
+     "Will Works Out"
+    ],
+    "air_date": "1999-04-22",
+    "season": 1,
+    "number": 19
+   },
+   {
+    "names": [
+     "Saving Grace"
+    ],
+    "air_date": "1999-04-29",
+    "season": 1,
+    "number": 20
+   },
+   {
+    "names": [
+     "Alley Cats"
+    ],
+    "air_date": "1999-05-06",
+    "season": 1,
+    "number": 21
+   },
+   {
+    "names": [
+     "Object of My Rejection"
+    ],
+    "air_date": "1999-05-13",
+    "season": 1,
+    "number": 22
+   },
+   {
+    "names": [
+     "Guess Who's Not Coming to Dinner"
+    ],
+    "air_date": "1999-09-21",
+    "season": 2,
+    "number": 1
+   },
+   {
+    "names": [
+     "Election"
+    ],
+    "air_date": "1999-09-28",
+    "season": 2,
+    "number": 2
+   },
+   {
+    "names": [
+     "Das Boob"
+    ],
+    "air_date": "1999-11-02",
+    "season": 2,
+    "number": 3
+   },
+   {
+    "names": [
+     "Whose Mom Is It Anyway?"
+    ],
+    "air_date": "1999-11-09",
+    "season": 2,
+    "number": 4
+   },
+   {
+    "names": [
+     "Polk Defeats Truman"
+    ],
+    "air_date": "1999-11-16",
+    "season": 2,
+    "number": 5
+   },
+   {
+    "names": [
+     "To Serve and Disinfect"
+    ],
+    "air_date": "1999-11-23",
+    "season": 2,
+    "number": 6
+   },
+   {
+    "names": [
+     "Homo for the Holidays"
+    ],
+    "air_date": "1999-11-25",
+    "season": 2,
+    "number": 7
+   },
+   {
+    "names": [
+     "Terms of Employment"
+    ],
+    "air_date": "1999-11-30",
+    "season": 2,
+    "number": 8
+   },
+   {
+    "names": [
+     "I Never Promised You an Olive Garden"
+    ],
+    "air_date": "1999-12-14",
+    "season": 2,
+    "number": 9
+   },
+   {
+    "names": [
+     "Tea and a Total Lack of Sympathy"
+    ],
+    "air_date": "2000-01-11",
+    "season": 2,
+    "number": 10
+   },
+   {
+    "names": [
+     "Seeds of Discontent"
+    ],
+    "air_date": "2000-01-25",
+    "season": 2,
+    "number": 11
+   },
+   {
+    "names": [
+     "He's Come Undone"
+    ],
+    "air_date": "2000-02-08",
+    "season": 2,
+    "number": 12
+   },
+   {
+    "names": [
+     "Oh Dad, Poor Dad, He's Kept Me in the Closet and I'm So Sad"
+    ],
+    "air_date": "2000-02-15",
+    "season": 2,
+    "number": 13
+   },
+   {
+    "names": [
+     "Acting Out"
+    ],
+    "air_date": "2000-02-22",
+    "season": 2,
+    "number": 14
+   },
+   {
+    "names": [
+     "Advise and Resent"
+    ],
+    "air_date": "2000-02-29",
+    "season": 2,
+    "number": 15
+   },
+   {
+    "names": [
+     "Hey La, Hey La, My Ex-Boyfriend's Back"
+    ],
+    "air_date": "2000-03-14",
+    "season": 2,
+    "number": 16
+   },
+   {
+    "names": [
+     "The Hospital Show"
+    ],
+    "air_date": "2000-03-28",
+    "season": 2,
+    "number": 17
+   },
+   {
+    "names": [
+     "Sweet & Sour Charity"
+    ],
+    "air_date": "2000-04-04",
+    "season": 2,
+    "number": 18
+   },
+   {
+    "names": [
+     "An Affair to Forget"
+    ],
+    "air_date": "2000-04-18",
+    "season": 2,
+    "number": 19
+   },
+   {
+    "names": [
+     "Girls, Interrupted"
+    ],
+    "air_date": "2000-05-02",
+    "season": 2,
+    "number": 20
+   },
+   {
+    "names": [
+     "There But for the Grace of Grace"
+    ],
+    "air_date": "2000-05-09",
+    "season": 2,
+    "number": 21
+   },
+   {
+    "names": [
+     "My Best Friend's Tush"
+    ],
+    "air_date": "2000-05-16",
+    "season": 2,
+    "number": 22
+   },
+   {
+    "names": [
+     "Ben? Her? (1)"
+    ],
+    "air_date": "2000-05-23",
+    "season": 2,
+    "number": 23
+   },
+   {
+    "names": [
+     "Ben? Her? (2)"
+    ],
+    "air_date": "2000-05-23",
+    "season": 2,
+    "number": 24
+   },
+   {
+    "names": [
+     "New Will City"
+    ],
+    "air_date": "2000-10-12",
+    "season": 3,
+    "number": 1
+   },
+   {
+    "names": [
+     "Fear and Clothing"
+    ],
+    "air_date": "2000-10-19",
+    "season": 3,
+    "number": 2
+   },
+   {
+    "names": [
+     "Husbands and Trophy Wives"
+    ],
+    "air_date": "2000-10-19",
+    "season": 3,
+    "number": 3
+   },
+   {
+    "names": [
+     "Girl Trouble"
+    ],
+    "air_date": "2000-10-26",
+    "season": 3,
+    "number": 4
+   },
+   {
+    "names": [
+     "Grace 0, Jack 2000"
+    ],
+    "air_date": "2000-11-02",
+    "season": 3,
+    "number": 5
+   },
+   {
+    "names": [
+     "Love Plus One"
+    ],
+    "air_date": "2000-11-09",
+    "season": 3,
+    "number": 6
+   },
+   {
+    "names": [
+     "Gypsies, Tramps and Weed"
+    ],
+    "air_date": "2000-11-16",
+    "season": 3,
+    "number": 7
+   },
+   {
+    "names": [
+     "Lows in the Mid-Eighties (1)"
+    ],
+    "air_date": "2000-11-23",
+    "season": 3,
+    "number": 8
+   },
+   {
+    "names": [
+     "Lows in the Mid-Eighties (2)"
+    ],
+    "air_date": "2000-11-23",
+    "season": 3,
+    "number": 9
+   },
+   {
+    "names": [
+     "Three's a Crowd, Six Is a Freak Show"
+    ],
+    "air_date": "2000-12-14",
+    "season": 3,
+    "number": 10
+   },
+   {
+    "names": [
+     "Coffee & Commitment"
+    ],
+    "air_date": "2001-01-04",
+    "season": 3,
+    "number": 11
+   },
+   {
+    "names": [
+     "Swimming Pools... Movie Stars"
+    ],
+    "air_date": "2001-01-11",
+    "season": 3,
+    "number": 12
+   },
+   {
+    "names": [
+     "Crazy in Love"
+    ],
+    "air_date": "2001-02-01",
+    "season": 3,
+    "number": 13
+   },
+   {
+    "names": [
+     "Brothers, a Love Story"
+    ],
+    "air_date": "2001-02-08",
+    "season": 3,
+    "number": 14
+   },
+   {
+    "names": [
+     "My Uncle the Car"
+    ],
+    "air_date": "2001-02-15",
+    "season": 3,
+    "number": 15
+   },
+   {
+    "names": [
+     "Cheaters (1)"
+    ],
+    "air_date": "2001-02-22",
+    "season": 3,
+    "number": 16
+   },
+   {
+    "names": [
+     "Cheaters (2)"
+    ],
+    "air_date": "2001-02-22",
+    "season": 3,
+    "number": 17
+   },
+   {
+    "names": [
+     "Mad Dogs and Average Men"
+    ],
+    "air_date": "2001-03-15",
+    "season": 3,
+    "number": 18
+   },
+   {
+    "names": [
+     "Poker? I Don't Even Like Her"
+    ],
+    "air_date": "2001-03-29",
+    "season": 3,
+    "number": 19
+   },
+   {
+    "names": [
+     "An Old-Fashioned Piano Party"
+    ],
+    "air_date": "2001-04-19",
+    "season": 3,
+    "number": 20
+   },
+   {
+    "names": [
+     "The Young and the Tactless"
+    ],
+    "air_date": "2001-04-26",
+    "season": 3,
+    "number": 21
+   },
+   {
+    "names": [
+     "Alice Doesn't Lisp Here Anymore"
+    ],
+    "air_date": "2001-05-03",
+    "season": 3,
+    "number": 22
+   },
+   {
+    "names": [
+     "Last of the Really Odd Lovers"
+    ],
+    "air_date": "2001-05-10",
+    "season": 3,
+    "number": 23
+   },
+   {
+    "names": [
+     "Sons and Lovers (1)"
+    ],
+    "air_date": "2001-05-17",
+    "season": 3,
+    "number": 24
+   },
+   {
+    "names": [
+     "Sons and Lovers (2)"
+    ],
+    "air_date": "2001-05-17",
+    "season": 3,
+    "number": 25
+   },
+   {
+    "names": [
+     "The Third Wheel Gets the Grace"
+    ],
+    "air_date": "2001-09-27",
+    "season": 4,
+    "number": 1
+   },
+   {
+    "names": [
+     "Past and Presents"
+    ],
+    "air_date": "2001-10-04",
+    "season": 4,
+    "number": 2
+   },
+   {
+    "names": [
+     "Crouching Father, Hidden Husband"
+    ],
+    "air_date": "2001-10-11",
+    "season": 4,
+    "number": 3
+   },
+   {
+    "names": [
+     "Prison Blues"
+    ],
+    "air_date": "2001-10-18",
+    "season": 4,
+    "number": 4
+   },
+   {
+    "names": [
+     "Loose Lips Sink Relationships"
+    ],
+    "air_date": "2001-10-25",
+    "season": 4,
+    "number": 5
+   },
+   {
+    "names": [
+     "Rules of Engagement"
+    ],
+    "air_date": "2001-11-01",
+    "season": 4,
+    "number": 6
+   },
+   {
+    "names": [
+     "Bed, Bath & Beyond"
+    ],
+    "air_date": "2001-11-08",
+    "season": 4,
+    "number": 7
+   },
+   {
+    "names": [
+     "Star-Spangled Banter"
+    ],
+    "air_date": "2001-11-15",
+    "season": 4,
+    "number": 8
+   },
+   {
+    "names": [
+     "Moveable Feast (1)"
+    ],
+    "air_date": "2001-11-22",
+    "season": 4,
+    "number": 9
+   },
+   {
+    "names": [
+     "Moveable Feast (2)"
+    ],
+    "air_date": "2001-11-22",
+    "season": 4,
+    "number": 10
+   },
+   {
+    "names": [
+     "Stakin' Care of Business"
+    ],
+    "air_date": "2001-12-06",
+    "season": 4,
+    "number": 11
+   },
+   {
+    "names": [
+     "Jingle Balls"
+    ],
+    "air_date": "2001-12-13",
+    "season": 4,
+    "number": 12
+   },
+   {
+    "names": [
+     "Whoa, Nelly"
+    ],
+    "air_date": "2002-01-10",
+    "season": 4,
+    "number": 13
+   },
+   {
+    "names": [
+     "Grace in the Hole"
+    ],
+    "air_date": "2002-01-17",
+    "season": 4,
+    "number": 14
+   },
+   {
+    "names": [
+     "Dyeing Is Easy, Comedy Is Hard"
+    ],
+    "air_date": "2002-01-31",
+    "season": 4,
+    "number": 15
+   },
+   {
+    "names": [
+     "A Chorus Lie"
+    ],
+    "air_date": "2002-02-07",
+    "season": 4,
+    "number": 16
+   },
+   {
+    "names": [
+     "Someone Old, Someplace New (1)"
+    ],
+    "air_date": "2002-02-28",
+    "season": 4,
+    "number": 17
+   },
+   {
+    "names": [
+     "Something Borrowed, Someone's Due (2)"
+    ],
+    "air_date": "2002-03-07",
+    "season": 4,
+    "number": 18
+   },
+   {
+    "names": [
+     "Cheatin' Trouble Blues"
+    ],
+    "air_date": "2002-03-28",
+    "season": 4,
+    "number": 19
+   },
+   {
+    "names": [
+     "Went to a Garden Potty"
+    ],
+    "air_date": "2002-04-04",
+    "season": 4,
+    "number": 20
+   },
+   {
+    "names": [
+     "He Shoots, They Snore"
+    ],
+    "air_date": "2002-04-11",
+    "season": 4,
+    "number": 21
+   },
+   {
+    "names": [
+     "Wedding Balls"
+    ],
+    "air_date": "2002-04-18",
+    "season": 4,
+    "number": 22
+   },
+   {
+    "names": [
+     "Fagel Attraction"
+    ],
+    "air_date": "2002-04-25",
+    "season": 4,
+    "number": 23
+   },
+   {
+    "names": [
+     "Hocus Focus"
+    ],
+    "air_date": "2002-05-02",
+    "season": 4,
+    "number": 24
+   },
+   {
+    "names": [
+     "A Buncha White Chicks Sittin' Around Talkin'"
+    ],
+    "air_date": "2002-05-09",
+    "season": 4,
+    "number": 25
+   },
+   {
+    "names": [
+     "A.I.: Artificial Insemination (1)"
+    ],
+    "air_date": "2002-05-16",
+    "season": 4,
+    "number": 26
+   },
+   {
+    "names": [
+     "A.I.: Artificial Insemination (2)"
+    ],
+    "air_date": "2002-05-16",
+    "season": 4,
+    "number": 27
+   },
+   {
+    "names": [
+     "...And the Horse He Rode in On"
+    ],
+    "air_date": "2002-09-26",
+    "season": 5,
+    "number": 1
+   },
+   {
+    "names": [
+     "Bacon and Eggs"
+    ],
+    "air_date": "2002-10-03",
+    "season": 5,
+    "number": 2
+   },
+   {
+    "names": [
+     "The Kid Stays Out of the Picture"
+    ],
+    "air_date": "2002-10-10",
+    "season": 5,
+    "number": 3
+   },
+   {
+    "names": [
+     "Humongous Growth"
+    ],
+    "air_date": "2002-10-17",
+    "season": 5,
+    "number": 4
+   },
+   {
+    "names": [
+     "It's the Gay Pumpkin, Charlie Brown"
+    ],
+    "air_date": "2002-10-31",
+    "season": 5,
+    "number": 5
+   },
+   {
+    "names": [
+     "Boardroom & a Parked Place"
+    ],
+    "air_date": "2002-11-07",
+    "season": 5,
+    "number": 6
+   },
+   {
+    "names": [
+     "The Needle & Omelet's Done"
+    ],
+    "air_date": "2002-11-14",
+    "season": 5,
+    "number": 7
+   },
+   {
+    "names": [
+     "Marry Me a Little (1)"
+    ],
+    "air_date": "2002-11-21",
+    "season": 5,
+    "number": 8
+   },
+   {
+    "names": [
+     "Marry Me a Little More (2)"
+    ],
+    "air_date": "2002-11-21",
+    "season": 5,
+    "number": 9
+   },
+   {
+    "names": [
+     "The Honeymoon's Over"
+    ],
+    "air_date": "2002-12-05",
+    "season": 5,
+    "number": 10
+   },
+   {
+    "names": [
+     "All About Christmas Eve"
+    ],
+    "air_date": "2002-12-12",
+    "season": 5,
+    "number": 11
+   },
+   {
+    "names": [
+     "Field of Queens"
+    ],
+    "air_date": "2003-01-09",
+    "season": 5,
+    "number": 12
+   },
+   {
+    "names": [
+     "Fagmalion Part One: Gay It Forward"
+    ],
+    "air_date": "2003-01-16",
+    "season": 5,
+    "number": 13
+   },
+   {
+    "names": [
+     "Fagmalion Part Two: Attack of the Clones"
+    ],
+    "air_date": "2003-01-30",
+    "season": 5,
+    "number": 14
+   },
+   {
+    "names": [
+     "Homojo"
+    ],
+    "air_date": "2003-02-06",
+    "season": 5,
+    "number": 15
+   },
+   {
+    "names": [
+     "Women & Children First"
+    ],
+    "air_date": "2003-02-13",
+    "season": 5,
+    "number": 16
+   },
+   {
+    "names": [
+     "Fagmalion Part Three: Bye, Bye, Beardy"
+    ],
+    "air_date": "2003-02-20",
+    "season": 5,
+    "number": 17
+   },
+   {
+    "names": [
+     "Fagmalion Part Four: The Guy Who Loved Me"
+    ],
+    "air_date": "2003-03-13",
+    "season": 5,
+    "number": 18
+   },
+   {
+    "names": [
+     "Sex, Losers, & Videotape"
+    ],
+    "air_date": "2003-04-03",
+    "season": 5,
+    "number": 19
+   },
+   {
+    "names": [
+     "Leo Unwrapped"
+    ],
+    "air_date": "2003-04-17",
+    "season": 5,
+    "number": 20
+   },
+   {
+    "names": [
+     "Dolls and Dolls"
+    ],
+    "air_date": "2003-04-24",
+    "season": 5,
+    "number": 21
+   },
+   {
+    "names": [
+     "May Divorce Be with You"
+    ],
+    "air_date": "2003-05-01",
+    "season": 5,
+    "number": 22
+   },
+   {
+    "names": [
+     "23"
+    ],
+    "air_date": "2003-05-08",
+    "season": 5,
+    "number": 23
+   },
+   {
+    "names": [
+     "24"
+    ],
+    "air_date": "2003-05-15",
+    "season": 5,
+    "number": 24
+   },
+   {
+    "names": [
+     "Dames at Sea"
+    ],
+    "air_date": "2003-09-25",
+    "season": 6,
+    "number": 1
+   },
+   {
+    "names": [
+     "Last Ex to Brooklyn"
+    ],
+    "air_date": "2003-10-02",
+    "season": 6,
+    "number": 2
+   },
+   {
+    "names": [
+     "Home Court Disadvantage"
+    ],
+    "air_date": "2003-10-09",
+    "season": 6,
+    "number": 3
+   },
+   {
+    "names": [
+     "Me and Mr. Jones"
+    ],
+    "air_date": "2003-10-23",
+    "season": 6,
+    "number": 4
+   },
+   {
+    "names": [
+     "A-Story, Bee-Story"
+    ],
+    "air_date": "2003-10-30",
+    "season": 6,
+    "number": 5
+   },
+   {
+    "names": [
+     "Heart Like a Wheelchair"
+    ],
+    "air_date": "2003-11-06",
+    "season": 6,
+    "number": 6
+   },
+   {
+    "names": [
+     "Nice in White Satin"
+    ],
+    "air_date": "2003-11-13",
+    "season": 6,
+    "number": 7
+   },
+   {
+    "names": [
+     "Swimming from Cambodia"
+    ],
+    "air_date": "2003-11-20",
+    "season": 6,
+    "number": 8
+   },
+   {
+    "names": [
+     "Strangers with Candice"
+    ],
+    "air_date": "2003-12-04",
+    "season": 6,
+    "number": 9
+   },
+   {
+    "names": [
+     "Fanilow"
+    ],
+    "air_date": "2003-12-11",
+    "season": 6,
+    "number": 10
+   },
+   {
+    "names": [
+     "The Accidental Tsuris"
+    ],
+    "air_date": "2004-01-15",
+    "season": 6,
+    "number": 11
+   },
+   {
+    "names": [
+     "A Gay/December Romance"
+    ],
+    "air_date": "2004-01-22",
+    "season": 6,
+    "number": 12
+   },
+   {
+    "names": [
+     "Ice Cream Balls"
+    ],
+    "air_date": "2004-02-10",
+    "season": 6,
+    "number": 13
+   },
+   {
+    "names": [
+     "Looking for Mr. Good Enough"
+    ],
+    "air_date": "2004-02-19",
+    "season": 6,
+    "number": 14
+   },
+   {
+    "names": [
+     "Flip-Flop (1)"
+    ],
+    "air_date": "2004-02-26",
+    "season": 6,
+    "number": 15
+   },
+   {
+    "names": [
+     "Flip-Flop (2)"
+    ],
+    "air_date": "2004-03-04",
+    "season": 6,
+    "number": 16
+   },
+   {
+    "names": [
+     "East Side Story"
+    ],
+    "air_date": "2004-03-11",
+    "season": 6,
+    "number": 17
+   },
+   {
+    "names": [
+     "Courting Disaster"
+    ],
+    "air_date": "2004-03-18",
+    "season": 6,
+    "number": 18
+   },
+   {
+    "names": [
+     "No Sex 'N' the City"
+    ],
+    "air_date": "2004-03-25",
+    "season": 6,
+    "number": 19
+   },
+   {
+    "names": [
+     "Fred Astaire and Ginger Chicken"
+    ],
+    "air_date": "2004-04-01",
+    "season": 6,
+    "number": 20
+   },
+   {
+    "names": [
+     "I Never Cheered for My Father"
+    ],
+    "air_date": "2004-04-08",
+    "season": 6,
+    "number": 21
+   },
+   {
+    "names": [
+     "Speechless"
+    ],
+    "air_date": "2004-04-22",
+    "season": 6,
+    "number": 22
+   },
+   {
+    "names": [
+     "I Do (1)"
+    ],
+    "air_date": "2004-04-29",
+    "season": 6,
+    "number": 23
+   },
+   {
+    "names": [
+     "Oh, No, You Di-In't (2)"
+    ],
+    "air_date": "2004-04-29",
+    "season": 6,
+    "number": 24
+   },
+   {
+    "names": [
+     "FYI: I Hurt, Too"
+    ],
+    "air_date": "2004-09-16",
+    "season": 7,
+    "number": 1
+   },
+   {
+    "names": [
+     "Back Up Dancer"
+    ],
+    "air_date": "2004-09-23",
+    "season": 7,
+    "number": 2
+   },
+   {
+    "names": [
+     "One Gay at a Time"
+    ],
+    "air_date": "2004-09-30",
+    "season": 7,
+    "number": 3
+   },
+   {
+    "names": [
+     "Company"
+    ],
+    "air_date": "2004-10-07",
+    "season": 7,
+    "number": 4
+   },
+   {
+    "names": [
+     "Key Party"
+    ],
+    "air_date": "2004-10-14",
+    "season": 7,
+    "number": 5
+   },
+   {
+    "names": [
+     "The Newlydreads"
+    ],
+    "air_date": "2004-10-21",
+    "season": 7,
+    "number": 6
+   },
+   {
+    "names": [
+     "Will & Grace & Vince & Nadine"
+    ],
+    "air_date": "2004-11-04",
+    "season": 7,
+    "number": 7
+   },
+   {
+    "names": [
+     "Saving Grace, Again (1)"
+    ],
+    "air_date": "2004-11-11",
+    "season": 7,
+    "number": 8
+   },
+   {
+    "names": [
+     "Saving Grace, Again (2)"
+    ],
+    "air_date": "2004-11-18",
+    "season": 7,
+    "number": 9
+   },
+   {
+    "names": [
+     "Queens for a Day (1)"
+    ],
+    "air_date": "2004-11-25",
+    "season": 7,
+    "number": 10
+   },
+   {
+    "names": [
+     "Queens for a Day (2)"
+    ],
+    "air_date": "2004-11-25",
+    "season": 7,
+    "number": 11
+   },
+   {
+    "names": [
+     "Christmas Break"
+    ],
+    "air_date": "2004-12-09",
+    "season": 7,
+    "number": 12
+   },
+   {
+    "names": [
+     "Board Games"
+    ],
+    "air_date": "2005-01-06",
+    "season": 7,
+    "number": 13
+   },
+   {
+    "names": [
+     "Partners"
+    ],
+    "air_date": "2005-01-13",
+    "season": 7,
+    "number": 14
+   },
+   {
+    "names": [
+     "Bully Woolley"
+    ],
+    "air_date": "2005-02-03",
+    "season": 7,
+    "number": 15
+   },
+   {
+    "names": [
+     "Dance Cards & Greeting Cards"
+    ],
+    "air_date": "2005-02-10",
+    "season": 7,
+    "number": 16
+   },
+   {
+    "names": [
+     "The Birds and the Bees"
+    ],
+    "air_date": "2005-02-17",
+    "season": 7,
+    "number": 17
+   },
+   {
+    "names": [
+     "The Fabulous Baker Boy"
+    ],
+    "air_date": "2005-02-24",
+    "season": 7,
+    "number": 18
+   },
+   {
+    "names": [
+     "Sour Balls"
+    ],
+    "air_date": "2005-03-17",
+    "season": 7,
+    "number": 19
+   },
+   {
+    "names": [
+     "The Blonde Leading the Blind"
+    ],
+    "air_date": "2005-04-21",
+    "season": 7,
+    "number": 20
+   },
+   {
+    "names": [
+     "It's a Dad, Dad, Dad, Dad World"
+    ],
+    "air_date": "2005-05-05",
+    "season": 7,
+    "number": 21
+   },
+   {
+    "names": [
+     "From Queer to Eternity"
+    ],
+    "air_date": "2005-05-10",
+    "season": 7,
+    "number": 22
+   },
+   {
+    "names": [
+     "Friends with Benefits"
+    ],
+    "air_date": "2005-05-19",
+    "season": 7,
+    "number": 23
+   },
+   {
+    "names": [
+     "Kiss & Tell"
+    ],
+    "air_date": "2005-05-19",
+    "season": 7,
+    "number": 24
+   },
+   {
+    "names": [
+     "Alive and Schticking"
+    ],
+    "air_date": "2005-09-29",
+    "season": 8,
+    "number": 1
+   },
+   {
+    "names": [
+     "I Second That Emotion"
+    ],
+    "air_date": "2005-10-06",
+    "season": 8,
+    "number": 2
+   },
+   {
+    "names": [
+     "The Old Man and the Sea"
+    ],
+    "air_date": "2005-10-13",
+    "season": 8,
+    "number": 3
+   },
+   {
+    "names": [
+     "Steams Like Old Times"
+    ],
+    "air_date": "2005-10-20",
+    "season": 8,
+    "number": 4
+   },
+   {
+    "names": [
+     "The Hole Truth"
+    ],
+    "air_date": "2005-11-03",
+    "season": 8,
+    "number": 5
+   },
+   {
+    "names": [
+     "Love Is in the Airplane"
+    ],
+    "air_date": "2005-11-10",
+    "season": 8,
+    "number": 6
+   },
+   {
+    "names": [
+     "Birds of a Feather Boa"
+    ],
+    "air_date": "2005-11-17",
+    "season": 8,
+    "number": 7
+   },
+   {
+    "names": [
+     "Swish Out of Water"
+    ],
+    "air_date": "2005-11-24",
+    "season": 8,
+    "number": 8
+   },
+   {
+    "names": [
+     "A Little Christmas Queer"
+    ],
+    "air_date": "2005-12-08",
+    "season": 8,
+    "number": 9
+   },
+   {
+    "names": [
+     "Von Trapped"
+    ],
+    "air_date": "2006-01-05",
+    "season": 8,
+    "number": 10
+   },
+   {
+    "names": [
+     "Bathroom Humor"
+    ],
+    "air_date": "2006-01-12",
+    "season": 8,
+    "number": 11
+   },
+   {
+    "names": [
+     "Forbidden Fruit"
+    ],
+    "air_date": "2006-01-19",
+    "season": 8,
+    "number": 12
+   },
+   {
+    "names": [
+     "Cop to It"
+    ],
+    "air_date": "2006-01-26",
+    "season": 8,
+    "number": 13
+   },
+   {
+    "names": [
+     "I Love L. Gay"
+    ],
+    "air_date": "2006-02-02",
+    "season": 8,
+    "number": 14
+   },
+   {
+    "names": [
+     "The Definition of Marriage"
+    ],
+    "air_date": "2006-02-09",
+    "season": 8,
+    "number": 15
+   },
+   {
+    "names": [
+     "Grace Expectations"
+    ],
+    "air_date": "2006-03-16",
+    "season": 8,
+    "number": 16
+   },
+   {
+    "names": [
+     "Cowboys and Iranians"
+    ],
+    "air_date": "2006-03-23",
+    "season": 8,
+    "number": 17
+   },
+   {
+    "names": [
+     "Buy, Buy Baby"
+    ],
+    "air_date": "2006-03-30",
+    "season": 8,
+    "number": 18
+   },
+   {
+    "names": [
+     "Blanket Apology"
+    ],
+    "air_date": "2006-04-06",
+    "season": 8,
+    "number": 19
+   },
+   {
+    "names": [
+     "The Mourning Son"
+    ],
+    "air_date": "2006-04-27",
+    "season": 8,
+    "number": 20
+   },
+   {
+    "names": [
+     "Partners 'n' Crime"
+    ],
+    "air_date": "2006-05-04",
+    "season": 8,
+    "number": 21
+   },
+   {
+    "names": [
+     "Whatever Happened to Baby Gin?"
+    ],
+    "air_date": "2006-05-11",
+    "season": 8,
+    "number": 22
+   },
+   {
+    "names": [
+     "The Finale (1)"
+    ],
+    "air_date": "2006-05-18",
+    "season": 8,
+    "number": 23
+   },
+   {
+    "names": [
+     "The Finale (2)"
+    ],
+    "air_date": "2006-05-18",
+    "season": 8,
+    "number": 24
+   }
+  ],
+  "tvdb": {}
+ },
+ "expect": {
+  "available": {
+   "27601": {
+    "service": "S01E01",
+    "name": "Homo for the Holidays",
+    "match": "title",
+    "same": true
+   },
+   "27655": {
+    "service": "S01E02",
+    "name": "Jingle Balls",
+    "match": "title",
+    "same": true
+   },
+   "27681": {
+    "service": "S01E03",
+    "name": "All About Christmas Eve",
+    "match": "title",
+    "same": true
+   },
+   "27704": {
+    "service": "S01E04",
+    "name": "Fanilow",
+    "match": "title",
+    "same": true
+   },
+   "27730": {
+    "service": "S01E05",
+    "name": "Christmas Break",
+    "match": "title",
+    "same": true
+   },
+   "27751": {
+    "service": "S01E06",
+    "name": "A Little Christmas Queer",
+    "match": "title",
+    "same": true
+   },
+   "27773": {
+    "service": "S01E07",
+    "name": "A Gay Olde Christmas",
+    "match": "title",
+    "same": true
+   }
+  },
+  "titlesAgree": true,
+  "season_map": {}
+ }
+}
