@@ -4654,5 +4654,10 @@
   "code"
  ],
  "Daily check skipped: relayed through another server": [],
- "Not run: the series' name is unknown": []
+ "Not run: the series' name is unknown": [],
+ "A download is running: check again when it ends": [],
+ "Unexpected {0} in the reply": [
+  "what"
+ ],
+ "search results": []
 }

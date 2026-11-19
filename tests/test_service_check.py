@@ -3,9 +3,12 @@ import asyncio
 import importlib
 import json
 import threading
+import types
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import pytest
+import responses
 
 from test_sync import load
 from unshacklarr.backend import UnshackleError
@@ -25,6 +28,7 @@ class Serve:
         self.replies = {"/api/search": {"results": [{"title": "Show", "id": "show-1"}, {"title": "Other", "id": "o"}]},
                         "/api/list-titles": {"titles": TITLES}, "/api/list-tracks": TRACKS, **(replies or {})}
         self.calls = []
+        self.timeouts = []
         self.by_title = {}  # (path, title_id) -> a reply for that series only
 
     def services(self):
@@ -32,6 +36,7 @@ class Serve:
 
     def call(self, method, path, **kwargs):
         self.calls.append((method, path, kwargs.get("json")))
+        self.timeouts.append(kwargs.get("timeout"))
         reply = self.by_title.get((path, (kwargs.get("json") or {}).get("title_id")), self.replies[path])
         if isinstance(reply, Exception):
             raise reply
@@ -391,19 +396,219 @@ def test_the_service_checks_endpoints_return_the_results_and_start_a_run(check, 
     shown = json.loads(asyncio.run(web.service_checks(None)).text)
     assert shown["last_run"] == NOW.isoformat() and shown["running"] is False and shown["services"]["MLT"]["ok"] is True
 
-    started = threading.Event()
-    release = threading.Event()
+    started, release, finished = threading.Event(), threading.Event(), threading.Event()
 
-    def slow(*args):
-        with check._running:
-            started.set()
-            release.wait(5)
+    def slow(now=None, reserved=False):
+        assert reserved  # the lock was taken before the answer
+        started.set()
+        release.wait(5)
+        check._running.release()
+        finished.set()
     monkeypatch.setattr(check, "run_check", slow)
     try:
-        response = asyncio.run(web.start_service_check(None))
-        assert response.status == 202
-        assert started.wait(5)
-        with pytest.raises(web.web.HTTPConflict):
+        assert asyncio.run(web.start_service_check(None)).status == 202
+        with pytest.raises(web.web.HTTPConflict) as refused:  # at once, before the run's thread need have started
             asyncio.run(web.start_service_check(None))
+        assert "already running" in refused.value.text
+        assert started.wait(5)
     finally:
         release.set()
+        assert finished.wait(5)  # the run's thread is done before the next test reloads the module
+
+
+def test_a_check_on_demand_waits_for_the_downloads_like_the_daily_one(check, monkeypatch):
+    import unshacklarr.web
+    web = importlib.reload(unshacklarr.web)
+    web.servicecheck = check
+    monkeypatch.setattr(check.sync, "slot_active", {"job": 1})
+
+    with pytest.raises(web.web.HTTPConflict) as refused:
+        asyncio.run(web.start_service_check(None))
+
+    assert "download is running" in refused.value.text
+    assert check.serve.calls == [] and check.state()["running"] is False  # nothing started, nothing left locked
+
+
+def test_a_dead_series_does_not_keep_the_service_failing_for_good(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in range(111, 122)])  # eleven series: the first ten refused, the eleventh plays
+    refuse(check, *range(111, 121))
+    first = check.run_check(NOW)["services"]["RTLP"]
+    assert (first["ok"], first["tried"], first["next"]) == (False, 10, 121)
+    check.serve.calls.clear()
+
+    second = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+
+    assert (second["ok"], second["tvdb"], second["tried"]) == (True, 121, 1)
+    assert [(level, title) for level, title, _ in check.sent] == [("error", "RTLP failed its daily check"), ("success", "RTLP passes its daily check again")]
+
+
+def test_the_probe_of_a_failing_service_moves_on_each_day_and_wraps_without_telling_again(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 112, 113)])
+    refuse(check, 111, 112, 113)
+    check.run_check(NOW)
+    probed = []
+    for day in (1, 2):
+        check.serve.calls.clear()
+        result = check.run_check(NOW + timedelta(days=day))["services"]["RTLP"]
+        probed.append((result["tvdb"], result["ok"], result["tried"]))
+    assert probed == [(111, False, 1), (112, False, 1)] and len(check.sent) == 1
+    del check.serve.by_title[("/api/list-tracks", "show-113")]
+
+    result = check.run_check(NOW + timedelta(days=3))["services"]["RTLP"]
+
+    assert (result["ok"], result["tvdb"], result["tried"]) == (True, 113, 1)
+    assert [title for _, title, _ in check.sent] == ["RTLP failed its daily check", "RTLP passes its daily check again"]
+
+
+def test_a_probe_that_fails_to_sign_in_asks_the_same_series_again(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 112)])
+    error = UnshackleError("HTTP 401: session expired")
+    error.status, error.error_code = 401, "AUTH_FAILED"
+    check.serve.by_title[("/api/list-tracks", "show-111")] = error
+    assert check.run_check(NOW)["services"]["RTLP"]["next"] == 111
+
+    result = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+
+    assert (result["tvdb"], result["tried"], result["next"]) == (111, 1, 111)
+    assert "show-112" not in [(c[2] or {}).get("title_id") for c in check.serve.calls]
+
+
+def test_the_sign_in_failure_of_a_later_series_is_the_result(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 112)])
+    refuse(check, 111)
+    error = UnshackleError("HTTP 401: session expired")
+    error.status, error.error_code = 401, "AUTH_FAILED"
+    check.serve.by_title[("/api/list-tracks", "show-112")] = error
+
+    result = check.run_check(NOW)["services"]["RTLP"]
+
+    assert (result["ok"], result["tvdb"], result["tried"], result["failed"]) == (False, 112, 2, ["tracks"])
+    assert result["stages"]["tracks"]["code"] == "AUTH_FAILED" and result["stages"]["search"]["count"] == 2  # the first series' search
+    assert "session expired" in check.sent[0][2]
+
+
+def test_a_bare_401_ends_the_tries_too(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 112)])
+    error = UnshackleError("unauthorised")
+    error.status = 401
+    check.serve.by_title[("/api/list-tracks", "show-111")] = error
+
+    result = check.run_check(NOW)["services"]["RTLP"]
+
+    assert (result["tried"], result["stages"]["tracks"]["code"]) == (1, "HTTP_401")
+
+
+@pytest.mark.parametrize("path, reply, stage", [
+    ("/api/search", {"results": [None]}, "search"), ("/api/search", ["unexpected"], "search"),
+    ("/api/list-titles", {"titles": ["unexpected"]}, "list"), ("/api/list-titles", ["unexpected"], "list"),
+    ("/api/list-tracks", ["unexpected"], "tracks"), ("/api/list-tracks", {"video": [None], "audio": []}, "tracks")])
+def test_a_malformed_reply_fails_its_stage_and_the_other_services_are_still_checked(check, tmp_path, path, reply, stage):
+    check.serve.replies[path] = reply
+
+    done = check.run_check(NOW)
+
+    assert done["services"]["RTLP"]["stages"][stage]["code"] == "BAD_REPLY" and stage in done["services"]["RTLP"]["failed"]
+    assert set(done["services"]) == {"RTLP", "MLT"} and check.read_results() == done  # the next service ran, and the day is kept
+
+
+def test_an_unexpected_exception_in_one_service_leaves_the_others_and_the_save(check, monkeypatch):
+    real = check.check_series
+
+    def boom(backend, tag, *args, **kwargs):
+        if tag == "RTLP":
+            raise KeyError("odd")
+        return real(backend, tag, *args, **kwargs)
+    monkeypatch.setattr(check, "check_series", boom)
+
+    done = check.run_check(NOW)
+
+    assert done["services"]["RTLP"]["failed"] == ["search", "list", "tracks"] and done["services"]["MLT"]["ok"] is True
+    assert check.read_results() == done
+
+
+def test_a_failing_service_that_is_skipped_or_cannot_search_is_not_announced_as_recovered(check, tmp_path, monkeypatch):
+    check.serve.by_title[("/api/search", None)] = UnshackleError("search is down")
+    check.serve.replies["/api/search"] = UnshackleError("search is down")
+    check.run_check(NOW)
+    told = len(check.sent)  # RTLP and MLT failed their search
+    assert told == 2
+
+    def down(wanted, keep=3600):
+        raise check.requests.ConnectionError("sonarr is down")
+    monkeypatch.setattr(check.sync, "sonarr_series", down)
+    check.run_check(NOW + timedelta(days=1))  # a failing stage that is skipped now has not passed
+    assert len(check.sent) == told
+
+    several(tmp_path, (111, ", options: {--remote: true}"))  # RTLP only relayed now
+    monkeypatch.setattr(check.sync, "sonarr_series", lambda wanted, keep=3600: {t: {"title": "Show"} for t in wanted})
+    results = check.run_check(NOW + timedelta(days=2))["services"]
+    assert results["RTLP"]["skipped"] == "relay" and len(check.sent) == told  # skipping tells nothing
+
+
+@pytest.mark.parametrize("text", [
+    "Max retries exceeded with url: /seg.mp4?hdnea=exp=1~hmac=SECRET",
+    r'{"url":"https:\/\/cdn.example\/a.m3u8?hdnea=SECRET"}',
+    "failed /manifest?hdnea=fixture#fixture"])
+def test_every_shape_of_url_loses_its_query_and_fragment(check, tmp_path, text):
+    check.serve.replies["/api/list-titles"] = UnshackleError(text)
+
+    check.run_check(NOW)
+
+    saved = (tmp_path / "service_checks.json").read_text()
+    for kept in (saved, *(message for _, _, message in check.sent)):
+        assert "SECRET" not in kept and "fixture" not in kept and "hdnea" not in kept and "exp=1" not in kept
+
+
+def test_a_stage_that_never_answers_leaves_no_thread_that_holds_up_the_shutdown(check, monkeypatch):
+    monkeypatch.setattr(check, "STAGE_TIMEOUT", 0.2)
+    stuck = threading.Event()
+    check.serve.replies["/api/list-titles"] = lambda: stuck.wait(10) or {"titles": TITLES}
+    try:
+        check.run_check(NOW)
+        stages = [t for t in threading.enumerate() if t.name == "service-check-stage" and t.is_alive()]
+        assert stages and all(t.daemon for t in stages)
+    finally:
+        stuck.set()
+
+
+def test_every_request_is_bounded_by_the_stage_timeout(check, monkeypatch):
+    monkeypatch.setattr(check, "STAGE_TIMEOUT", 30)
+
+    check.run_check(NOW)
+
+    assert check.serve.timeouts and all(connect <= 5 and read <= 30 for connect, read in check.serve.timeouts)  # list-tracks included
+
+
+def test_remote_and_server_are_taken_out_of_every_request(check):
+    control = {"service": "RTLP", "title": "show-1", "options": {"--remote": True, "--server": "far"}}
+    config = check.sync.read_file()
+    assert check.sync.serve_params(control, config, check.serve)["remote"] is True  # the series does ask for a relay
+
+    stages = check.check_series(check.serve, "RTLP", control, config, "Show", True)
+
+    assert all(stage["ok"] for stage in stages.values())
+    assert check.serve.calls and all("remote" not in p and "server" not in p for _, _, p in check.serve.calls)
+
+
+@responses.activate
+def test_a_full_run_makes_only_the_documented_requests_to_a_cold_real_client(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    (tmp_path / "config.yaml").write_text("series:\n  111: {service: RTLP, title: show-1}\n  222: {service: MLT, title: show-2}\nnotifications: {urls: []}\n")
+    from unshacklarr import servicecheck
+    check = importlib.reload(servicecheck)
+    monkeypatch.setattr(sync.UNSHACKLE, "services", types.MethodType(sync.Unshackle.services, sync.UNSHACKLE))  # not load()'s fake
+    sync.UNSHACKLE.configure({"unshackle_mode": "remote", "unshackle_url": "http://serve:8888", "unshackle_api_key": "k" * 40})
+    monkeypatch.setattr(sync, "sonarr_series", lambda wanted, keep=3600: {t: {"title": "Show"} for t in wanted})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: True)
+    monkeypatch.setattr(sync, "slot_active", {})
+    responses.add(responses.GET, "http://serve:8888/api/services", json={"services": [{"tag": "RTLP", "cli_params": []}, {"tag": "MLT", "cli_params": []}]})
+    responses.add(responses.POST, "http://serve:8888/api/search", json={"results": [{"title": "Show", "id": "show-1"}]})
+    responses.add(responses.POST, "http://serve:8888/api/list-titles", json={"titles": TITLES})
+    responses.add(responses.POST, "http://serve:8888/api/list-tracks", json=TRACKS)
+
+    done = check.run_check(NOW)
+
+    assert {tag: r["ok"] for tag, r in done["services"].items()} == {"RTLP": True, "MLT": True}
+    asked = {(call.request.method, urlparse(call.request.url).path) for call in responses.calls}
+    assert asked == {("GET", "/api/services"), ("POST", "/api/search"), ("POST", "/api/list-titles"), ("POST", "/api/list-tracks")}
+    assert not [path for _, path in asked if path.startswith(("/api/session", "/api/download", "/api/remote", "/api/cdm"))]

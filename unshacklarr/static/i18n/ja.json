@@ -2474,5 +2474,8 @@
  "{0} passes its daily check again": "{0} の毎日の確認が再び成功しました",
  "{0} has no video track": "{0} には映像トラックがありません",
  "Daily check skipped: relayed through another server": "毎日の確認をスキップしました: 別のサーバー経由です",
- "Not run: the series' name is unknown": "未実行: シリーズ名が不明です"
+ "Not run: the series' name is unknown": "未実行: シリーズ名が不明です",
+ "A download is running: check again when it ends": "ダウンロード中です。終わってからもう一度確認してください",
+ "Unexpected {0} in the reply": "応答に予期しない {0} が含まれています",
+ "search results": "検索結果"
 }

@@ -6,8 +6,6 @@ import json
 import re
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as StageTimeout
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -20,9 +18,17 @@ RETRY_AFTER = 900  # seconds before a check held back by a running download look
 SERIES_TRIED = 10  # series of a service tried before it is called failing: a title may be refused (not entitled, to buy) while the service is well
 STAGE_TIMEOUT = 120  # seconds a stage may take, however its request behaves
 STAGES = {"search": "Search", "list": "Listing", "tracks": "Tracks"}
-URL_QUERY = re.compile(r"(\b[a-z][a-z0-9+.-]*://[^\s?#]+)[?#]\S*", re.IGNORECASE)  # no_credentials leaves some signed queries (?hdnea=, #320)
+SIGNED_OUT = ("AUTH_FAILED", "HTTP_401")  # the session needs a person, whatever the title
+# a path or URL with a query or fragment, absolute, relative ("url: /seg.mp4?...") or JSON-escaped (https:\/\/...):
+# no_credentials leaves some signed queries (?hdnea=, #320)
+URL_QUERY = re.compile(r"([^\s?#]*/[^\s?#]*)[?#]\S*")
 
 _running = threading.Lock()
+
+
+class BadReply(Exception):
+    """A reply that is not the shape the endpoint documents."""
+    error_code = "BAD_REPLY"
 
 
 def failure(error: Exception) -> dict:
@@ -33,16 +39,48 @@ def failure(error: Exception) -> dict:
 
 def attempt(work):
     """(value, None), or (None, a failed stage) when work raises or takes longer than STAGE_TIMEOUT. A request that
-    never answers is left to end on its own: its thread cannot be stopped."""
-    pool = ThreadPoolExecutor(max_workers=1)
-    try:
-        return pool.submit(work).result(timeout=STAGE_TIMEOUT), None
-    except StageTimeout:
+    never answers is left to end on its own, in a daemon thread that cannot hold up the shutdown."""
+    box: dict = {}
+
+    def run() -> None:
+        try:
+            box["value"] = work()
+        except Exception as e:  # one service's odd reply must not end the check of the others
+            box["error"] = e
+
+    thread = threading.Thread(target=run, name="service-check-stage", daemon=True)
+    thread.start()
+    thread.join(STAGE_TIMEOUT)
+    if thread.is_alive():
         return None, {"ok": False, "code": "TIMEOUT", "message": f"No answer within {STAGE_TIMEOUT} s"}
-    except Exception as e:  # one service's odd reply must not end the check of the others
-        return None, failure(e)
-    finally:
-        pool.shutdown(wait=False)
+    if "error" in box:
+        return None, failure(box["error"])
+    return box["value"], None
+
+
+class Bounded:
+    """A backend whose calls end within STAGE_TIMEOUT, whoever makes them (list_tracks makes its own)."""
+
+    def __init__(self, backend):
+        self.backend = backend
+
+    def call(self, method: str, path: str, **kwargs):
+        return self.backend.call(method, path, timeout=(5, min(60, STAGE_TIMEOUT)), **kwargs)
+
+    def __getattr__(self, name: str):
+        return getattr(self.backend, name)
+
+
+def dicts(value, what: str) -> list[dict]:
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise BadReply(f"Unexpected {what} in the reply")
+    return value
+
+
+def listed(reply, key: str, what: str) -> list[dict]:
+    if not isinstance(reply, dict):
+        raise BadReply(f"Unexpected {what} in the reply")
+    return dicts(reply.get(key) or [], what)
 
 
 def check_series(backend, tag: str, control: dict, config: dict, query: str | None, search: bool) -> dict:
@@ -53,18 +91,22 @@ def check_series(backend, tag: str, control: dict, config: dict, query: str | No
         return {stage: error for stage in STAGES if search or stage != "search"}
     stages = {}
     if search:
-        def look() -> list[dict]:
-            return backend.call("POST", "/api/search", json={**params, "service": tag, "query": query}).get("results") or []
+        def look() -> dict:
+            results = listed(backend.call("POST", "/api/search", json={**params, "service": tag, "query": query}), "results", "search results")
+            found = any(str(r.get("url") or r.get("id")) == control["title"] or sync.title_key(r.get("title")) == sync.title_key(query)
+                        for r in results)
+            return {"ok": True, "count": len(results), "found": found}
 
         if query:
-            results, error = attempt(look)
-            found = any(str(r.get("url") or r.get("id")) == control["title"] or sync.title_key(r.get("title")) == sync.title_key(query)
-                        for r in results or [])
-            stages["search"] = error or {"ok": True, "count": len(results), "found": found}
+            looked, error = attempt(look)
+            stages["search"] = error or looked
         else:  # Sonarr did not answer: that says nothing of the service
             stages["search"] = {"ok": None, "code": "SKIPPED", "message": "Not run: the series' name is unknown"}
 
-    titles, error = attempt(lambda: backend.call("POST", "/api/list-titles", json={**params, "service": tag, "title_id": control["title"]})["titles"])
+    def titles_of() -> list[dict]:
+        return listed(backend.call("POST", "/api/list-titles", json={**params, "service": tag, "title_id": control["title"]}), "titles", "titles")
+
+    titles, error = attempt(titles_of)
     if not error and not titles:
         error = {"ok": False, "code": "EMPTY", "message": "The service listed no titles"}
     stages["list"] = error or {"ok": True, "count": len(titles)}
@@ -73,8 +115,8 @@ def check_series(backend, tag: str, control: dict, config: dict, query: str | No
         episodes = [t for t in titles if t.get("type") == "episode"] or titles
         latest = max(episodes, key=lambda t: (int(t.get("season") or 0), int(t.get("number") or 0)))
         code = f"S{int(latest.get('season') or 0):02}E{int(latest.get('number') or 0):02}"
-        parts = sync.list_tracks(control, config, {**params, "service": tag, "title_id": control["title"], "wanted": [code]}, backend=backend)
-        video, audio = (sum(len(p.get(kind) or []) for p in parts) for kind in ("video", "audio"))
+        parts = dicts(sync.list_tracks(control, config, {**params, "service": tag, "title_id": control["title"], "wanted": [code]}, backend=backend), "tracks")
+        video, audio = (sum(len(dicts(p.get(kind) or [], "tracks")) for p in parts) for kind in ("video", "audio"))
         found = {"episode": code, "video": video, "audio": audio}  # audio not required: 10 Play embeds it in the video
         if video:
             return {"ok": True, **found}
@@ -88,36 +130,38 @@ def check_series(backend, tag: str, control: dict, config: dict, query: str | No
     return stages
 
 
-def check_service(tag: str, picks: list[tuple[int, dict]], config: dict, now: datetime) -> dict:
+def check_service(tag: str, picks: list[tuple[int, dict]], ring: list[int], config: dict, now: datetime) -> dict:
     """A service's result from its picked series: the first whose listing and tracks pass stands for it; a sign-in
-    failure ends the tries (it is the session, not the title); else the first series' stages stand."""
-    backend = sync.backend_for(tag, config)
+    failure ends the tries (it is the session, not the title) and its stages stand; else the first series' stages
+    stand. A failure says which series tomorrow's probe is: the next in config order, the same after a sign-in failure."""
+    backend = Bounded(sync.backend_for(tag, config))
     first = None
     for tried, (tvdb, control) in enumerate(picks, 1):
         stages = check_series(backend, tag, control, config, series_name(tvdb) if tried == 1 else None, search=tried == 1)
         first = first or (tvdb, stages)
+        stands = {**first[1], **{stage: stages[stage] for stage in ("list", "tracks")}}
         if stages["list"]["ok"] and stages["tracks"]["ok"]:
-            stages = {**first[1], **{stage: stages[stage] for stage in ("list", "tracks")}}
-            return result_of(now, tvdb, tried, stages)
-        if any(stage.get("code") == "AUTH_FAILED" for stage in stages.values()):
-            break
-    return result_of(now, first[0], tried, first[1])
+            return result_of(now, tvdb, tried, stands)
+        if any(stage.get("code") in SIGNED_OUT for stage in stages.values()):
+            return result_of(now, tvdb, tried, stands, probe=tvdb)
+    return result_of(now, first[0], tried, first[1], probe=ring[(ring.index(tvdb) + 1) % len(ring)])
 
 
-def result_of(now: datetime, tvdb: int, tried: int, stages: dict) -> dict:
+def result_of(now: datetime, tvdb: int, tried: int, stages: dict, probe: int | None = None) -> dict:
     failed = [stage for stage in STAGES if stages[stage]["ok"] is False]
-    return {"checked": now.isoformat(), "ok": not failed, "failed": failed, "tvdb": tvdb, "tried": tried, "stages": stages}
+    return {"checked": now.isoformat(), "ok": not failed, "failed": failed, "tvdb": tvdb, "tried": tried, "stages": stages,
+            **({"next": probe} if failed and probe is not None else {})}
 
 
 def skipped(now: datetime) -> dict:
     return {"checked": now.isoformat(), "ok": None, "failed": [], "skipped": "relay", "stages": {}}
 
 
-def picked_controls(config: dict, before: dict) -> dict[str, list[tuple[int, dict]]]:
-    """Each service a series uses, with the series (TVDB id and title) to try, in order: the one that stood for it
-    last time, then the others in config order, none relayed (--remote). Up to SERIES_TRIED; one when its last
-    result was a failure (a probe, so a service that is down is not asked ten times a day). An empty list for a
-    service whose every series is relayed."""
+def picked_controls(config: dict, before: dict) -> dict[str, tuple[list[tuple[int, dict]], list[int]]]:
+    """Each service a series uses: the series (TVDB id and title) to try, in order, and every series of it in config
+    order. None is relayed (--remote). The order starts with the one that stood for the service last time; when its
+    last result was a failure, with the one its probe named, and only that one is tried (so a service that is down
+    is not asked ten times a day), else up to SERIES_TRIED. No series to try: every series of the service is relayed."""
     every: dict[str, list[tuple[int, dict]]] = {}
     for tvdb, control in sync.configured_controls(config):
         tag = control.get("service")
@@ -129,8 +173,10 @@ def picked_controls(config: dict, before: dict) -> dict[str, list[tuple[int, dic
     picked = {}
     for tag, series in every.items():
         last = before.get(tag) or {}
-        series.sort(key=lambda pick: pick[0] != last.get("tvdb"))  # stable: the rest stay in config order
-        picked[tag] = series[: 1 if last.get("ok") is False else SERIES_TRIED]
+        failing = last.get("ok") is False
+        ring = [tvdb for tvdb, _ in series]
+        series = sorted(series, key=lambda pick: pick[0] != ((last.get("next") or last.get("tvdb")) if failing else last.get("tvdb")))  # stable
+        picked[tag] = (series[: 1 if failing else SERIES_TRIED], ring)
     return picked
 
 
@@ -146,31 +192,42 @@ def read_results() -> dict:
 
 
 def notify_changes(config: dict, before: dict, after: dict) -> None:
-    """One message when a service's failing stages change (it fails, fails elsewhere, or recovers), none while they stay."""
+    """One message when a service's failing stages change (it fails, fails elsewhere, or recovers), none while they
+    stay and none for a skipped service. A stage that was failing and did not pass (it is skipped now) still fails."""
     for tag, result in after.items():
-        if result["failed"] == (before.get(tag) or {}).get("failed", []):
+        if result.get("skipped"):
+            continue
+        was = (before.get(tag) or {}).get("failed", [])
+        failing = [stage for stage in STAGES if result["stages"][stage]["ok"] is False or (stage in was and result["stages"][stage]["ok"] is not True)]
+        if failing == was:
             continue
         key = f"service-check:{tag}"  # the bell keeps one line a service: the newest replaces the one before
-        if result["failed"]:
-            lines = [f"{STAGES[stage]}: {result['stages'][stage]['message']}" for stage in result["failed"]]
+        if failing:
+            lines = [f"{STAGES[stage]}: {result['stages'][stage]['message']}" for stage in failing]
             sync.notify(config.get("notifications") or {}, "error", f"{tag} failed its daily check", "\n".join(lines), key=key, service=tag)
         else:
             sync.notify(config.get("notifications") or {}, "success", f"{tag} passes its daily check again",
                         "It searches, lists and has tracks again.", key=key, service=tag)
 
 
-def run_check(now: datetime | None = None) -> dict | None:
+def run_check(now: datetime | None = None, reserved: bool = False) -> dict | None:
     """Check every service now, keep the results and the time of the run, and notify what changed. None when a
-    check is already running."""
-    if not _running.acquire(blocking=False):
+    check is already running (reserved: the caller took the lock, and this releases it)."""
+    if not reserved and not _running.acquire(blocking=False):
         return None
     try:
         now = now or datetime.now(timezone.utc)
         config = sync.read_file()
         before = read_results().get("services") or {}
         results = {}
-        for tag, picks in picked_controls(config, before).items():
-            results[tag] = check_service(tag, picks, config, now) if picks else skipped(now)
+        for tag, (picks, ring) in picked_controls(config, before).items():
+            if not picks:
+                results[tag] = skipped(now)
+                continue
+            try:
+                results[tag] = check_service(tag, picks, ring, config, now)
+            except Exception as e:  # one service's unexpected failure must not stop the others or the save
+                results[tag] = result_of(now, picks[0][0], 0, dict.fromkeys(STAGES, failure(e)))
         done = {"last_run": now.isoformat(), "services": results}
         try:
             write_atomic(sync.SERVICE_CHECKS_FILE, json.dumps(done))
@@ -199,12 +256,18 @@ def run_if_due(now: datetime | None = None) -> float:
     return CHECK_EVERY.total_seconds()
 
 
-def start() -> bool:
-    """A check on demand, in the background; False when one is already running."""
-    if _running.locked():
-        return False
-    threading.Thread(target=run_check, name="service-check", daemon=True).start()
-    return True
+def start() -> str:
+    """A check on demand, in the background, under the daily run's gate. "" when it started, else why it did not."""
+    if not _running.acquire(blocking=False):
+        return "A check is already running"
+    try:
+        if downloading():
+            raise RuntimeError
+        threading.Thread(target=run_check, kwargs={"reserved": True}, name="service-check", daemon=True).start()
+    except RuntimeError:
+        _running.release()
+        return "A download is running: check again when it ends"
+    return ""
 
 
 def state() -> dict:

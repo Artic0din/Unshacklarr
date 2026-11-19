@@ -2479,5 +2479,8 @@
  "{0} passes its daily check again": "{0} 再次通过每日检查",
  "{0} has no video track": "{0} 没有视频轨道",
  "Daily check skipped: relayed through another server": "每日检查已跳过：经由另一台服务器转发",
- "Not run: the series' name is unknown": "未运行：该剧集的名称未知"
+ "Not run: the series' name is unknown": "未运行：该剧集的名称未知",
+ "A download is running: check again when it ends": "正在下载：请在下载结束后再检查",
+ "Unexpected {0} in the reply": "响应中包含意外的{0}",
+ "search results": "搜索结果"
 }

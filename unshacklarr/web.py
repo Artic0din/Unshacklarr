@@ -4801,8 +4801,8 @@ async def service_checks(_):
 
 
 async def start_service_check(_):
-    if not servicecheck.start():
-        raise web.HTTPConflict(text="A check is already running")
+    if reason := servicecheck.start():
+        raise web.HTTPConflict(text=reason)
     return web.json_response(servicecheck.state(), status=202)
 
 
