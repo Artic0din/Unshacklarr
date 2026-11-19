@@ -4783,6 +4783,28 @@ async def watch_service_lists():
         await asyncio.sleep(3000)
 
 
+async def in_daemon_thread(work):
+    """work()'s result, from a thread the shutdown does not wait for (to_thread's are joined: a check of every
+    service, stage timeouts and all, would hold the exit)."""
+    loop, done = asyncio.get_running_loop(), asyncio.get_running_loop().create_future()
+
+    def settle(result, error) -> None:
+        if not done.done():
+            done.set_exception(error) if error else done.set_result(result)
+
+    def run() -> None:
+        try:
+            result, error = work(), None
+        except Exception as e:
+            result, error = None, e
+        try:
+            loop.call_soon_threadsafe(settle, result, error)
+        except RuntimeError:
+            pass  # the loop closed meanwhile: nobody waits for the answer
+    threading.Thread(target=run, name="service-check", daemon=True).start()
+    return await done
+
+
 async def watch_service_checks():
     """Once a day, the check of each service (servicecheck.run_if_due)."""
     await asyncio.sleep(600)  # not at start: Sonarr and the services settle first
@@ -4790,7 +4812,7 @@ async def watch_service_checks():
         wait = servicecheck.RETRY_AFTER
         try:
             if read_config()["auth"] and sonarr_sync.SONARR:
-                wait = await asyncio.to_thread(servicecheck.run_if_due)
+                wait = await in_daemon_thread(servicecheck.run_if_due)
         except Exception as e:
             print(f"Service check: {type(e).__name__}: {no_credentials(e)}", flush=True)
         await asyncio.sleep(wait)

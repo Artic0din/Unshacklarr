@@ -19,9 +19,10 @@ SERIES_TRIED = 10  # series of a service tried before it is called failing: a ti
 STAGE_TIMEOUT = 120  # seconds a stage may take, however its request behaves
 STAGES = {"search": "Search", "list": "Listing", "tracks": "Tracks"}
 SIGNED_OUT = ("AUTH_FAILED", "HTTP_401")  # the session needs a person, whatever the title
-# a path or URL with a query or fragment, absolute, relative ("url: /seg.mp4?...") or JSON-escaped (https:\/\/...):
-# no_credentials leaves some signed queries (?hdnea=, #320)
-URL_QUERY = re.compile(r"([^\s?#]*/[^\s?#]*)[?#]\S*")
+# a query after anything (an absolute URL, a relative one as in "url: /seg.mp4?...", a JSON-escaped one, a bare file
+# name) and a fragment after a path: no_credentials leaves some signed queries (?hdnea=, #320)
+URL_QUERY = re.compile(r"([^\s?#]+)\?\S*")
+URL_FRAGMENT = re.compile(r"([^\s?#]*/[^\s?#]*)#\S*")
 
 _running = threading.Lock()
 
@@ -34,7 +35,7 @@ class BadReply(Exception):
 def failure(error: Exception) -> dict:
     """A failed stage as it is kept and shown: a code and a short summary, without credentials or a URL's query."""
     code = getattr(error, "error_code", "") or (f"HTTP_{error.status}" if getattr(error, "status", 0) else "ERROR")
-    return {"ok": False, "code": code, "message": URL_QUERY.sub(r"\1", no_credentials(error))[:200]}
+    return {"ok": False, "code": code, "message": URL_FRAGMENT.sub(r"\1", URL_QUERY.sub(r"\1", no_credentials(error)))[:200]}
 
 
 def attempt(work):
@@ -80,7 +81,7 @@ def dicts(value, what: str) -> list[dict]:
 def listed(reply, key: str, what: str) -> list[dict]:
     if not isinstance(reply, dict):
         raise BadReply(f"Unexpected {what} in the reply")
-    return dicts(reply.get(key) or [], what)
+    return dicts([] if reply.get(key) is None else reply[key], what)  # none listed is an empty list, not false or 0
 
 
 def check_series(backend, tag: str, control: dict, config: dict, query: str | None, search: bool) -> dict:
@@ -200,27 +201,33 @@ def read_results() -> dict:
     return read_json(sync.SERVICE_CHECKS_FILE, {})
 
 
-def unresolved(last: dict, result: dict) -> list[str]:
-    """The stages still failing as the person was last told: those that failed now, and those that were failing and
-    have not passed since (skipped now, or the whole service is): kept with the result, so that a skipped run does
-    not forget a failure whose recovery is still to tell."""
-    was = last.get("unresolved", last.get("failed", []))
+def unresolved_of(last: dict) -> dict:
+    kept = last.get("unresolved")
+    return kept if isinstance(kept, dict) else {}
+
+
+def settled(last: dict, result: dict) -> dict:
+    """The result as it is kept: a stage that was failing and could not be checked now (it is skipped, or the whole
+    service is) keeps its failure, for it has not passed. So the page, the next run's baseline and the notifications
+    agree. `unresolved` holds those failures by stage."""
+    was = unresolved_of(last)
     if result.get("skipped"):
-        return was
-    return [stage for stage in STAGES if result["stages"][stage]["ok"] is False or (stage in was and result["stages"][stage]["ok"] is not True)]
+        return {**result, "unresolved": was}
+    stages = {stage: was[stage] if result["stages"][stage]["ok"] is None and stage in was else result["stages"][stage] for stage in STAGES}
+    failed = [stage for stage in STAGES if stages[stage]["ok"] is False]
+    return {**result, "stages": stages, "failed": failed, "ok": not failed, "unresolved": {stage: stages[stage] for stage in failed}}
 
 
 def notify_changes(config: dict, before: dict, after: dict) -> None:
     """One message when a service's unresolved stages change (it fails, fails elsewhere, or recovers), none while
     they stay and none for a skipped service."""
     for tag, result in after.items():
-        last = before.get(tag) or {}
-        was, failing = last.get("unresolved", last.get("failed", [])), result["unresolved"]
+        was, failing = list(unresolved_of(before.get(tag) or {})), list(result["unresolved"])
         if result.get("skipped") or failing == was:
             continue
         key = f"service-check:{tag}"  # the bell keeps one line a service: the newest replaces the one before
         if failing:
-            lines = [f"{STAGES[stage]}: {result['stages'][stage]['message']}" for stage in failing]
+            lines = [f"{STAGES[stage]}: {result['unresolved'][stage]['message']}" for stage in failing]
             sync.notify(config.get("notifications") or {}, "error", f"{tag} failed its daily check", "\n".join(lines), key=key, service=tag)
         else:
             sync.notify(config.get("notifications") or {}, "success", f"{tag} passes its daily check again",
@@ -245,7 +252,7 @@ def run_check(now: datetime | None = None, reserved: bool = False) -> dict | Non
                     results[tag] = check_service(tag, picks, ring, config, now)
                 except Exception as e:  # one service's unexpected failure must not stop the others or the save
                     results[tag] = result_of(now, picks[0][0], 0, dict.fromkeys(STAGES, failure(e)))
-            results[tag]["unresolved"] = unresolved(before.get(tag) or {}, results[tag])
+            results[tag] = settled(before.get(tag) or {}, results[tag])
         done = {"last_run": now.isoformat(), "services": results}
         try:
             write_atomic(sync.SERVICE_CHECKS_FILE, json.dumps(done))

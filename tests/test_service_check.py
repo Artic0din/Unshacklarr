@@ -444,6 +444,30 @@ def test_the_watcher_runs_the_check_and_waits_as_long_as_it_says(check, monkeypa
     assert waits == [600, 900.0, check.RETRY_AFTER, 86400.0] and answers == []
 
 
+def test_the_scheduled_check_runs_in_a_thread_that_shutdown_does_not_wait_for(check, monkeypatch):
+    import unshacklarr.web
+    web = importlib.reload(unshacklarr.web)
+    web.servicecheck = check
+    ran = {}
+
+    def due():
+        ran["daemon"] = threading.current_thread().daemon
+        return 5.0
+
+    async def sleep(seconds):
+        if seconds == 5.0:
+            raise asyncio.CancelledError
+    monkeypatch.setattr(web.asyncio, "sleep", sleep)
+    monkeypatch.setattr(web, "read_config", lambda: {"auth": {"password": "set"}})
+    monkeypatch.setattr(web.sonarr_sync, "SONARR", "http://sonarr")
+    monkeypatch.setattr(check, "run_if_due", due)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(web.watch_service_checks())
+
+    assert ran == {"daemon": True}
+
+
 def test_a_service_only_a_season_page_uses_is_checked_too(check, tmp_path):
     (tmp_path / "config.yaml").write_text("series:\n  111: {service: RTLP, title: show-1, season_pages: {2: {url: page-2, service: MLT}}}\n"
                                          "notifications: {urls: []}\n")
@@ -550,6 +574,15 @@ def test_a_malformed_reply_fails_its_stage_and_the_other_services_are_still_chec
     assert set(done["services"]) == {"RTLP", "MLT"} and check.read_results() == done  # the next service ran, and the day is kept
 
 
+@pytest.mark.parametrize("path, reply", [("/api/search", {"results": False}), ("/api/search", {"results": "none"}), ("/api/list-titles", {"titles": 0})])
+def test_a_reply_that_is_not_a_list_is_a_bad_reply_not_an_empty_one(check, path, reply):
+    check.serve.replies[path] = reply
+
+    stage = check.run_check(NOW)["services"]["RTLP"]["stages"]["search" if path == "/api/search" else "list"]
+
+    assert (stage["ok"], stage["code"]) == (False, "BAD_REPLY")
+
+
 def test_an_unexpected_exception_in_one_service_leaves_the_others_and_the_save(check, monkeypatch):
     real = check.check_series
 
@@ -585,28 +618,42 @@ def test_a_failing_service_that_is_skipped_or_cannot_search_is_not_announced_as_
 
 
 def test_a_failure_stays_unresolved_through_skips_and_its_recovery_is_told_once(check, tmp_path, monkeypatch):
-    check.serve.replies["/api/search"] = UnshackleError("search is down")
-    check.run_check(NOW)
-    assert len(check.sent) == 2  # RTLP and MLT failed their search
+    several(tmp_path, (111, ""))  # RTLP alone
+    told = lambda: [(level, title) for level, title, _ in check.sent]
+    named = lambda wanted, keep=3600: {t: {"title": "Show"} for t in wanted}
 
     def down(wanted, keep=3600):
         raise check.requests.ConnectionError("sonarr is down")
+    check.serve.replies["/api/search"] = UnshackleError("search is down")
+    check.run_check(NOW)
+    assert told() == [("error", "RTLP failed its daily check")]
+
     monkeypatch.setattr(check.sync, "sonarr_series", down)
-    kept = check.run_check(NOW + timedelta(days=1))["services"]  # the search is skipped: neither failed nor passed
-    assert kept["RTLP"]["failed"] == [] and kept["RTLP"]["unresolved"] == ["search"] and len(check.sent) == 2
+    kept = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]  # the search could not run: it has not passed
+    assert (kept["ok"], kept["failed"], list(kept["unresolved"])) == (False, ["search"], ["search"]) and len(check.sent) == 1
+    assert kept["stages"]["search"]["message"].endswith("search is down")  # its failure is kept, and shown, till it passes
+    assert kept["stages"]["list"]["ok"] and kept["stages"]["tracks"]["ok"]
 
-    several(tmp_path, (111, ", options: {--remote: true}"))  # RTLP only relayed now: skipped, its failure still unresolved
-    kept = check.run_check(NOW + timedelta(days=2))["services"]
-    assert kept["RTLP"]["skipped"] == "relay" and kept["RTLP"]["unresolved"] == ["search"] and len(check.sent) == 2
+    monkeypatch.setattr(check.sync, "sonarr_series", named)
+    again = check.run_check(NOW + timedelta(days=2))["services"]["RTLP"]  # the same search error is back: said once already
+    assert again["failed"] == ["search"] and len(check.sent) == 1
 
-    several(tmp_path, (111, ""))
-    check.serve.replies["/api/search"] = {"results": [{"title": "Show", "id": "show-1"}]}
-    monkeypatch.setattr(check.sync, "sonarr_series", lambda wanted, keep=3600: {t: {"title": "Show"} for t in wanted})
-    passed = check.run_check(NOW + timedelta(days=3))["services"]
-    assert passed["RTLP"]["ok"] is True and passed["RTLP"]["unresolved"] == []
-    assert [(level, title) for level, title, _ in check.sent[2:]] == [("success", "RTLP passes its daily check again")]
-    check.run_check(NOW + timedelta(days=4))
-    assert len(check.sent) == 3  # told once
+    several(tmp_path, (111, ", options: {--remote: true}"))  # only relayed now: skipped, its failure still unresolved
+    kept = check.run_check(NOW + timedelta(days=3))["services"]["RTLP"]
+    assert kept["skipped"] == "relay" and list(kept["unresolved"]) == ["search"] and len(check.sent) == 1
+
+    several(tmp_path, (111, ""))  # back, with no name to search with: the failure it had before the skip stands
+    monkeypatch.setattr(check.sync, "sonarr_series", down)
+    kept = check.run_check(NOW + timedelta(days=4))["services"]["RTLP"]
+    assert (kept["ok"], kept["failed"]) == (False, ["search"]) and len(check.sent) == 1
+
+    check.serve.replies["/api/search"] = {"results": [{"title": "Show", "id": "show-111"}]}
+    monkeypatch.setattr(check.sync, "sonarr_series", named)
+    passed = check.run_check(NOW + timedelta(days=5))["services"]["RTLP"]
+    assert passed["ok"] is True and passed["unresolved"] == {}
+    assert told()[1:] == [("success", "RTLP passes its daily check again")]
+    check.run_check(NOW + timedelta(days=6))
+    assert len(check.sent) == 2  # told once
 
 
 def test_a_service_only_programmes_series_use_is_shown_as_skipped_not_left_out(check, tmp_path):
@@ -623,7 +670,8 @@ def test_a_service_only_programmes_series_use_is_shown_as_skipped_not_left_out(c
 @pytest.mark.parametrize("text", [
     "Max retries exceeded with url: /seg.mp4?hdnea=exp=1~hmac=SECRET",
     r'{"url":"https:\/\/cdn.example\/a.m3u8?hdnea=SECRET"}',
-    "failed /manifest?hdnea=fixture#fixture"])
+    "failed /manifest?hdnea=fixture#fixture",
+    "403 for segment.m4s?hdnea=TEST"])  # a file with no path
 def test_every_shape_of_url_loses_its_query_and_fragment(check, tmp_path, text):
     check.serve.replies["/api/list-titles"] = UnshackleError(text)
 
