@@ -3125,6 +3125,27 @@ def test_the_same_stories_in_another_order_are_the_episodes_very_title_and_alike
                                    2: {"service": "S04E09", "name": "Runaround / The Night Cap", "match": "title"}}
 
 
+def test_a_title_added_by_its_stories_does_not_change_how_the_other_episodes_are_found(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    # two titles meet ours: too few to say a title that differs under the same number is another episode, so the
+    # third is found by its number. A fourth found only by its stories must not tip that over
+    service = [{"type": "episode", "season": 1, "number": n, "name": name} for n, name in
+               [(1, "Opening Night"), (2, "Last Call"), (3, "Case Closed"), (4, "Night Shift / Mobbed")]]
+    sonarr = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "title": name, "airDate": f"2020-01-0{n}", "airDateUtc": f"2020-01-0{n}T09:00:00Z"}
+              for n, name in [(1, "Opening Night"), (2, "Last Call"), (3, "The Long Goodbye"), (4, "Mobbed/Night Shift")]]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "BINGE", "cli_params": []}]})
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {"tmdbId": 5})
+    monkeypatch.setattr(web, "tmdb_key", lambda: "key")
+    monkeypatch.setattr(web, "tmdb_episodes", lambda tmdb_id: [{"names": ["The Long Goodbye"], "air_date": "2020-01-03", "season": 1, "number": 3}])
+    probed = web.probe_series({"service": "BINGE", "title": "x"}, 1)
+    assert probed["available"][3] == {"service": "S01E03", "name": "Case Closed"}  # by its number, as before
+    assert probed["available"][4] == {"service": "S01E04", "name": "Night Shift / Mobbed", "match": "title", "same": True}
+
+
 def test_the_schedule_knows_each_episodes_latest_download(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -6580,6 +6601,10 @@ def test_the_story_rules_never_replace_what_the_whole_title_finds():
     assert got(["Cold Betrayal"], [cold[0], ep(2, "A Cold Betrayal")]) == {}  # two of Sonarr's own titles fit: neither, as before
     # a title found by its last part, after a colon, keeps its episode from the same stories the other way round
     assert got(["Documentary: Hit/Run", "Run/Hit"], [ep(1, "Hit/Run")]) == {"S09E01": 1}
+    assert got(["Night Shift / True Crime: Mobbed"], [ep(1, "Mobbed"), ep(2, "True Crime Mobbed / Night Shift")]) == {"S09E01": 1}
+    # the episode with the very same stories is already found: a follow-up that is only alike is not taken in its place
+    again = [ep(1, "Night Shift/Mobbed"), ep(2, "Night Shift Revisited/Mobbed")]
+    assert got(["Night Shift / Mobbed", "Mobbed / Night Shift"], again) == {"S09E01": 1}
     # one part of a service episode is found by its whole title: its other part adds no episode by its stories
     parts = [{"season": 9, "number": 1, "name": "Alpha Road", "part": 1}, {"season": 9, "number": 1, "name": "Bravo Lane / Charlie Hill", "part": 2}]
     two = match_by_title(parts, [ep(1, "Alpha Road"), ep(2, "Charlie Hill/Bravo Lane")], [])

@@ -4286,7 +4286,7 @@ def titles_of(sonarr_eps: list[dict], tmdb_eps: list[dict], own: bool = True, pl
 
 def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: list[dict]) -> dict[str, dict]:
     """The service's episodes found in Sonarr by their title: service episode ("S26E11", or "S26E12" for all
-    its parts) -> {"episodeId", "name"}. The title is looked for in Sonarr's own titles (TVDB's) and in TMDB's,
+    its parts) -> {"episodeId", "name"}, and "added" for one only the two last rules below found. The title is looked for in Sonarr's own titles (TVDB's) and in TMDB's,
     whose air date gives the episode in Sonarr. A title that fits two episodes, or that two of the service's
     episodes share, finds nothing; of several that fit a title joining stories with "/", the one its first story
     names is taken. Two more rules then name an episode for a title that found none so, among the episodes still
@@ -4374,16 +4374,18 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
     for i in open_:
         (t, name), mine = listed[i], stories(listed[i][0].get("name"))
         if len(whole[i]) != 1 and mine:
-            # by its stories, at the first level that finds any: an alike spelling never replaces an exact one. Not an
-            # episode whose very title is another of the service's: both claiming it would lose it for both
+            # by its stories, at the first level that finds any: an alike spelling never replaces an exact one, even
+            # one that is not free (already named, or its very title another of the service's: both claiming it would
+            # lose it for both). Then nothing is taken in its place
             levels = (
                 lambda: by_stories.get(tuple(sorted(mine)), []),
                 lambda: [id_ for story, id_ in told if same_stories(mine, story, same_title)],
                 lambda: [id_ for story, id_ in told if same_stories(mine, story, spelt_alike)],
             )
-            can = lambda id_: id_ not in taken and not elsewhere(id_, name)
-            whole[i] = one_of(t, name, set(next((hits for level in levels if (hits := [id_ for id_ in level() if can(id_)])), [])))
-    return {**matches, **agreed(found_in((listed[i][0], whole[i]) for i in open_))}
+            best = next((hits for level in levels if (hits := level())), [])
+            whole[i] = one_of(t, name, {id_ for id_ in best if id_ not in taken and not elsewhere(id_, name)})
+    # marked, so the caller can tell what it knew before from what was added
+    return {**matches, **{k: {**m, "added": True} for k, m in agreed(found_in((listed[i][0], whole[i]) for i in open_)).items()}}
 
 
 def list_titles(show: dict) -> list[dict]:
@@ -4566,9 +4568,12 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
     # ...unless the titles that do meet sit mostly under other numbers: then the numbering differs, not the language
     # (RMC+'s J'irai dormir chez vous: "Mali" is Sonarr's S01E03 and its S17E02), and a title still says another episode
     own_key = {e["id"]: sonarr_sync.service_episode(show, e["seasonNumber"], e["episodeNumber"]) for e in every}
-    moved = sum(key.split(".")[0] != (own_key.get(m["episodeId"]) or "").split(".")[0] for key, m in by_title.items())
-    agreeing = not pairs or 2 * sum(same_title(a, b) for a, b in pairs) >= len(pairs) or 2 * moved > len(by_title)
-    comparable = enough(len(by_title)) and agreeing
+    # how the listing compares with ours is told by the titles the whole titles found: one added since (by its stories,
+    # or Sonarr's own title) names its episode, and says nothing of how the others are found
+    first = {key: m for key, m in by_title.items() if not m.get("added")}
+    moved = sum(key.split(".")[0] != (own_key.get(m["episodeId"]) or "").split(".")[0] for key, m in first.items())
+    agreeing = not pairs or 2 * sum(same_title(a, b) for a, b in pairs) >= len(pairs) or 2 * moved > len(first)
+    comparable = enough(len(first)) and agreeing
     # Sonarr's own titles weigh only in the service's language (French, J'irai dormir), not in English against
     # a French Disney+ (Futurama): there, an episode with no French title from TMDB has nothing to contradict.
     ours = {usable_title(e.get("title")) for e in every} - {""}
