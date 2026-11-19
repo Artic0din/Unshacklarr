@@ -513,6 +513,15 @@ def test_a_result_says_which_backend_it_was_checked_on(check, monkeypatch):
     monkeypatch.setattr(check.sync, "BACKENDS", {"vpn": check.serve})
     assert check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]["backend"] == "vpn"
 
+    error = UnshackleError("RTLP through Unshackle: HTTP 401: session expired")
+    error.status, error.error_code = 401, "AUTH_FAILED"
+    check.serve.replies["/api/list-tracks"] = error  # a failure is its backend's too: a sign-in failure
+    failed = check.run_check(NOW + timedelta(days=2))["services"]["RTLP"]
+    assert (failed["ok"], failed["backend"]) == (False, "vpn")
+    check.serve.replies["/api/list-tracks"] = UnshackleError("boom")  # and one of every series tried
+    failed = check.run_check(NOW + timedelta(days=3))["services"]["RTLP"]
+    assert (failed["ok"], failed["backend"]) == (False, "vpn")
+
 
 def test_a_skipped_service_says_which_backend_it_is_on_too(check, tmp_path, monkeypatch):
     several(tmp_path, (111, ", options: {--remote: true}"))  # RTLP only relayed
@@ -661,10 +670,12 @@ def test_an_unexpected_exception_in_one_service_leaves_the_others_and_the_save(c
             raise KeyError("odd")
         return real(backend, tag, *args, **kwargs)
     monkeypatch.setattr(check, "check_series", boom)
+    monkeypatch.setattr(check.sync, "BACKENDS", {"vpn": check.serve})
 
     done = check.run_check(NOW)
 
     assert done["services"]["RTLP"]["failed"] == ["search", "list", "tracks"] and done["services"]["MLT"]["ok"] is True
+    assert done["services"]["RTLP"]["backend"] == "vpn"  # shown on the row of the serve it failed on
     assert check.read_results() == done
 
 
@@ -672,16 +683,20 @@ def test_an_unexpected_exception_for_a_skipped_service_leaves_the_others_and_the
     (tmp_path / "config.yaml").write_text("series:\n  111: {service: RTLP, title: show-1, options: {--remote: true}}\n"
                                          "  222: {service: MLT, title: show-2}\nnotifications: {urls: []}\n")
 
+    monkeypatch.setattr(check.sync, "BACKENDS", {"vpn": check.serve})
+    assert check.run_check(NOW)["services"]["RTLP"]["backend"] == "vpn"
+
     def which(tag, config=None):
         if tag == "RTLP":
             raise KeyError("services")  # a catalogue that is not one
         return check.serve
     monkeypatch.setattr(check.sync, "backend_for", which)
 
-    done = check.run_check(NOW)
+    done = check.run_check(NOW + timedelta(days=1))
 
-    assert done["services"]["RTLP"]["failed"] == ["search", "list", "tracks"] and done["services"]["MLT"]["ok"] is True
-    assert check.read_results() == done
+    # nothing of it was asked: it stays skipped, on the serve it was last known on, not failed at stages that never ran
+    assert (done["services"]["RTLP"]["skipped"], done["services"]["RTLP"]["backend"]) == ("relay", "vpn")
+    assert done["services"]["MLT"]["ok"] is True and check.read_results() == done
 
 
 def test_a_failing_service_that_is_skipped_or_cannot_search_is_not_announced_as_recovered(check, tmp_path, monkeypatch):

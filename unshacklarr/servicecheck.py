@@ -141,11 +141,10 @@ def check_series(backend, tag: str, control: dict, config: dict, query: str | No
     return stages
 
 
-def check_service(tag: str, picks: list[tuple[int, dict]], ring: list[int], config: dict, now: datetime) -> dict:
+def check_service(tag: str, serve, picks: list[tuple[int, dict]], ring: list[int], config: dict, now: datetime) -> dict:
     """A service's result from its picked series: the first whose listing and tracks pass stands for it; a sign-in
     failure ends the tries (it is the session, not the title) and its stages stand; else the first series' stages
     stand. A failure says which series tomorrow's probe is: the next in config order, the same after a sign-in failure."""
-    serve = sync.backend_for(tag, config)
     backend, on = Bounded(serve), backend_name(serve)
     first = None
     for tried, (tvdb, control) in enumerate(picks, 1):
@@ -263,11 +262,14 @@ def run_check(now: datetime | None = None, reserved: bool = False) -> dict | Non
         before = read_results().get("services") or {}
         results = {}
         for tag, (picks, ring, why) in picked_controls(config, before).items():
+            on = (before.get(tag) or {}).get("backend") or ""  # the last known, should asking which serve fail
             try:
-                results[tag] = (check_service(tag, picks, ring, config, now) if picks
-                                else skipped(now, why, backend_name(sync.backend_for(tag, config))))
+                serve = sync.backend_for(tag, config)
+                on = backend_name(serve)
+                results[tag] = check_service(tag, serve, picks, ring, config, now) if picks else skipped(now, why, on)
             except Exception as e:  # one service's unexpected failure must not stop the others or the save
-                results[tag] = result_of(now, picks[0][0] if picks else 0, 0, dict.fromkeys(STAGES, failure(e)))
+                # a service with no series to try stays skipped: nothing of it ran, so nothing of it failed
+                results[tag] = result_of(now, picks[0][0], 0, dict.fromkeys(STAGES, failure(e)), backend=on) if picks else skipped(now, why, on)
             results[tag] = settled(before.get(tag) or {}, results[tag])
         done = {"last_run": now.isoformat(), "services": results}
         try:
