@@ -1200,12 +1200,15 @@ const promptState = (input) => {
       FALL: { service: "FALL", backend: "", state: "anonymous" },
       PROG: { service: "PROG", backend: "", state: "anonymous" },
       GONE: { service: "GONE", backend: "", state: "anonymous" },
+      MOVED: { service: "MOVED", backend: "", state: "anonymous" },
     };
     box.S.authenticationMethods = { HULU: ["cookies", "credentials"], "HULU@vpn": ["cookies"], OPEN: [], ATVP: ["cookies"], ZONE: ["cookies"], FALL: [] };
     box.S.authenticationSetups = [];
     box.S.config.series = { 1: { service: "HULU" }, 2: { service: "HULU" }, 3: { service: "OPEN" }, 4: { service: "EXTRA" }, 5: { service: "ATVP", fallback: { service: "FALL" } },
-      6: { service: "PROG", programmes: true } };
+      6: { service: "PROG", programmes: true }, 7: { service: "MOVED" } };
     box.S.serviceChecks = { services: {
+      MOVED: { checked: "2026-11-19T03:00:00Z", ok: true, failed: [], backend: "vpn", stages: { search: { ok: true, count: 1, found: true },
+        list: { ok: true, count: 3 }, tracks: { ok: true, episode: "S01E03", video: 1, audio: 1 } } },
       PROG: { checked: "2026-11-19T03:00:00Z", ok: null, failed: [], skipped: "programmes", stages: {} },
       GONE: { checked: "2026-11-18T03:00:00Z", ok: false, failed: ["list"], stages: { search: { ok: true, count: 1, found: true },
         list: { ok: false, code: "ERROR", message: "boom" }, tracks: { ok: false, code: "NOT_RUN", message: "none" } } },
@@ -1457,7 +1460,7 @@ def test_cancelled_authentication_is_rendered_until_the_next_refresh():
 def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     result = run_authentication_ui("cookies_per_service")
     rows = {row["name"]: row for row in result["rows"]}
-    assert [row["name"] for row in result["rows"]] == ["HULU", "ATVP", "EXTRA", "OPEN", "PROG", "FALL", "GONE", "HULU · vpn", "ZONE"]
+    assert [row["name"] for row in result["rows"]] == ["HULU", "ATVP", "EXTRA", "MOVED", "OPEN", "PROG", "FALL", "GONE", "HULU · vpn", "ZONE"]
     assert rows["HULU"] == {
         "name": "HULU", "label": "Sign-in needed", "tone": "bad", "attention": True, "used": ["2 series", "Show series"],
         # the daily check: its result, the stage that failed, and the search shown (not alerted) even when it missed the series
@@ -1485,6 +1488,8 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     # a service only a fallback uses counts no series, yet it is checked: its result shows; unchecked, it shows nothing
     assert rows["FALL"]["used"] == ["No series"] and rows["FALL"]["signIn"][-2:] == ["Daily check passed now", "Search results: 2"]
     assert not [line for line in rows["ZONE"]["signIn"] if line.startswith("Daily check")]
+    # a result kept from another backend (the service was moved to this one since) is not this backend's
+    assert rows["MOVED"]["signIn"][-1] == "Daily check: not run yet"
     # the last series of a service is gone: its kept result is no longer shown (the next run drops it)
     assert rows["GONE"]["used"] == ["No series"] and not [line for line in rows["GONE"]["signIn"] if "check" in line or "Listing" in line]
     assert result["state"] == "sx-state down"

@@ -492,6 +492,28 @@ def test_a_check_on_demand_waits_for_the_downloads_like_the_daily_one(check, mon
     assert check.serve.calls == [] and check.state()["running"] is False  # nothing started, nothing left locked
 
 
+def test_a_sign_in_failure_stands_while_its_stage_cannot_run(check, tmp_path):
+    several(tmp_path, (111, ""))
+    error = UnshackleError("RTLP through Unshackle: HTTP 401: session expired")
+    error.status, error.error_code = 401, "AUTH_FAILED"
+    check.serve.replies["/api/list-tracks"] = error
+    check.run_check(NOW)
+
+    check.serve.replies["/api/list-titles"] = UnshackleError("listing is down")  # the tracks cannot be asked for now
+    kept = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+    assert kept["failed"] == ["list", "tracks"] and kept["stages"]["tracks"]["code"] == "AUTH_FAILED"  # still to sign in
+
+    check.serve.replies.update({"/api/list-titles": {"titles": TITLES}, "/api/list-tracks": TRACKS})
+    assert check.run_check(NOW + timedelta(days=2))["services"]["RTLP"]["ok"] is True
+
+
+def test_a_result_says_which_backend_it_was_checked_on(check, monkeypatch):
+    assert check.run_check(NOW)["services"]["RTLP"]["backend"] == ""  # the main unshackle serve
+
+    monkeypatch.setattr(check.sync, "BACKENDS", {"vpn": check.serve})
+    assert check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]["backend"] == "vpn"
+
+
 def test_a_run_that_cannot_start_frees_its_reservation_and_is_not_called_a_download(check, monkeypatch):
     def no_thread(self):
         raise RuntimeError("can't start new thread")
@@ -682,7 +704,8 @@ def test_a_service_only_programmes_series_use_is_shown_as_skipped_not_left_out(c
     "Max retries exceeded with url: /seg.mp4?hdnea=exp=1~hmac=SECRET",
     r'{"url":"https:\/\/cdn.example\/a.m3u8?hdnea=SECRET"}',
     "failed /manifest?hdnea=fixture#fixture",
-    "403 for segment.m4s?hdnea=TEST"])  # a file with no path
+    "403 for segment.m4s?hdnea=TEST",  # a file with no path
+    "redirected to callback#access_token=SECRET"])  # a fragment that carries a value, path or not
 def test_every_shape_of_url_loses_its_query_and_fragment(check, tmp_path, text):
     check.serve.replies["/api/list-titles"] = UnshackleError(text)
 

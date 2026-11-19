@@ -22,7 +22,7 @@ SIGNED_OUT = ("AUTH_FAILED", "HTTP_401")  # the session needs a person, whatever
 # a query after anything (an absolute URL, a relative one as in "url: /seg.mp4?...", a JSON-escaped one, a bare file
 # name) and a fragment after a path: no_credentials leaves some signed queries (?hdnea=, #320)
 URL_QUERY = re.compile(r"([^\s?#]+)\?\S*")
-URL_FRAGMENT = re.compile(r"([^\s?#]*/[^\s?#]*)#\S*")
+URL_FRAGMENT = re.compile(r"([^\s?#]*/[^\s?#]*)#\S*|([^\s?#]+)#\S*=\S*")  # after a path, or one that carries a value
 
 _running = threading.Lock()
 
@@ -35,7 +35,8 @@ class BadReply(Exception):
 def failure(error: Exception) -> dict:
     """A failed stage as it is kept and shown: a code and a short summary, without credentials or a URL's query."""
     code = getattr(error, "error_code", "") or (f"HTTP_{error.status}" if getattr(error, "status", 0) else "ERROR")
-    return {"ok": False, "code": code, "message": URL_FRAGMENT.sub(r"\1", URL_QUERY.sub(r"\1", no_credentials(error)))[:200]}
+    scrubbed = URL_FRAGMENT.sub(lambda m: m[1] or m[2], URL_QUERY.sub(r"\1", no_credentials(error)))
+    return {"ok": False, "code": code, "message": scrubbed[:200]}
 
 
 def attempt(work):
@@ -135,22 +136,24 @@ def check_service(tag: str, picks: list[tuple[int, dict]], ring: list[int], conf
     """A service's result from its picked series: the first whose listing and tracks pass stands for it; a sign-in
     failure ends the tries (it is the session, not the title) and its stages stand; else the first series' stages
     stand. A failure says which series tomorrow's probe is: the next in config order, the same after a sign-in failure."""
-    backend = Bounded(sync.backend_for(tag, config))
+    serve = sync.backend_for(tag, config)
+    backend = Bounded(serve)
+    on = next((name for name, other in sync.BACKENDS.items() if other is serve), "")  # which unshackle serve: the page shows a result on its row only
     first = None
     for tried, (tvdb, control) in enumerate(picks, 1):
         stages = check_series(backend, tag, control, config, series_name(tvdb) if tried == 1 else None, search=tried == 1)
         first = first or (tvdb, stages)
         stands = {**first[1], **{stage: stages[stage] for stage in ("list", "tracks")}}
         if stages["list"]["ok"] and stages["tracks"]["ok"]:
-            return result_of(now, tvdb, tried, stands)
+            return result_of(now, tvdb, tried, stands, backend=on)
         if any(stage.get("code") in SIGNED_OUT for stage in stages.values()):
-            return result_of(now, tvdb, tried, stands, probe=tvdb)
-    return result_of(now, first[0], tried, first[1], probe=ring[(ring.index(tvdb) + 1) % len(ring)])
+            return result_of(now, tvdb, tried, stands, probe=tvdb, backend=on)
+    return result_of(now, first[0], tried, first[1], probe=ring[(ring.index(tvdb) + 1) % len(ring)], backend=on)
 
 
-def result_of(now: datetime, tvdb: int, tried: int, stages: dict, probe: int | None = None) -> dict:
+def result_of(now: datetime, tvdb: int, tried: int, stages: dict, probe: int | None = None, backend: str = "") -> dict:
     failed = [stage for stage in STAGES if stages[stage]["ok"] is False]
-    return {"checked": now.isoformat(), "ok": not failed, "failed": failed, "tvdb": tvdb, "tried": tried, "stages": stages,
+    return {"checked": now.isoformat(), "ok": not failed, "failed": failed, "tvdb": tvdb, "tried": tried, "backend": backend, "stages": stages,
             **({"next": probe} if failed and probe is not None else {})}
 
 
@@ -207,13 +210,14 @@ def unresolved_of(last: dict) -> dict:
 
 
 def settled(last: dict, result: dict) -> dict:
-    """The result as it is kept: a stage that was failing and could not be checked now (it is skipped, or the whole
-    service is) keeps its failure, for it has not passed. So the page, the next run's baseline and the notifications
+    """The result as it is kept: a stage that was failing and could not be checked now (it is skipped, the stage
+    before it failed, or the whole service is skipped) keeps its failure, for it has not passed. So the page, the next run's baseline and the notifications
     agree. `unresolved` holds those failures by stage."""
     was = unresolved_of(last)
     if result.get("skipped"):
         return {**result, "unresolved": was}
-    stages = {stage: was[stage] if result["stages"][stage]["ok"] is None and stage in was else result["stages"][stage] for stage in STAGES}
+    unchecked = lambda stage: stage["ok"] is None or stage.get("code") == "NOT_RUN"  # skipped, or the stage before it failed
+    stages = {stage: was[stage] if stage in was and unchecked(result["stages"][stage]) else result["stages"][stage] for stage in STAGES}
     failed = [stage for stage in STAGES if stages[stage]["ok"] is False]
     return {**result, "stages": stages, "failed": failed, "ok": not failed, "unresolved": {stage: stages[stage] for stage in failed}}
 
