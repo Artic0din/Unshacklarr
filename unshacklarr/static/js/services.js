@@ -127,7 +127,8 @@ function serviceModels() {
     const selected = set && inventory.includes(`${service}@${set}`) ? set
       : inventory.includes(service) ? "" : (inventory.find((k) => k.startsWith(`${service}@`)) || "").split("@")[1] || "";
     const used = backend === selected ? seriesOf(service) : null;
-    const check = !used ? null : S.serviceChecks?.services?.[service] || null;  // the daily check runs on the backend that downloads it
+    // the daily check runs on the backend that downloads it; a service only a fallback uses counts no series, yet is checked
+    const check = backend !== selected ? null : S.serviceChecks?.services?.[service] || null;
     const cookieless = status.state === "anonymous" || (listed && methods.length > 0 && !methods.includes("cookies"));  // an empty list: not known
     // no cookie file is fine when none is needed, or a confirmed sign-in has another way in (credentials,
     // pairing): a cookie-only service confirmed before its last file went still needs one
@@ -179,8 +180,7 @@ function renderServices() {
   // the daily check (servicecheck.py): its result, the stages that failed, and what the search found (shown, never alerted)
   const checkLines = (m) => {
     const done = m.check;
-    if (!m.used) return [];
-    if (!done) return [el("small", { className: "sv-check", textContent: "Daily check: not run yet" })];
+    if (!done) return m.used ? [el("small", { className: "sv-check", textContent: "Daily check: not run yet" })] : [];
     if (done.skipped) return [el("small", { className: "sv-check", textContent: "Daily check skipped: relayed through another server" })];
     const signIn = Object.values(done.stages).some((stage) => stage.code === "AUTH_FAILED"), when = ago(done.checked), search = done.stages.search;
     return [el("small", { className: "sv-check", dataset: done.ok ? {} : { tone: "bad" },

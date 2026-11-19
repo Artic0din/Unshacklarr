@@ -416,6 +416,45 @@ def test_the_service_checks_endpoints_return_the_results_and_start_a_run(check, 
         assert finished.wait(5)  # the run's thread is done before the next test reloads the module
 
 
+def test_the_watcher_runs_the_check_and_waits_as_long_as_it_says(check, monkeypatch):
+    import unshacklarr.web
+    web = importlib.reload(unshacklarr.web)
+    web.servicecheck = check
+    waits, answers = [], [900.0, RuntimeError("Sonarr is down"), 86400.0]
+
+    async def sleep(seconds):
+        waits.append(seconds)
+        if len(waits) == 4:
+            raise asyncio.CancelledError
+
+    def due():
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+    monkeypatch.setattr(web.asyncio, "sleep", sleep)
+    monkeypatch.setattr(web, "read_config", lambda: {"auth": {"password": "set"}})
+    monkeypatch.setattr(web.sonarr_sync, "SONARR", "http://sonarr")
+    monkeypatch.setattr(check, "run_if_due", due)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(web.watch_service_checks())
+
+    # not at start; then as long as each look says, and the retry wait after a look that failed
+    assert waits == [600, 900.0, check.RETRY_AFTER, 86400.0] and answers == []
+
+
+def test_a_service_only_a_season_page_uses_is_checked_too(check, tmp_path):
+    (tmp_path / "config.yaml").write_text("series:\n  111: {service: RTLP, title: show-1, season_pages: {2: {url: page-2, service: MLT}}}\n"
+                                         "notifications: {urls: []}\n")
+
+    done = check.run_check(NOW)
+
+    assert {tag: result["ok"] for tag, result in done["services"].items()} == {"RTLP": True, "MLT": True}
+    assert ("/api/list-titles", "page-2") in [(path, (asked or {}).get("title_id")) for _, path, asked in check.serve.calls]
+    assert set(check.serve.paths()) <= ALLOWED
+
+
 def test_a_check_on_demand_waits_for_the_downloads_like_the_daily_one(check, monkeypatch):
     import unshacklarr.web
     web = importlib.reload(unshacklarr.web)
