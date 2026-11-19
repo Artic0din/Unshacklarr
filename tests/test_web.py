@@ -6538,6 +6538,22 @@ def test_a_tmdb_date_that_loses_a_title_does_not_keep_its_episode_from_another_n
     assert {k: m["episodeId"] for k, m in match_by_title(service, sonarr, tmdb).items()} == {"S09E01": 1, "S09E02": 2}
 
 
+def test_a_title_tmdb_dates_to_an_episode_is_not_its_when_another_is_itself_titled_so():
+    from unshacklarr.web import match_by_title
+    ep = lambda id_, title, date: {"id": id_, "seasonNumber": 1, "episodeNumber": id_, "title": title, "airDate": date}
+    got = lambda names, sonarr, tmdb: {k: m["episodeId"] for k, m in match_by_title(
+        [{"season": 9, "number": n, "name": name} for n, name in enumerate(names, 1)], sonarr, tmdb).items()}
+    dated = lambda name: [{"names": [name], "air_date": "2020-01-08", "season": 1, "number": 2}]  # to episode 2's day
+    # a one-story name that is only like Sonarr's own title is still the episode TMDB names, when its own is elsewhere
+    ward = [ep(1, "On the Psych Ward", "2020-01-01"), ep(2, "Episode 2", "2020-01-08")]
+    assert got(["On the Psych Ward", "Back on the Psych Ward"], ward, dated("Back in the Psych Ward")) == {"S09E01": 1, "S09E02": 2}
+    # TMDB dates one episode's very title to another: that other is not found by it, in any order of its stories
+    shift = [ep(1, "Night Shift/Mobbed", "2020-01-01"), ep(2, "Something Else", "2020-01-08")]
+    assert got(["Night Shift / Mobbed", "Mobbed / Night Shift"], shift, dated("Night Shift/Mobbed")) == {"S09E01": 1}
+    # a title only TMDB gives is the episode's: it keeps it from the same stories in another order
+    assert got(["Night Shift / Mobbed", "Mobbed / Night Shift"], shift[1:], dated("Night Shift/Mobbed")) == {"S09E01": 2}
+
+
 def test_many_stories_that_are_alike_are_paired_without_trying_every_order():
     import time
     from unshacklarr.web import same_stories, same_title
