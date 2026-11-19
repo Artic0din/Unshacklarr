@@ -3175,8 +3175,12 @@ def test_a_title_added_by_its_stories_does_not_hand_its_old_number_to_another_ep
     moved = {9: {"service": "S01E04", "name": "Night Shift / Mobbed", "match": "title", "same": True}}
     assert web.probe_series({"service": "BINGE", "title": "x"}, 1)["available"] == moved
     # unless an episode was given that number by hand: then all stays as it was found before, and the title adds nothing
-    by_hand = web.probe_series({"service": "BINGE", "title": "x", "episode_map": {"S01E05": "S01E04"}}, 1)["available"]
-    assert by_hand == {4: {"service": "S01E04", "name": "Night Shift / Mobbed"}, 5: {"service": "S01E04", "name": "Night Shift / Mobbed"}}
+    by_hand = web.probe_series({"service": "BINGE", "title": "x", "episode_map": {"S01E05": "S01E04"}}, 1)
+    assert by_hand["available"] == {4: {"service": "S01E04", "name": "Night Shift / Mobbed"}, 5: {"service": "S01E04", "name": "Night Shift / Mobbed"}}
+    assert by_hand["titled"] == []  # the title that was not added is not told as one
+    # nor does it move an episode whose own number was given by hand
+    own = web.probe_series({"service": "BINGE", "title": "x", "episode_map": {"S01E09": "S01E07"}}, 1)
+    assert own["available"] == {4: {"service": "S01E04", "name": "Night Shift / Mobbed"}} and own["titled"] == []
 
 
 def test_the_schedule_knows_each_episodes_latest_download(tmp_path, monkeypatch):
