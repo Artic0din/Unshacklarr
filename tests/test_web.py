@@ -6500,6 +6500,15 @@ def test_the_most_exact_evidence_names_the_episode():
     by_date = [{"names": ["Mobbed/Night Shift"], "air_date": "2012-01-02", "season": 9, "number": 9}]
     assert found("Night Shift / Mobbed", [ep(1, "Episode 1"), ep(2, "Episode 2")], by_id) == {"S03E09": 1}
     assert found("Night Shift / Mobbed", [ep(1, "Episode 1"), ep(2, "Episode 2")], by_date) == {"S03E09": 2}
+    # a part marker written with spaces is not a join: "(1 / 2)" is "(1/2)"
+    assert stories("Night Shift (1 / 2) / Mobbed") == stories("Night Shift (1/2)/Mobbed") != ()
+    assert found("Night Shift (1 / 2) / Mobbed", [ep(1, "Mobbed / Night Shift (1/2)")]) == {"S03E09": 1}
+    # an own title that is only alike does not outrank the episode a TMDB title names exactly (iPlayer's Psych Ward): the
+    # service lists both, each is its own episode
+    ward = [ep(1, "On the Psych Ward"), ep(2, "Episode 2")]
+    dated = [{"names": ["Back on the Psych Ward"], "air_date": "2012-01-02", "season": 9, "number": 9}]
+    both = match_by_title([{"season": 1, "number": 17, "name": "On the Psych Ward"}, {"season": 1, "number": 18, "name": "Back on the Psych Ward"}], ward, dated)
+    assert {k: m["episodeId"] for k, m in both.items()} == {"S01E17": 1, "S01E18": 2}
     # a title of one story is found as before: an exact title does not outrank another that holds it (a special's)
     assert found("Cap-Vert", [ep(1, "Cap-Vert"), ep(2, "Spéciale - Cap-Vert")]) == {}
 

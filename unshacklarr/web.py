@@ -4131,20 +4131,25 @@ def usable_title(text: str | None) -> str:
     return re.sub(r"^(e|ep|episode|page|chapter|chapitre|capitulo|kapitel) ?\d+ (?=\w)", "", plain)
 
 
-STORIES = re.compile(r"(?<!\d)/|/(?!\d)")  # a slash joins stories, save between two digits ("24/7", "(1/2)")
+NUMBERS_SLASH = re.compile(r"(?<=\d)\s*/\s*(?=\d)")  # a slash between two digits joins no stories: "24/7", "(1/2)", "(1 / 2)"
+
+
+def story_parts(text: str | None) -> list[str]:
+    """A title cut at the slashes that join its stories."""
+    return [part.replace("\0", "/") for part in NUMBERS_SLASH.sub("\0", text or "").split("/")]
 
 
 def first_story(text: str | None) -> str:
     """The first of the stories a title joins with "/", plain: 9Now's "Ep 166 Pretty Little Penny/Passed in Not
     Passed Out" is "pretty little penny"; "" for a title of one story ("24/7" and "(1/2)" join none)."""
-    parts = STORIES.split(text or "")
+    parts = story_parts(text)
     return usable_title(parts[0]) if len(parts) > 1 else ""
 
 
 def stories(text: str | None) -> tuple[str, ...]:
     """The stories a title joins with "/", plain: ("night shift", "mobbed") for "Night Shift / Mobbed"; () for a title
     of one story."""
-    plain = tuple(usable_title(part) for part in STORIES.split(text or ""))
+    plain = tuple(usable_title(part) for part in story_parts(text))
     return plain if len(plain) > 1 and all(plain) else ()  # a part that names no story ("Episode 3"): its stories are not known
 
 
@@ -4294,25 +4299,31 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
     for story, id_ in told:
         by_stories.setdefault(tuple(sorted(story)), []).append((story, id_))
 
-    def fits(name: str, mine: tuple[str, ...]) -> tuple[set[int], set[int]]:
-        """The Sonarr episodes a service title fits, and those among them Sonarr itself titles so. A title of one
-        story fits as it always did (same_title). Stories are found at the first level that finds any, so a spelling
-        that is only alike never replaces an exact one."""
+    def fits(name: str, mine: tuple[str, ...]) -> set[int]:
+        """The Sonarr episodes a service title fits. A title of one story fits as it always did (same_title). Stories
+        are found at the first level that finds any, so a spelling that is only alike never replaces an exact one.
+        Of those that fit, one that has the name only through a TMDB date gives way to one Sonarr itself titles so
+        (#321), unless TMDB's title is the name exactly and Sonarr's is only alike."""
         if not mine:
-            hits = [(id_, (other, id_) in own_named) for other, id_ in named if same_title(name, other)]
-            return {id_ for id_, _ in hits}, {id_ for id_, own in hits if own}
-        levels = (
-            lambda: [(id_, pair in own_named) for pair in by_name.get(name, []) for id_ in [pair[1]]],
-            lambda: [(id_, (story, id_) in own_told) for story, id_ in by_stories.get(tuple(sorted(mine)), [])],
-            lambda: [(id_, (other, id_) in own_named) for other, id_ in named if same_title(name, other)]
-            + [(id_, (story, id_) in own_told) for story, id_ in told if same_stories(mine, story, same_title)],
-            lambda: [(id_, (story, id_) in own_told) for story, id_ in told if same_stories(mine, story, spelt_alike)],
-        )
-        # an episode whose very title is another of the service's is that one, however its stories are ordered here:
-        # both claiming it would lose it for both
-        elsewhere = lambda id_: bool(exact.get(id_)) and name not in exact[id_]
-        hits = next((found for level in levels if (found := [hit for hit in level() if not elsewhere(hit[0])])), [])
-        return {id_ for id_, _ in hits}, {id_ for id_, own in hits if own}
+            hits = [(id_, (other, id_) in own_named, other == name) for other, id_ in named if same_title(name, other)]
+        else:
+            levels = (
+                lambda: [(id_, pair in own_named) for pair in by_name.get(name, []) for id_ in [pair[1]]],
+                lambda: [(id_, (story, id_) in own_told) for story, id_ in by_stories.get(tuple(sorted(mine)), [])],
+                lambda: [(id_, (other, id_) in own_named) for other, id_ in named if same_title(name, other)]
+                + [(id_, (story, id_) in own_told) for story, id_ in told if same_stories(mine, story, same_title)],
+                lambda: [(id_, (story, id_) in own_told) for story, id_ in told if same_stories(mine, story, spelt_alike)],
+            )
+            # an episode whose very title is another of the service's is that one, however its stories are ordered
+            # here: both claiming it would lose it for both
+            elsewhere = lambda id_: bool(exact.get(id_)) and name not in exact[id_]
+            level = next((found for level in levels if (found := [hit for hit in level() if not elsewhere(hit[0])])), [])
+            hits = [(id_, own, True) for id_, own in level]  # one level: all as exact as each other
+        ids, owned = {id_ for id_, _, _ in hits}, {id_ for id_, own, _ in hits if own}
+        if len(ids) > 1 and owned:
+            own_exact = any(own and same for _, own, same in hits)
+            ids = owned | {id_ for id_, _, same in hits if same and not own_exact}
+        return ids
 
     exact: dict[int, set] = {}  # a Sonarr episode -> the service's names that are its very title
     for title, id_ in named:
@@ -4323,9 +4334,7 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
         name = usable_title(t.get("name"))
         if not name or len(keys_by_name[name]) > 1:
             continue
-        ids, own = fits(name, stories(t.get("name")))
-        if len(ids) > 1 and own:  # the episode Sonarr itself gives the name outranks one TMDB gives it by a date (#321)
-            ids = ids & own
+        ids = fits(name, stories(t.get("name")))
         if len(ids) > 1:
             # one that has its very title elsewhere on the service is that one, not this: iPlayer's "Back on the
             # Psych Ward" fits Sonarr's "Back in the Psych Ward" and "On the Psych Ward", the latter its own S01E17
