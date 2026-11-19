@@ -1,6 +1,8 @@
-"""Real series, as a real Sonarr and their services had them on 2026-10-13: the service's listing, Sonarr's episodes and
-the titles TMDB and TheTVDB (SkyHook) gave, with how each Sonarr episode is found on the service. Every title-matching
-rule meets them all: a new rule that breaks one of them fails here first. US series mostly, Koh-Lanta and a French one.
+"""Real series, as a real Sonarr and their services had them on 2026-10-13 (the Australian ones on 2026-11-19): the
+service's listing, Sonarr's episodes and the titles TMDB and TheTVDB (SkyHook) gave, with how each Sonarr episode is
+found on the service. Every title-matching rule meets them all: a new rule that breaks one of them fails here first.
+US series mostly, Koh-Lanta and a French one, and one series each on 9Now, 7plus, ABC iview, SBS On Demand, Stan and
+Binge (10's listing needs an interactive sign-in, so it has none).
 To add one: capture its inputs the same way (tools/corpus-capture.py, inside a running Unshacklarr) and check the result by hand."""
 import json
 from pathlib import Path
