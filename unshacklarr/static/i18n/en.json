@@ -867,6 +867,7 @@
  "Each episode stays in Activity, Waiting in downloads, until you import or delete it. It is never deleted automatically.": [],
  "Each episode's answer is kept up to this percentage less than Ask again after, a different amount for each episode, so episodes checked on the same day are not all asked about again on the same day. 0: no spreading.": [],
  "Each series' own": [],
+ "Each stage that ran passed.": [],
  "Earlier releases": [],
  "Earlier versions": [],
  "Earlier versions…": [],
@@ -4619,5 +4620,46 @@
  ],
  "Check the cookies for {0}": [
   "svcName(m.service)"
- ]
+ ],
+ "A check is already running": [],
+ "Daily check failed {0}": [
+  "when"
+ ],
+ "Daily check passed {0}": [
+  "when"
+ ],
+ "Daily check: not run yet": [],
+ "Daily check: sign-in failed {0}": [
+  "when"
+ ],
+ "Listing": [],
+ "No answer within {0} s": [
+  "STAGE_TIMEOUT"
+ ],
+ "No title was listed to ask the tracks of": [],
+ "Search results: {0}": [
+  "search.count"
+ ],
+ "Search results: {0}, series not among them": [
+  "search.count"
+ ],
+ "The service listed no titles": [],
+ "{0} failed its daily check": [
+  "tag"
+ ],
+ "{0} passes its daily check again": [
+  "tag"
+ ],
+ "{0} has no video track": [
+  "code"
+ ],
+ "Daily check skipped: relayed through another server": [],
+ "Daily check skipped: its programmes are found one episode at a time": [],
+ "Not run: the series' name is unknown": [],
+ "Not run: the service has no search": [],
+ "A download is running: check again when it ends": [],
+ "Unexpected {0} in the reply": [
+  "what"
+ ],
+ "search results": []
 }

@@ -1993,6 +1993,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .sv-table .sv-label { justify-self: start; padding: 2px 9px; border-radius: 10px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
 .sv-label[data-tone="ok"] { color: var(--ok); background: var(--ok-tint); }
 .sv-label[data-tone="bad"] { color: var(--err); background: var(--err-tint); }
+.sv-check[data-tone="bad"] { color: var(--err); }
 .sv-signin { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; align-items: center; column-gap: 12px; }
 .sv-signin > .sv-ctl { margin-top: 0; }
 .sv-signin > .sv-ctl:has(input) { grid-column: 1 / -1; margin-top: 6px; }  /* a code to type: its own line */

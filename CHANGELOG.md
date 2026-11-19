@@ -41,6 +41,10 @@ Every change worth knowing, newest first. The format follows
   still fails, the job pauses and you are told, instead of failing every episode left.
 
 **🎧 Services and languages**
+- **A daily check of every service.** Once a day, and while no download runs, each service a series uses is searched,
+  its series listed, and the tracks of its latest episode asked for, through Unshackle only (no download, no licence).
+  A stage that fails is told once in the bell, and again when it recovers; a stale sign-in shows as a sign-in failure.
+  The last result of each service is in Settings › Services, which also has Check now. (#319)
 - **orig in the accepted audio languages.** Each series' original language as Sonarr gives it, so "orig, fr" works for
   every series at once. In Settings › Download options.
 - **Clear one service's cache.** In Settings › Per service, without logging every other service out. Unshacklarr

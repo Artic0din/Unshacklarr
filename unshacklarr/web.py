@@ -39,7 +39,7 @@ import requests
 import yaml
 from aiohttp import web
 
-from unshacklarr import __version__, cdm, cookies, i18n, offsite, options
+from unshacklarr import __version__, cdm, cookies, i18n, offsite, options, servicecheck
 from unshacklarr.files import CREDENTIALS, PRIVATE, no_credentials, read_json, write_atomic
 from unshacklarr import sync as sonarr_sync  # the schedule shows the very downloads the sync will ask for
 from unshacklarr.backend import UnshackleError
@@ -4885,6 +4885,51 @@ async def watch_service_lists():
         await asyncio.sleep(3000)
 
 
+async def in_daemon_thread(work):
+    """work()'s result, from a thread the shutdown does not wait for (to_thread's are joined: a check of every
+    service, stage timeouts and all, would hold the exit)."""
+    loop, done = asyncio.get_running_loop(), asyncio.get_running_loop().create_future()
+
+    def settle(result, error) -> None:
+        if not done.done():
+            done.set_exception(error) if error else done.set_result(result)
+
+    def run() -> None:
+        try:
+            result, error = work(), None
+        except Exception as e:
+            result, error = None, e
+        try:
+            loop.call_soon_threadsafe(settle, result, error)
+        except RuntimeError:
+            pass  # the loop closed meanwhile: nobody waits for the answer
+    threading.Thread(target=run, name="service-check", daemon=True).start()
+    return await done
+
+
+async def watch_service_checks():
+    """Once a day, the check of each service (servicecheck.run_if_due)."""
+    await asyncio.sleep(600)  # not at start: Sonarr and the services settle first
+    while True:
+        wait = servicecheck.RETRY_AFTER
+        try:
+            if read_config()["auth"] and sonarr_sync.SONARR:
+                wait = await in_daemon_thread(servicecheck.run_if_due)
+        except Exception as e:
+            print(f"Service check: {type(e).__name__}: {no_credentials(e)}", flush=True)
+        await asyncio.sleep(wait)
+
+
+async def service_checks(_):
+    return web.json_response(servicecheck.state())
+
+
+async def start_service_check(_):
+    if reason := servicecheck.start():
+        raise web.HTTPConflict(text=reason)
+    return web.json_response(servicecheck.state(), status=202)
+
+
 async def probe(request):
     body = await json_object(request)
     show = body.get("show") or {}
@@ -6980,6 +7025,7 @@ app.cleanup_ctx.append(background(watch_prechecks))
 app.cleanup_ctx.append(background(watch_upgrades))
 app.cleanup_ctx.append(background(watch_upgrade_checks))
 app.cleanup_ctx.append(background(watch_service_lists))
+app.cleanup_ctx.append(background(watch_service_checks))
 app.cleanup_ctx.append(background(watch_updates))
 app.cleanup_ctx.append(background(watch_backups))
 app.cleanup_ctx.append(background(watch_queue))
@@ -7036,6 +7082,8 @@ app.add_routes([
     web.post("/api/sonarr/test", test_sonarr),
     web.post("/api/unshackle/test", test_unshackle),
     web.get("/api/status", status),
+    web.get("/api/service-checks", service_checks),
+    web.post("/api/service-checks", start_service_check),
     web.post("/api/unshackle/restart", restart_unshackle),
     web.get("/api/unshackle/log", unshackle_log),
     web.post(r"/api/unshackle/maintenance/{action}", unshackle_maintenance),

@@ -915,6 +915,7 @@ const source = [
   pick(services, /^async function cancelServiceAuthentication\(.*?^\}/ms),
   pick(services, /^function signInCounts\(.*?^\}/ms),
   pick(services, /^function signInSummary\(.*?^\}/ms),
+  pick(services, /^const CHECK_STAGES = .*?;$/m),
   pick(services, /^const SERVICE_COLUMNS = .*?;$/m),
   pick(services, /^let servicesCookies = .*?;/m),
   pick(services, /^let servicesDrawn = .*?;/m),
@@ -928,6 +929,8 @@ const source = [
   pick(services, /^function paintServicesBadge\(.*?^\}/ms),
   pick(services, /^let servicesCookiesAsked = .*$/m),
   pick(services, /^function loadServiceCookies\(.*?^\}/ms),
+  pick(services, /^async function pollServiceCheck\(.*?^\}/ms),
+  pick(services, /^\$\("#sv-check"\)\.onclick = .*?^\};/ms),
   pick(schedule, /^async function refreshBusy\(.*?^\}/ms),
   pick(schedule, /^async function refreshHealth\(.*?^\}/ms),
   pick(schedule, /^function renderHealth\(.*?^\}/ms),
@@ -957,6 +960,7 @@ const nodes = {
   "#sv-folder": new FakeNode(),
   "#sv-note": new FakeNode(),
   "#nav-busy": new FakeNode(),
+  "#sv-check": new FakeNode("button", { disabled: false }),
 };
 const healthButtons = Object.fromEntries(["unshackle", "sonarr"].map((name) => {
   const dot = new FakeNode();
@@ -1193,10 +1197,30 @@ const promptState = (input) => {
       HULU: { service: "HULU", backend: "", state: "needs_user_action" },
       "HULU@vpn": { service: "HULU", backend: "vpn", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
       OPEN: { service: "OPEN", backend: "", state: "anonymous" },
+      FALL: { service: "FALL", backend: "", state: "anonymous" },
+      PROG: { service: "PROG", backend: "", state: "anonymous" },
+      GONE: { service: "GONE", backend: "", state: "anonymous" },
+      MOVED: { service: "MOVED", backend: "", state: "anonymous" },
+      "FAR@vpn": { service: "FAR", backend: "vpn", state: "anonymous" },
     };
-    box.S.authenticationMethods = { HULU: ["cookies", "credentials"], "HULU@vpn": ["cookies"], OPEN: [], ATVP: ["cookies"], ZONE: ["cookies"] };
+    box.S.authenticationMethods = { HULU: ["cookies", "credentials"], "HULU@vpn": ["cookies"], OPEN: [], ATVP: ["cookies"], ZONE: ["cookies"], FALL: [], "FAR@vpn": [] };
     box.S.authenticationSetups = [];
-    box.S.config.series = { 1: { service: "HULU" }, 2: { service: "HULU" }, 3: { service: "OPEN" } };
+    box.S.config.series = { 1: { service: "HULU" }, 2: { service: "HULU" }, 3: { service: "OPEN" }, 4: { service: "EXTRA" }, 5: { service: "ATVP", fallback: { service: "FALL" } },
+      6: { service: "PROG", programmes: true }, 7: { service: "MOVED" }, 8: { service: "FAR" } };
+    box.S.serviceChecks = { services: {
+      MOVED: { checked: "2026-11-19T03:00:00Z", ok: true, failed: [], backend: "vpn", stages: { search: { ok: true, count: 1, found: true },
+        list: { ok: true, count: 3 }, tracks: { ok: true, episode: "S01E03", video: 1, audio: 1 } } },
+      PROG: { checked: "2026-11-19T03:00:00Z", ok: null, failed: [], skipped: "programmes", stages: {} },
+      FAR: { checked: "2026-11-19T03:00:00Z", ok: null, failed: [], skipped: "relay", backend: "vpn", stages: {} },
+      GONE: { checked: "2026-11-18T03:00:00Z", ok: false, failed: ["list"], stages: { search: { ok: true, count: 1, found: true },
+        list: { ok: false, code: "ERROR", message: "boom" }, tracks: { ok: false, code: "NOT_RUN", message: "none" } } },
+      FALL: { checked: "2026-11-19T03:00:00Z", ok: true, failed: [], stages: { search: { ok: true, count: 2, found: true }, list: { ok: true, count: 3 },
+        tracks: { ok: true, episode: "S01E03", video: 1, audio: 1 } } },
+      OPEN: { checked: "2026-11-19T03:00:00Z", ok: null, failed: [], skipped: "relay", stages: {} },
+      HULU: { checked: "2026-11-19T03:00:00Z", ok: false, failed: ["tracks"], stages: {
+        search: { ok: true, count: 4, found: false }, list: { ok: true, count: 9 }, tracks: { ok: false, code: "AUTH_FAILED", message: "Sign-in expired" } } },
+      EXTRA: { checked: "2026-11-19T03:00:00Z", ok: true, failed: [], stages: { search: { ok: null, code: "SKIPPED", message: "Not run: the series' name is unknown" },
+        list: { ok: true, count: 3 }, tracks: { ok: true, episode: "S01E03", video: 1, audio: 0 } } } } };
     const now = Math.floor(Date.now() / 1000);
     vm.runInContext(`servicesCookies = { folder: "/cookies", files: {
       HULU: [{ profile: "", count: 1, expired: true, expires: ${now - 86400}, updated: ${now} }, { profile: "kids", count: 3, expires: ${now + 90 * 86400}, updated: ${now} }],
@@ -1213,6 +1237,31 @@ const promptState = (input) => {
         signIn: words(cells[1]), cookies: words(cells[2]), used: words(cells[3]), attention: !!row.dataset.attention };
     });
     console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className }));
+  }
+  if (scenario === "check_now") {
+    const asked = [], timers = [];
+    const passed = { checked: "2026-11-19T03:00:00Z", ok: true, failed: [], stages: { search: { ok: true, count: 2, found: true }, list: { ok: true, count: 3 },
+      tracks: { ok: true, episode: "S01E03", video: 1, audio: 1 } } };
+    const answers = [{ running: true, services: {} }, { running: true, services: {} }, { running: false, services: { HULU: passed } }];
+    box.api = async (path, options = {}) => { asked.push(`${options.method || "GET"} ${path}`); return answers.shift(); };
+    box.setTimeout = (fn) => { timers.push(fn); };
+    box.S.authentication = { HULU: { service: "HULU", backend: "", state: "anonymous" } };
+    box.S.authenticationMethods = { HULU: [] };
+    box.S.authenticationSetups = [];
+    box.S.config.series = { 1: { service: "HULU" } };
+    vm.runInContext(`servicesCookies = { folder: "/cookies", files: {} }`, box);
+    const button = nodes["#sv-check"], shown = () => findAll(nodes["#sv-list"], (node) => node.className === "sv-check").map((node) => node.textContent);
+    await button.onclick();
+    const clicked = { disabled: button.disabled, asked: [...asked], timers: timers.length };
+    await timers.shift()();
+    const running = { disabled: button.disabled, timers: timers.length, shown: shown() };
+    await timers.shift()();
+    const done = { disabled: button.disabled, asked: [...asked], timers: timers.length, shown: shown() };
+    let told = "";
+    box.toast = (message) => { told = message; };
+    box.api = async () => { throw new Error("A download is running: check again when it ends"); };
+    await button.onclick();
+    console.log(JSON.stringify({ clicked, running, done, refused: { disabled: button.disabled, told, timers: timers.length } }));
   }
   if (scenario === "validated_cookie_only_missing") {
     box.S.authentication = {
@@ -1413,9 +1462,11 @@ def test_cancelled_authentication_is_rendered_until_the_next_refresh():
 def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     result = run_authentication_ui("cookies_per_service")
     rows = {row["name"]: row for row in result["rows"]}
-    assert [row["name"] for row in result["rows"]] == ["HULU", "OPEN", "ATVP", "EXTRA", "HULU · vpn", "ZONE"]
+    assert [row["name"] for row in result["rows"]] == ["HULU", "ATVP", "EXTRA", "FAR · vpn", "MOVED", "OPEN", "PROG", "FALL", "GONE", "HULU · vpn", "ZONE"]
     assert rows["HULU"] == {
-        "name": "HULU", "label": "Sign-in needed", "tone": "bad", "signIn": ["Sign-in needed", "Sign in again"], "attention": True, "used": ["2 series", "Show series"],
+        "name": "HULU", "label": "Sign-in needed", "tone": "bad", "attention": True, "used": ["2 series", "Show series"],
+        # the daily check: its result, the stage that failed, and the search shown (not alerted) even when it missed the series
+        "signIn": ["Sign-in needed", "Sign in again", "Daily check: sign-in failed now", "Tracks: Sign-in expired", "Search results: 4, series not among them"],
         "cookies": ["HULU.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
                     "kids.txt", "Valid · 90 days left", "3 cookies · updated today", "Replace", "Delete"],
     }
@@ -1425,14 +1476,37 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
         "cookies": ["—", "Managed on that server", "Check"],
     }
     # a cookie-only sign-in only tests its cookie file: no sign-in button, a Check beside the file
-    assert rows["ATVP"]["signIn"] == ["Not checked yet"] and rows["ATVP"]["tone"] == ""
+    assert rows["ATVP"]["signIn"][0] == "Not checked yet" and rows["ATVP"]["tone"] == ""
     assert rows["ATVP"]["cookies"] == ["ATVP.txt", "Valid · 90 days left", "15 cookies · updated today", "Check", "Replace", "Delete"]
     # several files: the check uses its series' profile, so Check sits under them all, not beside one
     assert rows["ZONE"]["cookies"] == ["ZONE.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
                                        "kids.txt", "Valid · 90 days left", "3 cookies · updated today", "Replace", "Delete", "Check"]
     assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 90 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series", "Show series"]
+    assert rows["OPEN"]["signIn"][-1] == "Daily check skipped: relayed through another server"  # a relay-only service has no stages
+    assert rows["EXTRA"]["signIn"][-2:] == ["Not checked yet", "Daily check passed now"]  # a skipped search shows no line
+    assert rows["PROG"]["signIn"][-1] == "Daily check skipped: its programmes are found one episode at a time"
+    assert rows["ATVP"]["signIn"][-1] == "Daily check: not run yet"
+    # a service only a fallback uses counts no series, yet it is checked: its result shows; unchecked, it shows nothing
+    assert rows["FALL"]["used"] == ["No series"] and rows["FALL"]["signIn"][-2:] == ["Daily check passed now", "Search results: 2"]
+    assert not [line for line in rows["ZONE"]["signIn"] if line.startswith("Daily check")]
+    # a result kept from another backend (the service was moved to this one since) is not this backend's
+    assert rows["MOVED"]["signIn"][-1] == "Daily check: not run yet"
+    # and one kept on this very backend shows on its row, a skipped one too
+    assert rows["FAR · vpn"]["signIn"][-1] == "Daily check skipped: relayed through another server"
+    # the last series of a service is gone: its kept result is no longer shown (the next run drops it)
+    assert rows["GONE"]["used"] == ["No series"] and not [line for line in rows["GONE"]["signIn"] if "check" in line or "Listing" in line]
     assert result["state"] == "sx-state down"
+
+
+def test_check_now_starts_a_run_and_follows_it_until_it_ends():
+    result = run_authentication_ui("check_now")
+    assert result["clicked"] == {"disabled": True, "asked": ["POST /api/service-checks"], "timers": 1}
+    assert result["running"] == {"disabled": True, "timers": 1, "shown": ["Daily check: not run yet"]}  # asked again while it runs
+    assert result["done"] == {"disabled": False, "asked": ["POST /api/service-checks", "GET /api/service-checks", "GET /api/service-checks"],
+                              "timers": 0, "shown": ["Daily check passed now", "Search results: 2"]}
+    # refused (a download runs, or a check already does): said, and the button is free again
+    assert result["refused"] == {"disabled": False, "told": "A download is running: check again when it ends", "timers": 0}
 
 
 def test_validated_cookie_only_service_still_reports_a_deleted_cookie_file():
