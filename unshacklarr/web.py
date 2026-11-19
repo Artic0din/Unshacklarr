@@ -4233,7 +4233,20 @@ def same_stories(a: tuple[str, ...], b: tuple[str, ...], like) -> bool:
     (`like` says when two stories are one), none answering two."""
     if len(a) != len(b):
         return False
-    return not a or any(like(a[0], story) and same_stories(a[1:], b[:i] + b[i + 1:], like) for i, story in enumerate(b))
+    answers: dict[int, int] = {}  # a story of b -> the story of a it answers
+
+    def place(i: int, tried: set[int]) -> bool:
+        """Give a's story i one of b's: a free one, or one whose story of a can take another. Each of b's is tried
+        once a story, not once an order: many stories alike cost their square, not their factorial."""
+        for j, story in enumerate(b):
+            if j not in tried and like(a[i], story):
+                tried.add(j)
+                if j not in answers or place(answers[j], tried):
+                    answers[j] = i
+                    return True
+        return False
+
+    return all(place(i, set()) for i in range(len(a)))
 
 
 def spelt_alike(a: str, b: str) -> bool:

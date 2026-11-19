@@ -6538,6 +6538,17 @@ def test_a_tmdb_date_that_loses_a_title_does_not_keep_its_episode_from_another_n
     assert {k: m["episodeId"] for k, m in match_by_title(service, sonarr, tmdb).items()} == {"S09E01": 1, "S09E02": 2}
 
 
+def test_many_stories_that_are_alike_are_paired_without_trying_every_order():
+    import time
+    from unshacklarr.web import same_stories, same_title
+    alike, start = ("night watch",) * 10, time.monotonic()
+    assert not same_stories(alike + ("alpha",), alike + ("zulu bravo",), same_title)
+    assert time.monotonic() - start < 1  # was 3.6 s, ten times more for each story added
+    # each story answers one of the other title, none two: the pairing may have to be undone to find it
+    like = lambda a, b: (a, b) in {("x", "p"), ("x", "q"), ("y", "p")}
+    assert same_stories(("x", "y"), ("p", "q"), like) and not same_stories(("x", "y"), ("p", "p"), lambda a, b: a == "x")
+
+
 def test_tvdbs_title_for_the_very_episode_outranks_a_tmdb_date():
     from unshacklarr.web import match_by_title
     # Sonarr's title says nothing ("Episode 1"); TVDB's website names that very episode, TMDB dates the name to another
