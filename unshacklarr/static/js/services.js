@@ -127,8 +127,10 @@ function serviceModels() {
     const selected = set && inventory.includes(`${service}@${set}`) ? set
       : inventory.includes(service) ? "" : (inventory.find((k) => k.startsWith(`${service}@`)) || "").split("@")[1] || "";
     const used = backend === selected ? seriesOf(service) : null;
-    // the daily check runs on the backend that downloads it; a service only a fallback uses counts no series, yet is checked
-    const check = backend !== selected ? null : S.serviceChecks?.services?.[service] || null;
+    // the daily check runs on the backend that downloads it; a service only a fallback uses counts no series, yet is
+    // checked; one no series uses any more keeps no result to show (the next run drops it)
+    const checked = backend === selected && Object.values(S.config.series || {}).some((c) => usesService(c, service) || c?.fallback?.service === service);
+    const check = checked ? S.serviceChecks?.services?.[service] || null : null;
     const cookieless = status.state === "anonymous" || (listed && methods.length > 0 && !methods.includes("cookies"));  // an empty list: not known
     // no cookie file is fine when none is needed, or a confirmed sign-in has another way in (credentials,
     // pairing): a cookie-only service confirmed before its last file went still needs one

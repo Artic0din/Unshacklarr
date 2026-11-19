@@ -492,6 +492,17 @@ def test_a_check_on_demand_waits_for_the_downloads_like_the_daily_one(check, mon
     assert check.serve.calls == [] and check.state()["running"] is False  # nothing started, nothing left locked
 
 
+def test_a_run_that_cannot_start_frees_its_reservation_and_is_not_called_a_download(check, monkeypatch):
+    def no_thread(self):
+        raise RuntimeError("can't start new thread")
+    monkeypatch.setattr(check.threading.Thread, "start", no_thread)
+
+    with pytest.raises(RuntimeError, match="can't start new thread"):
+        check.start()
+
+    assert check.state()["running"] is False  # the next Check now is not told one is running
+
+
 def test_a_dead_series_does_not_keep_the_service_failing_for_good(check, tmp_path):
     several(tmp_path, *[(tvdb, "") for tvdb in range(111, 122)])  # eleven series: the first ten refused, the eleventh plays
     refuse(check, *range(111, 121))

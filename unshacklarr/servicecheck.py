@@ -285,13 +285,14 @@ def start() -> str:
     """A check on demand, in the background, under the daily run's gate. "" when it started, else why it did not."""
     if not _running.acquire(blocking=False):
         return "A check is already running"
-    try:
-        if downloading():
-            raise RuntimeError
-        threading.Thread(target=run_check, kwargs={"reserved": True}, name="service-check", daemon=True).start()
-    except RuntimeError:
+    if downloading():
         _running.release()
         return "A download is running: check again when it ends"
+    try:
+        threading.Thread(target=run_check, kwargs={"reserved": True}, name="service-check", daemon=True).start()
+    except RuntimeError:  # no thread to be had: said as it is, and the reservation freed
+        _running.release()
+        raise
     return ""
 
 
