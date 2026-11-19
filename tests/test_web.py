@@ -6461,9 +6461,10 @@ def test_stories_joined_by_a_slash_are_found_in_any_order_and_spelling():
     three = [{"id": 6, "seasonNumber": 1, "episodeNumber": 8, "title": "Hells Angels/Fishy Drivers/A Race Against Time", "airDate": "2012-01-01"},
              {"id": 7, "seasonNumber": 1, "episodeNumber": 9, "title": "Hells Angels/Fishy Drivers", "airDate": "2012-01-08"}]
     assert found("Fishy Drivers/A Race Against Time/Hells Angels", three) == {"S03E09": 6}  # three stories, in any order
-    # the first story of the service's name names an older episode (RBT), yet the episode titled with both, reversed, is the one
+    # the first story of the service's name names an older episode (RBT): it stays the one, as before, though another
+    # is titled with both stories the other way round. The stories only add to what the whole titles find
     older = [*RBT_SONARR, {"id": 87030, "seasonNumber": 22, "episodeNumber": 1, "title": "Pretty Little Penny/Passed in Not Passed Out", "airDate": "2027-02-04"}]
-    assert found("Ep 166 Passed in Not Passed Out/Pretty Little Penny", older) == {"S03E09": 87030}  # not the 2024 S19E07
+    assert found("Ep 166 Passed in Not Passed Out/Pretty Little Penny", older) == {"S03E09": 86998}
     digits = [{"id": 8, "seasonNumber": 1, "episodeNumber": 1, "title": "Night Shift/The 24/7 Diner", "airDate": "2012-01-01"}]
     assert found("The 24/7 Diner / Night Shift", digits) == {"S03E09": 8}  # the 24/7 is one story, not two
     assert found("Night Shift/24/7", digits) == {}  # no slash here joins two stories: it is one title, and not that one
@@ -6552,6 +6553,22 @@ def test_a_title_tmdb_dates_to_an_episode_is_not_its_when_another_is_itself_titl
     assert got(["Night Shift / Mobbed", "Mobbed / Night Shift"], shift, dated("Night Shift/Mobbed")) == {"S09E01": 1}
     # a title only TMDB gives is the episode's: it keeps it from the same stories in another order
     assert got(["Night Shift / Mobbed", "Mobbed / Night Shift"], shift[1:], dated("Night Shift/Mobbed")) == {"S09E01": 2}
+
+
+def test_the_story_rules_never_replace_what_the_whole_title_finds():
+    from unshacklarr.web import match_by_title
+    ep = lambda id_, title, date=None: {"id": id_, "seasonNumber": 1, "episodeNumber": id_, "title": title, "airDate": date}
+    got = lambda names, sonarr, tmdb=(): {k: m["episodeId"] for k, m in match_by_title(
+        [{"season": 9, "number": n, "name": name} for n, name in enumerate(names, 1)], sonarr, list(tmdb)).items()}
+    # the whole title is like one episode's: a follow-up with the same stories in another order does not contest it
+    assert got(["Night Shift / Mobbed"], [ep(1, "The Night Shift/Mobbed"), ep(2, "Mobbed/Night Shift Revisited")]) == {"S09E01": 1}
+    # a slash with spaces joins stories even between two numbers; only a part marker, "(1 / 2)", joins none
+    assert got(["Flight 182 / 48 Hours"], [ep(1, "Flight 182"), ep(2, "48 Hours")]) == {"S09E01": 1}
+    assert got(["Night Shift (1 / 2) / Mobbed"], [ep(1, "Mobbed/Night Shift (1/2)")]) == {"S09E01": 1}
+    # RBT: TMDB dates the next episode's title to this one's day; the first story still names this one
+    rbt = [ep(1, "Passed in Not Passed Out", "2024-05-01"), ep(2, "Pretty Little Penny", "2026-11-05"), ep(3, "Not Old and Silly", "2026-11-12")]
+    dated = [{"names": ["Not Old and Silly"], "air_date": "2026-11-05", "season": 21, "number": 6}]
+    assert got(["Pretty Little Penny/Passed in Not Passed Out", "Not Old and Silly"], rbt, dated) == {"S09E01": 2, "S09E02": 3}
 
 
 def test_many_stories_that_are_alike_are_paired_without_trying_every_order():
