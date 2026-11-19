@@ -6416,6 +6416,10 @@ def test_two_stories_joined_by_a_slash_are_the_episode_the_first_names():
     assert found("Ep 166 Pretty Little Penny/Passed in Not Passed Out") == {"S05E166": 87018}  # not the 2024 S19E07
     assert found("Ep 166 Passed in Not Passed Out/Pretty Little Penny") == {"S05E166": 86998}  # the first story, whichever
     assert found("Ep 3 Brand New/Pretty Little Penny/Passed in Not Passed Out") == {}  # the first names neither: no guess
+    # an episode Sonarr titles with the whole of it is that one, not an older episode one of its stories names
+    whole = [*RBT_SONARR, {"id": 87030, "seasonNumber": 22, "episodeNumber": 1, "title": "Pretty Little Penny/Passed in Not Passed Out", "airDate": "2027-02-04"}]
+    match = match_by_title([{"season": 22, "number": 1, "name": "Pretty Little Penny/Passed in Not Passed Out"}], whole, [])
+    assert {k: m["episodeId"] for k, m in match.items()} == {"S22E01": 87030}
 
 
 def test_a_year_in_brackets_is_not_a_part():

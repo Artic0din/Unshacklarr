@@ -4250,7 +4250,8 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
     """The service's episodes found in Sonarr by their title: service episode ("S26E11", or "S26E12" for all
     its parts) -> {"episodeId", "name"}. The title is looked for in Sonarr's own titles (TVDB's) and in TMDB's,
     whose air date gives the episode in Sonarr. A title that fits two episodes, or that two of the service's
-    episodes share, finds nothing."""
+    episodes share, finds nothing; but stories joined by "/" that fit several are the episode with the whole
+    title, else the one the first story names."""
     named = [(title, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps).items() for title in titles]
     key = lambda t: f"S{t['season']:02}E{t['number']:02}"
     keys_by_name: dict[str, set] = {}
@@ -4273,8 +4274,9 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
             ids = {i for i in ids if not (exact.get(i) and name not in exact[i])}
         if len(ids) > 1 and (first := first_story(t.get("name"))):
             # stories joined by "/" hold both their titles: the first names the episode (9Now's RBT Ep 166 is
-            # "Pretty Little Penny", its second story a 2024 episode's); none so named, nothing is picked as before
-            ids = {i for title, i in named if title == first and i in ids} or ids
+            # "Pretty Little Penny", its second story a 2024 episode's); none so named, nothing is picked as before.
+            # An episode titled with the whole of it comes first: it is that one, not an older one named by a story
+            ids = next((pick for want in (name, first) if (pick := {i for title, i in named if title == want and i in ids})), ids)
         if len(ids) == 1:
             found.setdefault(key(t), []).append((t.get("part"), ids.pop(), t.get("name")))
     matches = {}
