@@ -4554,7 +4554,11 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         except (requests.RequestException, ValueError) as e:  # SkyHook down or answering otherwise: without them
             print(f"TVDB: no titles for {title}: {type(e).__name__}", flush=True)
     tmdb_eps = tmdb_eps + [{"episodeId": i, "names": [n]} for i, n in local.items()]
-    by_title = match_by_title(service_eps, every, tmdb_eps)  # the service's episodes found by their title, whatever their number
+    found = match_by_title(service_eps, every, tmdb_eps)  # the service's episodes found by their title, whatever their number
+    # the titles its two last rules added are laid over the result at the end: until then every episode is found as
+    # before them, so an added title names its own episode and changes how no other is found
+    added = {key: m for key, m in found.items() if m.get("added")}
+    by_title = {key: m for key, m in found.items() if key not in added}
     titled = {m["episodeId"]: key for key, m in by_title.items()}
     # The service's titles meet ours often enough (a language in common): one that meets none of an episode's
     # titles then says another episode, whatever its number (RMC+'s S01E03 "France" is not TVDB's "Mali").
@@ -4568,12 +4572,9 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
     # ...unless the titles that do meet sit mostly under other numbers: then the numbering differs, not the language
     # (RMC+'s J'irai dormir chez vous: "Mali" is Sonarr's S01E03 and its S17E02), and a title still says another episode
     own_key = {e["id"]: sonarr_sync.service_episode(show, e["seasonNumber"], e["episodeNumber"]) for e in every}
-    # how the listing compares with ours is told by the titles the whole titles found: one added since (by its stories,
-    # or Sonarr's own title) names its episode, and says nothing of how the others are found
-    first = {key: m for key, m in by_title.items() if not m.get("added")}
-    moved = sum(key.split(".")[0] != (own_key.get(m["episodeId"]) or "").split(".")[0] for key, m in first.items())
-    agreeing = not pairs or 2 * sum(same_title(a, b) for a, b in pairs) >= len(pairs) or 2 * moved > len(first)
-    comparable = enough(len(first)) and agreeing
+    moved = sum(key.split(".")[0] != (own_key.get(m["episodeId"]) or "").split(".")[0] for key, m in by_title.items())
+    agreeing = not pairs or 2 * sum(same_title(a, b) for a, b in pairs) >= len(pairs) or 2 * moved > len(by_title)
+    comparable = enough(len(by_title)) and agreeing
     # Sonarr's own titles weigh only in the service's language (French, J'irai dormir), not in English against
     # a French Disney+ (Futurama): there, an episode with no French title from TMDB has nothing to contradict.
     ours = {usable_title(e.get("title")) for e in every} - {""}
@@ -4582,6 +4583,15 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
     own_stories = titles_of(every, tmdb_eps, plain=lambda name: tuple(sorted(stories(name))))  # and its very stories, in any order
     mapped = show.get("episode_map") or {}
     available = {}  # every Sonarr episode the service has, for the Episodes tab: by number and title, by title, by number
+
+    def by_its_title(key: str, match: dict) -> dict:
+        # "same": not merely close (by mj23au, #12); the first of its stories counts as its very title too, and so do
+        # the same stories in another order (stories only alike do not)
+        theirs_name, id_ = match["name"], match["episodeId"]
+        same = bool({usable_title(theirs_name), first_story(theirs_name)} & own_titles.get(id_, set())
+                    or tuple(sorted(stories(theirs_name))) in own_stories.get(id_, set()))
+        return {"service": key, "name": theirs_name, "match": "title", **({"same": True} if same else {})}
+
     # A season of the service the numbering gives another Sonarr season (Koh-Lanta's S34 as MyTF1's S29) is that one's:
     # Sonarr's own S29 (2023) is not asked there by its number
     claimed = {}
@@ -4594,12 +4604,7 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         hit = by_key.get(theirs or "")
         if e["id"] in titled:
             key = titled[e["id"]]
-            # not merely close (by mj23au, #12); the first of its stories counts as its very title too, and so do the
-            # same stories in another order (stories only alike do not)
-            theirs_name = by_title[key]["name"]
-            same = bool({usable_title(theirs_name), first_story(theirs_name)} & own_titles.get(e["id"], set())
-                        or tuple(sorted(stories(theirs_name))) in own_stories.get(e["id"], set()))
-            available[e["id"]] = {"service": key, "name": by_title[key]["name"], "match": "title", **({"same": True} if same else {})}
+            available[e["id"]] = by_its_title(key, by_title[key])
         elif hit and (theirs or "").split(".")[0] not in by_title \
                 and claimed.get(int(theirs[1:].split("E")[0]), e["seasonNumber"]) == e["seasonNumber"]:  # nor another season's
             theirs_name = usable_title(hit.get("name"))
@@ -4622,6 +4627,10 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
                 available[e["id"]] = {"service": key, "name": hit.get("name"), "match": "absolute"}
                 taken.add(key)
                 break
+    for key, match in added.items():  # its service episode is that Sonarr episode's now, and no other's by its number
+        for id_ in [id_ for id_, have in available.items() if have["service"].split(".")[0] == key]:
+            del available[id_]
+        available[match["episodeId"]] = by_its_title(key, match)
     checks = []
     for e in checked:  # as the sync and the Episodes tab find them: by title too, not by number alone (by mj23au)
         sxxeyy = f"S{e['seasonNumber']:02}E{e['episodeNumber']:02}"
@@ -4641,7 +4650,7 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         # whether the service's titles and Sonarr's agree where both number an episode alike: when they don't, the
         # page offers Sonarr's titles in your language (Sonarr 5)
         "titlesAgree": agreeing,
-        "titled": sorted(by_title),  # the service's numbers some Sonarr episode's title points to
+        "titled": sorted(found),  # the service's numbers some Sonarr episode's title points to
         "local_titles": local,  # TVDB's titles in your language, for the page to show over Sonarr's "TBA"
         # everything the service lists, as it numbers it: what a download's own numbering can ask for
         "titles": [{"key": f"S{t['season']:02}E{t['number']:02}", "part": t.get("part"), "name": t.get("name")} for t in service_eps],

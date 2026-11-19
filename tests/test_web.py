@@ -3146,6 +3146,29 @@ def test_a_title_added_by_its_stories_does_not_change_how_the_other_episodes_are
     assert probed["available"][4] == {"service": "S01E04", "name": "Night Shift / Mobbed", "match": "title", "same": True}
 
 
+def test_a_title_added_by_its_stories_does_not_hand_its_old_number_to_another_episode(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    # Sonarr's S02E13 is the service's S02E15 by its stories, no longer its S02E13 by number. That number, now free,
+    # is not given to Sonarr's S02E01 (the 13th episode), which stays where it was found before
+    service = [{"type": "episode", "season": s, "number": n, "name": name} for s, n, name in
+               [(1, 13, "The New Case"), (2, 13, "Fire on the Waterfront"), (2, 15, "Night Shift / Mobbed")]]
+    sonarr = [{"id": 1, "seasonNumber": 2, "episodeNumber": 1, "absoluteEpisodeNumber": 13, "title": "The New Investigation",
+               "airDate": "2020-01-01", "airDateUtc": "2020-01-01T09:00:00Z"},
+              {"id": 2, "seasonNumber": 2, "episodeNumber": 13, "absoluteEpisodeNumber": 25, "title": "Mobbed / Night Shift",
+               "airDate": "2020-04-01", "airDateUtc": "2020-04-01T09:00:00Z"}]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "BINGE", "cli_params": []}]})
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {})
+    monkeypatch.setattr(web, "tmdb_key", lambda: "")
+    probed = web.probe_series({"service": "BINGE", "title": "x"}, 1)
+    assert probed["available"] == {1: {"service": "S01E13", "name": "The New Case", "match": "absolute"},
+                                   2: {"service": "S02E15", "name": "Night Shift / Mobbed", "match": "title", "same": True}}
+    assert probed["titled"] == ["S02E15"]
+
+
 def test_the_schedule_knows_each_episodes_latest_download(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
