@@ -6556,7 +6556,7 @@ def test_a_title_tmdb_dates_to_an_episode_is_not_its_when_another_is_itself_titl
 
 
 def test_the_story_rules_never_replace_what_the_whole_title_finds():
-    from unshacklarr.web import match_by_title
+    from unshacklarr.web import match_by_title, stories
     ep = lambda id_, title, date=None: {"id": id_, "seasonNumber": 1, "episodeNumber": id_, "title": title, "airDate": date}
     got = lambda names, sonarr, tmdb=(): {k: m["episodeId"] for k, m in match_by_title(
         [{"season": 9, "number": n, "name": name} for n, name in enumerate(names, 1)], sonarr, list(tmdb)).items()}
@@ -6564,6 +6564,7 @@ def test_the_story_rules_never_replace_what_the_whole_title_finds():
     assert got(["Night Shift / Mobbed"], [ep(1, "The Night Shift/Mobbed"), ep(2, "Mobbed/Night Shift Revisited")]) == {"S09E01": 1}
     # a slash with spaces joins stories even between two numbers; only a part marker, "(1 / 2)", joins none
     assert got(["Flight 182 / 48 Hours"], [ep(1, "Flight 182"), ep(2, "48 Hours")]) == {"S09E01": 1}
+    assert stories("Flight 182 / 48 Hours") == ("flight 182", "48 hours") and stories("Night Shift (1 / 2)") == ()
     assert got(["Night Shift (1 / 2) / Mobbed"], [ep(1, "Mobbed/Night Shift (1/2)")]) == {"S09E01": 1}
     # RBT: a title TMDB dates to another day, with the same stories the other way round, does not take the name
     rbt = [ep(1, "Passed in Not Passed Out", "2024-05-01"), ep(2, "Pretty Little Penny", "2026-11-05"), ep(3, "Not Old and Silly", "2026-11-12")]
@@ -6577,6 +6578,16 @@ def test_the_story_rules_never_replace_what_the_whole_title_finds():
     cold = [ep(1, "Cold Betrayal", "2014-07-10"), ep(2, "Betrayed", "2026-01-08")]
     assert got(["Cold Betrayal"], cold, [{"names": ["Betrayal"], "air_date": "2026-01-08", "season": 29, "number": 2}]) == {"S09E01": 1}
     assert got(["Cold Betrayal"], [cold[0], ep(2, "A Cold Betrayal")]) == {}  # two of Sonarr's own titles fit: neither, as before
+    # a title found by its last part, after a colon, keeps its episode from the same stories the other way round
+    assert got(["Documentary: Hit/Run", "Run/Hit"], [ep(1, "Hit/Run")]) == {"S09E01": 1}
+    # one part of a service episode is found by its whole title: its other part adds no episode by its stories
+    parts = [{"season": 9, "number": 1, "name": "Alpha Road", "part": 1}, {"season": 9, "number": 1, "name": "Bravo Lane / Charlie Hill", "part": 2}]
+    two = match_by_title(parts, [ep(1, "Alpha Road"), ep(2, "Charlie Hill/Bravo Lane")], [])
+    assert {k: m["episodeId"] for k, m in two.items()} == {"S09E01": 1}
+    # an exact title of Sonarr's own does not take an episode another title already found
+    port = [ep(1, "The Long Night Shift", "2020-01-01"), ep(2, "Episode 2", "2020-01-08")]
+    names = [{"episodeId": 1, "names": ["Le Port Nord"]}, {"names": ["Long Night Shift"], "air_date": "2020-01-08", "season": 1, "number": 2}]
+    assert got(["Le Port du Nord", "The Long Night Shift"], port, names) == {"S09E01": 1}
 
 
 def test_many_stories_that_are_alike_are_paired_without_trying_every_order():
