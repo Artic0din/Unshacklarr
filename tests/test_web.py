@@ -6449,6 +6449,21 @@ def test_stories_joined_by_a_slash_are_found_in_any_order_and_spelling():
     assert found("Night Shift/24/7", digits) == {}  # no slash here joins two stories: it is one title, and not that one
 
 
+def test_the_episode_titled_with_the_name_outranks_one_that_has_it_through_tmdb():
+    from unshacklarr.web import match_by_title
+    # The First 48 on Binge: Sonarr's S15E08 is "Killer Connection/Bloody Birthday"; TMDB gives the same name to the episode
+    # it airs on 2014-05-01, which Sonarr's S15E06 "Million Dollar Question" aired on
+    sonarr = [{"id": 24969, "seasonNumber": 15, "episodeNumber": 6, "title": "Million Dollar Question", "airDate": "2014-05-01"},
+              {"id": 24971, "seasonNumber": 15, "episodeNumber": 8, "title": "Killer Connection/Bloody Birthday", "airDate": "2014-05-29"}]
+    alias = lambda name: [{"names": [name], "air_date": "2014-05-01", "season": 13, "number": 34}]
+    found = lambda name, eps, tmdb: {k: m["episodeId"] for k, m in match_by_title([{"season": 16, "number": 16, "name": name}], eps, tmdb).items()}
+    assert found("Killer Connection / Bloody Birthday", sonarr, alias("Killer Connection/Bloody Birthday")) == {"S16E16": 24971}
+    one_story = [sonarr[0], {**sonarr[1], "title": "Killer Connection"}]
+    assert found("Killer Connection", one_story, alias("Killer Connection")) == {"S16E16": 24971}
+    # a name only TMDB gives (to S15E06) is still found there
+    assert found("Bloody Birthday", sonarr[:1], alias("Bloody Birthday")) == {"S16E16": 24969}
+
+
 def test_a_year_in_brackets_is_not_a_part():
     from unshacklarr.web import plain_title, same_title
     assert plain_title("The Ambush (2)") == "the ambush part 2"

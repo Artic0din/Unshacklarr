@@ -4260,18 +4260,32 @@ def titles_of(sonarr_eps: list[dict], tmdb_eps: list[dict], own: bool = True, pl
     return {id_: {t for t in names if t} for id_, names in titles.items()}
 
 
+def fitting(name: str, mine: tuple[str, ...], named: list[tuple], told: list[tuple]) -> set[int]:
+    """The Sonarr episodes a service title fits: by its stories when it joins some, else (or when no title joins
+    the same) as a whole. `named` and `told` pair each title, plain and as stories, with its episode."""
+    ids = {id_ for other, id_ in named if same_title(name, other)}
+    if mine:  # Night Shift / Mobbed is Sonarr's Mobbed/Night Shift
+        ids = {id_ for other, id_ in told if same_stories(mine, other)} or ids
+    return ids
+
+
 def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: list[dict]) -> dict[str, dict]:
     """The service's episodes found in Sonarr by their title: service episode ("S26E11", or "S26E12" for all
     its parts) -> {"episodeId", "name"}. The title is looked for in Sonarr's own titles (TVDB's) and in TMDB's,
     whose air date gives the episode in Sonarr. A title that fits two episodes, or that two of the service's
     episodes share, finds nothing; but stories joined by "/" are the episode that joins the same stories, in any
-    order, and when they fit several, the episode with the whole title, else the one the first story names."""
+    order. Of several that fit, the one titled so by Sonarr itself is the episode, not one TMDB gives that title by
+    its date; then, for stories, the episode with the whole title, else the one the first story names."""
     named = [(title, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps).items() for title in titles]
     key = lambda t: f"S{t['season']:02}E{t['number']:02}"
     keys_by_name: dict[str, set] = {}
     for t in service_eps:
         keys_by_name.setdefault(usable_title(t.get("name")), set()).add(key(t))
     told = [(story, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps, plain=stories).items() for story in titles]
+    # what Sonarr itself calls an episode: its title, and TVDB's for that very episode, never TMDB's guess by air date
+    sure = [t for t in tmdb_eps if t.get("episodeId")]
+    own_named = [(title, id_) for id_, titles in titles_of(sonarr_eps, sure).items() for title in titles]
+    own_told = [(story, id_) for id_, titles in titles_of(sonarr_eps, sure, plain=stories).items() for story in titles]
     exact: dict[int, set] = {}  # a Sonarr episode -> the service's names that are its very title
     for title, id_ in named:
         if title in keys_by_name:
@@ -4281,9 +4295,10 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
         name = usable_title(t.get("name"))
         if not name or len(keys_by_name[name]) > 1:
             continue
-        ids = {id_ for other, id_ in named if same_title(name, other)}
-        if mine := stories(t.get("name")):  # Night Shift / Mobbed is Sonarr's Mobbed/Night Shift
-            ids = {id_ for other, id_ in told if same_stories(mine, other)} or ids
+        mine = stories(t.get("name"))
+        ids = fitting(name, mine, named, told)
+        if len(ids) > 1:  # the episode Sonarr itself gives the name outranks one TMDB gives it by a date (#321)
+            ids = fitting(name, mine, own_named, own_told) & ids or ids
         if len(ids) > 1:
             # one that has its very title elsewhere on the service is that one, not this: iPlayer's "Back on the
             # Psych Ward" fits Sonarr's "Back in the Psych Ward" and "On the Psych Ward", the latter its own S01E17
