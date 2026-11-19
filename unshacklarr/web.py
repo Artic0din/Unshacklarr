@@ -4131,6 +4131,13 @@ def usable_title(text: str | None) -> str:
     return re.sub(r"^(e|ep|episode|page|chapter|chapitre|capitulo|kapitel) ?\d+ (?=\w)", "", plain)
 
 
+def first_story(text: str | None) -> str:
+    """The first of the stories a title joins with "/", plain: 9Now's "Ep 166 Pretty Little Penny/Passed in Not
+    Passed Out" is "pretty little penny"; "" for a title of one story ("24/7" and "(1/2)" join none)."""
+    stories = re.split(r"(?<!\d)/(?!\d)", text or "")
+    return usable_title(stories[0]) if len(stories) > 1 else ""
+
+
 TVDB_TITLES = sonarr_sync.DATA / "tvdb_titles.json"
 TVDB_TITLES_DAYS = 7
 TVDB_LANGUAGES = {"fr": "fra", "de": "deu", "es": "spa", "it": "ita", "nl": "nld", "pt": "por", "pl": "pol", "sv": "swe",
@@ -4264,6 +4271,10 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
             # Psych Ward" fits Sonarr's "Back in the Psych Ward" and "On the Psych Ward", the latter its own S01E17
             # (by mj23au)
             ids = {i for i in ids if not (exact.get(i) and name not in exact[i])}
+        if len(ids) > 1 and (first := first_story(t.get("name"))):
+            # stories joined by "/" hold both their titles: the first names the episode (9Now's RBT Ep 166 is
+            # "Pretty Little Penny", its second story a 2024 episode's); none so named, nothing is picked as before
+            ids = {i for title, i in named if title == first and i in ids} or ids
         if len(ids) == 1:
             found.setdefault(key(t), []).append((t.get("part"), ids.pop(), t.get("name")))
     matches = {}
@@ -4496,7 +4507,8 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         hit = by_key.get(theirs or "")
         if e["id"] in titled:
             key = titled[e["id"]]
-            same = usable_title(by_title[key]["name"]) in own_titles.get(e["id"], set())  # not merely close (by mj23au, #12)
+            # not merely close (by mj23au, #12); the first of its stories counts as its very title too
+            same = bool({usable_title(by_title[key]["name"]), first_story(by_title[key]["name"])} & own_titles.get(e["id"], set()))
             available[e["id"]] = {"service": key, "name": by_title[key]["name"], "match": "title", **({"same": True} if same else {})}
         elif hit and (theirs or "").split(".")[0] not in by_title \
                 and claimed.get(int(theirs[1:].split("E")[0]), e["seasonNumber"]) == e["seasonNumber"]:  # nor another season's

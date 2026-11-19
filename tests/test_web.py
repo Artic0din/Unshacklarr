@@ -3087,6 +3087,24 @@ def test_a_country_title_finds_its_episode_and_a_number_saying_another_finds_not
     assert web.same_title("mali", "mali") and not web.same_title("mali", "malibu")  # a short title only when the same
 
 
+def test_an_episode_named_by_the_first_of_its_stories_is_available_by_its_very_title(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    # RBT on 9Now lists one episode, two stories, no date
+    service = [{"type": "episode", "season": 5, "number": 166, "name": "Ep 166 Pretty Little Penny/Passed in Not Passed Out"}]
+    sonarr = [{**e, "airDateUtc": f"{e['airDate']}T09:30:00Z"} for e in RBT_SONARR]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "NINE", "cli_params": []}]})
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {})
+    monkeypatch.setattr(web, "tmdb_key", lambda: "")
+    probed = web.probe_series({"service": "NINE", "title": "x"}, 1)
+    assert probed["available"] == {87018: {"service": "S05E166", "name": "Ep 166 Pretty Little Penny/Passed in Not Passed Out",
+                                           "match": "title", "same": True}}  # neither S19E07 (2024) nor S21E07
+    assert probed["titled"] == ["S05E166"]
+
+
 def test_the_schedule_knows_each_episodes_latest_download(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -6383,6 +6401,21 @@ def test_sonarr_specials_are_found_in_the_services_seasons_by_title_and_part():
     found = match_by_title(service, sonarr, [])
     assert {k: m["episodeId"] for k, m in found.items()} == {"S04E21": 45, "S04E22": 46, "S05E09": 42, "S04E16": 40}
     assert not same_title("a family vendetta part 2", "a family vendetta part 1")  # close, but another part
+
+
+RBT_SONARR = [{"id": 86998, "seasonNumber": 19, "episodeNumber": 7, "title": "Passed in Not Passed Out", "airDate": "2024-05-15"},
+              {"id": 87018, "seasonNumber": 21, "episodeNumber": 6, "title": "Pretty Little Penny", "airDate": "2026-11-12"},
+              {"id": 87019, "seasonNumber": 21, "episodeNumber": 7, "title": "Not Old and Silly", "airDate": "2026-11-19"}]
+
+
+def test_two_stories_joined_by_a_slash_are_the_episode_the_first_names():
+    from unshacklarr.web import first_story, match_by_title
+    assert first_story("24/7") == first_story("Le tueur (1/2)") == first_story("Pretty Little Penny") == ""  # one story each
+    # RBT on 9Now: its Ep 166 is Sonarr's S21E06, its second story an older episode's (S19E07, 2024)
+    found = lambda name: {k: m["episodeId"] for k, m in match_by_title([{"season": 5, "number": 166, "name": name}], RBT_SONARR, []).items()}
+    assert found("Ep 166 Pretty Little Penny/Passed in Not Passed Out") == {"S05E166": 87018}  # not the 2024 S19E07
+    assert found("Ep 166 Passed in Not Passed Out/Pretty Little Penny") == {"S05E166": 86998}  # the first story, whichever
+    assert found("Ep 3 Brand New/Pretty Little Penny/Passed in Not Passed Out") == {}  # the first names neither: no guess
 
 
 def test_a_year_in_brackets_is_not_a_part():

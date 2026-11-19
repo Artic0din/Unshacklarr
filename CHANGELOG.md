@@ -129,6 +129,11 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **An episode whose title joins two stories is found by the first.** 9Now's RBT names its Ep 166 "Pretty Little
+  Penny/Passed in Not Passed Out": both halves were Sonarr titles (S21E06, and S19E07 from 2024), so the episode was
+  matched to neither and every download asked 9Now for Sonarr's own number, which it doesn't have. The first story
+  now names the episode: S21E06 is downloaded as 9Now's S05E166, and S19E07 is no longer taken for it. A title whose
+  first story names none of them is still matched to none.
 - **Every page tells the same story about a service, a download and a cookie file.** Settings, Services counts every
   service whose sign-in failed, timed out or was rejected as needing attention, names them, and shows the count beside
   Services in the Settings list. A cookie file's days left are counted the same way in Services and in the bell. A
