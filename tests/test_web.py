@@ -6449,6 +6449,29 @@ def test_stories_joined_by_a_slash_are_found_in_any_order_and_spelling():
     assert found("Night Shift/24/7", digits) == {}  # no slash here joins two stories: it is one title, and not that one
 
 
+def test_the_most_exact_evidence_names_the_episode():
+    from unshacklarr.web import match_by_title, same_stories, same_title, stories
+    ep = lambda i, title, date=None: {"id": i, "seasonNumber": 1, "episodeNumber": i, "title": title, "airDate": date or f"2012-01-{i:02}"}
+    found = lambda name, eps, tmdb=(): {k: m["episodeId"] for k, m in match_by_title([{"season": 3, "number": 9, "name": name}], eps, list(tmdb)).items()}
+    # an episode titled with the whole name, exactly, is not replaced by one that joins the same stories
+    assert found("The Long Night Shift / Mobbed", [ep(1, "The Long Night Shift Mobbed"), ep(2, "Mobbed / Long Night Shift")]) == {"S03E09": 1}
+    # the same stories exactly outrank stories that are only alike, and those outrank a spelling with other spaces
+    assert found("Now Here / Long Night Shift", [ep(1, "Long Night Shift / Nowhere"), ep(2, "Long Night Shift / Now Here")]) == {"S03E09": 2}
+    assert found("Now Here / Long Night Shift", [ep(1, "Long Night Shift / Nowhere"), ep(2, "The Long Night Shift / Now Here!")]) == {"S03E09": 2}
+    # each story answers one story of the other title: two alike do not share one, and the counts are the same
+    assert not same_stories(("the long night shift", "long night shift", "murder at dawn"), ("murder at dawn", "the murder at dawn", "long night shift"), same_title)
+    assert not same_stories(("mobbed", "night shift"), ("mobbed", "mobbed", "night shift"), same_title)
+    assert same_stories(("mobbed", "night shift"), ("night shift", "mobbed"), same_title)
+    # a part that names no story ("Episode 3") leaves the stories unknown: none is dropped to make two titles agree
+    assert stories("Long Night Shift / Episode 3 / Mobbed") == ()
+    assert found("Long Night Shift / Episode 3 / Mobbed", [ep(1, "Mobbed / Long Night Shift")]) == {}
+    # a name TMDB gives exactly (to the episode of that date) outranks an episode whose own title is only alike
+    alias = [{"names": ["Long Night Shift / Mobbed"], "air_date": "2012-01-02", "season": 9, "number": 9}]
+    assert found("Long Night Shift / Mobbed", [ep(1, "The Long Night Shift / Mobbed"), ep(2, "Something Else")], alias) == {"S03E09": 2}
+    # a title of one story is found as before: an exact title does not outrank another that holds it (a special's)
+    assert found("Cap-Vert", [ep(1, "Cap-Vert"), ep(2, "Spéciale - Cap-Vert")]) == {}
+
+
 def test_the_episode_titled_with_the_name_outranks_one_that_has_it_through_tmdb():
     from unshacklarr.web import match_by_title
     # The First 48 on Binge: Sonarr's S15E08 is "Killer Connection/Bloody Birthday"; TMDB gives the same name to the episode

@@ -4141,8 +4141,8 @@ def first_story(text: str | None) -> str:
 def stories(text: str | None) -> tuple[str, ...]:
     """The stories a title joins with "/", plain: ("night shift", "mobbed") for "Night Shift / Mobbed"; () for a title
     of one story."""
-    plain = tuple(story for part in re.split(r"(?<!\d)/(?!\d)", text or "") if (story := usable_title(part)))
-    return plain if len(plain) > 1 else ()
+    plain = tuple(usable_title(part) for part in re.split(r"(?<!\d)/(?!\d)", text or ""))
+    return plain if len(plain) > 1 and all(plain) else ()  # a part that names no story ("Episode 3"): its stories are not known
 
 
 TVDB_TITLES = sonarr_sync.DATA / "tvdb_titles.json"
@@ -4220,11 +4220,17 @@ def same_title(a: str, b: str) -> bool:
     return difflib.SequenceMatcher(None, a, b).ratio() >= at
 
 
-def same_stories(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
-    """Two titles joining the same stories, in any order: each story of one is a story of the other, as a title is a title
-    (same_title), or spelt with other spaces ("runaround" is "the run around")."""
-    like = lambda x, y: same_title(x, y) or last_number(x) == last_number(y) and same_title(x.replace(" ", ""), y.replace(" ", ""))
-    return len(a) == len(b) and all(any(like(x, y) for y in b) for x in a) and all(any(like(x, y) for x in a) for y in b)
+def same_stories(a: tuple[str, ...], b: tuple[str, ...], like) -> bool:
+    """Two titles joining the same stories, in any order: as many, each story of one answering one story of the other
+    (`like` says when two stories are one), none answering two."""
+    if len(a) != len(b):
+        return False
+    return not a or any(like(a[0], story) and same_stories(a[1:], b[:i] + b[i + 1:], like) for i, story in enumerate(b))
+
+
+def spelt_alike(a: str, b: str) -> bool:
+    """Two stories that are one once their spaces are set aside: "runaround" is "the run around"."""
+    return same_title(a, b) or last_number(a) == last_number(b) and same_title(a.replace(" ", ""), b.replace(" ", ""))
 
 
 @functools.lru_cache(maxsize=1 << 14)
@@ -4260,22 +4266,14 @@ def titles_of(sonarr_eps: list[dict], tmdb_eps: list[dict], own: bool = True, pl
     return {id_: {t for t in names if t} for id_, names in titles.items()}
 
 
-def fitting(name: str, mine: tuple[str, ...], named: list[tuple], told: list[tuple]) -> set[int]:
-    """The Sonarr episodes a service title fits: by its stories when it joins some, else (or when no title joins
-    the same) as a whole. `named` and `told` pair each title, plain and as stories, with its episode."""
-    ids = {id_ for other, id_ in named if same_title(name, other)}
-    if mine:  # Night Shift / Mobbed is Sonarr's Mobbed/Night Shift
-        ids = {id_ for other, id_ in told if same_stories(mine, other)} or ids
-    return ids
-
-
 def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: list[dict]) -> dict[str, dict]:
     """The service's episodes found in Sonarr by their title: service episode ("S26E11", or "S26E12" for all
     its parts) -> {"episodeId", "name"}. The title is looked for in Sonarr's own titles (TVDB's) and in TMDB's,
     whose air date gives the episode in Sonarr. A title that fits two episodes, or that two of the service's
-    episodes share, finds nothing; but stories joined by "/" are the episode that joins the same stories, in any
-    order. Of several that fit, the one titled so by Sonarr itself is the episode, not one TMDB gives that title by
-    its date; then, for stories, the episode with the whole title, else the one the first story names."""
+    episodes share, finds nothing. Stories joined by "/" are found by the most exact evidence there is: the whole
+    title exactly, else the same stories in any order, else titles or stories that are alike, else stories spelt with
+    other spaces. Of several that fit, the one titled so by Sonarr itself is the episode, not one TMDB gives that
+    title by its date; then, for stories, the one the first story names."""
     named = [(title, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps).items() for title in titles]
     key = lambda t: f"S{t['season']:02}E{t['number']:02}"
     keys_by_name: dict[str, set] = {}
@@ -4284,8 +4282,32 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
     told = [(story, id_) for id_, titles in titles_of(sonarr_eps, tmdb_eps, plain=stories).items() for story in titles]
     # what Sonarr itself calls an episode: its title, and TVDB's for that very episode, never TMDB's guess by air date
     sure = [t for t in tmdb_eps if t.get("episodeId")]
-    own_named = [(title, id_) for id_, titles in titles_of(sonarr_eps, sure).items() for title in titles]
-    own_told = [(story, id_) for id_, titles in titles_of(sonarr_eps, sure, plain=stories).items() for story in titles]
+    own_named = {(title, id_) for id_, titles in titles_of(sonarr_eps, sure).items() for title in titles}
+    own_told = {(story, id_) for id_, titles in titles_of(sonarr_eps, sure, plain=stories).items() for story in titles}
+    by_name: dict[str, list] = {}
+    for title, id_ in named:
+        by_name.setdefault(title, []).append((title, id_))
+    by_stories: dict[tuple, list] = {}
+    for story, id_ in told:
+        by_stories.setdefault(tuple(sorted(story)), []).append((story, id_))
+
+    def fits(name: str, mine: tuple[str, ...]) -> tuple[set[int], set[int]]:
+        """The Sonarr episodes a service title fits, and those among them Sonarr itself titles so. A title of one
+        story fits as it always did (same_title). Stories are found at the first level that finds any, so a spelling
+        that is only alike never replaces an exact one."""
+        if not mine:
+            hits = [(id_, (other, id_) in own_named) for other, id_ in named if same_title(name, other)]
+            return {id_ for id_, _ in hits}, {id_ for id_, own in hits if own}
+        levels = (
+            lambda: [(id_, pair in own_named) for pair in by_name.get(name, []) for id_ in [pair[1]]],
+            lambda: [(id_, (story, id_) in own_told) for story, id_ in by_stories.get(tuple(sorted(mine)), [])],
+            lambda: [(id_, (other, id_) in own_named) for other, id_ in named if same_title(name, other)]
+            + [(id_, (story, id_) in own_told) for story, id_ in told if same_stories(mine, story, same_title)],
+            lambda: [(id_, (story, id_) in own_told) for story, id_ in told if same_stories(mine, story, spelt_alike)],
+        )
+        hits = next((found for level in levels if (found := level())), [])
+        return {id_ for id_, _ in hits}, {id_ for id_, own in hits if own}
+
     exact: dict[int, set] = {}  # a Sonarr episode -> the service's names that are its very title
     for title, id_ in named:
         if title in keys_by_name:
@@ -4295,10 +4317,9 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
         name = usable_title(t.get("name"))
         if not name or len(keys_by_name[name]) > 1:
             continue
-        mine = stories(t.get("name"))
-        ids = fitting(name, mine, named, told)
-        if len(ids) > 1:  # the episode Sonarr itself gives the name outranks one TMDB gives it by a date (#321)
-            ids = fitting(name, mine, own_named, own_told) & ids or ids
+        ids, own = fits(name, stories(t.get("name")))
+        if len(ids) > 1 and own:  # the episode Sonarr itself gives the name outranks one TMDB gives it by a date (#321)
+            ids = ids & own
         if len(ids) > 1:
             # one that has its very title elsewhere on the service is that one, not this: iPlayer's "Back on the
             # Psych Ward" fits Sonarr's "Back in the Psych Ward" and "On the Psych Ward", the latter its own S01E17
