@@ -4393,6 +4393,15 @@ def test_a_number_its_title_gives_to_another_episode_is_not_downloaded(tmp_path,
     sync.sync(sync.read_file(), {}, [episode(111, 2, 5)], manual=True, kind="manual")
     assert asked == ["S03E01", "S02E05", "S02E05"]
 
+
+def test_an_episode_its_very_title_finds_under_another_number_is_asked_there(tmp_path, monkeypatch):
+    # RBT on 9Now: S21E06 is its S05E166 by the first of its stories; S19E07, its second story, is not listed
+    sync = load(tmp_path, monkeypatch)
+    listing = {"available": {2106: {"service": "S05E166", "match": "title", "same": True}}, "listed": {"S05E166"}, "titled": {"S05E166"}}
+    monkeypatch.setattr(sync, "find_by_title", lambda show, ep: listing)
+    assert sync.wrong_number({}, episode(111, 21, 6), "S21E06", None) == {"service": "S05E166", "match": "title", "unlisted": True}
+    assert sync.wrong_number({}, episode(111, 19, 7), "S19E07", None) is None  # asked as before: not on the service yet
+
 @responses.activate
 def test_another_sonarr_gets_its_own_copy_with_its_own_ladder(tmp_path, monkeypatch):
     # From #10, by mj23au: sonarr for 1080p, sonarr-4k for 4K, the same series set up once
