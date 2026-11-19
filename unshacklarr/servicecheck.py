@@ -17,7 +17,7 @@ from unshacklarr.files import no_credentials, read_json, write_atomic
 
 CHECK_EVERY = timedelta(days=1)
 RETRY_AFTER = 900  # seconds before a check held back by a running download looks again
-SERIES_TRIED = 3  # series of a service tried before it is called failing: one title may be the problem, not the service
+SERIES_TRIED = 10  # series of a service tried before it is called failing: a title may be refused (not entitled, to buy) while the service is well
 STAGE_TIMEOUT = 120  # seconds a stage may take, however its request behaves
 STAGES = {"search": "Search", "list": "Listing", "tracks": "Tracks"}
 URL_QUERY = re.compile(r"(\b[a-z][a-z0-9+.-]*://[^\s?#]+)[?#]\S*", re.IGNORECASE)  # no_credentials leaves some signed queries (?hdnea=, #320)
@@ -89,8 +89,8 @@ def check_series(backend, tag: str, control: dict, config: dict, query: str | No
 
 
 def check_service(tag: str, picks: list[tuple[int, dict]], config: dict, now: datetime) -> dict:
-    """A service's result from up to SERIES_TRIED of its series: the first whose listing and tracks pass stands for
-    it; a sign-in failure ends the tries (it is the session, not the title); else the first series' stages stand."""
+    """A service's result from its picked series: the first whose listing and tracks pass stands for it; a sign-in
+    failure ends the tries (it is the session, not the title); else the first series' stages stand."""
     backend = sync.backend_for(tag, config)
     first = None
     for tried, (tvdb, control) in enumerate(picks, 1):
@@ -113,19 +113,24 @@ def skipped(now: datetime) -> dict:
     return {"checked": now.isoformat(), "ok": None, "failed": [], "skipped": "relay", "stages": {}}
 
 
-def picked_controls(config: dict) -> dict[str, list[tuple[int, dict]]]:
-    """Each service a series uses, with up to SERIES_TRIED of its series (TVDB id and title, config order) that
-    are not relayed (--remote); an empty list for a service whose every series is."""
-    picked: dict[str, list[tuple[int, dict]]] = {}
-    seen: set[tuple[str, int]] = set()
+def picked_controls(config: dict, before: dict) -> dict[str, list[tuple[int, dict]]]:
+    """Each service a series uses, with the series (TVDB id and title) to try, in order: the one that stood for it
+    last time, then the others in config order, none relayed (--remote). Up to SERIES_TRIED; one when its last
+    result was a failure (a probe, so a service that is down is not asked ten times a day). An empty list for a
+    service whose every series is relayed."""
+    every: dict[str, list[tuple[int, dict]]] = {}
     for tvdb, control in sync.configured_controls(config):
         tag = control.get("service")
         if not tag:
             continue
-        picked.setdefault(tag, [])
-        if len(picked[tag]) < SERIES_TRIED and (tag, tvdb) not in seen and not sync.stacked(control, config)[0].get("--remote"):
-            seen.add((tag, tvdb))
-            picked[tag].append((tvdb, control))
+        every.setdefault(tag, [])
+        if all(tvdb != seen for seen, _ in every[tag]) and not sync.stacked(control, config)[0].get("--remote"):
+            every[tag].append((tvdb, control))
+    picked = {}
+    for tag, series in every.items():
+        last = before.get(tag) or {}
+        series.sort(key=lambda pick: pick[0] != last.get("tvdb"))  # stable: the rest stay in config order
+        picked[tag] = series[: 1 if last.get("ok") is False else SERIES_TRIED]
     return picked
 
 
@@ -162,10 +167,10 @@ def run_check(now: datetime | None = None) -> dict | None:
     try:
         now = now or datetime.now(timezone.utc)
         config = sync.read_file()
-        results = {}
-        for tag, picks in picked_controls(config).items():
-            results[tag] = check_service(tag, picks, config, now) if picks else skipped(now)
         before = read_results().get("services") or {}
+        results = {}
+        for tag, picks in picked_controls(config, before).items():
+            results[tag] = check_service(tag, picks, config, now) if picks else skipped(now)
         done = {"last_run": now.isoformat(), "services": results}
         try:
             write_atomic(sync.SERVICE_CHECKS_FILE, json.dumps(done))

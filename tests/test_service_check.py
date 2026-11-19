@@ -53,7 +53,7 @@ def check(tmp_path, monkeypatch):
     module.serve = Serve()
     module.sent = []
     monkeypatch.setattr(sync, "backend_for", lambda tag, config=None: module.serve)
-    monkeypatch.setattr(sync, "sonarr_series", lambda wanted, keep=3600: {tvdb: {"title": "Show"} for tvdb in (111, 112, 222, 333)})
+    monkeypatch.setattr(sync, "sonarr_series", lambda wanted, keep=3600: {tvdb: {"title": "Show"} for tvdb in wanted})
     monkeypatch.setattr(sync, "notify", lambda settings, level, title, message, **kw: module.sent.append((level, title, message)) or True)
     monkeypatch.setattr(sync, "slot_active", {})
     return module
@@ -160,18 +160,87 @@ def test_a_sign_in_failure_stops_at_once_it_is_the_session_not_the_title(check, 
     assert set(check.serve.paths()) == ALLOWED
 
 
-def test_a_service_fails_when_three_series_fail_and_keeps_the_first_ones_stages(check, tmp_path):
-    several(tmp_path, (111, ", season_pages: {1: {url: show-111b}}"), (112, ""), (113, ""), (114, ""))
-    for tvdb in (111, 112, 113, 114):
+def refuse(check, *tvdbs):
+    for tvdb in tvdbs:
         check.serve.by_title[("/api/list-tracks", f"show-{tvdb}")] = UnshackleError(f"refused {tvdb}")
+
+
+def asked_of(check, path, tvdb):
+    return [c for c in check.serve.calls if c[1] == path and (c[2] or {}).get("title_id") == f"show-{tvdb}"]
+
+
+def test_a_service_fails_when_ten_series_fail_and_keeps_the_first_ones_stages(check, tmp_path):
+    several(tmp_path, (111, ", season_pages: {1: {url: show-111b}}"), *[(tvdb, "") for tvdb in range(112, 123)])
+    refuse(check, *range(111, 123))
 
     result = check.run_check(NOW)["services"]["RTLP"]
 
-    assert (result["ok"], result["failed"], result["tvdb"], result["tried"]) == (False, ["tracks"], 111, 3)
+    assert (result["ok"], result["failed"], result["tvdb"], result["tried"]) == (False, ["tracks"], 111, 10)
     assert "refused 111" in result["stages"]["tracks"]["message"]
     asked = {(c[2] or {}).get("title_id") for c in check.serve.calls}
-    assert asked >= {"show-111", "show-112", "show-113"} and not asked & {"show-111b", "show-114"}  # one series is one try
+    assert asked >= {"show-111", "show-120"} and not asked & {"show-111b", "show-121", "show-122"}  # one series is one try
     assert [(level, title) for level, title, _ in check.sent] == [("error", "RTLP failed its daily check")]
+
+
+def test_a_playable_series_further_down_the_config_stands_for_the_service(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 112, 113, 114)])
+    refuse(check, 111, 112, 113)
+
+    result = check.run_check(NOW)["services"]["RTLP"]
+
+    assert (result["ok"], result["tvdb"], result["tried"]) == (True, 114, 4)
+    assert check.sent == []  # a title refused is not the service failing
+
+
+def test_the_next_run_starts_with_the_series_that_passed(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 112, 113, 114)])
+    refuse(check, 111, 112, 113)
+    check.run_check(NOW)
+    check.serve.calls.clear()
+
+    result = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+
+    assert (result["ok"], result["tvdb"], result["tried"]) == (True, 114, 1)
+    assert len(asked_of(check, "/api/list-titles", 114)) == len(asked_of(check, "/api/list-tracks", 114)) == 1
+    assert [c for c in check.serve.calls if c[1] == "/api/list-tracks"] == asked_of(check, "/api/list-tracks", 114)
+
+
+def test_a_failing_service_is_probed_with_one_series_and_told_once(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 112, 113)])
+    refuse(check, 111, 112, 113)
+    first = check.run_check(NOW)["services"]["RTLP"]
+    assert (first["ok"], first["tried"]) == (False, 3) and len(check.sent) == 1
+    check.serve.calls.clear()
+
+    second = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+
+    assert (second["ok"], second["tried"], second["tvdb"]) == (False, 1, 111)
+    assert len([c for c in check.serve.calls if c[1] == "/api/list-tracks"]) == 1
+    assert len(check.sent) == 1  # the same failure is not told again
+    assert set(check.serve.paths()) == ALLOWED
+
+
+def test_a_failing_service_that_passes_its_one_probe_is_told_it_recovered(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 112)])
+    refuse(check, 111, 112)
+    check.run_check(NOW)
+    del check.serve.by_title[("/api/list-tracks", "show-111")]
+
+    result = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+
+    assert (result["ok"], result["tvdb"], result["tried"]) == (True, 111, 1)
+    assert [(level, title) for level, title, _ in check.sent] == [("error", "RTLP failed its daily check"), ("success", "RTLP passes its daily check again")]
+
+
+def test_a_stored_series_that_left_the_config_falls_back_to_config_order(check, tmp_path):
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 112)])
+    refuse(check, 111)
+    assert check.run_check(NOW)["services"]["RTLP"]["tvdb"] == 112
+    several(tmp_path, *[(tvdb, "") for tvdb in (111, 113)])
+
+    result = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+
+    assert (result["ok"], result["tvdb"], result["tried"]) == (True, 113, 2)
 
 
 def test_a_search_that_cannot_run_is_skipped_not_failed(check, monkeypatch):
