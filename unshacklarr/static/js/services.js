@@ -84,6 +84,7 @@ function signInCheck() {
   return box;
 }
 
+const CHECK_STAGES = { search: "Search", list: "Listing", tracks: "Tracks" };
 const SERVICE_COLUMNS = ["Service", "Signs in with", "Sign-in status", "Cookies", "Used by"];
 let servicesCookies = null;  // /api/cookies: the files of Unshackle's own cookies folder, by service
 let servicesDrawn = "";      // what the table was drawn from: a refresh that changes nothing leaves it (and the focus) alone
@@ -126,6 +127,7 @@ function serviceModels() {
     const selected = set && inventory.includes(`${service}@${set}`) ? set
       : inventory.includes(service) ? "" : (inventory.find((k) => k.startsWith(`${service}@`)) || "").split("@")[1] || "";
     const used = backend === selected ? seriesOf(service) : null;
+    const check = !used ? null : S.serviceChecks?.services?.[service] || null;  // the daily check runs on the backend that downloads it
     const cookieless = status.state === "anonymous" || (listed && methods.length > 0 && !methods.includes("cookies"));  // an empty list: not known
     // no cookie file is fine when none is needed, or a confirmed sign-in has another way in (credentials,
     // pairing): a cookie-only service confirmed before its last file went still needs one
@@ -137,7 +139,7 @@ function serviceModels() {
     const attention = status.state === "needs_user_action" || SIGN_IN_FAILED.includes(observation?.state)
       || Boolean(used && (missing || cookieFiles?.some((f) => f.st[0] === "bad")));
     return { key, service, backend, name: svcName(service) + (backend ? ` · ${backend}` : ""), label, tone, state: status.state, signedIn, cookiesOnly, setup, listed,
-      methods: listed ? methods : null, anonymous: status.state === "anonymous", cookieFiles, cookieless, missing, used, attention };
+      methods: listed ? methods : null, anonymous: status.state === "anonymous", cookieFiles, cookieless, missing, used, attention, check };
   }).sort((a, b) => b.attention - a.attention || (b.used || 0) - (a.used || 0) || a.name.localeCompare(b.name));
 }
 
@@ -172,7 +174,19 @@ function renderServices() {
         onclick: () => startServiceAuthentication(m.service, m.backend) }));
     }
     return [el("div", { className: "sv-signin" }, el("small", { className: "sv-label", textContent: m.label, dataset: m.tone ? { tone: m.tone } : {} }),
-      ...(controls.length ? [el("div", { className: "sv-ctl" }, ...controls)] : []))];
+      ...(controls.length ? [el("div", { className: "sv-ctl" }, ...controls)] : [])), ...checkLines(m)];
+  };
+  // the daily check (servicecheck.py): its result, the stages that failed, and what the search found (shown, never alerted)
+  const checkLines = (m) => {
+    const done = m.check;
+    if (!m.used) return [];
+    if (!done) return [el("small", { className: "sv-check", textContent: "Daily check: not run yet" })];
+    if (done.skipped) return [el("small", { className: "sv-check", textContent: "Daily check skipped: relayed through another server" })];
+    const signIn = Object.values(done.stages).some((stage) => stage.code === "AUTH_FAILED"), when = ago(done.checked), search = done.stages.search;
+    return [el("small", { className: "sv-check", dataset: done.ok ? {} : { tone: "bad" },
+        textContent: done.ok ? `Daily check passed ${when}` : signIn ? `Daily check: sign-in failed ${when}` : `Daily check failed ${when}` }),
+      ...done.failed.map((stage) => el("small", { className: "sv-check", textContent: `${CHECK_STAGES[stage]}: ${done.stages[stage].message}` })),
+      ...(search.ok ? [el("small", { className: "sv-check", textContent: search.found ? `Search results: ${search.count}` : `Search results: ${search.count}, series not among them` })] : [])];
   };
   // a cookie-only service's sign-in check, in the Cookies column; none while a check runs
   const checking = (m) => m.setup && !["authenticated", "timed_out", "cancelled", "error"].includes(m.setup.state);
@@ -279,7 +293,8 @@ function revealService() {
 }
 async function loadServices() {
   if (!servicesDrawn) $("#sv-list").replaceChildren(loading("Checking the services…"));
-  const [status, cookies] = await Promise.allSettled([api("/api/status?auth=1"), api("/api/cookies")]);
+  const [status, cookies, checks] = await Promise.allSettled([api("/api/status?auth=1"), api("/api/cookies"), api("/api/service-checks")]);
+  if (checks.status === "fulfilled") S.serviceChecks = checks.value;
   if (status.status === "fulfilled") renderHealth(status.value);
   servicesCookies = cookies.status === "fulfilled" ? cookies.value : { folder: null, files: {}, error: cookies.reason.message };
   if (status.status === "rejected" && !Object.keys(S.authentication || {}).length) {
@@ -303,3 +318,14 @@ function showSeriesOf(service) {  // every series of that service: the other fil
   $("#f-service").value = service;
   renderWall();
 }
+
+async function pollServiceCheck() {
+  try { S.serviceChecks = await api("/api/service-checks"); } catch (error) { toast(error.message, true); $("#sv-check").disabled = false; return; }
+  renderServices();
+  if (S.serviceChecks.running) setTimeout(pollServiceCheck, 3000); else $("#sv-check").disabled = false;
+}
+$("#sv-check").onclick = async () => {
+  $("#sv-check").disabled = true;
+  try { await api("/api/service-checks", { method: "POST" }); } catch (error) { toast(error.message, true); $("#sv-check").disabled = false; return; }
+  setTimeout(pollServiceCheck, 1000);
+};

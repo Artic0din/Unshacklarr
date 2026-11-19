@@ -135,6 +135,7 @@ authentication_cleanup_retry_owners: tuple[str, ...] = ()
 INBOX_FILE = DATA / "inbox.json"  # every notification, for the page's bell: {"read_at": iso, "items": [...]}
 INBOX_KEEP, INBOX_DAYS = 200, 60
 inbox_lock = threading.Lock()
+SERVICE_CHECKS_FILE = DATA / "service_checks.json"  # the daily check of each service: when it last ran, and its results
 SENT_FILE = DATA / "notifications_sent.json"  # the last messages sent out, and whether each address took them
 HELD_FILE = DATA / "notifications_held.json"  # what came in the quiet hours, sent together once they end
 SENT_KEEP = 20
@@ -1472,10 +1473,11 @@ def _finish_authentication_setup(key: str, session: dict) -> dict:
     return _terminal_authentication_setup(session)
 
 
-def _authentication_setup_control(service: str) -> tuple[dict, dict]:
-    config = read_file()
+def configured_controls(config: dict):
+    """(TVDB id, the series as one title of one service) for each title the series config names, in order: the
+    series' page, its fallback's, each season page's, and each programme a programmes series maps."""
     series = config.get("series") or {}
-    for show in series.values() if isinstance(series, dict) else []:
+    for tvdb, show in series.items() if isinstance(series, dict) else []:
         if not isinstance(show, dict):
             continue
         candidates = [show, fallback_show(show)]
@@ -1483,17 +1485,24 @@ def _authentication_setup_control(service: str) -> tuple[dict, dict]:
         if isinstance(pages, dict):
             candidates.extend(season_page(show, season) for season in pages)
         for candidate in candidates:
-            if not isinstance(candidate, dict) or candidate.get("service") != service:
+            if not isinstance(candidate, dict):
                 continue
             title = candidate.get("title") or candidate.get("url")
             if isinstance(title, str) and title.strip():
-                return {**candidate, "title": title.strip()}, config
-        if show.get("service") == service and show.get("programmes") is True:
+                yield tvdb, {**candidate, "title": title.strip()}
+        if show.get("programmes") is True:
             programme_map = show.get("programme_map") or {}
             if isinstance(programme_map, dict):
                 for title in programme_map.values():
                     if isinstance(title, str) and title.strip():
-                        return {**show, "title": title.strip()}, config
+                        yield tvdb, {**show, "title": title.strip()}
+
+
+def _authentication_setup_control(service: str) -> tuple[dict, dict]:
+    config = read_file()
+    for _, control in configured_controls(config):
+        if control.get("service") == service:
+            return control, config
     raise ValueError(f"Configure a {service} series before signing in")
 
 

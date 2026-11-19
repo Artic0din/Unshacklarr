@@ -2431,5 +2431,22 @@
  "{0}: update available": "{0}: actualización disponible",
  "{0}: unreachable": "{0}: inaccesible",
  "{0}: checking": "{0}: comprobando",
- "Check the cookies for {0}": "Comprobar las cookies de {0}"
+ "Check the cookies for {0}": "Comprobar las cookies de {0}",
+ "A check is already running": "Ya hay una comprobación en curso",
+ "Daily check failed {0}": "La comprobación diaria falló {0}",
+ "Daily check passed {0}": "Comprobación diaria superada {0}",
+ "Daily check: not run yet": "Comprobación diaria: aún no realizada",
+ "Daily check: sign-in failed {0}": "Comprobación diaria: falló el inicio de sesión {0}",
+ "It searches, lists and has tracks again.": "Vuelve a buscar, listar y tener pistas.",
+ "Listing": "Listado",
+ "No answer within {0} s": "Sin respuesta en {0} s",
+ "No title was listed to ask the tracks of": "No se listó ningún título del que pedir las pistas",
+ "Search results: {0}": "Resultados de búsqueda: {0}",
+ "Search results: {0}, series not among them": "Resultados de búsqueda: {0}, la serie no está entre ellos",
+ "Sonarr did not give the series' name": "Sonarr no dio el nombre de la serie",
+ "The service listed no titles": "El servicio no listó ningún título",
+ "{0} failed its daily check": "{0} falló su comprobación diaria",
+ "{0} passes its daily check again": "{0} supera de nuevo su comprobación diaria",
+ "{0} has no video track": "{0} no tiene pista de vídeo",
+ "Daily check skipped: relayed through another server": "Comprobación diaria omitida: pasa por otro servidor"
 }
