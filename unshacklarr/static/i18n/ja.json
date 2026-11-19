@@ -2469,10 +2469,10 @@
  "No title was listed to ask the tracks of": "トラックを問い合わせるタイトルが一覧にありませんでした",
  "Search results: {0}": "検索結果: {0}",
  "Search results: {0}, series not among them": "検索結果: {0}、シリーズは含まれていません",
- "Sonarr did not give the series' name": "Sonarr からシリーズ名が得られませんでした",
  "The service listed no titles": "サービスはタイトルを一覧にしませんでした",
  "{0} failed its daily check": "{0} の毎日の確認に失敗しました",
  "{0} passes its daily check again": "{0} の毎日の確認が再び成功しました",
  "{0} has no video track": "{0} には映像トラックがありません",
- "Daily check skipped: relayed through another server": "毎日の確認をスキップしました: 別のサーバー経由です"
+ "Daily check skipped: relayed through another server": "毎日の確認をスキップしました: 別のサーバー経由です",
+ "Not run: the series' name is unknown": "未実行: シリーズ名が不明です"
 }

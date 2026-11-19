@@ -2474,10 +2474,10 @@
  "No title was listed to ask the tracks of": "没有可查询轨道的已列出标题",
  "Search results: {0}": "搜索结果：{0}",
  "Search results: {0}, series not among them": "搜索结果：{0}，其中没有该剧集",
- "Sonarr did not give the series' name": "Sonarr 未提供该剧集的名称",
  "The service listed no titles": "该服务未列出任何标题",
  "{0} failed its daily check": "{0} 未通过每日检查",
  "{0} passes its daily check again": "{0} 再次通过每日检查",
  "{0} has no video track": "{0} 没有视频轨道",
- "Daily check skipped: relayed through another server": "每日检查已跳过：经由另一台服务器转发"
+ "Daily check skipped: relayed through another server": "每日检查已跳过：经由另一台服务器转发",
+ "Not run: the series' name is unknown": "未运行：该剧集的名称未知"
 }

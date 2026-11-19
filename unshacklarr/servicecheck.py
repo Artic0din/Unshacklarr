@@ -17,6 +17,7 @@ from unshacklarr.files import no_credentials, read_json, write_atomic
 
 CHECK_EVERY = timedelta(days=1)
 RETRY_AFTER = 900  # seconds before a check held back by a running download looks again
+SERIES_TRIED = 3  # series of a service tried before it is called failing: one title may be the problem, not the service
 STAGE_TIMEOUT = 120  # seconds a stage may take, however its request behaves
 STAGES = {"search": "Search", "list": "Listing", "tracks": "Tracks"}
 URL_QUERY = re.compile(r"(\b[a-z][a-z0-9+.-]*://[^\s?#]+)[?#]\S*", re.IGNORECASE)  # no_credentials leaves some signed queries (?hdnea=, #320)
@@ -44,61 +45,88 @@ def attempt(work):
         pool.shutdown(wait=False)
 
 
-def check_service(tag: str, control: dict, config: dict, query: str | None, now: datetime) -> dict:
-    backend = sync.backend_for(tag, config)
+def check_series(backend, tag: str, control: dict, config: dict, query: str | None, search: bool) -> dict:
+    """The stages of one series on its service: the search only when asked, then the listing and the tracks."""
     # never a relay: a relayed listing can open a session, and a pairing prompt, on the other server
     params, error = attempt(lambda: {k: v for k, v in sync.serve_params(control, config, backend).items() if k not in ("remote", "server")})
     if error:
-        stages = dict.fromkeys(STAGES, error)
-    else:
-        def search() -> list[dict]:
-            if not query:
-                raise ValueError("Sonarr did not give the series' name")
+        return {stage: error for stage in STAGES if search or stage != "search"}
+    stages = {}
+    if search:
+        def look() -> list[dict]:
             return backend.call("POST", "/api/search", json={**params, "service": tag, "query": query}).get("results") or []
 
-        results, error = attempt(search)
-        found = any(str(r.get("url") or r.get("id")) == control["title"] or sync.title_key(r.get("title")) == sync.title_key(query)
-                    for r in results or [])
-        stages = {"search": error or {"ok": True, "count": len(results), "found": found}}
+        if query:
+            results, error = attempt(look)
+            found = any(str(r.get("url") or r.get("id")) == control["title"] or sync.title_key(r.get("title")) == sync.title_key(query)
+                        for r in results or [])
+            stages["search"] = error or {"ok": True, "count": len(results), "found": found}
+        else:  # Sonarr did not answer: that says nothing of the service
+            stages["search"] = {"ok": None, "code": "SKIPPED", "message": "Not run: the series' name is unknown"}
 
-        titles, error = attempt(lambda: backend.call("POST", "/api/list-titles", json={**params, "service": tag, "title_id": control["title"]})["titles"])
-        if not error and not titles:
-            error = {"ok": False, "code": "EMPTY", "message": "The service listed no titles"}
-        stages["list"] = error or {"ok": True, "count": len(titles)}
+    titles, error = attempt(lambda: backend.call("POST", "/api/list-titles", json={**params, "service": tag, "title_id": control["title"]})["titles"])
+    if not error and not titles:
+        error = {"ok": False, "code": "EMPTY", "message": "The service listed no titles"}
+    stages["list"] = error or {"ok": True, "count": len(titles)}
 
-        def tracks() -> dict:
-            episodes = [t for t in titles if t.get("type") == "episode"] or titles
-            latest = max(episodes, key=lambda t: (int(t.get("season") or 0), int(t.get("number") or 0)))
-            code = f"S{int(latest.get('season') or 0):02}E{int(latest.get('number') or 0):02}"
-            parts = sync.list_tracks(control, config, {**params, "service": tag, "title_id": control["title"], "wanted": [code]}, backend=backend)
-            video, audio = (sum(len(p.get(kind) or []) for p in parts) for kind in ("video", "audio"))
-            found = {"episode": code, "video": video, "audio": audio}  # audio not required: 10 Play embeds it in the video
-            if video:
-                return {"ok": True, **found}
-            return {"ok": False, "code": "NO_TRACKS", "message": f"{code} has no video track", **found}
+    def tracks() -> dict:
+        episodes = [t for t in titles if t.get("type") == "episode"] or titles
+        latest = max(episodes, key=lambda t: (int(t.get("season") or 0), int(t.get("number") or 0)))
+        code = f"S{int(latest.get('season') or 0):02}E{int(latest.get('number') or 0):02}"
+        parts = sync.list_tracks(control, config, {**params, "service": tag, "title_id": control["title"], "wanted": [code]}, backend=backend)
+        video, audio = (sum(len(p.get(kind) or []) for p in parts) for kind in ("video", "audio"))
+        found = {"episode": code, "video": video, "audio": audio}  # audio not required: 10 Play embeds it in the video
+        if video:
+            return {"ok": True, **found}
+        return {"ok": False, "code": "NO_TRACKS", "message": f"{code} has no video track", **found}
 
-        if error:
-            stages["tracks"] = {"ok": False, "code": "NOT_RUN", "message": "No title was listed to ask the tracks of"}
-        else:
-            counted, error = attempt(tracks)
-            stages["tracks"] = error or counted
-    failed = [stage for stage in STAGES if not stages[stage]["ok"]]
-    return {"checked": now.isoformat(), "ok": not failed, "failed": failed, "stages": stages}
+    if error:
+        stages["tracks"] = {"ok": False, "code": "NOT_RUN", "message": "No title was listed to ask the tracks of"}
+    else:
+        counted, error = attempt(tracks)
+        stages["tracks"] = error or counted
+    return stages
+
+
+def check_service(tag: str, picks: list[tuple[int, dict]], config: dict, now: datetime) -> dict:
+    """A service's result from up to SERIES_TRIED of its series: the first whose listing and tracks pass stands for
+    it; a sign-in failure ends the tries (it is the session, not the title); else the first series' stages stand."""
+    backend = sync.backend_for(tag, config)
+    first = None
+    for tried, (tvdb, control) in enumerate(picks, 1):
+        stages = check_series(backend, tag, control, config, series_name(tvdb) if tried == 1 else None, search=tried == 1)
+        first = first or (tvdb, stages)
+        if stages["list"]["ok"] and stages["tracks"]["ok"]:
+            stages = {**first[1], **{stage: stages[stage] for stage in ("list", "tracks")}}
+            return result_of(now, tvdb, tried, stages)
+        if any(stage.get("code") == "AUTH_FAILED" for stage in stages.values()):
+            break
+    return result_of(now, first[0], tried, first[1])
+
+
+def result_of(now: datetime, tvdb: int, tried: int, stages: dict) -> dict:
+    failed = [stage for stage in STAGES if stages[stage]["ok"] is False]
+    return {"checked": now.isoformat(), "ok": not failed, "failed": failed, "tvdb": tvdb, "tried": tried, "stages": stages}
 
 
 def skipped(now: datetime) -> dict:
     return {"checked": now.isoformat(), "ok": None, "failed": [], "skipped": "relay", "stages": {}}
 
 
-def first_controls(config: dict) -> dict[str, tuple[int, dict] | None]:
-    """Each service a series uses, with the series (TVDB id) and title that stand for it: one that is not relayed
-    (--remote); None for a service whose every title is."""
-    first: dict[str, tuple[int, dict] | None] = {}
+def picked_controls(config: dict) -> dict[str, list[tuple[int, dict]]]:
+    """Each service a series uses, with up to SERIES_TRIED of its series (TVDB id and title, config order) that
+    are not relayed (--remote); an empty list for a service whose every series is."""
+    picked: dict[str, list[tuple[int, dict]]] = {}
+    seen: set[tuple[str, int]] = set()
     for tvdb, control in sync.configured_controls(config):
         tag = control.get("service")
-        if tag and not first.get(tag):
-            first[tag] = None if sync.stacked(control, config)[0].get("--remote") else (tvdb, control)
-    return first
+        if not tag:
+            continue
+        picked.setdefault(tag, [])
+        if len(picked[tag]) < SERIES_TRIED and (tag, tvdb) not in seen and not sync.stacked(control, config)[0].get("--remote"):
+            seen.add((tag, tvdb))
+            picked[tag].append((tvdb, control))
+    return picked
 
 
 def series_name(tvdb: int) -> str | None:
@@ -135,8 +163,8 @@ def run_check(now: datetime | None = None) -> dict | None:
         now = now or datetime.now(timezone.utc)
         config = sync.read_file()
         results = {}
-        for tag, pick in first_controls(config).items():
-            results[tag] = skipped(now) if pick is None else check_service(tag, pick[1], config, series_name(pick[0]), now)
+        for tag, picks in picked_controls(config).items():
+            results[tag] = check_service(tag, picks, config, now) if picks else skipped(now)
         before = read_results().get("services") or {}
         done = {"last_run": now.isoformat(), "services": results}
         try:

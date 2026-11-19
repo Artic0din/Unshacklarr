@@ -1197,12 +1197,13 @@ const promptState = (input) => {
     };
     box.S.authenticationMethods = { HULU: ["cookies", "credentials"], "HULU@vpn": ["cookies"], OPEN: [], ATVP: ["cookies"], ZONE: ["cookies"] };
     box.S.authenticationSetups = [];
-    box.S.config.series = { 1: { service: "HULU" }, 2: { service: "HULU" }, 3: { service: "OPEN" }, 4: { service: "EXTRA" } };
+    box.S.config.series = { 1: { service: "HULU" }, 2: { service: "HULU" }, 3: { service: "OPEN" }, 4: { service: "EXTRA" }, 5: { service: "ATVP" } };
     box.S.serviceChecks = { services: {
       OPEN: { checked: "2026-11-19T03:00:00Z", ok: null, failed: [], skipped: "relay", stages: {} },
       HULU: { checked: "2026-11-19T03:00:00Z", ok: false, failed: ["tracks"], stages: {
         search: { ok: true, count: 4, found: false }, list: { ok: true, count: 9 }, tracks: { ok: false, code: "AUTH_FAILED", message: "Sign-in expired" } } },
-      ATVP: { checked: "2026-11-19T03:00:00Z", ok: true, failed: [], stages: { search: { ok: true, count: 1, found: true } } } } };
+      EXTRA: { checked: "2026-11-19T03:00:00Z", ok: true, failed: [], stages: { search: { ok: null, code: "SKIPPED", message: "Not run: the series' name is unknown" },
+        list: { ok: true, count: 3 }, tracks: { ok: true, episode: "S01E03", video: 1, audio: 0 } } } } };
     const now = Math.floor(Date.now() / 1000);
     vm.runInContext(`servicesCookies = { folder: "/cookies", files: {
       HULU: [{ profile: "", count: 1, expired: true, expires: ${now - 86400}, updated: ${now} }, { profile: "kids", count: 3, expires: ${now + 90 * 86400}, updated: ${now} }],
@@ -1419,7 +1420,7 @@ def test_cancelled_authentication_is_rendered_until_the_next_refresh():
 def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     result = run_authentication_ui("cookies_per_service")
     rows = {row["name"]: row for row in result["rows"]}
-    assert [row["name"] for row in result["rows"]] == ["HULU", "EXTRA", "OPEN", "ATVP", "HULU · vpn", "ZONE"]
+    assert [row["name"] for row in result["rows"]] == ["HULU", "ATVP", "EXTRA", "OPEN", "HULU · vpn", "ZONE"]
     assert rows["HULU"] == {
         "name": "HULU", "label": "Sign-in needed", "tone": "bad", "attention": True, "used": ["2 series", "Show series"],
         # the daily check: its result, the stage that failed, and the search shown (not alerted) even when it missed the series
@@ -1433,7 +1434,7 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
         "cookies": ["—", "Managed on that server", "Check"],
     }
     # a cookie-only sign-in only tests its cookie file: no sign-in button, a Check beside the file
-    assert rows["ATVP"]["signIn"] == ["Not checked yet"] and rows["ATVP"]["tone"] == ""  # no series uses it: no daily check shown
+    assert rows["ATVP"]["signIn"][0] == "Not checked yet" and rows["ATVP"]["tone"] == ""
     assert rows["ATVP"]["cookies"] == ["ATVP.txt", "Valid · 90 days left", "15 cookies · updated today", "Check", "Replace", "Delete"]
     # several files: the check uses its series' profile, so Check sits under them all, not beside one
     assert rows["ZONE"]["cookies"] == ["ZONE.txt", "Expired", "1 cookie · updated today", "Replace", "Delete",
@@ -1441,7 +1442,8 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     assert rows["EXTRA"]["cookies"] == ["EXTRA.txt", "Valid · 90 days left", "2 cookies · updated today", "Replace", "Delete"]  # its file is there: Replace, not Add
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series", "Show series"]
     assert rows["OPEN"]["signIn"][-1] == "Daily check skipped: relayed through another server"  # a relay-only service has no stages
-    assert rows["EXTRA"]["signIn"][-1] == "Daily check: not run yet"
+    assert rows["EXTRA"]["signIn"][-2:] == ["Not checked yet", "Daily check passed now"]  # a skipped search shows no line
+    assert rows["ATVP"]["signIn"][-1] == "Daily check: not run yet"
     assert result["state"] == "sx-state down"
 
 

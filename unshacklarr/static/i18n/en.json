@@ -4643,7 +4643,6 @@
  "Search results: {0}, series not among them": [
   "search.count"
  ],
- "Sonarr did not give the series' name": [],
  "The service listed no titles": [],
  "{0} failed its daily check": [
   "tag"
@@ -4654,5 +4653,6 @@
  "{0} has no video track": [
   "code"
  ],
- "Daily check skipped: relayed through another server": []
+ "Daily check skipped: relayed through another server": [],
+ "Not run: the series' name is unknown": []
 }

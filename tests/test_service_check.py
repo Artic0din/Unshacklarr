@@ -25,13 +25,14 @@ class Serve:
         self.replies = {"/api/search": {"results": [{"title": "Show", "id": "show-1"}, {"title": "Other", "id": "o"}]},
                         "/api/list-titles": {"titles": TITLES}, "/api/list-tracks": TRACKS, **(replies or {})}
         self.calls = []
+        self.by_title = {}  # (path, title_id) -> a reply for that series only
 
     def services(self):
         return [{"tag": "RTLP", "cli_params": []}, {"tag": "MLT", "cli_params": []}]
 
     def call(self, method, path, **kwargs):
         self.calls.append((method, path, kwargs.get("json")))
-        reply = self.replies[path]
+        reply = self.by_title.get((path, (kwargs.get("json") or {}).get("title_id")), self.replies[path])
         if isinstance(reply, Exception):
             raise reply
         if callable(reply):
@@ -129,6 +130,63 @@ def test_tracks_pass_with_video_and_no_audio_list(check):
     assert result["ok"] is True and result["stages"]["tracks"] == {"ok": True, "episode": "S02E03", "video": 1, "audio": 0}
 
 
+def several(tmp_path, *lines):
+    (tmp_path / "config.yaml").write_text("series:\n" + "".join(f"  {tvdb}: {{service: RTLP, title: show-{tvdb}{extra}}}\n" for tvdb, extra in lines))
+
+
+def test_another_series_stands_in_when_the_first_is_not_the_services_problem(check, tmp_path):
+    several(tmp_path, (111, ""), (112, ""))
+    check.serve.by_title[("/api/list-tracks", "show-111")] = UnshackleError("not entitled to this title")
+
+    result = check.run_check(NOW)["services"]["RTLP"]
+
+    assert (result["ok"], result["failed"], result["tvdb"], result["tried"]) == (True, [], 112, 2)
+    assert result["stages"]["tracks"]["ok"] and result["stages"]["list"]["ok"]
+    assert [c[1] for c in check.serve.calls].count("/api/search") == 1  # asked for the first series only
+    assert check.sent == [] and set(check.serve.paths()) == ALLOWED
+
+
+def test_a_sign_in_failure_stops_at_once_it_is_the_session_not_the_title(check, tmp_path):
+    several(tmp_path, (111, ""), (112, ""))
+    error = UnshackleError("HTTP 401: session expired")
+    error.status, error.error_code = 401, "AUTH_FAILED"
+    check.serve.by_title[("/api/list-tracks", "show-111")] = error
+
+    result = check.run_check(NOW)["services"]["RTLP"]
+
+    assert (result["ok"], result["failed"], result["tvdb"], result["tried"]) == (False, ["tracks"], 111, 1)
+    assert result["stages"]["tracks"]["code"] == "AUTH_FAILED"
+    assert "show-112" not in [(c[2] or {}).get("title_id") for c in check.serve.calls]
+    assert set(check.serve.paths()) == ALLOWED
+
+
+def test_a_service_fails_when_three_series_fail_and_keeps_the_first_ones_stages(check, tmp_path):
+    several(tmp_path, (111, ", season_pages: {1: {url: show-111b}}"), (112, ""), (113, ""), (114, ""))
+    for tvdb in (111, 112, 113, 114):
+        check.serve.by_title[("/api/list-tracks", f"show-{tvdb}")] = UnshackleError(f"refused {tvdb}")
+
+    result = check.run_check(NOW)["services"]["RTLP"]
+
+    assert (result["ok"], result["failed"], result["tvdb"], result["tried"]) == (False, ["tracks"], 111, 3)
+    assert "refused 111" in result["stages"]["tracks"]["message"]
+    asked = {(c[2] or {}).get("title_id") for c in check.serve.calls}
+    assert asked >= {"show-111", "show-112", "show-113"} and not asked & {"show-111b", "show-114"}  # one series is one try
+    assert [(level, title) for level, title, _ in check.sent] == [("error", "RTLP failed its daily check")]
+
+
+def test_a_search_that_cannot_run_is_skipped_not_failed(check, monkeypatch):
+    def down(wanted, keep=3600):
+        raise check.requests.ConnectionError("sonarr is down")
+    monkeypatch.setattr(check.sync, "sonarr_series", down)
+
+    result = check.run_check(NOW)["services"]["RTLP"]
+
+    assert result["ok"] is True and result["failed"] == []
+    assert result["stages"]["search"]["ok"] is None and result["stages"]["search"]["message"]
+    assert result["stages"]["list"]["ok"] and result["stages"]["tracks"]["ok"]
+    assert "/api/search" not in check.serve.paths() and check.sent == []
+
+
 def test_a_relayed_series_is_never_asked_through_its_relay(check, tmp_path):
     (tmp_path / "config.yaml").write_text(
         "series:\n  111: {service: RTLP, title: relayed-1, options: {--remote: true, --server: far}}\n"
@@ -142,6 +200,7 @@ def test_a_relayed_series_is_never_asked_through_its_relay(check, tmp_path):
     sent = [payload for _, _, payload in check.serve.calls]
     assert sent and {p["service"] for p in sent} == {"RTLP"} and {p["title_id"] for p in sent if "title_id" in p} == {"local-1"}  # the relay-only services were not asked at all
     assert all("remote" not in p and "server" not in p for p in sent)
+    assert (results["RTLP"]["tvdb"], results["RTLP"]["tried"]) == (112, 1)  # the relayed one is not counted
     assert check.sent == []  # skipped is not a failure
 
 

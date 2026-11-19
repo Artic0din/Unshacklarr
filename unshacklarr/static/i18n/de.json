@@ -2458,10 +2458,10 @@
  "No title was listed to ask the tracks of": "Es wurde kein Titel aufgelistet, dessen Tracks abgefragt werden könnten",
  "Search results: {0}": "Suchergebnisse: {0}",
  "Search results: {0}, series not among them": "Suchergebnisse: {0}, die Serie ist nicht darunter",
- "Sonarr did not give the series' name": "Sonarr hat den Namen der Serie nicht geliefert",
  "The service listed no titles": "Der Dienst hat keine Titel aufgelistet",
  "{0} failed its daily check": "{0}: Tägliche Prüfung fehlgeschlagen",
  "{0} passes its daily check again": "{0} besteht die tägliche Prüfung wieder",
  "{0} has no video track": "{0} hat keine Videospur",
- "Daily check skipped: relayed through another server": "Tägliche Prüfung übersprungen: über einen anderen Server weitergeleitet"
+ "Daily check skipped: relayed through another server": "Tägliche Prüfung übersprungen: über einen anderen Server weitergeleitet",
+ "Not run: the series' name is unknown": "Nicht ausgeführt: Der Name der Serie ist unbekannt"
 }

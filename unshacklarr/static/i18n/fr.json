@@ -2500,10 +2500,10 @@
  "No title was listed to ask the tracks of": "Aucun titre n'a été listé dont demander les pistes",
  "Search results: {0}": "Résultats de recherche : {0}",
  "Search results: {0}, series not among them": "Résultats de recherche : {0}, la série n'en fait pas partie",
- "Sonarr did not give the series' name": "Sonarr n'a pas donné le nom de la série",
  "The service listed no titles": "Le service n'a listé aucun titre",
  "{0} failed its daily check": "{0} a échoué à sa vérification quotidienne",
  "{0} passes its daily check again": "{0} réussit de nouveau sa vérification quotidienne",
  "{0} has no video track": "{0} n'a aucune piste vidéo",
- "Daily check skipped: relayed through another server": "Vérification quotidienne ignorée : passe par un autre serveur"
+ "Daily check skipped: relayed through another server": "Vérification quotidienne ignorée : passe par un autre serveur",
+ "Not run: the series' name is unknown": "Non exécuté : le nom de la série est inconnu"
 }

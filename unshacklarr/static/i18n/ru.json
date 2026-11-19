@@ -2532,10 +2532,10 @@
  "No title was listed to ask the tracks of": "Не найдено ни одного названия, для которого можно запросить дорожки",
  "Search results: {0}": "Результаты поиска: {0}",
  "Search results: {0}, series not among them": "Результаты поиска: {0}, сериала среди них нет",
- "Sonarr did not give the series' name": "Sonarr не вернул название сериала",
  "The service listed no titles": "Сервис не вернул ни одного названия",
  "{0} failed its daily check": "{0}: ежедневная проверка не пройдена",
  "{0} passes its daily check again": "{0}: ежедневная проверка снова пройдена",
  "{0} has no video track": "В {0} нет видеодорожки",
- "Daily check skipped: relayed through another server": "Ежедневная проверка пропущена: идёт через другой сервер"
+ "Daily check skipped: relayed through another server": "Ежедневная проверка пропущена: идёт через другой сервер",
+ "Not run: the series' name is unknown": "Не выполнялось: название сериала неизвестно"
 }
