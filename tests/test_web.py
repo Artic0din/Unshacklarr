@@ -3257,6 +3257,29 @@ def test_a_title_added_by_its_stories_does_not_hand_its_old_number_to_another_ep
     assert own["available"] == {4: {"service": "S01E04", "name": "Night Shift / Mobbed"}} and own["titled"] == []
 
 
+def test_an_episode_at_its_own_number_is_kept_when_its_title_only_differs_a_little(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    # Kath & Kim on Netflix: the titles meet Sonarr's, so a title that says another episode refuses its number. An
+    # article more, a word less or other spaces do not say another episode; another title does.
+    pairs = [("Sex", "Sex"), ("Gay", "Gay"), ("Sport", "Sport"), ("Fat", "Fat"), ("Old", "Old"), ("Money", "Money"), ("Party", "Party"),
+             ("The Wedding", "Wedding"), ("Cactus", "Cactus Hour"), ("Sea Dog", "Seadog"), ("Vegas", "Las Vegas"),
+             ("France", "Mali"), ("The Ambush (1)", "The Ambush (2)"), ("Malibu", "Mali")]
+    service = [{"type": "episode", "season": 1, "number": n, "name": theirs} for n, (theirs, _) in enumerate(pairs, 1)]
+    sonarr = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "title": ours, "airDate": f"2002-05-{n:02}", "airDateUtc": f"2002-05-{n:02}T09:00:00Z"}
+              for n, (_, ours) in enumerate(pairs, 1)]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "NF", "cli_params": []}]})
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {})
+    monkeypatch.setattr(web, "tmdb_key", lambda: "")
+    available = web.probe_series({"service": "NF", "title": "x"}, 1)["available"]
+    for n, name in [(8, "The Wedding"), (9, "Cactus"), (10, "Sea Dog"), (11, "Vegas")]:
+        assert available[n] == {"service": f"S01E{n:02}", "name": name}  # by its number
+    assert not {12, 13, 14} & set(available)  # another title, another part, a longer word: still another episode
+
+
 def test_the_schedule_knows_each_episodes_latest_download(tmp_path, monkeypatch):
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
