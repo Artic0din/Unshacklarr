@@ -546,18 +546,47 @@ def test_a_failure_kept_from_another_backend_is_not_the_new_ones(check, tmp_path
     assert (moved["ok"], moved["failed"], moved["unresolved"]) == (True, [], {})  # that serve never failed a search
 
 
-def test_a_service_that_has_no_search_is_not_asked_to_search(check, tmp_path):
+def test_a_failure_kept_from_another_backend_is_dropped_while_the_service_is_skipped(check, tmp_path, monkeypatch):
     several(tmp_path, (111, ""))
-    check.serve.replies["/api/search"] = UnshackleError("RTLP through Unshackle: HTTP 400: search is not supported")
-    assert check.run_check(NOW)["services"]["RTLP"]["failed"] == ["search"]  # a serve that does not say: asked
+    check.serve.replies["/api/search"] = UnshackleError("search is down")
+    assert check.run_check(NOW)["services"]["RTLP"]["failed"] == ["search"]  # on the main unshackle serve
 
-    check.serve.services = lambda: [{"tag": "RTLP", "cli_params": [], "has_search": False}]
+    several(tmp_path, (111, ", options: {--remote: true}"))  # only relayed now, and moved to another serve
+    monkeypatch.setattr(check.sync, "BACKENDS", {"vpn": check.serve})
+    kept = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+
+    assert (kept["skipped"], kept["backend"], kept["unresolved"]) == ("relay", "vpn", {})
+
+
+def test_a_service_that_has_no_search_is_not_asked_to_search(check):
+    searched = lambda since: [payload["service"] for _, path, payload in check.serve.calls[since:] if path == "/api/search"]
+    check.serve.replies["/api/search"] = UnshackleError("Unshackle: HTTP 400: search is not supported")
+    first = check.run_check(NOW)["services"]
+    assert first["RTLP"]["failed"] == ["search"] and searched(0) == ["RTLP", "MLT"]  # a serve that does not say: asked
+
+    check.serve.services = lambda: [{"tag": "RTLP", "cli_params": [], "has_search": False}, {"tag": "MLT", "cli_params": [], "has_search": True}]
     asked = len(check.serve.calls)
-    result = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
+    results = check.run_check(NOW + timedelta(days=1))["services"]
 
-    assert "/api/search" not in [path for _, path, _ in check.serve.calls[asked:]]
-    assert result["stages"]["search"] == {"ok": None, "code": "UNSUPPORTED", "message": "Not run: the service has no search"}
-    assert (result["ok"], result["unresolved"]) == (True, {})  # nothing to search: no failure of it is kept
+    assert searched(asked) == ["MLT"]  # each service by its own entry, not another's
+    assert results["RTLP"]["stages"]["search"] == {"ok": None, "code": "UNSUPPORTED", "message": "Not run: the service has no search"}
+    assert (results["RTLP"]["ok"], results["RTLP"]["unresolved"]) == (True, {})  # nothing to search: no failure of it is kept
+    assert results["MLT"]["failed"] == ["search"]
+
+
+def test_a_catalogue_that_cannot_be_read_does_not_stop_the_search(check, tmp_path):
+    several(tmp_path, (111, ""))
+    reads = iter([[{"tag": "RTLP", "cli_params": []}]])  # read once for the request's options, then gone
+
+    def gone():
+        for services in reads:
+            return services
+        raise UnshackleError("unshackle serve is unreachable")
+    check.serve.services = gone
+
+    check.run_check(NOW)
+
+    assert "/api/search" in check.serve.paths()  # it cannot say the service has no search: asked
 
 
 def test_a_run_that_cannot_start_frees_its_reservation_and_is_not_called_a_download(check, monkeypatch):
