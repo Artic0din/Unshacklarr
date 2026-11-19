@@ -4627,8 +4627,12 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
                 available[e["id"]] = {"service": key, "name": hit.get("name"), "match": "absolute"}
                 taken.add(key)
                 break
+    by_hand = {e["id"] for e in every if f"S{e['seasonNumber']:02}E{e['episodeNumber']:02}" in mapped}
     for key, match in added.items():  # its service episode is that Sonarr episode's now, and no other's by its number
-        for id_ in [id_ for id_, have in available.items() if have["service"].split(".")[0] == key]:
+        had = [id_ for id_, have in available.items() if have["service"].split(".")[0] == key]
+        if by_hand & {match["episodeId"], *had}:
+            continue  # a number given by hand stands: an added title does not take it, nor move that episode
+        for id_ in had:
             del available[id_]
         available[match["episodeId"]] = by_its_title(key, match)
     checks = []
@@ -4650,7 +4654,8 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         # whether the service's titles and Sonarr's agree where both number an episode alike: when they don't, the
         # page offers Sonarr's titles in your language (Sonarr 5)
         "titlesAgree": agreeing,
-        "titled": sorted(found),  # the service's numbers some Sonarr episode's title points to
+        # the service's numbers some Sonarr episode's title points to
+        "titled": sorted(set(by_title) | {a["service"].split(".")[0] for a in available.values() if a.get("match") == "title"}),
         "local_titles": local,  # TVDB's titles in your language, for the page to show over Sonarr's "TBA"
         # everything the service lists, as it numbers it: what a download's own numbering can ask for
         "titles": [{"key": f"S{t['season']:02}E{t['number']:02}", "part": t.get("part"), "name": t.get("name")} for t in service_eps],

@@ -3167,6 +3167,16 @@ def test_a_title_added_by_its_stories_does_not_hand_its_old_number_to_another_ep
     assert probed["available"] == {1: {"service": "S01E13", "name": "The New Case", "match": "absolute"},
                                    2: {"service": "S02E15", "name": "Night Shift / Mobbed", "match": "title", "same": True}}
     assert probed["titled"] == ["S02E15"]
+    # the service's S01E04 is Sonarr's S01E09 by its stories: Sonarr's own S01E04, another title, no longer has it
+    service = [{"type": "episode", "season": 1, "number": 4, "name": "Night Shift / Mobbed"}]
+    sonarr[:] = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "title": name, "airDate": f"2020-01-0{n}", "airDateUtc": f"2020-01-0{n}T09:00:00Z"}
+                 for n, name in [(4, "Something Else"), (5, "Another Thing"), (9, "Mobbed/Night Shift")]]
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "BINGE", "cli_params": []}]})
+    moved = {9: {"service": "S01E04", "name": "Night Shift / Mobbed", "match": "title", "same": True}}
+    assert web.probe_series({"service": "BINGE", "title": "x"}, 1)["available"] == moved
+    # unless an episode was given that number by hand: then all stays as it was found before, and the title adds nothing
+    by_hand = web.probe_series({"service": "BINGE", "title": "x", "episode_map": {"S01E05": "S01E04"}}, 1)["available"]
+    assert by_hand == {4: {"service": "S01E04", "name": "Night Shift / Mobbed"}, 5: {"service": "S01E04", "name": "Night Shift / Mobbed"}}
 
 
 def test_the_schedule_knows_each_episodes_latest_download(tmp_path, monkeypatch):
