@@ -2470,6 +2470,7 @@
  "{0} passes its daily check again": "{0} supera di nuovo il controllo giornaliero",
  "{0} has no video track": "{0} non ha tracce video",
  "Daily check skipped: relayed through another server": "Controllo giornaliero saltato: passa da un altro server",
+ "Daily check skipped: its programmes are found one episode at a time": "Controllo giornaliero saltato: i suoi programmi si cercano un episodio alla volta",
  "Not run: the series' name is unknown": "Non eseguito: il nome della serie è sconosciuto",
  "A download is running: check again when it ends": "Un download è in corso: controlla di nuovo quando termina",
  "Unexpected {0} in the reply": "{0} inattesi nella risposta",

@@ -2505,6 +2505,7 @@
  "{0} passes its daily check again": "{0} réussit de nouveau sa vérification quotidienne",
  "{0} has no video track": "{0} n'a aucune piste vidéo",
  "Daily check skipped: relayed through another server": "Vérification quotidienne ignorée : passe par un autre serveur",
+ "Daily check skipped: its programmes are found one episode at a time": "Vérification quotidienne ignorée : ses programmes sont cherchés épisode par épisode",
  "Not run: the series' name is unknown": "Non exécuté : le nom de la série est inconnu",
  "A download is running: check again when it ends": "Un téléchargement est en cours : vérifiez à nouveau quand il se termine",
  "Unexpected {0} in the reply": "{0} inattendus dans la réponse",

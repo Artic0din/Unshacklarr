@@ -1198,11 +1198,14 @@ const promptState = (input) => {
       "HULU@vpn": { service: "HULU", backend: "vpn", state: "validated", validated_at: "2026-11-15T00:00:00Z" },
       OPEN: { service: "OPEN", backend: "", state: "anonymous" },
       FALL: { service: "FALL", backend: "", state: "anonymous" },
+      PROG: { service: "PROG", backend: "", state: "anonymous" },
     };
     box.S.authenticationMethods = { HULU: ["cookies", "credentials"], "HULU@vpn": ["cookies"], OPEN: [], ATVP: ["cookies"], ZONE: ["cookies"], FALL: [] };
     box.S.authenticationSetups = [];
-    box.S.config.series = { 1: { service: "HULU" }, 2: { service: "HULU" }, 3: { service: "OPEN" }, 4: { service: "EXTRA" }, 5: { service: "ATVP", fallback: { service: "FALL" } } };
+    box.S.config.series = { 1: { service: "HULU" }, 2: { service: "HULU" }, 3: { service: "OPEN" }, 4: { service: "EXTRA" }, 5: { service: "ATVP", fallback: { service: "FALL" } },
+      6: { service: "PROG", programmes: true } };
     box.S.serviceChecks = { services: {
+      PROG: { checked: "2026-11-19T03:00:00Z", ok: null, failed: [], skipped: "programmes", stages: {} },
       FALL: { checked: "2026-11-19T03:00:00Z", ok: true, failed: [], stages: { search: { ok: true, count: 2, found: true }, list: { ok: true, count: 3 },
         tracks: { ok: true, episode: "S01E03", video: 1, audio: 1 } } },
       OPEN: { checked: "2026-11-19T03:00:00Z", ok: null, failed: [], skipped: "relay", stages: {} },
@@ -1451,7 +1454,7 @@ def test_cancelled_authentication_is_rendered_until_the_next_refresh():
 def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     result = run_authentication_ui("cookies_per_service")
     rows = {row["name"]: row for row in result["rows"]}
-    assert [row["name"] for row in result["rows"]] == ["HULU", "ATVP", "EXTRA", "OPEN", "FALL", "HULU · vpn", "ZONE"]
+    assert [row["name"] for row in result["rows"]] == ["HULU", "ATVP", "EXTRA", "OPEN", "PROG", "FALL", "HULU · vpn", "ZONE"]
     assert rows["HULU"] == {
         "name": "HULU", "label": "Sign-in needed", "tone": "bad", "attention": True, "used": ["2 series", "Show series"],
         # the daily check: its result, the stage that failed, and the search shown (not alerted) even when it missed the series
@@ -1474,6 +1477,7 @@ def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
     assert rows["OPEN"]["cookies"] == ["Not needed"] and rows["OPEN"]["used"] == ["1 series", "Show series"]
     assert rows["OPEN"]["signIn"][-1] == "Daily check skipped: relayed through another server"  # a relay-only service has no stages
     assert rows["EXTRA"]["signIn"][-2:] == ["Not checked yet", "Daily check passed now"]  # a skipped search shows no line
+    assert rows["PROG"]["signIn"][-1] == "Daily check skipped: its programmes are found one episode at a time"
     assert rows["ATVP"]["signIn"][-1] == "Daily check: not run yet"
     # a service only a fallback uses counts no series, yet it is checked: its result shows; unchecked, it shows nothing
     assert rows["FALL"]["used"] == ["No series"] and rows["FALL"]["signIn"][-2:] == ["Daily check passed now", "Search results: 2"]

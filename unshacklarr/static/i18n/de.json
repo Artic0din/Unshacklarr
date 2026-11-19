@@ -2463,6 +2463,7 @@
  "{0} passes its daily check again": "{0} besteht die tägliche Prüfung wieder",
  "{0} has no video track": "{0} hat keine Videospur",
  "Daily check skipped: relayed through another server": "Tägliche Prüfung übersprungen: über einen anderen Server weitergeleitet",
+ "Daily check skipped: its programmes are found one episode at a time": "Tägliche Prüfung übersprungen: Die Sendungen werden Folge für Folge gesucht",
  "Not run: the series' name is unknown": "Nicht ausgeführt: Der Name der Serie ist unbekannt",
  "A download is running: check again when it ends": "Ein Download läuft: Prüfen Sie erneut, wenn er endet",
  "Unexpected {0} in the reply": "Unerwartete {0} in der Antwort",

@@ -153,22 +153,31 @@ def result_of(now: datetime, tvdb: int, tried: int, stages: dict, probe: int | N
             **({"next": probe} if failed and probe is not None else {})}
 
 
-def skipped(now: datetime) -> dict:
-    return {"checked": now.isoformat(), "ok": None, "failed": [], "skipped": "relay", "stages": {}}
+def skipped(now: datetime, why: str) -> dict:
+    return {"checked": now.isoformat(), "ok": None, "failed": [], "skipped": why, "stages": {}}
 
 
-def picked_controls(config: dict, before: dict) -> dict[str, tuple[list[tuple[int, dict]], list[int]]]:
-    """Each service a series uses: the series (TVDB id and title) to try, in order, and every series of it in config
-    order. None is relayed (--remote). The order starts with the one that stood for the service last time; when its
-    last result was a failure, with the one its probe named, and only that one is tried (so a service that is down
-    is not asked ten times a day), else up to SERIES_TRIED. No series to try: every series of the service is relayed."""
+def picked_controls(config: dict, before: dict) -> dict[str, tuple[list[tuple[int, dict]], list[int], str]]:
+    """Each service a series uses: the series (TVDB id and title) to try, in order, every series of it in config
+    order, and why none can be tried. None is relayed (--remote). The order starts with the one that stood for the
+    service last time; when its last result was a failure, with the one its probe named, and only that one is tried
+    (so a service that is down is not asked ten times a day), else up to SERIES_TRIED. No series to try: every series
+    of the service is relayed ("relay"), or its series are separate programmes found one episode at a time, with no
+    title of their own to list ("programmes")."""
     every: dict[str, list[tuple[int, dict]]] = {}
+    relayed = set()
+    series = config.get("series") or {}
+    for show in series.values() if isinstance(series, dict) else []:
+        if isinstance(show, dict) and show.get("programmes") is True and show.get("service"):
+            every.setdefault(show["service"], [])  # checked through a programme pasted for it, else told as skipped
     for tvdb, control in sync.configured_controls(config):
         tag = control.get("service")
         if not tag:
             continue
         every.setdefault(tag, [])
-        if all(tvdb != seen for seen, _ in every[tag]) and not sync.stacked(control, config)[0].get("--remote"):
+        if sync.stacked(control, config)[0].get("--remote"):
+            relayed.add(tag)
+        elif all(tvdb != seen for seen, _ in every[tag]):
             every[tag].append((tvdb, control))
     picked = {}
     for tag, series in every.items():
@@ -176,7 +185,7 @@ def picked_controls(config: dict, before: dict) -> dict[str, tuple[list[tuple[in
         failing = last.get("ok") is False
         ring = [tvdb for tvdb, _ in series]
         series = sorted(series, key=lambda pick: pick[0] != ((last.get("next") or last.get("tvdb")) if failing else last.get("tvdb")))  # stable
-        picked[tag] = (series[: 1 if failing else SERIES_TRIED], ring)
+        picked[tag] = (series[: 1 if failing else SERIES_TRIED], ring, "relay" if tag in relayed else "programmes")
     return picked
 
 
@@ -191,15 +200,23 @@ def read_results() -> dict:
     return read_json(sync.SERVICE_CHECKS_FILE, {})
 
 
+def unresolved(last: dict, result: dict) -> list[str]:
+    """The stages still failing as the person was last told: those that failed now, and those that were failing and
+    have not passed since (skipped now, or the whole service is): kept with the result, so that a skipped run does
+    not forget a failure whose recovery is still to tell."""
+    was = last.get("unresolved", last.get("failed", []))
+    if result.get("skipped"):
+        return was
+    return [stage for stage in STAGES if result["stages"][stage]["ok"] is False or (stage in was and result["stages"][stage]["ok"] is not True)]
+
+
 def notify_changes(config: dict, before: dict, after: dict) -> None:
-    """One message when a service's failing stages change (it fails, fails elsewhere, or recovers), none while they
-    stay and none for a skipped service. A stage that was failing and did not pass (it is skipped now) still fails."""
+    """One message when a service's unresolved stages change (it fails, fails elsewhere, or recovers), none while
+    they stay and none for a skipped service."""
     for tag, result in after.items():
-        if result.get("skipped"):
-            continue
-        was = (before.get(tag) or {}).get("failed", [])
-        failing = [stage for stage in STAGES if result["stages"][stage]["ok"] is False or (stage in was and result["stages"][stage]["ok"] is not True)]
-        if failing == was:
+        last = before.get(tag) or {}
+        was, failing = last.get("unresolved", last.get("failed", [])), result["unresolved"]
+        if result.get("skipped") or failing == was:
             continue
         key = f"service-check:{tag}"  # the bell keeps one line a service: the newest replaces the one before
         if failing:
@@ -220,14 +237,15 @@ def run_check(now: datetime | None = None, reserved: bool = False) -> dict | Non
         config = sync.read_file()
         before = read_results().get("services") or {}
         results = {}
-        for tag, (picks, ring) in picked_controls(config, before).items():
+        for tag, (picks, ring, why) in picked_controls(config, before).items():
             if not picks:
-                results[tag] = skipped(now)
-                continue
-            try:
-                results[tag] = check_service(tag, picks, ring, config, now)
-            except Exception as e:  # one service's unexpected failure must not stop the others or the save
-                results[tag] = result_of(now, picks[0][0], 0, dict.fromkeys(STAGES, failure(e)))
+                results[tag] = skipped(now, why)
+            else:
+                try:
+                    results[tag] = check_service(tag, picks, ring, config, now)
+                except Exception as e:  # one service's unexpected failure must not stop the others or the save
+                    results[tag] = result_of(now, picks[0][0], 0, dict.fromkeys(STAGES, failure(e)))
+            results[tag]["unresolved"] = unresolved(before.get(tag) or {}, results[tag])
         done = {"last_run": now.isoformat(), "services": results}
         try:
             write_atomic(sync.SERVICE_CHECKS_FILE, json.dumps(done))

@@ -584,6 +584,42 @@ def test_a_failing_service_that_is_skipped_or_cannot_search_is_not_announced_as_
     assert results["RTLP"]["skipped"] == "relay" and len(check.sent) == told  # skipping tells nothing
 
 
+def test_a_failure_stays_unresolved_through_skips_and_its_recovery_is_told_once(check, tmp_path, monkeypatch):
+    check.serve.replies["/api/search"] = UnshackleError("search is down")
+    check.run_check(NOW)
+    assert len(check.sent) == 2  # RTLP and MLT failed their search
+
+    def down(wanted, keep=3600):
+        raise check.requests.ConnectionError("sonarr is down")
+    monkeypatch.setattr(check.sync, "sonarr_series", down)
+    kept = check.run_check(NOW + timedelta(days=1))["services"]  # the search is skipped: neither failed nor passed
+    assert kept["RTLP"]["failed"] == [] and kept["RTLP"]["unresolved"] == ["search"] and len(check.sent) == 2
+
+    several(tmp_path, (111, ", options: {--remote: true}"))  # RTLP only relayed now: skipped, its failure still unresolved
+    kept = check.run_check(NOW + timedelta(days=2))["services"]
+    assert kept["RTLP"]["skipped"] == "relay" and kept["RTLP"]["unresolved"] == ["search"] and len(check.sent) == 2
+
+    several(tmp_path, (111, ""))
+    check.serve.replies["/api/search"] = {"results": [{"title": "Show", "id": "show-1"}]}
+    monkeypatch.setattr(check.sync, "sonarr_series", lambda wanted, keep=3600: {t: {"title": "Show"} for t in wanted})
+    passed = check.run_check(NOW + timedelta(days=3))["services"]
+    assert passed["RTLP"]["ok"] is True and passed["RTLP"]["unresolved"] == []
+    assert [(level, title) for level, title, _ in check.sent[2:]] == [("success", "RTLP passes its daily check again")]
+    check.run_check(NOW + timedelta(days=4))
+    assert len(check.sent) == 3  # told once
+
+
+def test_a_service_only_programmes_series_use_is_shown_as_skipped_not_left_out(check, tmp_path):
+    (tmp_path / "config.yaml").write_text("series:\n  111: {service: RTLP, title: show-1}\n  222: {service: IP, programmes: true}\n"
+                                         "notifications: {urls: []}\n")
+
+    results = check.run_check(NOW)["services"]
+
+    assert results["RTLP"]["ok"] is True
+    assert results["IP"]["skipped"] == "programmes" and results["IP"]["ok"] is None and results["IP"]["stages"] == {}
+    assert {payload["service"] for _, _, payload in check.serve.calls} == {"RTLP"} and check.sent == []
+
+
 @pytest.mark.parametrize("text", [
     "Max retries exceeded with url: /seg.mp4?hdnea=exp=1~hmac=SECRET",
     r'{"url":"https:\/\/cdn.example\/a.m3u8?hdnea=SECRET"}',

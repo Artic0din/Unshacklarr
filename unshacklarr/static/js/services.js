@@ -181,7 +181,8 @@ function renderServices() {
   const checkLines = (m) => {
     const done = m.check;
     if (!done) return m.used ? [el("small", { className: "sv-check", textContent: "Daily check: not run yet" })] : [];
-    if (done.skipped) return [el("small", { className: "sv-check", textContent: "Daily check skipped: relayed through another server" })];
+    if (done.skipped) return [el("small", { className: "sv-check", textContent: done.skipped === "programmes"
+      ? "Daily check skipped: its programmes are found one episode at a time" : "Daily check skipped: relayed through another server" })];
     const signIn = Object.values(done.stages).some((stage) => stage.code === "AUTH_FAILED"), when = ago(done.checked), search = done.stages.search;
     return [el("small", { className: "sv-check", dataset: done.ok ? {} : { tone: "bad" },
         textContent: done.ok ? `Daily check passed ${when}` : signIn ? `Daily check: sign-in failed ${when}` : `Daily check failed ${when}` }),
