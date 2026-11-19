@@ -136,6 +136,11 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **An episode under its own number is no longer hidden for a small difference in its title.** Kath & Kim on Netflix
+  lists S01E08 "The Wedding" and S03E01 "Cactus"; Sonarr calls them "Wedding" and "Cactus Hour", so both showed as
+  not on the service and were not downloaded. Under the same number, a title that is the other's first or last
+  words, or the same with other spaces or punctuation ("Sea Dog", "Seadog"), no longer says another episode; another
+  title or another part number still does. (#344)
 - **A title TMDB dates to another episode no longer blocks the episode Sonarr itself gives it to.** Binge's "Killer
   Connection / Bloody Birthday" is Sonarr's S15E08, but TMDB gives the same name to the episode aired on 2014-05-01,
   S15E06: the title fitted two episodes, so it was matched to neither. When a title is exactly one episode's own

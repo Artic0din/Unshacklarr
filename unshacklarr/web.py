@@ -4251,6 +4251,17 @@ def spelt_alike(a: str, b: str) -> bool:
     return same_title(a, b) or last_number(a) == last_number(b) and same_title(a.replace(" ", ""), b.replace(" ", ""))
 
 
+def not_another(a: str, b: str) -> bool:
+    """Whether two plain titles under the same number can be one episode's. A weaker question than same_title's,
+    which finds a title's episode anywhere in a series: here a title that is the other's first or last words says
+    no other episode ("wedding" and "the wedding", "cactus" and "cactus hour"), nor one spelt with other spaces
+    ("sea dog", "seadog"). One with another number does ("the ambush", "the ambush part 2")."""
+    if same_title(a, b) or spelt_alike(a, b):
+        return True
+    few, many = sorted((a.split(), b.split()), key=len)
+    return bool(few) and last_number(a) == last_number(b) and few in (many[:len(few)], many[-len(few):])
+
+
 @functools.lru_cache(maxsize=1 << 14)
 def letters(title: str) -> collections.Counter:
     return collections.Counter(title)
@@ -4608,7 +4619,7 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         elif hit and (theirs or "").split(".")[0] not in by_title \
                 and claimed.get(int(theirs[1:].split("E")[0]), e["seasonNumber"]) == e["seasonNumber"]:  # nor another season's
             theirs_name = usable_title(hit.get("name"))
-            clash = comparable and theirs_name and known[e["id"]] and not any(same_title(theirs_name, t) for t in known[e["id"]])
+            clash = comparable and theirs_name and known[e["id"]] and not any(not_another(theirs_name, t) for t in known[e["id"]])
             if sxxeyy in mapped or not clash:
                 available[e["id"]] = {"service": theirs, "name": hit.get("name")}
     # Numbered from the series' first episode (Netflix's anime: Sonarr's S02E01, the 13th, is its S02E13; a single
@@ -4622,6 +4633,7 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         for key in dict.fromkeys((f"S{e['seasonNumber']:02}E{absolute:02}", f"S01E{absolute:02}")):
             hit = by_key.get(key)
             theirs_name = usable_title((hit or {}).get("name"))
+            # the number here is worked out, not the episode's own: the title must be the episode's (same_title)
             clash = comparable and theirs_name and known[e["id"]] and not any(same_title(theirs_name, t) for t in known[e["id"]])
             if hit and key not in taken and key not in by_title and not clash:
                 available[e["id"]] = {"service": key, "name": hit.get("name"), "match": "absolute"}
