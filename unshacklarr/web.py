@@ -4633,7 +4633,8 @@ def probe_one(show: dict, series_id: int, title: str, seasons: dict | None) -> d
         for key in dict.fromkeys((f"S{e['seasonNumber']:02}E{absolute:02}", f"S01E{absolute:02}")):
             hit = by_key.get(key)
             theirs_name = usable_title((hit or {}).get("name"))
-            clash = comparable and theirs_name and known[e["id"]] and not any(not_another(theirs_name, t) for t in known[e["id"]])
+            # the number here is worked out, not the episode's own: the title must be the episode's (same_title)
+            clash = comparable and theirs_name and known[e["id"]] and not any(same_title(theirs_name, t) for t in known[e["id"]])
             if hit and key not in taken and key not in by_title and not clash:
                 available[e["id"]] = {"service": key, "name": hit.get("name"), "match": "absolute"}
                 taken.add(key)

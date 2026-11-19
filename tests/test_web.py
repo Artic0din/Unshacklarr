@@ -3271,6 +3271,9 @@ def test_an_episode_at_its_own_number_is_kept_when_its_title_only_differs_a_litt
     service = [{"type": "episode", "season": 1, "number": n, "name": theirs} for n, (theirs, _) in enumerate(pairs, 1)]
     sonarr = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "title": ours, "airDate": f"2002-05-{n:02}", "airDateUtc": f"2002-05-{n:02}T09:00:00Z"}
               for n, (_, ours) in enumerate(pairs, 1)]
+    # the 12th episode of the series, numbered S02E01 by Sonarr: the service's S01E12 "France" is free, and nearly its title
+    sonarr.append({"id": 20, "seasonNumber": 2, "episodeNumber": 1, "absoluteEpisodeNumber": 12, "title": "La France",
+                   "airDate": "2003-05-01", "airDateUtc": "2003-05-01T09:00:00Z"})
     monkeypatch.setattr(web.UNSHACKLE, "call", lambda method, path, **k: {"titles": service, "services": [{"tag": "NF", "cli_params": []}]})
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **q: sonarr if path == "episode" else {})
     monkeypatch.setattr(web, "tmdb_key", lambda: "")
@@ -3278,6 +3281,8 @@ def test_an_episode_at_its_own_number_is_kept_when_its_title_only_differs_a_litt
     for n, name in [(8, "The Wedding"), (9, "Cactus"), (10, "Sea Dog"), (11, "Vegas")]:
         assert available[n] == {"service": f"S01E{n:02}", "name": name}  # by its number
     assert not {12, 13, 14} & set(available)  # another title, another part, a longer word: still another episode
+    # a number worked out from the series' first episode is a guess: there the title must be the episode's, as before
+    assert 20 not in available
 
 
 def test_the_schedule_knows_each_episodes_latest_download(tmp_path, monkeypatch):
