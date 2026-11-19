@@ -4325,9 +4325,12 @@ def match_by_title(service_eps: list[dict], sonarr_eps: list[dict], tmdb_eps: li
             ids = owned | {id_ for id_, _, same in hits if same and not own_exact}
         return ids
 
-    exact: dict[int, set] = {}  # a Sonarr episode -> the service's names that are its very title
+    # a Sonarr episode -> the service's names that are its very title; not one TMDB dates to it that another episode
+    # is itself titled with: that name is the other's, and must not keep this episode from its own
+    exact: dict[int, set] = {}
+    owned_titles = {title for title, _ in own_named}
     for title, id_ in named:
-        if title in keys_by_name:
+        if title in keys_by_name and ((title, id_) in own_named or title not in owned_titles):
             exact.setdefault(id_, set()).add(title)
     found: dict[str, list] = {}
     for t in service_eps:

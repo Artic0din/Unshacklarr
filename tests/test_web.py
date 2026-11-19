@@ -6528,6 +6528,26 @@ def test_the_episode_titled_with_the_name_outranks_one_that_has_it_through_tmdb(
     assert found("Bloody Birthday", sonarr[:1], alias("Bloody Birthday")) == {"S16E16": 24969}
 
 
+def test_a_tmdb_date_that_loses_a_title_does_not_keep_its_episode_from_another_name():
+    from unshacklarr.web import match_by_title
+    # TMDB dates "Killer Connection/Bloody Birthday" to the day of another episode: that one is still found by its own name
+    sonarr = [{"id": 1, "seasonNumber": 1, "episodeNumber": 1, "title": "Killer Connection/Bloody Birthday", "airDate": "2020-01-01"},
+              {"id": 2, "seasonNumber": 1, "episodeNumber": 2, "title": "Night Shifts/Mobbed", "airDate": "2020-01-08"}]
+    tmdb = [{"names": ["Killer Connection/Bloody Birthday"], "air_date": "2020-01-08", "season": 1, "number": 2}]
+    service = [{"season": 9, "number": 1, "name": "Killer Connection / Bloody Birthday"}, {"season": 9, "number": 2, "name": "Night Shift / Mobbed"}]
+    assert {k: m["episodeId"] for k, m in match_by_title(service, sonarr, tmdb).items()} == {"S09E01": 1, "S09E02": 2}
+
+
+def test_tvdbs_title_for_the_very_episode_outranks_a_tmdb_date():
+    from unshacklarr.web import match_by_title
+    # Sonarr's title says nothing ("Episode 1"); TVDB's website names that very episode, TMDB dates the name to another
+    sonarr = [{"id": 1, "seasonNumber": 1, "episodeNumber": 1, "title": "Episode 1", "airDate": "2020-01-01"},
+              {"id": 2, "seasonNumber": 1, "episodeNumber": 2, "title": "Episode 2", "airDate": "2020-01-08"}]
+    tmdb = [{"episodeId": 1, "names": ["Le Port"]}, {"names": ["Le Port"], "air_date": "2020-01-08", "season": 1, "number": 2}]
+    found = match_by_title([{"season": 9, "number": 1, "name": "Le Port"}], sonarr, tmdb)
+    assert {k: m["episodeId"] for k, m in found.items()} == {"S09E01": 1}
+
+
 def test_a_year_in_brackets_is_not_a_part():
     from unshacklarr.web import plain_title, same_title
     assert plain_title("The Ambush (2)") == "the ambush part 2"
