@@ -2463,7 +2463,7 @@
  "Daily check passed {0}": "毎日の確認に成功しました {0}",
  "Daily check: not run yet": "毎日の確認: まだ実行されていません",
  "Daily check: sign-in failed {0}": "毎日の確認: サインインに失敗しました {0}",
- "It searches, lists and has tracks again.": "検索、一覧、トラックが再び動作しています。",
+ "Each stage that ran passed.": "実行された各段階は合格しました。",
  "Listing": "一覧",
  "No answer within {0} s": "{0} 秒以内に応答がありません",
  "No title was listed to ask the tracks of": "トラックを問い合わせるタイトルが一覧にありませんでした",

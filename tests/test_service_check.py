@@ -544,6 +544,8 @@ def test_a_failure_kept_from_another_backend_is_not_the_new_ones(check, tmp_path
     moved = check.run_check(NOW + timedelta(days=1))["services"]["RTLP"]
 
     assert (moved["ok"], moved["failed"], moved["unresolved"]) == (True, [], {})  # that serve never failed a search
+    # it is told as passing, without saying a search worked that could not run
+    assert check.sent[-1] == ("success", "RTLP passes its daily check again", "Each stage that ran passed.")
 
 
 def test_a_failure_kept_from_another_backend_is_dropped_while_the_service_is_skipped(check, tmp_path, monkeypatch):

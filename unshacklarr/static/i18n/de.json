@@ -2452,7 +2452,7 @@
  "Daily check passed {0}": "Tägliche Prüfung bestanden {0}",
  "Daily check: not run yet": "Tägliche Prüfung: noch nicht ausgeführt",
  "Daily check: sign-in failed {0}": "Tägliche Prüfung: Anmeldung fehlgeschlagen {0}",
- "It searches, lists and has tracks again.": "Suche, Auflistung und Tracks funktionieren wieder.",
+ "Each stage that ran passed.": "Jede ausgeführte Stufe wurde bestanden.",
  "Listing": "Auflistung",
  "No answer within {0} s": "Keine Antwort innerhalb von {0} s",
  "No title was listed to ask the tracks of": "Es wurde kein Titel aufgelistet, dessen Tracks abgefragt werden könnten",

@@ -2526,7 +2526,7 @@
  "Daily check passed {0}": "Ежедневная проверка пройдена {0}",
  "Daily check: not run yet": "Ежедневная проверка: ещё не выполнялась",
  "Daily check: sign-in failed {0}": "Ежедневная проверка: не удалось войти {0}",
- "It searches, lists and has tracks again.": "Поиск, список и дорожки снова работают.",
+ "Each stage that ran passed.": "Все выполненные этапы пройдены.",
  "Listing": "Список",
  "No answer within {0} s": "Нет ответа за {0} с",
  "No title was listed to ask the tracks of": "Не найдено ни одного названия, для которого можно запросить дорожки",

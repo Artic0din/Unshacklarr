@@ -2437,7 +2437,7 @@
  "Daily check passed {0}": "Comprobación diaria superada {0}",
  "Daily check: not run yet": "Comprobación diaria: aún no realizada",
  "Daily check: sign-in failed {0}": "Comprobación diaria: falló el inicio de sesión {0}",
- "It searches, lists and has tracks again.": "Vuelve a buscar, listar y tener pistas.",
+ "Each stage that ran passed.": "Cada etapa ejecutada pasó.",
  "Listing": "Listado",
  "No answer within {0} s": "Sin respuesta en {0} s",
  "No title was listed to ask the tracks of": "No se listó ningún título del que pedir las pistas",

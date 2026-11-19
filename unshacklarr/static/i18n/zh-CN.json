@@ -2468,7 +2468,7 @@
  "Daily check passed {0}": "每日检查通过 {0}",
  "Daily check: not run yet": "每日检查：尚未运行",
  "Daily check: sign-in failed {0}": "每日检查：登录失败 {0}",
- "It searches, lists and has tracks again.": "搜索、列表和轨道已恢复正常。",
+ "Each stage that ran passed.": "已运行的每个阶段均通过。",
  "Listing": "列表",
  "No answer within {0} s": "{0} 秒内无响应",
  "No title was listed to ask the tracks of": "没有可查询轨道的已列出标题",

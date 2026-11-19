@@ -2494,7 +2494,7 @@
  "Daily check passed {0}": "Vérification quotidienne réussie {0}",
  "Daily check: not run yet": "Vérification quotidienne : pas encore faite",
  "Daily check: sign-in failed {0}": "Vérification quotidienne : connexion échouée {0}",
- "It searches, lists and has tracks again.": "La recherche, la liste et les pistes fonctionnent à nouveau.",
+ "Each stage that ran passed.": "Chaque étape exécutée a réussi.",
  "Listing": "Liste",
  "No answer within {0} s": "Aucune réponse en {0} s",
  "No title was listed to ask the tracks of": "Aucun titre n'a été listé dont demander les pistes",

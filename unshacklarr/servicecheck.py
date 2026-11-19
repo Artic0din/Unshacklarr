@@ -248,7 +248,7 @@ def notify_changes(config: dict, before: dict, after: dict) -> None:
             sync.notify(config.get("notifications") or {}, "error", f"{tag} failed its daily check", "\n".join(lines), key=key, service=tag)
         else:
             sync.notify(config.get("notifications") or {}, "success", f"{tag} passes its daily check again",
-                        "It searches, lists and has tracks again.", key=key, service=tag)
+                        "Each stage that ran passed.", key=key, service=tag)
 
 
 def run_check(now: datetime | None = None, reserved: bool = False) -> dict | None:
