@@ -15,7 +15,8 @@ const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8");
 const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
 const [first, second] = JSON.parse(process.argv[2]);  // the pane opened first, then the one opened second
-const main = { heading: null, replaceChildren(...k) { this.heading = JSON.stringify(k).match(/"textContent":"(Stats|Waiting in downloads)"/)?.[1] ?? "other"; } };
+const main = { children: [], replaceChildren(...children) { this.children = children; },
+  get heading() { return JSON.stringify(this.children).match(/"textContent":"(Stats|Waiting in downloads)"/)?.[1] ?? "other"; } };
 const title = { textContent: "" };
 const stub = { textContent: "", hidden: false, classList: { add() {} }, replaceChildren() {} };
 const pending = {};
@@ -24,17 +25,29 @@ const ctx = {
   document: { querySelectorAll: () => [] },
   el: (tag, props = {}, ...kids) => ({ tag, ...props, kids }),
   failed: (t) => ({ failed: t }),
-  api: (path) => new Promise((resolve) => { pending[path] = resolve; }),
+  clearTimeout() {},
+  api: (path) => new Promise((resolve, reject) => { pending[path] = { resolve, reject }; }),
   day: () => "", ago: () => "", duration: () => "", LOCALE: "en", S: { series: [] }, svcName: (tag) => tag, icon: () => ({}), COUNT: {}, posterSrc: () => "", posterFail: () => null, OUTCOME: {}, renderDock: () => {},
 };
 vm.createContext(ctx);
-vm.runInContext(`var picked_run = null;\n${grab("markPicked")}\n${grab("showLeftovers")}\n${grab("showStats")}`, ctx);
+vm.runInContext(`let picked_run = null, langTimer, langLast;\n` +
+  ["markPicked", "showLeftovers", "showStats", "showLanguages"].map(grab).join("\n"), ctx);
 const path = { stats: "/api/stats", left: "/api/leftovers" };
 const answer = { stats: { month: {}, weeks: [], services: [], since: null }, left: { items: [], days: 0 } };
 const open = { stats: ctx.showStats, left: ctx.showLeftovers };
 (async () => {
+  if (first === "languages") {
+    const languages = ctx.showLanguages(), replacement = open[second]();
+    pending[path[second]].resolve(answer[second]);
+    await replacement;
+    const content = main.children;
+    pending["/api/languages"].reject(Error("network offline"));
+    await languages;
+    console.log(JSON.stringify({ title: title.textContent, heading: main.heading, unchanged: main.children === content }));
+    return;
+  }
   const a = open[first](), b = open[second]();
-  for (const which of [second, first]) { pending[path[which]](answer[which]); await (which === second ? b : a); }
+  for (const which of [second, first]) { pending[path[which]].resolve(answer[which]); await (which === second ? b : a); }
   console.log(JSON.stringify({ title: title.textContent, heading: main.heading }));
 })();
 """
@@ -74,18 +87,26 @@ const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8"), html = fs.readFileSync(process.argv[2], "utf8");
 const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
 const line = (name) => src.match(new RegExp(`^const ${name} = .*;$`, "m"))[0];
+const handler = (id) => src.match(new RegExp(`^\\$\\("#${id}"\\)\\.onclick = .*?^\\};`, "ms"))[0];
+const doc = { activeElement: null };
 const node = (props = {}) => ({
   children: [], attrs: {}, dataset: {}, classList: { toggle() {}, add() {}, remove() {} },
   setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; },
   replaceChildren(...children) { this.children = children; }, get childElementCount() { return this.children.length; },
+  focus() { doc.activeElement = this; },
+  getBoundingClientRect: () => ({ left: 0, right: 100, width: 100 }),
   ...props,
 });
 const elements = { "#con-search": node({ value: "" }) };
 const buttons = [...html.matchAll(/id="(con-[^"]+)" data-con-view="([^"]+)" aria-pressed="([^"]+)"/g)].map(([, id, conView, pressed]) =>
   elements[`#${id}`] = node({ dataset: { conView }, attrs: { "aria-pressed": pressed } }));
-const $ = (s) => s.startsWith("#cd-main > ")
-  ? $("#cd-main").children.find((n) => [`.${n.className}`, `#${n.id}`].includes(s.slice(11)))
-  : elements[s] ??= node();
+const $ = (s) => {
+  if (s.startsWith("#cd-main > ")) return $("#cd-main").children.find((n) => [`.${n.className}`, `#${n.id}`].includes(s.slice(11)));
+  const chip = s.match(/^#con-running \[data-fk="([^"]+)"\]$/);
+  if (chip) return $("#con-running").children.find((n) => n.dataset.fk === chip[1]);
+  if (s.startsWith("[data-fk=")) return undefined;
+  return elements[s] ??= node();
+};
 let detail = null;
 const pending = {};
 const strip = $("#con-running"), classes = new Set();
@@ -97,10 +118,11 @@ Object.assign(strip, { scrollLeft: 0, scrollWidth: 800, clientWidth: 300,
 const ctx = { $, innerWidth: 1000, el: (tag, props) => node(props),
   CSS: { supports: () => process.argv[3] !== "chip-overflow" },
   ResizeObserver: class { constructor(callback) { resize = callback; } observe() {} },
-  document: { querySelectorAll: (s) => ({
+  document: Object.assign(doc, { getElementById: (id) => elements[`#${id}`], querySelectorAll: (s) => ({
     ".con-views [data-con-view]": buttons, "#con-running .chip": $("#con-running").children,
     "#con .crow": [...$("#runs-live").children, ...$("#runs-history").children],
-  })[s] || [] }, glideBars() {}, emptyHistory: () => node(),
+  })[s] || [] }), glideBars() {}, emptyHistory: () => node(),
+  scrollTo() {}, focusHeading: (heading) => heading.focus(), getComputedStyle: () => ({ scrollPaddingInlineEnd: "0px" }),
   itemRow: (item) => node({ dataset: { hk: `row:${ctx.keyOf(item)}` }, onclick: () => ctx.pickRun(ctx.keyOf(item)) }),
   renderDetail: (card) => { detail = card.id; }, renderJob: (job) => { detail = `job:${job.job}`; },
   nothingPicked: () => { detail = null; $("#cd-main").replaceChildren(); }, keepFocus: (_, draw) => draw(),
@@ -116,7 +138,7 @@ vm.runInContext(`let picked_run = null, runBackKey, landOnLive = false, conFilte
   ["itemKey", "isLive", "isQueued"].map(line).join("\n") + "\n" +
   ["openActivity", "renderConsole", "drawRunningChips", "drawConsole", "jobsOf", "markPicked", "pickRun", "openActivityTool", "showStats"].map(grab).join("\n") +
   '\nthis.keyOf = itemKey;\n' + src.match(/^\$\("#con-stats"\)\.onclick = .*;$/m)[0] + "\n" +
-  src.match(/^\$\("#con-downloads"\)\.onclick = .*?^\};/ms)[0], ctx);
+  ["con-downloads", "cd-back"].map(handler).join("\n"), ctx);
 const pressed = () => buttons.filter((b) => b.attrs["aria-pressed"] === "true").map((b) => b.dataset.conView);
 const snapshot = () => [pressed(), $("#con-running").hidden, detail];
 const addRuns = (cards, liveOnly = false) => {
@@ -129,7 +151,6 @@ const history = { id: "old", series: "Older", outcome: "downloaded" };
 async function lateRuns(selection) {
   // On phones opening Activity from the menu would automatically open the first live download.
   ctx.innerWidth = 500;
-  ctx.scrollTo = ctx.focusHeading = () => {};
   if (selection !== "stats") addRuns([active, history]); // Cached rows remain available during a refresh.
   vm.runInContext("landOnLive = true", ctx);
   const request = ctx.openActivity();
@@ -192,6 +213,29 @@ if (scenario === "chip-overflow") {
   console.log(JSON.stringify([atStart, atEnd, backAtStart, cue()]));
 }
 else if (scenario === "fail-stats" || scenario === "fail-downloads") failedRuns(scenario.slice(5));
+else if (scenario === "back-to-chip") {
+  ctx.innerWidth = 500;
+  addRuns([active, history]);
+  const chip = strip.children[0], back = $("#cd-back");
+  chip.onclick();
+  const opened = detail;
+  back.focus();
+  back.onclick();
+  console.log(JSON.stringify([opened, detail, doc.activeElement === chip]));
+}
+else if (scenario === "downloads-width") {
+  addRuns([active, history]);
+  $("#runs-history").children[0].onclick();
+  const downloads = $("#con-downloads"), list = $("#runs-history"), row = list.children[0];
+  const state = () => [detail, downloads.getAttribute("aria-pressed"), list.children[0] === row];
+  const before = state();
+  const click = () => downloads.onclick({ currentTarget: downloads });
+  click();
+  const wide = state();
+  ctx.innerWidth = 500;
+  click();
+  console.log(JSON.stringify([before, wide, state()]));
+}
 else if (scenario) lateRuns(scenario);
 else switchViews();
 """
@@ -234,6 +278,20 @@ def test_pending_runs_do_not_override_an_explicit_selection(selection, expected)
 def test_failed_runs_leave_a_pending_tool_loader_in_place():
     assert switcher("fail-stats") == [["stats"], True, "Could not load the downloads: network offline"]
     assert switcher("fail-downloads") == [["downloads"], False, "Could not load the downloads: network offline"]
+
+
+def test_back_from_a_running_download_returns_focus_to_its_chip():
+    assert switcher("back-to-chip") == ["live", None, True]
+
+
+def test_pressed_downloads_keeps_wide_detail_but_returns_to_the_narrow_list():
+    assert switcher("downloads-width") == [["old", "true", True], ["old", "true", True], [None, "true", False]]
+
+
+def test_late_languages_error_does_not_replace_stats_content():
+    assert node(PANES, str(JS / "activity.js"), '["languages", "stats"]') == {
+        "title": "Stats", "heading": "Stats", "unchanged": True,
+    }
 
 
 @pytest.mark.parametrize("suggestions", [{"2": {"service": "SBS", "count": 8}}, {}])
