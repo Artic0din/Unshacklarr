@@ -230,6 +230,7 @@ function showTab(name, fromRoute = false, quiet = false) {
     showSettingsList(false);
   }
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
+  if (currentTab === "log" && changedTab) landOnLive = false;
   currentTab = name;
   closeDetails(false);  // the Schedule's popover belongs to its card
   updateTitle();  // after the list is chosen: a phone's Settings tab names the list, not the section it left
@@ -251,8 +252,8 @@ function showTab(name, fromRoute = false, quiet = false) {
 document.querySelectorAll("nav [data-tab]").forEach((b) => b.onclick = (e) => {
   if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;  // a new tab or window: the browser opens the link
   e.preventDefault();
-  if (b.dataset.tab === "log") landOnLive = true;
   showTab(b.dataset.tab);
+  if (b.dataset.tab === "log" && currentTab === "log") landOnLive = true;
 });
 // the hash is the route: the skip link moves the focus itself and leaves the URL as it is
 $(".skip").onclick = (e) => { e.preventDefault(); $("main").focus(); };

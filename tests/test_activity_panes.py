@@ -492,7 +492,7 @@ const $ = (s) => {
   if (row) return [...$("#runs-live").children, ...$("#runs-history").children].find((n) => n.dataset.hk === `row:${row[1]}`);
   return elements[s] ??= node();
 };
-let detail = null;
+let detail = null, modalOpen = false;
 const pending = {};
 const location = { hash: "#/activity" };
 const entries = [{ state: null, hash: location.hash }];
@@ -520,7 +520,8 @@ Object.assign(strip, { scrollLeft: 0, scrollWidth: 800, clientWidth: 300,
 const ctx = { $, innerWidth: 1000, history: historyStack, location, el: (tag, props) => node(props),
   CSS: { supports: () => process.argv[3] !== "chip-overflow" },
   ResizeObserver: class { constructor(callback) { resize = callback; } observe() {} },
-  document: Object.assign(doc, { getElementById: (id) => elements[`#${id}`], querySelectorAll: (s) => ({
+  document: Object.assign(doc, { getElementById: (id) => elements[`#${id}`],
+    querySelector: (s) => s === "dialog:modal" && modalOpen ? node() : null, querySelectorAll: (s) => ({
     ".con-views [data-con-view]": buttons, "#con-running .chip": $("#con-running").children,
     "#con .crow": [...$("#runs-live").children, ...$("#runs-history").children],
     "#tab-log .con-filters button": filters, "main > section": panes,
@@ -548,7 +549,7 @@ const addRuns = (cards, liveOnly = false) => {
   ctx.cards = cards;
   vm.runInContext(`runCards = cards; renderConsole(${liveOnly})`, ctx);
 };
-for (const name of ["recordActivityDetail", "syncActivityRoute", "closeActivityDetail"]) {
+for (const name of ["activityIsVisible", "recordActivityDetail", "syncActivityRoute", "closeActivityDetail"]) {
   if (src.includes(`function ${name}(`)) vm.runInContext(grab(name), ctx);
 }
 vm.runInContext("let activityDetail = null", ctx);
@@ -574,6 +575,17 @@ async function lateRuns(selection) {
   pending["/api/runs"].resolve([active, history]);
   await request;
   console.log(JSON.stringify([pressed(), detail]));
+}
+async function lateAutoOpen(destination) {
+  ctx.innerWidth = 390;
+  vm.runInContext("landOnLive = true", ctx);
+  const request = ctx.openActivity();
+  if (destination === "series") ctx.showTab("series");
+  if (destination === "inbox") { modalOpen = true; historyStack.pushState({ inbox: true }); }
+  if (destination === "drawer") historyStack.pushState(null, "", "#/activity/s/12/episodes");
+  pending["/api/runs"].resolve([active, history]);
+  await request;
+  console.log(JSON.stringify([detail, entry, historyStack.state?.activity ?? null]));
 }
 async function failedRuns(selection) {
   const request = ctx.openActivity();
@@ -690,6 +702,7 @@ else if (scenario === "reenter-activity") {
   historyStack.back();
   console.log(JSON.stringify([opened, reentered, back, location.hash, detail]));
 }
+else if (scenario === "late-auto-open") lateAutoOpen(process.argv[4]);
 else if (scenario === "downloads-width") {
   addRuns([active, history]);
   $("#runs-history").children[0].onclick();
@@ -770,6 +783,11 @@ def test_reentering_activity_from_schedule_uses_the_destination_detail():
 
 def test_reentering_wide_activity_keeps_the_side_by_side_run_selection():
     assert switcher("reenter-activity", "1440") == ["old", ["old", None], "#/schedule", "#/activity", "old"]
+
+
+@pytest.mark.parametrize("destination", ["series", "inbox", "drawer"])
+def test_late_activity_response_does_not_open_a_run_behind_another_view(destination):
+    assert switcher("late-auto-open", destination) == [None, 1, None]
 
 
 def test_pressed_downloads_keeps_wide_detail_but_returns_to_the_narrow_list():

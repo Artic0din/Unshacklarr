@@ -218,7 +218,7 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
     $("#runs-more").hidden = pastItems.length <= runsShown;
   }
   // Activity opened from the menu while a download runs: straight to it, a phone too.
-  if (landOnLive && liveItems.length && picked_run !== "serve") {
+  if (landOnLive && liveItems.length && picked_run !== "serve" && !history.state?.activity && activityIsVisible()) {
     picked_run = itemKey(liveItems[0]); runBackKey = null; $("#con").classList.add("open");
     recordActivityDetail(picked_run);
   }
@@ -584,8 +584,13 @@ function markPicked(key) {
   return view;
 }
 let runBackKey = null, activityDetail = null;
+function activityIsVisible() {
+  const route = parseRoute();
+  return route.tab === "log" && !route.id && !$("#tab-log").hidden && !document.hidden
+    && !current && !history.state?.inbox && !document.querySelector("dialog:modal");
+}
 function recordActivityDetail(id, tool = false) {
-  if (innerWidth > 700) return;
+  if (innerWidth > 700 || !activityIsVisible()) return;
   const current = history.state?.activity;
   if (current?.id === id && current.tool === tool && current.backKey === runBackKey) {
     activityDetail = current;
