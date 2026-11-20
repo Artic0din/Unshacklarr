@@ -2931,23 +2931,31 @@ def series_episodes(series_id: int, fresh: bool = False) -> list[dict]:
 _sonarr_series_lock = threading.RLock()
 _sonarr_series_generation = 0
 _series_by_tvdb: dict[str, tuple[float, dict]] = {}  # by Sonarr ("" the main one): (fetched, series by TVDB id)
+_series_connection: dict[str, tuple] = {}  # the address and key each other Sonarr's library came from
 
 
 def sonarr_series(wanted: set, keep: float = 3600) -> dict[int, dict]:
     """Sonarr's series by TVDB id, kept an hour (or `keep` seconds): the whole library is one big answer, asked again
     sooner only for a series it did not have (added since), at most once a minute."""
     key = (instance() or {}).get("name", "")  # each Sonarr its own library: ids differ between them
-    with _sonarr_series_lock:
-        generation = _sonarr_series_generation
-        connection = (sonarr_url(), sonarr_headers())
-        fetched, known = _series_by_tvdb.get(key, (0.0, {}))
-    age = time.monotonic() - fetched
-    if not fetched or age > keep or (age > 60 and not wanted <= set(known)):
+    while True:
+        with _sonarr_series_lock:
+            generation = _sonarr_series_generation
+            connection = (sonarr_url(), sonarr_headers())
+            fetched, known = _series_by_tvdb.get(key, (0.0, {}))
+            if key and _series_connection.get(key) != connection:  # another Sonarr edited since: its old ids are not these
+                fetched = 0.0
+        age = time.monotonic() - fetched
+        if fetched and age <= keep and (age <= 60 or wanted <= set(known)):
+            return known
         known = {s["tvdbId"]: s for s in sonarr_get("series", connection=connection) if s.get("tvdbId")}
         with _sonarr_series_lock:
-            if key or generation == _sonarr_series_generation:
+            if (sonarr_url(), sonarr_headers()) != connection:
+                continue  # the connection changed while asking: the new Sonarr's ids, never the old one's
+            if generation == _sonarr_series_generation:
                 _series_by_tvdb[key] = (time.monotonic(), known)
-    return known
+                _series_connection[key] = connection
+        return known
 
 
 def broadcast_dated(plans: list) -> set[int]:

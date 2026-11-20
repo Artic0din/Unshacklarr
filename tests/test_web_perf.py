@@ -690,9 +690,29 @@ def test_sync_sonarr_series_inflight_fetch_cannot_restore_old_library(tmp_path, 
             web.write_config({"settings": {"sonarr_url": new_url, "sonarr_api_key": "new-key"}})
         finally:
             release.set()
-        assert old_fetch.result(timeout=5)[100]["id"] == 1
+        # the caller gets the new Sonarr's library, never the old one's ids to use against the new server
+        assert old_fetch.result(timeout=5)[100]["id"] == 2
 
     assert sync.sonarr_series({100})[100]["id"] == 2
+
+
+def test_an_edited_named_sonarr_does_not_reuse_its_old_library(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    asked = []
+
+    def fake_get(url, *, headers, **kwargs):
+        asked.append(url)
+        series_id = 1 if "old-4k" in url else 2
+        return SimpleNamespace(status_code=200, content=b"", raise_for_status=lambda: None,
+                               json=lambda: [{"id": series_id, "tvdbId": 100}])
+
+    monkeypatch.setattr(sync.requests, "get", fake_get)
+    with sync.on_instance({"name": "4K", "url": "http://old-4k.test", "api_key": "k1"}):
+        assert sync.sonarr_series({100})[100]["id"] == 1
+    with sync.on_instance({"name": "4K", "url": "http://new-4k.test", "api_key": "k2"}):  # its address edited in Settings
+        assert sync.sonarr_series({100})[100]["id"] == 2
+    assert len(asked) == 2
 
 
 def test_missing_of_managed_skips_zero_missing_only_when_stats_are_fresh_and_complete(tmp_path, monkeypatch):
