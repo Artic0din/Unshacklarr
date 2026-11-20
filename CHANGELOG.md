@@ -8,6 +8,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Security
 
+- **cryptography 50.0.2.** Its wheels carry OpenSSL 4.0.3, a security release whose most severe fix is High. Push
+  notifications are signed and encrypted with it.
 - **oauthlib 4.0.1.** Fixes CVE-2026-49272, a device-flow token endpoint that handed out a bearer token without a
   valid device code. Unshacklarr runs no OAuth server, so it was not exposed; oauthlib comes with Apprise.
 - **No one can lock the owner out of signing in.** Wrong passwords are limited per client only, no longer 30 for
