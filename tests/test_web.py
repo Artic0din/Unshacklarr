@@ -1250,6 +1250,14 @@ const promptState = (input) => {
         box.renderServices();
         const row = find(nodes["#sv-list"], (node) => node.id === "sv-SPARE");
         return [primary(row), findAll(row, (node) => node.tag === "button").map((node) => node.textContent)];
+      })(),
+      expiring: (() => {  // a used cookie-only service whose only file runs out in 3 days: renewing it is the thing to do
+        box.S.authentication.SOON = { service: "SOON", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" };
+        box.S.authenticationMethods.SOON = ["cookies"];
+        box.S.config.series[9] = { service: "SOON" };
+        vm.runInContext(`servicesCookies.files.SOON = [{ profile: "", count: 3, expires: ${now + 3 * 86400}, updated: ${now} }]`, box);
+        box.renderServices();
+        return primary(find(nodes["#sv-list"], (node) => node.id === "sv-SOON"));
       })() }));
   }
   if (scenario === "check_now") {
@@ -1481,6 +1489,7 @@ def test_service_identity_keeps_sign_in_methods_and_marks_a_primary_action_only_
     # an expired cookie in use, two healthy rows, an expired cookie no series uses
     assert result["primary"] == [["Sign in again"], [], [], ["Replace"]]
     assert result["spare"] == [[], ["Add"]]
+    assert result["expiring"] == ["Replace"]
 
 
 def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
