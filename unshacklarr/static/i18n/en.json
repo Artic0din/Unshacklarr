@@ -483,12 +483,11 @@
  "Check its Numbering, then try again.": [],
  "Check new series": [],
  "Check now": [],
- "Check now asks each service what it has, one episode at a time.": [],
  "Check now reads each series' files from Sonarr.": [],
  "Check this series' Numbering (its episode table), then try again": [],
  "Check {0} in Settings › Services": [
   "svcName(conf.service)",
-  "svcName(signIn)"
+  "svcName(signIn.service)"
  ],
  "Checked a moment ago": [],
  "Checked automatically every day": [],
@@ -527,6 +526,7 @@
   "label"
  ],
  "Checking…": [],
+ "Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": [],
  "Choose a folder": [],
  "Choose a passphrase: the backups are encrypted with it.": [],
  "Choose a quality ladder for Sonarr {0} in Settings, Sonarr first": [
@@ -796,13 +796,17 @@
  "Download questions": [],
  "Download the whole episode again": [],
  "Download the {0}": [
-  "r.items.length"
+  "count"
  ],
  "Download the {0} again": [
   "n"
  ],
  "Download window": [],
  "Download window times look like 01:00": [],
+ "Download {0} {1}": [
+  "it.series",
+  "it.sxxeyy"
+ ],
  "Downloaded": [],
  "Downloaded from {0}": [
   "svcName(conf.service)"
@@ -977,7 +981,6 @@
  "Fallback profiles": [],
  "Fallback service": [],
  "File": [],
- "Files your quality ladder says could be better. Check now asks each service what it has, up to 10 episodes of a series at a time, and keeps each answer for the days set in Settings, Upgrades. Replace downloads the better ones over your files, even when Sonarr ranks both the same (H.264 and H.265 in 1080p).": [],
  "Filter by Sonarr library": [],
  "Filter by service": [],
  "Filters active": [],
@@ -995,6 +998,7 @@
  "Finnish": [],
  "First day": [],
  "Fix": [],
+ "Fix sign-in": [],
  "Fix the proxy, then resume the job in Activity and retry this episode.": [],
  "Fix what does not answer in Settings: the restore is done.": [],
  "Folder URL": [],
@@ -3763,7 +3767,7 @@
   "show['service']"
  ],
  "{0} episodes queued, one after the other": [
-  "r.items.length"
+  "episodeIds.length"
  ],
  "{0} episodes queued, replacing their files": [
   "picked.length"

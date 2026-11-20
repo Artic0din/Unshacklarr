@@ -361,6 +361,7 @@ function renderJob(j) {
   const retryable = j.cards.filter((c) => c.episodeId && ["failed", "stopped", "interrupted"].includes(c.outcome));  // not the cancelled ones: taken out on purpose
   const title = new Set(j.cards.map((c) => c.series)).size > 1 ? `${j.cards.length} episodes` : `${first.series} · ${j.cards.length} episodes`;
   $("#cd-top-title").textContent = title;
+  const signIn = !st.live && signInAction(j.cards.find(signInFailed));
   const acts = [series ? el("button", { className: "btn small", textContent: "Open series", dataset: { fk: "open" }, onclick: () => openDrawer(series) }) : "",
     st.live && st.n.queued ? el("button", { className: `btn small${st.paused ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause", dataset: { fk: "pause" },
       title: st.paused ? "The next episode starts" : "The current download finishes; the next one waits",
@@ -369,7 +370,8 @@ function renderJob(j) {
       onclick: () => openJobOptions(j) }) : "",
     st.live ? el("button", { className: "btn small danger", textContent: "Stop the job", dataset: { fk: "stop" }, title: "Stops the current download. The queued episodes don't start",
       onclick: (e) => stopJob(j, e.target) }) : "",
-    retryable.length ? el("button", { className: "btn small primary", textContent: `Retry ${retryable.length} failed`, dataset: { fk: "retry" },
+    signIn,
+    retryable.length ? el("button", { className: `btn small${signIn ? "" : " primary"}`, textContent: `Retry ${retryable.length} failed`, dataset: { fk: "retry" },
       title: st.live ? "Downloads them again, before the episodes still to come" : "Downloads them again, in this job",
       onclick: (e) => retryJob(j, retryable, e.target) }) : "",
     !st.live ? el("button", { className: "btn small danger", textContent: "Delete the job", dataset: { focusKey: `delete:${j.job}`, fk: "delete" }, title: "Removes every episode of this job from the history",
@@ -568,12 +570,12 @@ async function showLeftovers() {
   const rows = r.items.map((it) => {
     const poster = posterSrc(S.series.find((x) => x.tvdbId === it.tvdbId)?.poster, it.series);
     const age = Math.floor((Date.now() / 1000 - it.since) / 86400);
-    return el("div", { className: "left-row" }, el("img", { alt: "", loading: "lazy", src: poster, onerror: posterFail(it.series) }),
+    return el("div", { className: "left-row wait-row" }, el("img", { alt: "", loading: "lazy", src: poster, onerror: posterFail(it.series) }),
       el("div", {}, el("b", { textContent: `${it.series || `TVDB ${it.tvdbId}`} ${it.sxxeyy}` }),
         el("small", { className: "why", textContent: it.cause || (it.outcome ? OUTCOME[it.outcome] : "No download history for it") }),
         el("small", { textContent: `${it.size >= 2 ** 30 ? `${(it.size / 2 ** 30).toFixed(1)} GB` : `${Math.max(1, Math.round(it.size / 2 ** 20))} MB`} · waiting ${age < 1 ? "since today" : COUNT.day(age)} · ${it.sonarr_path}` }),
         ...(it.by_hand ? [el("small", { className: "left-hand", textContent: "Download only: kept until you import or delete it" })] : [])),
-      el("div", { className: "btns" }, act(it, "import", it.by_hand ? "Import" : "Import anyway", it.by_hand ? "primary" : ""), act(it, "delete", "Delete", "danger")));
+      el("div", { className: "btns" }, act(it, "import", it.by_hand ? "Import" : "Import anyway", ""), act(it, "delete", "Delete", "danger")));
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Waiting in downloads" }),
@@ -583,7 +585,7 @@ async function showLeftovers() {
 $("#con-left").onclick = openActivityTool(showLeftovers);
 
 /* Catch up: the aired episodes Unshacklarr's series still miss (those before a series got its service, or the
-   automatic sync gave up on), downloaded together as one job. Within so many days, or all. */
+   automatic sync gave up on). Within so many days, or all. */
 let missingDays = 30, missingSonarr = "", missingSeq = 0;  // missingSeq: the newest ask, an older answer is dropped
 /* Catch up and Upgrades for another Sonarr (a 4K one) too: which one, beside the rest; one whose ladder was never chosen
    says so, and nothing is downloaded for it. */
@@ -617,19 +619,41 @@ async function showMissing() {
   const ages = el("div", { className: "ax-seg", role: "group", ariaLabel: "Aired within" }, ...[[7, "7 days"], [30, "30 days"], [90, "90 days"], [0, "All"]].map(([d, label]) =>
     el("button", { type: "button", textContent: label, ariaPressed: String(missingDays === d), onclick: () => { missingDays = d; showMissing(); } })));
   const unset = unsetNote(sonarr);
-  const go = el("button", { className: "btn primary", textContent: r.items.length === 1 ? "Download it" : `Download the ${r.items.length}`, hidden: !r.items.length || !!unset,
-    onclick: async (e) => {
-      e.target.disabled = true;
-      try {
-        await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds: r.items.map((x) => x.episodeId), ...(sonarr ? { sonarr: savedSonarr(sonarr) } : {}) }) });
-        toast(r.items.length === 1 ? "1 episode queued" : `${r.items.length} episodes queued, one after the other`);
-      } catch (err) { e.target.disabled = false; toast(err.message, true); }
-    } });
+  const rowButtons = new Map();
+  const remaining = () => [...rowButtons.keys()].filter((id) => !rowButtons.get(id).disabled);
+  const bulkLabel = (count) => count === 1 ? "Download it" : `Download the ${count}`;
+  const updateBulk = () => {
+    const count = remaining().length;
+    go.disabled = !count;
+    if (count) go.textContent = bulkLabel(count);
+  };
+  const download = async (ids) => {
+    const episodeIds = ids.filter((id) => !rowButtons.get(id).disabled);
+    if (unset || !episodeIds.length) return;
+    episodeIds.forEach((id) => { rowButtons.get(id).disabled = true; });
+    updateBulk();
+    try {
+      await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds, ...(sonarr ? { sonarr: savedSonarr(sonarr) } : {}) }) });
+      toast(episodeIds.length === 1 ? "1 episode queued" : `${episodeIds.length} episodes queued, one after the other`);
+    } catch (err) {
+      episodeIds.forEach((id) => { rowButtons.get(id).disabled = false; });
+      updateBulk();
+      toast(err.message, true);
+    }
+  };
+  const go = el("button", { className: "btn primary", textContent: bulkLabel(r.items.length), hidden: !r.items.length || !!unset,
+    onclick: () => download(remaining()) });
   const rows = r.items.map((it) => {
     const poster = posterSrc(S.series.find((x) => x.tvdbId === it.tvdbId)?.poster, it.series);
-    return el("div", { className: "left-row" }, el("img", { alt: "", loading: "lazy", src: poster, onerror: posterFail(it.series) }),
+    const season = Number(/^S(\d+)E/.exec(it.sxxeyy)?.[1]);
+    const service = seasonTag(season, it.tvdbId);
+    const button = el("button", { type: "button", className: "btn small", textContent: "Download",
+      ariaLabel: `Download ${it.series} ${it.sxxeyy}`, disabled: !!unset, onclick: () => download([it.episodeId]) });
+    rowButtons.set(it.episodeId, button);
+    return el("div", { className: "left-row miss-row" }, el("img", { alt: "", loading: "lazy", src: poster, onerror: posterFail(it.series) }),
       el("div", {}, el("b", { textContent: `${it.series} ${it.sxxeyy}` }),
-        el("small", {}, ...(it.title ? [episodeTitle(it.tvdbId, it.sxxeyy, it.title), " · "] : []), `aired ${ago(it.aired)}`)));
+        el("small", {}, ...(it.title ? [episodeTitle(it.tvdbId, it.sxxeyy, it.title), " · "] : []), `aired ${ago(it.aired)}`),
+        service ? el("span", { className: "sv-chip", textContent: svcName(service) }) : ""), button);
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Catch up" }),
@@ -727,10 +751,10 @@ async function showUpgrades(fresh = true) {
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Upgrades" }),
-      el("small", { className: "line1", textContent: "Files your quality ladder says could be better. Check now asks each service what it has, up to 10 episodes of a series at a time, and keeps each answer for the days set in Settings, Upgrades. Replace downloads the better ones over your files, even when Sonarr ranks both the same (H.264 and H.265 in 1080p)." }))),
+      el("small", { textContent: "Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265)." }))),
     ...[sonarrPicker(sonarr, (n) => { upgradeSonarr = n; upgradePick.clear(); upgradeOpen.clear(); showUpgrades(); }), unsetNote(sonarr)].filter(Boolean),
     el("div", { className: "miss-bar" }, el("span", { className: "muted", textContent: state }), el("span", { className: "up-acts" }, selAll, check, go)),
-    ...(rows.length ? [el("div", {}, ...rows)] : [el("p", { className: "muted", textContent: scan.running ? "Nothing better found yet." : r.checked ? "Nothing better on the services: every file is already on the best step they have." : "Check now asks each service what it has, one episode at a time." })])));
+    ...(rows.length ? [el("div", {}, ...rows)] : scan.running || r.checked ? [el("p", { className: "muted", textContent: scan.running ? "Nothing better found yet." : "Nothing better on the services: every file is already on the best step they have." })] : [])));
   // asked again every 3 s while something runs, but not while Activity or the tab is out of sight
   const tick = () => { if (picked_run !== "upgrades") return; if (document.hidden || $("#tab-log").hidden) upgradeTimer = setTimeout(tick, 3000); else showUpgrades(); };
   if (scan.running || r.items.some((i) => i.running)) upgradeTimer = setTimeout(tick, 3000);
@@ -1025,12 +1049,16 @@ function signInFailed(c) {
   return service ? { service, backend: c.auth_failure_backends?.[service] ?? c.backend ?? "" } : null;
 }
 const fixSignIn = (c) => { const { service, backend } = signInFailed(c); openServiceRow(service, backend); };
+function signInAction(c) {
+  const signIn = c && signInFailed(c);
+  return signIn ? el("button", { className: "btn small primary", textContent: "Fix sign-in", title: `Check ${svcName(signIn.service)} in Settings › Services`, dataset: { fk: "sign-in" }, onclick: () => fixSignIn(c) }) : "";
+}
 /* What can be done with an attempt: stop it, import it anyway, fix its sign-in, retry it, forget it. */
 function runActs(c) {
-  const live = isLive(c), signIn = signInFailed(c);
+  const live = isLive(c), signIn = signInAction(c);
   return [
     setupButton(c),
-    signIn ? el("button", { className: "btn small primary", textContent: "Fix sign-in", title: `Check ${svcName(signIn.service)} in Settings › Services`, dataset: { fk: "sign-in" }, onclick: () => fixSignIn(c) }) : "",
+    signIn,
     live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
     !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: `btn small${signIn ? "" : " primary"}`, textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",

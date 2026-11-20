@@ -145,7 +145,7 @@ const boxes = {};
 const ctx = { savedSonarr: (name) => name, $: (sel) => (boxes[sel] ??= { classList: { add() {}, toggle() {} }, textContent: "", hidden: false, replaceChildren: (...kids) => { if (sel === "#cd-main") draws.push(kids); } }),
   document: { hidden: false, querySelectorAll: () => [] }, el: (tag, props = {}, ...kids) => ({ tag, ...props, kids }), loading: (t) => ({ loading: t }), failed: (t) => ({ failed: t }),
   S: { config: { settings: { sonarrs: [{ name: "A", quality_ladder: "x" }, { name: "B", quality_ladder: "x" }] } }, series: [] }, runCards: [], isLive: () => false, isQueued: () => false,
-  renderDock() {}, posterSrc: () => "", posterFail: () => null, ago: () => "", episodeTitle: () => "", thumb: () => ({}), mainSonarr: () => "Main", URLSearchParams, toast() {}, setTimeout: () => 0, clearTimeout() {}, picked_run: null,
+  renderDock() {}, posterSrc: () => "", posterFail: () => null, ago: () => "", episodeTitle: () => "", thumb: () => ({}), mainSonarr: () => "Main", seasonTag: () => "", URLSearchParams, toast() {}, setTimeout: () => 0, clearTimeout() {}, picked_run: null,
   api: (path, opts = {}) => {
     if (opts.method === "POST") { posts.push(JSON.parse(opts.body)); return wait(0, {}); }
     waits.push(opts.wait);
@@ -178,7 +178,7 @@ const goText = () => find(draws[draws.length - 1], (n) => n.className === "btn p
     await show("A", 0);
     const go = find(draws[draws.length - 1], (n) => n.className === "btn primary");
     const next = show("B", 0);
-    await go.onclick({ target: {} });
+    await go.onclick({ target: {}, currentTarget: go });
     await next;
     console.log(JSON.stringify({ sent: posts.map((p) => p.sonarr ?? null) }));
   }

@@ -1041,6 +1041,12 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .left-row img { width: 30px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-sm); background: var(--bg); }
 .left-row b { display: block; } .left-row small { display: block; color: var(--muted); font-size: var(--fs-sub); overflow-wrap: anywhere; }
 .left-row .why { color: var(--warn); } .left-row .btns { display: flex; gap: 6px; }
+.wait-row { column-gap: 10px; row-gap: 4px; padding-block: 6px; }
+.miss-row .sv-chip { display: inline-block; margin-top: 3px; }
+@media (max-width: 540px) {
+  .wait-row { grid-template-columns: 30px minmax(0, 1fr); align-items: start; }
+  .wait-row .btns { grid-column: 2; flex-wrap: wrap; }
+}
 .kpis { display: flex; gap: 28px; flex-wrap: wrap; }
 .kpis div { display: grid; } .kpis small { color: var(--muted); font-size: var(--fs-footnote); } .kpis b { font-size: var(--fs-title2); font-variant-numeric: tabular-nums; }
 .weeks { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; padding-top: 8px; }
@@ -1711,9 +1717,9 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
   .dock:has(.d-acts > :nth-child(4)) .d-mid { flex-basis: 100%; }  /* four buttons or more: on a row of their own, under it */
   .dock .d-ico, .dock .d-l1 span { display: none; }
   .dock .d-acts button { width: 32px; height: 32px; }
-  .con-detail.docked-acts .cd-foot { display: none; }  /* the bar has the job's actions; only Delete, which it has no button for, stays */
-  .con-detail.docked-acts .cd-foot:has([data-fk="delete"]) { display: flex; }
-  .con-detail.docked-acts .cd-foot .btn:not([data-fk="delete"]) { display: none; }
+  .con-detail.docked-acts .cd-foot { display: none; }  /* Keep actions that have no dock button in the footer. */
+  .con-detail.docked-acts .cd-foot:has(:is([data-fk="delete"], [data-fk="sign-in"])) { display: flex; }
+  .con-detail.docked-acts .cd-foot .btn:not([data-fk="delete"], [data-fk="sign-in"]) { display: none; }
   .dock.open > .cd-raw .term { height: calc(100dvh - 330px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .cd-tracks .t { grid-template-columns: 1fr auto; } .cd-tracks .t .bar { grid-column: 1 / -1; grid-row: 2; }
   .cd-raw .term { height: 60dvh; min-height: 280px; }

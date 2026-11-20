@@ -58,9 +58,10 @@ console.log(JSON.stringify({ keys: docked.acts.map((a) => a.key), label: open.la
     assert seen == {"keys": ["open", "pause", "opts", "stop"], "label": "Open series", "opened": [7]}
 
 
-def test_a_phone_keeps_a_finished_jobs_delete_when_the_bar_has_its_other_buttons():
-    assert re.search(r"\.con-detail\.docked-acts \.cd-foot:has\(\[data-fk=\"delete\"\]\)\s*\{\s*display:\s*flex", CSS)
-    assert re.search(r"\.con-detail\.docked-acts \.cd-foot \.btn:not\(\[data-fk=\"delete\"\]\)\s*\{\s*display:\s*none", CSS)
+def test_a_phone_keeps_finished_job_actions_that_are_not_in_the_dock():
+    footer_actions = r'\[data-fk="delete"\], \[data-fk="sign-in"\]'
+    assert re.search(rf"\.con-detail\.docked-acts \.cd-foot:has\(:is\({footer_actions}\)\)\s*\{{\s*display:\s*flex", CSS)
+    assert re.search(rf"\.con-detail\.docked-acts \.cd-foot \.btn:not\({footer_actions}\)\s*\{{\s*display:\s*none", CSS)
 
 
 LIST_ROW = r"""
@@ -190,7 +191,7 @@ const opened = [];
 const ctx = sandbox({ isLive: () => false, setupButton: () => "", svcName: (s) => `${s}+`, openServiceRow: (...a) => opened.push(a),
   el: (tag, props = {}, ...kids) => ({ tag, ...props, kids, set innerHTML(v) {} }) });
 vm.runInContext(grab(src, /^function signInFailed\b[\s\S]*?\n}\n/m) + grab(src, /^const fixSignIn = .*$/m) + "\n" + grab(src, /^const ACT_ICONS = [\s\S]*?\n};\n/m)
-  + grab(src, /^function cardActs\b[\s\S]*?\n}\n/m) + grab(src, /^function runActs\b[\s\S]*?\n}\n/m), ctx);
+  + grab(src, /^function signInAction\b[\s\S]*?\n}\n/m) + grab(src, /^function cardActs\b[\s\S]*?\n}\n/m) + grab(src, /^function runActs\b[\s\S]*?\n}\n/m), ctx);
 const card = (extra) => ({ id: "a", episodeId: 1, service: "HULU", backend: "", outcome: "failed", ...extra });
 const acts = (extra) => ctx.runActs(card(extra)).map((b) => ({ text: b.textContent, title: b.title, primary: b.className.includes("primary"), go: b.onclick }));
 const icons = (extra) => ctx.cardActs(card(extra)).map((b) => [b.ariaLabel, b.className.includes("primary"), b.onclick]);

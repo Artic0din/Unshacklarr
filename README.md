@@ -361,7 +361,8 @@ does. Without it, the step shows how long it has been going.
 
 **Catch up** (Activity): the automatic sync only takes new episodes. The aired episodes your series still miss
 (those from before a series got its service, or that the sync gave up on) are listed there, within 7, 30 or 90
-days or all, and downloaded together.
+days or all.
+Each row shows the season's service, and you can download one episode or queue the whole list for the selected Sonarr.
 
 ### 🎛️ Download options
 

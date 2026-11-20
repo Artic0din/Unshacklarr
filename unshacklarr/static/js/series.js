@@ -651,8 +651,8 @@ const belowAsked = (e) => {
   return lad ? !!e.file?.track && stepOf(lad, e.file.track) > 0 : e.file?.height && e.file.height < askedHeight(e.seasonNumber) * 0.9;
 };
 /* The service a season downloads from: its own page's when that is on another service, else the series'. */
-function seasonTag(season) {
-  const conf = S.config.series[current.tvdbId] || {};
+function seasonTag(season, tvdbId = current.tvdbId) {
+  const conf = S.config.series[tvdbId] || {};
   return conf.season_pages?.[season]?.service || conf.service;
 }
 const seasonSvc = (season) => svcName(seasonTag(season));

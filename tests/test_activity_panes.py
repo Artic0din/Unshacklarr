@@ -82,6 +82,118 @@ def node(script, *args):
     return json.loads(out.stdout)
 
 
+ACTIVITY_ACTIONS = r"""
+const fs = require("fs"), vm = require("vm");
+const [dir, scenario, ...args] = process.argv.slice(1);
+const src = fs.readFileSync(`${dir}/activity.js`, "utf8");
+const series = fs.readFileSync(`${dir}/series.js`, "utf8");
+const grab = (name, text = src) => text.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const line = (name, text = src) => text.match(new RegExp(`^const ${name} = .*?;(?:  //.*)?$`, "m"))[0];
+const elements = {};
+const el = (tag, props = {}, ...children) => ({ tag, children, classList: { add() {} },
+  replaceChildren(...kids) { this.children = kids; }, querySelector: () => null,
+  insertBefore(child) { this.children.push(child); }, cloneNode() { return { ...this }; }, ...props });
+const $ = (sel) => elements[sel] ??= el(sel);
+const walk = (n) => n?.tag ? [n, ...n.children.flatMap(walk)] : [];
+const posts = [], toasts = [], opened = [];
+const target = args[0] || "";
+const sonarrs = [{ name: "4K", quality_ladder: ["2160"] }, { name: "Unset" }];
+const ctx = { $, el, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
+  S: { config: { settings: { sonarrs }, series: { 72: { service: "NF", season_pages: { 2: { service: "DSNP" } } } } },
+    serviceNames: { NF: "Netflix", DSNP: "Disney+" }, series: [] },
+  savedSonarr: (n) => n === "4K" ? "4K Saved" : n, mainSonarr: () => "Main",
+  markPicked() {}, renderDock() {}, loading() {}, posterSrc() {}, posterFail() {}, ago: () => "yesterday",
+  toast: (...data) => toasts.push(data), episodeTitle: (_, __, title) => title,
+  api: async (path, options) => {
+    if (options.method === "POST") {
+      posts.push({ path, body: JSON.parse(options.body) });
+      if (args[1] === "refused") throw Error("read-only proxy");
+      return;
+    }
+    return { items: [
+      { episodeId: 123, tvdbId: 72, series: "Example", sxxeyy: "S01E05" },
+      { episodeId: 456, tvdbId: 72, series: "Example", sxxeyy: "S02E01" },
+    ] };
+  },
+  FINISHING: new Set(), jobHidden: new Set(), jobCards: new Map(), openCards: new Set(),
+  following: null, isLive: () => false, thumb() {}, posterOf() {}, day() {}, time() {},
+  outcomeOf: (c) => c.outcome, hovering: () => "", stepStates: () => [], icon() {}, glideBars() {}, jobDone: () => el("div"),
+  openServiceRow: (...data) => opened.push(data),
+};
+vm.createContext(ctx);
+vm.runInContext(`let picked_run, missingDays = 30, missingSonarr = "", missingSeq = 0;\n` +
+  [line("svcName", series), grab("seasonTag", series), line("fixSignIn"),
+    ...["sonarrPicker", "unsetNote", "showMissing", "signInFailed", "signInAction", "cardKind", "jobState", "renderJob"].map((n) => grab(n))
+  ].join("\n"), ctx);
+(async () => {
+  if (scenario === "job") {
+    const card = { tvdbId: 72, series: "Example", outcome: "failed", started: "2026-01-01", service: "NF" };
+    const auth = target === "classified" ? { auth_failures: { DSNP: "expired" }, auth_failure_backends: { DSNP: "secondary" } }
+      : { cause: "Login failed" };
+    ctx.renderJob({ job: "job1", cards: [{ ...card, id: "a", episodeId: 123 }, { ...card, ...auth, id: "b", episodeId: 456 }] });
+    const buttons = $("#cd-foot").children;
+    buttons.find((b) => b.textContent === "Fix sign-in")?.onclick();
+    console.log(JSON.stringify({ primary: buttons.filter((b) => b.className.includes("primary")).map((b) => b.textContent), opened }));
+    return;
+  }
+  await ctx.showMissing();
+  if (target) {
+    walk($("#cd-main")).find((n) => n.tag === "button" && n.textContent === target).onclick();
+    await new Promise(setImmediate);
+  }
+  const all = walk($("#cd-main"));
+  const rows = all.filter((n) => n.className?.split(" ").includes("left-row"));
+  const buttons = rows.map((r) => walk(r).find((n) => n.tag === "button" && n.textContent === "Download"));
+  const bulk = all.find((n) => n.tag === "button" && n.textContent === "Download the 2");
+  const click = (b) => b?.onclick({ currentTarget: b, target: b });
+  for (const action of scenario.split("-")) await click(action === "row" ? buttons[1] : bulk);
+  console.log(JSON.stringify({ posts, toasts, bulkHidden: bulk.hidden, chips: rows.map((r) =>
+    walk(r).find((n) => n.className === "sv-chip")?.textContent),
+    buttons: buttons.map((b) => b && { primary: b.className.includes("primary"), disabled: !!b.disabled }) }));
+})();
+"""
+
+
+@pytest.mark.parametrize(("target", "sonarr"), [("", {}), ("4K", {"sonarr": "4K Saved"})])
+def test_catch_up_row_download_uses_same_sonarr_as_bulk(target, sonarr):
+    row = node(ACTIVITY_ACTIONS, str(JS), "row", target)
+    bulk = node(ACTIVITY_ACTIONS, str(JS), "bulk", target)
+    assert row["posts"] == [{"path": "/api/download", "body": {"episodeIds": [456], **sonarr}}]
+    assert bulk["posts"] == [{"path": "/api/download", "body": {"episodeIds": [123, 456], **sonarr}}]
+    assert row["chips"] == ["Netflix", "Disney+"]
+    assert row["buttons"] == [{"primary": False, "disabled": False}, {"primary": False, "disabled": True}]
+
+
+@pytest.mark.parametrize("action", ["row", "bulk"])
+def test_catch_up_never_queues_when_sonarr_quality_is_unset(action):
+    result = node(ACTIVITY_ACTIONS, str(JS), action, "Unset")
+    assert result["posts"] == []
+    assert result["bulkHidden"] is True
+    assert all(b and b["disabled"] for b in result["buttons"])
+
+
+def test_catch_up_download_error_allows_retry():
+    result = node(ACTIVITY_ACTIONS, str(JS), "row", "", "refused")
+    assert result["toasts"] == [["read-only proxy", True]]
+    assert result["buttons"][1]["disabled"] is False
+
+
+@pytest.mark.parametrize(("order", "sent"), [("row-bulk", [[456], [123]]), ("bulk-row", [[123, 456]])])
+def test_catch_up_row_and_bulk_do_not_queue_the_same_episode(order, sent):
+    result = node(ACTIVITY_ACTIONS, str(JS), order)
+    assert [request["body"]["episodeIds"] for request in result["posts"]] == sent
+    assert all(b["disabled"] for b in result["buttons"])
+
+
+@pytest.mark.parametrize(("classification", "primary", "opened"), [
+    ("classified", ["Fix sign-in"], [["DSNP", "secondary"]]),
+    ("unclassified", ["Retry 2 failed"], []),
+])
+def test_failed_job_footer_offers_sign_in_only_for_classified_failure(classification, primary, opened):
+    result = node(ACTIVITY_ACTIONS, str(JS), "job", classification)
+    assert result == {"primary": primary, "opened": opened}
+
+
 SWITCHER = r"""
 const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8"), html = fs.readFileSync(process.argv[2], "utf8");
