@@ -190,7 +190,7 @@ function applyRoute(event) {
     const sameTarget = sameInboxPage && JSON.stringify(history.state?.settings?.target ?? null) === JSON.stringify(settingsTarget);
     if (alreadyOpen && (!event || route.id || current || sameTarget)) loadSettingsSec();
     else showSettingsSec(route.sec, true, false, null, Boolean(event));
-  } else if (route.tab === "settings" && !sameInboxPage) { showSettingsList(true); loadSettingsSec(); }
+  } else if (route.tab === "settings" && !sameInboxPage) { showSettingsList(true, sameTab); loadSettingsSec(); }
   routed = true;
   if (currentTab === "log" && !route.id) syncActivityRoute(sameTab);
   if (sameInboxPage) return;  // drawer and title are tied to the hash, not the history entry

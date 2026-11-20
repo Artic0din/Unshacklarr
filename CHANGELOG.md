@@ -173,6 +173,7 @@ Every change worth knowing, newest first. The format follows
 - Made Escape dismiss a tooltip without also closing the Series drawer or Inbox.
 - Restored translations for the device picker and other short labels that name a service.
 - Restored the Activity view from browser history even when the same jump opened or closed the Inbox.
+- Stopped browser Back and Forward from focusing a Settings row when arriving from another tab.
 - Kept same-number episodes from different series in Catch up history, including in search and Failed.
 - Kept series and Sonarr names unchanged while translating service labels.
 - Kept unread notifications and the retry button intact when reopening the Inbox during a slow load.

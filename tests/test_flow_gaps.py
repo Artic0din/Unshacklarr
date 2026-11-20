@@ -39,7 +39,7 @@ def node(body, *args):
 
 
 SETTINGS_NAV = r"""
-const listeners = {}, location = { hash: "#/settings/cdm" };
+const listeners = {}, location = { hash: process.argv[2] === "settings-list" ? "#/settings" : "#/settings/cdm" };
 const window = { scrollY: 0, addEventListener: (name, fn) => { listeners[name] = fn; } };
 function element() {
   const listeners = {};
@@ -142,6 +142,27 @@ const services = () => {
     grab(src, new RegExp(`^(async )?function ${name}\\b[\\s\\S]*?\\n}\\n`, "m"))).join("\n"), ctx);
 };
 """
+
+
+def test_cross_tab_history_opens_the_settings_list_without_focusing_a_row():
+    result = node(SETTINGS_NAV + r"""
+const cold = focused === listItem;
+ctx.showTab("schedule");
+ctx.showTab("settings");
+ctx.showTab("series");
+focused = null;
+history.back();
+const back = [location.hash, focused === listItem];
+ctx.showSettingsSec("connections");
+focused = null;
+history.back();
+const fromSection = [location.hash, focused === listItem];
+history.back();
+focused = null;
+history.forward();
+console.log(JSON.stringify([cold, back, fromSection, [location.hash, focused === listItem]]));
+""", str(JS / "navigation.js"), "settings-list")
+    assert result == [False, ["#/settings", False], ["#/settings", True], ["#/settings", False]]
 
 
 def test_same_page_inbox_history_preserves_settings_scroll_unless_the_target_changes():
