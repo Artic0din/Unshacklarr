@@ -194,15 +194,16 @@ async function showServeLog() {
   try { ({ log } = await api("/api/unshackle/log")); } catch (e) { return toast(e.message, true); }
   showTab("log");
   picked_run = "serve";
+  runBackKey = null;
   markPicked(picked_run);
   $("#con").classList.add("open");
+  $("#cd-top-title").textContent = "unshackle serve";
   $("#cd-main").replaceChildren(el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "unshackle serve" }),
     el("small", { textContent: "Its log, last lines" }))));
   renderDock(null); $("#cd-foot").replaceChildren();  // no job here: neither its bar nor its actions
   $("#cd-raw").hidden = false;
   $("#cd-raw").open = true;
   if (openTerm()) { termFor = "serve"; termQuery = ""; term.write(log.replaceAll("\n", "\r\n")); }
-  document.querySelectorAll(".crow").forEach((r) => r.classList.remove("sel"));
 }
 
 /* Suggest services: every series without a service, airing ones first, with what TMDB finds for it, added at once. */
@@ -378,4 +379,3 @@ async function renderPush() {
     toast("Notifications on for this device");
   })]));
 }
-

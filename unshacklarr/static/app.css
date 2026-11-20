@@ -958,20 +958,64 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .seg.small button { padding: 5px 12px; }
 .chip.o-downloaded { color: var(--ok); } .chip.o-failed { color: var(--err); } .chip.o-kept { color: var(--warn); } .chip.o-interrupted, .chip.o-stopped, .chip.o-unavailable { color: var(--muted); }
 /* Activity: list on the left (what runs, then the history), the picked download on the right. */
+.con-toolbar { --con-target: 36px; --chip-slot: calc(var(--con-target) + 8px);
+  display: flex; gap: var(--sp-2); align-items: center; min-height: var(--chip-slot); margin-bottom: var(--sp-2); }
+#tab-log .con-views { flex: none; flex-wrap: wrap; gap: 2px; margin: 0; }
+#tab-log .con-views button { min-height: var(--con-target); padding: 4px 10px; }
+.con-views button[aria-pressed="true"] { box-shadow: inset 0 -2px var(--field-line-hover); }
+.con-views #con-left-n { display: inline; margin: 0; }
+.con-views #con-left-n:empty { display: none; }
+.con-running:not([hidden]) { display: flex; flex: 1; align-items: start; gap: var(--sp-1); min-width: 0; height: var(--chip-slot);
+  padding-block: var(--sp-1) 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.con-running .chip { display: inline-flex; flex: none; align-items: center; gap: 6px; max-width: min(18rem, 100%);
+  min-height: var(--con-target); padding-inline: 10px; background: var(--accent-tint); color: var(--accent); cursor: pointer; }
+.con-running .chip::before { content: ""; flex: 0 0 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.con-running .chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.con-running .chip[aria-current="true"] { box-shadow: inset 0 -2px currentColor; }
+.con-running .chip:focus-visible { outline-offset: -2px; }
+.con-running { --chip-fade: 14px; scroll-padding-inline-end: var(--chip-fade); }
+@property --chip-edge { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@supports (animation-timeline: scroll()) {
+  .con-running { mask-image: linear-gradient(to right, black calc(100% - var(--chip-edge)), transparent);
+    animation: con-chip-edge linear both;
+    animation-timeline: scroll(self inline); animation-range: calc(100% - var(--chip-fade)) 100%; }
+  @keyframes con-chip-edge { from { --chip-edge: var(--chip-fade); } }
+}
+@supports not (animation-timeline: scroll()) {
+  .con-running.more-chips { mask-image: linear-gradient(to right, black calc(100% - var(--chip-fade)), transparent); }
+}
+@media (pointer: coarse) {
+  .con-toolbar { --con-target: 44px; }
+  .con-views button, .con-running .chip { min-width: 44px; }
+}
+@media (max-width: 700px) {
+  .con-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .con-toolbar:has(#con-downloads[aria-pressed="true"]):has(.con-running:not([hidden])) { grid-template-rows: auto var(--chip-slot); }  /* the chips' row only while something runs: no empty band */
+}
+@media (max-width: 520px) {
+  #tab-log .con-views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .con-views button { white-space: normal; overflow-wrap: anywhere; }
+}
+/* The toolbar can grow at larger text sizes without making the whole page scroll. */
+@media (min-width: 701px) {
+  #tab-log:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(420px, 1fr);
+    height: calc(100dvh - var(--head-h, 65px) - 2 * var(--sp-6) - var(--sp-2)); }
+}
 .con { display: grid; grid-template-columns: clamp(320px, 22vw, 440px) minmax(0, 1fr); background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--r-md); height: calc(100dvh - 150px); min-height: 420px; overflow: hidden; }
-/* The page stays the screen's height and only the history scrolls, loading more as it nears the end;
-   a screen too short for it scrolls the whole column. */
+  border-radius: var(--r-md); min-height: 420px; overflow: hidden; }
+/* On wide screens the history scrolls inside the pane; short panes can scroll the whole list. */
 .con-list { border-right: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; background: var(--bg);
   overflow-y: auto; }
 #runs-history { flex: 1 0 260px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 4px;
   margin: 0 -4px; padding: 0 4px; }
 .con-detail { overflow-y: auto; }
 .con-detail > * { flex-shrink: 0; }  /* a card unfolding makes the column scroll; it never squeezes the output (overflow: hidden let it) */
-.con-state { font-size: var(--fs-sub); color: var(--muted); padding: 2px 4px 6px; }
+.con-state:not(:empty) { font-size: var(--fs-sub); color: var(--muted); margin: 0 8px; }
+.con-state:empty { display: none; }
 .con-gh { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-footnote); font-weight: 700; color: var(--muted); letter-spacing: .04em;
   margin: 10px 4px 4px; text-transform: uppercase; }
 .con-gh b { color: var(--text); }
+.con-list > .con-gh:first-child { margin-top: 0; }
 .gh-act { background: none; border: 0; padding: 0 2px; font: inherit; color: var(--muted); cursor: pointer; letter-spacing: inherit; text-transform: inherit; }
 .gh-act:focus-visible { color: var(--text); }
 @media (hover: hover) { .gh-act:hover { color: var(--text); } }
@@ -993,15 +1037,6 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .crow small { display: block; font-size: var(--fs-footnote); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .crow .bar { display: block; margin-top: 5px; height: 4px; }
 .crow .chip.ask { white-space: normal; max-width: 7.5em; text-align: center; }  /* two short lines, not a row with no room for the series */
-.stats-ico { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-sm); background: var(--well); color: var(--text); }
-.stats-ico svg { width: 17px; height: 17px; }
-/* The five shortcuts as two columns, their descriptions read aloud only: the history starts higher */
-.con-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 4px; }
-.con-tools .crow { position: relative; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; padding: 6px; }
-.con-tools .crow b { display: block; white-space: normal; line-height: 1.25; }
-.con-tools .crow b span { overflow: visible; }  /* a count wraps with its words, never cut */
-.con-tools #con-left { grid-column: 1 / -1; }  /* the one that can need you, and the longest name: a row of its own, two pairs under it */
-.con-tools .crow small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .left-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
 .left-row img { width: 30px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-sm); background: var(--bg); }
 .left-row b { display: block; } .left-row small { display: block; color: var(--muted); font-size: var(--fs-sub); overflow-wrap: anywhere; }
@@ -1040,7 +1075,8 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .cd-head .act { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .cd-top, .cd-foot, .steps .s, .cd-head .line2 { display: none; }
 .steps { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
-.steps > span { display: grid; gap: 7px; font-size: var(--fs-footnote); color: var(--muted); }
+.steps > span { display: grid; min-width: 0; overflow: hidden; text-overflow: ellipsis; gap: 7px; font-size: var(--fs-footnote); color: var(--muted); }
+.steps :is(.l, .s) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .steps > span::before { content: ""; height: 4px; border-radius: 2px; background: var(--well); }
 .steps .done { color: var(--text); } .steps .done::before { background: var(--ok); }
 .steps .now { color: var(--text); font-weight: 600; }
@@ -2126,9 +2162,9 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
    invisible slop centred on it makes up the rest without moving anything: a percentage inset is of the control's size. */
 @media (max-width: 700px), (pointer: coarse) {
   :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
-    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico) { position: relative; }
+    #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico) { position: relative; }
   :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
-    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
+    #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
   details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
   .btn, .btn.small, nav a, .pill, .ax-seg button, .inbox-filters button, .con-filters button, .set-nav button,
   .set-back, .hidden-btn, .sched-filter .pill, .cd-tracks-fold > summary, .ds-sub summary,
