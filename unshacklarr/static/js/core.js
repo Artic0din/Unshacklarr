@@ -183,6 +183,7 @@ async function responseError(response) {
   // the cause alone when the server gives one: leading with "answered HTTP 403" pushes it out of a narrow field
   const error = new Error(safeDetail ? tr(safeDetail) : tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`));
   error.detail = safeDetail;
+  error.status = response.status;
   return error;
 }
 const errorDetail = (error) => error.detail || error.message;
@@ -196,7 +197,7 @@ async function api(path, { wait = 30, ...opts } = {}) {
       ? `Unshacklarr did not answer after ${wait} s. Try again.`
       : "Unshacklarr can't be reached. Check that it is running, then try again.");
   }
-  if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw new Error("Sign in first"); }
+  if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw Object.assign(new Error("Sign in first"), { status: r.status }); }
   if (!r.ok) throw await responseError(r);
   return r.json();
 }
