@@ -138,8 +138,11 @@ def test_a_phone_bar_over_the_save_bar_stands_on_it_as_tall_as_it_is():
 
 
 def test_phone_page_end_clears_the_dock_raised_by_the_save_bar():
-    rule = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\) main \{ padding-bottom: ([^;]+);", phone_blocks())
-    assert rule and "var(--save-h" in rule[1], "page padding must grow with the save bar"
+    """The dock stands on the save bar, raised by its height and a gap: the page's end grows by as much, only then."""
+    rule = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\):has\(#dock:not\(\[hidden\]\)\) main \{ padding-bottom: ([^;]+);",
+                     phone_blocks())
+    assert rule, "page padding must grow with the save bar, while the dock shows"
+    assert rule[1].replace(" ", "") == "calc(96px+var(--save-h,56px)+8px)", rule[1]  # main's own 96px, the bar, the gap
 
 
 def test_an_open_dock_on_the_save_bar_gives_its_output_the_save_bars_height():
