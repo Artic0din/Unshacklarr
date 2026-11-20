@@ -109,6 +109,7 @@ Every change worth knowing, newest first. The format follows
 - Corrected which Series controls the Filters and actions button announced as collapsed on desktop.
 - Moved Activity tools into a compact switcher, added shortcuts to running downloads, and kept the download detail pane full size. (#353)
 - Fixed Activity filters to count whole jobs and show all their outcomes.
+- Fixed phone Back navigation to return from an Activity detail to its opener in the list.
 - Added service names and individual downloads to Catch up, tightened Waiting and Upgrades, and added Fix sign-in to failed jobs that need it. (#353)
 
 - Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)

@@ -220,6 +220,7 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
   // Activity opened from the menu while a download runs: straight to it, a phone too.
   if (landOnLive && liveItems.length && picked_run !== "serve") {
     picked_run = itemKey(liveItems[0]); runBackKey = null; $("#con").classList.add("open");
+    recordActivityDetail(picked_run);
   }
   landOnLive = false;
   // On a wide screen, something is always shown: what runs first, else the latest download.
@@ -582,11 +583,32 @@ function markPicked(key) {
   });
   return view;
 }
-let runBackKey = null;
+let runBackKey = null, activityDetail = null;
+function recordActivityDetail(id, tool = false) {
+  if (innerWidth > 700) return;
+  const current = history.state?.activity;
+  if (current?.id === id && current.tool === tool && current.backKey === runBackKey) {
+    activityDetail = current;
+    return;
+  }
+  activityDetail = { id, tool, backKey: runBackKey, hash: location.hash };
+  history[current ? "replaceState" : "pushState"]({ ...history.state, activity: activityDetail }, "");
+}
+function syncActivityRoute() {
+  const detail = history.state?.activity;
+  if (detail?.hash === location.hash) {
+    if (activityDetail?.id === detail.id && picked_run === detail.id) return;
+    activityDetail = detail;
+    if (detail.tool) $(`#con-${detail.id}`).onclick();
+    else pickRun(detail.id, detail.backKey);
+  } else if (activityDetail?.hash === location.hash) closeActivityDetail();
+}
+window.addEventListener("popstate", syncActivityRoute);
 function pickRun(id, backKey = null) {
   landOnLive = false;
   runBackKey = backKey;
   picked_run = id;
+  recordActivityDetail(id);
   $("#con").classList.add("open");
   renderConsole();
   if (innerWidth <= 700) { scrollTo({ top: 0 }); focusHeading($("#cd-top-title")); }  // the list is out of sight: the keyboard goes with the view
@@ -597,6 +619,7 @@ function openActivityTool(show) {
     runBackKey = null;
     $("#cd-main").replaceChildren(loading("Loading…"));
     show();
+    recordActivityDetail(picked_run, true);
     if (innerWidth <= 700) { scrollTo({ top: 0 }); focusHeading($("#cd-top-title")); }
   };
 }
@@ -941,11 +964,14 @@ $("#con-stats").onclick = openActivityTool(showStats);
 $("#con-downloads").onclick = (e) => {
   landOnLive = false;
   if (innerWidth > 700 && e.currentTarget.getAttribute("aria-pressed") === "true") return;
+  if (history.state?.activity) return history.back();
   runBackKey = null;
   $("#con").classList.remove("open"); picked_run = null; renderConsole();
 };
-$("#cd-back").onclick = () => {
+$("#cd-back").onclick = () => history.state?.activity ? history.back() : closeActivityDetail();
+function closeActivityDetail() {
   landOnLive = false;
+  activityDetail = null;
   const from = picked_run, trigger = runBackKey;
   runBackKey = null;
   $("#con").classList.remove("open"); picked_run = null; renderConsole();
@@ -965,7 +991,7 @@ $("#cd-back").onclick = () => {
     ($(`[data-fk="row:${from}"]`) || document.getElementById(`con-${from}`) ||
       $("#con-downloads")).focus({ preventScroll: true });
   }
-};
+}
 let searchTimer = null;  // typed: the history filtered once the typing pauses, not at each key
 $("#con-search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 150); };
 function setConFilter(f) {

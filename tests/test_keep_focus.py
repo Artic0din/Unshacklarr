@@ -314,14 +314,15 @@ if (scenario === "activity" || scenario === "chip-back") {
     return m ? find(m[1] || m[2].startsWith("chip:") ? strip : rows, (n) => n.dataset.fk === m[2])
       : ({ "#con": con, "#con-running": strip, "#con-downloads": downloads })[sel] ?? title;
   };
-  Object.assign(ctx, { $: lookup, innerWidth: 500, scrollTo() {}, renderConsole: drawRows, picked_run: null });
+  Object.assign(ctx, { $: lookup, innerWidth: 500, scrollTo() {}, renderConsole: drawRows, picked_run: null,
+    history: { state: null }, recordActivityDetail() {} });
   doc.getElementById = (id) => id === "con-downloads" ? downloads : null;
   drawRows();
-  run(fn(activity, "pickRun") + "\n" + "let picked_run = null;");
+  run(fn(activity, "pickRun") + "\n" + fn(activity, "closeActivityDetail") + "\n" + "let picked_run = null, activityDetail = null;");
   con.classList.add = () => {};
   const back = {};
   ctx.$ = (sel) => sel === "#cd-back" ? back : lookup(sel);
-  run((activity.match(/^\$\("#cd-back"\)\.onclick = .*\};$/m) || activity.match(/^\$\("#cd-back"\)\.onclick = .*?^\};/ms))[0]);
+  run(activity.match(/^\$\("#cd-back"\)\.onclick = .*;$/m)[0]);
   rows.children[0].focus();
   ctx.pickRun("job:j1");
   out.phoneOpen = [doc.activeElement === title, title.tabIndex];

@@ -488,18 +488,28 @@ const $ = (s) => {
   if (s.startsWith("#cd-main > ")) return $("#cd-main").children.find((n) => [`.${n.className}`, `#${n.id}`].includes(s.slice(11)));
   const chip = s.match(/^#con-running \[data-fk="([^"]+)"\]$/);
   if (chip) return $("#con-running").children.find((n) => n.dataset.fk === chip[1]);
-  if (s.startsWith("[data-fk=")) return undefined;
+  const row = s.match(/^\[data-fk="row:([^"]+)"\]$/);
+  if (row) return [...$("#runs-live").children, ...$("#runs-history").children].find((n) => n.dataset.hk === `row:${row[1]}`);
   return elements[s] ??= node();
 };
 let detail = null;
 const pending = {};
+const entries = [null];
+let entry = 0;
+const historyStack = {
+  get state() { return entries[entry]; },
+  pushState(state) { entries.splice(++entry, Infinity, state); },
+  replaceState(state) { entries[entry] = state; },
+  back() { if (entry > 0) { entry--; ctx.syncActivityRoute?.(); } },
+  forward() { if (entry < entries.length - 1) { entry++; ctx.syncActivityRoute?.(); } },
+};
 const strip = $("#con-running"), classes = new Set();
 let scroll = () => {}, resize = () => {};
 Object.assign(strip, { scrollLeft: 0, scrollWidth: 800, clientWidth: 300,
   addEventListener: (event, listener) => { if (event === "scroll") scroll = listener; },
   classList: { toggle: (name, on) => on ? classes.add(name) : classes.delete(name) },
 });
-const ctx = { $, innerWidth: 1000, el: (tag, props) => node(props),
+const ctx = { $, innerWidth: 1000, history: historyStack, location: { hash: "#/activity" }, el: (tag, props) => node(props),
   CSS: { supports: () => process.argv[3] !== "chip-overflow" },
   ResizeObserver: class { constructor(callback) { resize = callback; } observe() {} },
   document: Object.assign(doc, { getElementById: (id) => elements[`#${id}`], querySelectorAll: (s) => ({
@@ -523,13 +533,17 @@ vm.runInContext(`let picked_run = null, runBackKey, landOnLive = false, conFilte
   ["itemKey", "isLive", "isQueued"].map(line).join("\n") + "\n" +
   ["openActivity", "renderConsole", "drawRunningChips", "drawConsole", "jobsOf", "markPicked", "pickRun", "openActivityTool", "showStats"].map(grab).join("\n") +
   '\nthis.keyOf = itemKey;\n' + src.match(/^\$\("#con-stats"\)\.onclick = .*;$/m)[0] + "\n" +
-  ["con-downloads", "cd-back"].map(handler).join("\n"), ctx);
+  handler("con-downloads") + "\n" + src.match(/^\$\("#cd-back"\)\.onclick = .*?(?:\};|;)$/ms)[0], ctx);
 const pressed = () => buttons.filter((b) => b.attrs["aria-pressed"] === "true").map((b) => b.dataset.conView);
 const snapshot = () => [pressed(), $("#con-running").hidden, detail];
 const addRuns = (cards, liveOnly = false) => {
   ctx.cards = cards;
   vm.runInContext(`runCards = cards; renderConsole(${liveOnly})`, ctx);
 };
+for (const name of ["recordActivityDetail", "syncActivityRoute", "closeActivityDetail"]) {
+  if (src.includes(`function ${name}(`)) vm.runInContext(grab(name), ctx);
+}
+vm.runInContext("let activityDetail = null", ctx);
 const active = { id: "live", series: "Show", sxxeyy: "S01E01", outcome: "running", step: "downloading", batch: "batch" };
 const queued = { ...active, id: "queued", sxxeyy: "S01E02", waiting: true, step: "queued" };
 const history = { id: "old", series: "Older", outcome: "downloaded" };
@@ -621,6 +635,23 @@ else if (scenario === "back-to-chip") {
   back.onclick();
   console.log(JSON.stringify([opened, detail, doc.activeElement === chip]));
 }
+else if (scenario === "phone-history") {
+  ctx.innerWidth = 390;
+  addRuns([active, history]);
+  const row = () => $("#runs-history").children[0];
+  row().onclick();
+  const opened = detail;
+  historyStack.back();
+  const browserBack = [detail, doc.activeElement === row()];
+  historyStack.forward();
+  const browserForward = detail;
+  $("#cd-back").onclick();
+  const buttonBack = [detail, doc.activeElement === row()];
+  $("#con-stats").onclick();
+  const stats = pressed();
+  historyStack.back();
+  console.log(JSON.stringify([opened, browserBack, browserForward, buttonBack, stats, pressed(), doc.activeElement === $("#con-stats")]));
+}
 else if (scenario === "downloads-width") {
   addRuns([active, history]);
   $("#runs-history").children[0].onclick();
@@ -685,6 +716,10 @@ def test_history_outcomes_count_and_keep_whole_jobs_without_running_jobs():
 
 def test_back_from_a_running_download_returns_focus_to_its_chip():
     assert switcher("back-to-chip") == ["live", None, True]
+
+
+def test_phone_activity_browser_and_in_app_back_restore_the_list_and_opener():
+    assert switcher("phone-history") == ["old", [None, True], "old", [None, True], ["stats"], ["downloads"], True]
 
 
 def test_pressed_downloads_keeps_wide_detail_but_returns_to_the_narrow_list():
