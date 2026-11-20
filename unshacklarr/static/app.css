@@ -1041,6 +1041,7 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .dock { position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px;
   border-radius: 14px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--sh-lg);
   font-size: 13px; margin-top: auto; }
+.dock[hidden] { display: none; }  /* its display above would undo [hidden]: a tool pane would keep the last job's bar */
 .dock .d-ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--field-bg);
   border: 1px solid var(--line); color: var(--accent); flex: none; }
 .dock svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1401,7 +1402,7 @@ button.pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 
 .remote-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; } .remote-row [hidden] { display: none; }
 @media (max-width: 700px) {
   .cdm-grp { grid-template-columns: minmax(0, 1fr) auto; } .cdm-grp .cdm-to { grid-column: 1 / -1; } .cdm-default .cdm-to { grid-column: 1; }
-  .cdm-dev { grid-template-columns: 10px minmax(0, 1fr) 30px; } .cdm-sum { grid-column: 1 / 3; } .cdm-dev .kind, .cdm-dev .used, .cdm-dev .st { grid-column: 2; }
+  .cdm-dev { grid-template-columns: 10px minmax(0, 1fr) 44px; } .cdm-sum { grid-column: 1 / 3; } .cdm-dev .kind, .cdm-dev .used, .cdm-dev .st { grid-column: 2; }
   .cdm-dev .jact { grid-column: 3; grid-row: 1; } .cdm-dev .st { text-align: left; }
 }
 .st-sect { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -2066,10 +2067,10 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .ck-pill.bad, .sched-st.late, .rg-chip.bad, .chip.o-failed, .news-list .security .news-kind { color: var(--err); background: var(--err-tint); }
 .ax-seg button[aria-pressed=true] .chip-default { color: var(--accent-ink); background: var(--accent); }  /* filled, to stand out on the picked button's tint */
 
-/* Control heights, one pair for the whole app above phone width (a phone keeps its 44px touch sizes):
-   36px in toolbars and forms, 30px for the buttons inside a row or a card. Segmented controls: their frame is 36px. */
+/* Control heights, one pair for desktop pointer devices above phone width (phones and coarse-pointer tablets keep 44px
+   touch targets): 36px in toolbars and forms, 30px for the buttons inside a row or a card. Segmented controls: 36px. */
 :root { --ctl-h: 36px; --ctl-h-sm: 30px; }
-@media (min-width: 701px) {
+@media (min-width: 701px) and (pointer: fine) {
   .btn, nav a, .pill, .ax-seg button,
   :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: var(--ctl-h); height: auto; }
   .ax-seg button, input[type=time] { height: var(--ctl-h); }  /* a time field's own inner box is taller than the rest */
@@ -2082,14 +2083,22 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .sc-foot .icon-hide { width: var(--ctl-h-sm); height: var(--ctl-h-sm); }
   :is(.toolbar, .sched-head, .sched-tools, .cal-nav, .cd-head .act) .btn.small { min-height: var(--ctl-h); padding-inline: 14px; font-size: inherit; }
 }
-/* A phone: every control 44 px to the finger (Apple HIG). Where the mark is smaller by design, an invisible
-   slop centred on it makes up the rest without moving anything: a percentage inset is of the control's own size. */
-@media (max-width: 700px) {
+/* Phones and touch tablets: every control 44 px to the finger (Apple HIG). Where the mark is smaller by design, an
+   invisible slop centred on it makes up the rest without moving anything: a percentage inset is of the control's size. */
+@media (max-width: 700px), (pointer: coarse) {
   :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
-    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button) { position: relative; }
+    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button, #version, .inbox-filters button, .dock .d-ico) { position: relative; }
   :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
-    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
+    .con-tools .crow, #d-meta a, .ds-nav a, .ax-seg button, #version, .inbox-filters button, .dock .d-ico)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
   details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
+  .btn, .btn.small, nav a, .pill, .ax-seg button, .inbox-filters button, .con-filters button, .set-nav button,
+  .set-back, .hidden-btn, .sched-filter .pill, .cd-tracks-fold > summary, .ds-sub summary,
+  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: 44px; }
+  nav a { display: inline-flex; align-items: center; }
+  .hidden-btn { height: auto; }
+  .cd-back, .dock .d-open, .dock .d-acts button { width: 44px; height: 44px; }
+  .jact { min-width: 44px; min-height: 44px; }
+  #bell, .inbox-x { width: 44px; height: 44px; }
   .seg { overflow: visible; }  /* it wraps here, never scrolls: the slop reaches past its frame */
   .con-filters { row-gap: 8px; }  /* a wrapped row's slop would cover the row above */
   #d-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(44px - 1lh) .3em; }  /* wrapped, its links 44 px apart */
@@ -2101,6 +2110,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .ep-sel button { min-width: 44px; min-height: 44px; }  /* its frame clips: no room for a slop */
   .set-nav button.set-version { min-height: 44px; }
 }
+@media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }  /* its icon-only size up to 1240px is 40px */
 /* Dropdowns drawn as fields, in every browser: Safari otherwise sizes its native ones on its own, ignoring the heights above.
    The arrow is two gradients in the look's muted colour, so it follows light and dark. */
 select:not([multiple]) { appearance: none; -webkit-appearance: none; padding-right: 32px;
