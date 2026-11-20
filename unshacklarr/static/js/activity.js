@@ -934,12 +934,12 @@ async function showStats() {
   if (picked_run !== "stats") return;  // another pane was picked while this answer was on its way
   const m = st.month, fmt = (v, unit = "") => v === null || v === undefined ? "–" : `${v}${unit}`;
   const max = Math.max(1, ...st.weeks.map((w) => w.downloaded + w.failed + w.kept));
-  const weekOf = (w) => new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
+  const weekOf = (w, month = "short") => new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month });
   const weeks = el("div", { className: "weeks", ariaHidden: "true" }, ...st.weeks.map((w) => {  // drawn for the eye: the table under it has the numbers
     const n = w.downloaded + w.failed + w.kept, h = (k) => `height:${(w[k] / max) * 130}px`;
     return el("div", { className: "w", title: `Week of ${weekOf(w)}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
       el("span", { className: "stack" }, el("i", { className: "ok", style: h("downloaded") }), el("i", { className: "kp", style: h("kept") }), el("i", { className: "ko", style: h("failed") })),
-      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: weekOf(w) })));
+      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: weekOf(w, "numeric") })));
   }));
   const perWeek = el("table", { className: "svc-table" }, el("caption", { className: "sr-only", textContent: "Downloads per week, the last 8 weeks" }),
     el("thead", {}, el("tr", {}, ...["Week", "Downloaded", "Failed", "Kept"].map((t) => el("th", { textContent: t })))),

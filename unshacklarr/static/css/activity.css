@@ -94,7 +94,7 @@
 .weeks .w { display: grid; grid-template-rows: 132px auto; gap: 6px; text-align: center; justify-items: center; }
 .weeks .stack { display: flex; flex-direction: column-reverse; align-self: end; width: min(44px, 100%); border-radius: var(--r-sm); overflow: hidden; min-height: 2px; background: var(--well); }
 .weeks .stack i { display: block; } .weeks .ok { background: var(--ok); } .weeks .kp { background: var(--warn); } .weeks .ko { background: var(--err); }
-.weeks small { color: var(--muted); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; } .weeks b { font-size: var(--fs-footnote); }
+.weeks small { color: var(--muted); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; white-space: nowrap; } .weeks b { font-size: var(--fs-footnote); }
 .legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) 16px; font-size: var(--fs-footnote); color: var(--muted); }
 .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
 .svc-scroll { overflow-x: auto; --cover: var(--panel);  /* shadows at the edges that still hide columns: the surface under the table covers each once that edge is reached */
@@ -105,9 +105,10 @@
 .svc-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sub); }
 .svc-table th { text-align: left; font-size: var(--fs-footnote); color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .svc-table td { padding: 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-.svc-table tbody th { color: var(--text); font-size: var(--fs-sub); font-weight: 400; }
+.svc-table tbody th { color: var(--text); font-size: var(--fs-sub); font-weight: 400; white-space: nowrap; }
 .svc-table .bad { color: var(--err); font-weight: 600; } .svc-table .fine { color: var(--ok); }
 @media (max-width: 400px) {
+  .weeks { gap: var(--sp-1); }
   .svc-table :is(th, td) { padding-inline: var(--sp-1); overflow-wrap: anywhere; hyphens: auto; }
   .svc-scroll td:nth-child(5) { white-space: nowrap; }
 }
