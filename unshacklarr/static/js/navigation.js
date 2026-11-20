@@ -18,14 +18,55 @@ const LEGACY_SETTINGS_MAP = {
 };
 const settingsPages = Object.values(LEGACY_SETTINGS_MAP);
 const legacySettings = (name) => Object.hasOwn(LEGACY_SETTINGS_MAP, name) ? LEGACY_SETTINGS_MAP[name] : null;
-let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false, secFromList = false;
-let loadedSettings = null, settingsAnchor = null, settingsAnchorObserver = null;
+let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false;
+let loadedSettings = null, settingsJump = null;
 const inSettingsSec = () => currentTab === "settings" && !settingsList;  // a section on screen, not the phone's list
 const showingSettings = (name) => inSettingsSec() && legacySettings(name)?.sec === settingsSec;
 const settingsHref = (name) => `#/settings/${name}`;
-function clearSettingsAnchor() {
-  settingsAnchorObserver?.disconnect();
-  settingsAnchorObserver = settingsAnchor = null;
+function cancelSettingsJump() {
+  settingsJump?.observer?.disconnect();
+  settingsJump = null;
+}
+function applySettingsJump(jump) {
+  if (settingsJump !== jump || !inSettingsSec()) return;
+  const { target, heading } = jump;
+  const anchor = target?.service ? (target.id ? document.getElementById(target.id) : serviceRow(target))
+    : target ? document.querySelector(target) : heading;
+  if (!anchor) return;
+  if (target) {
+    const fold = anchor.closest("details");
+    if (fold) fold.open = true;
+    anchor.scrollIntoView({ block: target.service ? "center" : "start" });
+  } else scrollTo({ top: 0 });
+  if (!jump.focused) {
+    const label = target && !target.service && [...anchor.querySelectorAll("h2, h3, h4, label")].find((node) =>
+      node.getClientRects().length && !node.closest("[hidden], details:not([open])"));
+    focusHeading(label || anchor);
+    jump.focused = true;
+  }
+  if (target?.service && !target.id) {
+    const entry = history.state?.settings;
+    if (entry?.target?.service) history.replaceState({ settings: { ...entry, target: { ...target, id: anchor.id } } }, "");
+  }
+  if (!target || target.service || loadedSettings?.settled) cancelSettingsJump();
+  else if (!jump.observer) {
+    // While the loaders run, a health redraw can move the anchored subsection.
+    jump.observer = new ResizeObserver(() => applySettingsJump(jump));
+    jump.observer.observe(anchor.closest(".set-sec"));
+  }
+}
+function startSettingsJump(target, restoring) {
+  // The record's identity is the navigation token; queued callbacks cannot revive a cancelled jump.
+  const jump = settingsJump = { target, heading: $(`.set-sec[data-sec="${settingsSec}"] h2`) };
+  const apply = () => { jump.ready = true; applySettingsJump(jump); };
+  if (document.documentElement.classList.contains("i18n-wait")) {
+    i18nReady.then(() => {
+      if (settingsJump !== jump) return;
+      if (document.activeElement === document.body) apply();
+      else cancelSettingsJump();
+    });
+  } else if (restoring) requestAnimationFrame(apply);  // after the browser restores the entry's scroll
+  else apply();
 }
 function loadSettingsSec() {
   if (!inSettingsSec() || !S.config.settings || loadedSettings?.sec === settingsSec) return;
@@ -39,55 +80,42 @@ function loadSettingsSec() {
   Promise.all(pending).then(() => {
     entry.settled = true;
     if (loadedSettings !== entry) return;
-    settingsAnchor?.scrollIntoView({ block: "start" });
-    clearSettingsAnchor();
+    if (settingsJump?.ready) applySettingsJump(settingsJump);
   });
 }
 function leaveSettingsSec() {
   loadedSettings = null;
-  clearSettingsAnchor();
+  cancelSettingsJump();
   leaveSettingsNews(settingsSec);
 }
 function showSettingsList(on) {
   const fromSec = on && phoneLayout() && inSettingsSec();
   if (fromSec) leaveSettingsSec();
-  else if (on) clearSettingsAnchor();
+  else if (on) cancelSettingsJump();
   settingsList = on && phoneLayout();
   $(".set-layout").classList.toggle("at-list", settingsList);
   if (fromSec) document.querySelector(`.set-nav [data-sec="${settingsSec}"]`).focus({ preventScroll: true });  // the item it came from
 }
-function showSettingsSec(name, fromRoute = false, push = false, target = null) {
+function showSettingsSec(name, fromRoute = false, push = false, target = null, restoring = false) {
   const page = legacySettings(name), sec = page?.sec || (settingsPages.some((item) => item.sec === name) ? name : "connections");
   const changedSection = sec !== settingsSec;
   if (changedSection && inSettingsSec()) leaveSettingsSec();
-  clearSettingsAnchor();
+  cancelSettingsJump();
   const fromList = currentTab === "settings" && settingsList && phoneLayout();
-  if (changedSection || settingsList) secFromList = fromList && !fromRoute;
   showSettingsList(false);
   settingsSec = sec;
   settingsRoute = page ? name : sec;
   document.querySelectorAll(".set-sec").forEach((x) => x.hidden = x.dataset.sec !== sec);
   document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.setAttribute("aria-current", x.dataset.sec === sec));
   loadSettingsSec();
-  if (!fromRoute && inSettingsSec()) { navigate(push || fromList); updateTitle(); }
-  const anchor = (target && document.querySelector(target)) || (page && page.sec !== name && document.getElementById(page.anchor));
-  if (anchor) {
-    const fold = anchor.closest("details");
-    if (fold) fold.open = true;
-    anchor.scrollIntoView({ block: "start" });
-    const heading = [...anchor.querySelectorAll("h2, h3, h4, label")].find((node) =>
-      node.getClientRects().length && !node.closest("[hidden], details:not([open])"));
-    focusHeading(heading || anchor);
-    if (!loadedSettings?.settled) {
-      settingsAnchor = anchor;
-      // Startup health renders can resize the section before its own loaders finish.
-      settingsAnchorObserver = new ResizeObserver(() => settingsAnchor?.scrollIntoView({ block: "start" }));
-      settingsAnchorObserver.observe(anchor.closest(".set-sec"));
-    }
-  } else if (changedSection || fromList || !fromRoute) {
-    scrollTo({ top: 0 });
-    focusHeading($(`.set-sec[data-sec="${sec}"] h2`));
+  if (fromRoute) target = history.state?.settings?.target ?? null;
+  else if (inSettingsSec()) {
+    const fromListEntry = fromList || (!push && history.state?.settings?.fromList);
+    navigate(push || fromList, { target, fromList: Boolean(fromListEntry) });
+    updateTitle();
   }
+  target ??= page && page.sec !== name ? `#${page.anchor}` : null;
+  if (target || changedSection || fromList || !fromRoute || !routed) startSettingsJump(target, restoring);
 }
 function openSettings(name, target) {
   const fromTab = currentTab !== "settings";
@@ -102,7 +130,7 @@ $("#tab-settings").addEventListener("click", (e) => {
   showSettingsSec(link.hash.split("/").pop());
 });
 $("#set-back").onclick = () => {
-  if (secFromList) return history.back();  // the list is the page before: the phone's back does the same
+  if (history.state?.settings?.fromList) return history.back();
   showSettingsList(true);
   navigate(false);
   updateTitle();
@@ -116,9 +144,14 @@ function routeHash() {
   const hash = inSettingsSec() ? settingsHref(settingsRoute) : `#/${HASH_OF[currentTab] || currentTab}`;
   return hash + (current ? `/s/${current.tvdbId}/${drawerTab}` : "");
 }
-function navigate(push) {
+function navigate(push, settings) {
   const hash = routeHash();
-  if (location.hash !== hash) history[push ? "pushState" : "replaceState"](null, "", hash);
+  if (location.hash === hash && !settings) return;
+  cancelSettingsJump();
+  if (!settings && inSettingsSec() && location.hash.split("/s/")[0] === settingsHref(settingsRoute)) {
+    settings = history.state?.settings;
+  }
+  history[push && location.hash !== hash ? "pushState" : "replaceState"](settings ? { settings } : null, "", hash);
 }
 function parseRoute() {
   let [tab, ...rest] = location.hash.replace(/^#\/?/, "").split("/");
@@ -136,7 +169,8 @@ function updateTitle() {
     : section ? tr(`Settings: ${section} · Unshacklarr`) : tr(`${PAGE_NAME[currentTab]} · Unshacklarr`);
 }
 let routed = false;
-function applyRoute() {
+function applyRoute(event) {
+  if (event) cancelSettingsJump();
   if (location.hash.startsWith("#/inbox")) {  // a push notification touched: the bell's list over the current page
     history.replaceState(null, "", `#/${HASH_OF[currentTab] || currentTab}`);
     openInbox();
@@ -145,8 +179,8 @@ function applyRoute() {
   const alreadyOpen = inSettingsSec() && route.sec === settingsRoute;
   if (!routed || route.tab !== currentTab) showTab(route.tab, true);  // closing a series keeps its tab as it was
   if (route.sec) {
-    if (alreadyOpen) loadSettingsSec();  // the initial state arrived after the URL was shown
-    else showSettingsSec(route.sec, true);
+    if (alreadyOpen && (!event || route.id || current)) loadSettingsSec();
+    else showSettingsSec(route.sec, true, false, null, Boolean(event));
   } else if (route.tab === "settings") { showSettingsList(true); loadSettingsSec(); }
   routed = true;
   const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
@@ -158,10 +192,10 @@ function applyRoute() {
 window.addEventListener("popstate", applyRoute);
 // Startup can scroll without user input; only input should interrupt a jump that is still loading.
 for (const event of ["wheel", "touchmove", "pointerdown"]) {
-  window.addEventListener(event, (e) => { if (e.isTrusted) clearSettingsAnchor(); }, { passive: true });
+  window.addEventListener(event, (e) => { if (e.isTrusted) cancelSettingsJump(); }, { passive: true });
 }
 window.addEventListener("keydown", (e) => {
-  if (e.isTrusted && ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Tab"].includes(e.key)) clearSettingsAnchor();
+  if (e.isTrusted && ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Tab"].includes(e.key)) cancelSettingsJump();
 });
 
 // The page's scroll padding, so focus stops clear of what is pinned: the header as tall as it is (a status row under it
@@ -188,7 +222,6 @@ function showTab(name, fromRoute = false, quiet = false) {
   if (name !== currentTab && currentTab === "settings") {
     if (inSettingsSec()) leaveSettingsSec();
     showSettingsList(false);
-    secFromList = false;
   }
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   currentTab = name;

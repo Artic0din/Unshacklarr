@@ -190,13 +190,19 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
     }
   }
   const loads = [], location = { hash: "" }, dlg = { close() {} };
+  const history = { state: null, pushState(state, _, hash = location.hash) { this.replaceState(state, _, hash); },
+    replaceState(state, _, hash = location.hash) { this.state = state; location.hash = hash; } };
   Object.assign(ctx, { current: null, location, showTab(tab) { run(`currentTab = ${JSON.stringify(tab)}`); },
     phone: true, window: { scrollY: 0 }, ResizeObserver: class { observe() {} disconnect() {} },
     leaveSettingsNews() {}, updateTitle() {}, scrollTo() {}, S: { series: [], config: {} },
-    history: { pushState(_, __, hash) { location.hash = hash; }, replaceState(_, __, hash) { location.hash = hash; } },
+    history,
     $: (sel) => sel === "#news-dlg" || sel === "#inbox-dialog" ? dlg : sel === ".set-layout" ? root : doc.querySelector(sel),
     phoneLayout: () => ctx.phone });
-  doc.querySelector = (sel) => buttons[sel.match(/data-sec="([^"]+)"/)?.[1]] || anchors[sel.slice(1)];
+  doc.documentElement = root;
+  doc.querySelector = (sel) => {
+    const sec = sel.match(/data-sec="([^"]+)"/)?.[1];
+    return sel.endsWith(" h2") ? panels.find((n) => n.dataset.sec === sec).children[0] : buttons[sec] || anchors[sel.slice(1)];
+  };
   doc.querySelectorAll = (sel) => sel === ".set-sec" ? panels : Object.values(buttons);
   doc.getElementById = (id) => anchors[id];
   const loaders = "renderSonarrState loadUnshackleStatus renderAutomation renderImportMode renderLearnWindow renderQuality renderUpgradeSeries renderUpgradeGroups loadServices loadCdm renderPush loadSent renderInterface renderRegion loadHistory loadAccount";
@@ -205,7 +211,7 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   run(navigation.slice(navigation.indexOf('let currentTab ='), navigation.indexOf("/* The tab's title")));
   run('let routed = false;\n' + fn(navigation, "applyRoute"));
   const routes = ["sonarr", "unshackle", "downloads", "automation", "quality", "upgrades", "services", "cdm",
-    "notifications", "interface", "region", "history", "account", "cookies"];
+    "interface", "region", "history", "account", "cookies", ...Object.keys(buttons)];
   out.routes = {};
   for (const route of routes) {
     location.hash = `#/settings/${route}`;
@@ -217,7 +223,13 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
     const before = loads.slice();
     ctx.S.config.settings = {};
     ctx.applyRoute();
-    out.routes[route] = [panels.find((n) => !n.hidden).dataset.sec, out.scrolledTo, before, loads.slice()];
+    const afterState = loads.slice();
+    const initialAnchor = out.scrolledTo;
+    delete out.scrolledTo;
+    root.focus();
+    ctx.applyRoute();
+    out.routes[route] = [panels.filter((n) => !n.hidden).map((n) => n.dataset.sec), initialAnchor, before,
+      afterState, loads.slice(), !out.scrolledTo && doc.activeElement === root];
     ctx.showSettingsList(true);
   }
   delete out.scrolledTo;
@@ -231,15 +243,16 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   doc.activeElement = root; ctx.phone = false; run("settingsList = false"); ctx.showSettingsList(true);
   out.wide = doc.activeElement === root;  // a wide screen keeps both: nothing moves
 
-  const option = make("div", { scrollIntoView() { out.optionScrolled = true; }, closest: () => null, querySelector: () => null }); root.append(option);
+  const option = make("div", { scrollIntoView() { out.optionScrolled = true; }, closest: () => null, querySelectorAll: () => [] }); root.append(option);
   anchors["ax-window-card"] = option;
   run(fn(read("news.js"), "showOption"));
   ctx.showOption({ sec: "automation", target: "#ax-window-card" });
   out.news = [location.hash, panels.find((n) => !n.hidden).dataset.sec, doc.activeElement === option];
   Object.assign(ctx, { getSelection: () => "", INBOX_ICONS: {}, LOCALE: "en", inboxSeenAt: null,
-    renderServices: () => ctx.revealService(), svcName: (s) => s, SCROLL: "auto" });
-  const row = make("div", { scrollIntoView() { out.serviceScrolled = true; } }); root.append(row); anchors["sv-EXAMPLE"] = row;
-  run('let servicesReveal = "";\n' + fn(read("services.js"), "openServiceRow") + "\n" + fn(read("services.js"), "revealService"));
+    renderServices: () => ctx.revealService(), svcName: (s) => s });
+  const row = make("div", { id: "sv-EXAMPLE", closest: () => null, scrollIntoView() { out.serviceScrolled = true; } });
+  root.append(row); anchors[row.id] = row;
+  run(["openServiceRow", "serviceRow", "revealService"].map((name) => fn(read("services.js"), name)).join("\n"));
   run(fn(read("inbox.js"), "inboxRow"));
   ctx.inboxRow({ items: [{ service: "EXAMPLE", at: "2025-01-01" }], eps: [], level: "error" }, 0, 4).onclick();
   out.inbox = [location.hash, panels.find((n) => !n.hidden).dataset.sec, doc.activeElement === row];
@@ -631,7 +644,7 @@ def test_a_service_table_redraw_keeps_the_focused_row_in_view_when_it_reorders()
     assert run_scenario("service-redraw") == {"restored": True, "top": 250}
 
 
-def test_every_legacy_settings_route_reveals_its_anchor_and_loads_after_state():
+def test_every_settings_route_reveals_its_panel_and_loads_once_after_state():
     routes = run_scenario("settings")["routes"]
     groups = {
         "connections": (["sonarr", "unshackle"], ["renderSonarrState", "loadUnshackleStatus"]),
@@ -641,11 +654,11 @@ def test_every_legacy_settings_route_reveals_its_anchor_and_loads_after_state():
         "notifications": (["notifications"], ["renderPush", "loadSent"]),
         "general": (["interface", "region", "history", "account"], ["renderInterface", "renderRegion", "loadHistory", "loadAccount"]),
     }
-    assert len(routes) == 14
+    assert len(routes) == 19
     for section, (old_ids, data) in groups.items():
-        for old_id in old_ids:
-            anchor = "services" if old_id == "cookies" else old_id
-            assert routes[old_id] == [section, None if old_id == section else f"{anchor}-sec", [], data], old_id
+        for route in {section, *old_ids}:
+            anchor = "services" if route == "cookies" else route
+            assert routes[route] == [[section], None if route == section else f"{anchor}-sec", [], data, data, True], route
 
 
 def test_a_phone_download_opens_on_its_heading_and_back_returns_to_its_row():

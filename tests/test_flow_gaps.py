@@ -43,13 +43,18 @@ const window = { scrollY: 0, addEventListener: (name, fn) => { listeners[name] =
 const select = { classList: { contains: () => false, toggle() {} }, setAttribute() {},
   addEventListener: (name, fn) => { listeners[name] = fn; } };
 let cdmTop = 400, focused, finishServices, finishCdm, sectionResized, accountLoads = 0, keyPrompt = false, backCalls = 0;
+let translating = process.argv[2] === "translated", finishTranslation;
+const i18nReady = new Promise((resolve) => { finishTranslation = resolve; });
+const frames = [];
+const flushFrames = () => frames.splice(0).forEach((fn) => fn());
 const heading = { id: "cdm-heading", getClientRects: () => [{}], closest: () => null };
 const section = {};
 const connectionsHeading = { id: "connections-heading" };
 const hiddenLabel = { getClientRects: () => [], closest: () => null };
 const visibleLabel = { getClientRects: () => [{}], closest: () => null };
 const listItem = { focus: () => { focused = listItem; } };
-const row = { scrollIntoView: () => { window.scrollY = 1000; }, focus: () => { focused = row; } };
+const row = { id: "sv-HULU", closest: () => section, querySelectorAll: () => [], getClientRects: () => [{}],
+  scrollIntoView: () => { window.scrollY = 1000; }, focus: () => { focused = row; } };
 const servicesAnchor = { ...row, closest: (selector) => selector === ".set-sec" ? section : null,
   querySelectorAll: () => [], scrollIntoView: () => { window.scrollY = 400; } };
 const notificationsHeading = { id: "notifications-heading", getClientRects: () => [{}], closest: () => null };
@@ -72,19 +77,37 @@ const anchors = {
   "account-sec": { closest: () => null, querySelector: () => heading, querySelectorAll: () => [heading],
     scrollIntoView: () => { window.scrollY = 1938; } },
 };
+const entries = [{ hash: location.hash, state: null }];
+let index = 0;
+const history = {
+  get state() { return entries[index].state; },
+  replaceState(state, _, hash = location.hash) { entries[index] = { state, hash }; location.hash = hash; },
+  pushState(state, _, hash) { entries.splice(++index, Infinity, { state, hash }); location.hash = hash; },
+  back() { backCalls++; traverse(-1); },
+  forward() { traverse(1); },
+};
+function traverse(delta) {
+  if (!entries[index + delta]) return;
+  index += delta;
+  location.hash = entries[index].hash;
+  listeners.popstate({ state: history.state });
+  flushFrames();
+}
 const ctx = sandbox({
-  $, window, location, current: null, S: { config: {} }, termSocket: null,
+  $, window, location, current: null, S: { config: {} }, termSocket: null, i18nReady,
+  requestAnimationFrame: (fn) => frames.push(fn),
   phoneLayout: () => true,
   ResizeObserver: class {
     constructor(callback) { this.callback = callback; }
     observe(node) { if (node === section) sectionResized = this.callback; }
     disconnect() { if (sectionResized === this.callback) sectionResized = null; }
   },
-  document: { querySelector: (selector) => selector === ".up-mode" ? audioTarget : selector.startsWith(".set-nav ") ? listItem : null,
-    querySelectorAll: () => [], body: select, getElementById: (id) => anchors[id] },
-  history: { replaceState: (_, __, hash) => { location.hash = hash; },
-    pushState: (_, __, hash) => { location.hash = hash; }, back: () => { backCalls++; } },
-  focusHeading: (node) => { focused = node; },
+  document: { querySelector: (selector) => selector === ".up-mode" ? audioTarget : selector.startsWith(".set-nav ") ? listItem : anchors[selector.slice(1)],
+    querySelectorAll: () => [], body: select, getElementById: (id) => anchors[id],
+    get activeElement() { return focused || select; },
+    documentElement: { classList: { contains: (name) => name === "i18n-wait" && translating } } },
+  history,
+  focusHeading: (node) => { if (node && !translating) focused = node; },
   loadServices: () => new Promise((resolve) => {
     finishServices = resolve;
   }),
@@ -100,8 +123,14 @@ function $(selector) {
 const source = read(process.argv[1]);
 vm.runInContext(source.slice(0, source.indexOf('showTab(parseRoute().tab')) +
   grab(source, /^showTab\(parseRoute\(\).tab.*\nif \(parseRoute\(\).sec\).*\nelse if .*$/m), ctx);
-const enter = (hash) => { location.hash = hash; ctx.applyRoute(); };
+const enter = (hash) => { history.replaceState(null, "", hash); ctx.applyRoute(); };
 const jump = (hash) => listeners.click({ preventDefault() {}, target: { closest: () => ({ hash }) } });
+const services = () => {
+  const src = read(process.argv[2]);
+  Object.assign(ctx, { CSS: { escape: (value) => value }, renderServices: () => ctx.revealService() });
+  vm.runInContext(["serviceRow", "revealService", "openServiceRow"].map((name) =>
+    grab(src, new RegExp(`^(async )?function ${name}\\b[\\s\\S]*?\\n}\\n`, "m"))).join("\n"), ctx);
+};
 """
 
 
@@ -121,6 +150,7 @@ def test_delayed_services_keep_the_cdm_heading_in_view_only_if_the_jump_is_still
   ctx.S.config.settings = {};
   ctx.applyRoute();
   const movedOnState = window.scrollY !== beforeState;
+  const notifyResize = sectionResized;
   const interruption = process.argv[2];
   if (["wheel", "touchmove", "keydown", "tab", "pointerdown"].includes(interruption)) {
     const event = interruption === "tab" ? "keydown" : interruption;
@@ -136,14 +166,14 @@ def test_delayed_services_keep_the_cdm_heading_in_view_only_if_the_jump_is_still
   if (process.argv[2] === "route") enter("#/schedule");
   const scrollBeforeRender = window.scrollY;
   cdmTop += 6000; // A health refresh can render the rows before the section's loader finishes.
-  sectionResized?.();
+  notifyResize?.();
   const topWhileLoading = cdmTop - window.scrollY;
   finishServices();
   finishCdm();
   await new Promise(setImmediate);
   const top = cdmTop - window.scrollY, moved = window.scrollY !== scrollBeforeRender;
   cdmTop += 250;
-  sectionResized?.();
+  notifyResize?.();
   console.log(JSON.stringify({ before, focusedCdm, movedOnState, topWhileLoading, top, moved,
     shiftAfterLoading: cdmTop - window.scrollY - top }));
 })();
@@ -175,10 +205,7 @@ console.log(JSON.stringify({ accountScroll, opened, restored: window.scrollY }))
 def test_service_row_jump_takes_priority_while_settings_loads():
     seen = node(SETTINGS_NAV + r"""
 (async () => {
-  const src = read(process.argv[2]);
-  Object.assign(ctx, { SCROLL: "auto", renderServices: () => ctx.revealService() });
-  vm.runInContext("let servicesReveal = '';\n" + grab(src, /^function revealService\b[\s\S]*?\n}\n/m)
-    + grab(src, /^async function openServiceRow\b[\s\S]*?\n}\n/m), ctx);
+  services();
   enter("#/schedule");
   ctx.S.config.settings = {};
   await ctx.openServiceRow("HULU");
@@ -201,6 +228,98 @@ select.onclick();
 console.log(JSON.stringify({ backCalls, hash: location.hash, focused: focused === listItem }));
 """, str(JS / "navigation.js"))
     assert seen == {"backCalls": 0, "hash": "#/settings", "focused": True}
+
+
+def test_phone_back_after_forward_does_not_duplicate_the_settings_list():
+    seen = node(SETTINGS_NAV + r"""
+enter("#/schedule");
+ctx.showTab("settings");
+ctx.showSettingsSec("notifications");
+history.back();
+history.forward();
+select.onclick();
+const appBack = location.hash;
+history.back();
+console.log(JSON.stringify({ appBack, browserBack: location.hash }));
+""", str(JS / "navigation.js"))
+    assert seen == {"appBack": "#/settings", "browserBack": "#/schedule"}
+
+
+@pytest.mark.parametrize("target", ["service", "show-me"])
+def test_forward_restores_the_exact_settings_target_with_its_scroll(target):
+    seen = node(SETTINGS_NAV + r"""
+(async () => {
+  enter("#/schedule");
+  services();
+  const service = process.argv[3] === "service";
+  if (service) await ctx.openServiceRow("HULU");
+  else ctx.openSettings("downloads", ".up-mode");
+  const expected = service ? row : audioTarget;
+  const first = [window.scrollY, focused === expected];
+  history.back();
+  focused = listItem;
+  history.forward();
+  console.log(JSON.stringify({ first, forward: [window.scrollY, focused === expected] }));
+})();
+""", str(JS / "navigation.js"), str(JS / "services.js"), target)
+    expected = [1000 if target == "service" else 500, True]
+    assert seen == {"first": expected, "forward": expected}
+
+
+@pytest.mark.parametrize("interruption", ["devices", "wheel"])
+def test_late_service_row_does_not_override_newer_navigation_or_scroll(interruption):
+    seen = node(SETTINGS_NAV + r"""
+(async () => {
+  enter("#/schedule");
+  services();
+  delete anchors["sv-HULU"];
+  await ctx.openServiceRow("HULU");
+  if (process.argv[3] === "devices") jump("#/settings/cdm");
+  else {
+    listeners.wheel({ isTrusted: true });
+    window.scrollY = 250;
+  }
+  const before = focused;
+  anchors["sv-HULU"] = row;
+  ctx.renderServices();
+  console.log(JSON.stringify({ hash: location.hash, scroll: window.scrollY, retainedFocus: before === focused }));
+})();
+""", str(JS / "navigation.js"), str(JS / "services.js"), interruption)
+    devices = interruption == "devices"
+    assert seen == {"hash": "#/settings/cdm" if devices else "#/settings/services",
+                    "scroll": 400 if devices else 250, "retainedFocus": True}
+
+
+@pytest.mark.parametrize("focus_taken", ["none", "user"])
+def test_initial_settings_route_focuses_only_after_translations_reveal_it(focus_taken):
+    seen = node(SETTINGS_NAV + r"""
+(async () => {
+  const hiddenFocus = Boolean(focused);
+  translating = false;
+  if (process.argv[3] === "user") listItem.focus();
+  finishTranslation();
+  await new Promise(setImmediate);
+  flushFrames();
+  console.log(JSON.stringify({ hiddenFocus, focused: focused === heading ? "devices" : focused === listItem ? "user" : "body" }));
+})();
+""", str(JS / "navigation.js"), "translated", focus_taken)
+    assert seen == {"hiddenFocus": False, "focused": "devices" if focus_taken == "none" else "user"}
+
+
+def test_leaving_downloading_marks_downloads_and_automation_news_seen():
+    seen = node(SETTINGS_NAV + r"""
+const news = read(process.argv[2]);
+const marked = [];
+Object.assign(ctx, {
+  newsUnseen: () => [{ id: "audio", sec: "downloads" }, { id: "window", sec: "automation" }, { id: "device", sec: "cdm" }],
+  markNews: (ids) => marked.push(...ids),
+});
+vm.runInContext(grab(news, /^function leaveNews\b[\s\S]*?\n}\n/m) +
+  grab(news, /^function leaveSettingsNews\b[\s\S]*?\n}\n/m), ctx);
+ctx.leaveSettingsNews("downloading");
+console.log(JSON.stringify(marked));
+""", str(JS / "navigation.js"), str(JS / "news.js"))
+    assert seen == ["audio", "window"]
 
 
 def test_notifications_opens_at_top_with_heading_focus():
@@ -423,12 +542,11 @@ def test_an_attempt_its_sign_in_failed_offers_the_sign_in_first_and_retry_after(
 
 REVEAL = r"""
 const src = read(process.argv[1]);
-const rows = new Set(["sv-HULU", "sv-HULU@vpn", "sv-HULU@eu"]), shown = [];
-const ctx = sandbox({ S: { config: { service_defaults: { HULU: { backend: "eu" } } } }, SCROLL: "auto", CSS: { escape: (s) => s },
-  document: { getElementById: (id) => (rows.has(id) ? { id, scrollIntoView() { shown.push(id); }, focus() {} } : null), querySelector: () => null } });
-vm.runInContext("let servicesReveal = '';\n" + grab(src, /^function revealService\b[\s\S]*?\n}\n/m) + "globalThis.go = (s) => { servicesReveal = s; revealService(); };", ctx);
-for (const s of ["HULU@vpn", "HULU@", "HULU"]) ctx.go(s);
-console.log(JSON.stringify(shown));
+const rows = new Set(["sv-HULU", "sv-HULU@vpn", "sv-HULU@eu"]);
+const ctx = sandbox({ S: { config: { service_defaults: { HULU: { backend: "eu" } } } }, CSS: { escape: (s) => s },
+  document: { getElementById: (id) => (rows.has(id) ? { id } : null), querySelector: () => null } });
+vm.runInContext(grab(src, /^function serviceRow\b[\s\S]*?\n}\n/m), ctx);
+console.log(JSON.stringify(["vpn", "", undefined].map((backend) => ctx.serviceRow({ service: "HULU", backend }).id)));
 """
 
 

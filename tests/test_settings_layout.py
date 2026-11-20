@@ -66,7 +66,10 @@ def test_the_unshackle_card_may_be_narrower_than_its_commands():
 
 
 def test_settings_jump_chips_wrap_instead_of_clipping():
-    assert "flex-wrap: wrap" in rule(".ds-nav.set-jumps")
+    jumps = rule(".ds-nav.set-jumps")
+    assert "flex-wrap: wrap" in jumps
+    assert "overflow: visible" in jumps
+    assert "position: static" in jumps
 
 
 def test_choice_tiles_put_their_titles_level_whatever_the_length_of_their_text():

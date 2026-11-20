@@ -857,7 +857,7 @@ def test_saved_authentication_status_remains_visible_while_unshackle_is_offline(
             r"^const AUTH_METHOD_LABELS = .*?;$", r"^const AUTH_METHOD_NAMES = .*?;$", r"^const AUTH_FAILURE_LABELS = .*?;$",
             r"^function authenticationLabel\(.*?^\}", r"^function signInCounts\(.*?^\}", r"^function signInSummary\(.*?^\}",
             r"^const SERVICE_COLUMNS = .*?;$", r"^let servicesCookies = .*?;", r"^let servicesDrawn = .*?;", r"^let servicesAsked = .*?;",
-            r"^let servicesReveal = .*?;", r"^const SIGN_IN_FAILED = .*?;$", r"^function serviceModels\(.*?^\}", r"^function renderServices\(.*?^\}",
+            r"^const SIGN_IN_FAILED = .*?;$", r"^function serviceModels\(.*?^\}", r"^function renderServices\(.*?^\}",
             r"^function revealService\(.*?^\}", r"^function needingText\(.*?^\}", r"^function paintServicesBadge\(.*?^\}",
         )
     )
@@ -867,6 +867,7 @@ const nodes = {{}};
 for (const name of ["#sv-list", "#sv-state", "#sv-folder", "#sv-note"])
   nodes[name] = {{ replaceChildren(...children) {{ this.children = children; }}, querySelector: () => ({{}}) }};
 const box = {{
+  settingsJump: null,
   S: {{ authentication: {{ PAIRED: {{ state: "needs_user_action", service: "PAIRED" }} }}, config: {{ settings: {{}}, series: {{}} }} }},
   document: {{ activeElement: null, querySelector: () => null }},
   $: (selector) => nodes[selector],
@@ -922,7 +923,6 @@ const source = [
   pick(services, /^let servicesCookies = .*?;/m),
   pick(services, /^let servicesDrawn = .*?;/m),
   pick(services, /^let servicesAsked = .*?;/m),
-  pick(services, /^let servicesReveal = .*?;/m),
   pick(services, /^const SIGN_IN_FAILED = .*?;$/m),
   pick(services, /^function serviceModels\(.*?^\}/ms),
   pick(services, /^function renderServices\(.*?^\}/ms),

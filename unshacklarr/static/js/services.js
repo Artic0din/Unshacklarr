@@ -89,7 +89,6 @@ const SERVICE_COLUMNS = ["Service", "Sign-in status", "Cookies", "Used by"];
 let servicesCookies = null;  // /api/cookies: the files of Unshackle's own cookies folder, by service
 let servicesDrawn = "";      // what the table was drawn from: a refresh that changes nothing leaves it (and the focus) alone
 let servicesAsked = "";      // the cookie file whose deletion is being confirmed: "SERVICE/profile"
-let servicesReveal = "";     // a service to scroll to once the table is there
 
 // a sign-in that ended badly (cancelled is your own doing; waiting and renewing are under way)
 const SIGN_IN_FAILED = ["session_expired", "session_rejected", "fallback", "timed_out", "error"];
@@ -308,18 +307,12 @@ function paintServicesBadge(n = serviceModels().filter((m) => m.attention).lengt
   nav.querySelector(":scope > .sv-attn")?.remove();
   if (n) nav.querySelector(":scope > span").after(el("b", { className: "ck-pill bad sv-attn", textContent: String(n), title: needingText(n) }));
 }
-/* Scrolled to and focused, when another page sent you to one service's row. */
+function serviceRow({ service, backend = S.config.service_defaults?.[service]?.backend }) {
+  return (backend && document.getElementById(`sv-${service}@${backend}`)) || document.getElementById(`sv-${service}`)
+    || document.querySelector(`[id^="sv-${CSS.escape(service)}@"]`);
+}
 function revealService() {
-  // "SERVICE@backend": that server's row (where a download's sign-in failed, "" the main one); else the one set for it
-  const [service, named] = servicesReveal.split("@"), backend = named ?? S.config.service_defaults?.[service]?.backend;
-  const row = service && ((backend && document.getElementById(`sv-${service}@${backend}`)) || document.getElementById(`sv-${service}`)
-    || document.querySelector(`[id^="sv-${CSS.escape(service)}@"]`));  // only on another server
-  if (!row) return;
-  servicesReveal = "";
-  if (!showingSettings("services")) return;  // the user left while the row was loading
-  clearSettingsAnchor();
-  row.scrollIntoView({ block: "center" });
-  row.focus({ preventScroll: true });
+  if (settingsJump?.ready && settingsJump.target?.service) applySettingsJump(settingsJump);
 }
 async function loadServices() {
   if (!servicesDrawn) $("#sv-list").replaceChildren(loading("Checking the services…"));
@@ -337,8 +330,7 @@ async function loadServices() {
    backend, that server's row. */
 async function openServiceRow(service, backend) {
   if (current && !await closeDrawer(true)) return;
-  servicesReveal = backend === undefined ? service : `${service}@${backend}`;
-  openSettings("services");
+  openSettings("services", { service, backend });
   renderServices();
 }
 function showSeriesOf(service) {  // every series of that service: the other filters cleared, as they could hide some
