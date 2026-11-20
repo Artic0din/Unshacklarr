@@ -140,6 +140,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **The unshackle serve log now shows after viewing a download, and empty Activity no longer shows the old download's bar.** (#365)
 - **Switching Sonarr connections no longer lets an in-flight sync lookup put the old library back in the cache.** (#368)
 - **The Remote CDMs heading has room on phones.** The add button wraps below the heading and description on narrow screens. (#369)
 - **Clearing series file name, season map, join parts, or episode name now clears the unsaved save bar.** Normalizing
