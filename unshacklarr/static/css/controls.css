@@ -306,7 +306,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
     #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
   details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
   .btn, .btn.small, nav a, .pill, .ax-seg button, .inbox-filters button, .con-filters button, .set-nav button,
-  .set-back, .hidden-btn, .sched-filter .pill, .cd-tracks-fold > summary, .ds-sub summary,
+  .set-back, .hidden-btn, .sched-filter .pill, .cd-tracks-fold > summary, .ds-sub summary, .inbox-clear,
   :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: 44px; }
   nav a { min-inline-size: 44px; }
   .hidden-btn { height: auto; }
