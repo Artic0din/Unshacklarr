@@ -89,13 +89,26 @@ def test_ok_text_on_its_own_tint_is_readable():
 
 
 @pytest.mark.parametrize("badge", [
-    ".ck-pill.ok", ".sched-st.ok", ".chip.disk", ".chip.o-downloaded",
+    ".ck-pill.ok", ".sched-st.ok", ".chip.disk", ".chip.o-downloaded", ".rg-chip.ok",
     ".ep-on", ".ep-on.other", ".res.r1080", ".poster.on:not(:has(.sick)) .svc", ".sched-card .svc",
 ])
 def test_a_done_or_healthy_badge_is_green_not_the_accent(badge):
-    last = rules_of(badge)[-1]  # the later rule wins
+    rules = rules_of(badge)
+    assert rules, f"{badge} has no status colour"
+    last = rules[-1]  # the later rule wins
     assert "color: var(--ok)" in last
     assert "background: var(--ok-tint)" in last
+
+
+def test_region_country_chips_are_neutral():
+    last = rules_of(".rg-chip")[-1]
+    assert "color: var(--muted)" in last
+    assert "background: var(--well)" in last
+
+
+def test_complete_season_counts_are_green():
+    rules = rules_of(".seasons button small.complete")
+    assert rules and "color: var(--ok)" in rules[-1]
 
 
 def test_a_poster_with_a_failure_icon_has_no_green_service_chip_or_frame():

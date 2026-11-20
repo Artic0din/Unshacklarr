@@ -99,6 +99,53 @@ def node(body, *args):
     return json.loads(out.stdout)
 
 
+def test_notification_history_marks_delivery_success_and_failure_separately():
+    shown = node(r"""
+const box = { replaceChildren(...children) { this.children = children; } };
+const ctx = sandbox({
+  $: () => box, ago: () => "now", icon: (name) => name, hoverTip: (chip) => chip,
+  api: async () => ({ sent: [{ title: "Download complete", to: [
+    { app: "First", ok: true }, { app: "Second", ok: false },
+  ] }] }),
+});
+vm.runInContext(grab(read(process.argv[1]), /^async function loadSent\(.*?^\}/ms), ctx);
+ctx.loadSent().then(() => {
+  const recipients = box.children[0].kids.find((el) => el.className === "nt-to");
+  console.log(JSON.stringify(recipients.kids.map((chip) => [chip.kids[1], chip.className])));
+}).catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(JS / "settings-options.js"))
+    assert shown == [["First", "rg-chip ok"], ["Second", "rg-chip bad"]]
+
+
+def test_season_strip_marks_a_full_season_complete_but_not_one_with_a_gap():
+    shown = node(r"""
+const s = { id: 7, tvdbId: 1 };
+const episodes = [
+  { id: 1, seasonNumber: 1, hasFile: true },
+  { id: 2, seasonNumber: 1, hasFile: true },
+  { id: 3, seasonNumber: 2, hasFile: false, airDateUtc: "2020-01-01T00:00:00Z" },
+];
+const box = { replaceChildren(...children) { this.children = children; } };
+const ctx = sandbox({
+  $: () => box, current: s, S: { config: { series: { 1: {} } } },
+  api: async (path) => path === "/api/series/7/episodes" ? episodes : null,
+  picked: new Set(), epSonarrOf: null, seriesTags: () => [],
+  el: (tag, props, ...kids) => ({ tag, ...props, kids, dataset: {} }),
+});
+const src = read(process.argv[1]);
+vm.runInContext("let epSeq = 0;\n" + grab(src, /^async function loadEpisodes\(.*?^\}/ms)
+  + "\n" + grab(src, /^function state\(.*?^\}/ms), ctx);
+ctx.loadEpisodes(s).then(() => {
+  const strip = box.children.find((el) => el.className === "seasons");
+  console.log(JSON.stringify(strip.kids.map((button) => {
+    const count = button.kids.find((el) => el.tag === "small");
+    return [button.dataset.season, count.className, count.textContent];
+  })));
+}).catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(JS / "series.js"))
+    assert shown == [[2, "gap", "1 missing"], [1, "complete", "2/2"]]
+
+
 def test_catch_up_distinguishes_possible_upgrades_from_confirmed_results():
     shown = node(r"""
 const box = { classList: { toggle() {} }, replaceChildren(...children) { this.children = children; } };
@@ -130,6 +177,35 @@ console.log(JSON.stringify([possible, confirmed, result()]));
         ["ok", "1 on disk SBS has in better quality (Activity, Upgrades)", "btn small"],
         ["ok", "SBS has 1 of your 1 missing episode", "btn primary small"],
     ]
+
+
+def test_catch_up_warns_about_a_possible_resolution_upgrade_alongside_missing_episodes():
+    shown = node(r"""
+const box = { replaceChildren(...children) { this.children = children; } };
+const ctx = sandbox({
+  $: () => box, document: { querySelectorAll: () => [] },
+  current: { tvdbId: 1 }, S: { config: { series: { 1: { options: { "--quality": "1080" } } } } },
+  epSeasons: { 1: [
+    { id: 1, seasonNumber: 1, episodeNumber: 1, hasFile: true, file: { height: 720 } },
+    { id: 2, seasonNumber: 1, episodeNumber: 2, hasFile: false, airDateUtc: "2020-01-01T00:00:00Z" },
+  ] },
+  epAvail: { 1: { service: "S01E01" }, 2: { service: "S01E02" } },
+  epBusy: new Set(), epElsewhere: {}, epPages: {}, epUp: null,
+  seriesSvcs: () => "SBS", seasonConf: () => ctx.S.config.series[1], ladderOfSeries: () => null,
+  pad2: (n) => String(n).padStart(2, "0"),
+});
+const src = read(process.argv[1]);
+vm.runInContext([
+  grab(src, /^function state\(.*?^\}/ms),
+  grab(src, /^function askedHeight\(.*?^\}/ms),
+  grab(src, /^const belowAsked = .*?^\};/ms),
+  grab(src, /^function renderCatchUp\(.*?^\}/ms),
+].join("\n"), ctx);
+ctx.renderCatchUp();
+const note = box.children[0].kids.find((el) => el.tag === "small" && el.textContent.includes("lower resolution"));
+console.log(JSON.stringify([box.hidden, note.className, note.textContent]));
+""", str(JS / "series.js"))
+    assert shown == [False, "renum warn", "1 on disk in a lower resolution than asked: SBS may have better"]
 
 
 def test_month_labels_managed_episodes_without_calling_them_downloaded():
