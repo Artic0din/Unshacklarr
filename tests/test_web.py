@@ -4599,7 +4599,6 @@ def suggest_module(tmp_path, monkeypatch):
     monkeypatch.setattr(web, "service_domains", lambda: {})
     monkeypatch.setattr(web, "searched_in_place", lambda links, tmdb_id: links)
     monkeypatch.setattr(web, "named_titles", lambda links, tmdb_id: links)
-    monkeypatch.setattr(web, "series_network", lambda tmdb_id, given: "")
     return web
 
 

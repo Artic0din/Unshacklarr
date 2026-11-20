@@ -23,6 +23,17 @@ def _reload_web(tmp_path, monkeypatch):
     return importlib.reload(unshacklarr.web)
 
 
+def test_executor_scales_worker_count_with_cpus(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web.os, "cpu_count", lambda: 16)
+
+    async def run():
+        async with asynccontextmanager(web.configure_executor)(None):
+            assert asyncio.get_running_loop()._default_executor._max_workers == 64
+
+    asyncio.run(run())
+
+
 def test_networks_concurrent_preserves_cache_deduplicates_and_does_not_starve_busy(tmp_path, monkeypatch):
     web = _reload_web(tmp_path, monkeypatch)
     web.write_config({"settings": {"country": "AU"}, "auth": {}, "series": {}})
@@ -117,10 +128,53 @@ def test_networks_persists_lookup_when_request_is_cancelled(tmp_path, monkeypatc
                     await request
             finally:
                 release.set()
+            await web._network_lookups[loop].inflight[1]
 
     asyncio.run(run())
     assert web.NETWORKS_CACHE.exists(), "cancelled request lost the completed TMDB lookup"
     assert json.loads(web.NETWORKS_CACHE.read_text())["1"]["name"] == "Network"
+
+
+def test_networks_cleanup_cancels_queued_lookups_and_saves_completed(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    release = threading.Event()
+    lock = threading.Lock()
+    calls = []
+    slots = web.TMDB_CONCURRENCY
+
+    async def run():
+        loop = asyncio.get_running_loop()
+        saturated = asyncio.Event()
+
+        def fetch(tmdb_id):
+            with lock:
+                calls.append(tmdb_id)
+                if len(calls) == slots + 1:
+                    loop.call_soon_threadsafe(saturated.set)
+            if tmdb_id > 1:
+                assert release.wait(5), "TMDB lookups were never released"
+            return {"name": f"Net{tmdb_id}", "network_country": "US", "providers": {}}
+
+        monkeypatch.setattr(web, "tmdb_network", fetch)
+        async with asynccontextmanager(web.configure_executor)(None):
+            cleanup = asynccontextmanager(web.flush_networks_on_cleanup)(None)
+            await cleanup.__aenter__()
+            lookups = web._network_lookups[loop] = web._NetworkLookups()
+            try:
+                await lookups.lookup(1)
+                lookups.inflight.update({i: asyncio.create_task(lookups.lookup(i)) for i in range(2, 201)})
+                await asyncio.wait_for(saturated.wait(), timeout=5)
+            finally:
+                try:
+                    await asyncio.wait_for(cleanup.__aexit__(None, None, None), timeout=1)
+                finally:
+                    release.set()
+
+    asyncio.run(run())
+    assert sorted(calls) == list(range(1, slots + 2))
+    saved = json.loads(web.NETWORKS_CACHE.read_text())
+    assert set(saved) == {"1"}
+    assert saved["1"]["name"] == "Net1"
 
 
 def test_networks_older_batch_does_not_overwrite_newer_lookup(tmp_path, monkeypatch):
@@ -168,6 +222,41 @@ def test_networks_older_batch_does_not_overwrite_newer_lookup(tmp_path, monkeypa
     saved = json.loads(web.NETWORKS_CACHE.read_text())
     assert saved["1"]["name"] == "New"
     assert saved["2"]["name"] == "Slow"
+
+
+def test_networks_newer_lookup_survives_in_progress_cache_write(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    names = iter(("Old", "New"))
+    monkeypatch.setattr(web, "tmdb_network", lambda tid: {
+        "name": next(names), "network_country": "US", "providers": {},
+    })
+    release = threading.Event()
+    write_atomic = web.write_atomic
+
+    async def run():
+        loop = asyncio.get_running_loop()
+        writing_old = asyncio.Event()
+
+        def gated_write(path, content):
+            if json.loads(content)["1"]["name"] == "Old":
+                loop.call_soon_threadsafe(writing_old.set)
+                assert release.wait(5), "old cache write was never released"
+            write_atomic(path, content)
+
+        monkeypatch.setattr(web, "write_atomic", gated_write)
+        async with asynccontextmanager(web.flush_networks_on_cleanup)(None):
+            lookups = web._network_lookups[loop] = web._NetworkLookups()
+            await lookups.lookup(1)
+            try:
+                await asyncio.wait_for(writing_old.wait(), timeout=5)
+                await lookups.lookup(1)
+                assert (await lookups.read_cache())["1"]["name"] == "New"
+            finally:
+                release.set()
+            await lookups.flush_task
+
+    asyncio.run(run())
+    assert json.loads(web.NETWORKS_CACHE.read_text())["1"]["name"] == "New"
 
 
 @pytest.mark.parametrize("failure", ["lookup", "cache-write"])
@@ -266,8 +355,42 @@ def test_networks_coalesces_cold_cache_writes(tmp_path, monkeypatch):
     assert writes <= 2, f"20 cold lookups rewrote the cache {writes} times"
 
 
+def test_networks_retries_failed_write_without_another_request(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "NETWORKS_RETRY_DELAY", 0.01)
+    monkeypatch.setattr(web, "tmdb_key", lambda: "fake-key")
+    monkeypatch.setattr(web, "brand_logos", lambda country: {})
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    monkeypatch.setattr(web, "tmdb_network", lambda tid: {"name": "Network", "network_country": "US", "providers": {}})
+    write_atomic = web.write_atomic
+    attempts = 0
+
+    async def run():
+        loop = asyncio.get_running_loop()
+        written = asyncio.Event()
+
+        def fail_once(path, content):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise PermissionError("network cache temporarily not writable")
+            write_atomic(path, content)
+            loop.call_soon_threadsafe(written.set)
+
+        monkeypatch.setattr(web, "write_atomic", fail_once)
+        async with asynccontextmanager(web.flush_networks_on_cleanup)(None):
+            response = await web.networks(SimpleNamespace(query={"tmdb": "1"}))
+            assert json.loads(response.text)["1"]["name"] == "Network"
+            await asyncio.wait_for(written.wait(), timeout=1)
+            assert json.loads(web.NETWORKS_CACHE.read_text())["1"]["name"] == "Network"
+
+    asyncio.run(run())
+    assert attempts == 2
+
+
 def test_networks_retries_cache_merge_after_read_failure(tmp_path, monkeypatch):
     web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "NETWORKS_RETRY_DELAY", 0.01)
     monkeypatch.setattr(web, "tmdb_key", lambda: "fake-key")
     monkeypatch.setattr(web, "brand_logos", lambda country: {})
     monkeypatch.setattr(web, "service_domains", lambda: {})
@@ -309,6 +432,28 @@ def test_networks_retries_cache_merge_after_read_failure(tmp_path, monkeypatch):
     assert json.loads(path.read_text())["2"]["name"] == "Net2"
 
 
+def test_suggest_prefers_pending_network_over_disk_cache(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "service_domains", lambda: {"bbc.co.uk": "iP"})
+    link = {"service": "iP", "url": "https://www.bbc.co.uk/iplayer/episodes/show",
+            "country": "GB", "kind": "native", "found_by": "homepage"}
+    web.TMDB_CACHE.write_text(json.dumps({"1": {
+        "countries": web.read_config()["tmdb_countries"],
+        "checked": web.datetime.now(web.timezone.utc).isoformat(),
+        "map": web.SUGGEST_MAP,
+        "links": [link],
+    }}))
+    web.NETWORKS_CACHE.write_text(json.dumps({"1": {"name": "PBS"}}))
+
+    async def run():
+        lookups = web._network_lookups[asyncio.get_running_loop()] = web._NetworkLookups()
+        lookups.pending["1"] = {"name": "BBC One"}
+        return await web.suggest(SimpleNamespace(match_info={"tmdb_id": "1"}, query={}))
+
+    response = asyncio.run(run())
+    assert json.loads(response.text)["links"] == [link]
+
+
 def test_runs_live_skips_scanning_completed_history_files(tmp_path, monkeypatch):
     web = _reload_web(tmp_path, monkeypatch)
     web.sonarr_sync.RUNS_DIR.mkdir(parents=True)
@@ -331,8 +476,9 @@ def test_runs_live_skips_scanning_completed_history_files(tmp_path, monkeypatch)
     web.sonarr_sync.EpisodeRun.active = {"20261120-9999": object()}
     web.sonarr_sync.waiting = {42: {"id": "queued-42", "series": "Queued Show", "outcome": "running"}}
     res_live = asyncio.run(web.runs(SimpleNamespace(query={"live": "1"})))
-    ids = [c["id"] for c in json.loads(res_live.text)]
-    assert ids == ["queued-42", "20261120-9999"]
+    cards = json.loads(res_live.text)
+    assert [c["id"] for c in cards] == ["queued-42", "20261120-9999"]
+    assert [c["outcome"] for c in cards] == ["running", "running"]
 
 
 def test_cookie_state_caches_unwritable_files_and_invalidates_on_write(tmp_path, monkeypatch):
@@ -411,10 +557,56 @@ def test_sonarr_series_caches_briefly_and_invalidates(tmp_path, monkeypatch):
     assert calls == 1
     assert first[0]["title"] == "Show v1" and second[0]["title"] == "Show v1"
 
-    web.write_config(web.read_config())
+    key, _, entries = web._sonarr_series_cache
+    expired = time.monotonic() - web.SONARR_SERIES_TTL - 1
+    monkeypatch.setattr(web, "_sonarr_series_cache", (key, expired, entries))
     third = web.sonarr_series()
     assert calls == 2
     assert third[0]["title"] == "Show v2"
+
+    web.write_config(web.read_config())
+    fourth = web.sonarr_series()
+    assert calls == 3
+    assert fourth[0]["title"] == "Show v3"
+
+
+def test_hand_edited_config_invalidates_sonarr_library_and_inflight_fetch(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    web.write_config({"settings": {"sonarr_url": "http://sonarr.test", "sonarr_api_key": "old-key"}})
+    web.read_config()  # Load the initial stamp before editing the file by hand.
+    started, release = threading.Event(), threading.Event()
+    old_calls = 0
+
+    def fake_get(url, *, headers, **kwargs):
+        nonlocal old_calls
+        if headers["X-Api-Key"] == "old-key":
+            old_calls += 1
+            if old_calls == 2:
+                started.set()
+                assert release.wait(5), "old fetch was never released"
+            show = {"id": 1, "tvdbId": 100, "title": "Old Library", "seasonType": "dvd"}
+        else:
+            assert headers["X-Api-Key"] == "replacement-key"
+            show = {"id": 2, "tvdbId": 100, "title": "Fresh Library"}
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: [show])
+
+    monkeypatch.setattr(web.requests, "get", fake_get)
+    assert web.sonarr_series()[0]["title"] == "Old Library"
+    assert web.known_order(100) == "dvd"
+    monkeypatch.setattr(web, "SONARR_SERIES_TTL", 0)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        old_fetch = pool.submit(web.sonarr_series)
+        try:
+            assert started.wait(5), "old fetch never started"
+            web.SERIES_FILE.write_text("settings: {sonarr_url: 'http://sonarr.test', sonarr_api_key: replacement-key}")
+            assert web.read_config()["settings"]["sonarr_api_key"] == "replacement-key"
+            assert web.known_order(100) == "official"
+        finally:
+            release.set()
+        assert old_fetch.result(timeout=5)[0]["title"] == "Old Library"
+
+    assert web.known_order(100) == "official"
+    assert web.sonarr_series()[0]["title"] == "Fresh Library"
 
 
 @pytest.mark.parametrize("save_settings", [False, True], ids=["clear", "settings-save"])

@@ -32,6 +32,7 @@ import weakref
 import zlib
 import zoneinfo
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode, parse_qs, unquote, urlparse
@@ -631,9 +632,12 @@ def without_covered_episodes(links: list[dict]) -> list[dict]:
     return [l for l in links if not (l.get("episode") and l["service"] in covered)]
 
 
-def series_network(tmdb_id: str, given: str) -> str:
+def series_network(tmdb_id: str, given: str, *, pending: dict | None = None) -> str:
     """Sonarr's network for the series, else the TMDB network the calendar cached."""
-    return given or str((read_json(NETWORKS_CACHE, {}).get(str(tmdb_id)) or {}).get("name") or "")
+    if given:
+        return given
+    entry = pending if pending is not None else read_json(NETWORKS_CACHE, {}).get(str(tmdb_id))
+    return str((entry or {}).get("name") or "")
 
 
 YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)  # libyaml's, when PyYAML has it
@@ -698,7 +702,7 @@ def _load_config_cached() -> dict:
         edited = bool(before)  # changed outside Unshacklarr (by hand): not at startup, not after its own write
         config_read = (stamp, parsed or {})
         if edited:  # its settings too (another Sonarr removed…), not only its series: no restart needed
-            sonarr_sync.apply_settings(sonarr_sync.load_settings(parsed or {}))
+            _apply_config_settings(parsed or {})
     return config_read[1]
 
 
@@ -961,6 +965,10 @@ def write_config(config: dict) -> None:
     clear_unwritable_cache()
     # the session secret, the password hash and the API keys: its owner only, whatever it was before
     write_atomic(SERIES_FILE, yaml.safe_dump(config, allow_unicode=True, sort_keys=False), PRIVATE)
+    _apply_config_settings(config)
+
+
+def _apply_config_settings(config: dict) -> None:
     with _sonarr_series_lock:
         previous = (sonarr_sync.SONARR, sonarr_sync.HEADERS)
         sonarr_sync.apply_settings(sonarr_sync.load_settings(config))
@@ -2002,8 +2010,10 @@ async def suggest(request):
         domains = await asyncio.to_thread(service_domains)
     except UnshackleError:
         domains = {}
+    lookups = _network_lookups.get(asyncio.get_running_loop())
+    pending = lookups.pending.get(tmdb_id) if lookups is not None else None
     shown = await asyncio.to_thread(lambda: prefer_download_links(
-        installed_links(hit["links"]), series_network(tmdb_id, request.query.get("network", ""))))
+        installed_links(hit["links"]), series_network(tmdb_id, request.query.get("network", ""), pending=pending)))
     return web.json_response({"links": shown, "brands": brand_fallbacks(hit["links"], shown, domains),
                               "checked": hit["checked"]})
 
@@ -3892,6 +3902,8 @@ def brand_logos(country: str) -> dict[str, dict]:
 
 NETWORKS_LOCK = threading.Lock()
 NETWORKS_FLUSH_DELAY = 0.05  # seconds to collect nearby completions before rewriting the cache
+NETWORKS_RETRY_DELAY = 30.0
+NETWORKS_RETRY_MAX_DELAY = 300.0
 TMDB_CONCURRENCY = 8
 
 
@@ -3901,6 +3913,7 @@ class _NetworkLookups:
         self.inflight: dict[int, asyncio.Task[tuple[int, dict | None]]] = {}
         self.pending: dict[str, dict] = {}
         self.flush_task: asyncio.Task[None] | None = None
+        self.flush_stopping = asyncio.Event()
         self.writes = 0
 
     async def read_cache(self) -> dict:
@@ -3916,23 +3929,32 @@ class _NetworkLookups:
             self.flush_task = asyncio.create_task(self.flush(NETWORKS_FLUSH_DELAY))
 
     async def flush(self, delay: float) -> None:
+        next_delay = delay
+        retry_delay = NETWORKS_RETRY_DELAY
         while self.pending:
-            if delay:
-                await asyncio.sleep(delay)
+            if next_delay:
+                with suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(self.flush_stopping.wait(), timeout=next_delay)
+                    return
             batch = self.pending.copy()
             try:
                 saved = await asyncio.to_thread(_merge_json_cache, NETWORKS_CACHE, NETWORKS_LOCK, batch)
             except Exception as error:
                 print(f"TMDB network cache write failed: {type(error).__name__}", flush=True)
                 saved = False
-            if saved:
-                self.writes += 1
-                for key, entry in batch.items():
-                    # A lookup may have replaced this result while the write was in progress.
-                    if self.pending[key] is entry:
-                        del self.pending[key]
-            elif len(batch) == len(self.pending) and all(self.pending[key] is entry for key, entry in batch.items()):
-                return  # No new results arrived. Retry on the next request or during cleanup.
+            if not saved:
+                if self.flush_stopping.is_set():
+                    return
+                next_delay = retry_delay
+                retry_delay = min(retry_delay * 2, NETWORKS_RETRY_MAX_DELAY)
+                continue
+            self.writes += 1
+            for key, entry in batch.items():
+                # A lookup may have replaced this result while the write was in progress.
+                if self.pending[key] is entry:
+                    del self.pending[key]
+            next_delay = delay
+            retry_delay = NETWORKS_RETRY_DELAY
 
     async def lookup(self, tmdb_id: int) -> tuple[int, dict | None]:
         async with self.limit:
@@ -3957,7 +3979,14 @@ async def flush_networks_on_cleanup(_app: web.Application) -> AsyncIterator[None
     yield
     lookups = _network_lookups.pop(asyncio.get_running_loop(), None)
     if lookups is not None:
-        await asyncio.gather(*lookups.inflight.values())
+        lookups.flush_stopping.set()  # Skip any retry delay without interrupting a write already in progress.
+        inflight = tuple(lookups.inflight.values())
+        for task in inflight:
+            if not task.done():
+                task.cancel()
+        for task in inflight:
+            with suppress(asyncio.CancelledError):
+                await task
         if lookups.flush_task is not None:
             await lookups.flush_task
         await lookups.flush(delay=0)
