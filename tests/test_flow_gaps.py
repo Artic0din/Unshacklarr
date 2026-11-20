@@ -40,7 +40,7 @@ def node(body, *args):
 SETTINGS_NAV = r"""
 const listeners = {}, location = { hash: "#/settings/cdm" };
 const window = { scrollY: 0, addEventListener: (name, fn) => { listeners[name] = fn; } };
-const select = { classList: { contains: () => false, toggle() {} },
+const select = { classList: { contains: () => false, toggle() {} }, setAttribute() {},
   addEventListener: (name, fn) => { listeners[name] = fn; } };
 let cdmTop = 400, focused, finishServices, accountLoads = 0, keyPrompt = false;
 const heading = { id: "cdm-heading" };
@@ -69,7 +69,9 @@ const ctx = sandbox({
   loadAccount: () => { accountLoads++; keyPrompt = false; },
   scrollTo: ({ top }) => { window.scrollY = top; },
 });
-function $(selector) { return select; }
+function $(selector) {
+  return selector === "#tab-settings" ? select : { ...select, addEventListener() {} };
+}
 const source = read(process.argv[1]);
 vm.runInContext(source.slice(0, source.indexOf('showTab(parseRoute().tab')) +
   grab(source, /^showTab\(parseRoute\(\).tab.*\nif \(parseRoute\(\).sec\).*\nelse if .*$/m), ctx);

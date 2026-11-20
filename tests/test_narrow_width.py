@@ -44,10 +44,19 @@ def test_a_finished_card_names_its_whole_line_when_it_is_cut_short():
     assert "el(\"small\", { textContent: tookLine(c, live), title: tookLine(c, live) })" in js
 
 
-def test_the_series_filter_goes_to_a_second_row_instead_of_overflowing_its_buttons():
-    phone = media("max-width: 700px")
-    has(phone, ".seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));")
-    assert "overflow-wrap: anywhere" in squash(phone[phone.index(".seg button {"):][:200])
+def test_series_secondary_controls_stay_hidden_until_disclosed_on_phones():
+    has(media("max-width: 700px"), '#series-options-toggle[aria-expanded="false"] + #series-options { display: none; }')
+
+
+def test_series_search_shares_a_row_with_intrinsically_sized_selects():
+    has(CSS, ".toolbar input[type=search] { flex: 1 1 0; min-inline-size: 5rem; }")
+    has(CSS, "#series-filters select { field-sizing: content;")
+    has(media("max-width: 1400px"), ".toolbar .seg { flex-basis: 100%; }")
+
+
+def test_series_selects_wrap_as_a_group_instead_of_shrinking_selected_labels():
+    has(CSS, "#series-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); max-inline-size: 100%; overflow-x: auto; }")
+    has(CSS, "#series-filters select { field-sizing: content; width: auto; min-inline-size: max-content; }")
 
 
 def test_the_setup_error_wraps_inside_the_card_when_it_sits_under_its_field():
@@ -160,6 +169,33 @@ def test_activitys_history_filters_and_clear_are_big_enough_to_tap_on_a_phone():
     has(phone, ".btn.small, .con-filters button { min-height: 36px; }")
     has(phone, ".gh-act { min-height: 36px;")
     has(CSS, ".con-gh { display: flex; justify-content: space-between; align-items: center;")  # its label level with Clear…
+
+
+def test_activity_keeps_a_single_line_for_running_chips_without_moving_the_panes():
+    page = (STATIC / "index.html").read_text()
+    assert 'class="con-toolbar"' in page
+    toolbar = page[page.index('class="con-toolbar"'):page.index('id="con"')]
+    assert toolbar.index('class="seg con-views"') < toolbar.index('id="con-running"')
+    # the phone reserves the chips' row only while something runs: idle, there is no empty band under the switcher
+    has(media("max-width: 700px"), '.con-toolbar:has(#con-downloads[aria-pressed="true"]):has(.con-running:not([hidden])) { grid-template-rows: auto var(--chip-slot); }')
+    has(CSS, "padding-block: var(--sp-1) 0; overflow-x: auto; overflow-y: hidden;")
+
+
+def test_activity_switcher_sizes_follow_the_pointer_even_on_a_narrow_window():
+    has(CSS, ".con-toolbar { --con-target: 36px;")
+    has(CSS, "#tab-log .con-views button { min-height: var(--con-target);")
+    has(media("pointer: coarse"), ".con-toolbar { --con-target: 44px; }")
+
+
+def test_activity_sync_status_takes_space_inside_the_pane_not_below_it():
+    page = (STATIC / "index.html").read_text()
+    activity = page[page.index('id="tab-log"'):page.index('id="tab-yaml"')]
+    running = activity[activity.index('id="runs-live"'):activity.index("<span>History")]
+    assert 'id="sync-state"' in running
+
+
+def test_activity_has_no_unused_stats_icon_styles():
+    assert ".stats-ico" not in CSS
 
 
 def test_coarse_pointer_devices_keep_44px_touch_targets_above_700px():

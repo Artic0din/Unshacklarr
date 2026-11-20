@@ -217,6 +217,35 @@ document.querySelectorAll("#tab-series .seg button").forEach((b) => b.onclick = 
 });
 ["#f-service", "#f-library", "#f-sort", "#f-missing", "#f-monitored"].forEach((id) => $(id).onchange = renderWall);
 
+function bindSeriesOptions() {
+  const toggle = $("#series-options-toggle");
+  const options = $("#series-options");
+  const toolbar = $("#tab-series .toolbar");
+  const narrow = matchMedia("(max-width: 700px)");
+  const syncControls = () => toggle.setAttribute("aria-controls", narrow.matches ? "series-options" : "series-actions");
+  syncControls();
+  narrow.addEventListener("change", syncControls);
+  const inDisclosure = (target) => target === toggle || options.contains(target);
+  const expanded = () => toggle.getAttribute("aria-expanded") === "true";
+  const close = (restoreFocus = true) => {
+    if (!expanded()) return false;
+    toggle.setAttribute("aria-expanded", "false");
+    if (restoreFocus) toggle.focus();
+    return true;
+  };
+  toggle.onclick = () => toggle.setAttribute("aria-expanded", String(!expanded()));
+  toolbar.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && inDisclosure(e.target) && close()) e.preventDefault();
+  });
+  toolbar.addEventListener("focusout", (e) => {
+    if (e.relatedTarget && inDisclosure(e.target) && !inDisclosure(e.relatedTarget)) close(false);
+  });
+  options.addEventListener("click", (e) => {
+    if (e.target.closest("#bulk-open, #sel-toggle")) close();
+  }, true);  // Suggest's dialog must open after focus moves back to the visible trigger.
+}
+bindSeriesOptions();
+
 /* The service filter lists only the services some series actually uses. */
 function renderServiceFilter() {
   const used = [...new Set(Object.values(S.config.series).flatMap((c) => [c.service, ...Object.values(c.season_pages || {}).map((p) => p.service)]).filter(Boolean))].sort();

@@ -120,7 +120,7 @@ CHANGED_ERROR_TEXTS = {
     "from unshackle.yaml. Empty keeps the saved one.",
     "from unshackle.yaml. Leave empty to keep the saved key.",
     "Got a license ({0}), {1}. A service may still refuse this device.",
-    "If the service refuses the sign-in, the download is tried again with these profiles, in order. Useful for a second account while the first one's cookies are renewed.",
+    "If sign-in fails, try these profiles in order.",
     "Imported",
     "Its path on the machine where Unshackle runs. Empty: the same path as above.",
     "Keeps the last {0} downloads, none older than {1}.",
@@ -259,6 +259,13 @@ def test_every_language_translates_the_sign_in_texts_with_their_placeholders():
         assert SIGN_IN_TEXTS <= translated.keys(), f"{path.name}: {sorted(SIGN_IN_TEXTS - translated.keys())}"
         for key in SIGN_IN_TEXTS:
             assert set(HOLE.findall(translated[key])) == set(HOLE.findall(key)), f"{path.name}: {key!r} loses or adds a {{n}}"
+
+
+def test_every_language_names_the_episode_subtitle_chip():
+    key = "+{0}: Show subtitles for {1}"
+    for path in I18N.glob("*.json"):
+        if path.name != "en.json":
+            assert set(HOLE.findall(json.loads(path.read_text())[key])) == {"{0}", "{1}"}, path.name
 
 
 def test_authentication_guidance_translates_without_changing_the_provider_reason():

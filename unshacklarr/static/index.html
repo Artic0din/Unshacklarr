@@ -52,31 +52,39 @@
 
 <main id="main" tabindex="-1">
   <section id="tab-series" hidden>
-    <div class="seg" role="group" aria-label="Which series">
-      <button data-managed="" aria-pressed="true">All <span></span></button>
-      <button data-managed="*" aria-pressed="false">Downloading <span></span></button>
-      <button data-managed="-" aria-pressed="false">Not downloading <span></span></button>
-      <button data-managed="h" aria-pressed="false" title="Series hidden from the Schedule" hidden>Hidden <span></span></button>
-      <button data-managed="f" aria-pressed="false" title="Series whose last 3 downloads failed" hidden>Failing <span></span></button>
-    </div>
     <div class="toolbar">
-      <input type="search" id="search" placeholder="Search series" aria-label="Search series">
-      <div class="toolbar-row">
-      <select id="f-service" aria-label="Filter by service">
-        <option value="">All services</option>
-      </select>
-      <select id="f-library" aria-label="Filter by Sonarr library" hidden>
-        <option value="">All libraries</option>
-      </select>
-      <select id="f-sort" aria-label="Sort">
-        <option value="title">Sort by title</option>
-        <option value="missing">Sort by missing episodes</option>
-        <option value="year">Sort by year, newest first</option>
-      </select>
-      <label class="pill"><input type="checkbox" id="f-missing"> Missing episodes <span id="f-missing-n"></span></label>
-      <label class="pill"><input type="checkbox" id="f-monitored"> Monitored <span id="f-monitored-n"></span></label>
-      <button class="btn small" id="bulk-open" title="Services for your series, found on TMDB">Suggest services</button>
-      <button class="btn small" id="sel-toggle" type="button" aria-pressed="false">Select</button>
+      <div class="seg" role="group" aria-label="Which series">
+        <button type="button" data-managed="" aria-pressed="true">All <span></span></button>
+        <button type="button" data-managed="*" aria-pressed="false">Downloading <span></span></button>
+        <button type="button" data-managed="-" aria-pressed="false">Not downloading <span></span></button>
+        <button type="button" data-managed="h" aria-pressed="false" title="Series hidden from the Schedule" hidden>Hidden <span></span></button>
+        <button type="button" data-managed="f" aria-pressed="false" title="Series whose last 3 downloads failed" hidden>Failing <span></span></button>
+      </div>
+      <input type="search" id="search" placeholder="Search" aria-label="Search series">
+      <button class="btn" id="series-options-toggle" type="button" aria-expanded="false" aria-controls="series-options">Filters and actions
+        <span class="series-filtered"><span class="sr-only">Filters active</span></span>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div id="series-options">
+        <div id="series-filters">
+          <select id="f-service" aria-label="Filter by service">
+            <option value="">All services</option>
+          </select>
+          <select id="f-library" aria-label="Filter by Sonarr library" hidden>
+            <option value="">All libraries</option>
+          </select>
+          <select id="f-sort" aria-label="Sort">
+            <option value="title">Sort by title</option>
+            <option value="missing">Sort by missing episodes</option>
+            <option value="year">Sort by year, newest first</option>
+          </select>
+        </div>
+        <div id="series-actions">
+          <label class="pill"><input type="checkbox" id="f-missing"> Missing episodes <span id="f-missing-n"></span></label>
+          <label class="pill"><input type="checkbox" id="f-monitored"> Monitored <span id="f-monitored-n"></span></label>
+          <button class="btn small" id="bulk-open" type="button" title="Services for your series, found on TMDB">Suggest services</button>
+          <button class="btn small" id="sel-toggle" type="button" aria-pressed="false">Select</button>
+        </div>
       </div>
     </div>
     <div class="wall" id="wall" aria-busy="true"><span class="sr-only" role="status">Loading series…</span><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
@@ -568,18 +576,22 @@
   </section>
 
   <section id="tab-log" hidden>
+    <div class="con-toolbar">
+      <div class="seg con-views" role="group" aria-label="Activity">
+        <button type="button" id="con-downloads" data-con-view="downloads" aria-pressed="true">Downloads</button>
+        <button type="button" id="con-left" data-con-view="left" aria-pressed="false">Waiting <span id="con-left-n"></span></button>
+        <button type="button" id="con-missing" data-con-view="missing" aria-pressed="false">Catch up</button>
+        <button type="button" id="con-upgrades" data-con-view="upgrades" aria-pressed="false">Upgrades</button>
+        <button type="button" id="con-languages" data-con-view="languages" aria-pressed="false">Languages</button>
+        <button type="button" id="con-stats" data-con-view="stats" aria-pressed="false">Stats</button>
+      </div>
+      <div class="con-running" id="con-running" role="group" aria-label="Running" hidden></div>
+    </div>
     <div class="con" id="con">
       <aside class="con-list" aria-label="Downloads">
-        <p class="con-state" id="log-state"></p>
-        <div class="con-tools">
-        <button class="crow" id="con-left"><span class="stats-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7h6l2 2h10v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg></span><span><b>Waiting in downloads <span id="con-left-n"></span></b><small>Files Sonarr did not take</small></span></button>
-        <button class="crow" id="con-missing"><span class="stats-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5M12 7v5l3 2"/></svg></span><span><b>Catch up</b><small>Episodes your series are still missing</small></span></button>
-        <button class="crow" id="con-upgrades"><span class="stats-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/><path d="M5 21h14"/></svg></span><span><b>Upgrades</b><small>Files a service has in better quality</small></span></button>
-        <button class="crow" id="con-languages"><span class="stats-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h9M8.5 3v2M6 5c0 4 3 7 7 8M11 5c0 4-3 8-7 9"/><path d="M13 21l4-9 4 9M14.5 18h5"/></svg></span><span><b>Languages</b><small>Files without your audio languages</small></span></button>
-        <button class="crow" id="con-stats"><span class="stats-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span><b>Stats</b><small>The last weeks, and each service</small></span></button>
-        </div>
         <div class="con-gh"><span>Running</span><b id="con-live-n"></b></div>
         <div id="runs-live"></div>
+        <p class="con-state" id="sync-state"></p>
         <div class="con-gh"><span>History</span><button class="gh-act" id="hist-clear" type="button">Clear…</button></div>
         <input type="search" class="con-search" id="con-search" placeholder="Search a series" aria-label="Search the history">
         <div class="con-filters" role="group" aria-label="Show">
@@ -592,7 +604,8 @@
       </aside>
       <div class="con-detail" id="con-detail">
         <div class="cd-top"><button class="cd-back" id="cd-back" aria-label="Back to the downloads"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><h2 id="cd-top-title"></h2></div>
-        <div id="cd-main"><div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading the downloads…</div></div>
+        <div id="cd-main"><div id="downloads-loading" class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading the downloads…</div></div>
+        <p class="con-state" id="log-state"></p>
         <details class="cd-raw" id="cd-raw" hidden><summary>
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 4 4-4 4M12 16h7"/></svg><span class="t">Output</span>
             <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary>
@@ -674,7 +687,6 @@
       <div class="field" id="d-libs-field" hidden>
         <span id="d-libs-l">Libraries</span>
         <div class="d-libs" id="d-libs" role="group" aria-labelledby="d-libs-l"></div>
-        <small>New episodes are downloaded for each library switched on, with its own quality ladder (Settings › Connections › Sonarr).</small>
         <details class="d-libs-adv" id="d-libs-adv"><summary>Advanced</summary><div id="d-libs-adv-body"></div></details>
       </div>
       <div class="ds-tools">
@@ -708,7 +720,7 @@
         <div class="field">
           <label for="d-release-day">On</label>
           <select id="d-release-day"></select>
-          <small>Counted from the air date in Sonarr. Pick a day before when a streaming platform gets the episodes ahead of the TV channel.</small>
+          <small>Relative to Sonarr's air date.</small>
         </div>
         <div class="field">
           <label for="d-release-gap">Next episode</label>
@@ -755,17 +767,15 @@
         <div class="field">
           <span id="d-spoiler-l">Episode titles</span>
           <div class="ax-seg" id="d-spoiler-seg" role="group" aria-labelledby="d-spoiler-l"></div>
-          <small>Hidden titles are blurred until you click or tap them. Default follows Settings › General › Interface, No spoilers.</small>
         </div>
         <div class="field">
           <span id="d-notify-l">Notifications</span>
           <div class="ax-seg" id="d-notify-seg" role="group" aria-labelledby="d-notify-l"></div>
-          <small>What is sent for this series' episodes. The bell in the page always keeps everything.</small>
         </div>
         <div class="field">
           <label for="d-audio">Accepted audio languages</label>
           <input type="text" id="d-audio" spellcheck="false">
-          <small>For example fr, en, or orig for the series' original language. An episode with none of them is not downloaded. It is tried again at each sync.</small>
+          <small>Use orig for the original language. Episodes without a match are retried at the next sync.</small>
         </div>
         <div class="field">
           <label for="d-prefer">Upgrade the audio to</label>
@@ -791,12 +801,11 @@
         <span>Download options</span>
         <div class="opts inh-list" id="d-inherited" hidden></div>
         <div class="opts" id="d-opts"></div>
-        <small>For this series only. They take priority over the options set for its service.</small>
       </div>
       <div class="field">
         <label for="d-fallback">Fallback profiles</label>
         <input type="text" id="d-fallback" spellcheck="false" autocomplete="off" placeholder="Example: alt, backup">
-        <small>If the service refuses the sign-in, the download is tried again with these profiles, in order. Useful for a second account while the first one's cookies are renewed.</small>
+        <small>If sign-in fails, try these profiles in order.</small>
         <div class="fb-known" id="d-fallback-known" hidden></div>
       </div>
     </section>
@@ -830,12 +839,12 @@
         <div class="field">
           <label for="d-seasons">Seasons on the service</label>
           <input type="text" id="d-seasons" placeholder="Example: 34=29" autocomplete="off" autocapitalize="off" spellcheck="false">
-          <small>Sonarr's season = the service's season, comma-separated.</small>
+          <small>Sonarr season = service season, comma-separated. <code>34=29</code></small>
         </div>
         <div class="field" id="d-pages-field">
           <label for="d-pages">Seasons listed as separate shows</label>
           <textarea id="d-pages" rows="2" spellcheck="false" placeholder="S02 https://www.sbs.com.au/ondemand/tv-series/apollo-has-fallen"></textarea>
-          <small>For a season the service lists as a separate show. One line per season: Sonarr's season, then the show's URL. If the episodes are not in season 1 of that show, add its season number at the end.</small>
+          <small>One per line. Append the service's season number if it isn't 1. <code>S02 &lt;url&gt;</code></small>
         </div>
         <div class="field">
           <label for="d-offset">Episode offset</label>

@@ -330,11 +330,11 @@ mounts its parent folder at `/downloads` sees it as `/downloads/unshacklarr`, th
 > [!NOTE]
 > A folder that stays there is an episode waiting for Sonarr: it is not downloaded again. When
 > Sonarr keeps its own file (the download was not better), you get a warning, and the folder waits
-> in Activity › Waiting in downloads, to import anyway or delete. After 14 days it is deleted
+> in Activity › Waiting, to import anyway or delete. After 14 days it is deleted
 > (Settings › Downloading › Automation › Delete them after; 0 keeps them).
 
 **Download only** (Settings › Downloading › Automation › After the download, or a series' own page): the episode is
-downloaded, checked and named, then waits in Activity › Waiting in downloads for you to import it by
+downloaded, checked and named, then waits in Activity › Waiting for you to import it by
 hand. Those folders are never deleted on their own.
 
 **Other Unshackle servers** (Settings › Connections › Unshackle): more `unshackle serve`, one behind a VPN say, each

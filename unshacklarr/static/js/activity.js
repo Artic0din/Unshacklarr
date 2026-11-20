@@ -50,7 +50,7 @@ async function openActivity() {
   catch (e) {
     if (seq !== runsSeq) return;
     $("#runs-live").replaceChildren(failed(`Could not load the downloads: ${e.message}`, openActivity));
-    if ($("#cd-main > .loading")) nothingPicked();  // the list says it failed, with its retry: the detail stops loading
+    if ($("#cd-main > #downloads-loading")) nothingPicked();
     clearTimeout(runsTimer);
     runsTimer = setTimeout(activityLater, 10000);  // back from a sleep, the network may not be up yet: tried again
     return;
@@ -158,12 +158,45 @@ const nothingPicked = () => {
   $("#cd-main").replaceChildren(el("div", { className: "con-none" }, el("b", { textContent: "Nothing picked" }), "Pick a download on the left to see where it stands."));
 };
 /* Each tick redraws the lists and the detail: the control in use is found again by its data-fk. */
-function renderConsole(liveOnly = false) { keepFocus($("#con"), () => drawConsole(liveOnly)); }
+function renderConsole(liveOnly = false) {
+  const key = document.activeElement?.dataset.fk;
+  keepFocus($("#tab-log"), () => drawConsole(liveOnly));
+  if (key?.startsWith("chip:") && document.activeElement === document.body) {
+    const row = $(`#runs-history [data-fk="row:${key.slice(5)}"]`);
+    (row?.getClientRects().length ? row : $("#con-downloads")).focus();
+  }
+}
+function watchRunningChipEdge(row) {
+  if (CSS.supports("animation-timeline", "scroll()")) return;
+  const update = () => row.classList.toggle("more-chips", row.scrollWidth - row.clientWidth - row.scrollLeft > 1);
+  row.addEventListener("scroll", update, { passive: true });
+  new ResizeObserver(update).observe(row);
+  return update;
+}
+const syncRunningChipEdge = watchRunningChipEdge($("#con-running"));
+function drawRunningChips(items) {
+  const row = $("#con-running");
+  const chips = items.flatMap((item) => {
+    const cards = item.cards || [item];
+    if (!cards.some((c) => isLive(c) && !c.waiting && !isQueued(c))) return [];
+    const series = new Set(cards.map((c) => c.series)).size > 1 ? "Several series" : cards[0].series;
+    const episode = item.job ? `${cards.length} episodes` : item.sxxeyy;
+    return [[itemKey(item), series, episode]];
+  });
+  const signature = JSON.stringify(chips);
+  if (row.dataset.chips === signature) return;
+  row.dataset.chips = signature;
+  row.replaceChildren(...chips.map(([key, series, episode]) => el("button", {
+    type: "button", className: "chip", dataset: { fk: `chip:${key}` }, title: `${series} · ${episode}`, onclick: () => pickRun(key, `chip:${key}`),
+  }, el("span", {}, series, " · ", episode))));
+  syncRunningChipEdge?.();
+}
 function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same downloads moving on
   const live = runCards.filter(isLive);
   // A job (episodes picked together) is running while one of its episodes is; the others wait in it, not in the history
   const liveJobs = new Set(live.map((c) => c.batch).filter(Boolean));
   const liveItems = jobsOf(runCards.filter((c) => isLive(c) || liveJobs.has(c.batch)));
+  drawRunningChips(liveItems);
   $("#con-live-n").textContent = live.length || "";
   $("#runs-live").replaceChildren(...(liveItems.length ? liveItems.map(itemRow) : [el("p", { className: "con-empty", textContent: "Nothing is downloading right now." })]));
   glideBars($("#runs-live"));
@@ -183,12 +216,13 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
     $("#runs-more").hidden = pastItems.length <= runsShown;
   }
   // Activity opened from the menu while a download runs: straight to it, a phone too.
-  if (landOnLive && liveItems.length) { picked_run = itemKey(liveItems[0]); $("#con").classList.add("open"); }
+  if (landOnLive && liveItems.length && picked_run !== "serve") {
+    picked_run = itemKey(liveItems[0]); runBackKey = null; $("#con").classList.add("open");
+  }
   landOnLive = false;
   // On a wide screen, something is always shown: what runs first, else the latest download.
   if (!picked_run && innerWidth > 700) picked_run = itemKey(liveItems[0] || jobsOf(runCards)[0]) || null;
-  markPicked(picked_run);  // the rows were drawn before this pick, and the summary rows are not redrawn
-  if (picked_run === "serve" || picked_run === "stats" || picked_run === "left") return;
+  if (markPicked(picked_run) !== "downloads") return;
   if (picked_run?.startsWith("job:")) {
     const job = jobsOf(runCards).find((i) => i.job === picked_run.slice(4));
     if (job) return renderJob(job);
@@ -479,25 +513,42 @@ function listRow(c) {
     side);
   return row;
 }
-// The one row shown as current: a summary row (Waiting in downloads, Stats…) by its id or its picked_run key,
-// a download or job by its key. Nothing else is: picking one clears the others, and the serve log clears them all.
 function markPicked(key) {
-  document.querySelectorAll(".crow").forEach((r) => {
-    const on = !!key && (r.id === key || r.id === `con-${key}` || r.dataset.hk === `row:${key}`);
+  const tools = document.querySelectorAll(".con-views [data-con-view]");
+  const view = key === "serve" || [...tools].some((b) => b.dataset.conView === key) ? key : "downloads";
+  tools.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.conView === view)));
+  const chips = $("#con-running");
+  chips.hidden = view !== "downloads" || !chips.childElementCount;
+  document.querySelectorAll("#con-running .chip").forEach((r) => r.setAttribute("aria-current", String(r.dataset.fk === `chip:${key}`)));
+  document.querySelectorAll("#con .crow").forEach((r) => {
+    const on = !!key && r.dataset.hk === `row:${key}`;
     r.classList.toggle("sel", on); r.setAttribute("aria-current", String(on));
   });
+  return view;
 }
-function pickRun(id) {
+let runBackKey = null;
+function pickRun(id, backKey = null) {
+  landOnLive = false;
+  runBackKey = backKey;
   picked_run = id;
   $("#con").classList.add("open");
   renderConsole();
-  if (innerWidth < 700) { scrollTo({ top: 0 }); focusHeading($("#cd-top-title")); }  // the list is out of sight: the keyboard goes with the view
+  if (innerWidth <= 700) { scrollTo({ top: 0 }); focusHeading($("#cd-top-title")); }  // the list is out of sight: the keyboard goes with the view
+}
+function openActivityTool(show) {
+  return () => {
+    landOnLive = false;
+    runBackKey = null;
+    $("#cd-main").replaceChildren(loading("Loading…"));
+    show();
+    if (innerWidth <= 700) { scrollTo({ top: 0 }); focusHeading($("#cd-top-title")); }
+  };
 }
 /* Waiting in downloads: folders Sonarr did not take, with why, imported anyway or deleted. */
 async function showLeftovers() {
   picked_run = "left";
   $("#con").classList.add("open");
-  markPicked("con-left");
+  markPicked(picked_run);
   $("#cd-top-title").textContent = "Waiting in downloads";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -529,7 +580,7 @@ async function showLeftovers() {
       el("small", { className: "line1", textContent: r.days > 0 ? `Deleted on their own after ${r.days} days (Settings › Downloading › Automation).` : "Kept until you delete them (Settings › Downloading › Automation)." }))),
     ...(rows.length ? [el("div", {}, ...rows)] : [el("p", { className: "muted", textContent: "Nothing waits: every download went to Sonarr." })])));
 }
-$("#con-left").onclick = showLeftovers;
+$("#con-left").onclick = openActivityTool(showLeftovers);
 
 /* Catch up: the aired episodes Unshacklarr's series still miss (those before a series got its service, or the
    automatic sync gave up on), downloaded together as one job. Within so many days, or all. */
@@ -551,7 +602,7 @@ async function showMissing() {
   picked_run = "missing";
   const seq = ++missingSeq;
   $("#con").classList.add("open");
-  markPicked("con-missing");
+  markPicked(picked_run);
   $("#cd-top-title").textContent = "Catch up";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -587,7 +638,7 @@ async function showMissing() {
     el("div", { className: "miss-bar" }, ages, go),
     ...(rows.length ? [el("div", {}, ...rows)] : [el("p", { className: "muted", textContent: missingDays ? `Nothing missing from the last ${missingDays} days.` : "Nothing missing: every aired episode has its file." })])));
 }
-$("#con-missing").onclick = showMissing;
+$("#con-missing").onclick = openActivityTool(showMissing);
 
 /* Upgrades: the files of the series with a quality ladder that are not on its first step, checked against the
    service's tracks (a series' episodes 10 at a time, in the background; answers kept); those it has on an earlier step are replaced. */
@@ -597,7 +648,7 @@ async function showUpgrades(fresh = true) {
   picked_run = "upgrades";
   clearTimeout(upgradeTimer);
   $("#con").classList.add("open");
-  markPicked("con-upgrades");
+  markPicked(picked_run);
   $("#cd-top-title").textContent = "Upgrades";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -684,7 +735,7 @@ async function showUpgrades(fresh = true) {
   const tick = () => { if (picked_run !== "upgrades") return; if (document.hidden || $("#tab-log").hidden) upgradeTimer = setTimeout(tick, 3000); else showUpgrades(); };
   if (scan.running || r.items.some((i) => i.running)) upgradeTimer = setTimeout(tick, 3000);
 }
-$("#con-upgrades").onclick = showUpgrades;
+$("#con-upgrades").onclick = openActivityTool(showUpgrades);
 
 /* Languages (Sonarr 5): the library's files without the preferred audio language, or without any accepted one, read
    from Sonarr's own tracks (nothing opened). Nothing ticked at first: the first are watched for their language (added,
@@ -694,13 +745,14 @@ async function showLanguages(fresh = true) {
   picked_run = "languages";
   clearTimeout(langTimer);
   $("#con").classList.add("open");
-  markPicked("con-languages");
+  markPicked(picked_run);
   $("#cd-top-title").textContent = "Languages";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
   let r;
   if (fresh !== false || !langLast) {
-    try { r = langLast = await api("/api/languages"); } catch (e) { return $("#cd-main").replaceChildren(failed(e.message, showLanguages)); }
+    try { r = langLast = await api("/api/languages"); }
+    catch (e) { return picked_run === "languages" ? $("#cd-main").replaceChildren(failed(e.message, showLanguages)) : undefined; }
   } else r = langLast;
   if (picked_run !== "languages") return;
   const scan = r.scan;
@@ -753,13 +805,13 @@ async function showLanguages(fresh = true) {
   const tick = () => { if (picked_run !== "languages") return; if (document.hidden || $("#tab-log").hidden) langTimer = setTimeout(tick, 3000); else showLanguages(); };
   if (scan.running) langTimer = setTimeout(tick, 3000);
 }
-$("#con-languages").onclick = showLanguages;
+$("#con-languages").onclick = openActivityTool(showLanguages);
 
 /* Stats: what the history adds up to, in the detail pane. */
 async function showStats() {
   picked_run = "stats";
   $("#con").classList.add("open");
-  markPicked("con-stats");
+  markPicked(picked_run);
   $("#cd-top-title").textContent = "Stats";
   $("#cd-raw").hidden = true; renderDock(null);
   $("#cd-foot").replaceChildren();
@@ -794,11 +846,34 @@ async function showStats() {
     perWeek,
     st.services.length ? el("div", { className: "svc-scroll" }, table) : ""));
 }
-$("#con-stats").onclick = showStats;
-$("#cd-back").onclick = () => {
-  const from = picked_run;
+$("#con-stats").onclick = openActivityTool(showStats);
+$("#con-downloads").onclick = (e) => {
+  landOnLive = false;
+  if (innerWidth > 700 && e.currentTarget.getAttribute("aria-pressed") === "true") return;
+  runBackKey = null;
   $("#con").classList.remove("open"); picked_run = null; renderConsole();
-  ($(`[data-fk="row:${from}"]`) || document.getElementById(`con-${from}`))?.focus({ preventScroll: true });  // the row it came from
+};
+$("#cd-back").onclick = () => {
+  landOnLive = false;
+  const from = picked_run, trigger = runBackKey;
+  runBackKey = null;
+  $("#con").classList.remove("open"); picked_run = null; renderConsole();
+  if (trigger) {
+    const chip = $(`#con-running [data-fk="${trigger}"]`);
+    if (chip) {
+      const strip = $("#con-running"), start = strip.getBoundingClientRect().left;
+      const { left, right, width } = chip.getBoundingClientRect();
+      const padding = parseFloat(getComputedStyle(strip).scrollPaddingInlineEnd) || 0;
+      const end = start + strip.clientWidth - Math.min(padding, Math.max(0, strip.clientWidth - width));
+      // Only move the strip; Back should not jump the page.
+      if (left < start) strip.scrollLeft += left - start;
+      else if (right > end) strip.scrollLeft += right - end;
+    }
+    (chip || $("#con-downloads")).focus({ preventScroll: true });
+  } else {
+    ($(`[data-fk="row:${from}"]`) || document.getElementById(`con-${from}`) ||
+      $("#con-downloads")).focus({ preventScroll: true });
+  }
 };
 let searchTimer = null;  // typed: the history filtered once the typing pauses, not at each key
 $("#con-search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 150); };
