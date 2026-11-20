@@ -869,6 +869,44 @@ vm.runInContext(read(process.argv[1]), ctx);
     assert result == {"failed": [True, 0, False, True, False], "recovered": [1, True, "inbox-empty"]}
 
 
+@pytest.mark.parametrize("stale_first", ["yes", "no"])
+def test_reopened_inbox_ignores_the_previous_openings_response(stale_first):
+    result = node(r"""
+const nodes = Object.fromEntries(["list", "clear", "filters", "summary"].map((id) => [`#inbox-${id}`, {
+  classList: { toggle() {} }, dataset: {}, replaceChildren(...kids) { this.kids = kids; },
+}]));
+let menu = false, posts = 0;
+const dialog = {
+  style: {}, open: false, classList: { toggle(_name, value) { menu = value; }, contains: () => menu },
+  showModal() { this.open = true; }, close() { this.open = false; }, addEventListener() {},
+};
+const bell = { focus() {}, getBoundingClientRect: () => ({}), setAttribute() {} };
+const badge = { hidden: false, textContent: "2" }, reads = [];
+const ctx = sandbox({
+  $: (sel) => nodes[sel] || ({ "#inbox-dialog": dialog, "#bell": bell, "#bell-count": badge })[sel] || any,
+  history: { state: { inbox: true } }, phoneLayout: () => true, setInterval() {},
+  keepFocus: (_, draw) => draw(), loading: () => ({ state: "loading" }), failed: () => ({ state: "retry" }),
+  api: (path) => {
+    if (path === "/api/inbox/read") { posts++; return Promise.resolve({ items: [], unread: 0 }); }
+    return new Promise((resolve, reject) => reads.push({ resolve, reject }));
+  },
+});
+vm.runInContext(read(process.argv[1]), ctx);
+(async () => {
+  const before = ctx.openInbox();
+  dialog.close();
+  const after = ctx.openInbox();
+  const stale = async () => { reads[0].resolve({ items: [], unread: 9 }); await before; };
+  if (process.argv[2] === "yes") await stale();
+  reads[1].reject(Error("503"));
+  await after;
+  if (process.argv[2] === "no") await stale();
+  console.log(JSON.stringify([posts, badge.hidden, badge.textContent, nodes["#inbox-list"].kids[0]?.state]));
+})();
+""", str(JS / "inbox.js"), stale_first)
+    assert result == [0, False, "2", "retry"]
+
+
 def test_browser_back_closes_full_inbox_without_leaving_its_page():
     result = node(r"""
 const location = { hash: "#/series" };

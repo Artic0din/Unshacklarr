@@ -1,8 +1,12 @@
 /* The bell: every notification kept by the server; what waits for you (a code to enter) first. */
-let inboxData = null;
+let inboxData = null, inboxOpening = 0;
 async function refreshInbox() {
-  try { inboxData = await api("/api/inbox"); } catch { return false; }
-  const n = $("#inbox-dialog").open ? 0 : inboxData.unread;
+  const dialog = $("#inbox-dialog"), opening = inboxOpening, wasOpen = dialog.open;
+  let data;
+  try { data = await api("/api/inbox"); } catch { return false; }
+  if (opening !== inboxOpening || wasOpen !== dialog.open) return false;
+  inboxData = data;
+  const n = wasOpen ? 0 : data.unread;
   $("#bell-count").hidden = !n;
   $("#bell-count").textContent = n > 99 ? "99+" : String(n);
   const unread = inboxData.items.filter((i) => i.at > (inboxData.read_at || ""));
@@ -111,7 +115,8 @@ function renderInbox(animate = false) {
 }
 /* The bell opens a menu under it; its ⤢ (or a push notification) the whole list, as a window over the page. */
 async function openInbox(mode = "full") {
-  const dialog = $("#inbox-dialog");
+  const dialog = $("#inbox-dialog"), opening = ++inboxOpening;
+  const stillOpen = () => opening === inboxOpening && dialog.open;
   if (dialog.open && dialog.classList.contains("menu") !== (mode === "menu")) dialog.close();
   dialog.classList.toggle("menu", mode === "menu");
   const bell = $("#bell").getBoundingClientRect();
@@ -129,14 +134,17 @@ async function openInbox(mode = "full") {
   $("#inbox-summary").textContent = "";
   inboxFilter = "all";
   const loaded = await refreshInbox();
-  if (!dialog.open || dialog.classList.contains("menu") !== (mode === "menu")) return;
+  if (!stillOpen()) return;
   if (!loaded) {
     $("#inbox-list").replaceChildren(failed("Could not load notifications", () => openInbox(mode)));
     return;
   }
   inboxSeenAt = inboxData?.read_at ?? null;  // what came since the last look is marked new while the list is open
   renderInbox(true);
-  try { inboxData = await api("/api/inbox/read", { method: "POST" }); } catch { /* the next refresh picks up the server's unread count */ }
+  try {
+    const data = await api("/api/inbox/read", { method: "POST" });
+    if (stillOpen()) inboxData = data;
+  } catch { /* the next refresh picks up the server's unread count */ }
 }
 let afterInboxClose = null;
 function closeInbox(afterClose = () => {}) {
@@ -183,7 +191,7 @@ $("#inbox-dialog").addEventListener("cancel", (e) => {
   e.preventDefault();
   closeInbox();
 });
-$("#inbox-dialog").addEventListener("close", refreshInbox);
+$("#inbox-dialog").addEventListener("close", () => { if (!$("#inbox-dialog").open) refreshInbox(); });
 $("#inbox-clear").onclick = async (e) => {
   if (!inboxData || e.currentTarget.hidden) return;
   const gone = clearable(inboxData.items).length;
