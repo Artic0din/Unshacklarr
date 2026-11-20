@@ -491,11 +491,12 @@ function openColumns() {
   draw();
   $("#cols-dialog").showModal();
 }
-function fileLine(f, odd) {  // the same, in one line (phones)
-  const parts = [fileVideo(f), bitrate(f) ? flagged(`${f.videoBitrate ? "" : "≈"}${rate(bitrate(f))}`, odd.rate) : "",
-    [f.audio, layout(f.channels)].filter(Boolean).join(" "), flagged(f.audioLanguages.join(", "), odd.audio),
-    f.size ? size(f.size) : ""].filter(Boolean);
-  return el("small", { className: "ep-file-line" }, resBadge(f, odd.height), ...parts.flatMap((p, i) => i ? [" · ", p] : [p]));
+function fileLine(f, odd) {
+  const unbroken = (value) => value.replaceAll(" ", "\u00a0");
+  const parts = [fileVideo(f), bitrate(f) ? flagged(unbroken(`${f.videoBitrate ? "" : "≈"}${rate(bitrate(f))}`), odd.rate) : "",
+    unbroken([f.audio, layout(f.channels)].filter(Boolean).join(" ")), flagged(f.audioLanguages.join(", "), odd.audio),
+    f.size ? unbroken(size(f.size)) : ""].filter(Boolean);
+  return el("small", { className: "ep-file-line" }, resBadge(f, odd.height), ...parts.flatMap((p, i) => i ? ["\u00a0· ", p] : [p]));
 }
 function setSubtitleExpanded(chip, detail, expanded) {
   detail.hidden = !expanded;
@@ -514,7 +515,7 @@ function subtitleSummary(tracks, required, why, id, number, expanded) {
   const preview = (accepted.length ? [...tracks].sort((a, b) => priority(a) - priority(b)) : tracks).slice(0, 2);
   const remaining = tracks.length - preview.length;
   const cell = el("span", { className: "spec subs" + (tracks.length ? "" : " blank") },
-    flagged(preview.join(", ") || "none", why));
+    el("span", { className: "ep-subs-label", textContent: "Subtitles" }), flagged(preview.join(", ") || "none", why));
   if (!remaining) return { cell };
   const detail = el("div", { id: `ep-subs-${id}`, className: "ep-subs-detail", hidden: !expanded, textContent: tracks.join(", ") });
   const chip = el("button", { type: "button", className: "ep-subs-chip", textContent: `+${remaining}`,
@@ -689,7 +690,7 @@ function onBadge(e) {
   const svc = seasonSvc(e.seasonNumber), found = epAvail[e.id];
   const sxxeyy = `S${String(e.seasonNumber).padStart(2, "0")}E${String(e.episodeNumber).padStart(2, "0")}`;
   const other = found.service !== sxxeyy;  // under another number there: Download asks for it as found
-  return hoverTip(el("em", { className: "ep-on" + (other ? " other" : ""), textContent: other ? `on ${svc} as ${found.service}` : `on ${svc}` }), () => [
+  return hoverTip(el("em", { className: "ep-on" + (other ? " other" : ""), textContent: other ? trWith("on {0} as {1}", svc, found.service) : trWith("on {0}", svc) }), () => [
     el("b", { textContent: (!titleHidden(current.tvdbId, sxxeyy, found.name) && found.name) || `On ${svc}` }),
     el("small", {}, `${svc} lists it as `, el("code", { textContent: found.service })),
     ...(found.match === "title" ? [el("small", { className: "diff", textContent: `Found by its title, under another number: Download asks the service for ${found.service}` })]
@@ -882,7 +883,7 @@ function renderSeason() {
     ...(missing ? [el("small", { textContent: `${missing} missing` })] : []),
     ...(q && (q.video || q.audio) ? [el("small", {
       textContent: `${seasonSvc(epSeason)}: up to ${[q.video, q.audio].filter(Boolean).join(", ")}` })] : []),
-    ...(flagged ? [el("small", { className: "odd-legend", textContent: "Orange: different from most of this season (hover for details)" })] : []));
+    ...(flagged ? [el("small", { className: "odd-legend", textContent: "Orange: different from most of this season" })] : []));
   table.replaceChildren(...(rows.length ? [head, ...rows] : [el("li", { className: "none", textContent: "Every episode of this season is on disk." })]));
   epFit.observe(table);  // on a resize; now, for new rows or columns
   fitEpList(table);

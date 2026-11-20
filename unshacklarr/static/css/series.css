@@ -205,6 +205,7 @@ body.drawer-open .savebar { display: none; }
 .spec { font-size: var(--fs-sub); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .spec.blank { color: var(--muted); }
 .ep-list .spec.subs { display: inline-flex; justify-self: start; align-items: center; gap: 5px; white-space: nowrap; }
+.ep-subs-label { display: none; }
 .ep-list.stack .col.subs { overflow: visible; }
 .ep-subs-chip { flex: none; padding: 2px 7px; min-height: 26px; border: 1px solid var(--field-line); border-radius: var(--r-md);
   background: var(--select); font: inherit; font-variant-numeric: tabular-nums; color: var(--text); cursor: pointer; }

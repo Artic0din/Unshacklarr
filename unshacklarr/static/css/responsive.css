@@ -304,11 +304,15 @@
   .ep-view .pill { min-height: 36px; }
   .ep-list .ep { grid-template-columns: auto 32px minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 12px; min-height: 52px; }
   .ep-list .ep-head, .ep .col, .ep-tools .cols-btn { display: none; }
-  .ep-list .ep .subs { grid-area: 2 / 4; justify-self: end; }
+  .ep .t .tt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+  .ep .t > .ep-on { margin-inline-start: 0; max-inline-size: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .ep .t { column-gap: var(--sp-2); }
+  .ep-list .ep .subs { grid-area: 3 / 2 / auto / -1; flex-wrap: wrap; white-space: normal; }
+  .ep-subs-label { display: inline; color: var(--muted); }
   .ep-list .ep .ep-state { grid-area: 1 / 4; }
   .ep-list.compact .ep { grid-template-columns: auto 32px minmax(0, 1fr); }
   .ep-status { grid-area: 2 / 3; text-align: start; }
-  .ep-file-line { display: block; grid-area: 2 / 2 / auto / 4; color: var(--muted); font-size: var(--fs-footnote); }
+  .ep-file-line { display: block; grid-area: 2 / 2 / auto / -1; color: var(--muted); font-size: var(--fs-footnote); }
   .ep-file-line .res { min-width: 0; margin-inline-end: 4px; }
   .ep time { display: none; }
   .ep-bar { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }

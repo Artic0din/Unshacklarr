@@ -68,15 +68,15 @@ const src = read(process.argv[1]), ctx = sandbox({ el: (tag, props, ...kids) => 
 vm.runInContext(grab(src, /function setSubtitleExpanded\b[\s\S]*?function subtitleSummary\b[\s\S]*?\n}\n/), ctx);
 const tracks = ["en", "ara", "cat", "cze", "fr", "fre-CA", ...Array(27).fill("es")];
 const { cell, detail } = ctx.subtitleSummary(tracks, "fr-CA", "", 5, "E05", false);
-const chip = cell.kids[1];
+const chip = cell.kids[2];
 const closed = detail.hidden;
 chip.onclick();
 const opened = !detail.hidden && chip["aria-expanded"] === "true";
 chip.onclick();
 console.log(JSON.stringify({
-  preview: cell.kids[0], chip: chip.textContent, name: chip.ariaLabel, closed, opened,
+  preview: cell.kids[1], chip: chip.textContent, name: chip.ariaLabel, closed, opened,
   collapsedAgain: detail.hidden && chip["aria-expanded"] === "false",
-  detail: detail.textContent, short: ctx.subtitleSummary(["en"], "", "", 1, "E01", false).cell.kids,
+  detail: detail.textContent, short: ctx.subtitleSummary(["en"], "", "", 1, "E01", false).cell.kids.map(k => k.textContent ?? k),
 }));
 """, str(JS / "series.js"))
     assert summary == {
@@ -87,7 +87,7 @@ console.log(JSON.stringify({
         "opened": True,
         "collapsedAgain": True,
         "detail": ", ".join(["en", "ara", "cat", "cze", "fr", "fre-CA", *(["es"] * 27)]),
-        "short": ["en"],
+        "short": ["Subtitles", "en"],
     }
 
 
@@ -158,7 +158,7 @@ const subtitles = () => {
   const [row, detail] = list.kids[2].kids;
   const cell = row.kids.find(k => hasClass(k, "subs"));
   const chip = cell?.kids.find(k => hasClass(k, "ep-subs-chip"));
-  return { preview: cell?.kids[0], chip: chip?.textContent,
+  return { preview: cell?.kids[1], chip: chip?.textContent,
     detail: detail?.textContent, linked: !!detail && chip?.["aria-controls"] === detail.id,
     mobileCell: !!cell && hasClass(cell, "ep-mobile-subs"),
     mobileDetail: !!detail && hasClass(detail, "ep-mobile-subs") };
