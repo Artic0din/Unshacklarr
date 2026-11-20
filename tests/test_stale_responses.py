@@ -325,13 +325,14 @@ def test_logos_redraw_the_schedule_only_once_its_range_has_loaded(view, key, loa
     shown = node(r"""
 const [view, key, loaded] = [process.argv[2], process.argv[3], process.argv[4] === "true"];
 const redraws = [];
-const ctx = { networksById: {}, S: { series: [{ tvdbId: 1, tmdbId: 7 }] }, api: async () => ({ 7: { providers: [] } }), renderCalendar: () => redraws.push(1),
+const ctx = { networksById: {}, S: { series: [{ tvdbId: 1, tmdbId: 7 }] }, api: async () => ({ 7: { providers: [] } }),
+  renderWeek: () => redraws.push("week"), renderMonth: () => redraws.push("month"),
   cal: { date: "2026-11-09", month: "2026-11-01", fetched: new Set(loaded ? [key] : []) }, schedView: () => view, isoDay: (d) => d, weekStartOf: (d) => (d === "2026-11-01" ? "2026-10-26" : d) };
 vm.createContext(ctx);
-vm.runInContext(grab("fetchNetworks"), ctx);
-ctx.fetchNetworks([{ tvdbId: 1 }]).then(() => console.log(JSON.stringify({ redraws: redraws.length, logos: Object.keys(ctx.networksById) })));
+vm.runInContext([grab("renderCalendar"), grab("fetchNetworks")].join("\n"), ctx);
+ctx.fetchNetworks([{ tvdbId: 1 }]).then(() => console.log(JSON.stringify({ redraws, logos: Object.keys(ctx.networksById) })));
 """, str(JS / "schedule.js"), view, key, str(loaded).lower())
-    assert shown == {"redraws": 1 if loaded else 0, "logos": ["7"]}
+    assert shown == {"redraws": [view] if loaded else [], "logos": ["7"]}
 
 
 def test_reopening_suggest_services_stops_the_previous_run():

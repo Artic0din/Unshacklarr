@@ -99,6 +99,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
+
 - Kept the header in view while scrolling, moved version details to Settings, and made Inbox filters and episode lists easier to read on small screens. (#351)
 - Gave service names more room in Settings and showed service names instead of codes on CDM devices. (#357)
 - Switched to a dark theme with lime highlights and removed the light theme and Appearance setting. (#375)
