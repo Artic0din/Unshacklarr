@@ -1598,7 +1598,7 @@
  "Being replaced now": "置き換え中",
  "Check again": "再確認",
  "Check now": "今すぐ確認",
- "Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "シリーズごとに最大 10 エピソードずつ確認します。結果は「設定」›「アップグレード」で指定した期間だけ保持されます。Sonarr が両方のバージョンを同じ評価にしていても（1080p の H.264 と H.265 など）、ファイルを置き換えると画質が向上する場合があります。",
+ "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "画質ラダーの設定に基づいて、アップグレードの対象となるファイルが決まります。シリーズごとに最大 10 エピソードずつ確認します。結果は「設定」›「アップグレード」で指定した期間だけ保持されます。Sonarr が両方のバージョンを同じ評価にしていても（1080p の H.264 と H.265 など）、ファイルを置き換えると画質が向上する場合があります。",
  "Checked {0}{1}{2}": "確認：{0}{1}{2}",
  "Downloaded from {0}": "{0} からダウンロード済み",
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": "例：fr。エピソードには少なくともいずれか1つの完全な字幕が必要です。強制字幕は数えません。",

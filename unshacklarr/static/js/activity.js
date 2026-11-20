@@ -361,9 +361,9 @@ function renderJob(j) {
   const retryable = j.cards.filter((c) => c.episodeId && ["failed", "stopped", "interrupted"].includes(c.outcome));  // not the cancelled ones: taken out on purpose
   const title = new Set(j.cards.map((c) => c.series)).size > 1 ? `${j.cards.length} episodes` : `${first.series} · ${j.cards.length} episodes`;
   $("#cd-top-title").textContent = title;
-  const signIn = !st.live && signInAction(j.cards.find(signInFailed));
+  const signIn = signInAction(j.cards.find(signInFailed));
   const acts = [series ? el("button", { className: "btn small", textContent: "Open series", dataset: { fk: "open" }, onclick: () => openDrawer(series) }) : "",
-    st.live && st.n.queued ? el("button", { className: `btn small${st.paused ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause", dataset: { fk: "pause" },
+    st.live && st.n.queued ? el("button", { className: `btn small${st.paused && !signIn ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause", dataset: { fk: "pause" },
       title: st.paused ? "The next episode starts" : "The current download finishes; the next one waits",
       onclick: (e) => pauseJob(j, !st.paused, e.target) }) : "",
     st.live && st.n.queued ? el("button", { className: "btn small", textContent: "Options", dataset: { fk: "options" }, title: "Download options for the episodes still to come in this job",
@@ -587,6 +587,8 @@ $("#con-left").onclick = openActivityTool(showLeftovers);
 /* Catch up: the aired episodes Unshacklarr's series still miss (those before a series got its service, or the
    automatic sync gave up on). Within so many days, or all. */
 let missingDays = 30, missingSonarr = "", missingSeq = 0;  // missingSeq: the newest ask, an older answer is dropped
+const missingSubmissions = new Map();  // Sonarr name -> episode ID -> submission state
+let updateMissingButtons = null;
 /* Catch up and Upgrades for another Sonarr (a 4K one) too: which one, beside the rest; one whose ladder was never chosen
    says so, and nothing is downloaded for it. */
 function sonarrPicker(picked, pick) {
@@ -603,6 +605,7 @@ function unsetNote(name) {
 async function showMissing() {
   picked_run = "missing";
   const seq = ++missingSeq;
+  updateMissingButtons = null;
   $("#con").classList.add("open");
   markPicked(picked_run);
   $("#cd-top-title").textContent = "Catch up";
@@ -611,33 +614,54 @@ async function showMissing() {
   $("#cd-main").replaceChildren(loading("Asking Sonarr what your series miss…"));
   let r;
   if (missingSonarr && !(S.config.settings.sonarrs || []).some((i) => i.name === missingSonarr)) missingSonarr = "";
-  const sonarr = missingSonarr;  // the one this list is for: the buttons send it, whatever the picker says by then
-  const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(sonarr ? { sonarr: savedSonarr(sonarr) } : {}) });
+  const sonarr = missingSonarr, instance = savedSonarr(sonarr);
+  if (!missingSubmissions.has(instance)) missingSubmissions.set(instance, new Map());
+  const submissions = missingSubmissions.get(instance);
+  // An accepted download may not have a run card yet; retry its failures in Activity.
+  const uncertain = new Set([...submissions].filter(([, state]) => state === "uncertain").map(([id]) => id));
+  const stillShowing = () => picked_run === "missing" && seq === missingSeq;
+  const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(instance ? { sonarr: instance } : {}) });
   // wait: as long as the server waits for a busy Sonarr (120 s)
-  try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`, { wait: 130 }); } catch (e) { return seq === missingSeq && picked_run === "missing" ? $("#cd-main").replaceChildren(failed(e.message, showMissing)) : undefined; }
-  if (picked_run !== "missing" || seq !== missingSeq) return;
+  try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`, { wait: 130 }); } catch (e) { return stillShowing() ? $("#cd-main").replaceChildren(failed(e.message, showMissing)) : undefined; }
+  if (!stillShowing()) return;
+  const recheck = r.items.map((it) => it.episodeId).filter((id) => uncertain.has(id));
+  if (recheck.length) {
+    // An ambiguous submission can only be retried after both server reads succeed.
+    const live = await api("/api/runs?live=1").catch(() => null);
+    if (!stillShowing()) return;
+    if (live) {
+      const liveIds = new Set(live.filter((c) => (c.instance || "") === instance).map((c) => c.episodeId));
+      for (const id of recheck) if (!liveIds.has(id)) submissions.delete(id);
+    }
+  }
   const ages = el("div", { className: "ax-seg", role: "group", ariaLabel: "Aired within" }, ...[[7, "7 days"], [30, "30 days"], [90, "90 days"], [0, "All"]].map(([d, label]) =>
     el("button", { type: "button", textContent: label, ariaPressed: String(missingDays === d), onclick: () => { missingDays = d; showMissing(); } })));
   const unset = unsetNote(sonarr);
   const rowButtons = new Map();
-  const remaining = () => [...rowButtons.keys()].filter((id) => !rowButtons.get(id).disabled);
+  const available = (id) => !unset && !submissions.has(id);
+  const remaining = () => [...rowButtons.keys()].filter(available);
   const bulkLabel = (count) => count === 1 ? "Download it" : `Download the ${count}`;
-  const updateBulk = () => {
+  const updateButtons = () => {
+    for (const [id, button] of rowButtons) button.ariaDisabled = String(!available(id));
     const count = remaining().length;
     go.disabled = !count;
     if (count) go.textContent = bulkLabel(count);
   };
   const download = async (ids) => {
-    const episodeIds = ids.filter((id) => !rowButtons.get(id).disabled);
-    if (unset || !episodeIds.length) return;
-    episodeIds.forEach((id) => { rowButtons.get(id).disabled = true; });
-    updateBulk();
+    const episodeIds = ids.filter(available);
+    if (!episodeIds.length) return;
+    episodeIds.forEach((id) => submissions.set(id, "pending"));
+    if (picked_run === "missing") updateMissingButtons?.();
     try {
-      await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds, ...(sonarr ? { sonarr: savedSonarr(sonarr) } : {}) }) });
+      await api("/api/download", { method: "POST", body: JSON.stringify({ episodeIds, ...(instance ? { sonarr: instance } : {}) }) });
+      episodeIds.forEach((id) => submissions.set(id, "accepted"));
       toast(episodeIds.length === 1 ? "1 episode queued" : `${episodeIds.length} episodes queued, one after the other`);
     } catch (err) {
-      episodeIds.forEach((id) => { rowButtons.get(id).disabled = false; });
-      updateBulk();
+      for (const id of episodeIds) {
+        if (err.status >= 400 && err.status < 600) submissions.delete(id);
+        else submissions.set(id, "uncertain");
+      }
+      if (picked_run === "missing") updateMissingButtons?.();
       toast(err.message, true);
     }
   };
@@ -655,6 +679,8 @@ async function showMissing() {
         el("small", {}, ...(it.title ? [episodeTitle(it.tvdbId, it.sxxeyy, it.title), " · "] : []), `aired ${ago(it.aired)}`),
         service ? el("span", { className: "sv-chip", textContent: svcName(service) }) : ""), button);
   });
+  updateMissingButtons = updateButtons;
+  updateButtons();
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Catch up" }),
       el("small", { className: "line1", textContent: "Episodes that aired, are monitored and have no file in Sonarr, for the series Unshackle downloads. The automatic sync only looks at recent ones." }))),
@@ -751,7 +777,7 @@ async function showUpgrades(fresh = true) {
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Upgrades" }),
-      el("small", { textContent: "Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265)." }))),
+      el("small", { textContent: "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265)." }))),
     ...[sonarrPicker(sonarr, (n) => { upgradeSonarr = n; upgradePick.clear(); upgradeOpen.clear(); showUpgrades(); }), unsetNote(sonarr)].filter(Boolean),
     el("div", { className: "miss-bar" }, el("span", { className: "muted", textContent: state }), el("span", { className: "up-acts" }, selAll, check, go)),
     ...(rows.length ? [el("div", {}, ...rows)] : scan.running || r.checked ? [el("p", { className: "muted", textContent: scan.running ? "Nothing better found yet." : "Nothing better on the services: every file is already on the best step they have." })] : [])));

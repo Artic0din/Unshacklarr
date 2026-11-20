@@ -1592,7 +1592,7 @@
  "Chat ID": "ID chat",
  "Check again": "Ricontrolla",
  "Check now": "Controlla ora",
- "Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "I controlli avvengono in gruppi di massimo 10 episodi per serie. I risultati vengono conservati per il tempo indicato in Impostazioni › Miglioramenti. Sostituire un file può migliorarne la qualità anche quando Sonarr classifica le due versioni allo stesso livello (ad esempio, H.264 e H.265 in 1080p).",
+ "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "La tua scala di qualità determina quali file possono essere migliorati. I controlli avvengono in gruppi di massimo 10 episodi per serie. I risultati vengono conservati per il tempo indicato in Impostazioni › Miglioramenti. Sostituire un file può migliorarne la qualità anche quando Sonarr classifica le due versioni allo stesso livello (ad esempio, H.264 e H.265 in 1080p).",
  "Checked {0}{1}{2}": "Controllato {0}{1}{2}",
  "Downloaded from {0}": "Scaricato da {0}",
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": "Ad esempio fr. L'episodio deve avere sottotitoli completi in almeno una di esse. I sottotitoli forzati non contano.",

@@ -1605,7 +1605,7 @@
  "Being replaced now": "Заменяется сейчас",
  "Check again": "Проверить снова",
  "Check now": "Проверить сейчас",
- "Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "Эпизоды проверяются группами до 10 на сериал. Результаты хранятся в течение срока, заданного в разделе «Настройки» › «Улучшения». Замена файла может повысить качество, даже если Sonarr оценивает обе версии одинаково (например, H.264 и H.265 в 1080p).",
+ "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "Лестница качества определяет, какие файлы можно улучшить. Эпизоды проверяются группами до 10 на сериал. Результаты хранятся в течение срока, заданного в разделе «Настройки» › «Улучшения». Замена файла может повысить качество, даже если Sonarr оценивает обе версии одинаково (например, H.264 и H.265 в 1080p).",
  "Checked {0}{1}{2}": "Проверено {0}{1}{2}",
  "Downloaded from {0}": "Скачано с {0}",
  "E-mail": "Эл. почта",

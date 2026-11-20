@@ -1562,7 +1562,7 @@
  "Being replaced now": "Reemplazándose ahora",
  "Check again": "Volver a comprobar",
  "Check now": "Comprobar ahora",
- "Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "Las comprobaciones se hacen en lotes de hasta 10 episodios por serie. Los resultados se guardan durante el tiempo definido en Ajustes › Mejoras. Sustituir un archivo puede mejorar su calidad aunque Sonarr clasifique ambas versiones igual (por ejemplo, H.264 y H.265 en 1080p).",
+ "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "Tu escala de calidad determina qué archivos se pueden mejorar. Las comprobaciones se hacen en lotes de hasta 10 episodios por serie. Los resultados se guardan durante el tiempo definido en Ajustes › Mejoras. Sustituir un archivo puede mejorar su calidad aunque Sonarr clasifique ambas versiones igual (por ejemplo, H.264 y H.265 en 1080p).",
  "Checked {0}{1}{2}": "Comprobado {0}{1}{2}",
  "Downloaded from {0}": "Descargado de {0}",
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": "Por ejemplo fr. El episodio debe tener subtítulos completos en al menos uno de ellos. Los subtítulos forzados no cuentan.",

@@ -526,7 +526,7 @@
   "label"
  ],
  "Checking…": [],
- "Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": [],
+ "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": [],
  "Choose a folder": [],
  "Choose a passphrase: the backups are encrypted with it.": [],
  "Choose a quality ladder for Sonarr {0} in Settings, Sonarr first": [

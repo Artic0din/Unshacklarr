@@ -1601,7 +1601,7 @@
  "Being replaced now": "En cours de remplacement",
  "Check again": "Vérifier à nouveau",
  "Check now": "Vérifier maintenant",
- "Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "Les vérifications se font par lots de 10 épisodes maximum par série. Les résultats sont conservés pendant la durée définie dans Réglages › Améliorations. Remplacer un fichier peut améliorer sa qualité même si Sonarr classe les deux versions au même niveau (par exemple, H.264 et H.265 en 1080p).",
+ "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "Votre échelle de qualité détermine quels fichiers peuvent être améliorés. Les vérifications se font par lots de 10 épisodes maximum par série. Les résultats sont conservés pendant la durée définie dans Réglages › Améliorations. Remplacer un fichier peut améliorer sa qualité même si Sonarr classe les deux versions au même niveau (par exemple, H.264 et H.265 en 1080p).",
  "Checked {0}{1}{2}": "Vérifié {0}{1}{2}",
  "Not checked yet.": "Pas encore vérifié.",
  "Nothing better found yet.": "Rien de mieux trouvé pour l'instant.",
