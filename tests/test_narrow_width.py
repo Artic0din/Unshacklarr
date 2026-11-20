@@ -211,6 +211,13 @@ def test_inbox_clear_is_at_least_44px_high_on_touch():
     assert re.search(r"[^{}]*\.inbox-clear\b[^{}]*\{\s*min-height: 44px;", touch)
 
 
+def test_series_settings_input_defaults_allow_the_touch_height_to_win():
+    # The switch exclusion must not raise the base rule above input[type=text].
+    has(CSS, ".sx-grid input:where(:not(.switch)) { width: 100%; min-height: 40px;")
+    touch = media("max-width: 700px), (pointer: coarse")
+    assert re.search(r":is\(input\[type=text\][^{}]+\) \{ min-height: 44px;", touch)
+
+
 def test_activity_stats_wrap_german_labels_without_splitting_service_figures():
     has(CSS, ".legend { display: flex; flex-wrap: wrap;")
     narrow = media("max-width: 400px")
