@@ -140,6 +140,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **The unshackle serve log now shows after viewing a download, and empty Activity no longer shows the old download's bar.** (#365)
 - **Clearing series file name, season map, join parts, or episode name now clears the unsaved save bar.** Normalizing
   empty and default series fields (including `sonarr_order` when no numbering overrides remain) during comparison means
   undoing an edit no longer leaves the save bar stuck open. (#335)

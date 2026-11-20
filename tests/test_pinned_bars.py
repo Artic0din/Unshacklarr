@@ -40,6 +40,48 @@ def test_phone_page_keeps_focus_clear_of_the_measured_header_and_bars():
     assert page and "var(--head-h" in page[0] and "var(--bars-h" in page[0]
 
 
+@pytest.mark.parametrize("pane", ["serve log", "empty Activity"])
+def test_a_pane_without_a_job_clears_the_previous_job_dock(pane: str) -> None:
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    activity = (STATIC / "js" / "activity.js").read_text()
+    services = (STATIC / "js" / "settings-services.js").read_text()
+    dock_end = activity.index('document.addEventListener("keydown"', activity.index("function closeSheet"))
+    code = "\n".join((
+        activity[activity.index("const nothingPicked"):activity.index("function renderConsole")],
+        activity[activity.index("function renderDock"):dock_end],
+        services[services.index("async function showServeLog"):services.index("/* Suggest services")],
+    ))
+    out = subprocess.run(["node", "-e", r"""
+const vm = require("vm"), [code, pane] = process.argv.slice(1);
+const detailClasses = new Set(["docked", "docked-acts"]);
+const dock = { hidden: false, classList: { contains: () => false } };
+const raw = { hidden: false, open: false };
+let output = "";
+const nodes = {
+  "#dock": dock, "#cd-raw": raw, "#con": { classList: new Set() },
+  "#cd-main": { replaceChildren() {} },
+  "#con-detail": { classList: { toggle: (name, on) => on ? detailClasses.add(name) : detailClasses.delete(name) } },
+};
+const ctx = vm.createContext({
+  $: (sel) => nodes[sel], api: async () => ({ log: "serve ready" }),
+  showTab() {}, markPicked() {}, el() {}, openTerm: () => true,
+  term: { write: (text) => { output += text; } }, document: { querySelectorAll: () => [] },
+});
+(async () => {
+  await vm.runInContext(code + (pane === "serve log" ? "\nshowServeLog()" : "\nnothingPicked()"), ctx);
+  console.log(JSON.stringify({ dockHidden: dock.hidden, detailClasses: [...detailClasses], rawHidden: raw.hidden, rawOpen: raw.open, output }));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", code, pane], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    state = json.loads(out.stdout)
+    assert state["dockHidden"], f"{pane} still shows the previous job's dock"
+    assert state["detailClasses"] == []
+    assert state["rawHidden"] == (pane == "empty Activity")
+    assert state["rawOpen"] == (pane == "serve log")
+    assert state["output"] == ("serve ready" if pane == "serve log" else "")
+
+
 def measured(bars):
     """--head-h and --bars-h as navigation.js sets them, for bars given as (offsetHeight, computed bottom)."""
     if not shutil.which("node"):
