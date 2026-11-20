@@ -903,8 +903,10 @@ const pick = (source, pattern) => {
   if (!match) throw new Error("Missing page function: " + pattern);
   return match[0];
 };
-const services = read("services.js"), cookies = read("cookies-cdm.js"), schedule = read("schedule.js");
+const services = read("services.js"), cookies = read("cookies-cdm.js"), schedule = read("schedule.js"), navigation = read("navigation.js");
 const source = [
+  navigation.slice(0, navigation.indexOf("function loadSettingsSec")),
+  'settingsSec = "services-devices";',
   pick(cookies, /^const ago_days = .*$/m),
   pick(cookies, /^function cookieStatus\(.*?^\}/ms),
   pick(services, /^const AUTH_METHOD_LABELS = .*?;$/m),
@@ -997,7 +999,6 @@ const box = {
   usesService: (conf, tag) => conf?.service === tag || Object.values(conf?.season_pages || []).some((page) => page.service === tag),
   ago: () => "now",
   currentTab: "settings",
-  settingsSec: "services",
   unshackleDetails: { ok: false, mode: "remote" },
   renderUnshackleStatus() {},
   hoverTip: (node) => node,
@@ -1354,14 +1355,14 @@ const promptState = (input) => {
     box.api = async (path) => { asked.push(path); return { running: 0, queued: 0, authentication: [], authentication_setups: [] }; };
     nodes["#sv-list"].replaceChildren = (...children) => painted.push(children.length);
     box.S.authenticationSetups = [setup];
-    box.settingsSec = "unshackle";
+    vm.runInContext('settingsSec = "connections"', box);
     await box.refreshBusy();
     await box.refreshHealth();
-    box.settingsSec = "services";
+    vm.runInContext('settingsSec = "services-devices"', box);
     box.S.authenticationSetups = [];
     await box.refreshBusy();
     await box.refreshHealth();
-    box.settingsSec = "automation";
+    vm.runInContext('settingsSec = "downloading"', box);
     await box.refreshHealth();
     console.log(JSON.stringify({ asked: asked.filter((path) => path.startsWith("/api/status")), repaintedOnUnshackle: painted.length > 1 ? "more" : painted.length }));
   }
@@ -5483,7 +5484,7 @@ def test_upgrades_find_the_files_a_service_has_on_an_earlier_step(tmp_path, monk
     monkeypatch.setitem(sync.SETTINGS, "upgrade_recheck_days", 0)
     web.scan_upgrades()
     assert asked[-1] == ["S01E01", "S01E03"]
-    config["series"][1]["skip_upgrades"] = True  # left out on its page, or in Settings, Quality, Upgrades
+    config["series"][1]["skip_upgrades"] = True  # left out on its page, or in Settings › Quality & Upgrades › Upgrades
     web.scan_upgrades()
     assert len(asked) == 3 and web.read_json(web.UPGRADES_FILE, {})["items"] == []
     del config["series"][1]["skip_upgrades"]
@@ -7554,7 +7555,7 @@ def test_two_logouts_at_once_both_stay_logged_out(tmp_path, monkeypatch):
 
 
 def test_a_sonarr_removed_from_settings_drops_its_series_settings_instead_of_refusing_the_save(monkeypatch):
-    # Renamed or removed in Settings, Sonarr: the series' own settings for it went with it, never a Save refused
+    # Renamed or removed in Settings › Connections › Sonarr: the series' own settings for it went with it, never a Save refused
     # until config.yaml was edited by hand
     import pytest
     from aiohttp import web as aioweb

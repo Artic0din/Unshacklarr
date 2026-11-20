@@ -481,8 +481,8 @@ ctx.renderSeriesState();
 console.log(JSON.stringify({ state: text.textContent, fix: fix.kids.map((k) => k.textContent) }));
 """, str(JS / "core.js"))
     assert shown == {"state": "Its last 3 downloads from HULU failed", "fix": [
-        "Session expired", "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services.",
-        "Check HULU in Settings › Services"]}
+        "Session expired", "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services & Devices › Services.",
+        "Check HULU in Settings › Services & Devices › Services"]}
 
 
 def test_an_empty_choice_of_episodes_is_hidden_not_greyed():

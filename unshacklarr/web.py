@@ -946,7 +946,7 @@ def tmdb_error(e: requests.RequestException) -> str:
     if status == 404:
         return "TMDB has no series with this id: Sonarr's TMDB id may be wrong"
     if status == 401:
-        return "TMDB refused the API key: check it in Settings, Sonarr"
+        return "TMDB refused the API key: check it in Settings › Connections › Sonarr"
     if status:
         return f"TMDB answered {status}"
     return f"TMDB is unreachable ({type(e).__name__})"
@@ -1409,7 +1409,7 @@ def checked_config(body: dict, previous: dict, known: dict | None) -> dict:
         picks = {}
         if backend := str(levels.get("backend") or ""):
             if backend not in {b["name"] for b in settings.get("backends") or []}:
-                raise web.HTTPBadRequest(text=f"{service} downloads with the Unshackle server {backend}, which is not in Settings, Unshackle")
+                raise web.HTTPBadRequest(text=f"{service} downloads with the Unshackle server {backend}, which is not in Settings › Connections › Unshackle")
             picks["backend"] = backend
         if ladder := check_ladder_name(levels.get("ladder"), ladders, service):
             picks["ladder"] = ladder
@@ -1538,7 +1538,7 @@ def check_ladder_name(name, ladders: list[dict], where: str) -> str:
     """A ladder picked by name: one of them, off (none), or empty (the level before decides)."""
     name = str(name or "")
     if name and name != "off" and name not in {lad["name"] for lad in ladders}:
-        raise web.HTTPBadRequest(text=f"{where} uses the quality ladder {name}, which is not in Settings, Quality")
+        raise web.HTTPBadRequest(text=f"{where} uses the quality ladder {name}, which is not in Settings › Quality & Upgrades › Quality")
     return name
 
 
@@ -2651,14 +2651,14 @@ def check_alerts(now: datetime | None = None) -> None:
     told, problems = read_json(ALERTS_FILE, {}), {}
     unknown = []  # what could not be checked now: what was told of it stands, never told twice
     if events.get("disk", True) and (full := sonarr_sync.free_space_problem()):
-        problems["disk"] = ("error", "The downloads folder is almost full", f"{full}. Make room, or lower the room kept free in Settings, Unshackle, Folders.")
+        problems["disk"] = ("error", "The downloads folder is almost full", f"{full}. Make room, or lower the room kept free in Settings › Connections › Unshackle, Folders.")
     if events.get("disk", True) and sonarr_sync.SONARR:  # Sonarr's library folders too: where the files end up
         keep = float(sonarr_sync.SETTINGS.get("min_free_gb") or 0)
         full_roots = [str(r["path"]).rstrip("/") for r in sonarr_sync.root_folders() if keep and r.get("freeSpace") is not None and r["freeSpace"] / 1e9 < keep]
         if full_roots:
             problems["library"] = ("error", "A library folder is almost full",
                                    f"Less than {keep:g} GB free in {', '.join(full_roots)}: nothing is downloaded for its series. Make room, "
-                                   "or lower the room kept free in Settings, Unshackle, Folders.")
+                                   "or lower the room kept free in Settings › Connections › Unshackle, Folders.")
     if events.get("precheck", True) and (services := remote_unsupported(read_config())):
         problems["remote"] = ("error", "--remote is not supported", f"Series of {', '.join(services)} use it: their downloads will fail. "
                                                                    "Update Unshackle to a version after 6.0.0.")
@@ -2672,11 +2672,11 @@ def check_alerts(now: datetime | None = None) -> None:
                 name = f"{service} {f['profile']}".strip()
                 left = (f["expires"] - now.timestamp()) / 86400 if f.get("expires") else None
                 if f.get("expired"):
-                    problems[f"cookies:{name}"] = ("error", f"{name} cookies have expired", "Its downloads will fail: replace them in Settings › Services.", service)
+                    problems[f"cookies:{name}"] = ("error", f"{name} cookies have expired", "Its downloads will fail: replace them in Settings › Services & Devices › Services.", service)
                 elif left is not None and 0 <= left < 7:
                     days = max(1, math.floor(left + 0.5))  # as cookieStatus (cookies-cdm.js) counts them: Math.round, a half up
                     problems[f"cookies:{name}"] = ("warning", f"{name} cookies expire in {days} days" if days > 1 else f"{name} cookies expire in 1 day",
-                                                    "Replace them before they expire, in Settings › Services.", service)
+                                                    "Replace them before they expire, in Settings › Services & Devices › Services.", service)
     if events.get("cdm", True):
         try:
             state = cdm_state()
@@ -2697,7 +2697,7 @@ def check_alerts(now: datetime | None = None) -> None:
             if not test.get("ok"):
                 word = "was revoked" if test.get("revoked") else "failed its test"
                 problems[f"cdm:{d['kind']}:{d['name']}"] = ("error", f"CDM {d['name']} {word}",
-                                                             f"{test.get('error') or 'No license'}. Used by {', '.join(d['used_by'])}: see Settings, CDM.")
+                                                             f"{test.get('error') or 'No license'}. Used by {', '.join(d['used_by'])}: see Settings › Services & Devices › Devices (CDM).")
     for key, (level, title, message, *service) in problems.items():  # a cookie file's: the service it signs in to
         if told.get(key) != title:
             sonarr_sync.notify(settings, level, title, message, key=key, service=service[0] if service else None)
@@ -2847,7 +2847,7 @@ def cookies_folder() -> Path:
     if UNSHACKLE.mode == "local":
         return UNSHACKLE.local.cookies_dir(str(sonarr_sync.SETTINGS.get("unshackle_command") or ""))
     raise UnshackleError("Unshacklarr cannot see Unshackle's Cookies folder: mount it and set its path "
-                         "in Settings, Unshackle (COOKIES_DIR with Docker)")
+                         "in Settings › Connections › Unshackle (COOKIES_DIR with Docker)")
 
 
 def cookie_state() -> dict:
@@ -2972,7 +2972,7 @@ def cdm_paths() -> tuple[Path, Path, Path]:
             return found["config"], found["wvds"], found["prds"]
         raise UnshackleError("This Unshackle has no unshackle.yaml yet")
     raise UnshackleError("Unshacklarr cannot see Unshackle's config: mount its folder (unshackle.yaml, WVDs, PRDs) "
-                         "and set its path in Settings, Unshackle (UNSHACKLE_CONFIG_DIR with Docker)")
+                         "and set its path in Settings › Connections › Unshackle (UNSHACKLE_CONFIG_DIR with Docker)")
 
 
 CDM_TESTS = sonarr_sync.DATA / "cdm_tests.json"  # each device's last test: "Widevine:name": {at, ok, revoked, error, keys}
@@ -3342,7 +3342,7 @@ async def unshackle_yaml(request):
     if len(new) > 1_000_000:
         raise web.HTTPBadRequest(text="That is too large for unshackle.yaml")
     if body.get("base") != fingerprint(text):
-        raise web.HTTPConflict(text="unshackle.yaml changed since you opened it (Settings, CDM writes to it too): open it again")
+        raise web.HTTPConflict(text="unshackle.yaml changed since you opened it (Settings › Services & Devices › Devices (CDM) writes to it too): open it again")
     if problem := yaml_problem(new):
         raise web.HTTPBadRequest(text=problem)
     if new == text:
@@ -3351,7 +3351,7 @@ async def unshackle_yaml(request):
 
 
 async def allow_proxies(_):
-    """Settings, Unshackle: Unshacklarr's key allowed Unshackle 6's own proxies (serve.users.<key>.server_proxy), in
+    """Settings › Connections › Unshackle: Unshacklarr's key allowed Unshackle 6's own proxies (serve.users.<key>.server_proxy), in
     unshackle.yaml, the file before kept in the editor's history. serve reads it at its next start."""
     key = str(sonarr_sync.SETTINGS.get("unshackle_api_key") or "")
     if UNSHACKLE.mode == "local" or not key:
@@ -3397,7 +3397,7 @@ def cache_folder() -> Path:
     if UNSHACKLE.mode == "local":
         return UNSHACKLE.local.paths(str(sonarr_sync.SETTINGS.get("unshackle_command") or ""))["cache"]
     raise UnshackleError("Unshacklarr cannot see Unshackle's Cache folder: mount it and set its path "
-                         "in Settings, Unshackle (CACHE_DIR with Docker)")
+                         "in Settings › Connections › Unshackle (CACHE_DIR with Docker)")
 
 
 def clear_service_cache(tag: str) -> int:
@@ -4215,7 +4215,7 @@ def sonarr_named(name: str) -> dict | None:
     if not name:
         return None
     if name not in sonarr_sync.SONARRS:
-        raise web.HTTPBadRequest(text=f"No Sonarr named {name} in Settings, Sonarr")
+        raise web.HTTPBadRequest(text=f"No Sonarr named {name} in Settings › Connections › Sonarr")
     return sonarr_sync.SONARRS[name]
 
 
@@ -4312,7 +4312,7 @@ async def series_language(request):
     """A series' page, Sonarr 5: its titles in the language where you watch, as its service names its episodes."""
     tvdb, name = int(request.match_info["tvdb"]), metadata_language()
     if not name:
-        raise web.HTTPBadRequest(text="Set your country in Settings, Region first: the language comes from it")
+        raise web.HTTPBadRequest(text="Set your country in Settings › General › Region first: the language comes from it")
     try:
         await asyncio.to_thread(set_series_language, tvdb, name)
     except requests.RequestException as e:
@@ -5674,7 +5674,7 @@ def scan_upgrades_in(inst: dict | None, name: str, only: set | None = None) -> b
 
 
 async def upgrade_groups(_):
-    """Settings, Upgrades: the release group each set-up series' downloads carry, grouped, and where it is set."""
+    """Settings › Quality & Upgrades › Upgrades: the release group each set-up series' downloads carry, grouped, and where it is set."""
     config = read_config()
 
     def found():
@@ -5828,7 +5828,7 @@ def sonarr_dirs(path: str) -> dict:
 
 
 async def library_browse(request):
-    """Settings, Add audio track: the folders to pick the library from, as Sonarr (side=sonarr) or Unshacklarr sees them."""
+    """Settings › Downloading › Download options › Audio upgrade: the folders to pick the library from, as Sonarr (side=sonarr) or Unshacklarr sees them."""
     side, path = request.query.get("side"), request.query.get("path", "").strip()[:1024]
     inst = sonarr_named(request.query.get("sonarr", ""))  # another Sonarr's folders, as it sees them
     if side == "local":
@@ -5935,7 +5935,7 @@ async def upgrades_action(request):
         listed = body.get("series") if isinstance(body.get("series"), list) else []
         only = {int(x) for x in listed if re.fullmatch(r"\d{1,9}", str(x))}  # "²" is a digit int() refuses
         if sonarr_sync.unset_ladder(inst):
-            raise web.HTTPBadRequest(text=f"Choose a quality ladder for Sonarr {inst['name']} in Settings, Sonarr first")
+            raise web.HTTPBadRequest(text=f"Choose a quality ladder for Sonarr {inst['name']} in Settings › Connections › Sonarr first")
         upgrade_scan["running"] = True  # at once: a second click before the thread starts is not a second check
         threading.Thread(target=scan_upgrades, args=((inst or {}).get("name", ""), only), daemon=True).start()
     return web.json_response({"running": upgrade_scan["running"]})
@@ -6918,7 +6918,7 @@ async def session(request):
     body = {"configured": bool(auth.get("password")), "logged_in": logged_in(request, auth) or bool(by_proxy)}
     if by_proxy:
         body["proxy_user"] = by_proxy
-    if body["logged_in"]:  # for Settings, Account: until when, and since when the password is the same
+    if body["logged_in"]:  # for Settings › General › Account & Backups: until when, and since when the password is the same
         body["expires"] = read_session(request.cookies[SESSION_COOKIE])[0] if logged_in(request, auth) else None
         body["password_changed"] = auth.get("changed")
         body["api_key"] = {"set": bool(auth.get("api_key")), "created": auth.get("api_key_created")}

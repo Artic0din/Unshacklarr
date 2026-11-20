@@ -282,7 +282,7 @@ function renderServices() {
   paintServicesBadge(needing.length);
   $("#sv-folder").textContent = cookies?.folder || "";
   $("#sv-note").textContent = !cookies ? "" : cookies.folder ? ""
-    : S.config.settings.unshackle_mode === "remote" ? "To manage them here too, mount its Cookies folder and set its path in Settings, Unshackle, Folders."
+    : S.config.settings.unshackle_mode === "remote" ? "To manage them here too, mount its Cookies folder and set its path in Settings › Connections › Unshackle, Folders."
     : cookies.error || "";
   revealService();
 }
@@ -294,7 +294,7 @@ function loadServiceCookies() {
 function needingText(n) { return n === 1 ? "1 service needs attention" : `${n} services need attention`; }
 /* The count of the rows that need attention, beside Services in the Settings list, from any page. */
 function paintServicesBadge(n = serviceModels().filter((m) => m.attention).length) {
-  const nav = document.querySelector('.set-nav [data-sec="services"]');
+  const nav = document.querySelector('.set-nav [data-sec="services-devices"]');
   if (!nav) return;
   nav.querySelector(":scope > .sv-attn")?.remove();
   if (n) nav.querySelector(":scope > span").after(el("b", { className: "ck-pill bad sv-attn", textContent: String(n), title: needingText(n) }));
@@ -322,13 +322,12 @@ async function loadServices() {
   }
   renderServices();
 }
-/* From another page (a failing series, a refused download): Settings, Services, at the service's row; with a
+/* From another page (a failing series, a refused download): Settings › Services & Devices › Services, at the service's row; with a
    backend, that server's row. */
 async function openServiceRow(service, backend) {
   if (current && !await closeDrawer(true)) return;
   servicesReveal = backend === undefined ? service : `${service}@${backend}`;
-  showTab("settings");
-  showSettingsSec("services");
+  openSettings("services");
   renderServices();
 }
 function showSeriesOf(service) {  // every series of that service: the other filters cleared, as they could hide some

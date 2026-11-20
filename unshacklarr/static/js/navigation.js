@@ -1,39 +1,74 @@
-/* Settings sections: one shown at a time, remembered in the URL (#/settings/automation). On a phone,
+/* Settings sections: one shown at a time, remembered in the URL. On a phone,
    #/settings is the list of sections, and a section is a page of its own that goes back to it. */
-let settingsSec = "unshackle", settingsList = false, secFromList = false;
+const LEGACY_SETTINGS_MAP = {
+  sonarr:        { sec: "connections", anchor: "sonarr-sec", load: () => renderSonarrState() },
+  unshackle:     { sec: "connections", anchor: "unshackle-sec", load: () => loadUnshackleStatus() },
+  downloads:     { sec: "downloading", anchor: "downloads-sec" },
+  automation:    { sec: "downloading", anchor: "automation-sec", load: () => { renderAutomation(); renderImportMode(); renderLearnWindow(); } },
+  quality:       { sec: "quality-upgrades", anchor: "quality-sec", load: () => renderQuality() },
+  upgrades:      { sec: "quality-upgrades", anchor: "upgrades-sec", load: () => { renderUpgradeSeries(); renderUpgradeGroups(); } },
+  services:      { sec: "services-devices", anchor: "services-sec", load: () => loadServices() },
+  cookies:       { sec: "services-devices", anchor: "services-sec" },
+  cdm:           { sec: "services-devices", anchor: "cdm-sec", load: () => loadCdm() },
+  notifications: { sec: "notifications", anchor: "notifications-sec", load: () => { renderPush().catch(() => {}); loadSent(); } },
+  interface:     { sec: "general", anchor: "interface-sec", load: () => renderInterface() },
+  region:        { sec: "general", anchor: "region-sec", load: () => renderRegion() },
+  history:       { sec: "general", anchor: "history-sec", load: () => loadHistory() },
+  account:       { sec: "general", anchor: "account-sec", load: () => loadAccount() },
+};
+const settingsPages = Object.values(LEGACY_SETTINGS_MAP);
+const legacySettings = (name) => Object.hasOwn(LEGACY_SETTINGS_MAP, name) ? LEGACY_SETTINGS_MAP[name] : null;
+let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false, secFromList = false;
 const inSettingsSec = () => currentTab === "settings" && !settingsList;  // a section on screen, not the phone's list
+const showingSettings = (name) => inSettingsSec() && legacySettings(name)?.sec === settingsSec;
+const settingsHref = (name) => `#/settings/${name}`;
+function loadSettingsSec() {
+  if (inSettingsSec() && S.config.settings) for (const page of settingsPages) {
+    if (page.sec === settingsSec) page.load?.();
+  }
+}
 function showSettingsList(on) {
   const fromSec = on && phoneLayout() && inSettingsSec();
-  if (fromSec) leaveNews((n) => n.sec === settingsSec);  // back to the list: the section is left
+  if (fromSec) leaveSettingsNews(settingsSec);
   settingsList = on && phoneLayout();
   $(".set-layout").classList.toggle("at-list", settingsList);
   if (fromSec) document.querySelector(`.set-nav [data-sec="${settingsSec}"]`).focus({ preventScroll: true });  // the item it came from
 }
-function showSettingsSec(name, fromRoute = false) {
-  if (name === "cookies") name = "services";  // the cookies page before: its files are on each service's row now
-  if (!document.querySelector(`.set-sec[data-sec="${name}"]`)) name = "unshackle";
-  if (name !== settingsSec && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);
+function showSettingsSec(name, fromRoute = false, push = false, target = null) {
+  const page = legacySettings(name), sec = page?.sec || (settingsPages.some((item) => item.sec === name) ? name : "connections");
+  if (sec !== settingsSec && inSettingsSec()) leaveSettingsNews(settingsSec);
   const fromList = settingsList;
-  secFromList = fromList && !fromRoute;
+  if (sec !== settingsSec || fromList) secFromList = fromList && !fromRoute;
   showSettingsList(false);
-  settingsSec = name;
-  document.querySelectorAll(".set-sec").forEach((x) => x.hidden = x.dataset.sec !== name);
-  document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.setAttribute("aria-current", x.dataset.sec === name));
-  document.querySelector(`.set-nav [data-sec="${name}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  if (name === "unshackle" && S.dlOptions.length && currentTab === "settings") loadUnshackleStatus();
-  if (name === "services" && S.dlOptions.length) loadServices();
-  if (name === "cdm" && S.dlOptions.length) loadCdm();
-  if (name === "history" && S.dlOptions.length) loadHistory();
-  if (name === "account") loadAccount();
-  if (name === "notifications") { renderPush().catch(() => {}); if (S.dlOptions.length) loadSent(); }
-  if (name === "automation") { renderAutomation(); renderImportMode(); renderLearnWindow(); }
-  if (name === "quality") renderQuality();
-  if (name === "upgrades") { renderUpgradeSeries(); renderUpgradeGroups(); }
-  if (name === "interface") renderInterface();
-  if (!fromRoute && currentTab === "settings") { navigate(fromList); updateTitle(); }  // from the list: back returns to it
-  if (fromList) { scrollTo({ top: 0 }); focusHeading(document.querySelector(`.set-sec[data-sec="${name}"]`).querySelector("h2, h3")); }
+  settingsSec = sec;
+  settingsRoute = page ? name : sec;
+  document.querySelectorAll(".set-sec").forEach((x) => x.hidden = x.dataset.sec !== sec);
+  document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.setAttribute("aria-current", x.dataset.sec === sec));
+  loadSettingsSec();
+  if (!fromRoute && inSettingsSec()) { navigate(push || fromList); updateTitle(); }
+  const anchor = (target && document.querySelector(target)) || (page && document.getElementById(page.anchor));
+  if (anchor) {
+    const fold = anchor.closest("details");
+    if (fold) fold.open = true;
+    anchor.scrollIntoView({ block: "start" });
+    focusHeading(anchor.querySelector("h2, h3, label") || anchor);
+  } else if (fromList || !fromRoute) {
+    scrollTo({ top: 0 });
+    focusHeading($(`.set-sec[data-sec="${sec}"] h2`));
+  }
+}
+function openSettings(name, target) {
+  const fromTab = currentTab !== "settings";
+  if (fromTab) showTab("settings", true);
+  if (currentTab === "settings") showSettingsSec(name, false, fromTab, target);
 }
 document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.onclick = () => showSettingsSec(x.dataset.sec));
+$("#tab-settings").addEventListener("click", (e) => {
+  const link = e.target.closest(".set-jumps a");
+  if (!link || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  showSettingsSec(link.hash.split("/").pop());
+});
 $("#set-back").onclick = () => {
   if (secFromList) return history.back();  // the list is the page before: the phone's back does the same
   showSettingsList(true);
@@ -41,15 +76,13 @@ $("#set-back").onclick = () => {
   updateTitle();
   scrollTo({ top: 0 });
 };
-showSettingsSec("unshackle", true);
-
 /* The URL holds where you are (#/schedule, #/series/s/111421/settings…): a refresh
    lands on the same page, and back (or the phone's back gesture) closes a series. */
 let currentTab = "schedule", drawerTab = null, drawerPushed = false;
 const HASH_OF = { log: "activity", yaml: "unshackle.yaml" }, TAB_OF = { activity: "log", terminal: "log", defaults: "settings", "unshackle.yaml": "yaml" };  // #/terminal: its name before
 function routeHash() {
-  const sub = currentTab === "settings" && !settingsList ? `/${settingsSec}` : "";
-  return `#/${HASH_OF[currentTab] || currentTab}${sub}` + (current ? `/s/${current.tvdbId}/${drawerTab}` : "");
+  const hash = inSettingsSec() ? settingsHref(settingsRoute) : `#/${HASH_OF[currentTab] || currentTab}`;
+  return hash + (current ? `/s/${current.tvdbId}/${drawerTab}` : "");
 }
 function navigate(push) {
   const hash = routeHash();
@@ -77,9 +110,9 @@ function applyRoute() {
     openInbox();
   }
   const route = parseRoute();
-  if (route.sec) showSettingsSec(route.sec, true);
-  else if (route.tab === "settings") showSettingsList(true);  // a phone: the list of sections
   if (!routed || route.tab !== currentTab) showTab(route.tab, true);  // closing a series keeps its tab as it was
+  if (route.sec) showSettingsSec(route.sec, true);
+  else if (route.tab === "settings") { showSettingsList(true); loadSettingsSec(); }
   routed = true;
   const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
   if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
@@ -110,10 +143,10 @@ function showTab(name, fromRoute = false, quiet = false) {
     if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }
     uyReset();
   }
-  if (name !== currentTab && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);
+  if (name !== currentTab && inSettingsSec()) leaveSettingsNews(settingsSec);
+  if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   currentTab = name;
   closeDetails(false);  // the Schedule's popover belongs to its card
-  if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   updateTitle();  // after the list is chosen: a phone's Settings tab names the list, not the section it left
   document.querySelectorAll("nav [data-tab]").forEach((b) => {
     if (b.dataset.tab === (name === "yaml" ? "settings" : name)) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
@@ -123,8 +156,7 @@ function showTab(name, fromRoute = false, quiet = false) {
   if (quiet) return;
   if (name === "log") { refreshLog(); openActivity(); }
   else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
-  if (name === "settings" && settingsSec === "unshackle" && S.dlOptions.length) loadUnshackleStatus();
-  if (name === "settings" && settingsSec === "services" && S.dlOptions.length) loadServices();
+  if (name === "settings" && !fromRoute) loadSettingsSec();
   if (name === "schedule") loadSchedule();
 }
 document.querySelectorAll("nav [data-tab]").forEach((b) => b.onclick = (e) => {
@@ -170,6 +202,7 @@ window.addEventListener("beforeunload", (e) => { if (!$("#savebar").hidden) e.pr
 
 showTab(parseRoute().tab, true, true);  // the right tab straight away, before the data comes
 if (parseRoute().sec) showSettingsSec(parseRoute().sec, true);
+else if (currentTab === "settings") showSettingsList(true);
 
 /* Pull to reload, in the installed app (iPhone, Android): the browser gives it in a tab, not there. From the top of a
    page, pulled down far enough and let go: the page loads again. Not over an open window, nor from a list that

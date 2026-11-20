@@ -590,7 +590,7 @@ def test_log_in_inside_an_ordinary_word_is_not_a_login_failure():
 def test_http_context_does_not_turn_a_server_permission_failure_into_a_login_failure():
     from unshacklarr.sync import login_failure
     assert not login_failure("Unshackle: HTTP 403: Unshackle refuses to pick the requested CDM")
-    assert not login_failure("Unshackle: HTTP 401: Unshackle rejected the internal API key. Check Settings, Unshackle.")
+    assert not login_failure("Unshackle: HTTP 401: Unshackle rejected the internal API key. Check Settings › Connections › Unshackle.")
     assert login_failure("HAYU through Unshackle: HTTP 403: Forbidden")
     assert login_failure("HAYU through Unshackle: HTTP 401: Authentication failed: Invalid token")
 
@@ -994,7 +994,7 @@ def test_a_login_failure_points_to_the_cookies(tmp_path, monkeypatch):
     monkeypatch.setattr(sync, "run_job", refused)
     assert sync.main() == 1
     [message] = discord_messages()
-    assert "Sign-in failed on RTLP: Show S02E05" in message and "Settings › Services" in message
+    assert "Sign-in failed on RTLP: Show S02E05" in message and "Settings › Services & Devices › Services" in message
     [card] = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
     assert "auth_failures" not in card  # free text alone is not retained as classified authentication evidence
 

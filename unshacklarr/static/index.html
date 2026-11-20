@@ -123,40 +123,52 @@
   <section id="tab-settings" hidden>
     <div class="set-layout">
       <div class="set-nav" role="navigation" aria-label="Settings sections">
-        <div class="set-group" role="group" aria-label="Connections"><p>Connections</p>
-        <button data-sec="sonarr"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></svg><span>Sonarr</span><small>Its address, API key, and TMDB</small></button>
-        <button data-sec="unshackle"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v2"/><circle cx="7" cy="14" r="2"/><circle cx="17" cy="12.5" r="2"/><path d="M12 13v8M9 18l3 3 3-3"/></svg><span>Unshackle</span><small>Where the downloads run</small></button>
-        </div>
-        <div class="set-group" role="group" aria-label="Downloading"><p>Downloading</p>
-        <button data-sec="downloads"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>Download options</span><small>Options for every series</small></button>
-        <button data-sec="quality"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20v-5M10 20V10M16 20V6M22 20V3"/></svg><span>Quality</span><small>Ladders of resolutions and codecs</small></button>
-        <button data-sec="upgrades"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span>Upgrades</span><small>Which series, how often</small></button>
-        <button data-sec="automation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>Automation</span><small>Syncs, release times, retries</small></button>
-        </div>
-        <div class="set-group" role="group" aria-label="Service access"><p>Service access</p>
-        <button data-sec="services"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span>Services</span><small>Sign-in and cookies</small></button>
-        <button data-sec="cdm"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2"/></svg><span>Devices (CDM)</span><small>Widevine and PlayReady devices</small></button>
-        </div>
-        <div class="set-group" role="group" aria-label="General"><p>General</p>
-        <button data-sec="interface"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg><span>Interface</span><small>Language, no spoilers</small></button>
-        <button data-sec="region"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg><span>Region</span><small>Country, time zone</small></button>
-        <button data-sec="notifications"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><span>Notifications</span><small>Discord, this device and more</small></button>
-        <button data-sec="history"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Activity history</span><small>What Activity keeps</small></button>
-        <button data-sec="account"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Account</span><small>Password, sessions, API key</small></button>
+        <div class="set-group">
+        <button type="button" data-sec="connections" aria-current="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></svg><span>Connections</span></button>
+        <button type="button" data-sec="downloading"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>Downloading</span></button>
+        <button type="button" data-sec="quality-upgrades"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20v-5M10 20V10M16 20V6M22 20V3"/></svg><span>Quality &amp; Upgrades</span></button>
+        <button type="button" data-sec="services-devices"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span>Services &amp; Devices</span></button>
+        <button type="button" data-sec="notifications"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><span>Notifications</span></button>
+        <button type="button" data-sec="general"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>General</span></button>
         </div>
         <button class="set-version" id="set-version" type="button" title="What's new in each version" hidden><span class="version-chip" id="version"></span></button>
       </div>
       <div class="set-body">
       <button class="set-back" id="set-back" type="button">Settings</button>
-      <div class="set-sec sx" data-sec="unshackle" data-mode="local" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 21h14"/></svg></span>
-          <div class="sx-id"><h2>Unshackle</h2><p id="ux-where"></p></div>
+      <div class="set-sec sx" data-sec="connections">
+        <h2 class="set-title">Connections</h2>
+        <div class="ds-nav set-jumps" role="navigation" aria-label="Jump to">
+          <a href="#/settings/sonarr">Sonarr</a>
+          <a href="#/settings/unshackle">Unshackle</a>
+        </div>
+        <div class="sx sx-subsection" id="sonarr-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Sonarr</h3><p id="sx-where"></p></div>
+          <div class="sx-state" id="sx-state"><span class="dot"></span><span><b>Checking…</b><small></small></span></div>
+          <div class="sx-actions"><button class="btn small" id="sonarr-test">Test the connection</button><a class="btn small" id="sx-open" target="_blank" rel="noopener" hidden>Open Sonarr ↗</a></div>
+        </section>
+        <div class="sx-card sx-grid">
+            <div class="field"><label for="sx-url">Sonarr URL</label><input id="sx-url" type="url" data-set="sonarr_url" placeholder="http://sonarr:8989"></div>
+            <div class="field"><label for="sx-web">Browser URL</label><input id="sx-web" type="url" data-set="sonarr_public_url" placeholder="https://sonarr.example.com"><small>Empty: the URL above, if your browser can open it.</small></div>
+            <div class="field"><label for="sx-key">API key <span class="sx-saved" id="sx-key-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="sx-key" type="password" data-set="sonarr_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>In Sonarr: Settings, General. Leave empty to keep the saved key. A new URL needs its key too.</small></div>
+            <div class="field"><label for="sx-tmdb">TMDB API key <span class="sx-saved" id="sx-tmdb-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="sx-tmdb" type="password" data-set="tmdb_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small><span id="tmdb-hint"></span></small></div>
+            <div class="field" id="sx-name-field"><label for="sx-name">Name</label><input id="sx-name" type="text" data-set="sonarr_name" placeholder="Sonarr" spellcheck="false"><small id="sx-name-help">The name shown on each series to tell the libraries apart when you have more than one Sonarr. Leave empty to use “Sonarr”.</small></div>
+            <div class="field"><label for="sx-dl">Downloads folder, as Sonarr sees it</label><input id="sx-dl" type="text" data-set="sonarr_downloads" placeholder="Same path" spellcheck="false"><small>Its path on Sonarr's side, e.g. inside Sonarr's container. Empty: the same path as for Unshacklarr.</small></div>
+        </div>
+        <section class="sx-card" id="sn-card">
+          <div class="sx-head"><div><h3>Other Sonarr instances</h3></div>
+            <button class="btn small dx-add" id="sn-add" type="button">Add a Sonarr</button></div>
+          <div id="sn-list"></div>
+        </section>
+        </div>
+        <div class="sx sx-subsection" id="unshackle-sec" data-mode="local">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Unshackle</h3><p id="ux-where"></p></div>
           <div class="sx-state" id="ux-state"><span class="dot"></span><span><b>Checking…</b><small></small></span></div>
-          <div class="sx-actions"><button class="btn small" id="unshackle-test">Test the connection</button><span class="ux-run" id="ux-run"></span><button class="btn small" id="uy-open" type="button">Edit unshackle.yaml</button><a class="btn small" href="#/settings/services">Sign-in and cookies</a></div>
+          <div class="sx-actions"><button class="btn small" id="unshackle-test">Test the connection</button><span class="ux-run" id="ux-run"></span><button class="btn small" id="uy-open" type="button">Edit unshackle.yaml</button></div>
           <div class="ux-more" id="u-status"></div>
         </section>
-              <section class="sx-card">
+        <section class="sx-card">
           <div class="sx-head"><div><h3>How it runs</h3></div></div>
           <div class="wz-tiles ux-tiles" role="radiogroup" aria-label="Unshackle runs">
             <button type="button" class="wz-tile" role="radio" data-value="local"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>Local</b><small>Unshacklarr starts it on this machine</small></button>
@@ -176,9 +188,9 @@
             <div class="field"><label for="downloads-input">Downloads folder</label><input type="text" data-set="downloads" id="downloads-input" spellcheck="false"></div>
             <div class="field"><label for="ux-free">Room kept free</label><div class="unit-input"><input id="ux-free" type="number" data-set="min_free_gb" data-num min="0" max="100000" step="1" inputmode="numeric"><span>GB</span></div><small>Nothing is downloaded while the downloads folder, or the library folder Sonarr moves a series into, has less free space than this, and you get a notification. 0: not checked.</small></div>
             <div class="field only-remote"><label for="ux-udl">Downloads folder, as Unshackle sees it</label><input id="ux-udl" type="text" data-set="unshackle_downloads" placeholder="Same path" spellcheck="false"><small>Its path on the machine where Unshackle runs. Empty: the same path as above.</small></div>
-            <div class="field"><label for="ux-cookies">Cookies folder</label><input id="ux-cookies" type="text" data-set="cookies_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to manage them in Settings › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
-            <div class="field"><label for="ux-cache">Cache folder</label><input id="ux-cache" type="text" data-set="cache_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to clear one service's cache in Settings › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
-            <div class="field"><label for="ux-cfg">Unshackle config folder</label><input id="ux-cfg" type="text" data-set="unshackle_config_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>The folder with unshackle.yaml and the WVD and PRD files, for Settings, CDM. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
+            <div class="field"><label for="ux-cookies">Cookies folder</label><input id="ux-cookies" type="text" data-set="cookies_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to manage them in Settings › Services &amp; Devices › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
+            <div class="field"><label for="ux-cache">Cache folder</label><input id="ux-cache" type="text" data-set="cache_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
+            <div class="field"><label for="ux-cfg">Unshackle config folder</label><input id="ux-cfg" type="text" data-set="unshackle_config_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>The folder with unshackle.yaml and the WVD and PRD files, for Settings › Services &amp; Devices › Devices (CDM). Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
           </div>
         </section>
         <section class="sx-card">
@@ -186,50 +198,58 @@
             <button class="btn small dx-add" id="ub-add" type="button">Add a server</button></div>
           <div id="ub-list"></div>
         </section>
+        </div>
       </div>
-      <div class="set-sec sx" data-sec="sonarr" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="m17 2-5 5-5-5"/></svg></span>
-          <div class="sx-id"><h2>Sonarr</h2><p id="sx-where"></p></div>
-          <div class="sx-state" id="sx-state"><span class="dot"></span><span><b>Checking…</b><small></small></span></div>
-          <div class="sx-actions"><button class="btn small" id="sonarr-test">Test the connection</button><a class="btn small" id="sx-open" target="_blank" rel="noopener" hidden>Open Sonarr ↗</a></div>
+      <div class="set-sec sx" data-sec="downloading" hidden>
+        <h2 class="set-title">Downloading</h2>
+        <div class="ds-nav set-jumps" role="navigation" aria-label="Jump to">
+          <a href="#/settings/downloads">Download options</a>
+          <a href="#/settings/automation">Automation</a>
+        </div>
+        <div class="sx sx-subsection" id="downloads-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Download options</h3></div>
+          <ol class="dx-order" aria-label="The order options apply in"><li><b>1</b>Every series</li><li><b>2</b>Its service</li><li><b>3</b>The series itself, on its page</li></ol>
+        </section>
+        <section class="sx-card" id="dx-defaults-card">
+          <div class="sx-head"><div><h3>For every series</h3></div></div>
+          <div class="opts" id="defaults"></div>
+          <div class="dx-cmd"><span>Every download starts as</span><code id="dx-cmd" translate="no"></code></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Connection</h3></div></div>
-          <div class="sx-grid">
-            <div class="field" id="sx-name-field"><label for="sx-name">Name</label><input id="sx-name" type="text" data-set="sonarr_name" placeholder="Sonarr" spellcheck="false"><small id="sx-name-help">The name shown on each series to tell the libraries apart when you have more than one Sonarr. Leave empty to use “Sonarr”.</small></div>
-            <div class="field"><label for="sx-url">Sonarr URL</label><input id="sx-url" type="url" data-set="sonarr_url" placeholder="http://sonarr:8989"></div>
-            <div class="field"><label for="sx-key">API key <span class="sx-saved" id="sx-key-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="sx-key" type="password" data-set="sonarr_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>In Sonarr: Settings, General. Leave empty to keep the saved key. A new URL needs its key too.</small></div>
-          </div>
+          <div class="sx-head"><div><h3>Per service</h3></div>
+            <select id="svc-add" class="dx-add" aria-label="Add options for a service"></select></div>
+          <div id="svc-defaults"></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Downloads folder</h3></div></div>
+          <div class="sx-head"><div><h3>Languages</h3><p>An episode with none of these languages is not downloaded. It is tried again at each sync.</p></div></div>
           <div class="sx-grid">
-            <div class="field"><label for="sx-dl">Downloads folder, as Sonarr sees it</label><input id="sx-dl" type="text" data-set="sonarr_downloads" placeholder="Same path" spellcheck="false"><small>Its path on Sonarr's side, e.g. inside Sonarr's container. Empty: the same path as for Unshacklarr.</small></div>
+            <div class="field" id="dx-audio-field"><label for="dx-audio">Accepted audio languages</label><input id="dx-audio" type="text" data-set="audio_accept" placeholder="Example: fr, en" spellcheck="false"><small>The episode must have at least one of them. It is checked before the download, then on the file. orig is each series' original language, as Sonarr gives it. Empty: the first language of --a-lang or --lang. A series can set its own.</small></div>
+            <div class="field"><label for="dx-prefer">Upgrade the audio to</label><input id="dx-prefer" type="text" data-set="audio_prefer" placeholder="Example: fr" spellcheck="false"><small>One language. An episode downloaded in another accepted language (for example English with French subtitles) is downloaded again when the service has this one. Empty: never.</small></div>
+            <div class="field"><label for="dx-upgrade-days">Wait for the audio, in days</label><div class="unit-input"><input id="dx-upgrade-days" type="number" data-set="upgrade_days" data-num min="1" max="365" step="1" inputmode="numeric"><span>days</span></div><small>After the download, the service is checked once a day for this many days. Nothing is downloaded until that language is there. After that, the episode keeps the audio it has.</small></div>
+            <div class="field"><label for="dx-subs">Required subtitle languages</label><input id="dx-subs" type="text" data-set="subs_accept" placeholder="Example: fr" spellcheck="false"><small>The episode must have full subtitles in at least one of them. Forced subtitles (only a few lines) do not count. Empty: not checked. A series can set its own.</small></div>
+          </div>
+          <div class="up-mode">
+            <span class="sub">Audio upgrade</span>
+            <div class="ax-seg" id="dx-upmode" role="group" aria-label="Audio upgrade"><button type="button" data-mode="redownload">Download the whole episode again</button><button type="button" data-mode="add_track">Add the audio track</button></div>
+            <p class="rt-who" id="dx-upmode-say"></p>
+            <div id="dx-library">
+              <div id="dx-lib-who"></div>
+              <div class="sx-grid">
+                <div class="field"><label for="dx-lib-sonarr">Library folder, as Sonarr sees it</label><input id="dx-lib-sonarr" type="text" placeholder="Example: /tv" spellcheck="false"><div class="fb-known" id="dx-lib-sonarr-pick"></div><small>The path Sonarr uses for your library.</small></div>
+                <div class="field"><label for="dx-lib-local">Library folder, as Unshacklarr sees it</label><input id="dx-lib-local" type="text" placeholder="Example: /mnt/tv" spellcheck="false"><div class="fb-known" id="dx-lib-local-pick"></div><small>The same folder as Unshacklarr sees it. Leave both empty if the paths are the same.</small></div>
+              </div>
+              <p class="lib-check" id="dx-lib-check" aria-live="polite"></p>
+              <div class="field"><span>A file from another source</span>
+                <div class="ax-seg" id="dx-lib-other" role="group" aria-label="A file from another source"><button type="button" data-other="ask">Ask me</button><button type="button" data-other="add">Add the audio anyway</button></div>
+                <small>When Sonarr's file doesn't say it comes from the series' service, its source may differ and the added audio may be a few seconds out of step. Another team's release of the same stream is fine. Ask me: the bell asks each time, nothing is downloaded until you answer.</small></div>
+            </div>
           </div>
         </section>
-        <section class="sx-card" id="sn-card">
-          <div class="sx-head"><div><h3>Other Sonarr instances</h3></div>
-            <button class="btn small dx-add" id="sn-add" type="button">Add a Sonarr</button></div>
-          <div id="sn-list"></div>
-        </section>
-        <section class="sx-card">
-          <div class="sx-head"><div><h3>In your browser</h3></div></div>
-          <div class="sx-grid">
-            <div class="field"><label for="sx-web">Browser URL</label><input id="sx-web" type="url" data-set="sonarr_public_url" placeholder="https://sonarr.example.com"><small>Empty: the URL above, if your browser can open it.</small></div>
-          </div>
-        </section>
-        <section class="sx-card">
-          <div class="sx-head"><div><h3>TMDB</h3></div></div>
-          <div class="sx-grid">
-            <div class="field"><label for="sx-tmdb">TMDB API key <span class="sx-saved" id="sx-tmdb-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="sx-tmdb" type="password" data-set="tmdb_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small><span id="tmdb-hint"></span></small></div>
-          </div>
-        </section>
-      </div>
-      <div class="set-sec sx" data-sec="automation" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-          <div class="sx-id"><h2>Automation</h2></div>
+        </div>
+        <div class="sx sx-subsection" id="automation-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Automation</h3></div>
           <div class="sx-state ok" id="ax-state"><span class="dot"></span><span><b>Next sync at …</b><small></small></span></div>
           <div class="sx-actions"><button class="btn small" type="button" id="ax-sync">Run a sync now</button></div>
         </section>
@@ -267,7 +287,7 @@
         </section>
         <section class="sx-card" id="ax-learn-card">
           <div class="sx-head"><div><h3>Auto release times</h3><p>When 3 episodes of a series come out at the same time, that time becomes its release time. Only for series without one. You get a notification and can change it on the series page.</p></div>
-            <input type="checkbox" class="switch" id="ax-learn" aria-label="Auto release times"></div>
+            <label class="sx-switch-target"><input type="checkbox" class="switch" id="ax-learn" aria-label="Auto release times"></label></div>
           <p class="rt-who" id="ax-learn-say"></p>
         </section>
         <section class="sx-card" id="ax-window-card">
@@ -285,101 +305,29 @@
             <div class="field"><label for="ax-left">Delete them after</label><div class="unit"><input id="ax-left" type="number" data-set="leftovers_days" data-num min="0" max="365"><span>days</span></div><small>0: never delete them. Episodes of a series set to Download only are never deleted automatically.</small></div>
           </div>
         </section>
+        </div>
       </div>
-      <div class="set-sec sx sx-tiles" data-sec="interface" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></span>
-          <div class="sx-id"><h2>Interface</h2></div>
-          <div class="sx-state ok" id="if-state"><span class="dot"></span><span><b></b><small></small></span></div>
-        </section>
-        <section class="sx-card">
-          <div class="sx-head"><div><h3><label for="lang-select">Language</label></h3></div>
-            <select id="lang-select" class="sx-pick" translate="no"></select></div>
-        </section>
-        <section class="sx-card" id="rg-spoiler-card">
-          <div class="sx-head"><div><h3>No spoilers</h3></div>
-            <input type="checkbox" class="switch" id="rg-spoiler" aria-label="No spoilers"></div>
-        </section>
-      </div>
-      <div class="set-sec sx sx-tiles" data-sec="region" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></span>
-          <div class="sx-id"><h2>Region</h2></div>
-          <div class="sx-state ok" id="rg-state"><span class="dot"></span><span><b></b><small></small></span></div>
-        </section>
-        <section class="sx-card">
-          <div class="sx-head"><div><h3>Where you watch</h3></div></div>
-          <div class="sx-grid">
-            <div class="field cp"><label>Country</label><input type="text" data-set="country"></div>
-            <div class="field"><label for="countries">Series links from</label><input type="text" id="countries" placeholder="FR, BE, CA, CH" spellcheck="false"><small>Comma-separated countries. Unshacklarr looks in their TMDB pages for a series' links on supported services.</small><div class="rg-chips" id="rg-countries"></div></div>
-          </div>
-        </section>
-        <section class="sx-card">
-          <div class="sx-head"><div><h3>Clock</h3></div></div>
-          <div class="sx-grid">
-            <div class="field cp"><label>Time zone</label><input type="text" data-set="timezone" id="tz-select"><small id="tz-hint"></small></div>
-          </div>
-        </section>
-      </div>
-      <div class="set-sec sx" data-sec="downloads" hidden>
-        <section class="sx-hero dx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>
-          <div class="sx-id"><h2>Download options</h2><p>Added to every <code>unshackle dl</code> command. Each level adds its options to the level before it. When both set the same option, the later level wins.</p></div>
-          <ol class="dx-order" aria-label="The order options apply in"><li><b>1</b>Every series</li><li><b>2</b>Its service</li><li><b>3</b>The series itself, on its page</li></ol>
-        </section>
-        <section class="sx-card">
-          <div class="sx-head"><div><h3>For every series</h3></div></div>
-          <div class="opts" id="defaults"></div>
-          <div class="dx-cmd"><span>Every download starts as</span><code id="dx-cmd" translate="no"></code></div>
-        </section>
-        <section class="sx-card">
-          <div class="sx-head"><div><h3>Per service</h3></div>
-            <select id="svc-add" class="dx-add" aria-label="Add options for a service"></select></div>
-          <div id="svc-defaults"></div>
-        </section>
-        <section class="sx-card">
-          <div class="sx-head"><div><h3>Languages</h3><p>An episode with none of these languages is not downloaded. It is tried again at each sync.</p></div></div>
-          <div class="sx-grid">
-            <div class="field"><label for="dx-audio">Accepted audio languages</label><input id="dx-audio" type="text" data-set="audio_accept" placeholder="Example: fr, en" spellcheck="false"><small>The episode must have at least one of them. It is checked before the download, then on the file. orig is each series' original language, as Sonarr gives it. Empty: the first language of --a-lang or --lang. A series can set its own.</small></div>
-            <div class="field"><label for="dx-prefer">Upgrade the audio to</label><input id="dx-prefer" type="text" data-set="audio_prefer" placeholder="Example: fr" spellcheck="false"><small>One language. An episode downloaded in another accepted language (for example English with French subtitles) is downloaded again when the service has this one. Empty: never.</small></div>
-            <div class="field"><label for="dx-upgrade-days">Wait for the audio, in days</label><div class="unit-input"><input id="dx-upgrade-days" type="number" data-set="upgrade_days" data-num min="1" max="365" step="1" inputmode="numeric"><span>days</span></div><small>After the download, the service is checked once a day for this many days. Nothing is downloaded until that language is there. After that, the episode keeps the audio it has.</small></div>
-            <div class="field"><label for="dx-subs">Required subtitle languages</label><input id="dx-subs" type="text" data-set="subs_accept" placeholder="Example: fr" spellcheck="false"><small>The episode must have full subtitles in at least one of them. Forced subtitles (only a few lines) do not count. Empty: not checked. A series can set its own.</small></div>
-          </div>
-          <div class="up-mode">
-            <span class="sub">Audio upgrade</span>
-            <div class="ax-seg" id="dx-upmode" role="group" aria-label="Audio upgrade"><button type="button" data-mode="redownload">Download the whole episode again</button><button type="button" data-mode="add_track">Add the audio track</button></div>
-            <p class="rt-who" id="dx-upmode-say"></p>
-            <div id="dx-library">
-              <div id="dx-lib-who"></div>
-              <div class="sx-grid">
-                <div class="field"><label for="dx-lib-sonarr">Library folder, as Sonarr sees it</label><input id="dx-lib-sonarr" type="text" placeholder="Example: /tv" spellcheck="false"><div class="fb-known" id="dx-lib-sonarr-pick"></div><small>The path Sonarr uses for your library.</small></div>
-                <div class="field"><label for="dx-lib-local">Library folder, as Unshacklarr sees it</label><input id="dx-lib-local" type="text" placeholder="Example: /mnt/tv" spellcheck="false"><div class="fb-known" id="dx-lib-local-pick"></div><small>The same folder as Unshacklarr sees it. Leave both empty if the paths are the same.</small></div>
-              </div>
-              <p class="lib-check" id="dx-lib-check" aria-live="polite"></p>
-              <div class="field"><span>A file from another source</span>
-                <div class="ax-seg" id="dx-lib-other" role="group" aria-label="A file from another source"><button type="button" data-other="ask">Ask me</button><button type="button" data-other="add">Add the audio anyway</button></div>
-                <small>When Sonarr's file doesn't say it comes from the series' service, its source may differ and the added audio may be a few seconds out of step. Another team's release of the same stream is fine. Ask me: the bell asks each time, nothing is downloaded until you answer.</small></div>
-            </div>
-          </div>
-        </section>
-      </div>
-      <div class="set-sec sx" data-sec="quality" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20v-5M10 20V10M16 20V6M22 20V3"/></svg></span>
-          <div class="sx-id"><h2>Quality</h2><p class="ax-lead">Before each download, Unshacklarr lists the episode's tracks on the service. It downloads the first step of the ladder that the service has, and nothing outside the ladder.</p></div>
+      <div class="set-sec sx" data-sec="quality-upgrades" hidden>
+        <h2 class="set-title">Quality &amp; Upgrades</h2>
+        <div class="ds-nav set-jumps" role="navigation" aria-label="Jump to">
+          <a href="#/settings/quality">Quality</a>
+          <a href="#/settings/upgrades">Upgrades</a>
+        </div>
+        <div class="sx sx-subsection" id="quality-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Quality</h3></div>
           <div class="sx-state" id="ql-state"><span class="dot"></span><span><b></b><small></small></span></div>
           <div class="sx-actions"><button class="btn small primary" id="ql-add" type="button">New ladder</button><button class="btn small" id="ql-reset" type="button">Reset ladders</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Every series downloads by</h3><p>Unless its service (Download options, Per service) or the series itself picks another. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
+          <div class="sx-head"><div><h3>Every series downloads by</h3><p>Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
           <div class="ax-seg" id="ql-default" role="group" aria-label="Every series downloads by"></div>
         </section>
         <div id="ql-list" class="ql-list"></div>
-      </div>
-      <div class="set-sec sx" data-sec="upgrades" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
-          <div class="sx-id"><h2>Upgrades</h2></div>
+        </div>
+        <div class="sx sx-subsection" id="upgrades-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Upgrades</h3></div>
           <div class="sx-state" id="ug-state"><span class="dot"></span><span><b></b><small></small></span></div>
         </section>
         <section class="sx-card">
@@ -403,13 +351,19 @@
           <div class="ug-list" id="ug-series"></div>
           <small class="muted" id="ug-say"></small>
         </section>
+        </div>
       </div>
-      <div class="set-sec sx" data-sec="services" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></span>
-          <div class="sx-id"><h2>Services</h2><p id="sv-folder"></p></div>
+      <div class="set-sec sx" data-sec="services-devices" hidden>
+        <h2 class="set-title">Services &amp; Devices</h2>
+        <div class="ds-nav set-jumps" role="navigation" aria-label="Jump to">
+          <a href="#/settings/services">Services</a>
+          <a href="#/settings/cdm">Devices (CDM)</a>
+        </div>
+        <div class="sx sx-subsection" id="services-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Services</h3><p id="sv-folder"></p></div>
           <div class="sx-state" id="sv-state"><span class="dot"></span><span><b>Checking the services…</b><small></small></span></div>
-          <div class="sx-actions"><button class="btn small" id="sv-check" type="button">Check now</button><a class="btn small" href="#/settings/cdm">CDM devices</a></div>
+          <div class="sx-actions"><button class="btn small" id="sv-check" type="button">Check now</button></div>
         </section>
         <section class="sx-card sv-card">
           <div id="sv-list"></div>
@@ -419,21 +373,21 @@
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span>
             <div><h3>Getting them</h3><p>Sign in to the service in your browser.<br>Export its cookies with a browser extension: <a href="https://addons.mozilla.org/firefox/addon/cookies-txt/" target="_blank" rel="noopener">cookies.txt for Firefox ↗</a> or <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener">Get cookies.txt LOCALLY for Chrome ↗</a>.<br>Then add the file here with Add.<br>A service that signs in with a username and password (set in unshackle.yaml) needs no cookies.</p></div></div>
         </div>
-      </div>
-      <div class="set-sec sx" data-sec="cdm" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2"/></svg></span>
-          <div class="sx-id"><h2>Devices (CDM)</h2><p id="cdm-folder"></p></div>
+        </div>
+        <div class="sx sx-subsection" id="cdm-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Devices (CDM)</h3><p id="cdm-folder"></p></div>
           <div class="sx-state" id="cdm-state"><span class="dot"></span><span><b>Reading Unshackle's CDMs…</b><small></small></span></div>
           <div class="sx-actions"><span id="cdm-hero-test"></span><button class="btn small primary" id="cdm-add">Add a device</button><input type="file" id="cdm-file" accept=".wvd,.prd" hidden></div>
           <div class="ux-more" id="cdm-alerts"></div>
         </section>
         <div id="cdm-list" class="sx"></div>
+        </div>
       </div>
       <div class="set-sec sx" data-sec="notifications" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span>
-          <div class="sx-id"><h2>Notifications</h2><p class="rg-purpose">Messages to Discord, Telegram, ntfy, Pushover, e-mail and 100 more, through <a href="https://github.com/caronc/apprise#supported-notifications" target="_blank" rel="noopener">Apprise</a>, and to this device.</p></div>
+        <div class="sx sx-subsection" id="notifications-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h2>Notifications</h2></div>
           <div class="sx-state" id="nt-state"><span class="dot"></span><span><b></b><small></small></span></div>
           <div class="sx-actions"><button class="btn small" id="test-notif">Test every address</button></div>
         </section>
@@ -486,11 +440,40 @@
           <div class="sx-head"><div><h3>Recently sent</h3></div></div>
           <div class="nt-sent" id="nt-sent"></div>
         </section>
+        </div>
       </div>
-      <div class="set-sec sx" data-sec="history" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></span>
-          <div class="sx-id"><h2>Activity history</h2></div>
+      <div class="set-sec sx" data-sec="general" hidden>
+        <h2 class="set-title">General</h2>
+        <div class="ds-nav set-jumps" role="navigation" aria-label="Jump to">
+          <a href="#/settings/interface">Interface</a>
+          <a href="#/settings/region">Region</a>
+          <a href="#/settings/history">Activity history</a>
+          <a href="#/settings/account">Account &amp; Backups</a>
+        </div>
+        <div class="sx sx-subsection" id="interface-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Interface</h3></div>
+          <div class="sx-state ok" id="if-state"><span class="dot"></span><span><b></b><small></small></span></div>
+        </section>
+        <div class="sx-card sx-grid sx-interface">
+            <div class="field"><label for="lang-select">Language</label><select id="lang-select" translate="no"></select></div>
+            <label class="sx-toggle" id="rg-spoiler-card" for="rg-spoiler"><b>No spoilers</b><input type="checkbox" class="switch" id="rg-spoiler"></label>
+        </div>
+        </div>
+        <div class="sx sx-subsection" id="region-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Region</h3></div>
+          <div class="sx-state ok" id="rg-state"><span class="dot"></span><span><b></b><small></small></span></div>
+        </section>
+        <div class="sx-card sx-grid">
+            <div class="field cp"><label>Country</label><input type="text" data-set="country"></div>
+            <div class="field cp"><label>Time zone</label><input type="text" data-set="timezone" id="tz-select"><small id="tz-hint"></small></div>
+            <div class="field sx-wide"><label for="countries">Series links from</label><input type="text" id="countries" placeholder="FR, BE, CA, CH" spellcheck="false"><small>Comma-separated countries. Unshacklarr looks in their TMDB pages for a series' links on supported services.</small><div class="rg-chips" id="rg-countries"></div></div>
+        </div>
+        </div>
+        <div class="sx sx-subsection" id="history-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Activity history</h3></div>
           <div class="sx-state" id="hs-state"><span class="dot"></span><span><b>Reading the history…</b><small></small></span></div>
           <div class="sx-actions"><button class="btn small" id="hs-open" type="button">Open Activity</button></div>
         </section>
@@ -508,14 +491,13 @@
         </section>
         <section class="sx-card" id="hs-debug-card">
           <div class="sx-head"><div><h3>Debug mode</h3><p>Each download's output shows much more: Unshackle's debug log, every call to Sonarr, and the job as Unshackle reports it.</p></div>
-            <input type="checkbox" class="switch" id="debug-mode" aria-label="Debug mode"></div>
+            <label class="sx-switch-target"><input type="checkbox" class="switch" id="debug-mode" aria-label="Debug mode"></label></div>
           <p class="rt-who" id="hs-debug-say"></p>
         </section>
-      </div>
-      <div class="set-sec sx" data-sec="account" hidden>
-        <section class="sx-hero">
-          <span class="sx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
-          <div class="sx-id"><h2>Account</h2></div>
+        </div>
+        <div class="sx sx-subsection" id="account-sec">
+        <section class="sx-subhead">
+          <div class="sx-id"><h3>Account &amp; Backups</h3></div>
           <div class="sx-state ok" id="ac-state"><span class="dot"></span><span><b>Signed in on this device</b><small></small></span></div>
           <div class="sx-actions"><button class="btn small" id="ac-others" type="button">Sign out other devices</button><button class="btn small danger" id="logout" type="button">Sign out</button></div>
         </section>
@@ -574,6 +556,7 @@
             <div class="field"><label for="ac-proxy-from">The proxy's addresses</label><input id="ac-proxy-from" type="text" data-set="proxy_auth_from" placeholder="172.18.0.0/16" spellcheck="false" autocomplete="off"><small>The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.</small></div>
           </div>
         </section>
+        </div>
       </div>
       </div>
     </div>
@@ -686,7 +669,7 @@
       <div class="field" id="d-libs-field" hidden>
         <span id="d-libs-l">Libraries</span>
         <div class="d-libs" id="d-libs" role="group" aria-labelledby="d-libs-l"></div>
-        <small>New episodes are downloaded for each library switched on, with its own quality ladder (Settings, Sonarr).</small>
+        <small>New episodes are downloaded for each library switched on, with its own quality ladder (Settings › Connections › Sonarr).</small>
         <details class="d-libs-adv" id="d-libs-adv"><summary>Advanced</summary><div id="d-libs-adv-body"></div></details>
       </div>
       <div class="ds-tools">
@@ -767,7 +750,7 @@
         <div class="field">
           <span id="d-spoiler-l">Episode titles</span>
           <div class="ax-seg" id="d-spoiler-seg" role="group" aria-labelledby="d-spoiler-l"></div>
-          <small>Hidden titles are blurred until you click or tap them. Default follows Settings, Interface, No spoilers.</small>
+          <small>Hidden titles are blurred until you click or tap them. Default follows Settings › General › Interface, No spoilers.</small>
         </div>
         <div class="field">
           <span id="d-notify-l">Notifications</span>

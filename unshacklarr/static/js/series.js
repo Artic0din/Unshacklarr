@@ -842,9 +842,9 @@ function cdmMissing(tag) {
   if (!tag || !Object.keys(cdm).length) return "";  // Unshackle unreachable: nothing to say
   if (Object.keys(cdm).some((k) => k !== "default" && k.toLowerCase() === tag.toLowerCase())) return "";
   if (!cdm.default) return "unshackle.yaml sets no device for it and no default device: its downloads are refused. "
-    + "Pick one in Settings, CDM, or No CDM if it has no DRM.";
+    + "Pick one in Settings › Services & Devices › Devices (CDM), or No CDM if it has no DRM.";
   return `unshackle.yaml sets no device for it, so the default one${cdm.default ? ` (${cdm.default})` : ""} is used. A download fails `
-    + "if the service needs the other DRM (Widevine or PlayReady). Set one under cdm: in Settings, unshackle.yaml.";
+    + "if the service needs the other DRM (Widevine or PlayReady). Set one under cdm: in Settings › Connections › Unshackle › Edit unshackle.yaml.";
 }
 function cdmNote(tag) {
   const text = cdmMissing(tag);

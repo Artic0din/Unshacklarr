@@ -526,7 +526,7 @@ async function showLeftovers() {
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Waiting in downloads" }),
-      el("small", { className: "line1", textContent: r.days > 0 ? `Deleted on their own after ${r.days} days (Settings, Automation).` : "Kept until you delete them (Settings, Automation)." }))),
+      el("small", { className: "line1", textContent: r.days > 0 ? `Deleted on their own after ${r.days} days (Settings › Downloading › Automation).` : "Kept until you delete them (Settings › Downloading › Automation)." }))),
     ...(rows.length ? [el("div", {}, ...rows)] : [el("p", { className: "muted", textContent: "Nothing waits: every download went to Sonarr." })])));
 }
 $("#con-left").onclick = showLeftovers;
@@ -545,7 +545,7 @@ function sonarrPicker(picked, pick) {
 }
 function unsetNote(name) {
   const inst = (S.config.settings.sonarrs || []).find((i) => i.name === name);
-  return inst && !inst.quality_ladder ? el("p", { className: "status-err", textContent: `Sonarr ${name} has no quality ladder chosen: nothing is downloaded for it until you choose one in Settings, Sonarr.` }) : null;
+  return inst && !inst.quality_ladder ? el("p", { className: "status-err", textContent: `Sonarr ${name} has no quality ladder chosen: nothing is downloaded for it until you choose one in Settings › Connections › Sonarr.` }) : null;
 }
 async function showMissing() {
   picked_run = "missing";
@@ -676,7 +676,7 @@ async function showUpgrades(fresh = true) {
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Upgrades" }),
-      el("small", { className: "line1", textContent: "Files your quality ladder says could be better. Check now asks each service what it has, up to 10 episodes of a series at a time, and keeps each answer for the days set in Settings, Upgrades. Replace downloads the better ones over your files, even when Sonarr ranks both the same (H.264 and H.265 in 1080p)." }))),
+      el("small", { className: "line1", textContent: "Files your quality ladder says could be better. Check now asks each service what it has, up to 10 episodes of a series at a time, and keeps each answer for the days set in Settings › Quality & Upgrades › Upgrades. Replace downloads the better ones over your files, even when Sonarr ranks both the same (H.264 and H.265 in 1080p)." }))),
     ...[sonarrPicker(sonarr, (n) => { upgradeSonarr = n; upgradePick.clear(); upgradeOpen.clear(); showUpgrades(); }), unsetNote(sonarr)].filter(Boolean),
     el("div", { className: "miss-bar" }, el("span", { className: "muted", textContent: state }), el("span", { className: "up-acts" }, selAll, check, go)),
     ...(rows.length ? [el("div", {}, ...rows)] : [el("p", { className: "muted", textContent: scan.running ? "Nothing better found yet." : r.checked ? "Nothing better on the services: every file is already on the best step they have." : "Check now asks each service what it has, one episode at a time." })])));
@@ -740,7 +740,7 @@ async function showLanguages(fresh = true) {
       el("span", { className: "up-acts" }, all, go)), el("div", {}, ...rows)];
   };
   const parts = [
-    ...section("preferred", "Without the preferred audio", "Watch for it: once the series' service has that language, it is added to the file or the episode is downloaded again, as set in Settings, Download options.",
+    ...section("preferred", "Without the preferred audio", "Watch for it: once the series' service has that language, it is added to the file or the episode is downloaded again, as set in Settings › Downloading › Download options.",
       (n) => (n === 1 ? "Watch for it" : `Watch for the ${n}`)),
     ...section("accepted", "Without an accepted audio", "None of the series' accepted audio languages: download the episode again from its service.",
       (n) => (n === 1 ? "Download it again" : `Download the ${n} again`)),
@@ -955,7 +955,7 @@ function runActs(c) {
   const live = isLive(c), signIn = signInFailed(c);
   return [
     setupButton(c),
-    signIn ? el("button", { className: "btn small primary", textContent: "Fix sign-in", title: `Check ${svcName(signIn.service)} in Settings › Services`, dataset: { fk: "sign-in" }, onclick: () => fixSignIn(c) }) : "",
+    signIn ? el("button", { className: "btn small primary", textContent: "Fix sign-in", title: `Check ${svcName(signIn.service)} in Settings › Services & Devices › Services`, dataset: { fk: "sign-in" }, onclick: () => fixSignIn(c) }) : "",
     live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
     !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: `btn small${signIn ? "" : " primary"}`, textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",

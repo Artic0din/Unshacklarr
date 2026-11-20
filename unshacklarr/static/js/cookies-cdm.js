@@ -1,4 +1,4 @@
-/* Cookies: where a cookie file stands and the window that replaces it (its rows are Settings, Services); then the CDM page. */
+/* Cookies: where a cookie file stands and the window that replaces it (its rows are Settings › Services & Devices › Services); then the CDM page. */
 const ago_days = (ts) => { const d = Math.floor((Date.now() / 1000 - ts) / 86400); return d < 1 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
 /* Where a cookie file stands: a colour, a word, a sentence for the tooltip. */
 function cookieStatus(f) {
@@ -200,7 +200,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   const state = $("#cdm-state");
   const show = (cls, b, small) => { state.className = `sx-state ${cls}`; state.querySelector("b").textContent = b; state.querySelector("small").textContent = small; };
   if (!data.folder && S.config.settings.unshackle_mode === "remote") { show("", "Managed where Unshackle runs", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren();
-    return $("#cdm-list").replaceChildren(el("p", { className: "muted", textContent: "To manage its devices here too, mount the folder of its unshackle.yaml and set its path in Settings, Unshackle, Folders." })); }
+    return $("#cdm-list").replaceChildren(el("p", { className: "muted", textContent: "To manage its devices here too, mount the folder of its unshackle.yaml and set its path in Settings › Connections › Unshackle, Folders." })); }
   if (!data.folder) { show("down", "No CDM folder", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren(); return $("#cdm-list").replaceChildren(el("p", { className: "status-err", textContent: data.error })); }
   const all = [...data.devices, ...data.remote.map((r) => ({ ...r, remote: true }))];
   const deviceOf = (name) => all.find((d) => d.name === name);

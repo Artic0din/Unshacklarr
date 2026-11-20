@@ -208,7 +208,7 @@ def test_an_attempt_its_sign_in_failed_offers_the_sign_in_first_and_retry_after(
     seen = node(RUN_ACTS, str(JS / "activity.js"))
     # a retry would fail the same way: the service's row in Settings, where its sign-in is renewed, comes first
     assert seen["refused"][:2] == [["Fix sign-in", True], ["Retry", False]]
-    assert seen["title"] == "Check HULU+ in Settings › Services"  # where it leads, short enough for a phone's bar
+    assert seen["title"] == "Check HULU+ in Settings › Services & Devices › Services"  # where it leads, short enough for a phone's bar
     # the server it failed on, not the one set for the service now; a card of the first schema: its own backend
     assert seen["opened"][:2] == [["HULU", "vpn"], ["HULU", "eu"]]
     assert seen["plain"][0] == ["Retry", True]  # any other failure: retrying is still the thing to do

@@ -548,10 +548,7 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     refreshLog();
     refreshInbox();
     if (!busyStarted) { busyStarted = true; refreshBusy(); }  // one loop, however often the page reloads its state
-    refreshHealth(currentTab === "settings" && settingsSec === "unshackle");
-    if (currentTab === "settings" && settingsSec === "services") loadServices();
-    if (currentTab === "settings" && settingsSec === "cdm") loadCdm();
-    if (currentTab === "settings" && settingsSec === "notifications") renderPush().catch(() => {});
+    if (!showingSettings("unshackle")) refreshHealth();
     applyRoute();
   } catch (e) {
     $("#wall").replaceChildren(failed(`Could not load series: ${e.message}`, () => location.reload()));

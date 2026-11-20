@@ -65,7 +65,7 @@ function inboxRow(g, n, cap = INBOX_EP_LIMIT) {  // the menu caps a job's episod
   const isNew = inboxSeenAt !== null && g.items.some((x) => x.at > inboxSeenAt);
   const props = { className: `inbox-item ${g.level}${isNew ? " new" : ""}`, style: `--i: ${n}` };
   // ponytail: a series is found by its exact title in Sonarr; a renamed one just isn't clickable
-  // a service's (its cookies): its row in Settings, Services
+  // a service's (its cookies): its row in Settings › Services & Devices › Services
   if (!g.series && !i.service) return el("div", props, art, body, time);
   // not a <button>: its text can be selected (an error to copy); a click that selects doesn't open the series
   const open = () => { if (String(getSelection()).trim()) return; $("#inbox-dialog").close(); g.series ? openDrawer(g.series) : openServiceRow(i.service); };
