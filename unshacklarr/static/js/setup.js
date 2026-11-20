@@ -529,11 +529,9 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     keepSonarrNames(sonarrNames());
     // a test build of a branch shows its branch and commit, not the release it started from
     const [, branch, commit] = (data.build || "").match(/^(.*?)(?:-([0-9a-f]{7,}))?$/);
-    $("#set-version").textContent = data.version ? `Unshacklarr ${data.build ? [branch, commit].filter(Boolean).join(" · ") : data.version}` : "";
-    if (data.build) $("#version").replaceChildren(branch, ...(commit ? [el("span", { className: "v-commit", textContent: ` · ${commit}` })] : []));
-    else $("#version").textContent = data.version ? `v${data.version}` : "";
+    $("#version").textContent = data.version ? `Unshacklarr ${data.build ? [branch, commit].filter(Boolean).join(" · ") : data.version}` : "";
     $("#version").classList.toggle("beta", !!data.build);
-    $("#version").hidden = !data.version;
+    $("#set-version").hidden = !data.version;
     const update = $("#update");  // a newer release: in sight on every page, its notes one click away
     update.hidden = !data.update;
     if (data.update) {

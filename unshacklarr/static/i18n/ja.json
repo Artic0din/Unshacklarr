@@ -1073,7 +1073,7 @@
  "· Unsaved changes": "· 未保存の変更",
  "· checking…": "· 確認中…",
  "· in use": "· 使用中",
- "⚠ No CDM for this service": "⚠ このサービスの CDM がありません",
+ "No CDM for this service": "このサービスの CDM がありません",
  "+ Add a service": "+ サービスを追加",
  "+ Add an address": "+ アドレスを追加",
  ", and to this device.": "、およびこのデバイスに送信します。",

@@ -513,11 +513,105 @@ console.log(JSON.stringify([ctx.BACK_NAME.schedule, ctx.BACK_NAME.log, ctx.BACK_
 
 
 def test_the_page_draws_no_emoji():
+    from html import unescape
     import re
-    emoji = re.compile("[\U0001F000-\U0001FFFF⏩-⏿]")  # flags are regional-indicator pairs: both in this range
-    found = [f"{path.name}:{n}" for path in JS.glob("*.js")
-             for n, line in enumerate(path.read_text().splitlines(), 1) if emoji.search(line)]
+
+    emoji = re.compile(r"[\U0001F000-\U0001FFFF\u23e9-\u23ff\u26a0\u2700-\u27bf]")
+    status_marks = str.maketrans("", "", "\u2713\u2717")
+    found = [f"{path.name}:{n}" for path in [STATIC / "index.html", *JS.glob("*.js")]
+             for n, line in enumerate(path.read_text().splitlines(), 1) if emoji.search(unescape(line).translate(status_marks))]
     assert not found
+
+
+def test_an_inbox_job_shows_six_episode_chips_and_counts_the_rest():
+    short, long, full = node(r"""
+const ctx = sandbox({ LOCALE: "en", ago: () => "Now" });
+vm.runInContext(read(process.argv[1]).split("const clearable")[0], ctx);
+const at = new Date().toISOString();
+const chips = (count, cap) => {
+  const eps = Array.from({ length: count }, (_, i) => `S01E${String(count - i).padStart(2, "0")}`);
+  const row = ctx.inboxRow({ name: "Show", level: "error", eps, items: [{ at }] }, 0, cap);
+  return row.kids[1].kids[0].kids[1].kids.map((chip) => chip.textContent);
+};
+console.log(JSON.stringify([chips(6), chips(12), chips(12, Infinity).length]));
+""", str(JS / "inbox.js"))
+    first_six = [f"S01E0{i}" for i in range(1, 7)]
+    assert short == first_six
+    assert long == [*first_six, "+6"]
+    assert full == 12  # the full Inbox names every episode: touch and keyboard users cannot read a tooltip
+
+
+def test_the_inbox_menu_caps_a_job_at_six_episodes_and_the_full_inbox_names_them_all():
+    menu, full = node(r"""
+let menu = true;
+const list = { classList: { toggle() {} }, replaceChildren(...kids) { this.kids = kids; } };
+const ctx = sandbox({ LOCALE: "en", ago: () => "Now", S: { series: [] }, keepFocus: (_box, draw) => draw(),
+  $: (sel) => sel === "#inbox-dialog" ? { classList: { contains: () => menu } } : sel === "#inbox-list" ? list : any });
+vm.runInContext(read(process.argv[1]).split("/* The bell opens")[0], ctx);  // the renderer, not the page's event wiring
+const at = new Date().toISOString();
+const items = Array.from({ length: 12 }, (_, i) => ({ title: `Failed: Show S01E${String(i + 1).padStart(2, "0")}`, at, level: "error", batch: "job1" }));
+vm.runInContext(`inboxData = { items: ${JSON.stringify(items)}, read_at: "" }`, ctx);
+const chips = () => { ctx.renderInbox(); return list.kids[1].kids[1].kids[0].kids[1].kids.map((chip) => chip.textContent); };
+const inMenu = chips();
+menu = false;
+console.log(JSON.stringify([inMenu, chips()]));
+""", str(JS / "inbox.js"))
+    episodes = [f"S01E{i:02d}" for i in range(1, 13)]
+    assert menu == [*episodes[:6], "+6"]
+    assert full == episodes
+
+
+def test_options_sharing_a_title_have_one_badge_and_keep_each_unread_id():
+    states = node(r"""
+const badges = [], classes = new Set(), posts = [];
+const title = {
+  append(badge) {
+    badge.parentElement = this;
+    badge.remove = () => badges.splice(badges.indexOf(badge), 1);
+    badges.push(badge);
+  },
+  querySelector: (selector) => badges.find((b) => selector === ".new-badge" || selector.includes(`"${b.dataset.news}"`)),
+};
+const box = {
+  dataset: {},
+  classList: { add: (name) => classes.add(name), remove: (...names) => names.forEach((name) => classes.delete(name)) },
+  matches: () => false, querySelector: () => title,
+  addEventListener: (_, fn) => { box.click = () => fn({ currentTarget: box }); box.listening = true; },
+  removeEventListener() { box.listening = false; },
+};
+let unobserved = 0;
+let intersect, finish;
+const S = { news: { installed: "1.5.0", seen: [] } };
+const ctx = sandbox({
+  S, innerHeight: 800,
+  document: {
+    querySelector: (selector) => selector === "#svc-defaults" ? box : null,
+    querySelectorAll: (selector) => selector === ".new-badge" ? [...badges] : classes.has("is-new") ? [box] : [],
+  },
+  IntersectionObserver: class { constructor(fn) { intersect = fn; } observe() {} unobserve() { unobserved += 1; } },
+  setTimeout: (fn) => { finish = fn; return 1; }, clearTimeout() {},
+  api: (_, { body }) => posts.push(JSON.parse(body).ids),
+});
+vm.runInContext(read(process.argv[1]).split("/* The What's new window")[0], ctx);
+ctx.renderNews();
+const initial = badges.map((b) => b.textContent);
+ctx.markNews(["service-cache"]);
+const stillUnread = badges.map((b) => b.textContent);
+intersect([{ target: box, isIntersecting: true, intersectionRatio: 1 }]);
+finish();
+const cleared = badges.length;
+S.news.seen = ["service-cache", "any-service-option"];
+ctx.renderNews();
+const watched = unobserved;
+box.click();  // its last unread option seen: the box is not new any more
+const released = [unobserved - watched, box.listening, classes.has("is-new")];  // no longer new: no observer, no click handler, no outline
+console.log(JSON.stringify([initial, stillUnread, cleared, badges.length, posts, released]));
+""", str(JS / "news.js"))
+    assert states == [
+        ["New"], ["New"], 0, 0,
+        [["service-cache"], ["any-service-option", "ladder-chips"], ["ladder-chips"]],
+        [1, False, False],
+    ]
 
 # A tiny stand-in for the DOM a pop-up touches: nodes that keep what is set on them and a shared "focused" node.
 POP_DOM = r"""
@@ -801,3 +895,18 @@ console.log(JSON.stringify({ root: [root.className, root.kids.map((k) => k.tag)]
     assert shown["before"] == [["Off", "false", None, None], ["UHD", "false", None, None], ["HD", "true", None, None]]
     assert shown["after"][0][1] == "true" and shown["after"][2][1] == "false"
     assert shown["picked"] == ["off"]
+
+
+def test_settings_version_button_names_a_release_or_a_test_build_and_hides_without_a_version():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const block = grab(src, /const \[, branch, commit\] = [\s\S]*?\$\("#set-version"\)\.hidden = !data\.version;/);
+const run = (data) => {
+  const version = { textContent: "", beta: false, classList: { toggle(_, on) { version.beta = on; } } }, button = { hidden: false };
+  const ctx = sandbox({ data, $: (selector) => selector === "#version" ? version : button });
+  vm.runInContext(block, ctx);
+  return [version.textContent, version.beta, button.hidden];
+};
+console.log(JSON.stringify([run({ version: "1.5.0", build: "" }), run({ version: "1.5.0", build: "feat-shell-abc1234" }), run({ version: "", build: "" })]));
+""", str(JS / "setup.js"))
+    assert shown == [["Unshacklarr 1.5.0", False, False], ["Unshacklarr feat-shell · abc1234", True, False], ["", False, True]]
