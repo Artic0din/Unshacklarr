@@ -637,7 +637,12 @@ for (const [kind, leave] of [["mouseover", "mouseout"], ["focusin", "focusout"]]
   });
 }
 document.addEventListener("click", (e) => { if (tipFor?.contains(e.target)) hideTip(); }, true);  // clicked: said what it does
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !tipEl) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  hideTip();
+}, true);
 /* The resolution asked of Unshackle for the series: its --quality, else its service's, else the defaults'
    (the highest listed); 1080 when none is set. What a service can give, unlike Sonarr's cutoff (a Blu-ray). */
 function askedHeight(season) {

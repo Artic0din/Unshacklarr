@@ -170,6 +170,7 @@ Every change worth knowing, newest first. The format follows
 ### Fixed
 
 - Restored 44 px input heights on touch in the Series drawer settings.
+- Made Escape dismiss a tooltip without also closing the Series drawer or Inbox.
 - Kept same-number episodes from different series in Catch up history, including in search and Failed.
 - Kept series and Sonarr names unchanged while translating service labels.
 - Kept unread notifications and the retry button intact when reopening the Inbox during a slow load.

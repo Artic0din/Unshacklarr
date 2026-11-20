@@ -72,31 +72,49 @@ console.log(JSON.stringify([...dates, ctx.ago("1993-11-01")]));
     assert shown == ["Okt. 2026", "1 d ago", "Nov. 1993", "Nov. 1993"]
 
 
-def test_escape_dismisses_the_visible_hover_tip_and_its_accessible_description():
+def test_escape_dismisses_the_hover_tip_before_closing_the_series_drawer():
     shown = node(r"""
 const src = read(process.argv[1]), listeners = {}, attributes = {};
-let tip = null;
+let tip = null, drawerOpen = true;
+const keydown = [];
 const rect = () => ({ left: 0, width: 10, top: 30, bottom: 40, height: 10 });
 const target = { addEventListener: (type, fn) => { listeners[type] = fn; },
   setAttribute: (key, value) => { attributes[key] = value; }, removeAttribute: (key) => { delete attributes[key]; },
   getBoundingClientRect: rect,
 };
 const ctx = sandbox({
-  document: { addEventListener: (type, fn) => { listeners[type] = fn; }, body: { append: (node) => { tip = node; } } },
+  document: {
+    addEventListener: (type, fn, capture) => { if (type === "keydown") keydown.push({ fn, capture }); },
+    querySelector: () => null, body: { append: (node) => { tip = node; } },
+  },
+  $: () => ({ classList: { contains: () => drawerOpen } }),
+  dismissEpisodeSubtitles: () => null,
+  closeDrawer: () => { drawerOpen = false; },
   el: (tag, props) => ({ ...props, style: {}, getBoundingClientRect: rect, remove: () => { tip = null; } }),
   innerWidth: 390, requestAnimationFrame() {}, onTop() {},
 });
-vm.runInContext(grab(src, /let tipEl[^\n]+\nconst hideTip[^\n]+\n/) +
+vm.runInContext(grab(src, /document\.addEventListener\("keydown", \(e\) => \{  \/\/ a dialog's Escape[\s\S]*?\n\}\);/) +
+  grab(src, /let tipEl[^\n]+\nconst hideTip[^\n]+\n/) +
   src.slice(src.indexOf("function showTip("), src.indexOf("function askedHeight(")), ctx);
+function press(key) {
+  let stopped = false, prevented = false;
+  for (const { fn } of [...keydown].sort((a, b) => Number(!!b.capture) - Number(!!a.capture))) {
+    fn({ key, preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; } });
+    if (stopped) break;
+  }
+  return prevented;
+}
 ctx.hoverTip(target, () => ["Available"]);
 listeners.mouseenter();
 const opened = [tip?.id, attributes["aria-describedby"]];
-listeners.keydown?.({ key: "Enter" });
+press("Enter");
 const stillOpen = tip?.id;
-listeners.keydown?.({ key: "Escape" });
-console.log(JSON.stringify([opened, stillOpen, tip, attributes]));
+const prevented = press("Escape");
+const firstEscape = [tip, { ...attributes }, drawerOpen, prevented];
+press("Escape");
+console.log(JSON.stringify([opened, stillOpen, firstEscape, drawerOpen]));
 """, str(JS / "series.js"))
-    assert shown == [["tip", "tip"], "tip", None, {}]
+    assert shown == [["tip", "tip"], "tip", [None, {}, True, True], False]
 
 
 def test_episode_subtitle_summary_prioritizes_required_languages_and_discloses_every_track():
