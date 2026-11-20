@@ -18,7 +18,7 @@ const LEGACY_SETTINGS_MAP = {
 };
 const settingsPages = Object.values(LEGACY_SETTINGS_MAP);
 const legacySettings = (name) => Object.hasOwn(LEGACY_SETTINGS_MAP, name) ? LEGACY_SETTINGS_MAP[name] : null;
-let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false;
+let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false, settingsTarget = null;
 let loadedSettings = null, settingsJump = null;
 const inSettingsSec = () => currentTab === "settings" && !settingsList;  // a section on screen, not the phone's list
 const showingSettings = (name) => inSettingsSec() && legacySettings(name)?.sec === settingsSec;
@@ -46,7 +46,10 @@ function applySettingsJump(jump) {
   }
   if (target?.service && !target.id) {
     const entry = history.state?.settings;
-    if (entry?.target?.service) history.replaceState({ settings: { ...entry, target: { ...target, id: anchor.id } } }, "");
+    if (entry?.target?.service) {
+      settingsTarget = { ...target, id: anchor.id };
+      history.replaceState({ settings: { ...entry, target: settingsTarget } }, "");
+    }
   }
   if (!target || target.service || loadedSettings?.settled) cancelSettingsJump();
   else if (!jump.observer) {
@@ -88,12 +91,13 @@ function leaveSettingsSec() {
   cancelSettingsJump();
   leaveSettingsNews(settingsSec);
 }
-function showSettingsList(on) {
-  const fromSec = on && phoneLayout() && inSettingsSec();
+function showSettingsList(on, restoreFocus = true) {
+  const fromSec = on && restoreFocus && phoneLayout() && inSettingsSec();
   if (fromSec) leaveSettingsSec();
   else if (on) cancelSettingsJump();
   settingsList = on && phoneLayout();
   $(".set-layout").classList.toggle("at-list", settingsList);
+  if (settingsList) document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.removeAttribute("aria-current"));
   if (fromSec) document.querySelector(`.set-nav [data-sec="${settingsSec}"]`).focus({ preventScroll: true });  // the item it came from
 }
 function showSettingsSec(name, fromRoute = false, push = false, target = null, restoring = false) {
@@ -114,6 +118,7 @@ function showSettingsSec(name, fromRoute = false, push = false, target = null, r
     navigate(push || fromList, { target, fromList: Boolean(fromListEntry) });
     updateTitle();
   }
+  settingsTarget = target;
   target ??= page && page.sec !== name ? `#${page.anchor}` : null;
   if (target || changedSection || fromList || !fromRoute || !routed) startSettingsJump(target, restoring);
 }
@@ -170,24 +175,31 @@ function updateTitle() {
 }
 let routed = false;
 function applyRoute(event) {
-  if (event) cancelSettingsJump();
+  const sameInboxPage = event && syncInboxRoute();
+  if (event && !sameInboxPage) cancelSettingsJump();
   if (location.hash.startsWith("#/inbox")) {  // a push notification touched: the bell's list over the current page
     history.replaceState(null, "", `#/${HASH_OF[currentTab] || currentTab}`);
     openInbox();
   }
   const route = parseRoute();
   const alreadyOpen = inSettingsSec() && route.sec === settingsRoute;
+  const sameTab = routed && route.tab === currentTab;
   if (!routed || route.tab !== currentTab) showTab(route.tab, true);  // closing a series keeps its tab as it was
   if (route.sec) {
-    if (alreadyOpen && (!event || route.id || current)) loadSettingsSec();
+    // Toggling the Inbox on the same entry must not steal focus or restart a Settings jump.
+    const sameTarget = sameInboxPage && JSON.stringify(history.state?.settings?.target ?? null) === JSON.stringify(settingsTarget);
+    if (alreadyOpen && (!event || route.id || current || sameTarget)) loadSettingsSec();
     else showSettingsSec(route.sec, true, false, null, Boolean(event));
-  } else if (route.tab === "settings") { showSettingsList(true); loadSettingsSec(); }
+  } else if (route.tab === "settings" && !sameInboxPage) { showSettingsList(true, sameTab); loadSettingsSec(); }
   routed = true;
+  if (currentTab === "log" && !route.id) syncActivityRoute(sameTab);
+  if (sameInboxPage) return;  // drawer and title are tied to the hash, not the history entry
   const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
   if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
   else if (series && route.view) showDrawerTab(route.view, true);
   else if (!series && current) closeDrawer(true);
   updateTitle();
+  if (history.state?.inbox && !$("#inbox-dialog").open) openInbox();
 }
 window.addEventListener("popstate", applyRoute);
 // Startup can scroll without user input; only input should interrupt a jump that is still loading.
@@ -215,6 +227,7 @@ function measureBars() {
 const barsSeen = new ResizeObserver(measureBars);
 [$("header"), ...BOTTOM_BARS].forEach((n) => barsSeen.observe(n));
 function showTab(name, fromRoute = false, quiet = false) {
+  const changedTab = name !== currentTab;
   if (currentTab === "yaml" && name !== "yaml") {  // leaving the editor: it forgets the password and the file
     if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }
     uyReset();
@@ -224,6 +237,7 @@ function showTab(name, fromRoute = false, quiet = false) {
     showSettingsList(false);
   }
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
+  if (currentTab === "log" && changedTab) landOnLive = false;
   currentTab = name;
   closeDetails(false);  // the Schedule's popover belongs to its card
   updateTitle();  // after the list is chosen: a phone's Settings tab names the list, not the section it left
@@ -232,8 +246,12 @@ function showTab(name, fromRoute = false, quiet = false) {
   });
   document.querySelectorAll("main > section").forEach((s) => s.hidden = s.id !== "tab-" + name);
   if (!fromRoute) navigate(true);
-  if (quiet) return;
-  if (name === "log") { refreshLog(); openActivity(); }
+  if (quiet || $("#initial-state-error")?.hidden === false) return;
+  if (name === "log") {
+    if (!fromRoute && changedTab) syncActivityRoute(false);
+    refreshLog();
+    openActivity();
+  }
   else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
   if (name === "settings" && !fromRoute) loadSettingsSec();
   if (name === "schedule") loadSchedule();
@@ -241,8 +259,8 @@ function showTab(name, fromRoute = false, quiet = false) {
 document.querySelectorAll("nav [data-tab]").forEach((b) => b.onclick = (e) => {
   if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;  // a new tab or window: the browser opens the link
   e.preventDefault();
-  if (b.dataset.tab === "log") landOnLive = true;
   showTab(b.dataset.tab);
+  if (b.dataset.tab === "log" && currentTab === "log") landOnLive = true;
 });
 // the hash is the route: the skip link moves the focus itself and leaves the URL as it is
 $(".skip").onclick = (e) => { e.preventDefault(); $("main").focus(); };
@@ -272,10 +290,15 @@ function bindSeriesOptions() {
   };
   toggle.onclick = () => toggle.setAttribute("aria-expanded", String(!expanded()));
   toolbar.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && inDisclosure(e.target) && close()) e.preventDefault();
+    if (!expanded() || !inDisclosure(e.target)) return;
+    if (e.key === "Escape" && close()) e.preventDefault();
+    if (e.key === "Tab") requestAnimationFrame(() => {
+      if (!inDisclosure(document.activeElement)) close(false);
+    });
   });
-  toolbar.addEventListener("focusout", (e) => {
-    if (e.relatedTarget && inDisclosure(e.target) && !inDisclosure(e.relatedTarget)) close(false);
+  window.addEventListener("click", (e) => {
+    const path = e.composedPath();
+    if (!path.includes(toggle) && !path.includes(options)) close(false);
   });
   options.addEventListener("click", (e) => {
     if (e.target.closest("#bulk-open, #sel-toggle")) close();
@@ -310,7 +333,7 @@ window.addEventListener("beforeunload", (e) => { if (!$("#savebar").hidden) e.pr
 
 showTab(parseRoute().tab, true, true);  // the right tab straight away, before the data comes
 if (parseRoute().sec) showSettingsSec(parseRoute().sec, true);
-else if (currentTab === "settings") showSettingsList(true);
+else if (currentTab === "settings") showSettingsList(true, false);
 
 /* Pull to reload, in the installed app (iPhone, Android): the browser gives it in a tab, not there. From the top of a
    page, pulled down far enough and let go: the page loads again. Not over an open window, nor from a list that

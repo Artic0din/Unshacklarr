@@ -8219,6 +8219,7 @@ const shown = {};
 const box = {
   S: { config: { service_defaults: { AMZN: {} }, settings: {} }, dlOptions: [], services: ["AMZN"] },
   el: node, field: (label, input) => node("field", { textContent: label }, input), svcName: (t) => t,
+  trWith: (template, label) => template.replace("{0}", label),
   COUNT: { option: (n) => `${n} options` }, loadServiceOptions: async () => [], optionsEditor() {},
   ladderChips: () => node("chips"), ladderClash() {}, ladderNamed() {}, renderCommands() {}, dirty() {}, api() {}, toast() {},
   $: (sel) => ({ replaceChildren: (...kids) => { shown[sel] = kids; } }),

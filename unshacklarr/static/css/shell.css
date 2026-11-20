@@ -57,6 +57,7 @@ nav .short { display: none; }
 .inbox-clear, .inbox-x { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: none; color: var(--muted);
   font: inherit; font-size: var(--fs-sub); cursor: pointer; border-radius: 999px; transition: background .15s, color .15s; }
 .inbox-clear { padding: 6px 12px; } .inbox-x { width: 34px; height: 34px; }
+.inbox-clear[hidden], .inbox-filters[hidden] { display: none; }
 .inbox-clear, .inbox-x { border: 1px solid var(--line); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .inbox-head:has(.inbox-clear[data-sure]) { flex-wrap: wrap; }  /* the question has a row of its own: the title is not squeezed away */
@@ -89,12 +90,17 @@ nav .short { display: none; }
 .uy-diff .add { color: var(--ok); } .uy-diff .del { color: var(--err); } .uy-diff .gap { color: var(--muted); } .inbox-head div { flex: 1 1 auto; min-width: min-content; } .inbox-head h2 { margin: 0; font-size: var(--fs-title3); outline: none; }
 #inbox-list { max-height: min(70vh, 640px); overflow-y: auto; margin: 0 -8px; padding: 0 8px; overscroll-behavior: contain; }
 #inbox-filters:not([hidden]) + #inbox-list { height: min(70vh, 640px); }  /* with filters, a fixed height: switching them never resizes the popup */
-@media (max-width: 340px) { #inbox-clear { order: 1; margin-left: auto; } }  /* too narrow for all four on a line: Clear on a row under the title, the close button stays up */
+.inbox-actions { display: contents; }
+@media (max-width: 340px) {
+  .inbox-actions:not(:has([data-sure])) { display: flex; gap: 6px; margin-inline-start: auto; }
+  .inbox-clear:not([data-sure]) { width: 44px; padding: 0; }
+  .inbox-clear:not([data-sure]) span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .inbox-head small { display: block; color: var(--muted); font-size: var(--fs-sub); font-weight: 400; margin-top: 2px; }
 .inbox-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .inbox-filters button { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
   background: none; color: var(--muted); font: inherit; font-size: var(--fs-sub); cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
-.inbox-filters button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+.inbox-filters button[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); }
 .inbox-filters i { width: 7px; height: 7px; border-radius: 50%; background: var(--lv, var(--muted)); }
 .inbox-filters b { font-weight: 600; }
 .inbox-sub { position: sticky; top: 0; z-index: 1; background: var(--panel); font-size: var(--fs-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
@@ -140,7 +146,8 @@ nav .short { display: none; }
 .seg button { background: none; border: 0; border-radius: var(--r-sm); padding: 7px 14px; cursor: pointer; color: var(--muted); white-space: nowrap; font-weight: 500; }
 .seg button[aria-pressed="true"] { background: var(--select); color: var(--text); font-weight: 600; }
 .seg button span { margin-left: 4px; font-variant-numeric: tabular-nums; }
-.seg button:focus-visible { outline-offset: -2px; }  /* inside the button: the scroller would clip a ring drawn outside */
+.seg button:focus-visible, .seasons button:focus-visible,
+.inbox-item.link:focus-visible { outline-offset: -2px; }  /* scrollers clip rings drawn outside */
 nav { overflow-x: auto; max-width: 100%; padding: 4px; margin: -4px; }  /* room inside the scroller for the focus ring */
 nav a { white-space: nowrap; }
 input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], select, textarea {

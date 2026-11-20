@@ -77,8 +77,9 @@
 .card .field { margin: var(--gap-field) 0 0; }
 .card .field > span, .card .field > label:not(.check) { color: var(--text); font-size: var(--fs-callout); }
 .card .field small, .card small.help { font-size: var(--fs-sub); color: var(--muted); }
+#d-checked { white-space: nowrap; }
 .card small.help { display: block; margin-top: 8px; }
-.card input[type=time] { background: var(--bg); border: 1px solid var(--field-line); border-radius: var(--r-sm); padding: 7px 10px; width: 100%; }
+.card :is(input[type=time], input[type=date]) { background: var(--bg); border: 1px solid var(--field-line); border-radius: var(--r-sm); padding: 7px 10px; width: 100%; }
 .card input[type=text], .card input[type=url], .card input[type=number], .card select { background: var(--bg); border-color: var(--field-line); }
 .card input:focus, .card select:focus { border-color: var(--accent); }  /* the ring itself: the text-field rule above, or :focus-visible */
 details.card summary { cursor: pointer; list-style: none; position: relative; padding-right: 24px; }
@@ -94,9 +95,10 @@ body.drawer-open .savebar { display: none; }
 .d-tabs button[aria-pressed="true"] { color: var(--text); background: var(--select); border-bottom-color: var(--field-line-hover); }
 .d-pane[hidden] { display: none; }
 /* Episodes: one season at a time, picked from a strip, so 35 seasons stay usable. */
-.seasons { display: flex; gap: 6px; overflow-x: auto; padding: 16px 0 10px; scrollbar-width: thin;
-  background: linear-gradient(to right, var(--bg) 30%, transparent) left / 28px 100% no-repeat local,
-    linear-gradient(to left, var(--bg) 30%, transparent) right / 28px 100% no-repeat local,
+.seasons { display: flex; gap: 6px; overflow-x: auto; padding: 16px 0 10px; scrollbar-width: thin; }
+.seasons, .ds-nav:where(:not(.set-jumps)) {
+  background: linear-gradient(to right, var(--scroll-cover, var(--bg)) 30%, transparent) left / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--scroll-cover, var(--bg)) 30%, transparent) right / 28px 100% no-repeat local,
     linear-gradient(to right, var(--line-strong), transparent) left / 12px 100% no-repeat scroll,
     linear-gradient(to left, var(--line-strong), transparent) right / 12px 100% no-repeat scroll; }
 .seasons button { flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 6px 12px;
@@ -205,6 +207,7 @@ body.drawer-open .savebar { display: none; }
 .spec { font-size: var(--fs-sub); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .spec.blank { color: var(--muted); }
 .ep-list .spec.subs { display: inline-flex; justify-self: start; align-items: center; gap: 5px; white-space: nowrap; }
+.ep-subs-label { display: none; }
 .ep-list.stack .col.subs { overflow: visible; }
 .ep-subs-chip { flex: none; padding: 2px 7px; min-height: 26px; border: 1px solid var(--field-line); border-radius: var(--r-md);
   background: var(--select); font: inherit; font-variant-numeric: tabular-nums; color: var(--text); cursor: pointer; }
@@ -271,6 +274,8 @@ body.drawer-open .savebar { display: none; }
 .oneoff-preview .pick select.bad { border-color: var(--err); color: var(--err); } #oneoff-slot { margin-bottom: 18px; }
 #oneoff-slot .adv { border: 0; padding: 0; background: none; } #oneoff-slot summary { display: none; }
 #d-meta a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+#d-meta { display: flex; flex-wrap: wrap; align-items: center; column-gap: .3em; }
+#d-meta > span:not(:last-child)::after { content: "\00a0\00b7"; }
 .ep-bar > span { flex: 1; } #ep-go-edit .short { display: none; }
 .ep-bar > .ep-cdm { flex: none; color: var(--warn); font-size: var(--fs-sub); font-weight: 600; cursor: help; }
 .cdm-note { margin: 0 0 12px; }

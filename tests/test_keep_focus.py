@@ -39,6 +39,7 @@ class Node {
   focus() { this.focusCalls++; if (this.isConnected && !this.disabled) doc.activeElement = this; }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k] ?? null; }
+  removeAttribute(k) { delete this.attrs[k]; }
   setSelectionRange(a, b, direction) { this.selected = [a, b, direction]; }
   scrollIntoView() {}
 }
@@ -146,6 +147,16 @@ if (scenario === "cdm") {  // a device's test result reorders the list: the focu
   run("cdmData.devices[1].test = null");  // and back again
   ctx.renderCdm();
   out.row = [rows(), label(doc.activeElement)];
+  const defaultActionIsPrimary = (name) => {
+    run(`cdmData.map.default = ${JSON.stringify(name)}`);
+    ctx.renderCdm();
+    return find(list, (n) => n.dataset?.key === "svc:default").className.split(" ").includes("primary");
+  };
+  out.defaultAction = ["", "alpha", "none", "missing"].map(defaultActionIsPrimary);
+  run("cdmData.devices[0].test = { ok: false }");
+  out.failedDefaultAction = defaultActionIsPrimary("alpha");
+  run("cdmData.devices[0].test = null; cdmData.devices[0].info = { unreadable: true }");
+  out.unreadableDefaultAction = defaultActionIsPrimary("alpha");
 }
 
 if (scenario === "chips") {  // a slide-out's chips are rebuilt at each pick
@@ -236,7 +247,11 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   }
   delete out.scrolledTo;
   const nav = buttons.connections, heading = anchors["sonarr-sec"].children[0];
-  run("settingsList = true");
+  doc.activeElement = root;
+  run("settingsList = false; settingsSec = 'connections'");
+  nav.setAttribute("aria-current", "true");
+  ctx.showSettingsList(true, false);
+  out.list = [doc.activeElement === root, nav.getAttribute("aria-current")];
   ctx.showSettingsSec("sonarr");
   out.opened = [doc.activeElement === heading, heading.tabIndex, run("settingsList")];
   doc.activeElement = root;
@@ -251,11 +266,12 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   ctx.showOption({ sec: "automation", target: "#ax-window-card" });
   out.news = [location.hash, panels.find((n) => !n.hidden).dataset.sec, doc.activeElement === option];
   Object.assign(ctx, { getSelection: () => "", INBOX_ICONS: {}, LOCALE: "en", inboxSeenAt: null,
-    renderServices: () => ctx.revealService(), svcName: (s) => s });
+    renderServices: () => ctx.revealService(), svcName: (s) => s,
+    trWith: (template, label) => template.replace("{0}", label) });
   const row = make("div", { id: "sv-EXAMPLE", closest: () => null, scrollIntoView() { out.serviceScrolled = true; } });
   root.append(row); anchors[row.id] = row;
   run(["openServiceRow", "serviceRow", "revealService"].map((name) => fn(read("services.js"), name)).join("\n"));
-  run(fn(read("inbox.js"), "inboxRow"));
+  run(["inboxRow", "closeInbox"].map((name) => fn(read("inbox.js"), name)).join("\n"));
   ctx.inboxRow({ items: [{ service: "EXAMPLE", at: "2025-01-01" }], eps: [], level: "error" }, 0, 4).onclick();
   out.inbox = [location.hash, panels.find((n) => !n.hidden).dataset.sec, doc.activeElement === row];
   delete out.scrolledTo;
@@ -304,14 +320,15 @@ if (scenario === "activity" || scenario === "chip-back") {
     return m ? find(m[1] || m[2].startsWith("chip:") ? strip : rows, (n) => n.dataset.fk === m[2])
       : ({ "#con": con, "#con-running": strip, "#con-downloads": downloads })[sel] ?? title;
   };
-  Object.assign(ctx, { $: lookup, innerWidth: 500, scrollTo() {}, renderConsole: drawRows, picked_run: null });
+  Object.assign(ctx, { $: lookup, innerWidth: 500, scrollTo() {}, renderConsole: drawRows, picked_run: null,
+    history: { state: null }, recordActivityDetail() {} });
   doc.getElementById = (id) => id === "con-downloads" ? downloads : null;
   drawRows();
-  run(fn(activity, "pickRun") + "\n" + "let picked_run = null;");
+  run(fn(activity, "pickRun") + "\n" + fn(activity, "closeActivityDetail") + "\n" + "let picked_run = null, activityDetail = null;");
   con.classList.add = () => {};
   const back = {};
   ctx.$ = (sel) => sel === "#cd-back" ? back : lookup(sel);
-  run((activity.match(/^\$\("#cd-back"\)\.onclick = .*\};$/m) || activity.match(/^\$\("#cd-back"\)\.onclick = .*?^\};/ms))[0]);
+  run(activity.match(/^\$\("#cd-back"\)\.onclick = .*;$/m)[0]);
   rows.children[0].focus();
   ctx.pickRun("job:j1");
   out.phoneOpen = [doc.activeElement === title, title.tabIndex];
@@ -618,6 +635,9 @@ def test_a_device_keeps_the_focus_when_a_test_result_reorders_the_devices():
         "before": ["alpha", "bravo"],
         "menu": [["bravo", "alpha"], "Actions for alpha", True],
         "row": [["alpha", "bravo"], "row:Widevine:alpha"],
+        "defaultAction": [True, False, False, True],
+        "failedDefaultAction": True,
+        "unreadableDefaultAction": True,
     }
 
 
@@ -635,6 +655,7 @@ def test_escape_closes_the_language_menu_and_returns_to_its_button():
 
 def test_a_phone_section_opens_on_its_heading_and_back_returns_to_its_item():
     result = run_scenario("settings")
+    assert result["list"] == [True, None]
     assert result["opened"] == [True, -1, False]
     assert result["back"] == [True, True]
     assert result["wide"]

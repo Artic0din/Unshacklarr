@@ -77,6 +77,30 @@ def node(body, *args):
     return json.loads(out.stdout)
 
 
+def test_initial_state_failure_shows_one_alert_and_retry_across_routes():
+    shown = node(r"""
+const src = read(process.argv[2]), shared = $("#initial-state-error");
+shared.hidden = true;
+let reloads = 0;
+const ctx = sandbox({
+  api: async (path) => path === "/api/session" ? { configured: true, logged_in: true } : {},
+  fetch: async () => ({ ok: false, status: 503 }),
+  responseError: async () => new Error("Service unavailable"),
+  i18nReady: Promise.resolve(), location: { reload: () => reloads++ }, paintLights() {},
+});
+const core = read(process.argv[1]);
+vm.runInContext(grab(core, /^function failed\(.*?^\}/ms), ctx);
+vm.runInContext(src.slice(src.lastIndexOf("\n(async () => {")), ctx).then(() => {
+  const alert = shared.firstChild, retry = alert?.kids[1];
+  retry?.onclick?.();
+  console.log(JSON.stringify([shared.hidden, alert?.role, alert?.kids[0].textContent, retry?.textContent, reloads]));
+});
+""", str(JS / "setup.js"))
+    assert shown == [False, "alert", "Could not load app data: Service unavailable", "Try again", 1]
+    assert re.search(r'<main[^>]*>\s*<div id="initial-state-error" hidden></div>', HTML)
+    assert re.search(r"#initial-state-error:not\(\[hidden\]\) ~ section \{\s*display: none;", CSS)
+
+
 def rule_colour(selector):
     """The colour of the last rule in the stylesheet that is exactly this selector (comments aside)."""
     css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)

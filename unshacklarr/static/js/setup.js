@@ -509,6 +509,11 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     })
     .catch(() => null);
   await i18nReady;
+  const bootError = (text) => {
+    const error = $("#initial-state-error");
+    error.hidden = false;
+    error.replaceChildren(failed(text, () => location.reload()));
+  };
   let session;
   try { session = await sessionAsked; }
   catch (e) { return $("#wall").replaceChildren(failed(`Unshacklarr can't be reached: ${e.message}`, () => location.reload())); }
@@ -551,6 +556,6 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     if (!showingSettings("unshackle")) refreshHealth();
     applyRoute();
   } catch (e) {
-    $("#wall").replaceChildren(failed(`Could not load series: ${e.message}`, () => location.reload()));
+    bootError(`Could not load app data: ${e.message}`);
   }
 })();

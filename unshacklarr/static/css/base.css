@@ -27,7 +27,7 @@
   --sh-lg: 0 2px 4px 0 #00000066, 0 8px 24px 0 #00000099;
 }
 * { box-sizing: border-box; }
-input[type=checkbox] { accent-color: var(--accent); }
+input[type=checkbox] { accent-color: var(--text); }
 ::placeholder { color: var(--muted); opacity: 1; }  /* an example, not a value: dimmer than any text typed */
 html { -webkit-tap-highlight-color: transparent;
   background: radial-gradient(ellipse 58rem 19rem at 15% 0, rgb(132 145 47 / .14), transparent) 0 0 / 100% 24rem no-repeat, var(--bg); }
@@ -43,3 +43,4 @@ h1, h2, h3, .sx-card h4 { line-height: 1.2; letter-spacing: -.01em; text-wrap: b
   background: var(--panel); color: var(--text); font-weight: 600; text-decoration: none; box-shadow: var(--sh-md); }
 .skip:not(:focus) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 main:focus { outline: none; }  /* the skip link's target, not a control */
+#initial-state-error:not([hidden]) ~ section { display: none; }

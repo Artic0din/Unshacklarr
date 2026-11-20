@@ -12,6 +12,11 @@ CORE = Path(__file__).resolve().parents[1] / "unshacklarr" / "static" / "js" / "
 NEEDED_CATEGORIES = {"ru": {"one", "few", "many", "other"}, "fr": {"one", "other"}, "pt-BR": {"one", "other"}}  # beyond "1 x" and "{0} xs"
 ABBREVIATED = {"ru": {"{0} days", "{0} hours"}}  # "{0} дн.", "{0} ч": right for every number, whatever the sentence
 CHANGED_ERROR_TEXTS = {
+    "Find it on {0}",
+    "Could not start unshackle serve with {0}: {1}",
+    "Season {0} will be downloaded from {1}. Click Save, then check again.",
+    "This page is out of date. Reload it, then make your change again.",
+    "Unshacklarr cannot read this file: check its permissions, or replace it",
     "Add cookies for {0}",
     "Replace {0}",
     "(ref {0})",
@@ -367,7 +372,7 @@ def test_the_server_picks_the_plural_form_of_the_language(lang, expected):
     assert {n: i18n.tr(english(n), lang) for n in expected} == expected
 
 
-def page_translate(lang: str, expressions: list[str]) -> list[str]:
+def page_translate(lang: str, expressions: list[str], setup: str = "") -> list[str]:
     """What the page's own tr() makes of each JavaScript expression (a string, or COUNT.device(2)), in this language."""
     if not shutil.which("node"):
         pytest.skip("node is not installed")
@@ -378,16 +383,38 @@ def page_translate(lang: str, expressions: list[str]) -> list[str]:
         r"^function trTemplate\(.*?^\}", r"^const trWith = .*?;$", r"^const COUNT = \{.*?^\};"))
     harness = f"""
 const vm = require("vm"), fs = require("fs");
-const box = {{ LANG: {json.dumps(lang)}, Intl, fs, path: {json.dumps(str(I18N / f"{lang}.json"))} }};
+const box = {{ LANG: {json.dumps(lang)}, Intl, fs, path: {json.dumps(str(I18N / f"{lang}.json"))},
+  S: {{ serviceNames: {{ ATVP: "Apple TV+", DSNP: "Disney+", STAN: "Stan" }}, services: ["Netflix", "Binge"] }} }};
 vm.createContext(box);
 vm.runInContext({json.dumps(code)} + `
 if (LANG !== "en") {{ T = JSON.parse(fs.readFileSync(path, "utf8")); TP = templates(T); }}
-out = [{", ".join(expressions)}].map((text) => tr(text));`, box);
+` + {json.dumps(setup)} + {json.dumps(f'out = [{", ".join(expressions)}].map((text) => tr(text));')}, box);
 console.log(JSON.stringify(box.out));
 """
     done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
+
+
+def test_german_device_picker_translates_the_heading_without_matching_service_names_globally():
+    src = (CORE.parent / "cookies-cdm.js").read_text()
+    picker = re.search(r"^function cdmPicker\(.*?^\}", src, re.M | re.S).group()
+    displayed = page_translate("de", [
+        'pick("Netflix")', 'pick("Netflix", ["Disney+"])', 'pick("default")', '"Device for Netflix"',
+    ], picker + """
+const cdmData = { devices: [], remote: [], map: {} };
+const svcName = (service) => service;
+const el = (_, props) => ({ value: "", children: [], ...props,
+  replaceChildren(...nodes) { this.children = nodes; }, append(node) { this.children.push(node); },
+});
+let heading;
+const cdmPopAt = (_, title) => { heading = tr(title.textContent); };
+function pick(service, also) {
+  cdmPicker({}, service, "", also);
+  return heading;
+}
+""")
+    assert displayed == ["Gerät für Netflix", "Gerät für Netflix, Disney+", "Das Standardgerät", "Device for Netflix"]
 
 
 @pytest.mark.parametrize("lang, expected", [
@@ -412,6 +439,25 @@ def test_a_template_with_a_dot_separator_is_read_whole_before_its_pieces():
     # "Sign-in failed" alone would match the older "{0} failed" and leave the rest of the line in English
     assert {text: i18n.tr(text, "fr") for text in SIGN_IN_LABELS} == SIGN_IN_LABELS
     assert page_translate("fr", [json.dumps(text) for text in SIGN_IN_LABELS]) == list(SIGN_IN_LABELS.values())
+
+
+def test_explicit_service_labels_translate_in_german():
+    labels = [("on", "Apple TV+"), ("Not on", "Netflix"), ("upgrade on", "Disney+"), ("No CDM for", "Stan"),
+              ("Options of", "Binge"), ("Open", "Apple TV+"), ("Find it on", "Apple TV+")]
+    assert page_translate("de", [f"trWith({json.dumps(prefix + ' {0}')}, {json.dumps(service)})"
+                                 for prefix, service in labels]) == [
+        "bei Apple TV+", "Nicht bei Netflix", "Upgrade bei Disney+", "Kein CDM für Stan", "Optionen von Binge",
+        "Apple TV+ öffnen", "Bei Apple TV+ suchen",
+    ]
+
+
+def test_raw_names_containing_a_service_are_not_translated_as_labels():
+    titles = ["Open Netflix", "Open Apple TV+", "Not on Netflix", "Open an unrelated document"]
+    assert page_translate("de", list(map(json.dumps, titles))) == titles
+    error = "Could not start unshackle serve with Python: Permission denied"
+    assert page_translate("de", [json.dumps(error)]) == [
+        "unshackle serve konnte mit Python nicht gestartet werden: Permission denied",
+    ]
 
 
 def test_a_superscript_number_picks_the_other_form_instead_of_failing():

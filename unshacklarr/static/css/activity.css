@@ -65,7 +65,7 @@
 .con-filters button { font: inherit; font-size: var(--fs-footnote); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: none;
   color: var(--muted); cursor: pointer; }
 .con-filters button span { font-variant-numeric: tabular-nums; }
-.con-filters button[aria-pressed="true"] { border-color: var(--field-line-hover); color: var(--text); }
+.con-filters button[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); }
 .crow { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 8px; border-radius: var(--r-md);
   border: 0; background: none; color: inherit; font: inherit; text-align: left; width: 100%; cursor: pointer; }
 .crow.is-hover { background: var(--panel); }
@@ -94,8 +94,8 @@
 .weeks .w { display: grid; grid-template-rows: 132px auto; gap: 6px; text-align: center; justify-items: center; }
 .weeks .stack { display: flex; flex-direction: column-reverse; align-self: end; width: min(44px, 100%); border-radius: var(--r-sm); overflow: hidden; min-height: 2px; background: var(--well); }
 .weeks .stack i { display: block; } .weeks .ok { background: var(--ok); } .weeks .kp { background: var(--warn); } .weeks .ko { background: var(--err); }
-.weeks small { color: var(--muted); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; } .weeks b { font-size: var(--fs-footnote); }
-.legend { display: flex; gap: 16px; font-size: var(--fs-footnote); color: var(--muted); }
+.weeks small { color: var(--muted); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; white-space: nowrap; } .weeks b { font-size: var(--fs-footnote); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) 16px; font-size: var(--fs-footnote); color: var(--muted); }
 .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
 .svc-scroll { overflow-x: auto; --cover: var(--panel);  /* shadows at the edges that still hide columns: the surface under the table covers each once that edge is reached */
   background: linear-gradient(to right, var(--cover) 30%, transparent) left / 28px 100% no-repeat local,
@@ -105,8 +105,13 @@
 .svc-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sub); }
 .svc-table th { text-align: left; font-size: var(--fs-footnote); color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .svc-table td { padding: 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-.svc-table tbody th { color: var(--text); font-size: var(--fs-sub); font-weight: 400; }
+.svc-table tbody th { color: var(--text); font-size: var(--fs-sub); font-weight: 400; white-space: nowrap; }
 .svc-table .bad { color: var(--err); font-weight: 600; } .svc-table .fine { color: var(--ok); }
+@media (max-width: 400px) {
+  .weeks { gap: var(--sp-1); }
+  .svc-table :is(th, td) { padding-inline: var(--sp-1); overflow-wrap: anywhere; hyphens: auto; }
+  .svc-scroll td:nth-child(5) { white-space: nowrap; }
+}
 .con-empty { padding: 8px; font-size: var(--fs-sub); color: var(--muted); }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); animation: pulse 1.6s infinite; }
 @keyframes pulse { 70% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent); } 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } }
@@ -120,10 +125,10 @@
 .cd-head h2 { margin: 0; font-size: var(--fs-title3); }
 .cd-head small { color: var(--muted); font-size: var(--fs-sub); }
 .cd-head .act { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.cd-top, .cd-foot, .steps .s, .cd-head .line2 { display: none; }
+.cd-top, .cd-foot, .step-caption, .cd-head .line2 { display: none; }
 .steps { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
 .steps > span { display: grid; min-width: 0; overflow: hidden; text-overflow: ellipsis; gap: 7px; font-size: var(--fs-footnote); color: var(--muted); }
-.steps :is(.l, .s) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.steps .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .steps > span::before { content: ""; height: 4px; border-radius: 2px; background: var(--well); }
 .steps .done { color: var(--text); } .steps .done::before { background: var(--ok); }
 .steps .now { color: var(--text); font-weight: 600; }
@@ -135,8 +140,8 @@
 .steps .warn { color: var(--warn); font-weight: 600; } .steps .warn::before { background: var(--warn); }
 .steps .halt { color: var(--muted); font-weight: 600; } .steps .halt::before { background: var(--muted); }
 /* failed and stopped carry a mark of their own too, not only a colour; the state's word is in .sr-only */
-.steps .fail :is(.l, .s)::before { content: "\2715\00a0"; content: "\2715\00a0" / ""; }
-.steps .halt :is(.l, .s)::before { content: "\25A0\00a0"; content: "\25A0\00a0" / ""; }
+:is(.steps .fail .l, .step-caption.fail)::before { content: "\2715\00a0"; content: "\2715\00a0" / ""; }
+:is(.steps .halt .l, .step-caption.halt)::before { content: "\25A0\00a0"; content: "\25A0\00a0" / ""; }
 .cd-stats { display: flex; gap: 28px; flex-wrap: wrap; }
 .cd-stats div { display: grid; } .cd-stats small { color: var(--muted); font-size: var(--fs-footnote); }
 .cd-stats b { font-size: var(--fs-title3); font-variant-numeric: tabular-nums; }
@@ -215,7 +220,7 @@
 @media (hover: hover) { .dock .d-acts button:hover { border-color: var(--field-line-hover); } }
 .dock .d-acts .stop { color: var(--err); } .dock .d-acts .retry, .dock .d-acts .on { color: var(--text); }
 .dock .d-sep { width: 1px; height: 24px; background: var(--line); flex: none; }
-.dock .d-open { width: 34px; height: 34px; border-radius: 9px; border: 0; background: var(--accent); color: var(--accent-ink);
+.dock .d-open { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--field-bg); color: var(--text);
   display: grid; place-items: center; flex: none; cursor: pointer; padding: 0; }
 .con-detail:has(.cd-foot :is([data-fk="sign-in"], [data-fk="retry"].primary)) .dock .d-open { border: 1px solid var(--line); background: var(--field-bg); color: var(--text); }
 .con-detail:has(.cd-foot [data-fk="retry"].primary) .dock .d-acts .retry { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }

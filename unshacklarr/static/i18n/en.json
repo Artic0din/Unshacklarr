@@ -640,9 +640,10 @@
   "show['service']",
   "e"
  ],
- "Could not load series: {0}": [
+ "Could not load app data: {0}": [
   "e.message"
  ],
+ "Could not load notifications": [],
  "Could not load the calendar: {0}": [
   "e.message"
  ],
@@ -1007,9 +1008,7 @@
  "Filters active": [],
  "Filters and actions": [],
  "Find a series": [],
- "Find it on {0}": [
-  "svcName(service)"
- ],
+ "Find it on {0}": [],
  "Find {0} on {1}": [
   "s.title",
   "svcName(tag)"
@@ -1214,7 +1213,6 @@
  ],
  "Job resumed": [],
  "Job stopped": [],
- "Join": [],
  "Join parts": [],
  "Joining parts": [],
  "Joining the parts": [],
@@ -1372,7 +1370,6 @@
  "Move up": [],
  "Move {0} down": [],
  "Move {0} up": [],
- "Mux": [],
  "Muxed": [],
  "Muxing": [],
  "Muxing {0}%": [
@@ -1792,7 +1789,7 @@
  "Options of {0}": [
   "svcName(tag)"
  ],
- "Orange: different from most of this season (hover for details)": [],
+ "Orange: different from most of this season": [],
  "Origin": [],
  "Other": [],
  "Other Sonarr instances": [],
@@ -1941,7 +1938,6 @@
   "i.name"
  ],
  "Removes every episode of this job from the history": [],
- "Rename": [],
  "Renaming": [],
  "Renewing {0} session": [
   "method"
@@ -3394,13 +3390,8 @@
  "on the hour. An episode is tried at the first sync after it airs. Next sync at {0}": [
   "nextAt"
  ],
- "on {0}": [
-  "svc"
- ],
- "on {0} as {1}": [
-  "svc",
-  "found.service"
- ],
+ "on {0}": [],
+ "on {0} as {1}": [],
  "once a day": [],
  "onchange": [],
  "one every {0}: for a 21:00 release, from {1} to {2}": [

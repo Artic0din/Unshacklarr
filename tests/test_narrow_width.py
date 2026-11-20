@@ -61,14 +61,26 @@ def test_series_selects_wrap_as_a_group_instead_of_shrinking_selected_labels():
     has(CSS, "#series-filters select { field-sizing: content; width: auto; min-inline-size: max-content; }")
 
 
+def test_phone_series_wall_columns_are_equal_even_with_long_labels():
+    has(media("max-width: 700px"), ".wall { grid-template-columns: repeat(3, minmax(0, 1fr));")
+
+
+def test_phone_episode_titles_can_wrap_past_two_lines_without_clipping():
+    title = re.search(r"\.ep \.t \.tt \{([^}]*)\}", media("max-width: 700px"))[1]
+    assert "white-space: normal" in title and "line-clamp" not in title
+
+
 def test_the_setup_error_wraps_inside_the_card_when_it_sits_under_its_field():
     has(media("max-width: 1180px"), "transform: none; margin-top: 8px; width: auto; max-width: 100%; }")
 
 
-def test_the_notifications_heading_keeps_its_own_width_and_the_row_may_wrap():
+def test_inbox_actions_stay_together_and_clear_keeps_its_name_when_icon_only():
     has(CSS, ".inbox-head { display: flex; flex-wrap: wrap;")
     has(CSS, ".inbox-head div { flex: 1 1 auto; min-width: min-content; }")
-    has(media("max-width: 340px"), "#inbox-clear { order: 1; margin-left: auto; }")
+    narrow = media("max-width: 340px")
+    has(narrow, ".inbox-actions:not(:has([data-sure])) { display: flex;")
+    has(narrow, ".inbox-clear:not([data-sure]) span { position: absolute;")
+    assert re.search(r'id="inbox-clear"[^>]*>.*?</svg><span>Clear</span>', (STATIC / "index.html").read_text())
 
 
 def test_inbox_filters_wrap_whole_pills_instead_of_clipping_the_last_one():
@@ -187,6 +199,43 @@ def test_activity_switcher_sizes_follow_the_pointer_even_on_a_narrow_window():
     has(CSS, ".con-toolbar { --con-target: 36px;")
     has(CSS, "#tab-log .con-views button { min-height: var(--con-target);")
     has(media("pointer: coarse"), ".con-toolbar { --con-target: 44px; }")
+
+
+def test_month_grid_fits_seven_44px_dates_at_320px():
+    has(CSS, ".cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));")
+    has(media("max-width: 363px"), ".cal-grid { margin-inline: calc(3px - var(--sp-4)); column-gap: 1px; }")
+
+
+def test_inbox_clear_is_at_least_44px_high_on_touch():
+    touch = media("max-width: 700px), (pointer: coarse")
+    assert re.search(r"[^{}]*\.inbox-clear\b[^{}]*\{\s*min-height: 44px;", touch)
+
+
+def test_series_settings_input_defaults_allow_the_touch_height_to_win():
+    # The switch exclusion must not raise the base rule above input[type=text].
+    has(CSS, ".sx-grid input:where(:not(.switch)) { width: 100%; min-height: 40px;")
+    touch = media("max-width: 700px), (pointer: coarse")
+    assert re.search(r":is\(input\[type=text\][^{}]+\) \{ min-height: 44px;", touch)
+
+
+def test_activity_stats_wrap_german_labels_without_splitting_service_figures():
+    has(CSS, ".legend { display: flex; flex-wrap: wrap;")
+    narrow = media("max-width: 400px")
+    has(narrow, ".svc-table :is(th, td) { padding-inline: var(--sp-1); overflow-wrap: anywhere; hyphens: auto; }")
+    has(narrow, ".svc-scroll td:nth-child(5) { white-space: nowrap; }")
+
+
+def test_device_chips_and_job_counts_are_at_least_44px_on_touch():
+    touch = media("pointer: coarse")
+    has(touch, ".cdm-opt, button.cdm-chip, .job-counts button { min-height: 44px;")
+    has(touch, "button.cdm-chip, .job-counts button { min-width: 44px;")
+
+
+def test_phone_job_stats_wrap_as_groups_without_splitting_figures():
+    has(CSS, ".cd-stats { display: flex; gap: 28px; flex-wrap: wrap; }")
+    phone = media("max-width: 700px")
+    has(phone, ".cd-stats { gap: 12px 22px; }")
+    assert re.search(r"\.cd-stats b \{[^}]*white-space: nowrap;", phone)
 
 
 def test_activity_sync_status_takes_space_inside_the_pane_not_below_it():

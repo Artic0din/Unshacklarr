@@ -824,7 +824,7 @@ function markInvalid(input, message, on = true) {
 
 /* The series' channel may have a catch-up service here, picked and looked up on by its name. */
 function networkButton(s, tag) {
-  return el("button", { type: "button", ariaLabel: `Find it on ${svcName(tag)}`, onclick: () => {
+  return el("button", { type: "button", ariaLabel: trWith("Find it on {0}", svcName(tag)), onclick: () => {
     const sel = $("#d-service");
     if (sel.value !== tag) { sel.value = tag; sel.dispatchEvent(new Event("change")); }
     showFind(false);
@@ -935,7 +935,7 @@ function renderFind(service) {
   $("#d-find-out").replaceChildren();
   $("#d-find-count").textContent = "";
   $("#d-find-open").hidden = !service;
-  $("#d-find-open").textContent = service ? `Find it on ${svcName(service)}` : "";
+  $("#d-find-open").textContent = service ? trWith("Find it on {0}", svcName(service)) : "";
 }
 $("#d-find-open").onclick = () => {
   showFind($("#d-find").hidden);
@@ -971,7 +971,7 @@ async function knownProfiles(service) {
   let r;
   try { r = await api(`/api/profiles/${encodeURIComponent(service)}`); } catch { return; }
   if (S.config.series[current?.tvdbId]?.service !== service || !r.profiles.length) return;
-  box.replaceChildren(el("span", { textContent: `On ${svcName(service)}:` }), ...r.profiles.map((p) => el("button", { type: "button", className: "chip-btn", textContent: p,
+  box.replaceChildren(el("span", { textContent: trWith("On {0}:", svcName(service)) }), ...r.profiles.map((p) => el("button", { type: "button", className: "chip-btn", textContent: p,
     onclick: () => {
       const list = $("#d-fallback").value.split(/[\s,]+/).filter(Boolean);
       if (!list.includes(p)) { $("#d-fallback").value = [...list, p].join(", "); $("#d-fallback").dispatchEvent(new Event("input")); }
@@ -1062,22 +1062,22 @@ function sonarrWeb(url = S.config.settings?.sonarr_url, publicUrl = S.config.set
 /* The other Sonarr instances that have the series, set up here or not: their names, each a link to it there. */
 function inOtherSonarrs(s, ext) {
   const others = S.sonarrsOf?.[s.tvdbId] || [];
-  if (!others.length) return [];
-  return others.flatMap((o) => {
+  return others.map((o) => {
     const web = sonarrWeb(o.url, "");
-    return [" · ", web && o.slug ? ext(o.name, `${web}/series/${o.slug}`) : o.name];
+    return web && o.slug ? ext(o.name, `${web}/series/${o.slug}`) : o.name;
   });
 }
 /* Under the series' name: it on TVDB, TMDB, its service (the page Unshackle downloads from) and Sonarr. */
 function renderMeta(s) {
   const ext = (label, href) => el("a", { href, target: "_blank", rel: "noopener", textContent: label, title: `This series on ${label}` });
   const conf = S.config.series[s.tvdbId];
-  $("#d-meta").replaceChildren(ext("TVDB", `https://thetvdb.com/dereferrer/series/${s.tvdbId}`),
-    ...(s.tmdbId ? [" · ", ext("TMDB", `https://www.themoviedb.org/tv/${s.tmdbId}`)] : []),
-    ...(conf?.service && /^https?:\/\//.test(conf.title || "") ? [" · ", ext(svcName(conf.service), conf.title)] : []),
-    ...(s.id && sonarrWeb() && s.titleSlug ? [" · ", ext("Sonarr", `${sonarrWeb()}/series/${s.titleSlug}`)] : []),
+  const parts = [ext("TVDB", `https://thetvdb.com/dereferrer/series/${s.tvdbId}`),
+    ...(s.tmdbId ? [ext("TMDB", `https://www.themoviedb.org/tv/${s.tmdbId}`)] : []),
+    ...(conf?.service && /^https?:\/\//.test(conf.title || "") ? [ext(svcName(conf.service), conf.title)] : []),
+    ...(s.id && sonarrWeb() && s.titleSlug ? [ext("Sonarr", `${sonarrWeb()}/series/${s.titleSlug}`)] : []),
     ...inOtherSonarrs(s, ext),
-    s.year ? ` · ${s.year}` : "");
+    ...(s.year ? [String(s.year)] : [])];
+  $("#d-meta").replaceChildren(...parts.map((part) => el("span", {}, part)));
 }
 /* Sonarr 5 numbers a series in an episode order (aired, DVD, Netflix…): a numbering set here is for one order; Sonarr
    numbering it in another since, its new episodes wait (sync.order_changed) until the numbering is checked. */

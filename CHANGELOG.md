@@ -105,8 +105,19 @@ Every change worth knowing, newest first. The format follows
 - Grouped Settings into six sections with shorter headers and jump links, while keeping existing Settings links working. (#354)
 - Kept Series wall filters on one desktop toolbar and made every filter and action reachable on phones without sideways scrolling. (#352)
 - Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.
+- Fixed poster taps when Series filters were expanded.
 - Corrected which Series controls the Filters and actions button announced as collapsed on desktop.
 - Moved Activity tools into a compact switcher, added shortcuts to running downloads, and kept the download detail pane full size. (#353)
+- Fixed Activity filters to count whole jobs and show all their outcomes.
+- Fixed phone Back navigation to return from an Activity detail to its opener in the list.
+- Fixed translations for service names, series search and several setup and file errors.
+- Replaced old elapsed-day counts with the month and year.
+- Matched the broadcast start date field to the other controls on phones.
+- Kept Stats week dates and the Series last-checked label on one line.
+- Made sideways scrolling visible in Series settings and kept metadata separators with their labels.
+- Fixed clipped keyboard focus rings in the Inbox and season strip.
+- Enlarged small touch controls across Series, Activity, Settings and dialogs.
+- Made Escape dismiss tooltips.
 - Added service names and individual downloads to Catch up, tightened Waiting and Upgrades, and added Fix sign-in to failed jobs that need it. (#353)
 
 - Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
@@ -158,6 +169,21 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Restored 44 px input heights on touch in the Series drawer settings.
+- Made Escape dismiss a tooltip without also closing the Series drawer or Inbox.
+- Restored translations for the device picker and other short labels that name a service.
+- Restored the Activity view from browser history even when the same jump opened or closed the Inbox.
+- Stopped browser Back and Forward from focusing a Settings row when arriving from another tab.
+- Kept same-number episodes from different series in Catch up history, including in search and Failed.
+- Kept series and Sonarr names unchanged while translating service labels.
+- Kept unread notifications and the retry button intact when reopening the Inbox during a slow load.
+- Stopped late Activity responses from opening downloads behind another tab or an overlay.
+- Cleared stale run details when returning to Activity from another tab.
+- Restored the open Activity detail when reloading on a phone so Back returned to the list.
+
+- Fixed cramped mobile layouts and focus indicators, made routine controls neutral, and added a retry when startup data failed to load.
+- Preserved unread notifications when the Inbox failed to load, added a retry, and made browser Back close the full Inbox without leaving the page.
+  Enlarged touch targets and kept Activity figures readable on narrow screens.
 - Restored the exact Settings shortcut on browser Forward, fixed Back on phones, and kept focus on the newest jump as translations and service rows loaded.
 - Kept service shortcuts focused on the right row, restored New badges on their own setting titles, and fixed Settings Back and Notifications on phones.
 - Kept the Devices heading in view after loading, moved focus to newly opened Settings sections, and fixed the Add audio track shortcut's focus.

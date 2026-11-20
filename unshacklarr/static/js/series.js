@@ -491,11 +491,12 @@ function openColumns() {
   draw();
   $("#cols-dialog").showModal();
 }
-function fileLine(f, odd) {  // the same, in one line (phones)
-  const parts = [fileVideo(f), bitrate(f) ? flagged(`${f.videoBitrate ? "" : "≈"}${rate(bitrate(f))}`, odd.rate) : "",
-    [f.audio, layout(f.channels)].filter(Boolean).join(" "), flagged(f.audioLanguages.join(", "), odd.audio),
-    f.size ? size(f.size) : ""].filter(Boolean);
-  return el("small", { className: "ep-file-line" }, resBadge(f, odd.height), ...parts.flatMap((p, i) => i ? [" · ", p] : [p]));
+function fileLine(f, odd) {
+  const unbroken = (value) => value.replaceAll(" ", "\u00a0");
+  const parts = [fileVideo(f), bitrate(f) ? flagged(unbroken(`${f.videoBitrate ? "" : "≈"}${rate(bitrate(f))}`), odd.rate) : "",
+    unbroken([f.audio, layout(f.channels)].filter(Boolean).join(" ")), flagged(f.audioLanguages.join(", "), odd.audio),
+    f.size ? unbroken(size(f.size)) : ""].filter(Boolean);
+  return el("small", { className: "ep-file-line" }, resBadge(f, odd.height), ...parts.flatMap((p, i) => i ? ["\u00a0· ", p] : [p]));
 }
 function setSubtitleExpanded(chip, detail, expanded) {
   detail.hidden = !expanded;
@@ -514,7 +515,7 @@ function subtitleSummary(tracks, required, why, id, number, expanded) {
   const preview = (accepted.length ? [...tracks].sort((a, b) => priority(a) - priority(b)) : tracks).slice(0, 2);
   const remaining = tracks.length - preview.length;
   const cell = el("span", { className: "spec subs" + (tracks.length ? "" : " blank") },
-    flagged(preview.join(", ") || "none", why));
+    el("span", { className: "ep-subs-label", textContent: "Subtitles" }), flagged(preview.join(", ") || "none", why));
   if (!remaining) return { cell };
   const detail = el("div", { id: `ep-subs-${id}`, className: "ep-subs-detail", hidden: !expanded, textContent: tracks.join(", ") });
   const chip = el("button", { type: "button", className: "ep-subs-chip", textContent: `+${remaining}`,
@@ -636,6 +637,12 @@ for (const [kind, leave] of [["mouseover", "mouseout"], ["focusin", "focusout"]]
   });
 }
 document.addEventListener("click", (e) => { if (tipFor?.contains(e.target)) hideTip(); }, true);  // clicked: said what it does
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !tipEl) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  hideTip();
+}, true);
 /* The resolution asked of Unshackle for the series: its --quality, else its service's, else the defaults'
    (the highest listed); 1080 when none is set. What a service can give, unlike Sonarr's cutoff (a Blu-ray). */
 function askedHeight(season) {
@@ -667,19 +674,19 @@ const seriesSvcs = (conf) => seriesTags(conf).map(svcName).join(" and ");
    number, or better than the file on disk) or not; one not aired yet says nothing. */
 function serviceBadge(e) {
   if (epAvail[e.id]) return [e.hasFile && belowAsked(e) ? upgradeBadge(e) : onBadge(e)];
-  return e.hasFile || state(e) === "miss" ? [el("em", { className: "ep-off", textContent: `not on ${seasonSvc(e.seasonNumber)}` })] : [];
+  return e.hasFile || state(e) === "miss" ? [el("em", { className: "ep-off", textContent: trWith("not on {0}", seasonSvc(e.seasonNumber)) })] : [];
 }
 /* On disk under the resolution asked of the service, and on the service: worth downloading again. */
 function upgradeBadge(e) {
   const svc = seasonSvc(e.seasonNumber), lad = ladderOfSeries(seasonConf(e.seasonNumber));
   if (lad) {
     const at = stepOf(lad, e.file.track);
-    return hoverTip(el("em", { className: "ep-up", textContent: `upgrade on ${svc}` }), () => [
+    return hoverTip(el("em", { className: "ep-up", textContent: trWith("upgrade on {0}", svc) }), () => [
       el("b", { textContent: at < lad.steps.length ? `${trackText(e.file.track)} here: step ${at + 1} of the ladder ${lad.name}` : `${trackText(e.file.track)} here: outside the ladder ${lad.name}` }),
       el("small", { textContent: `${svc} may have it in better quality. Activity, Upgrades checks this and can replace the file.` }),
     ]);
   }
-  return hoverTip(el("em", { className: "ep-up", textContent: `upgrade on ${svc}` }), () => [
+  return hoverTip(el("em", { className: "ep-up", textContent: trWith("upgrade on {0}", svc) }), () => [
     el("b", { textContent: `${e.file.height}p here, ${askedHeight(e.seasonNumber)}p asked of ${svc}` }),
     el("small", { textContent: `${svc} has this episode. Downloaded again, it replaces the file only if it ranks higher in Sonarr.` }),
   ]);
@@ -689,9 +696,9 @@ function onBadge(e) {
   const svc = seasonSvc(e.seasonNumber), found = epAvail[e.id];
   const sxxeyy = `S${String(e.seasonNumber).padStart(2, "0")}E${String(e.episodeNumber).padStart(2, "0")}`;
   const other = found.service !== sxxeyy;  // under another number there: Download asks for it as found
-  return hoverTip(el("em", { className: "ep-on" + (other ? " other" : ""), textContent: other ? `on ${svc} as ${found.service}` : `on ${svc}` }), () => [
-    el("b", { textContent: (!titleHidden(current.tvdbId, sxxeyy, found.name) && found.name) || `On ${svc}` }),
-    el("small", {}, `${svc} lists it as `, el("code", { textContent: found.service })),
+  return hoverTip(el("em", { className: "ep-on" + (other ? " other" : ""), textContent: other ? trWith("on {0} as {1}", svc, found.service) : trWith("on {0}", svc) }), () => [
+    el("b", { textContent: (!titleHidden(current.tvdbId, sxxeyy, found.name) && found.name) || trWith("On {0}", svc) }),
+    el("small", {}, `${trWith("{0} lists it as", svc)} `, el("code", { textContent: found.service })),
     ...(found.match === "title" ? [el("small", { className: "diff", textContent: `Found by its title, under another number: Download asks the service for ${found.service}` })]
       : found.match === "absolute" ? [el("small", { className: "diff", textContent: `The service numbers episodes from the series' start, like Sonarr's absolute number: Download asks it for ${found.service}` })]
       : found.service !== sxxeyy ? [el("small", { className: "diff", textContent: `Sonarr numbers it ${sxxeyy}: this series' Numbering settings map it there` })] : []),
@@ -718,7 +725,10 @@ function renderCatchUp() {
     const n = there.filter((e) => e.seasonNumber === Number(b.dataset.season)).length;
     b.querySelector(".avail")?.remove();
     b.classList.toggle("has-avail", n > 0);
-    if (epAvail && missing.some((e) => e.seasonNumber === Number(b.dataset.season))) b.append(el("small", { className: "avail" + (n ? "" : " none"), textContent: n ? `${n} on ${seasonSvc(Number(b.dataset.season))}` : `none on ${seasonSvc(Number(b.dataset.season))}` }));
+    if (epAvail && missing.some((e) => e.seasonNumber === Number(b.dataset.season))) {
+      const service = seasonSvc(Number(b.dataset.season));
+      b.append(el("small", { className: "avail" + (n ? "" : " none"), textContent: n ? trWith("{0} on {1}", n, service) : trWith("none on {0}", service) }));
+    }
   });
   const renumbered = there.filter((e) => epAvail[e.id].service !== `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`).length;
   // One season's counts are in the title row and the select row: the box says more only for several, or for what they lack
@@ -882,7 +892,7 @@ function renderSeason() {
     ...(missing ? [el("small", { textContent: `${missing} missing` })] : []),
     ...(q && (q.video || q.audio) ? [el("small", {
       textContent: `${seasonSvc(epSeason)}: up to ${[q.video, q.audio].filter(Boolean).join(", ")}` })] : []),
-    ...(flagged ? [el("small", { className: "odd-legend", textContent: "Orange: different from most of this season (hover for details)" })] : []));
+    ...(flagged ? [el("small", { className: "odd-legend", textContent: "Orange: different from most of this season" })] : []));
   table.replaceChildren(...(rows.length ? [head, ...rows] : [el("li", { className: "none", textContent: "Every episode of this season is on disk." })]));
   epFit.observe(table);  // on a resize; now, for new rows or columns
   fitEpList(table);
@@ -902,7 +912,7 @@ function cdmMissing(tag) {
 }
 function cdmNote(tag) {
   const text = cdmMissing(tag);
-  return text ? el("div", { className: "cd-note warn cdm-note" }, el("b", { textContent: `No CDM for ${svcName(tag)}` }), el("span", { textContent: text })) : "";
+  return text ? el("div", { className: "cd-note warn cdm-note" }, el("b", { textContent: trWith("No CDM for {0}", svcName(tag)) }), el("span", { textContent: text })) : "";
 }
 function updateEpBar() {
   $("#ep-bar").hidden = !picked.size;
@@ -976,10 +986,10 @@ function pickServiceEpisode(e, sx, theirs, svc, missing) {
       for (const t of parts) opts.push([`${key}.${t.part}`, `${key}.${t.part} · ${t.name || `part ${t.part}`}`]);
     } else opts.push([key, `${key}${items[0].name ? ` · ${items[0].name}` : ""}`]);
   }
-  if (!opts.some(([v]) => v === (theirs || ""))) opts.unshift([theirs || "", theirs ? `${theirs} · not on ${svc}` : "Nothing: before the first episode"]);
+  if (!opts.some(([v]) => v === (theirs || ""))) opts.unshift([theirs || "", theirs ? trWith("{0} · not on {1}", theirs, svc) : "Nothing: before the first episode"]);
   const titled = elsewhere(e) && epAvail[e.id].service;
   if (titled) opts.forEach((o) => { if (o[0] === titled) o[1] += " ✓"; });  // the one with the same title, in the list too
-  const select = el("select", { className: missing ? "bad" : "", ariaLabel: `${sx} on ${svc}`, onchange: () => {
+  const select = el("select", { className: missing ? "bad" : "", ariaLabel: trWith("{0} on {1}", sx, svc), onchange: () => {
     const map = { ...(oneOff.episode_map || {}) };
     const bare = serviceEpisode(seasonNumbering({ ...oneOff, episode_map: {} }, e.seasonNumber), e.seasonNumber, e.episodeNumber);  // what the rules give anyway
     if (!select.value || select.value === bare) delete map[sx]; else map[sx] = select.value;
@@ -1024,7 +1034,7 @@ function renderPreview() {
         textContent: `${dotted(name)}.${sx}${!dropName && epName ? `.${dotted(epName)}` : ""}….mkv` }),
         ...notes.map(([text, cls]) => el("small", { className: cls, textContent: text }))));
   });
-  $("#oneoff-preview").replaceChildren(...(rows.length ? [el("li", { className: "head" }, el("span", { textContent: "In Sonarr" }), el("span", { textContent: `On ${svc}` }))] : []), ...rows);
+  $("#oneoff-preview").replaceChildren(...(rows.length ? [el("li", { className: "head" }, el("span", { textContent: "In Sonarr" }), el("span", { textContent: trWith("On {0}", svc) }))] : []), ...rows);
 }
 /* Whether the service's episode picked is Sonarr's: the same title, another one, or none there. */
 const plainTitle = (t) => (t || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\(\s*\d+\s*\/\s*\d+\s*\)/g, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -1033,7 +1043,7 @@ const plainTitle = (t) => (t || "").normalize("NFKD").replace(/[\u0300-\u036f]/g
 const elsewhere = (e) => ["title", "absolute"].includes(epAvail?.[e.id]?.match);
 function agreement(e, theirs, found, svc) {
   if (!theirs) return "";
-  if (!found.length) return el("span", { className: "st bad", textContent: `Not on ${svc}` });
+  if (!found.length) return el("span", { className: "st bad", textContent: trWith("Not on {0}", svc) });
   const ours = plainTitle(e.title), other = plainTitle(found[0].name), generic = /^(tba|tbd|tbc|episode( \d+)?)$/;
   const titled = epAvail?.[e.id]?.match === "title" && epAvail[e.id].service === theirs;
   const meets = (a) => a && other && (a === other || a.includes(other) || other.includes(a));

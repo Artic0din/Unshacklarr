@@ -58,6 +58,65 @@ console.log(JSON.stringify(vm.runInContext("RELEASE_DAYS", ctx)));
     assert days == list(range(-sync.EARLY_DAYS_MAX, 2))
 
 
+def test_old_activity_dates_show_the_local_month_and_year_instead_of_elapsed_days():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const now = Date.parse("2026-11-20T12:00:00Z");
+process.env.TZ = "Europe/Paris";
+const ctx = sandbox({ LOCALE: "de", Date: class extends Date { static now() { return now; } } });
+vm.runInContext(grab(src, /function ago\b[\s\S]*?\n}\n/), ctx);
+const dates = ["2026-10-21T12:00:00Z", "2026-11-19T12:00:00Z", "1993-10-31T23:30:00Z"].map(ctx.ago);
+process.env.TZ = "America/Los_Angeles";
+console.log(JSON.stringify([...dates, ctx.ago("1993-11-01")]));
+""", str(JS / "settings-options.js"))
+    assert shown == ["Okt. 2026", "1 d ago", "Nov. 1993", "Nov. 1993"]
+
+
+def test_escape_dismisses_the_hover_tip_before_closing_the_series_drawer():
+    shown = node(r"""
+const src = read(process.argv[1]), listeners = {}, attributes = {};
+let tip = null, drawerOpen = true;
+const keydown = [];
+const rect = () => ({ left: 0, width: 10, top: 30, bottom: 40, height: 10 });
+const target = { addEventListener: (type, fn) => { listeners[type] = fn; },
+  setAttribute: (key, value) => { attributes[key] = value; }, removeAttribute: (key) => { delete attributes[key]; },
+  getBoundingClientRect: rect,
+};
+const ctx = sandbox({
+  document: {
+    addEventListener: (type, fn, capture) => { if (type === "keydown") keydown.push({ fn, capture }); },
+    querySelector: () => null, body: { append: (node) => { tip = node; } },
+  },
+  $: () => ({ classList: { contains: () => drawerOpen } }),
+  dismissEpisodeSubtitles: () => null,
+  closeDrawer: () => { drawerOpen = false; },
+  el: (tag, props) => ({ ...props, style: {}, getBoundingClientRect: rect, remove: () => { tip = null; } }),
+  innerWidth: 390, requestAnimationFrame() {}, onTop() {},
+});
+vm.runInContext(grab(src, /document\.addEventListener\("keydown", \(e\) => \{  \/\/ a dialog's Escape[\s\S]*?\n\}\);/) +
+  grab(src, /let tipEl[^\n]+\nconst hideTip[^\n]+\n/) +
+  src.slice(src.indexOf("function showTip("), src.indexOf("function askedHeight(")), ctx);
+function press(key) {
+  let stopped = false, prevented = false;
+  for (const { fn } of [...keydown].sort((a, b) => Number(!!b.capture) - Number(!!a.capture))) {
+    fn({ key, preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; } });
+    if (stopped) break;
+  }
+  return prevented;
+}
+ctx.hoverTip(target, () => ["Available"]);
+listeners.mouseenter();
+const opened = [tip?.id, attributes["aria-describedby"]];
+press("Enter");
+const stillOpen = tip?.id;
+const prevented = press("Escape");
+const firstEscape = [tip, { ...attributes }, drawerOpen, prevented];
+press("Escape");
+console.log(JSON.stringify([opened, stillOpen, firstEscape, drawerOpen]));
+""", str(JS / "series.js"))
+    assert shown == [["tip", "tip"], "tip", [None, {}, True, True], False]
+
+
 def test_episode_subtitle_summary_prioritizes_required_languages_and_discloses_every_track():
     summary = node(r"""
 const src = read(process.argv[1]), ctx = sandbox({ el: (tag, props, ...kids) => ({
@@ -68,15 +127,15 @@ const src = read(process.argv[1]), ctx = sandbox({ el: (tag, props, ...kids) => 
 vm.runInContext(grab(src, /function setSubtitleExpanded\b[\s\S]*?function subtitleSummary\b[\s\S]*?\n}\n/), ctx);
 const tracks = ["en", "ara", "cat", "cze", "fr", "fre-CA", ...Array(27).fill("es")];
 const { cell, detail } = ctx.subtitleSummary(tracks, "fr-CA", "", 5, "E05", false);
-const chip = cell.kids[1];
+const chip = cell.kids[2];
 const closed = detail.hidden;
 chip.onclick();
 const opened = !detail.hidden && chip["aria-expanded"] === "true";
 chip.onclick();
 console.log(JSON.stringify({
-  preview: cell.kids[0], chip: chip.textContent, name: chip.ariaLabel, closed, opened,
+  preview: cell.kids[1], chip: chip.textContent, name: chip.ariaLabel, closed, opened,
   collapsedAgain: detail.hidden && chip["aria-expanded"] === "false",
-  detail: detail.textContent, short: ctx.subtitleSummary(["en"], "", "", 1, "E01", false).cell.kids,
+  detail: detail.textContent, short: ctx.subtitleSummary(["en"], "", "", 1, "E01", false).cell.kids.map(k => k.textContent ?? k),
 }));
 """, str(JS / "series.js"))
     assert summary == {
@@ -87,7 +146,7 @@ console.log(JSON.stringify({
         "opened": True,
         "collapsedAgain": True,
         "detail": ", ".join(["en", "ara", "cat", "cze", "fr", "fre-CA", *(["es"] * 27)]),
-        "short": ["en"],
+        "short": ["Subtitles", "en"],
     }
 
 
@@ -158,7 +217,7 @@ const subtitles = () => {
   const [row, detail] = list.kids[2].kids;
   const cell = row.kids.find(k => hasClass(k, "subs"));
   const chip = cell?.kids.find(k => hasClass(k, "ep-subs-chip"));
-  return { preview: cell?.kids[0], chip: chip?.textContent,
+  return { preview: cell?.kids[1], chip: chip?.textContent,
     detail: detail?.textContent, linked: !!detail && chip?.["aria-controls"] === detail.id,
     mobileCell: !!cell && hasClass(cell, "ep-mobile-subs"),
     mobileDetail: !!detail && hasClass(detail, "ep-mobile-subs") };
@@ -413,13 +472,16 @@ const toggle = {
   setAttribute(name, value) { this.attributes[name] = String(value); },
   focus: () => events.push("focus: filters"),
 };
-const search = {}, sort = {}, library = {};
+const search = {}, sort = {}, library = {}, poster = {};
 const controls = {
   contains: (target) => target === sort || target === library,
   addEventListener: (name, fn, capture) => { listeners[name] = { fn, capture }; },
 };
 const narrow = { matches: false, addEventListener: (name, fn) => { listeners[name] = { fn }; } };
-const ctx = sandbox({ $: (sel) => sel === "#series-options-toggle" ? toggle : controls, matchMedia: () => narrow });
+const ctx = sandbox({ $: (sel) => sel === "#series-options-toggle" ? toggle : controls, matchMedia: () => narrow,
+  document: {}, window: { addEventListener: (name, fn) => { listeners[`window:${name}`] = { fn }; } },
+  requestAnimationFrame: (fn) => { listeners.afterTab = { fn }; },
+});
 const nav = read(process.argv[1]);
 vm.runInContext(nav.slice(nav.indexOf("function bindSeriesOptions("), nav.indexOf("function renderServiceFilter(")), ctx);
 const controlled = [toggle.getAttribute("aria-controls")];
@@ -441,11 +503,18 @@ events.push(expanded());
 listeners.keydown.fn({ key: "Escape", target: sort, preventDefault() {} });
 events.push(expanded());
 press();
-listeners.focusout.fn({ target: toggle, relatedTarget: sort });
-listeners.focusout.fn({ target: sort, relatedTarget: library });
+listeners.focusout?.fn({ target: toggle, relatedTarget: sort });
+listeners.focusout?.fn({ target: sort, relatedTarget: library });
 events.push(`inside: ${expanded() ? "open" : "closed"}`);
-listeners.focusout.fn({ target: library, relatedTarget: search });
-events.push(`outside: ${expanded() ? "open" : "closed"}`);
+listeners.focusout?.fn({ target: library, relatedTarget: poster });
+if (expanded()) events.push("poster opened drawer");
+listeners["window:click"]?.fn({ composedPath: () => [poster] });
+events.push(`after click: ${expanded() ? "open" : "closed"}`);
+toggle.setAttribute("aria-expanded", "true");
+listeners.keydown.fn({ key: "Tab", target: library });
+ctx.document.activeElement = search;
+listeners.afterTab?.fn();
+events.push(`after Tab: ${expanded() ? "open" : "closed"}`);
 for (const action of ["#bulk-open", "#sel-toggle"]) {
   press();
   click(action);
@@ -456,7 +525,7 @@ console.log(JSON.stringify([controlled, listeners.click.capture, ...events]));
     assert seen == [
         ["series-actions", "series-options", "series-actions"],
         True, True, False, True, "focus: filters", False,
-        "inside: open", "outside: closed",
+        "inside: open", "poster opened drawer", "after click: closed", "after Tab: closed",
         "focus: filters", "#bulk-open: closed", "focus: filters", "#sel-toggle: closed",
     ]
 
@@ -782,6 +851,131 @@ console.log(JSON.stringify([inMenu, chips()]));
     episodes = [f"S01E{i:02d}" for i in range(1, 13)]
     assert menu == [*episodes[:6], "+6"]
     assert full == episodes
+
+
+def test_inbox_fetch_failure_preserves_unread_and_can_retry():
+    result = node(r"""
+const nodes = Object.fromEntries(["dialog", "list", "clear", "filters", "summary"].map((id) => [`#inbox-${id}`, {
+  classList: { toggle() {}, contains: () => true }, dataset: {}, addEventListener() {}, replaceChildren(...kids) { this.kids = kids; },
+}]));
+Object.assign(nodes, {
+  "#inbox-dialog": { ...nodes["#inbox-dialog"], style: {}, show() { this.open = true; } },
+  "#bell": { getBoundingClientRect: () => ({}), setAttribute() {} }, "#bell-count": { hidden: false },
+});
+let unavailable = true, posts = 0;
+const ctx = sandbox({
+  $: (sel) => nodes[sel] || any, phoneLayout: () => true, setInterval() {},
+  keepFocus: (_box, draw) => draw(), failed: (text, retry) => ({ text, retry }),
+  api: async (path) => {
+    if (path === "/api/inbox/read") posts++;
+    if (unavailable) throw Error("503");
+    return { items: [], unread: path === "/api/inbox" ? 1 : 0 };
+  },
+});
+vm.runInContext(read(process.argv[1]), ctx);
+(async () => {
+  await ctx.openInbox("menu");
+  const retry = nodes["#inbox-list"].kids[0]?.retry;
+  let clearThrew = false;
+  try { await nodes["#inbox-clear"].onclick({ currentTarget: nodes["#inbox-clear"] }); } catch { clearThrew = true; }
+  const failed = [Boolean(retry), posts, nodes["#bell-count"].hidden, nodes["#inbox-clear"].hidden, clearThrew];
+  unavailable = false;
+  await retry?.();
+  console.log(JSON.stringify({ failed, recovered: [posts, nodes["#bell-count"].hidden, nodes["#inbox-list"].kids[0]?.className] }));
+})();
+""", str(JS / "inbox.js"))
+    assert result == {"failed": [True, 0, False, True, False], "recovered": [1, True, "inbox-empty"]}
+
+
+@pytest.mark.parametrize("stale_first", ["yes", "no"])
+def test_reopened_inbox_ignores_the_previous_openings_response(stale_first):
+    result = node(r"""
+const nodes = Object.fromEntries(["list", "clear", "filters", "summary"].map((id) => [`#inbox-${id}`, {
+  classList: { toggle() {} }, dataset: {}, replaceChildren(...kids) { this.kids = kids; },
+}]));
+let menu = false, posts = 0;
+const dialog = {
+  style: {}, open: false, classList: { toggle(_name, value) { menu = value; }, contains: () => menu },
+  showModal() { this.open = true; }, close() { this.open = false; }, addEventListener() {},
+};
+const bell = { focus() {}, getBoundingClientRect: () => ({}), setAttribute() {} };
+const badge = { hidden: false, textContent: "2" }, reads = [];
+const ctx = sandbox({
+  $: (sel) => nodes[sel] || ({ "#inbox-dialog": dialog, "#bell": bell, "#bell-count": badge })[sel] || any,
+  history: { state: { inbox: true } }, phoneLayout: () => true, setInterval() {},
+  keepFocus: (_, draw) => draw(), loading: () => ({ state: "loading" }), failed: () => ({ state: "retry" }),
+  api: (path) => {
+    if (path === "/api/inbox/read") { posts++; return Promise.resolve({ items: [], unread: 0 }); }
+    return new Promise((resolve, reject) => reads.push({ resolve, reject }));
+  },
+});
+vm.runInContext(read(process.argv[1]), ctx);
+(async () => {
+  const before = ctx.openInbox();
+  dialog.close();
+  const after = ctx.openInbox();
+  const stale = async () => { reads[0].resolve({ items: [], unread: 9 }); await before; };
+  if (process.argv[2] === "yes") await stale();
+  reads[1].reject(Error("503"));
+  await after;
+  if (process.argv[2] === "no") await stale();
+  console.log(JSON.stringify([posts, badge.hidden, badge.textContent, nodes["#inbox-list"].kids[0]?.state]));
+})();
+""", str(JS / "inbox.js"), stale_first)
+    assert result == [0, False, "2", "retry"]
+
+
+def test_browser_back_closes_full_inbox_without_leaving_its_page():
+    result = node(r"""
+const location = { hash: "#/series" };
+const entries = [{ state: null, hash: "#/schedule" }, { state: { settings: { target: "#section" } }, hash: location.hash }];
+let index = 1, focus = "bell", modal = false, menu = false, invoker, closesBeforePop = false;
+const dialog = {
+  style: {}, classList: { toggle(_name, value) { menu = value; }, contains: () => menu },
+  addEventListener() {}, show() { this.open = true; focus = "inbox-title"; },
+  showModal() { this.open = modal = true; invoker = focus; focus = "inbox-title"; },
+  close() { this.open = false; if (modal) focus = invoker; modal = false; },
+};
+const bell = { focus() { focus = "bell"; }, getBoundingClientRect: () => ({}) }, closeButton = {};
+const history = {
+  get state() { return entries[index].state; },
+  pushState(state) { entries.splice(++index, entries.length, { state, hash: location.hash }); },
+  back() {
+    if (closesBeforePop) dialog.close();
+    location.hash = entries[--index].hash;
+    ctx.applyRoute({ state: this.state });
+  },
+};
+const ctx = sandbox({
+  location, history, current: null, currentTab: "series", routed: true, S: { series: [] },
+  cancelSettingsJump() {}, inSettingsSec: () => false, updateTitle() {}, routeHash: () => "#/series",
+  parseRoute: () => ({ tab: location.hash.slice(2) }), showTab() {},
+  phoneLayout: () => true, setInterval() {}, api: async () => { throw Error("503"); },
+  $: (sel) => ({ "#inbox-dialog": dialog, "#bell": bell, "#inbox-close": closeButton })[sel] || any,
+});
+vm.runInContext(read(process.argv[1]), ctx);
+vm.runInContext(grab(read(process.argv[2]), /function applyRoute\b[\s\S]*?\n}\n/), ctx);
+(async () => {
+  await ctx.openInbox("menu");
+  const menuIndex = index;
+  focus = "inbox-full";
+  await ctx.openInbox();
+  const full = [modal, index, history.state?.settings?.target];
+  history.back();
+  const back = [dialog.open, location.hash, focus];
+  await ctx.openInbox();
+  closesBeforePop = true;
+  closeButton.onclick();
+  closesBeforePop = false;
+  await ctx.openInbox();
+  closeButton.onclick();
+  console.log(JSON.stringify({ menuIndex, full, back, close: [dialog.open, index] }));
+})();
+""", str(JS / "inbox.js"), str(JS / "navigation.js"))
+    assert result == {
+        "menuIndex": 1, "full": [True, 2, "#section"],
+        "back": [False, "#/series", "bell"], "close": [False, 1],
+    }
 
 
 def test_every_news_target_gets_a_new_badge():
@@ -1141,9 +1335,9 @@ def test_each_download_step_says_its_state_and_the_current_one_is_marked():
     shown = node(r"""
 const ctx = sandbox({ afterTracks: () => false });
 const src = read(process.argv[1]);
-for (const re of [/^const OUTCOME = [^\n]*\n/m, /^const STEPS = [^\n]*\n/m, /^const STEPS_SHORT = [^\n]*\n/m, /^const STEP_STATE = [^\n]*\n/m,
+for (const re of [/^const OUTCOME = [^\n]*\n/m, /^const STEPS = [^\n]*\n/m, /^const STEP_STATE = [^\n]*\n/m,
   /^function stepStates\(.*?^\}/ms, /^function stepList\(.*?^\}/ms]) vm.runInContext(grab(src, re), ctx);
-const read_ = (c) => ctx.stepList(c).kids.map((s) => [s.className, s.ariaCurrent ?? null, s.kids[2].textContent]);
+const read_ = (c) => ctx.stepList(c).kids[0].kids.map((s) => [s.className, s.ariaCurrent ?? null, s.kids[1].textContent]);
 console.log(JSON.stringify({
   running: read_({ step: "downloading", outcome: "running", parts: 1 }),
   failed: read_({ step: "renaming", outcome: "failed", parts: 1 }),
@@ -1151,6 +1345,11 @@ console.log(JSON.stringify({
   interrupted: read_({ step: "downloading", outcome: "interrupted", parts: 1 }),
   unavailable: read_({ step: "searching", outcome: "unavailable", parts: 1 }),
   kept: read_({ step: "done", outcome: "kept", parts: 1 }),
+  captions: [
+    { step: "downloading", outcome: "running" },
+    { step: "done", outcome: "kept" },
+    { step: "done", outcome: "downloaded" },
+  ].map((c) => ctx.stepList(c).kids[1]?.textContent ?? null),
 }));
 """, str(JS / "activity.js"))
     assert shown["running"] == [["done", None, "Done"], ["now", "step", "Running"], ["", None, "Waiting"], ["", None, "Waiting"], ["", None, "Waiting"]]
@@ -1160,6 +1359,7 @@ console.log(JSON.stringify({
     assert ["halt", "step", "Interrupted"] in shown["interrupted"]  # a halt says why, not always "Stopped"
     assert ["halt", "step", "Not out yet"] in shown["unavailable"]
     assert shown["kept"][-1] == ["warn", None, "Kept"]  # the outcome's own word, not a colour
+    assert shown["captions"] == ["Downloading", "Sonarr import", None]
 
 
 def test_the_weekly_bars_come_with_their_numbers_as_a_table():

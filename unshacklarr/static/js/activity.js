@@ -3,7 +3,7 @@
 const TERM_COLS = 110;
 const OUTCOME = { running: "Running", downloaded: "Downloaded", failed: "Failed", kept: "Kept", import: "Import needed", interrupted: "Interrupted", stopped: "Stopped", unavailable: "Not out yet", cancelled: "Cancelled" };
 /* A separate programme no search found has aired: it is not on the service, rather than not out yet */
-const outcomeOf = (c) => c.outcome === "unavailable" && c.notOn ? `Not on ${c.notOn}` : OUTCOME[c.outcome] || c.outcome;
+const outcomeOf = (c) => c.outcome === "unavailable" && c.notOn ? trWith("Not on {0}", c.notOn) : OUTCOME[c.outcome] || c.outcome;
 const KIND = { auto: "automatic sync", burst: "release time", manual: "started by hand", retry: "retried by hand", upgrade: "better language" };
 let term = null, termFit = null, termSocket = null, termFor = null, runsShown = 50, runsTimer = null;
 let runCards = [], picked_run = null, conFilter = "all";
@@ -204,20 +204,23 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
     const query = $("#con-search").value.trim(), q = query.toLowerCase();
     const groups = { all: () => true, downloaded: (c) => c.outcome === "downloaded", failed: (c) => c.outcome === "failed",
       kept: (c) => c.outcome === "kept" || c.outcome === "import", stopped: (c) => ["stopped", "interrupted", "cancelled"].includes(c.outcome) };
-    const searched = runCards.filter((c) => !isLive(c) && (!q || c.series.toLowerCase().includes(q)));
+    const historyItems = jobsOf(runCards.filter((c) => !isLive(c) && !liveJobs.has(c.batch)));
+    const matches = (item, filter) => (item.cards || [item]).some((c) =>
+      (!q || c.series.toLowerCase().includes(q)) && groups[filter](c));
     document.querySelectorAll("#tab-log .con-filters button").forEach((b) => {
-      const n = searched.filter(groups[b.dataset.f]).length;
+      const n = historyItems.filter((item) => matches(item, b.dataset.f)).length;
       b.querySelector("span").textContent = `(${n})`;
       b.hidden = !n && b.dataset.f !== "all" && b.dataset.f !== conFilter;  // an empty kind is noise; the pressed one stays, to be let go
     });
-    const pastItems = jobsOf(searched.filter(groups[conFilter]).filter((c) => !liveJobs.has(c.batch)));
+    const pastItems = historyItems.filter((item) => matches(item, conFilter));
     $("#runs-history").replaceChildren(...(pastItems.length ? pastItems.slice(0, runsShown).map(itemRow)
       : [emptyHistory(query, conFilter)]));
     $("#runs-more").hidden = pastItems.length <= runsShown;
   }
   // Activity opened from the menu while a download runs: straight to it, a phone too.
-  if (landOnLive && liveItems.length && picked_run !== "serve") {
+  if (landOnLive && liveItems.length && picked_run !== "serve" && !history.state?.activity && activityIsVisible()) {
     picked_run = itemKey(liveItems[0]); runBackKey = null; $("#con").classList.add("open");
+    recordActivityDetail(picked_run);
   }
   landOnLive = false;
   // On a wide screen, something is always shown: what runs first, else the latest download.
@@ -243,8 +246,9 @@ function jobsOf(cards) {
   jobs.forEach((j) => {  // one card per episode: its try going on or queued, else its latest
     const best = new Map();
     for (const c of j.cards) {
-      const was = best.get(c.sxxeyy), rank = (x) => (x.waiting || isLive(x) ? 2 : 1);
-      if (!was || rank(c) > rank(was) || (rank(c) === rank(was) && c.started > was.started)) best.set(c.sxxeyy, c);
+      const episode = JSON.stringify([c.instance || "", c.tvdbId || c.series, c.episodeId ?? c.sxxeyy]);
+      const was = best.get(episode), rank = (x) => (x.waiting || isLive(x) ? 2 : 1);
+      if (!was || rank(c) > rank(was) || (rank(c) === rank(was) && c.started > was.started)) best.set(episode, c);
     }
     j.cards = [...best.values()].sort((a, b) => a.sxxeyy.localeCompare(b.sxxeyy));
   });
@@ -459,7 +463,7 @@ function renderJob(j) {
     const tookLine = !live && c.ended ? [cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "";
     const detail = downloading ? el("div", { className: "jmeta" },  // how fast, how long still: in sight, not a grey line
         ...[...(afterTracks(c) ? [[ICON_CLOCK, muxLeft(c) ? `${afterTracks(c)} · ${muxLeft(c)} left` : `${afterTracks(c)} · ${since(c.mux_from || c.tracks_in)}`]] : [[ICON_SPEED, speedOf(c)], [ICON_CLOCK, timeLeft(c) && `${timeLeft(c)} left`]]), [ICON_GLOBE, proxyOf(c), "extra"], [ICON_FILM, videoOf(c), "extra"],
-          [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${svcName(c.service)}`, "extra"]]
+          [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && trWith("{0} on {1}", c.serviceEpisode, svcName(c.service)), "extra"]]
           .filter(([, t]) => t).map(([svg, t, extra]) => { const chip = metaChip(svg, t); if (extra) chip.classList.add(extra); return chip; }))
       : el("small", { textContent: tookLine, title: tookLine });  // ellipsised when narrow: the whole line on hover
     const open = openCards.has(c.id) && !c.waiting;
@@ -580,11 +584,36 @@ function markPicked(key) {
   });
   return view;
 }
-let runBackKey = null;
+let runBackKey = null, activityDetail = null;
+function activityIsVisible() {
+  const route = parseRoute();
+  return route.tab === "log" && !route.id && !$("#tab-log").hidden && !document.hidden
+    && !current && !history.state?.inbox && !document.querySelector("dialog:modal");
+}
+function recordActivityDetail(id, tool = false) {
+  if (innerWidth > 700 || !activityIsVisible()) return;
+  const current = history.state?.activity;
+  if (current?.id === id && current.tool === tool && current.backKey === runBackKey) {
+    activityDetail = current;
+    return;
+  }
+  activityDetail = { id, tool, backKey: runBackKey, hash: location.hash };
+  history[current ? "replaceState" : "pushState"]({ ...history.state, activity: activityDetail }, "");
+}
+function syncActivityRoute(restoreFocus = true) {
+  const detail = history.state?.activity;
+  if (detail?.hash === location.hash) {
+    if (activityDetail?.id === detail.id && picked_run === detail.id) return;
+    activityDetail = detail;
+    if (detail.tool) $(`#con-${detail.id}`).onclick();
+    else pickRun(detail.id, detail.backKey);
+  } else if (activityDetail || (!restoreFocus && innerWidth <= 700 && picked_run)) closeActivityDetail(restoreFocus);
+}
 function pickRun(id, backKey = null) {
   landOnLive = false;
   runBackKey = backKey;
   picked_run = id;
+  recordActivityDetail(id);
   $("#con").classList.add("open");
   renderConsole();
   if (innerWidth <= 700) { scrollTo({ top: 0 }); focusHeading($("#cd-top-title")); }  // the list is out of sight: the keyboard goes with the view
@@ -595,6 +624,7 @@ function openActivityTool(show) {
     runBackKey = null;
     $("#cd-main").replaceChildren(loading("Loading…"));
     show();
+    recordActivityDetail(picked_run, true);
     if (innerWidth <= 700) { scrollTo({ top: 0 }); focusHeading($("#cd-top-title")); }
   };
 }
@@ -909,12 +939,12 @@ async function showStats() {
   if (picked_run !== "stats") return;  // another pane was picked while this answer was on its way
   const m = st.month, fmt = (v, unit = "") => v === null || v === undefined ? "–" : `${v}${unit}`;
   const max = Math.max(1, ...st.weeks.map((w) => w.downloaded + w.failed + w.kept));
-  const weekOf = (w) => new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
+  const weekOf = (w, month = "short") => new Date(`${w.start}T00:00`).toLocaleDateString(LOCALE, { day: "numeric", month });
   const weeks = el("div", { className: "weeks", ariaHidden: "true" }, ...st.weeks.map((w) => {  // drawn for the eye: the table under it has the numbers
     const n = w.downloaded + w.failed + w.kept, h = (k) => `height:${(w[k] / max) * 130}px`;
     return el("div", { className: "w", title: `Week of ${weekOf(w)}: ${w.downloaded} downloaded, ${w.kept} kept, ${w.failed} failed` },
       el("span", { className: "stack" }, el("i", { className: "ok", style: h("downloaded") }), el("i", { className: "kp", style: h("kept") }), el("i", { className: "ko", style: h("failed") })),
-      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: weekOf(w) })));
+      el("span", {}, el("b", { textContent: n || "" }), el("br"), el("small", { textContent: weekOf(w, "numeric") })));
   }));
   const perWeek = el("table", { className: "svc-table" }, el("caption", { className: "sr-only", textContent: "Downloads per week, the last 8 weeks" }),
     el("thead", {}, el("tr", {}, ...["Week", "Downloaded", "Failed", "Kept"].map((t) => el("th", { textContent: t })))),
@@ -924,7 +954,7 @@ async function showStats() {
       el("td", { className: v.failed ? "bad" : "", textContent: v.failed }), el("td", { textContent: v.kept }),
       el("td", { className: v.success === null ? "" : v.success < 70 ? "bad" : "fine", textContent: fmt(v.success, "%") }),
       el("td", { textContent: v.last_success ? ago(v.last_success) : "never" }), el("td", { textContent: v.average ? duration(v.average * 1000) : "–" })))));
-  $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:22px" },
+  $("#cd-main").replaceChildren(el("div", { style: "display:grid;grid-template-columns:minmax(0,1fr);gap:22px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Stats" }),
       el("small", { className: "line1", textContent: st.since ? `From the history kept since ${day(new Date(st.since))}` : "Nothing in the history yet" }))),
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
@@ -939,14 +969,18 @@ $("#con-stats").onclick = openActivityTool(showStats);
 $("#con-downloads").onclick = (e) => {
   landOnLive = false;
   if (innerWidth > 700 && e.currentTarget.getAttribute("aria-pressed") === "true") return;
+  if (history.state?.activity) return history.back();
   runBackKey = null;
   $("#con").classList.remove("open"); picked_run = null; renderConsole();
 };
-$("#cd-back").onclick = () => {
+$("#cd-back").onclick = () => history.state?.activity ? history.back() : closeActivityDetail();
+function closeActivityDetail(restoreFocus = true) {
   landOnLive = false;
+  activityDetail = null;
   const from = picked_run, trigger = runBackKey;
   runBackKey = null;
   $("#con").classList.remove("open"); picked_run = null; renderConsole();
+  if (!restoreFocus) return;
   if (trigger) {
     const chip = $(`#con-running [data-fk="${trigger}"]`);
     if (chip) {
@@ -963,7 +997,7 @@ $("#cd-back").onclick = () => {
     ($(`[data-fk="row:${from}"]`) || document.getElementById(`con-${from}`) ||
       $("#con-downloads")).focus({ preventScroll: true });
   }
-};
+}
 let searchTimer = null;  // typed: the history filtered once the typing pauses, not at each key
 $("#con-search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 150); };
 function setConFilter(f) {
@@ -980,7 +1014,6 @@ addEventListener("scroll", () => {  // a phone: the list is the page
 }, { passive: true });
 
 const STEPS = ["Queued", "Downloading", "Decrypting and muxing", "Joining parts", "Renaming", "Sonarr import"];
-const STEPS_SHORT = ["Queued", "Download", "Mux", "Join", "Rename", "Import"];
 const STEP_STATE = { done: "Done", now: "Running", fail: "Failed", halt: "Stopped", "": "Waiting" };  // each step's state in words (warn: the outcome's own), the bar's colour aside
 function stepStates(c) {
   // past the last step ("done") only a success or a kept file gets here: anything else ended on the last step, not after it
@@ -1099,7 +1132,7 @@ function cardActs(c) {
   return [
     setupButton(c),
     live && c.job_id ? act("stop", "Stop", stopRun, "danger") : "",
-    !live && c.outcome === "kept" ? act("import", "Import anyway", importKept, "primary") : "",
+    !live && c.outcome === "kept" ? act("import", "Import anyway", importKept) : "",
     !live && c.outcome === "import" ? act("import", "Import", importKept, "primary") : "",
     signIn ? act("signin", "Fix sign-in", fixSignIn, "primary") : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? act("retry", "Retry", retryRun, signIn ? "" : "primary") : "",
@@ -1125,7 +1158,7 @@ function runActs(c) {
     setupButton(c),
     signIn,
     live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
-    !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
+    !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: `btn small${c.outcome === "import" ? " primary" : ""}`, textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: `btn small${signIn ? "" : " primary"}`, textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
     !live ? el("button", { className: "btn small", textContent: "Save diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
       onclick: () => downloadDiagnostic(c) }) : "",
@@ -1177,11 +1210,14 @@ function trackDone(t) {
 const tracksOpen = new Set();  // attempts whose downloaded tracks were unfolded: they stay so as it moves on
 /* An attempt's steps, each with its state in words and the current one marked, so no state rests on a colour. */
 function stepList(c) {
-  return el("div", { className: "steps", role: "list", ariaLabel: "Steps" },
-    ...stepStates(c).flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms`, ...(["now", "fail", "halt"].includes(st) ? { ariaCurrent: "step" } : {}) },
-      el("span", { className: "l", textContent: STEPS[i] }),
-      el("span", { className: "s", textContent: STEPS_SHORT[i] }),
-      el("span", { className: "sr-only", textContent: st === "halt" ? OUTCOME[c.outcome] || STEP_STATE.halt : STEP_STATE[st] || OUTCOME[c.outcome] }))]));  // halted: why, in the outcome's own word
+  const states = stepStates(c);
+  const active = states.findIndex((st) => ["now", "fail", "halt", "warn"].includes(st));
+  return el("div", {},
+    el("div", { className: "steps", role: "list", ariaLabel: "Steps" },
+      ...states.flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms`, ...(["now", "fail", "halt"].includes(st) ? { ariaCurrent: "step" } : {}) },
+        el("span", { className: "l", textContent: STEPS[i] }),
+        el("span", { className: "sr-only", textContent: st === "halt" ? OUTCOME[c.outcome] || STEP_STATE.halt : STEP_STATE[st] || OUTCOME[c.outcome] }))])),
+    active < 0 ? "" : el("div", { className: `step-caption ${states[active]}`, ariaHidden: "true", textContent: STEPS[active] }));
 }
 /* An attempt's steps, what waits for you, its figures or its end, and its tracks: in its own view and in a job's card. */
 function runBody(c) {
@@ -1398,5 +1434,5 @@ function promptBox(p) {
     } catch (err) { send.disabled = false; toast(err.message, true); }
   } }, field, send);
   return el("div", { className: "act-box", role: "status" },
-    el("b", { textContent: `${svcName(p.service)} asks` }), el("span", { className: "q", textContent: p.text }), form);
+    el("b", { textContent: trWith("{0} asks", svcName(p.service)) }), el("span", { className: "q", textContent: p.text }), form);
 }

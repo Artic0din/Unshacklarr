@@ -244,6 +244,7 @@ const ctx = {
   S: { config: { settings: {}, service_defaults: { NF: { options: {}, service_options: {} } } }, services: ["NF"], dlOptions: [] },
   COUNT: { option: (n) => `${n} options` },
   svcName: (t) => t === "NF" ? "Netflix" : t,
+  trWith: (template, label) => template.replace("{0}", label),
   optionsEditor() {}, ladderClash() {}, ladderNamed() {}, ladderChips() {}, field: () => ({}),
   loadServiceOptions: async () => [],
   renderCommands() {}, dirty() {}, toast: (m, err) => toasts.push([m, !!err]),

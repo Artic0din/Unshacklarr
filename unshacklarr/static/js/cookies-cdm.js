@@ -174,7 +174,7 @@ function cdmPicker(anchor, service, current, also = []) {
   };
   q.oninput = draw;
   draw();
-  const who = service === "default" ? "The default device" : `Device for ${[service, ...also].map(svcName).join(", ")}`;
+  const who = service === "default" ? "The default device" : trWith("Device for {0}", [service, ...also].map(svcName).join(", "));
   if (cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: who }), q, list)) q.focus();
 }
 const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
@@ -227,7 +227,8 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
     else onDefault.push(svc);
   }
   const def = typeof data.map.default === "string" ? data.map.default : "";
-  const defButton = el("button", { type: "button", className: "btn small cdm-pop-btn", dataset: { key: "svc:default" }, textContent: "Change",
+  const defaultDevice = deviceOf(def), defaultProblem = def !== "none" && (!defaultDevice || problem(defaultDevice));
+  const defButton = el("button", { type: "button", className: `btn small cdm-pop-btn${defaultProblem ? " primary" : ""}`, dataset: { key: "svc:default" }, textContent: "Change",
     onclick: (e) => cdmPicker(e.currentTarget, "default", def) });
   const others = data.services.filter((t) => !shown.some((x) => x.toLowerCase() === t.toLowerCase()) && t !== "EXAMPLE");
   const addSvc = el("button", { type: "button", className: "btn small cdm-pop-btn", dataset: { key: "add" }, textContent: "+ Another service", onclick: (e) => {
@@ -250,7 +251,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   const alerts = [
     ...[def, ...groups.keys()].filter((name) => name && name !== "none" && !deviceOf(name)).map((name) => {
       const svcs = name === def ? ["the default"] : groups.get(name);
-      const fix = el("button", { type: "button", className: "btn small primary cdm-pop-btn", dataset: { key: `fix:${name}` }, textContent: "Pick a device",
+      const fix = el("button", { type: "button", className: `btn small cdm-pop-btn${name === def ? "" : " primary"}`, dataset: { key: `fix:${name}` }, textContent: "Pick a device",
         onclick: (e) => name === def ? cdmPicker(e.currentTarget, "default", name) : cdmPicker(e.currentTarget, svcs[0], name, svcs.slice(1)) });
       return el("div", { className: "cdm-alert" }, el("span", {}, el("b", { textContent: svcs.map(cdmUsageName).join(", ") }), svcs.length === 1 ? ` uses ${name}, which is not in the CDM folder` : ` use ${name}, which is not in the CDM folder`), fix);
     }),
@@ -420,4 +421,3 @@ $("#cdm-file").onchange = async (e) => {
   try { loadCdm(await api("/api/cdm/add", { method: "POST", body: JSON.stringify({ filename: file.name, data: btoa(bin) }) })); toast(`${file.name} added`); }
   catch (err) { toast(err.message, true); }
 };
-

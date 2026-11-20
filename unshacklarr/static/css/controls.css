@@ -44,7 +44,7 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 @keyframes up-bob { 50% { transform: translateY(2px); opacity: .55; } }
 .left-row small.up-live { color: var(--accent); font-weight: 600; animation: up-bob 1.1s ease-in-out infinite; } .up-ep small.up-live { animation: none; }  /* the series' line moves; hundreds of queued rows stay still */
 .up-card .up-ep { padding-left: 30px; grid-template-columns: 18px minmax(0, 1fr); }
-.up-row { cursor: pointer; grid-template-columns: 18px 30px minmax(0, 1fr); } .up-row input { flex: none; width: 18px; height: 18px; accent-color: var(--accent); } .up-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.up-row { cursor: pointer; grid-template-columns: 18px 30px minmax(0, 1fr); } .up-row input { flex: none; width: 18px; height: 18px; } .up-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 /* Account, the automatic backups: the saved ones under the buttons */
 .bk-pass-row { margin-top: var(--gap-field); }
 .bk-saved { display: grid; gap: 6px; margin-top: var(--gap-field); max-width: calc(50% - 12px); padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); }
@@ -105,8 +105,8 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .up-mode .rt-who { max-width: 70ch; margin-bottom: var(--gap-field); }  /* a long explainer: a readable line, and room before the next labels */
 #dx-library[hidden] { display: none; } .ax-bursts { margin-top: 4px; font-size: var(--fs-callout); }
 /* the window's hours look like the other fields; a fallback half set says so in red */
-input[type=time] { background: var(--field-bg); border: 1px solid var(--field-line); border-radius: var(--r-md); padding: 7px 10px; width: 100%; min-height: 40px; color: var(--text); }
-input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
+:is(input[type=time], input[type=date]) { background: var(--field-bg); border: 1px solid var(--field-line); border-radius: var(--r-md); padding: 7px 10px; width: 100%; min-height: 40px; color: var(--text); }
+input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
 #d-fb-say.status-err, #ax-window-say.status-err { color: var(--err); }
 /* What's new: the list, and the "New" badges on the new options */
 #news-dlg { width: min(600px, calc(100vw - 32px)); } #news-dlg .modal-head p { margin: 2px 0 0; font-size: var(--fs-callout); }
@@ -285,10 +285,10 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 :root { --ctl-h: 36px; --ctl-h-sm: 30px; }
 @media (min-width: 701px) and (pointer: fine) {
   .btn, nav a, .pill, .ax-seg button,
-  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: var(--ctl-h); height: auto; }
-  .ax-seg button, input[type=time] { height: var(--ctl-h); }  /* a time field's own inner box is taller than the rest */
-  .sx-grid input, .nt-fields input, .ds .sx-grid select, .ql-name, .ql-step select, .ql-h input, .svc-picks select { min-height: var(--ctl-h); }
-  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { padding-block: 0; }
+  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], input[type=date], select) { min-height: var(--ctl-h); height: auto; }
+  .ax-seg button, input[type=time], input[type=date] { height: var(--ctl-h); }  /* native date/time fields have taller inner boxes */
+  .sx-grid input:not(.switch), .nt-fields input, .ds .sx-grid select, .ql-name, .ql-step select, .ql-h input, .svc-picks select { min-height: var(--ctl-h); }
+  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], input[type=date], select) { padding-block: 0; }
   .pill, .btn { padding-block: 0; }  /* the height comes from the line above, never from text plus padding */
   .seg, .seg.small { padding: 3px; }
   .seg button, .seg.small button { min-height: calc(var(--ctl-h) - 8px); padding-block: 0; }
@@ -306,8 +306,8 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
     #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
   details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
   .btn, .btn.small, nav a, .pill, .ax-seg button, .inbox-filters button, .con-filters button, .set-nav button,
-  .set-back, .hidden-btn, .sched-filter .pill, .cd-tracks-fold > summary, .ds-sub summary,
-  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: 44px; }
+  .set-back, .hidden-btn, .sched-filter .pill, .cd-tracks-fold > summary, .ds-sub summary, .inbox-clear,
+  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], input[type=date], select) { min-height: 44px; }
   nav a { min-inline-size: 44px; }
   .hidden-btn { height: auto; }
   .cal-step .btn.small, .sched-tools .seg.small button { min-width: 44px; min-height: 44px; padding-inline: 8px; }
@@ -318,18 +318,28 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   #bell, .inbox-x { width: 44px; height: 44px; }
   .seg { overflow: visible; }  /* it wraps here, never scrolls: the slop reaches past its frame */
   .con-filters { row-gap: 8px; }  /* a wrapped row's slop would cover the row above */
-  #d-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(44px - 1lh) .3em; }  /* wrapped, its links 44 px apart */
+  #d-meta a { display: inline-flex; align-items: center; min-height: 44px; }
   .seg button { min-height: 44px; }  /* wrapped rows touch: no room for a slop (Week and Month, one row, keep theirs) */
   .health { gap: 0; } .health button { min-width: 44px; min-height: 44px; padding: 0 8px; justify-content: center; }
-  .ds .sx-grid :is(select, input[type=time]) { min-height: 44px; }
+  .ds .sx-grid :is(select, input[type=time], input[type=date]) { min-height: 44px; }
   .ladder-pick .ax-edit { display: inline-flex; align-items: center; min-height: 44px; }  /* under the buttons: a slop would cover them */
   .ug-line { min-height: 44px; }
   .ep-sel button { min-width: 44px; min-height: 44px; }  /* its frame clips: no room for a slop */
   .ep-subs-chip, .ep-check, .ep-view .pill, .ep-view .cols-btn { min-width: 44px; min-height: 44px; }
   .set-nav button.set-version { min-height: 44px; }
 }
-@media (pointer: coarse) { .cdm-opt { min-height: 44px; align-content: center; } }
 @media (pointer: coarse) {
+  .cdm-opt, button.cdm-chip, .job-counts button { min-height: 44px; align-content: center; }
+  button.cdm-chip, .job-counts button { min-width: 44px; box-sizing: border-box; }
+  #news-dlg .news-go, .tools-box summary, #nt-quiet-on, .nt-pick, .ds label.check,
+  .jx, .chip-btn, .opt .rm, .toast.act button, #bulk-rows label, #cols-dialog .col-rows :is(label, .mv),
+  .bc-cal-head button, .bc-cal-grid button, #d-bc-days button, .cp-list li { min-height: 44px; min-width: 44px; }
+  .tools-box summary, .ds label.check { align-content: center; }
+  #nt-quiet-on { border: solid transparent; border-width: 11px 3px; background-clip: padding-box; }
+  .sx .opt { grid-template-columns: minmax(130px, 210px) minmax(0, 1fr) 44px; }
+  @media (max-width: 700px) { .sx .opt { grid-template-columns: minmax(0, 1fr) 44px; } }
+  .bc-cal { min-width: 0; }
+  .bc-cal-grid { grid-template-columns: repeat(7, minmax(44px, 1fr)); column-gap: 0; overflow-x: auto; }
   #tab-settings :is(.set-nav button, .set-jumps a, .sx-actions .btn, .sx-grid input:not(.switch), .sx-grid select,
     .sx-switch-target, .ax-bursts, .rt-custom, .ql-icon, .nt-quiet-row > label) { min-height: 44px; min-width: 44px; }
 }

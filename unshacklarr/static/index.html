@@ -58,6 +58,7 @@
 </header>
 
 <main id="main" tabindex="-1">
+  <div id="initial-state-error" hidden></div>
   <section id="tab-series" hidden>
     <div class="toolbar">
       <div class="seg" role="group" aria-label="Which series">
@@ -337,7 +338,7 @@
         <section class="sx-subhead">
           <div class="sx-id"><h3>Quality</h3></div>
           <div class="sx-state" id="ql-state"><span class="dot"></span><span><b></b><small></small></span></div>
-          <div class="sx-actions"><button class="btn small primary" id="ql-add" type="button">New ladder</button><button class="btn small" id="ql-reset" type="button">Reset ladders</button></div>
+          <div class="sx-actions"><button class="btn small" id="ql-add" type="button">New ladder</button><button class="btn small" id="ql-reset" type="button">Reset ladders</button></div>
         </section>
         <section class="sx-card">
           <div class="sx-head"><div><h4>Every series downloads by</h4><p>Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
@@ -398,7 +399,7 @@
         <section class="sx-subhead">
           <div class="sx-id"><h3>Devices (CDM)</h3><p id="cdm-folder"></p></div>
           <div class="sx-state" id="cdm-state"><span class="dot"></span><span><b>Reading Unshackle's CDMs…</b><small></small></span></div>
-          <div class="sx-actions"><span id="cdm-hero-test"></span><button class="btn small primary" id="cdm-add">Add a device</button><input type="file" id="cdm-file" accept=".wvd,.prd" hidden></div>
+          <div class="sx-actions"><span id="cdm-hero-test"></span><button class="btn small" id="cdm-add">Add a device</button><input type="file" id="cdm-file" accept=".wvd,.prd" hidden></div>
           <div class="ux-more" id="cdm-alerts"></div>
         </section>
         <div id="cdm-list" class="sx"></div>
@@ -528,14 +529,14 @@
             <div class="field"><label for="pw-new">New password</label><input type="password" id="pw-new" autocomplete="new-password" minlength="8" aria-describedby="pw-meter"><div role="status"><div class="pw-meter" id="pw-meter" data-score="0"><i></i><i></i><i></i><i></i><span></span></div></div><small class="pw-match" id="pw-new-say" role="alert"></small></div>
             <div class="field"><label for="pw-again">Confirm new password</label><input type="password" id="pw-again" autocomplete="new-password" minlength="8"><small class="pw-match" id="pw-match" role="status"></small></div>
           </div>
-          <div class="ac-go"><button class="btn primary" id="pw-change" type="button">Change the password</button></div>
+          <div class="ac-go"><button class="btn" id="pw-change" type="button">Change the password</button></div>
         </section>
         <section class="sx-card">
           <div class="sx-head"><div><h4>API key <span class="sx-saved" id="ak-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></h4><p>It only opens the /api/v1 routes: never the password, the cookies or the settings.</p></div></div>
           <div class="cmd ac-cmd" id="ak-show" hidden><code id="ak-cmd" translate="no"></code></div>
           <small class="pw-match" id="ak-say"></small>
           <div class="sx-grid" id="ak-pass-row" hidden><div class="field"><label for="ak-pass">Your password</label><input type="password" id="ak-pass" autocomplete="current-password"><small class="pw-match" id="ak-pass-say">Asked again before a key is made.</small></div></div>
-          <div class="ac-go"><button class="btn primary" id="ak-new" type="button">Create a key</button><button class="btn danger" id="ak-delete" type="button" hidden>Delete the key</button></div>
+          <div class="ac-go"><button class="btn" id="ak-new" type="button">Create a key</button><button class="btn danger" id="ak-delete" type="button" hidden>Delete the key</button></div>
         </section>
         <section class="sx-card">
           <div class="sx-head"><div><h4>Lost the password?</h4><p>It cannot be recovered, only replaced, with this command on the server.<br>Your settings and series stay as they are. Every device must sign in again.</p></div></div>
@@ -549,7 +550,7 @@
           </div>
           <div class="sx-grid bk-pass-row"><div class="field"><label for="bk-pass">Your password</label><input type="password" id="bk-pass" autocomplete="current-password"><small class="pw-match" id="bk-say">Asked again: the file holds secrets.</small></div>
             <div class="field" id="bk-phrase-row" hidden><label for="bk-phrase">Passphrase of the backup</label><input type="password" id="bk-phrase" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>The backup is encrypted: type the passphrase it was sent with.</small></div></div>
-          <div class="ac-go"><button class="btn primary" id="bk-save" type="button">Download a backup</button><button class="btn" id="bk-load" type="button">Restore from a file…</button><input type="file" id="bk-file" accept=".yaml,.yml,.enc,text/yaml" hidden></div>
+          <div class="ac-go"><button class="btn" id="bk-save" type="button">Download a backup</button><button class="btn" id="bk-load" type="button">Restore from a file…</button><input type="file" id="bk-file" accept=".yaml,.yml,.enc,text/yaml" hidden></div>
           <div class="bk-saved" id="bk-saved" hidden><b id="bk-saved-head">Saved backups</b><div id="bk-list"></div></div>
         </section>
         <section class="sx-card" id="bo-card">
@@ -910,10 +911,10 @@
 </dialog>
 <dialog class="modal wide" id="inbox-dialog" aria-labelledby="inbox-title">
   <div class="sr-only sure-say" role="status"></div>
-  <div class="inbox-head"><div><h2 id="inbox-title" tabindex="-1" autofocus>Notifications</h2><small id="inbox-summary"></small></div>
+  <div class="inbox-head"><div><h2 id="inbox-title" tabindex="-1" autofocus>Notifications</h2><small id="inbox-summary"></small></div><span class="inbox-actions">
     <button class="inbox-clear" id="inbox-clear" type="button" title="Clear every notification except those waiting for you"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>Clear</span></button>
     <button class="inbox-x" id="inbox-full" type="button" aria-label="Open the whole list" title="Open the whole list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
-    <button class="inbox-x" id="inbox-close" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <button class="inbox-x" id="inbox-close" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span></div>
   <div class="inbox-filters" id="inbox-filters" role="group" aria-label="Show"></div>
   <div id="inbox-list"></div>
 </dialog>

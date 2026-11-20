@@ -60,7 +60,7 @@ async function renderServiceDefaults() {
         ...(servers.length || levels.backend ? [field("Unshackle server", backend, `Where ${svcName(tag)} downloads.`)] : []),
         field("Quality ladder", ladder, "Default: the one of Settings › Quality & Upgrades › Quality.", clash)),
       el("span", { className: "sub", textContent: "Download options" }), dl,
-      el("span", { className: "sub", textContent: `Options of ${svcName(tag)}` }), own,  // any flag, even none listed (a remote server's)
+      el("span", { className: "sub", textContent: trWith("Options of {0}", svcName(tag)) }), own,  // any flag, even none listed (a remote server's)
       el("small", { className: "help dx-remote-note", hidden: true, dataset: { tag, known: specs.some((s) => s.remote) ? "1" : "" },
         textContent: "The remote server's options are not known with this Unshackle: write them as they are." }),
       el("div", { className: "dx-cmd" }, el("span", { textContent: `A ${svcName(tag)} download starts as` }),
@@ -854,8 +854,11 @@ $("#discard").onclick = discardChanges;
 
 let logTimer = null;
 function ago(iso) {
-  const min = Math.round((Date.now() - new Date(iso)) / 60000);
-  return min < 1 ? "just now" : min < 60 ? `${min} min ago` : min < 1440 ? `${Math.round(min / 60)} h ago` : `${Math.round(min / 1440)} d ago`;
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00` : iso);
+  const ageMinutes = (Date.now() - date) / 60000, minutesPerDay = 1440;
+  if (ageMinutes >= 30 * minutesPerDay) return date.toLocaleDateString(LOCALE, { month: "short", year: "numeric" });
+  const min = Math.round(ageMinutes);
+  return min < 1 ? "just now" : min < 60 ? `${min} min ago` : min < minutesPerDay ? `${Math.round(min / 60)} h ago` : `${Math.round(min / minutesPerDay)} d ago`;
 }
 async function refreshLog() {
   if (document.hidden) { clearTimeout(logTimer); logTimer = setTimeout(refreshLog, 60000); return; }  // out of sight: back on sight

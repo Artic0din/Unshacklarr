@@ -18,6 +18,10 @@
 #d-hide[aria-pressed="false"] { color: var(--muted); } #d-hide[aria-pressed="false"] .long { text-decoration: line-through; }  /* hidden: struck through, with the closed eye */
 .cal-nav h3 { margin: 0; font-size: var(--fs-headline); font-variant-numeric: tabular-nums; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+@media (max-width: 363px) {
+  /* At 320px, seven 44px dates leave 12px for six gaps and two margins. */
+  .cal-grid { margin-inline: calc(3px - var(--sp-4)); column-gap: 1px; }
+}
 .cal-head { font-size: var(--fs-footnote); color: var(--muted); font-weight: 600; padding: 4px 6px; }
 .cal-cell { min-height: 108px; display: flex; flex-direction: column; gap: 3px; align-items: stretch; text-align: left;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 6px; cursor: pointer; overflow: hidden; }

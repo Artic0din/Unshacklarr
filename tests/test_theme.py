@@ -1,5 +1,4 @@
 """The dark palette: every text and edge colour readable on what it sits on."""
-import hashlib
 import json
 import math
 import re
@@ -7,16 +6,19 @@ from pathlib import Path
 
 import pytest
 
-from css_assets import load_css
+from css_assets import STYLESHEET_LINK, load_css
 from test_ui_misc import JS, node
 
 STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
 CSS = load_css()
 
 
-def test_split_stylesheets_preserve_the_original_cascade():
-    # Baseline: app.css at 45eb406, minus the two identical .sr-only repeats.
-    assert hashlib.sha256(CSS.encode("utf-8")).hexdigest() == "feee935237c473b656d2f716921cf1ec51df2f7ba3a93e44899eab0181f47424"
+def test_split_stylesheets_load_in_cascade_order():
+    links = STYLESHEET_LINK.findall((STATIC / "index.html").read_text())
+    assert [path for path, _ in links] == [
+        f"/css/{name}.css"
+        for name in ("base", "shell", "series", "settings", "activity", "schedule", "responsive", "controls")
+    ]
 
 
 def block(selector):
@@ -141,7 +143,8 @@ def test_the_active_country_option_has_a_bar_not_only_a_tint():
 
 
 def test_a_failed_or_stopped_step_has_a_mark_and_the_word_is_there_for_everyone():
-    assert "\\2715" in rule(".steps .fail :is(.l, .s)::before") and "\\25A0" in rule(".steps .halt :is(.l, .s)::before")
+    assert "\\2715" in rule(":is(.steps .fail .l, .step-caption.fail)::before")
+    assert "\\25A0" in rule(":is(.steps .halt .l, .step-caption.halt)::before")
     assert "clip" in rule(".sr-only")
 
 
@@ -187,7 +190,8 @@ def test_a_link_drawn_as_a_button_takes_the_buttons_colour_not_the_browsers_link
 
 def test_a_text_fields_focus_is_a_2px_ring_on_every_field_rule():
     """A solid 2px ring replaces the old 1px accent edge with a faint halo."""
-    focus = [".remote-form input:focus", ".remote-form select:focus", "input[type=time]:focus:not(.bad)"]
+    focus = [".remote-form input:focus", ".remote-form select:focus",
+             "input[type=time]:focus:not(.bad)", "input[type=date]:focus:not(.bad)"]
     for selector in focus:
         assert any("outline: 2px solid var(--accent)" in body for body in rules_of(selector)), selector
     general = [body for body in rules_of("textarea):focus:not(.bad)") + rules_of(":is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], select, textarea):focus:not(.bad)")]
