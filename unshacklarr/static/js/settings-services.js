@@ -198,6 +198,7 @@ async function showServeLog() {
   $("#con").classList.add("open");
   $("#cd-main").replaceChildren(el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "unshackle serve" }),
     el("small", { textContent: "Its log, last lines" }))));
+  renderDock(null); $("#cd-foot").replaceChildren();  // no job here: neither its bar nor its actions
   $("#cd-raw").hidden = false;
   $("#cd-raw").open = true;
   if (openTerm()) { termFor = "serve"; termQuery = ""; term.write(log.replaceAll("\n", "\r\n")); }

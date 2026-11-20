@@ -40,6 +40,55 @@ def test_phone_page_keeps_focus_clear_of_the_measured_header_and_bars():
     assert page and "var(--head-h" in page[0] and "var(--bars-h" in page[0]
 
 
+@pytest.mark.parametrize("pane", ["serve log", "empty Activity"])
+def test_a_pane_without_a_job_clears_the_previous_job_dock(pane: str) -> None:
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    activity = (STATIC / "js" / "activity.js").read_text()
+    services = (STATIC / "js" / "settings-services.js").read_text()
+    dock_end = activity.index('document.addEventListener("keydown"', activity.index("function closeSheet"))
+    code = "\n".join((
+        activity[activity.index("const nothingPicked"):activity.index("function renderConsole")],
+        activity[activity.index("function renderDock"):dock_end],
+        services[services.index("async function showServeLog"):services.index("/* Suggest services")],
+    ))
+    out = subprocess.run(["node", "-e", r"""
+const vm = require("vm"), [code, pane] = process.argv.slice(1);
+const detailClasses = new Set(["docked", "docked-acts"]);
+// the previous job's output was open in the bar, and its actions were in the foot
+const dockClasses = new Set(["open"]);
+const dock = { hidden: false, classList: { contains: (c) => dockClasses.has(c), remove: (c) => dockClasses.delete(c) },
+  querySelector: () => ({ setAttribute() {} }) };
+const raw = { hidden: false, open: true, parent: "#dock" };
+const foot = { children: ["Delete the job"], replaceChildren(...kids) { this.children = kids; }, before(n) { n.parent = "#cd-foot"; } };
+let output = "";
+const nodes = {
+  "#dock": dock, "#cd-raw": raw, "#cd-foot": foot, "#con": { classList: new Set() },
+  "#cd-main": { replaceChildren() {} },
+  "#con-detail": { classList: { toggle: (name, on) => on ? detailClasses.add(name) : detailClasses.delete(name) } },
+};
+const ctx = vm.createContext({
+  $: (sel) => nodes[sel], api: async () => ({ log: "serve ready" }),
+  showTab() {}, markPicked() {}, el() {}, openTerm: () => true,
+  term: { write: (text) => { output += text; } }, document: { querySelectorAll: () => [] },
+});
+(async () => {
+  await vm.runInContext(code + (pane === "serve log" ? "\nshowServeLog()" : "\nnothingPicked()"), ctx);
+  console.log(JSON.stringify({ dockHidden: dock.hidden, dockOpen: dockClasses.has("open"), detailClasses: [...detailClasses],
+    rawHidden: raw.hidden, rawOpen: raw.open, rawIn: raw.parent, foot: foot.children, output }));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", code, pane], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    state = json.loads(out.stdout)
+    assert state["dockHidden"], f"{pane} still shows the previous job's dock"
+    assert state["detailClasses"] == []
+    assert state["rawHidden"] == (pane == "empty Activity")
+    assert state["rawOpen"] == (pane == "serve log")
+    assert state["output"] == ("serve ready" if pane == "serve log" else "")
+    assert not state["dockOpen"] and state["rawIn"] == "#cd-foot"  # the output left the hidden bar for its own place
+    assert state["foot"] == [], "the previous job's actions stay, still acting on it"
+
+
 def measured(bars):
     """--head-h and --bars-h as navigation.js sets them, for bars given as (offsetHeight, computed bottom)."""
     if not shutil.which("node"):
@@ -135,6 +184,14 @@ def test_a_phone_bar_over_the_save_bar_stands_on_it_as_tall_as_it_is():
     for bar in (".sel-bar", ".dock"):
         rules = re.findall(r"body:has\(#savebar:not\(\[hidden\]\)\) ([^{]+)\{ bottom: ([^}]+); \}", phone)
         assert any(bar in sel and "var(--save-h" in bottom for sel, bottom in rules), f"{bar}: not stacked on the save bar"
+
+
+def test_phone_page_end_clears_the_dock_raised_by_the_save_bar():
+    """The dock stands on the save bar, raised by its height and a gap: the page's end grows by as much, only then."""
+    rule = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\):has\(#dock:not\(\[hidden\]\)\) main \{ padding-bottom: ([^;]+);",
+                     phone_blocks())
+    assert rule, "page padding must grow with the save bar, while the dock shows"
+    assert rule[1].replace(" ", "") == "calc(96px+var(--save-h,56px)+8px)", rule[1]  # main's own 96px, the bar, the gap
 
 
 def test_an_open_dock_on_the_save_bar_gives_its_output_the_save_bars_height():

@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Security
 
+- **Session revocation.** The app now refuses to verify sessions when the sign-out record is corrupt. (#367)
 - **cryptography 50.0.2.** Its wheels carry OpenSSL 4.0.3, a security release whose most severe fix is High. Push
   notifications are signed and encrypted with it.
 - **oauthlib 4.0.1.** Fixes CVE-2026-49272, a device-flow token endpoint that handed out a bearer token without a
@@ -142,6 +143,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **The unshackle serve log now shows after viewing a download, and empty Activity no longer shows the old download's bar.** (#365)
 - **Switching Sonarr connections no longer lets an in-flight sync lookup put the old library back in the cache.** (#368)
 - **The Remote CDMs heading has room on phones.** The add button wraps below the heading and description on narrow screens. (#369)
 - **Clearing series file name, season map, join parts, or episode name now clears the unsaved save bar.** Normalizing
@@ -157,6 +159,7 @@ Every change worth knowing, newest first. The format follows
   confirm before clearing the service's logins, tokens, and sessions. (#334)
 - **A tool in Activity no longer shows the last job's bar.** Opening Waiting, Catch up, Upgrades, Languages or Stats
   after a download left that download's bar at the bottom of the pane; it is hidden now. (#363)
+- **On phones, the last items in an Activity job scroll clear of the dock even when the save bar is visible.** (#363)
 - **Web requests no longer stall behind slow TMDB, cache, or Sonarr scans.** Shared worker-pool sizing, deduplicated
   TMDB network lookups with serialized off-loop cache writes, mtime-cached read-only config/auth/JSON readers, direct
   live-card reads for `GET /api/runs?live=1`, cached `unwritable_files()` checks, a short-TTL `sonarr_series()` cache,
