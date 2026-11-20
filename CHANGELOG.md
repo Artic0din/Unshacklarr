@@ -136,6 +136,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **A tool in Activity no longer shows the last job's bar.** Opening Waiting, Catch up, Upgrades, Languages or Stats
+  after a download left that download's bar at the bottom of the pane; it is hidden now. (#363)
 - **An episode under its own number is no longer hidden for a small difference in its title.** Kath & Kim on Netflix
   lists S01E08 "The Wedding" and S03E01 "Cactus"; Sonarr calls them "Wedding" and "Cactus Hour", so both showed as
   not on the service and were not downloaded. Under the same number, a title that is the other's first or last
