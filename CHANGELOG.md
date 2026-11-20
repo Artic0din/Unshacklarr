@@ -140,6 +140,9 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Keyboard focus stays in place across the Quality editor, series notification chips, and Inbox filters, and CDM
+  device chips show the standard focus ring.** Editing a step, moving a step or ladder, removing a step, or picking a
+  default ladder chip no longer drops focus to the page. (#332)
 - **Touch targets stay at least 44 px on tablets and phones.** Desktop 36 px and 30 px control heights now apply only
   to fine pointers above 700 px, while coarse-pointer touch screens (including iPads above 700 px) keep 44 px minimum
   hit targets across navigation, filters, buttons, drawers, dock controls, and collapsible summaries. (#333)
