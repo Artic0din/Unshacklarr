@@ -1,0 +1,108 @@
+.badges, .prov { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.badges:empty { display: none; }
+.sched-logo { position: relative; display: inline-flex; min-width: 0; max-width: 100%; align-items: center;
+  padding: 2px 5px; border-radius: var(--r-sm); background: var(--well); color: var(--muted); font-size: var(--fs-footnote); overflow-wrap: break-word; }
+/* Keep a layout box for lazy loading without painting the image before it succeeds. */
+.sched-logo:not(.loaded) img { position: absolute; inset: 0; width: 1px; height: 1px; opacity: 0; }
+.sched-logo.loaded { background: var(--net-chip); }
+.sched-logo.loaded img { display: block; width: auto; max-width: 64px; height: 20px; object-fit: contain; }
+.prov .sched-logo.loaded { padding: 0; overflow: hidden; }
+.prov .sched-logo.loaded img { width: 24px; height: 24px; }
+.chip.nofr { color: var(--warn); font-size: var(--fs-footnote); }
+.icon-hide { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none;
+  color: var(--muted); cursor: pointer; opacity: .8; }
+.icon-hide .ico { width: 17px; height: 17px; }
+@media (hover: hover) { .icon-hide:hover { color: var(--text); background: var(--bg); } }
+#d-hide { display: inline-flex; align-items: center; gap: 7px; }
+#d-hide .ico { width: 17px; height: 17px; }
+#d-hide[aria-pressed="false"] { color: var(--muted); } #d-hide[aria-pressed="false"] .long { text-decoration: line-through; }  /* hidden: struck through, with the closed eye */
+.cal-nav h3 { margin: 0; font-size: var(--fs-headline); font-variant-numeric: tabular-nums; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-head { font-size: var(--fs-footnote); color: var(--muted); font-weight: 600; padding: 4px 6px; }
+.cal-cell { min-height: 108px; display: flex; flex-direction: column; gap: 3px; align-items: stretch; text-align: left;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 6px; cursor: pointer; overflow: hidden; }
+@media (hover: hover) { .cal-cell:hover { border-color: var(--field-line); } }
+.cal-cell.out { background: none; } .cal-cell.out .cal-date { color: var(--muted); }
+.cal-cell.today { border-color: var(--field-line-hover); }
+.cal-cell.today .cal-date { color: var(--text); font-weight: 700; }
+.cal-cell.picked { box-shadow: inset 0 0 0 2px var(--field-line-hover); }
+.cal-date { font-weight: 700; font-size: var(--fs-sub); }
+.cal-count { display: none; }
+.cal-eps { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cal-ep { font-size: var(--fs-footnote); line-height: 1.3; padding: 1px 5px; border-radius: var(--r-sm); background: var(--bg); color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-ep b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cal-ep.mine { background: var(--select); color: var(--text); box-shadow: inset 0 0 0 1px var(--field-line-hover); }
+.cal-ep.more { background: none; }
+#cal-day { margin-top: 14px; }
+button.pill { font: inherit; } .toolbar .pill span { font-variant-numeric: tabular-nums; margin-left: -2px; }
+button.pill[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); }
+.btn.add { color: var(--muted); background: transparent; border: 1px dashed var(--field-line); font-weight: 600; border-radius: 999px; }
+.btn.add:focus-visible { color: var(--text); border-color: var(--text); border-style: solid; }
+@media (hover: hover) { .btn.add:hover { color: var(--text); border-color: var(--field-line-hover); border-style: solid; } }
+.sched-day { font-size: var(--fs-callout); color: var(--muted); margin: 16px 0 6px; font-weight: 600; }
+/* Schedule, refined: late episodes in one banner, a status on each episode of yours */
+.late-banner { margin-bottom: 12px; border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  background: var(--warn-tint); border-radius: var(--r-md); font-size: var(--fs-callout); }
+.late-banner summary { padding: 6px 10px; color: var(--warn); cursor: pointer; }
+.late-banner > p, #sched-missing { margin: 4px 10px 10px; }
+.sched-st { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-footnote); font-weight: 600; white-space: nowrap; padding: 3px 9px; border-radius: 999px; }
+.sched-st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.sched-st.try { color: var(--text); background: var(--well); } .sched-st.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.sched-st.wait { color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); } .sched-st.late { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); }
+/* Week board: seven day columns from 1100px, as many as fit under that, one on a phone. Cards are episodes. */
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 8px; align-items: start; }
+.board > :is(.loading, .failed) { grid-column: 1 / -1; justify-self: start; }
+@media (min-width: 1100px) { .board { grid-template-columns: var(--week-columns, repeat(7, minmax(0, 1fr))); } }
+.day { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.day .sched-st { white-space: normal; }  /* a status wraps inside a narrow day column */
+.day-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin: 0; padding: 0 2px; font-size: var(--fs-body); }
+.day-h .num { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.day-h .rel { margin-left: auto; padding: 0 8px; border-radius: 999px; font-size: var(--fs-footnote); font-weight: 600; color: var(--text);
+  background: var(--well); }
+.day.today .day-h b { color: var(--text); }
+.day .n { margin-top: -4px; padding: 0 2px; color: var(--muted); font-size: var(--fs-footnote); }
+.day-empty { margin: 0; padding: 0 2px 6px; color: var(--muted); font-size: var(--fs-footnote); }
+.sched-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.sched-cards[hidden] { display: none; }
+.sched-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); }
+.sched-card.mine { border-color: var(--field-line-hover); }
+.sched-card.other { background: none; }
+.sc-when .tm { font: 700 var(--fs-footnote) system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); font-variant-numeric: tabular-nums; }
+.sc-when .tm small { margin-inline-start: 4px; font-size: inherit; font-weight: 600; color: var(--text); }
+.sc-when .tm small.m { color: var(--muted); font-weight: 500; }
+.sc-main { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.board .sched-card { padding: 7px; gap: 4px; }
+.sched-card .thumb { flex: none; width: 30px; aspect-ratio: 2 / 3; border-radius: 3px; object-fit: cover; background: var(--bg); }
+.sched-card .what { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.sched-card .what small { color: var(--muted); overflow-wrap: break-word; }
+.sched-card .finale-tag { margin: 3px 0 0; }
+.sc-open { padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; text-align: start; overflow-wrap: break-word; cursor: pointer; }
+.board .sc-open { max-width: 100%; font-size: var(--fs-callout); line-height: 1.25; }
+@media (hover: hover) { .sc-open:hover { text-decoration: underline; } }
+.sc-open[aria-expanded="true"] { background: var(--select); color: var(--text); }
+.sc-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }  /* a 44px Hide on touch: the badges centred on it, no gap above them */
+.sc-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; min-width: 0; }
+.sc-foot .icon-hide { width: 28px; height: 28px; }
+.board .sc-foot :is(.sched-st, .svc) { padding-inline: 5px; }
+.board .sc-foot .icon-hide { width: 24px; height: 24px; }
+/* Managed: filled service badge and an accent edge. Not managed: a dashed "add" button. */
+.sched-card .svc { padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--text); font-size: var(--fs-footnote); font-weight: 700; letter-spacing: .02em; overflow-wrap: anywhere; }
+.icon-hide:focus-visible { opacity: 1; }
+@media (hover: hover) { .sched-card:hover .icon-hide { opacity: 1; } }
+/* Details: a popover by its card; the dialog on a phone shares the content */
+.sched-pop { position: fixed; z-index: 60; box-sizing: border-box; width: min(380px, calc(100vw - 16px)); overflow-y: auto; padding: 14px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--sh-lg); }
+.sched-pop[hidden] { display: none; }
+.sched-pop:focus-visible { outline: none; }  /* the container takes focus for its reader, it is not a control */
+.sd { display: grid; gap: 10px; }
+.sd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sd-head h2 { margin: 0; font-size: var(--fs-headline); overflow-wrap: anywhere; }
+.sd p { margin: 0; }
+.sd .facts { display: grid; gap: 4px; font-size: var(--fs-sub); color: var(--muted); }
+.sd .facts b { color: var(--text); font-weight: 600; }
+.sd .cmd summary { color: var(--muted); cursor: pointer; }
+.sd code { display: block; margin-top: 4px; font: var(--fs-footnote)/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--field-bg); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 9px 11px; color: var(--text); overflow-wrap: anywhere; }
+.sd .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.last-sync { color: var(--muted); font-size: var(--fs-sub); }

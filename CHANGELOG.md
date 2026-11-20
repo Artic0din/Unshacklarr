@@ -99,6 +99,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Split the web interface stylesheet into smaller files without changing how the app looks. (#355)
+
 - Grouped repeated Activity failures by provider, HTTP status, and full reason while keeping labels short, listed affected episodes for mixed failures, and kept Retry prominent when a failure could be temporary. (#358)
 - Grouped Settings into six sections with shorter headers and jump links, while keeping existing Settings links working. (#354)
 - Kept Series wall filters on one desktop toolbar and made every filter and action reachable on phones without sideways scrolling. (#352)

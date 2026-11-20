@@ -28,7 +28,7 @@
           "unshacklarr/static/index.html"
         ],
         "createdAt": "2026-11-17T10:44:56.577Z",
-        "reason": "agent: .pulse is a live 'downloading' status dot; reduced-motion override at app.css turns it off"
+        "reason": "agent: .pulse is a live 'downloading' status dot; reduced-motion override at css/responsive.css turns it off"
       },
       {
         "rule": "flat-type-hierarchy",

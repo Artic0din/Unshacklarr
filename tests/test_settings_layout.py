@@ -1,11 +1,10 @@
 """Settings stays readable between phone and desktop widths: no column squeezed to nothing, no page scrolling sideways."""
 import re
-from pathlib import Path
-
 import pytest
 
-STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
-CSS = re.sub(r"/\*.*?\*/", "", (STATIC / "app.css").read_text(), flags=re.S)
+from css_assets import load_css
+
+CSS = re.sub(r"/\*.*?\*/", "", load_css(), flags=re.S)
 
 
 def rule(selector):

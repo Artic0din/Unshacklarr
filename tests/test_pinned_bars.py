@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from css_assets import load_css
+
 STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
-CSS = (STATIC / "app.css").read_text()
+CSS = load_css()
 BAR_MIN = 64  # the shortest pinned bar with its gap to the edge: a 44px control row, 20px off the edge
 PHONE = "@media (max-width: 700px) {"
 

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from css_assets import load_css
+
 JS = Path(__file__).parents[1] / "unshacklarr" / "static" / "js"
 
 
@@ -183,7 +185,7 @@ def test_translations_add_no_glyph_their_english_lacks():
 
 def test_hover_styles_apply_only_where_a_pointer_hovers():
     import re
-    css = (JS.parent / "app.css").read_text()
+    css = load_css()
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     stack, start, sticky = [], 0, []
     for i, ch in enumerate(css):

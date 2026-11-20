@@ -1050,7 +1050,7 @@ page_cache: tuple[tuple, str] = ((), "")
 
 
 def page_html() -> str:
-    """index.html with each of its style and scripts at an address of its own content (app.css?v=…): an app on a
+    """index.html with each stylesheet and script at an address of its own content (base.css?v=…): an app on a
     phone that kept the old ones (iOS does, whatever no-cache says) gets the new ones with the new page."""
     global page_cache
     files = [HERE / "static" / "index.html", *(HERE / "static" / p.lstrip("/") for p in sorted(PAGE_FILES))]
@@ -6521,7 +6521,10 @@ STATIC = {"/apple-touch-icon.png": "image/png", "/icon-192.png": "image/png", "/
           "/codemirror.js": "text/javascript", "/unshackle-keys.json": "application/json",  # the unshackle.yaml editor: public code and docs
           "/xterm.js": "text/javascript", "/xterm-fit.js": "text/javascript", "/xterm.css": "text/css"}  # Activity's terminal, served here: no CDN
 STATIC |= {f"/i18n/{f.name}": "application/json" for f in (HERE / "static" / "i18n").glob("*.json")}  # the page's languages, the login's too
-PAGE_FILES = {"/app.css": "text/css", **{f"/js/{f.name}": "text/javascript" for f in (HERE / "static" / "js").glob("*.js")}}
+PAGE_FILES = {
+    **{f"/css/{f.name}": "text/css" for f in (HERE / "static" / "css").glob("*.css")},
+    **{f"/js/{f.name}": "text/javascript" for f in (HERE / "static" / "js").glob("*.js")},
+}
 OPEN_PATHS = {"/", "/health", "/api/session", "/api/login", "/api/logout", *STATIC, *PAGE_FILES}
 SETUP_PATHS = {"/api/setup", "/api/setup/found", "/api/setup/backups", "/api/setup/restore", "/api/sonarr/test", "/api/unshackle/test"}  # open only until a password exists
 failed_logins: dict[str, list[float]] = {}

@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from css_assets import load_css
+
 JS = Path(__file__).parents[1] / "unshacklarr" / "static" / "js"
 
 # Runs the page's real showStats / showLeftovers with api answers released in a chosen order, and prints what the pane ended up showing.
@@ -625,7 +627,7 @@ def switcher(*args):
 
 def test_running_strip_keeps_overflow_cue_without_scroll_timeline():
     assert switcher("chip-overflow") == [True, False, True, False]
-    css = (JS.parent / "app.css").read_text()
+    css = load_css()
     assert re.search(r"@supports not \(animation-timeline: scroll\(\)\)\s*\{\s*"
                      r"\.con-running\.more-chips\s*\{[^}]*mask-image:", css)
 
