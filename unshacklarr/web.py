@@ -28,6 +28,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 import time
 import unicodedata
+import weakref
 import zlib
 import zoneinfo
 from datetime import date, datetime, timedelta, timezone
@@ -638,11 +639,47 @@ YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)  # libyaml's, when P
 
 
 config_read: tuple[tuple, dict] = ((), {})
+_json_cache: dict[Path, tuple[tuple, object]] = {}
+_json_cache_lock = threading.Lock()
 
 
-def read_config() -> dict:
-    """The whole config, secrets included: only for the server's own use. Parsed again only when the
-    file changed (every request reads it), a copy each time: callers change what they get."""
+def read_json_cached(path: Path, default):
+    """Read-only JSON cache keyed by (mtime_ns, size, ino); callers must not mutate the returned value."""
+    try:
+        st = path.stat()
+        stamp = (st.st_mtime_ns, st.st_size, st.st_ino)
+    except FileNotFoundError:
+        with _json_cache_lock:
+            _json_cache.pop(path, None)
+        return default
+    with _json_cache_lock:
+        hit = _json_cache.get(path)
+        if hit is not None and hit[0] == stamp:
+            return hit[1]
+    parsed = read_json(path, default)
+    if parsed is not default:
+        with _json_cache_lock:
+            _json_cache[path] = (stamp, parsed)
+    return parsed
+
+
+def _invalidate_json_cache(path: Path) -> None:
+    with _json_cache_lock:
+        _json_cache.pop(path, None)
+
+
+def _merge_json_cache(path: Path, lock: threading.Lock, updates: dict) -> dict:
+    """Atomically merge `updates` into a JSON dict file on disk under `lock` and refresh the in-memory cache."""
+    with lock:
+        current = read_json(path, {})
+        current.update(updates)
+        write_atomic(path, json.dumps(current))
+        _invalidate_json_cache(path)
+        return current
+
+
+def _load_config_cached() -> dict:
+    """Parse SERIES_FILE only when its (mtime_ns, size, ino) stamp changes; returns the shared read-only dict."""
     global config_read
     try:
         st = SERIES_FILE.stat()
@@ -656,7 +693,25 @@ def read_config() -> dict:
         config_read = (stamp, parsed or {})
         if edited:  # its settings too (another Sonarr removed…), not only its series: no restart needed
             sonarr_sync.apply_settings(sonarr_sync.load_settings(parsed or {}))
-    config = copy.deepcopy(config_read[1])
+    return config_read[1]
+
+
+def _read_config_raw() -> dict:
+    """Read-only view of the parsed config without deep-copying every series; honors monkeypatched read_config."""
+    if read_config is not _READ_CONFIG_IMPL:
+        return read_config()
+    return _load_config_cached()
+
+
+def read_auth() -> dict:
+    """Read-only shallow copy of auth settings for per-request middleware without deep-copying all series."""
+    return dict(_read_config_raw().get("auth") or {})
+
+
+def read_config() -> dict:
+    """The whole config, secrets included: only for the server's own use. Parsed again only when the
+    file changed (every request reads it), a copy each time: callers change what they get."""
+    config = copy.deepcopy(_load_config_cached())
     return {
         "settings": config.get("settings") or {},
         "auth": config.get("auth") or {},
@@ -668,6 +723,9 @@ def read_config() -> dict:
         "hidden_series": config.get("hidden_series") or [],
         "quality_ladders": sonarr_sync.ladders(config),  # the built-in ones until some are saved
     }
+
+
+_READ_CONFIG_IMPL = read_config
 
 
 SECRET_SETTINGS = ("sonarr_api_key", "tmdb_api_key", "unshackle_api_key", "backup_remote_secret", "backup_passphrase")
@@ -894,16 +952,42 @@ CONFIG_LOCK = threading.Lock()  # a Save and the sync's own writes (a learned re
 def write_config(config: dict) -> None:
     global config_read
     config_read = ((), {})  # read afresh next time, whatever the clock says
+    clear_sonarr_series_cache()
+    clear_unwritable_cache()
     # the session secret, the password hash and the API keys: its owner only, whatever it was before
     write_atomic(SERIES_FILE, yaml.safe_dump(config, allow_unicode=True, sort_keys=False), PRIVATE)
     sonarr_sync.apply_settings(sonarr_sync.load_settings(config))
 
 
+SONARR_SERIES_TTL = 30.0
+_sonarr_series_lock = threading.Lock()
+_sonarr_series_cache: tuple[tuple[str, str], float, list[dict]] = (("", ""), 0.0, [])
+
+
+def clear_sonarr_series_cache() -> None:
+    global _sonarr_series_cache
+    with _sonarr_series_lock:
+        _sonarr_series_cache = (("", ""), 0.0, [])
+
+
 def sonarr_series() -> list[dict]:
+    global _sonarr_series_cache
+    key = (sonarr_sync.SONARR, sonarr_sync.HEADERS.get("X-Api-Key", ""))
+    now = time.monotonic()
+    with _sonarr_series_lock:
+        c_key, fetched, entries = _sonarr_series_cache
+        if c_key == key and fetched and now - fetched < SONARR_SERIES_TTL:
+            return list(entries)
     r = requests.get(f"{sonarr_sync.SONARR}/api/v3/series", headers=sonarr_sync.HEADERS,
                      timeout=sonarr_sync.SONARR_READ_TIMEOUT)
     r.raise_for_status()
-    return sorted((series_entry(s) for s in r.json()), key=lambda s: s["title"].lower())
+    raw = r.json()
+    entries = sorted((series_entry(s) for s in raw), key=lambda s: s["title"].lower())
+    done_at = time.monotonic()
+    with _sonarr_series_lock:
+        _sonarr_series_cache = (key, done_at, entries)
+    sonarr_sync._series_by_tvdb[""] = (done_at, {s["tvdbId"]: s for s in raw if s.get("tvdbId")})
+    return list(entries)
 
 
 def known_order(tvdb: int) -> str:
@@ -1853,11 +1937,14 @@ TMDB_CACHE_DAYS = 7
 SUGGEST_MAP = 9
 
 
+TMDB_CACHE_LOCK = threading.Lock()
+
+
 async def suggest(request):
     """TMDB's where-to-watch links, cached a week per series: opening a series costs no request."""
     tmdb_id = request.match_info["tmdb_id"]
     countries = read_config()["tmdb_countries"]
-    cache = read_json(TMDB_CACHE, {})
+    cache = await asyncio.to_thread(read_json_cached, TMDB_CACHE, {})
     hit = cache.get(tmdb_id)
 
     def suggest_stale(entry: dict | None) -> bool:
@@ -1895,10 +1982,8 @@ async def suggest(request):
             # Prefer at read time only: cache keeps Channel rows so a later-uninstalled home still leaves them.
             hit = {"countries": countries, "checked": datetime.now(timezone.utc).isoformat(),
                    "map": SUGGEST_MAP, "links": links}
-            # Read again: lookups running at once wrote their entries while this one awaited TMDB.
-            cache = read_json(TMDB_CACHE, {})
-            cache[tmdb_id] = hit
-            write_atomic(TMDB_CACHE, json.dumps(cache))
+            # Read and merge off the event loop under lock: concurrent lookups never overwrite each other.
+            await asyncio.to_thread(_merge_json_cache, TMDB_CACHE, TMDB_CACHE_LOCK, {tmdb_id: hit})
     try:
         domains = await asyncio.to_thread(service_domains)
     except UnshackleError:
@@ -2752,7 +2837,34 @@ def cookie_state() -> dict:
         wants = {s["tag"] for s in UNSHACKLE.services() if "cookies" in (s.get("auth_methods") or [])}
     except UnshackleError:
         wants = set()
-    return {"folder": str(folder), "files": files, "used": used, "wants": sorted(wants), "unwritable": unwritable_files(folder)}
+    return {"folder": str(folder), "files": files, "used": used, "wants": sorted(wants), "unwritable": cached_unwritable_files(folder)}
+
+
+UNWRITABLE_TTL = 60.0
+_unwritable_lock = threading.Lock()
+_unwritable_cache: dict[tuple[str, str, str], tuple[float, list[str]]] = {}
+
+
+def clear_unwritable_cache() -> None:
+    with _unwritable_lock:
+        _unwritable_cache.clear()
+
+
+def cached_unwritable_files(cookies_dir: Path, most: int = 20) -> list[str]:
+    key = (
+        str(cookies_dir),
+        str(sonarr_sync.SETTINGS.get("cache_dir") or ""),
+        str(sonarr_sync.SETTINGS.get("unshackle_config_dir") or ""),
+    )
+    now = time.monotonic()
+    with _unwritable_lock:
+        hit = _unwritable_cache.get(key)
+        if hit is not None and now - hit[0] < UNWRITABLE_TTL:
+            return list(hit[1])
+    found = unwritable_files(cookies_dir, most=most)
+    with _unwritable_lock:
+        _unwritable_cache[key] = (time.monotonic(), list(found))
+    return found
 
 
 def unwritable_files(cookies_dir: Path, most: int = 20) -> list[str]:
@@ -2793,6 +2905,7 @@ async def save_cookies(request):
         raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:
         raise web.HTTPBadGateway(text=f"Could not write the cookie file: {e}")
+    clear_unwritable_cache()
     return web.json_response(saved)
 
 
@@ -2803,6 +2916,7 @@ async def delete_cookies(request):
         await asyncio.to_thread(cookies.delete, folder, str(body.get("service") or ""), str(body.get("profile") or ""))
     except (cookies.CookieError, cdm.CdmError, UnshackleError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
+    clear_unwritable_cache()
     return web.json_response({"deleted": True})
 
 
@@ -3244,6 +3358,9 @@ async def unshackle_maintenance(request):
         UNSHACKLE.configure(sonarr_sync.SETTINGS)  # forget the services it listed before
     if action == "clear-cache":
         await asyncio.to_thread(sonarr_sync.record_authentication_clear)
+        clear_unwritable_cache()
+    elif action == "clear-temp":
+        clear_unwritable_cache()
     return web.json_response(result)
 
 
@@ -3288,6 +3405,7 @@ async def clear_cache_of(request):
         freed = await asyncio.to_thread(clear_service_cache, request.match_info["tag"])
     except UnshackleError as e:
         raise web.HTTPBadGateway(text=str(e))
+    clear_unwritable_cache()
     return web.json_response({"freed_bytes": freed})
 
 
@@ -3685,7 +3803,7 @@ async def calendar(request):
             sonarr_sync.sonarr_get, "calendar",
             start=start.isoformat(), end=(start + timedelta(days=days)).isoformat(), includeSeries="true",
         ) if (ep.get("series") or {}).get("tvdbId") not in own]
-        episodes += sonarr_sync.broadcast_episodes(config, start, start + timedelta(days=days), plans)
+        episodes += await asyncio.to_thread(sonarr_sync.broadcast_episodes, config, start, start + timedelta(days=days), plans)
     except requests.RequestException as e:
         raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
     runs = await asyncio.to_thread(latest_runs)
@@ -3753,6 +3871,25 @@ def brand_logos(country: str) -> dict[str, dict]:
     return logos
 
 
+NETWORKS_LOCK = threading.Lock()
+TMDB_CONCURRENCY = 4
+_tmdb_semaphores: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+_tmdb_inflight: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _tmdb_gate() -> tuple[asyncio.Semaphore, dict[int, asyncio.Task]]:
+    loop = asyncio.get_running_loop()
+    sem = _tmdb_semaphores.get(loop)
+    if sem is None:
+        sem = asyncio.Semaphore(TMDB_CONCURRENCY)
+        _tmdb_semaphores[loop] = sem
+    inflight = _tmdb_inflight.get(loop)
+    if inflight is None:
+        inflight = {}
+        _tmdb_inflight[loop] = inflight
+    return sem, inflight
+
+
 async def networks(request):
     """Network and local services of the series asked for, cached a week: TMDB is asked once per series."""
     try:
@@ -3760,7 +3897,7 @@ async def networks(request):
     except ValueError:
         raise web.HTTPBadRequest(text="tmdb must be comma-separated numbers")
     country = sonarr_sync.SETTINGS["country"]
-    cache = read_json(NETWORKS_CACHE, {})
+    cache = await asyncio.to_thread(read_json_cached, NETWORKS_CACHE, {})
     fresh_after = (datetime.now(timezone.utc) - timedelta(days=NETWORKS_DAYS)).isoformat()
 
     def stale(entry: dict) -> bool:
@@ -3774,18 +3911,28 @@ async def networks(request):
 
     todo = [i for i in ids if stale(cache.get(str(i)) or {})]
     if todo and tmdb_key():
-        limit = asyncio.Semaphore(8)  # polite to TMDB when a new calendar brings many series
+        limit, inflight = _tmdb_gate()  # shared across concurrent requests so TMDB cannot starve the threadpool
 
-        async def one(tmdb_id):
+        async def one(tmdb_id: int) -> tuple[int, dict | None]:
             async with limit:
                 try:
                     found = await asyncio.to_thread(tmdb_network, tmdb_id)
                 except requests.RequestException:
-                    return  # try again next time
-                cache[str(tmdb_id)] = {**found, "checked": datetime.now(timezone.utc).isoformat()}
+                    return tmdb_id, None  # try again next time
+                return tmdb_id, {**found, "checked": datetime.now(timezone.utc).isoformat()}
 
-        await asyncio.gather(*(one(i) for i in todo))
-        write_atomic(NETWORKS_CACHE, json.dumps(cache))
+        tasks = []
+        for i in todo:
+            task = inflight.get(i)
+            if task is None or task.done():
+                task = asyncio.create_task(one(i))
+                inflight[i] = task
+                task.add_done_callback(lambda t, k=i, m=inflight: m.pop(k, None) if m.get(k) is t else None)
+            tasks.append(asyncio.shield(task))
+        results = await asyncio.gather(*tasks)
+        fetched = {str(tid): data for tid, data in results if data is not None}
+        if fetched:
+            cache = await asyncio.to_thread(_merge_json_cache, NETWORKS_CACHE, NETWORKS_LOCK, fetched)
     logos = await asyncio.to_thread(brand_logos, country) if tmdb_key() else {}
     try:
         domains = await asyncio.to_thread(service_domains)
@@ -3831,6 +3978,7 @@ def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: 
             print(f"Sync stopped: {type(e).__name__}: {e}", flush=True)
         finally:
             last_sync = datetime.now(timezone.utc)
+            clear_sonarr_series_cache()
 
     thread = threading.Thread(target=work, daemon=True)
     thread.start()
@@ -4050,6 +4198,7 @@ def set_series_language(tvdb: int, name: str) -> None:
     requests.put(f"{sonarr_sync.sonarr_url()}/api/v3/series/{serie['id']}", json=full, headers=sonarr_sync.sonarr_headers(),
                  timeout=60).raise_for_status()
     serie["language"] = full["language"]  # the library kept here says so too
+    clear_sonarr_series_cache()
 
 
 async def series_fresh(request):
@@ -4061,6 +4210,7 @@ async def series_fresh(request):
     kept = sonarr_sync._series_by_tvdb.get("", (0.0, {}))[1]
     if s.get("tvdbId") in kept:
         kept[s["tvdbId"]] = s  # the library kept here: the sync's labels say its new title too
+    clear_sonarr_series_cache()
     return web.json_response(series_entry(s))
 
 
@@ -4765,7 +4915,9 @@ async def service_list(request):
     """The series' last check of what its service has, whatever its age (the page says it), for the service and
     URL it has now: the weekly refresh keeps it current."""
     tvdb = request.match_info["tvdb"]
-    hit, show = read_json(SERVICE_LISTS, {}).get(tvdb), read_config()["series"].get(int(tvdb)) or {}
+    lists = await asyncio.to_thread(read_json_cached, SERVICE_LISTS, {})
+    hit = lists.get(tvdb)
+    show = (_read_config_raw().get("series") or {}).get(int(tvdb)) or {}
     return web.json_response(hit if same_listing(hit, show) else None)
 
 
@@ -4971,7 +5123,7 @@ async def probe(request):
 async def release_seen(request):
     """When this series' episodes were seen coming out on the service, and the time that suggests."""
     tvdb = int(request.match_info["tvdb"])
-    seen = read_json(sonarr_sync.SEEN_FILE, {})
+    seen = await asyncio.to_thread(read_json_cached, sonarr_sync.SEEN_FILE, {})
     entries = [e for e in seen.values() if e.get("tvdbId") == tvdb]
     return web.json_response({"suggestion": sonarr_sync.suggest_release(entries), "seen": len(entries)})
 
@@ -5154,15 +5306,42 @@ async def download(request):
     return web.json_response({"running": True})
 
 
+MISSING_SERIES_TTL = 15.0  # statistics fresh enough to skip episode fetches for complete series
+
+
+def _has_no_missing_episodes(series: dict) -> bool:
+    """True only when fresh Sonarr statistics prove zero monitored aired non-special episodes lack a file."""
+    stats = series.get("statistics")
+    if not isinstance(stats, dict):
+        return False
+    ep_count, file_count = stats.get("episodeCount"), stats.get("episodeFileCount")
+    if not isinstance(ep_count, int) or not isinstance(file_count, int) or ep_count > file_count:
+        return False
+    for season in series.get("seasons") or ():
+        if (season.get("seasonNumber") or 0) < 1:
+            continue
+        sstats = season.get("statistics")
+        if not isinstance(sstats, dict):
+            continue
+        sc, sf = sstats.get("episodeCount"), sstats.get("episodeFileCount")
+        if isinstance(sc, int) and isinstance(sf, int) and sc > sf:
+            return False
+    return True
+
+
 def missing_of_managed(days: int | None, now: datetime | None = None) -> list[dict]:
     """The episodes Unshacklarr could catch up on: monitored, aired, without a file, of the series it downloads (not
     Sonarr's whole wanted list: other series there are for other download clients), none already waiting in the
     downloads folder; aired within `days` when given. Oldest first."""
     config, now = sonarr_sync.read_file(), now or datetime.now(timezone.utc)
     managed = {int(k) for k, v in (config.get("series") or {}).items() if v.get("service") and v.get("title")}
+    key = (sonarr_sync.instance() or {}).get("name", "")
+    cached = sonarr_sync._series_by_tvdb.get(key)
+    if cached and time.monotonic() - cached[0] > MISSING_SERIES_TTL:
+        sonarr_sync._series_by_tvdb.pop(key, None)
     out = []
     for tvdb, series in sonarr_sync.sonarr_series(managed).items():
-        if tvdb not in managed or not series.get("monitored", True):
+        if tvdb not in managed or not series.get("monitored", True) or _has_no_missing_episodes(series):
             continue
         for ep in sonarr_sync.sonarr_get("episode", seriesId=series["id"]):
             aired = ep.get("airDateUtc") and sonarr_sync.parse_time(ep["airDateUtc"])
@@ -5913,6 +6092,9 @@ def run_cards() -> list[dict]:
     return list(sonarr_sync.waiting.values()) + cards  # picked with others, waiting their turn
 
 
+_RUN_CARDS_IMPL = run_cards
+
+
 def authentication_status(
     cards: list[dict], services: list[dict], main_services: list[dict] | None = None
 ) -> dict[str, dict]:
@@ -6107,8 +6289,30 @@ async def health_of_series(_):
     return web.json_response({str(k): v for k, v in series_health(cards).items()})
 
 
+def live_run_cards() -> list[dict]:
+    """Queued and active running cards only, without reading completed history files."""
+    queued = [c for c in list(sonarr_sync.waiting.values()) if c.get("outcome") == "running"]
+    active = []
+    if sonarr_sync.RUNS_DIR.exists():
+        for run_id in sorted(sonarr_sync.EpisodeRun.active, reverse=True):
+            try:
+                card = json.loads((sonarr_sync.RUNS_DIR / f"{run_id}.json").read_text())
+            except (OSError, ValueError):
+                continue
+            if card.get("ended"):
+                if card.get("outcome") == "running":
+                    active.append(card)
+            else:
+                active.append({**card, "outcome": "running"})
+    return queued + active
+
+
 async def runs(request):
     """The history's cards; ?live=1: only those going on (a series' page asks every few seconds)."""
+    if request.query.get("live") and run_cards is _RUN_CARDS_IMPL:
+        if not sonarr_sync.EpisodeRun.active and not sonarr_sync.waiting:
+            return web.json_response([])
+        return web.json_response(await asyncio.to_thread(live_run_cards))
     cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
     if request.query.get("live"):
         cards = [c for c in cards if c.get("outcome") == "running"]
@@ -6281,7 +6485,7 @@ def logged_in(request, auth: dict) -> bool:
         return False
     _, signed, signature = session
     expected = hmac.new(auth["secret"].encode(), signed.encode(), "sha256").hexdigest()
-    return hmac.compare_digest(signature.encode(), expected.encode()) and signature not in read_json(LOGGED_OUT_FILE, {})
+    return hmac.compare_digest(signature.encode(), expected.encode()) and signature not in read_json_cached(LOGGED_OUT_FILE, {})
 
 
 def setup_code_ok(body: dict) -> bool:
@@ -6302,6 +6506,7 @@ def forget_session(value: str) -> None:
     with LOGGED_OUT_LOCK:
         closed = {sig: until for sig, until in read_json(LOGGED_OUT_FILE, {}).items() if until > time.time()}  # the expired ones go
         write_atomic(LOGGED_OUT_FILE, json.dumps({**closed, signature: expires}), PRIVATE)
+        _invalidate_json_cache(LOGGED_OUT_FILE)
 
 
 def with_session(request, response, auth: dict):
@@ -6588,7 +6793,7 @@ async def v1_notifications(request):
 
 @web.middleware
 async def password_required(request, handler):
-    auth = read_config()["auth"]
+    auth = read_auth()
     if request.path in OPEN_PATHS or (request.path in SETUP_PATHS and not auth.get("password")):
         return await handler(request)
     if not auth.get("password"):
@@ -7025,8 +7230,22 @@ def background(loop):
     return context
 
 
+async def configure_executor(_app):
+    """Give asyncio.to_thread enough workers that slow upstream lookups cannot starve fast routes."""
+    loop = asyncio.get_running_loop()
+    prev = getattr(loop, "_default_executor", None)
+    executor = ThreadPoolExecutor(max_workers=max(16, (os.cpu_count() or 2) * 4), thread_name_prefix="unshacklarr-io")
+    loop.set_default_executor(executor)
+    try:
+        yield
+    finally:
+        loop._default_executor = prev
+        executor.shutdown(wait=False)
+
+
 app = web.Application(middlewares=[compress, same_origin_only, password_required])
 app.on_response_prepare.append(security_headers)
+app.cleanup_ctx.append(configure_executor)
 app.cleanup_ctx.append(background(watch_releases))
 app.cleanup_ctx.append(background(run_automatic_syncs))
 app.cleanup_ctx.append(stop_unshackle)

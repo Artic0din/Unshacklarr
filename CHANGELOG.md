@@ -136,6 +136,10 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Web requests no longer stall behind slow TMDB, cache, or Sonarr scans.** Shared worker-pool sizing, deduplicated
+  TMDB network lookups with serialized off-loop cache writes, mtime-cached read-only config/auth/JSON readers, direct
+  live-card reads for `GET /api/runs?live=1`, cached `unwritable_files()` checks, a short-TTL `sonarr_series()` cache,
+  and fresh-statistics filtering in `missing_of_managed()` keep fast API endpoints responsive under load. (#356)
 - **An episode under its own number is no longer hidden for a small difference in its title.** Kath & Kim on Netflix
   lists S01E08 "The Wedding" and S03E01 "Cactus"; Sonarr calls them "Wedding" and "Cactus Hour", so both showed as
   not on the service and were not downloaded. Under the same number, a title that is the other's first or last
