@@ -1580,7 +1580,7 @@
  "Being replaced now": "正在替换",
  "Check again": "重新检查",
  "Check now": "立即检查",
- "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings › Quality & Upgrades › Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "你的画质阶梯决定哪些文件可以升级。检查按批次进行，每部剧集每批最多 10 集。结果按“设置”›“画质与升级”›“升级”中指定的时长保留。即使 Sonarr 将两个版本评为同一等级（例如 1080p 的 H.264 和 H.265），替换文件也可能改善画质。",
+ "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings › Quality & Upgrades › Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265).": "你的画质阶梯决定哪些文件可以升级。检查按批次进行，每部剧集每批最多 10 集。结果按“设置”›“画质和升级”›“升级”中指定的时长保留。即使 Sonarr 将两个版本评为同一等级（例如 1080p 的 H.264 和 H.265），替换文件也可能改善画质。",
  "Checked {0}{1}{2}": "{0}检查{1}{2}",
  "Downloaded from {0}": "从 {0} 下载",
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": "例如 fr。该集必须至少有其中一种语言的完整字幕。强制字幕不算。",
