@@ -147,11 +147,16 @@ if (scenario === "cdm") {  // a device's test result reorders the list: the focu
   run("cdmData.devices[1].test = null");  // and back again
   ctx.renderCdm();
   out.row = [rows(), label(doc.activeElement)];
-  out.defaultAction = ["", "alpha", "none", "missing"].map((name) => {
+  const defaultActionIsPrimary = (name) => {
     run(`cdmData.map.default = ${JSON.stringify(name)}`);
     ctx.renderCdm();
     return find(list, (n) => n.dataset?.key === "svc:default").className.split(" ").includes("primary");
-  });
+  };
+  out.defaultAction = ["", "alpha", "none", "missing"].map(defaultActionIsPrimary);
+  run("cdmData.devices[0].test = { ok: false }");
+  out.failedDefaultAction = defaultActionIsPrimary("alpha");
+  run("cdmData.devices[0].test = null; cdmData.devices[0].info = { unreadable: true }");
+  out.unreadableDefaultAction = defaultActionIsPrimary("alpha");
 }
 
 if (scenario === "chips") {  // a slide-out's chips are rebuilt at each pick
@@ -631,6 +636,8 @@ def test_a_device_keeps_the_focus_when_a_test_result_reorders_the_devices():
         "menu": [["bravo", "alpha"], "Actions for alpha", True],
         "row": [["alpha", "bravo"], "row:Widevine:alpha"],
         "defaultAction": [True, False, False, True],
+        "failedDefaultAction": True,
+        "unreadableDefaultAction": True,
     }
 
 
