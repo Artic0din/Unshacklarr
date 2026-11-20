@@ -796,6 +796,27 @@ def test_json_cache_stat_error_uses_default(tmp_path, monkeypatch):
     assert web.read_json_cached(path, default) is default
 
 
+def test_a_malformed_revocation_file_keeps_revoked_sessions_out(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    auth = {"secret": "test-session-secret"}
+    cookie = web.session_value(auth)
+    req = SimpleNamespace(cookies={web.SESSION_COOKIE: cookie})
+    web.forget_session(cookie)
+    assert not web.logged_in(req, auth)
+    web.LOGGED_OUT_FILE.write_text("{")  # torn or hand-edited: the list of revoked sessions can't be read
+    assert web.logged_in(req, auth) is False  # fails closed: the revoked cookie is not accepted again, and no 500
+    with pytest.raises(OSError, match="Invalid JSON"):
+        web.forget_session(cookie)  # and a logout does not replace the list it could not read
+    for content in ("[]", "null", "[" * 100000):  # valid JSON of the wrong shape, or nested past the parser's depth
+        web.LOGGED_OUT_FILE.write_text(content)
+        assert web.logged_in(req, auth) is False
+    # other state read for a write keeps healing itself: a malformed file is read as empty and written anew
+    other = tmp_path / "state.json"
+    other.write_text("{")
+    assert web.read_json(other, {}, strict=True) == {}
+    assert web.read_json_cached(other, {}, strict=True) == {}
+
+
 @pytest.mark.parametrize("operation", ["stat", "read_text"])
 def test_unreadable_revocation_file_fails_closed(tmp_path, monkeypatch, operation):
     web = _reload_web(tmp_path, monkeypatch)
@@ -814,8 +835,7 @@ def test_unreadable_revocation_file_fails_closed(tmp_path, monkeypatch, operatio
             return original(path, *args, **kwargs)
 
         patch.setattr(path_type, operation, denied)
-        with pytest.raises(PermissionError, match="revocation file unreadable"):
-            web.logged_in(req, auth)
+        assert web.logged_in(req, auth) is False  # refused, not a 500 on every request
         if operation == "read_text":
             with pytest.raises(PermissionError, match="revocation file unreadable"):
                 web.forget_session(cookie)
@@ -834,11 +854,11 @@ def test_password_required_avoids_deepcopy_and_caches_logged_out(tmp_path, monke
     read_json_calls = 0
     real_read_json = web.read_json
 
-    def counting_read_json(path, default, strict=False):
+    def counting_read_json(path, default, strict=False, **kwargs):
         nonlocal read_json_calls
         if path == web.LOGGED_OUT_FILE:
             read_json_calls += 1
-        return real_read_json(path, default, strict=strict)
+        return real_read_json(path, default, strict=strict, **kwargs)
 
     monkeypatch.setattr(web, "read_json", counting_read_json)
     monkeypatch.setattr(copy, "deepcopy", lambda obj: pytest.fail("password_required must not deepcopy config"))
@@ -856,3 +876,34 @@ def test_password_required_avoids_deepcopy_and_caches_logged_out(tmp_path, monke
     web.forget_session(cookie)
     with pytest.raises(aiohttp.web.HTTPUnauthorized):
         asyncio.run(web.password_required(req, ok))
+
+
+def test_the_owner_signs_in_again_when_the_revoked_sessions_list_is_corrupt(tmp_path, monkeypatch):
+    """Fail closed without locking the owner out: every old session is refused, and the right password starts afresh."""
+    from aiohttp.test_utils import TestClient, TestServer
+    web = _reload_web(tmp_path, monkeypatch)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    page = {"X-Unshackle": "1"}
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as stolen, TestClient(TestServer(web.app)) as owner:
+            await stolen.post("/api/login", json={"password": "password1"}, headers=page)
+            copied = stolen.session.cookie_jar.filter_cookies(stolen.make_url("/"))[web.SESSION_COOKIE].value
+            await stolen.post("/api/logout", headers=page)
+            web.LOGGED_OUT_FILE.write_text("{")  # the list that revoked it is now corrupt
+            stolen.session.cookie_jar.update_cookies({web.SESSION_COOKIE: copied})
+            revoked = (await stolen.get("/api/state", headers=page)).status
+            out = await stolen.post("/api/logout", headers=page)  # no 500: the cookie is still dropped
+            dropped = out.cookies[web.SESSION_COOKIE]
+            logout = out.status, dropped.value == "" and (dropped["max-age"] == "0" or bool(dropped["expires"]))
+            # a wrong password changes nothing: no "log everyone out" for whoever can spoil the list
+            wrong = (await owner.post("/api/login", json={"password": "nope"}, headers=page)).status
+            assert web.read_config()["auth"]["secret"] == "s1" and web.LOGGED_OUT_FILE.read_text() == "{"
+            login = (await owner.post("/api/login", json={"password": "password1"}, headers=page)).status
+            back = (await owner.get("/api/session", headers=page)).json()
+            stolen.session.cookie_jar.update_cookies({web.SESSION_COOKIE: copied})
+            still_revoked = (await stolen.get("/api/state", headers=page)).status
+            return revoked, logout, wrong, login, (await back)["logged_in"], still_revoked
+
+    assert asyncio.run(go()) == (401, (200, True), 401, 200, True, 401)
+    assert web.read_config()["auth"]["secret"] != "s1"  # a new secret: every session from before is gone

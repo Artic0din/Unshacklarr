@@ -8,6 +8,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Security
 
+- **Session revocation.** The app now refuses to verify sessions when the sign-out record is corrupt. (#367)
 - **cryptography 50.0.2.** Its wheels carry OpenSSL 4.0.3, a security release whose most severe fix is High. Push
   notifications are signed and encrypted with it.
 - **oauthlib 4.0.1.** Fixes CVE-2026-49272, a device-flow token endpoint that handed out a bearer token without a
