@@ -8,6 +8,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Security
 
+- **cryptography 50.0.2.** Its wheels carry OpenSSL 4.0.3, a security release whose most severe fix is High. Push
+  notifications are signed and encrypted with it.
 - **No one can lock the owner out of signing in.** Wrong passwords are limited per client only, no longer 30 for
   everyone together, and `X-Real-IP` is believed only from the proxy's addresses listed in Settings, Account. Behind
   a reverse proxy, list its addresses there, even without signing in through it: until then, every client behind it
