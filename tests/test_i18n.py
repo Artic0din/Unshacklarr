@@ -372,7 +372,7 @@ def test_the_server_picks_the_plural_form_of_the_language(lang, expected):
     assert {n: i18n.tr(english(n), lang) for n in expected} == expected
 
 
-def page_translate(lang: str, expressions: list[str]) -> list[str]:
+def page_translate(lang: str, expressions: list[str], setup: str = "") -> list[str]:
     """What the page's own tr() makes of each JavaScript expression (a string, or COUNT.device(2)), in this language."""
     if not shutil.which("node"):
         pytest.skip("node is not installed")
@@ -388,12 +388,33 @@ const box = {{ LANG: {json.dumps(lang)}, Intl, fs, path: {json.dumps(str(I18N / 
 vm.createContext(box);
 vm.runInContext({json.dumps(code)} + `
 if (LANG !== "en") {{ T = JSON.parse(fs.readFileSync(path, "utf8")); TP = templates(T); }}
-out = [{", ".join(expressions)}].map((text) => tr(text));`, box);
+` + {json.dumps(setup)} + {json.dumps(f'out = [{", ".join(expressions)}].map((text) => tr(text));')}, box);
 console.log(JSON.stringify(box.out));
 """
     done = subprocess.run(["node", "-e", harness], capture_output=True, text=True)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
+
+
+def test_german_device_picker_translates_the_heading_without_matching_service_names_globally():
+    src = (CORE.parent / "cookies-cdm.js").read_text()
+    picker = re.search(r"^function cdmPicker\(.*?^\}", src, re.M | re.S).group()
+    displayed = page_translate("de", [
+        'pick("Netflix")', 'pick("Netflix", ["Disney+"])', 'pick("default")', '"Device for Netflix"',
+    ], picker + """
+const cdmData = { devices: [], remote: [], map: {} };
+const svcName = (service) => service;
+const el = (_, props) => ({ value: "", children: [], ...props,
+  replaceChildren(...nodes) { this.children = nodes; }, append(node) { this.children.push(node); },
+});
+let heading;
+const cdmPopAt = (_, title) => { heading = tr(title.textContent); };
+function pick(service, also) {
+  cdmPicker({}, service, "", also);
+  return heading;
+}
+""")
+    assert displayed == ["Gerät für Netflix", "Gerät für Netflix, Disney+", "Das Standardgerät", "Device for Netflix"]
 
 
 @pytest.mark.parametrize("lang, expected", [

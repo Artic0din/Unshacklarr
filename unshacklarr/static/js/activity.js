@@ -1434,5 +1434,5 @@ function promptBox(p) {
     } catch (err) { send.disabled = false; toast(err.message, true); }
   } }, field, send);
   return el("div", { className: "act-box", role: "status" },
-    el("b", { textContent: `${svcName(p.service)} asks` }), el("span", { className: "q", textContent: p.text }), form);
+    el("b", { textContent: trWith("{0} asks", svcName(p.service)) }), el("span", { className: "q", textContent: p.text }), form);
 }

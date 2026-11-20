@@ -698,7 +698,7 @@ function onBadge(e) {
   const other = found.service !== sxxeyy;  // under another number there: Download asks for it as found
   return hoverTip(el("em", { className: "ep-on" + (other ? " other" : ""), textContent: other ? trWith("on {0} as {1}", svc, found.service) : trWith("on {0}", svc) }), () => [
     el("b", { textContent: (!titleHidden(current.tvdbId, sxxeyy, found.name) && found.name) || trWith("On {0}", svc) }),
-    el("small", {}, `${svc} lists it as `, el("code", { textContent: found.service })),
+    el("small", {}, `${trWith("{0} lists it as", svc)} `, el("code", { textContent: found.service })),
     ...(found.match === "title" ? [el("small", { className: "diff", textContent: `Found by its title, under another number: Download asks the service for ${found.service}` })]
       : found.match === "absolute" ? [el("small", { className: "diff", textContent: `The service numbers episodes from the series' start, like Sonarr's absolute number: Download asks it for ${found.service}` })]
       : found.service !== sxxeyy ? [el("small", { className: "diff", textContent: `Sonarr numbers it ${sxxeyy}: this series' Numbering settings map it there` })] : []),

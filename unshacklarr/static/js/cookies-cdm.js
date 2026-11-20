@@ -174,7 +174,7 @@ function cdmPicker(anchor, service, current, also = []) {
   };
   q.oninput = draw;
   draw();
-  const who = service === "default" ? "The default device" : `Device for ${[service, ...also].map(svcName).join(", ")}`;
+  const who = service === "default" ? "The default device" : trWith("Device for {0}", [service, ...also].map(svcName).join(", "));
   if (cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: who }), q, list)) q.focus();
 }
 const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
