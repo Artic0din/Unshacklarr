@@ -2928,19 +2928,34 @@ def series_episodes(series_id: int, fresh: bool = False) -> list[dict]:
     return episodes
 
 
+_sonarr_series_lock = threading.RLock()
+_sonarr_series_generation = 0
 _series_by_tvdb: dict[str, tuple[float, dict]] = {}  # by Sonarr ("" the main one): (fetched, series by TVDB id)
+_series_connection: dict[str, tuple] = {}  # the address and key each other Sonarr's library came from
 
 
 def sonarr_series(wanted: set, keep: float = 3600) -> dict[int, dict]:
     """Sonarr's series by TVDB id, kept an hour (or `keep` seconds): the whole library is one big answer, asked again
     sooner only for a series it did not have (added since), at most once a minute."""
     key = (instance() or {}).get("name", "")  # each Sonarr its own library: ids differ between them
-    fetched, known = _series_by_tvdb.get(key, (0.0, {}))
-    age = time.monotonic() - fetched
-    if not fetched or age > keep or (age > 60 and not wanted <= set(known)):
-        known = {s["tvdbId"]: s for s in sonarr_get("series") if s.get("tvdbId")}
-        _series_by_tvdb[key] = (time.monotonic(), known)
-    return known
+    while True:
+        with _sonarr_series_lock:
+            generation = _sonarr_series_generation
+            connection = (sonarr_url(), sonarr_headers())
+            fetched, known = _series_by_tvdb.get(key, (0.0, {}))
+            if key and _series_connection.get(key) != connection:  # another Sonarr edited since: its old ids are not these
+                fetched = 0.0
+        age = time.monotonic() - fetched
+        if fetched and age <= keep and (age <= 60 or wanted <= set(known)):
+            return known
+        known = {s["tvdbId"]: s for s in sonarr_get("series", connection=connection) if s.get("tvdbId")}
+        with _sonarr_series_lock:
+            if (sonarr_url(), sonarr_headers()) != connection:
+                continue  # the connection changed while asking: the new Sonarr's ids, never the old one's
+            if generation == _sonarr_series_generation:
+                _series_by_tvdb[key] = (time.monotonic(), known)
+                _series_connection[key] = connection
+        return known
 
 
 def broadcast_dated(plans: list) -> set[int]:
@@ -4110,8 +4125,9 @@ class Kept(Exception):
 SONARR_READ_TIMEOUT = 120
 
 
-def sonarr_get(path: str, **params):
-    r = requests.get(f"{sonarr_url()}/api/v3/{path}", headers=sonarr_headers(), params=params, timeout=SONARR_READ_TIMEOUT)
+def sonarr_get(path: str, *, connection: tuple[str, dict[str, str]] | None = None, **params):
+    url, headers = connection if connection is not None else (sonarr_url(), sonarr_headers())
+    r = requests.get(f"{url}/api/v3/{path}", headers=headers, params=params, timeout=SONARR_READ_TIMEOUT)
     trace(f"Sonarr GET {path} {params or ''} → {r.status_code}, {len(r.content)} bytes", debug=True)
     r.raise_for_status()
     return r.json()
