@@ -2429,5 +2429,8 @@
  "Account & Backups": "Cuenta y copias de seguridad",
  "Jump to": "Ir a",
  "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": "Unshacklarr descarga el primer peldaño compatible. Un servicio o una serie puede elegir otra escalera. Desactivado:",
- "General": "General"
+ "General": "General",
+ "Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": "Necesaria para borrar la caché de un servicio en Ajustes › Descargas › Opciones de descarga › Por servicio. Si se deja en blanco, Unshacklarr consulta a Unshackle. Esto funciona cuando ambos se ejecutan en este equipo.",
+ "{0} redirects to {1}, which is not unshackle serve's: check its address in Settings › Connections › Unshackle": "{0} redirige a {1}, que no es la dirección de unshackle serve. Comprueba la dirección en Ajustes › Conexiones › Unshackle.",
+ "{0} redirects to {1}{2}: use that address for unshackle serve in Settings › Connections › Unshackle": "{0} redirige a {1}{2}. Usa esa dirección para unshackle serve en Ajustes › Conexiones › Unshackle."
 }

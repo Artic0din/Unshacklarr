@@ -33,6 +33,7 @@ class Node {
   *walk() { for (const c of this.children) { yield c; yield* c.walk(); } }
   querySelectorAll() { return [...this.walk()].filter(isControl); }
   getClientRects() { return this.noBox ? [] : [{}]; }
+  getBoundingClientRect() { return { top: 0 }; }
   focus() { this.focusCalls++; if (this.isConnected && !this.disabled) doc.activeElement = this; }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k] ?? null; }
@@ -190,7 +191,7 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   }
   const loads = [], location = { hash: "" }, dlg = { close() {} };
   Object.assign(ctx, { current: null, location, showTab(tab) { run(`currentTab = ${JSON.stringify(tab)}`); },
-    phone: true, leaveSettingsNews() {}, updateTitle() {}, scrollTo() {}, S: { series: [], config: {} },
+    phone: true, window: { scrollY: 0 }, leaveSettingsNews() {}, updateTitle() {}, scrollTo() {}, S: { series: [], config: {} },
     history: { pushState(_, __, hash) { location.hash = hash; }, replaceState(_, __, hash) { location.hash = hash; } },
     $: (sel) => sel === "#news-dlg" || sel === "#inbox-dialog" ? dlg : sel === ".set-layout" ? root : doc.querySelector(sel),
     phoneLayout: () => ctx.phone });
@@ -198,7 +199,7 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   doc.querySelectorAll = (sel) => sel === ".set-sec" ? panels : Object.values(buttons);
   doc.getElementById = (id) => anchors[id];
   const loaders = "renderSonarrState loadUnshackleStatus renderAutomation renderImportMode renderLearnWindow renderQuality renderUpgradeSeries renderUpgradeGroups loadServices loadCdm renderPush loadSent renderInterface renderRegion loadHistory loadAccount";
-  for (const name of loaders.split(" ")) ctx[name] = () => { loads.push(name); return Promise.resolve(); };
+  for (const name of loaders.split(" ")) ctx[name] = () => { loads.push(name); if (name === "renderPush") return Promise.resolve(); };
   run(navigation.split('document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.onclick')[0]);
   run(navigation.slice(navigation.indexOf('let currentTab ='), navigation.indexOf("/* The tab's title")));
   run('let routed = false;\n' + fn(navigation, "applyRoute"));
@@ -215,6 +216,7 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
     ctx.S.config.settings = {};
     ctx.applyRoute();
     out.routes[route] = [panels.find((n) => !n.hidden).dataset.sec, out.scrolledTo, before, loads.slice()];
+    ctx.showSettingsList(true);
   }
   delete out.scrolledTo;
   const nav = buttons.connections, heading = anchors["sonarr-sec"].children[0];

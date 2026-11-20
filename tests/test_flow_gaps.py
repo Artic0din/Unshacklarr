@@ -37,6 +37,104 @@ def node(body, *args):
     return json.loads(out.stdout)
 
 
+SETTINGS_NAV = r"""
+const listeners = {}, location = { hash: "#/settings/cdm" };
+const window = { scrollY: 0, addEventListener: (name, fn) => { listeners[name] = fn; } };
+const select = { classList: { contains: () => false, toggle() {} },
+  addEventListener: (name, fn) => { listeners[name] = fn; } };
+let cdmTop = 400, focused, finishServices, accountLoads = 0, keyPrompt = false;
+const heading = { id: "cdm-heading" };
+const anchors = {
+  "services-sec": { compareDocumentPosition: (other) => other === anchors["cdm-sec"] ? 4 : 0 },
+  "cdm-sec": {
+    closest: () => null, querySelector: () => heading,
+    scrollIntoView: () => { window.scrollY = cdmTop; },
+    getBoundingClientRect: () => ({ top: cdmTop - window.scrollY }),
+  },
+  "region-sec": { closest: () => null, querySelector: () => null, scrollIntoView() {},
+    getBoundingClientRect: () => ({ top: 100 - window.scrollY }) },
+  "history-sec": { compareDocumentPosition: () => 0 },
+  "account-sec": { compareDocumentPosition: () => 0 },
+};
+const ctx = sandbox({
+  $, window, location, current: null, S: { config: {} }, termSocket: null,
+  phoneLayout: () => true, Node: { DOCUMENT_POSITION_FOLLOWING: 4 },
+  document: { querySelectorAll: () => [], body: select, getElementById: (id) => anchors[id] },
+  history: { replaceState: (_, __, hash) => { location.hash = hash; } },
+  focusHeading: (node) => { focused = node; },
+  loadServices: () => new Promise((resolve) => {
+    finishServices = () => { cdmTop += 6000; resolve(); };
+  }),
+  loadCdm: () => new Promise(() => {}),
+  loadAccount: () => { accountLoads++; keyPrompt = false; },
+  scrollTo: ({ top }) => { window.scrollY = top; },
+});
+function $(selector) { return select; }
+const source = read(process.argv[1]);
+vm.runInContext(source.slice(0, source.indexOf('showTab(parseRoute().tab')) +
+  grab(source, /^showTab\(parseRoute\(\).tab.*\nif \(parseRoute\(\).sec\).*\nelse if .*$/m), ctx);
+const enter = (hash) => { location.hash = hash; ctx.applyRoute(); };
+const jump = (hash) => listeners.click({ preventDefault() {}, target: { closest: () => ({ hash }) } });
+"""
+
+
+@pytest.mark.parametrize("interruption", ["none", "layout", "before-state", "scroll", "route"])
+def test_delayed_services_keep_the_cdm_heading_in_view_only_if_the_jump_is_still_active(interruption):
+    seen = node(SETTINGS_NAV + r"""
+(async () => {
+  const before = cdmTop - window.scrollY;
+  const focusedCdm = focused === heading;
+  if (process.argv[2] === "before-state") {
+    window.scrollY += 120;
+    listeners.scroll?.();
+  }
+  const beforeState = window.scrollY;
+  ctx.S.config.settings = {};
+  ctx.applyRoute();
+  const movedOnState = window.scrollY !== beforeState;
+  if (process.argv[2] === "scroll") {
+    window.scrollY += 120;
+    listeners.scroll?.();
+  }
+  if (process.argv[2] === "layout") {
+    cdmTop += 35;
+    window.scrollY += 35;
+    listeners.scroll?.();
+  }
+  if (process.argv[2] === "route") enter("#/schedule");
+  const scrollBeforeRender = window.scrollY;
+  finishServices();
+  await new Promise(setImmediate);
+  console.log(JSON.stringify({ before, focusedCdm, movedOnState, top: cdmTop - window.scrollY,
+    moved: window.scrollY !== scrollBeforeRender }));
+})();
+""", str(JS / "navigation.js"), interruption)
+    assert seen["before"] == 0
+    assert seen["focusedCdm"]
+    assert not seen["movedOnState"]
+    if interruption in ("none", "layout"):
+        assert seen["top"] == 0
+    else:
+        assert not seen["moved"]
+
+
+def test_settings_jump_keeps_the_api_key_prompt_open_but_reentering_loads_account_again():
+    seen = node(SETTINGS_NAV + r"""
+enter("#/settings/general");
+const beforeState = accountLoads;
+ctx.S.config.settings = {};
+ctx.applyRoute();
+const afterState = accountLoads;
+keyPrompt = true;
+jump("#/settings/region");
+const openAfterJump = keyPrompt, afterJump = accountLoads;
+enter("#/schedule");
+enter("#/settings/general");
+console.log(JSON.stringify({ beforeState, afterState, afterJump, openAfterJump, afterReturn: accountLoads }));
+""", str(JS / "navigation.js"))
+    assert seen == {"beforeState": 0, "afterState": 1, "afterJump": 1, "openAfterJump": True, "afterReturn": 2}
+
+
 def test_a_jobs_bar_has_open_series_for_a_phone_whose_head_and_foot_are_hidden():
     seen = node(r"""
 const src = read(process.argv[1]);

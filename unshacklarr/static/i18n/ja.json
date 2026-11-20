@@ -2454,5 +2454,8 @@
  "Services & Devices": "サービスとデバイス",
  "Account & Backups": "アカウントとバックアップ",
  "Jump to": "移動先",
- "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": "Unshacklarr は最初に一致する段階でダウンロードします。サービスやシリーズに別のラダーを指定できます。オフ："
+ "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": "Unshacklarr は最初に一致する段階でダウンロードします。サービスやシリーズに別のラダーを指定できます。オフ：",
+ "Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": "設定 › ダウンロード › ダウンロードオプション › サービス別で、個別のサービスのキャッシュを削除するために必要です。空欄の場合は Unshacklarr が Unshackle に問い合わせます。両方がこのコンピューターで動作している場合に使えます。",
+ "{0} redirects to {1}, which is not unshackle serve's: check its address in Settings › Connections › Unshackle": "{0} は {1} にリダイレクトされますが、これは unshackle serve のアドレスではありません。設定 › 接続 › Unshackle でアドレスを確認してください。",
+ "{0} redirects to {1}{2}: use that address for unshackle serve in Settings › Connections › Unshackle": "{0} は {1}{2} にリダイレクトされます。設定 › 接続 › Unshackle で、このアドレスを unshackle serve に指定してください。"
 }

@@ -2517,5 +2517,8 @@
  "Services & Devices": "Сервисы и устройства",
  "Account & Backups": "Учётная запись и резервные копии",
  "Jump to": "Перейти к",
- "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": "Unshacklarr скачивает первый подходящий уровень. Сервис или сериал может выбрать другую лестницу. Выкл.:"
+ "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": "Unshacklarr скачивает первый подходящий уровень. Сервис или сериал может выбрать другую лестницу. Выкл.:",
+ "Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": "Нужна для очистки кеша отдельного сервиса в разделе «Настройки › Загрузки › Опции загрузки › По сервисам». Если поле пустое, Unshacklarr запрашивает путь у Unshackle. Это работает, когда обе программы запущены на одном компьютере.",
+ "{0} redirects to {1}, which is not unshackle serve's: check its address in Settings › Connections › Unshackle": "{0} перенаправляет на {1}, но это не адрес unshackle serve. Проверьте адрес в разделе «Настройки › Подключения › Unshackle».",
+ "{0} redirects to {1}{2}: use that address for unshackle serve in Settings › Connections › Unshackle": "{0} перенаправляет на {1}{2}. Укажите этот адрес для unshackle serve в разделе «Настройки › Подключения › Unshackle»."
 }

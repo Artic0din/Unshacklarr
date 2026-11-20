@@ -6,7 +6,7 @@ const LEGACY_SETTINGS_MAP = {
   downloads:     { sec: "downloading", anchor: "downloads-sec" },
   automation:    { sec: "downloading", anchor: "automation-sec", load: () => { renderAutomation(); renderImportMode(); renderLearnWindow(); } },
   quality:       { sec: "quality-upgrades", anchor: "quality-sec", load: () => renderQuality() },
-  upgrades:      { sec: "quality-upgrades", anchor: "upgrades-sec", load: () => { renderUpgradeSeries(); renderUpgradeGroups(); } },
+  upgrades:      { sec: "quality-upgrades", anchor: "upgrades-sec", load: () => { renderUpgradeSeries(); return renderUpgradeGroups(); } },
   services:      { sec: "services-devices", anchor: "services-sec", load: () => loadServices() },
   cookies:       { sec: "services-devices", anchor: "services-sec" },
   cdm:           { sec: "services-devices", anchor: "cdm-sec", load: () => loadCdm() },
@@ -19,24 +19,55 @@ const LEGACY_SETTINGS_MAP = {
 const settingsPages = Object.values(LEGACY_SETTINGS_MAP);
 const legacySettings = (name) => Object.hasOwn(LEGACY_SETTINGS_MAP, name) ? LEGACY_SETTINGS_MAP[name] : null;
 let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false, secFromList = false;
+let loadedSettings = null, settingsAnchor = null;
 const inSettingsSec = () => currentTab === "settings" && !settingsList;  // a section on screen, not the phone's list
 const showingSettings = (name) => inSettingsSec() && legacySettings(name)?.sec === settingsSec;
 const settingsHref = (name) => `#/settings/${name}`;
+function rememberSettingsAnchor(anchor) {
+  const top = anchor.getBoundingClientRect().top;
+  settingsAnchor = { anchor, scrollY: window.scrollY, pageTop: top + window.scrollY };
+}
+function checkSettingsScroll() {
+  if (!settingsAnchor || window.scrollY === settingsAnchor.scrollY) return;
+  const { anchor, pageTop } = settingsAnchor;
+  // Browser scroll anchoring can move the viewport when content above it changes.
+  if (Math.abs(anchor.getBoundingClientRect().top + window.scrollY - pageTop) > 1) rememberSettingsAnchor(anchor);
+  else settingsAnchor = null;
+}
 function loadSettingsSec() {
-  if (inSettingsSec() && S.config.settings) for (const page of settingsPages) {
-    if (page.sec === settingsSec) page.load?.();
+  if (!inSettingsSec() || !S.config.settings || loadedSettings?.sec === settingsSec) return;
+  const entry = loadedSettings = { sec: settingsSec };
+  for (const page of settingsPages) {
+    if (page.sec !== entry.sec) continue;
+    const pending = page.load?.();
+    pending?.then?.(() => {
+      if (loadedSettings !== entry || !inSettingsSec()) return;
+      checkSettingsScroll();
+      const jump = settingsAnchor;
+      if (!jump) return;
+      // Only a subsection above the target can push it down when its data renders.
+      const source = document.getElementById(page.anchor);
+      if (!(source.compareDocumentPosition(jump.anchor) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+      jump.anchor.scrollIntoView({ block: "start" });
+      rememberSettingsAnchor(jump.anchor);
+    }).catch(console.error);
   }
+}
+function leaveSettingsSec() {
+  loadedSettings = settingsAnchor = null;
+  leaveSettingsNews(settingsSec);
 }
 function showSettingsList(on) {
   const fromSec = on && phoneLayout() && inSettingsSec();
-  if (fromSec) leaveSettingsNews(settingsSec);
+  if (fromSec) leaveSettingsSec();
   settingsList = on && phoneLayout();
   $(".set-layout").classList.toggle("at-list", settingsList);
   if (fromSec) document.querySelector(`.set-nav [data-sec="${settingsSec}"]`).focus({ preventScroll: true });  // the item it came from
 }
 function showSettingsSec(name, fromRoute = false, push = false, target = null) {
   const page = legacySettings(name), sec = page?.sec || (settingsPages.some((item) => item.sec === name) ? name : "connections");
-  if (sec !== settingsSec && inSettingsSec()) leaveSettingsNews(settingsSec);
+  if (sec !== settingsSec && inSettingsSec()) leaveSettingsSec();
+  settingsAnchor = null;
   const fromList = settingsList;
   if (sec !== settingsSec || fromList) secFromList = fromList && !fromRoute;
   showSettingsList(false);
@@ -51,7 +82,8 @@ function showSettingsSec(name, fromRoute = false, push = false, target = null) {
     const fold = anchor.closest("details");
     if (fold) fold.open = true;
     anchor.scrollIntoView({ block: "start" });
-    focusHeading(anchor.querySelector("h2, h3, label") || anchor);
+    focusHeading(anchor.querySelector("h2, h3, h4, label") || anchor);
+    rememberSettingsAnchor(anchor);
   } else if (fromList || !fromRoute) {
     scrollTo({ top: 0 });
     focusHeading($(`.set-sec[data-sec="${sec}"] h2`));
@@ -110,9 +142,12 @@ function applyRoute() {
     openInbox();
   }
   const route = parseRoute();
+  const alreadyOpen = inSettingsSec() && route.sec === settingsRoute;
   if (!routed || route.tab !== currentTab) showTab(route.tab, true);  // closing a series keeps its tab as it was
-  if (route.sec) showSettingsSec(route.sec, true);
-  else if (route.tab === "settings") { showSettingsList(true); loadSettingsSec(); }
+  if (route.sec) {
+    if (alreadyOpen) loadSettingsSec();  // the initial state arrived after the URL was shown
+    else showSettingsSec(route.sec, true);
+  } else if (route.tab === "settings") { showSettingsList(true); loadSettingsSec(); }
   routed = true;
   const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
   if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
@@ -121,6 +156,13 @@ function applyRoute() {
   updateTitle();
 }
 window.addEventListener("popstate", applyRoute);
+window.addEventListener("scroll", checkSettingsScroll);
+for (const event of ["wheel", "touchmove"]) {
+  window.addEventListener(event, () => { settingsAnchor = null; }, { passive: true });
+}
+window.addEventListener("keydown", (e) => {
+  if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(e.key)) settingsAnchor = null;
+});
 
 // The page's scroll padding, so focus stops clear of what is pinned: the header as tall as it is (a status row under it
 // makes it taller), and how far up the bars pinned to the bottom reach, stacked, wrapped or expanded as they are now.
@@ -143,7 +185,7 @@ function showTab(name, fromRoute = false, quiet = false) {
     if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }
     uyReset();
   }
-  if (name !== currentTab && inSettingsSec()) leaveSettingsNews(settingsSec);
+  if (name !== currentTab && inSettingsSec()) leaveSettingsSec();
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   currentTab = name;
   closeDetails(false);  // the Schedule's popover belongs to its card

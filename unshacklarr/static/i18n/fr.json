@@ -2485,5 +2485,8 @@
  "Services & Devices": "Services et appareils",
  "Account & Backups": "Compte et sauvegardes",
  "Jump to": "Aller à",
- "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": "Unshacklarr télécharge le premier palier compatible. Un service ou une série peut choisir une autre échelle. Désactivé :"
+ "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": "Unshacklarr télécharge le premier palier compatible. Un service ou une série peut choisir une autre échelle. Désactivé :",
+ "Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": "Nécessaire pour vider le cache d’un service dans Réglages › Téléchargements › Options de téléchargement › Par service. Si le champ est vide, Unshacklarr demande à Unshackle, à condition que les deux tournent sur cet ordinateur.",
+ "{0} redirects to {1}, which is not unshackle serve's: check its address in Settings › Connections › Unshackle": "{0} redirige vers {1}, qui n’est pas l’adresse d’unshackle serve. Vérifiez son adresse dans Réglages › Connexions › Unshackle.",
+ "{0} redirects to {1}{2}: use that address for unshackle serve in Settings › Connections › Unshackle": "{0} redirige vers {1}{2}. Utilisez cette adresse pour unshackle serve dans Réglages › Connexions › Unshackle."
 }

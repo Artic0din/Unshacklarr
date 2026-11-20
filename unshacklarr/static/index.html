@@ -161,7 +161,7 @@
             <div class="field"><label for="sx-dl">Downloads folder, as Sonarr sees it</label><input id="sx-dl" type="text" data-set="sonarr_downloads" placeholder="Same path" spellcheck="false"><small>Its path on Sonarr's side, e.g. inside Sonarr's container. Empty: the same path as for Unshacklarr.</small></div>
         </div>
         <section class="sx-card" id="sn-card">
-          <div class="sx-head"><div><h3>Other Sonarr instances</h3></div>
+          <div class="sx-head"><div><h4>Other Sonarr instances</h4></div>
             <button class="btn small dx-add" id="sn-add" type="button">Add a Sonarr</button></div>
           <div id="sn-list"></div>
         </section>
@@ -174,7 +174,7 @@
           <div class="ux-more" id="u-status"></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>How it runs</h3></div></div>
+          <div class="sx-head"><div><h4>How it runs</h4></div></div>
           <div class="wz-tiles ux-tiles" role="radiogroup" aria-label="Unshackle runs">
             <button type="button" class="wz-tile" role="radio" data-value="local"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>Local</b><small>Unshacklarr starts it on this machine</small></button>
             <button type="button" class="wz-tile" role="radio" data-value="remote"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></span><b>Remote</b><small>On another machine</small></button>
@@ -188,7 +188,7 @@
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Folders</h3></div></div>
+          <div class="sx-head"><div><h4>Folders</h4></div></div>
           <div class="sx-grid">
             <div class="field"><label for="downloads-input">Downloads folder</label><input type="text" data-set="downloads" id="downloads-input" spellcheck="false"></div>
             <div class="field"><label for="ux-free">Room kept free</label><div class="unit-input"><input id="ux-free" type="number" data-set="min_free_gb" data-num min="0" max="100000" step="1" inputmode="numeric"><span>GB</span></div><small>Nothing is downloaded while the downloads folder, or the library folder Sonarr moves a series into, has less free space than this, and you get a notification. 0: not checked.</small></div>
@@ -199,7 +199,7 @@
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Other Unshackle servers</h3></div>
+          <div class="sx-head"><div><h4>Other Unshackle servers</h4></div>
             <button class="btn small dx-add" id="ub-add" type="button">Add a server</button></div>
           <div id="ub-list"></div>
         </section>
@@ -217,17 +217,17 @@
           <ol class="dx-order" aria-label="The order options apply in"><li><b>1</b>Every series</li><li><b>2</b>Its service</li><li><b>3</b>The series itself, on its page</li></ol>
         </section>
         <section class="sx-card" id="dx-defaults-card">
-          <div class="sx-head"><div><h3>For every series</h3></div></div>
+          <div class="sx-head"><div><h4>For every series</h4></div></div>
           <div class="opts" id="defaults"></div>
           <div class="dx-cmd"><span>Every download starts as</span><code id="dx-cmd" translate="no"></code></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Per service</h3></div>
+          <div class="sx-head"><div><h4>Per service</h4></div>
             <select id="svc-add" class="dx-add" aria-label="Add options for a service"></select></div>
           <div id="svc-defaults"></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Languages</h3><p>An episode with none of these languages is not downloaded. It is tried again at each sync.</p></div></div>
+          <div class="sx-head"><div><h4>Languages</h4><p>An episode with none of these languages is not downloaded. It is tried again at each sync.</p></div></div>
           <div class="sx-grid">
             <div class="field" id="dx-audio-field"><label for="dx-audio">Accepted audio languages</label><input id="dx-audio" type="text" data-set="audio_accept" placeholder="Example: fr, en" spellcheck="false"><small>The episode must have at least one of them. It is checked before the download, then on the file. orig is each series' original language, as Sonarr gives it. Empty: the first language of --a-lang or --lang. A series can set its own.</small></div>
             <div class="field"><label for="dx-prefer">Upgrade the audio to</label><input id="dx-prefer" type="text" data-set="audio_prefer" placeholder="Example: fr" spellcheck="false"><small>One language. An episode downloaded in another accepted language (for example English with French subtitles) is downloaded again when the service has this one. Empty: never.</small></div>
@@ -259,7 +259,7 @@
           <div class="sx-actions"><button class="btn small" type="button" id="ax-sync">Run a sync now</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Regular sync</h3></div></div>
+          <div class="sx-head"><div><h4>Regular sync</h4></div></div>
           <div class="rt-sum" id="rs-sum"></div>
           <div class="rt-rows">
             <div class="rt-row"><span class="rt-label" id="rs-every-l">Every</span>
@@ -272,7 +272,7 @@
           <p class="rt-who">After that, Unshacklarr stops trying: download the episode by hand from its series.</p>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>At a release time</h3></div></div>
+          <div class="sx-head"><div><h4>At a release time</h4></div></div>
           <div class="rt-sum" id="rt-sum"></div>
           <div class="rt-line" id="rt-line" aria-hidden="true"></div>
           <div class="rt-rows">
@@ -286,17 +286,17 @@
           <p class="rt-who" id="rt-who"></p>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>After the download</h3></div></div>
+          <div class="sx-head"><div><h4>After the download</h4></div></div>
           <div class="ax-seg" id="ax-import" role="group" aria-label="After the download"><button type="button" data-only="false">Sonarr imports it</button><button type="button" data-only="true">Download only</button></div>
           <p class="rt-who" id="ax-import-say"></p>
         </section>
         <section class="sx-card" id="ax-learn-card">
-          <div class="sx-head"><div><h3>Auto release times</h3><p>When 3 episodes of a series come out at the same time, that time becomes its release time. Only for series without one. You get a notification and can change it on the series page.</p></div>
+          <div class="sx-head"><div><h4>Auto release times</h4><p>When 3 episodes of a series come out at the same time, that time becomes its release time. Only for series without one. You get a notification and can change it on the series page.</p></div>
             <label class="sx-switch-target"><input type="checkbox" class="switch" id="ax-learn" aria-label="Auto release times"></label></div>
           <p class="rt-who" id="ax-learn-say"></p>
         </section>
         <section class="sx-card" id="ax-window-card">
-          <div class="sx-head"><div><h3>Download window</h3><p>Automatic downloads only run between these times, at night for example. Episodes you start by hand are not affected.</p></div></div>
+          <div class="sx-head"><div><h4>Download window</h4><p>Automatic downloads only run between these times, at night for example. Episodes you start by hand are not affected.</p></div></div>
           <div class="sx-grid ax-grid">
             <div class="field"><label for="ax-from">From</label><input id="ax-from" type="time" data-set="download_from"><small>Leave empty for no limit.</small></div>
             <div class="field"><label for="ax-to">To</label><input id="ax-to" type="time" data-set="download_to"><small>It can span midnight, for example 23:00 to 06:00.</small><small class="status-err" id="ax-window-err" role="status"></small></div>
@@ -305,7 +305,7 @@
           <p class="rt-who" id="ax-window-say"></p>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Downloads left waiting</h3></div></div>
+          <div class="sx-head"><div><h4>Downloads left waiting</h4></div></div>
           <div class="sx-grid ax-grid">
             <div class="field"><label for="ax-left">Delete them after</label><div class="unit"><input id="ax-left" type="number" data-set="leftovers_days" data-num min="0" max="365"><span>days</span></div><small>0: never delete them. Episodes of a series set to Download only are never deleted automatically.</small></div>
           </div>
@@ -325,7 +325,7 @@
           <div class="sx-actions"><button class="btn small primary" id="ql-add" type="button">New ladder</button><button class="btn small" id="ql-reset" type="button">Reset ladders</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Every series downloads by</h3><p>Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
+          <div class="sx-head"><div><h4>Every series downloads by</h4><p>Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
           <div class="ax-seg" id="ql-default" role="group" aria-label="Every series downloads by"></div>
         </section>
         <div id="ql-list" class="ql-list"></div>
@@ -336,7 +336,7 @@
           <div class="sx-state" id="ug-state"><span class="dot"></span><span><b></b><small></small></span></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>How often</h3><p>An answer is reused until it is older than this, unless the file changed.</p></div></div>
+          <div class="sx-head"><div><h4>How often</h4><p>An answer is reused until it is older than this, unless the file changed.</p></div></div>
           <div class="sx-grid">
             <div class="field"><label for="ug-recheck">Ask again after</label><div class="unit"><input id="ug-recheck" type="number" data-set="upgrade_recheck_days" data-num min="0" max="3650"><span>days</span></div><small>0: always ask.</small></div>
             <div class="field"><label for="ug-age">Only episodes from the last</label><div class="unit"><input id="ug-age" type="number" data-set="upgrade_max_age_years" data-num min="0" max="100"><span>years</span></div><small>Older episodes are not checked. 0: all of them.</small></div>
@@ -346,12 +346,12 @@
           <label class="ug-switch" id="ug-new-field"><input type="checkbox" class="switch" id="ug-new"><span><b>Check new series</b><small>A series you set up with episodes already on disk is checked within the hour, without waiting for the next automatic check.</small></span></label>
         </section>
         <section class="sx-card" id="ug-other-card">
-          <div class="sx-head"><div><h3>Release group</h3></div></div>
+          <div class="sx-head"><div><h4>Release group</h4></div></div>
           <label class="ug-switch"><input type="checkbox" class="switch" id="ug-other"><span><b>Replace files from other release groups</b><small>A file from another group (a torrent, an older tool) is listed when the service has the episode on the same step, not only a better one.</small></span></label>
           <div class="ug-groups" id="ug-groups"></div>
         </section>
         <section class="sx-card" id="ug-series-card">
-          <div class="sx-head"><div><h3>Series to check</h3></div></div>
+          <div class="sx-head"><div><h4>Series to check</h4></div></div>
           <div class="ug-tools"><input type="search" id="ug-find" placeholder="Find a series" aria-label="Find a series" autocomplete="off"><button type="button" class="btn small" id="ug-all">Select all</button><button type="button" class="btn small" id="ug-none">Select none</button></div>
           <div class="ug-list" id="ug-series"></div>
           <small class="muted" id="ug-say"></small>
@@ -376,7 +376,7 @@
         </section>
         <div class="sx-card">
           <div class="sx-head"><span class="sx-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span>
-            <div><h3>Getting them</h3><p>Sign in to the service in your browser.<br>Export its cookies with a browser extension: <a href="https://addons.mozilla.org/firefox/addon/cookies-txt/" target="_blank" rel="noopener">cookies.txt for Firefox ↗</a> or <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener">Get cookies.txt LOCALLY for Chrome ↗</a>.<br>Then add the file here with Add.<br>A service that signs in with a username and password (set in unshackle.yaml) needs no cookies.</p></div></div>
+            <div><h4>Getting them</h4><p>Sign in to the service in your browser.<br>Export its cookies with a browser extension: <a href="https://addons.mozilla.org/firefox/addon/cookies-txt/" target="_blank" rel="noopener">cookies.txt for Firefox ↗</a> or <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener">Get cookies.txt LOCALLY for Chrome ↗</a>.<br>Then add the file here with Add.<br>A service that signs in with a username and password (set in unshackle.yaml) needs no cookies.</p></div></div>
         </div>
         </div>
         <div class="sx sx-subsection" id="cdm-sec">
@@ -483,7 +483,7 @@
           <div class="sx-actions"><button class="btn small" id="hs-open" type="button">Open Activity</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>What is kept</h3><p>Whichever limit is reached first applies. The oldest downloads are removed first.</p></div></div>
+          <div class="sx-head"><div><h4>What is kept</h4><p>Whichever limit is reached first applies. The oldest downloads are removed first.</p></div></div>
           <div class="rt-rows">
             <div class="rt-row"><span class="rt-label" id="hs-keep-l">The last</span>
               <div class="ax-seg rt-seg" data-for="hs-keep" role="group" aria-labelledby="hs-keep-l"><button type="button" data-v="100">100 downloads</button><button type="button" data-v="300">300</button><button type="button" data-v="1000">1000</button>
@@ -495,7 +495,7 @@
           <p class="rt-who" id="hs-say"></p>
         </section>
         <section class="sx-card" id="hs-debug-card">
-          <div class="sx-head"><div><h3>Debug mode</h3><p>Each download's output shows much more: Unshackle's debug log, every call to Sonarr, and the job as Unshackle reports it.</p></div>
+          <div class="sx-head"><div><h4>Debug mode</h4><p>Each download's output shows much more: Unshackle's debug log, every call to Sonarr, and the job as Unshackle reports it.</p></div>
             <label class="sx-switch-target"><input type="checkbox" class="switch" id="debug-mode" aria-label="Debug mode"></label></div>
           <p class="rt-who" id="hs-debug-say"></p>
         </section>
@@ -507,7 +507,7 @@
           <div class="sx-actions"><button class="btn small" id="ac-others" type="button">Sign out other devices</button><button class="btn small danger" id="logout" type="button">Sign out</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Change the password</h3><p>At least 8 characters.<br>Every other device is signed out and stops getting push notifications. This one stays signed in.</p></div></div>
+          <div class="sx-head"><div><h4>Change the password</h4><p>At least 8 characters.<br>Every other device is signed out and stops getting push notifications. This one stays signed in.</p></div></div>
           <div class="sx-grid">
             <div class="field ac-wide"><label for="pw-current">Current password</label><input type="password" id="pw-current" autocomplete="current-password"><small class="pw-match" id="pw-current-say" role="alert"></small></div>
             <div class="field"><label for="pw-new">New password</label><input type="password" id="pw-new" autocomplete="new-password" minlength="8" aria-describedby="pw-meter"><div role="status"><div class="pw-meter" id="pw-meter" data-score="0"><i></i><i></i><i></i><i></i><span></span></div></div><small class="pw-match" id="pw-new-say" role="alert"></small></div>
@@ -516,18 +516,18 @@
           <div class="ac-go"><button class="btn primary" id="pw-change" type="button">Change the password</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>API key <span class="sx-saved" id="ak-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></h3><p>It only opens the /api/v1 routes: never the password, the cookies or the settings.</p></div></div>
+          <div class="sx-head"><div><h4>API key <span class="sx-saved" id="ak-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></h4><p>It only opens the /api/v1 routes: never the password, the cookies or the settings.</p></div></div>
           <div class="cmd ac-cmd" id="ak-show" hidden><code id="ak-cmd" translate="no"></code></div>
           <small class="pw-match" id="ak-say"></small>
           <div class="sx-grid" id="ak-pass-row" hidden><div class="field"><label for="ak-pass">Your password</label><input type="password" id="ak-pass" autocomplete="current-password"><small class="pw-match" id="ak-pass-say">Asked again before a key is made.</small></div></div>
           <div class="ac-go"><button class="btn primary" id="ak-new" type="button">Create a key</button><button class="btn danger" id="ak-delete" type="button" hidden>Delete the key</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Lost the password?</h3><p>It cannot be recovered, only replaced, with this command on the server.<br>Your settings and series stay as they are. Every device must sign in again.</p></div></div>
+          <div class="sx-head"><div><h4>Lost the password?</h4><p>It cannot be recovered, only replaced, with this command on the server.<br>Your settings and series stay as they are. Every device must sign in again.</p></div></div>
           <div class="cmd ac-cmd"><code id="ac-reset" translate="no">docker exec -it unshacklarr unshacklarr reset-password</code></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Backups</h3><p>The file holds your API keys and notification addresses: keep it private.</p></div></div>
+          <div class="sx-head"><div><h4>Backups</h4><p>The file holds your API keys and notification addresses: keep it private.</p></div></div>
           <div class="sx-grid ax-grid">
             <div class="field"><label for="bk-every">Back up automatically every</label><div class="unit"><input id="bk-every" type="number" data-set="backup_every_days" data-num min="0" max="30"><span>days</span></div><small>0 turns it off. Each backup is saved in the data folder's backups folder, without the password.</small></div>
             <div class="field"><label for="bk-keep">Keep the last</label><div class="unit"><input id="bk-keep" type="number" data-set="backup_keep" data-num min="1" max="365"><span>backups</span></div><small>Older ones are deleted. To restore one, download it, then use Restore from a file.</small></div>
@@ -538,7 +538,7 @@
           <div class="bk-saved" id="bk-saved" hidden><b id="bk-saved-head">Saved backups</b><div id="bk-list"></div></div>
         </section>
         <section class="sx-card" id="bo-card">
-          <div class="sx-head"><div><h3>Remote backup</h3></div></div>
+          <div class="sx-head"><div><h4>Remote backup</h4></div></div>
           <div class="ax-seg" id="bo-kind" role="group" aria-label="Send backups to"></div>
           <div id="bo-fields" hidden>
             <div class="sx-grid">
@@ -555,7 +555,7 @@
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h3>Sign in through a reverse proxy</h3><p>For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.<br>Your password is still asked before the most sensitive changes.</p></div></div>
+          <div class="sx-head"><div><h4>Sign in through a reverse proxy</h4><p>For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.<br>Your password is still asked before the most sensitive changes.</p></div></div>
           <div class="sx-grid">
             <div class="field"><label for="ac-proxy-header">User header</label><input id="ac-proxy-header" type="text" data-set="proxy_auth_header" placeholder="Remote-User" spellcheck="false" autocomplete="off"><small>The header your proxy sets: Remote-User for Authelia, X-authentik-username for Authentik. Empty: off.</small></div>
             <div class="field"><label for="ac-proxy-from">The proxy's addresses</label><input id="ac-proxy-from" type="text" data-set="proxy_auth_from" placeholder="172.18.0.0/16" spellcheck="false" autocomplete="off"><small>The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.</small></div>

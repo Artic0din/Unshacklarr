@@ -179,7 +179,7 @@ function cdmPicker(anchor, service, current, also = []) {
 }
 const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
   el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: svg }),
-    el("div", {}, el("h3", { textContent: title }), el("p", { textContent: text })), ...(extra ? [extra] : [])), ...body);
+    el("div", {}, el("h4", { textContent: title }), el("p", { textContent: text })), ...(extra ? [extra] : [])), ...body);
 // unshackle.yaml reads a service key in any case: "rmcbfm" is RMC BFM Play too
 const cdmUsageName = (tag) => tag.toLowerCase() === "default" ? "default" : svcName(Object.keys(S.serviceNames || {}).find((known) => known.toLowerCase() === tag.toLowerCase()) || tag);
 /* No device to list: what was asked for named, with a way back to the whole list. */

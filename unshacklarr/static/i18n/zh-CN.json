@@ -2459,5 +2459,8 @@
  "Services & Devices": "服务和设备",
  "Account & Backups": "账号和备份",
  "Jump to": "跳转到",
- "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": "Unshacklarr 会下载第一个匹配的档位。服务或剧集可以选择其他阶梯。关闭："
+ "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": "Unshacklarr 会下载第一个匹配的档位。服务或剧集可以选择其他阶梯。关闭：",
+ "Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": "在设置 › 下载 › 下载选项 › 按服务中清除单个服务的缓存时需要填写此项。留空时，Unshacklarr 会向 Unshackle 查询路径。这要求两者在同一台电脑上运行。",
+ "{0} redirects to {1}, which is not unshackle serve's: check its address in Settings › Connections › Unshackle": "{0} 重定向到 {1}，但这不是 unshackle serve 的地址。请在设置 › 连接 › Unshackle 中检查地址。",
+ "{0} redirects to {1}{2}: use that address for unshackle serve in Settings › Connections › Unshackle": "{0} 重定向到 {1}{2}。请在设置 › 连接 › Unshackle 中将此地址用于 unshackle serve。"
 }
