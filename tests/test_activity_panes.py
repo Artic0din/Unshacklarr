@@ -1,5 +1,6 @@
 """Activity's Stats and Waiting in downloads panes draw only their own answer; the output terminal says when it cannot connect."""
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -87,7 +88,15 @@ const $ = (s) => s.startsWith("#cd-main > ")
   : elements[s] ??= node();
 let detail = null;
 const pending = {};
+const strip = $("#con-running"), classes = new Set();
+let scroll = () => {}, resize = () => {};
+Object.assign(strip, { scrollLeft: 0, scrollWidth: 800, clientWidth: 300,
+  addEventListener: (event, listener) => { if (event === "scroll") scroll = listener; },
+  classList: { toggle: (name, on) => on ? classes.add(name) : classes.delete(name) },
+});
 const ctx = { $, innerWidth: 1000, el: (tag, props) => node(props),
+  CSS: { supports: () => process.argv[3] !== "chip-overflow" },
+  ResizeObserver: class { constructor(callback) { resize = callback; } observe() {} },
   document: { querySelectorAll: (s) => ({
     ".con-views [data-con-view]": buttons, "#con-running .chip": $("#con-running").children,
     "#con .crow": [...$("#runs-live").children, ...$("#runs-history").children],
@@ -100,6 +109,9 @@ const ctx = { $, innerWidth: 1000, el: (tag, props) => node(props),
   api: (path) => new Promise((resolve, reject) => { pending[path] = { resolve, reject }; }),
 };
 vm.createContext(ctx);
+if (src.includes("function watchRunningChipEdge")) {
+  vm.runInContext(grab("watchRunningChipEdge") + "\n" + line("syncRunningChipEdge"), ctx);
+}
 vm.runInContext(`let picked_run = null, runBackKey, landOnLive = false, conFilter = "all", runCards = [], runsShown = 50, runsSeq = 0, runsTimer, liveFeed;\n` +
   ["itemKey", "isLive", "isQueued"].map(line).join("\n") + "\n" +
   ["openActivity", "renderConsole", "drawRunningChips", "drawConsole", "jobsOf", "markPicked", "pickRun", "openActivityTool", "showStats"].map(grab).join("\n") +
@@ -168,7 +180,18 @@ states.push($("#con-running").hidden);
 console.log(JSON.stringify({ states, chipCount, steady }));
 }
 const scenario = process.argv[3];
-if (scenario === "fail-stats" || scenario === "fail-downloads") failedRuns(scenario.slice(5));
+if (scenario === "chip-overflow") {
+  const cue = () => classes.has("more-chips");
+  addRuns([active]);
+  const atStart = cue();
+  strip.scrollLeft = 500; scroll();
+  const atEnd = cue();
+  strip.scrollLeft = 0; scroll();
+  const backAtStart = cue();
+  strip.clientWidth = 800; resize();
+  console.log(JSON.stringify([atStart, atEnd, backAtStart, cue()]));
+}
+else if (scenario === "fail-stats" || scenario === "fail-downloads") failedRuns(scenario.slice(5));
 else if (scenario) lateRuns(scenario);
 else switchViews();
 """
@@ -176,6 +199,13 @@ else switchViews();
 
 def switcher(*args):
     return node(SWITCHER, str(JS / "activity.js"), str(JS.parent / "index.html"), *args)
+
+
+def test_running_strip_keeps_overflow_cue_without_scroll_timeline():
+    assert switcher("chip-overflow") == [True, False, True, False]
+    css = (JS.parent / "app.css").read_text()
+    assert re.search(r"@supports not \(animation-timeline: scroll\(\)\)\s*\{\s*"
+                     r"\.con-running\.more-chips\s*\{[^}]*mask-image:", css)
 
 
 def test_switcher_follows_run_selection_and_only_shows_chips_for_running_downloads():

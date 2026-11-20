@@ -191,14 +191,20 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   out.wide = doc.activeElement === root;  // a wide screen keeps both: nothing moves
 }
 
-if (scenario === "activity") {
+if (scenario === "activity" || scenario === "chip-back") {
   const con = page(), title = make("h3"), rows = page();
+  const strip = page(), downloads = make("button", { textContent: "Downloads" });
+  root.append(downloads);
   root.append(title);
   let picked = null;
   const drawRows = () => rows.replaceChildren(...["job:j1", "r1"].map((k) => ctx.el("button", { className: "crow", dataset: { fk: `row:${k}` } })));
-  const lookup = (sel) => { const m = /^\[data-fk="(.*)"\]$/.exec(sel); return m ? find(rows, (n) => n.dataset.fk === m[1]) : sel === "#con" ? con : title; };
+  const lookup = (sel) => {
+    const m = /^(#con-running )?\[data-fk="(.*)"\]$/.exec(sel);
+    return m ? find(m[1] || m[2].startsWith("chip:") ? strip : rows, (n) => n.dataset.fk === m[2])
+      : ({ "#con": con, "#con-running": strip, "#con-downloads": downloads })[sel] ?? title;
+  };
   Object.assign(ctx, { $: lookup, innerWidth: 500, scrollTo() {}, renderConsole: drawRows, picked_run: null });
-  doc.getElementById = () => null;
+  doc.getElementById = (id) => id === "con-downloads" ? downloads : null;
   drawRows();
   run(fn(activity, "pickRun") + "\n" + "let picked_run = null;");
   con.classList.add = () => {};
@@ -214,6 +220,29 @@ if (scenario === "activity") {
   run("picked_run = 'job:j1'");
   back.onclick();
   out.back = [named(doc.activeElement), doc.activeElement === rows.children[0]];
+  if (scenario === "chip-back") {
+    ctx.innerWidth = 390;
+    ctx.getComputedStyle = () => ({ scrollPaddingInlineEnd: "14px" });
+    Object.assign(strip, { scrollLeft: 0, clientWidth: 300, getBoundingClientRect: () => ({ left: 20 }) });
+    const chip = make("button", { dataset: { fk: "chip:r1" },
+      getBoundingClientRect: () => ({ left: 20 - strip.scrollLeft, right: 120 - strip.scrollLeft, width: 100 }) });
+    strip.append(chip);
+    chip.focus = (options) => { chip.preventScroll = options?.preventScroll; doc.activeElement = chip; };
+    ctx.pickRun("r1", "chip:r1");
+    strip.scrollLeft = 200;
+    back.onclick();
+    out.revealed = [named(doc.activeElement), strip.scrollLeft, chip.preventScroll];
+    const laterChip = make("button", { dataset: { fk: "chip:later" },
+      getBoundingClientRect: () => ({ left: 520 - strip.scrollLeft, right: 620 - strip.scrollLeft, width: 100 }) });
+    strip.append(laterChip);
+    ctx.pickRun("later", "chip:later");
+    back.onclick();
+    out.revealedFromRight = [named(doc.activeElement), strip.scrollLeft];
+    ctx.pickRun("r1", "chip:r1");
+    strip.replaceChildren();
+    back.onclick();
+    out.missing = named(doc.activeElement);
+  }
 }
 
 if (scenario === "tick") {  // the live feed redraws a job's actions: the one in use is found again by its key
@@ -242,7 +271,7 @@ if (scenario === "finish") {
     },
   });
   run(["itemKey", "isLive", "isQueued"].map((n) => line(activity, n)).join("\n") + "\n" +
-    ["drawRunningChips", "renderConsole"].map((n) => fn(activity, n)).join("\n"));
+    "const syncRunningChipEdge = undefined;\n" + ["drawRunningChips", "renderConsole"].map((n) => fn(activity, n)).join("\n"));
   for (const hidden of [false, true]) {
     ctx.job = true; ctx.renderConsole(); chips.children[0].focus();
     ctx.job = false; ctx.hidden = hidden; ctx.renderConsole();
@@ -434,6 +463,13 @@ def test_a_phone_section_opens_on_its_heading_and_back_returns_to_its_item():
 
 def test_a_phone_download_opens_on_its_heading_and_back_returns_to_its_row():
     assert run_scenario("activity") == {"phoneOpen": [True, -1], "wideOpen": True, "back": ["row:job:j1", True]}
+
+
+def test_phone_back_reveals_its_running_chip_or_focuses_downloads():
+    result = run_scenario("chip-back")
+    assert result["revealed"] == ["chip:r1", 0, True]
+    assert result["revealedFromRight"] == ["chip:later", 314]
+    assert result["missing"] == "Downloads"
 
 
 def test_the_live_tick_keeps_the_focus_on_the_control_in_use():

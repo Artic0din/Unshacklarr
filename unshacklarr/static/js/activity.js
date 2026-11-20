@@ -166,6 +166,14 @@ function renderConsole(liveOnly = false) {
     (row?.getClientRects().length ? row : $("#con-downloads")).focus();
   }
 }
+function watchRunningChipEdge(row) {
+  if (CSS.supports("animation-timeline", "scroll()")) return;
+  const update = () => row.classList.toggle("more-chips", row.scrollWidth - row.clientWidth - row.scrollLeft > 1);
+  row.addEventListener("scroll", update, { passive: true });
+  new ResizeObserver(update).observe(row);
+  return update;
+}
+const syncRunningChipEdge = watchRunningChipEdge($("#con-running"));
 function drawRunningChips(items) {
   const row = $("#con-running");
   const chips = items.flatMap((item) => {
@@ -181,6 +189,7 @@ function drawRunningChips(items) {
   row.replaceChildren(...chips.map(([key, series, episode]) => el("button", {
     type: "button", className: "chip", dataset: { fk: `chip:${key}` }, title: `${series} · ${episode}`, onclick: () => pickRun(key, `chip:${key}`),
   }, el("span", {}, series, " · ", episode))));
+  syncRunningChipEdge?.();
 }
 function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same downloads moving on
   const live = runCards.filter(isLive);
@@ -849,8 +858,22 @@ $("#cd-back").onclick = () => {
   const from = picked_run, trigger = runBackKey;
   runBackKey = null;
   $("#con").classList.remove("open"); picked_run = null; renderConsole();
-  ((trigger && $(`[data-fk="${trigger}"]`)) || $(`[data-fk="row:${from}"]`) ||
-    document.getElementById(`con-${from}`) || document.getElementById("con-downloads"))?.focus({ preventScroll: true });
+  if (trigger) {
+    const chip = $(`#con-running [data-fk="${trigger}"]`);
+    if (chip) {
+      const strip = $("#con-running"), start = strip.getBoundingClientRect().left;
+      const { left, right, width } = chip.getBoundingClientRect();
+      const padding = parseFloat(getComputedStyle(strip).scrollPaddingInlineEnd) || 0;
+      const end = start + strip.clientWidth - Math.min(padding, Math.max(0, strip.clientWidth - width));
+      // Only move the strip; Back should not jump the page.
+      if (left < start) strip.scrollLeft += left - start;
+      else if (right > end) strip.scrollLeft += right - end;
+    }
+    (chip || $("#con-downloads")).focus({ preventScroll: true });
+  } else {
+    ($(`[data-fk="row:${from}"]`) || document.getElementById(`con-${from}`) ||
+      $("#con-downloads")).focus({ preventScroll: true });
+  }
 };
 let searchTimer = null;  // typed: the history filtered once the typing pauses, not at each key
 $("#con-search").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderConsole, 150); };

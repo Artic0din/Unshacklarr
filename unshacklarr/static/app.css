@@ -877,12 +877,16 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .con-running .chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .con-running .chip[aria-current="true"] { box-shadow: inset 0 -2px currentColor; }
 .con-running .chip:focus-visible { outline-offset: -2px; }
+.con-running { --chip-fade: 14px; scroll-padding-inline-end: var(--chip-fade); }
 @property --chip-edge { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @supports (animation-timeline: scroll()) {
-  .con-running { --chip-fade: 14px; mask-image: linear-gradient(to right, black calc(100% - var(--chip-edge)), transparent);
-    scroll-padding-inline-end: var(--chip-fade); animation: con-chip-edge linear both;
+  .con-running { mask-image: linear-gradient(to right, black calc(100% - var(--chip-edge)), transparent);
+    animation: con-chip-edge linear both;
     animation-timeline: scroll(self inline); animation-range: calc(100% - var(--chip-fade)) 100%; }
   @keyframes con-chip-edge { from { --chip-edge: var(--chip-fade); } }
+}
+@supports not (animation-timeline: scroll()) {
+  .con-running.more-chips { mask-image: linear-gradient(to right, black calc(100% - var(--chip-fade)), transparent); }
 }
 @media (pointer: coarse) {
   .con-toolbar { --con-target: 44px; }
