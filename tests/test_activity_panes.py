@@ -140,6 +140,7 @@ vm.runInContext(`let picked_run;\n` +
   [src.slice(src.indexOf("let missingDays"), src.indexOf('$("#con-missing").onclick')),
     src.slice(src.indexOf("let upgrade"), src.indexOf('$("#con-upgrades").onclick')),
     grab("api", core), grab("responseError", core), line("svcName", series), grab("seasonTag", series), line("fixSignIn"),
+    line("JOB_TRANSIENT"),
     ...["signInFailed", "signInAction", "cardKind", "jobState", "jobFailure", "renderJob", "runBody"].map((n) => grab(n))
   ].join("\n"), ctx);
 (async () => {
@@ -383,6 +384,45 @@ def test_job_parses_multiline_451_and_demotes_retry(first_line):
     assert result["groups"] == ["2 episodes: 451 Unavailable for Legal Reason"]
     assert result["primary"] is False
     assert cause in result["expanded"]
+
+
+def test_job_groups_multiline_causes_by_first_http_error():
+    causes = ["Provider request failed\nHTTP 451: Denied\nHTTP 403: Forbidden",
+              "Provider request failed\n503 Server Error: Service Unavailable"]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
+    assert result["groups"] == [
+        "1 episode: 451 Denied (S01E01)",
+        "1 episode: 503 Service Unavailable (S01E02)",
+    ]
+
+
+def test_job_keeps_retry_primary_for_connection_reset_after_451():
+    cause = "HTTP 451: Denied\nTemporary failure: connection reset"
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps([cause, cause]))
+    assert result["groups"] == ["2 episodes: 451 Denied"]
+    assert result["primary"] is True
+
+
+def test_job_transient_pattern_matches_backend():
+    from unshacklarr.sync import TRANSIENT
+
+    source = (JS / "activity.js").read_text(encoding="utf-8")
+    classifier = re.search(r"^const JOB_TRANSIENT = /(.+)/([a-z]*);$", source, re.MULTILINE)
+    assert classifier is not None
+    assert classifier.groups() == (TRANSIENT.pattern, "i" if TRANSIENT.flags & re.IGNORECASE else "")
+
+
+def test_job_groups_long_reasons_by_full_sanitized_text():
+    prefix = "The sign-in request did not complete. " * 3
+    cancelled = f"HTTP 401: {prefix}Sign-in was cancelled"
+    rejected = f"HTTP 401: {prefix}Sign-in was rejected"
+    causes = [cancelled + " (ref abc123)", cancelled + " (ref def456)", rejected]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
+    label = "401 The sign-in request did not complete. The sign-in request did not complete. The sign-in request did…"
+    assert result["groups"] == [
+        f"2 episodes: {label} (S01E01, S01E02)",
+        f"1 episode: {label} (S01E03)",
+    ]
 
 
 def test_single_episode_job_shows_clean_reason_on_card_without_summary():

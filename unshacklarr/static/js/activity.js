@@ -354,12 +354,18 @@ function metaChip(svg, text) {
   chip.append(text);
   return chip;
 }
+// Match sync.py's TRANSIENT classifier for both current and historical cards.
+const JOB_TRANSIENT = /timed? ?out|timeout|connection (reset|refused|aborted|error)|remote end closed|temporarily|NETWORK_ERROR|SERVICE_UNAVAILABLE|SERVER_DRAINING|\b424\b|max retries|\b50[234]\b|service unavailable|bad gateway|name resolution|network is unreachable/i;
 function jobFailure(c) {
   const reasonLimit = 100;
-  const cause = (c.cause || "").trim().split(/\r?\n/, 1)[0];
+  const cause = c.cause || "", lines = cause.trim().split(/\r?\n/);
   // The service error can be wrapped in the backend's own HTTP status (often 422).
-  const [, status, message = cause] = cause.match(/\b(\d{3}) (?:Client|Server) Error:\s*(.*)/i)
-    || cause.match(/\bHTTP (\d{3}):\s*(.*)/i) || [];
+  let http;
+  for (const line of lines) {
+    http = line.match(/\b(\d{3}) (?:Client|Server) Error:\s*(.*)/i) || line.match(/\bHTTP (\d{3}):\s*(.*)/i);
+    if (http) break;
+  }
+  const [, status, message = lines[0]] = http || [];
   // A diagnostic payload can end mid-field when the backend truncates it.
   const detail = message.match(/['"]detail['"]:\s*(['"])(.*?)(?:\1(?=\s*[,}])|$)/i)?.[2];
   const clean = (detail?.replace(/^[\w/-]+:\s+/, "") || message)
@@ -370,9 +376,9 @@ function jobFailure(c) {
     .replace(/\s+/g, " ").trim();
   const short = clean.length > reasonLimit ? `${clean.slice(0, reasonLimit).trimEnd()}…` : clean;
   return {
-    reason: [status, short].filter(Boolean).join(" "),
-    // sync.py's TRANSIENT classifier treats "temporarily" as retryable even when the status looks permanent.
-    nonTransient: !/temporarily/i.test(c.cause || "") && (status === "451" || Boolean(signInFailed(c))),
+    reason: [status, clean].filter(Boolean).join(" "),
+    label: [status, short].filter(Boolean).join(" "),
+    nonTransient: !JOB_TRANSIENT.test(cause) && (status === "451" || Boolean(signInFailed(c))),
   };
 }
 /* A job: a card per episode, in order, unfolding to its details, and one output for them all. */
@@ -386,9 +392,9 @@ function renderJob(j) {
     const failure = jobFailure(c);
     failures.set(c.id, failure);
     if (failure.reason) {
-      const { reason } = failure, key = JSON.stringify([c.service, reason]);
+      const { reason, label } = failure, key = JSON.stringify([c.service, reason]);
       if (!reasons.has(key)) {
-        reasons.set(key, { reason, service: c.service, episodes: [] });
+        reasons.set(key, { reason, label, service: c.service, episodes: [] });
         providersPerReason.set(reason, (providersPerReason.get(reason) || 0) + 1);
       }
       reasons.get(key).episodes.push(c.sxxeyy);
@@ -436,7 +442,7 @@ function renderJob(j) {
     // a card that doesn't move (done, queued, folded) is the same element as at the last draw: a job of 200 episodes
     // redrawn each second rebuilt 200 cards and froze the page
     const still = !openCards.has(c.id) && (c.waiting || !isLive(c));
-    const failure = failures.get(c.id), cause = failure ? (groupFailures ? "" : failure.reason) : c.cause;
+    const failure = failures.get(c.id), cause = failure ? (groupFailures ? "" : failure.label) : c.cause;
     const sig = still && JSON.stringify([c.outcome, c.ended, cause, c.size, c.waiting, c.paused]);
     const kept = still && jobCards.get(c.id);
     if (kept && kept.sig === sig) return kept.li;
@@ -494,12 +500,12 @@ function renderJob(j) {
   if (!list) { list = el("ol", { className: "job-cards", dataset: { job: j.job } }); jobCards.clear(); }
   cards.forEach((li, i) => { if (list.children[i] !== li) list.insertBefore(li, list.children[i] || null); });
   while (list.children.length > cards.length) list.lastChild.remove();
-  const summary = groupFailures ? el("div", { className: "cd-note err" }, ...Array.from(reasons.values(), ({ reason, service, episodes }) => {
+  const summary = groupFailures ? el("div", { className: "cd-note err" }, ...Array.from(reasons.values(), ({ reason, label, service, episodes }) => {
     const count = episodes.length, names = episodes.filter(Boolean).join(", ");
-    const label = providersPerReason.get(reason) > 1 ? `${reason} · ${svcName(service)}` : reason;
+    const title = providersPerReason.get(reason) > 1 ? `${label} · ${svcName(service)}` : label;
     const text = reasons.size === 1 || !names
-      ? count === 1 ? trWith("1 episode: {0}", label) : trWith("{0} episodes: {1}", count, label)
-      : count === 1 ? trWith("1 episode: {0} ({1})", label, names) : trWith("{0} episodes: {1} ({2})", count, label, names);
+      ? count === 1 ? trWith("1 episode: {0}", title) : trWith("{0} episodes: {1}", count, title)
+      : count === 1 ? trWith("1 episode: {0} ({1})", title, names) : trWith("{0} episodes: {1} ({2})", count, title, names);
     return el("span", { textContent: text });
   })) : "";
   const sum = el("div", { style: "display:grid;gap:12px" }, ...(st.live ? [overall] : [jobDone(j, st), counts]), summary), box = list.parentElement;
