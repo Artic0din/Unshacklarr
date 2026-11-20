@@ -2511,8 +2511,9 @@ const code = [
   pick(schedule, /^async function hideSeries\(.*?^\}/ms),
 ].join("\n");
 const nodes = {};
-const focused = [], opener = (name, shown) => ({ getClientRects: () => (shown ? [{}] : []), focus: () => focused.push(name) });
-const openers = [opener("late episode, its list closed", false), opener("first episode shown", true)];
+// a browser still gives a button in a closed <details> a box, but it cannot take focus
+const focused = [], opener = (name, inClosedList) => ({ getClientRects: () => [{}], closest: () => (inClosedList ? {} : null), focus: () => focused.push(name) });
+const openers = [opener("late episode, its list closed", true), opener("first episode shown", false)];
 const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true }, "#tab-schedule": { hidden: false } };
 const box = {
   JSON, Object, Math, parseInt, Number, console, structuredClone, current: { tvdbId: 7 },
