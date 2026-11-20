@@ -651,6 +651,21 @@ else if (scenario === "mixed-history") {
   });
   console.log(JSON.stringify([counts, rows]));
 }
+else if (scenario === "mixed-series-history") {
+  const episodeId = process.argv[4] === "legacy" ? undefined : 9;
+  const first = { ...history, batch: "catch-up", series: "Alpha", tvdbId: 1, episodeId, sxxeyy: "S01E01" };
+  addRuns([
+    { ...first, id: "alpha-new", started: "2026-11-03" },
+    { ...first, id: "beta", series: "Beta", tvdbId: 2, started: "2026-11-02", outcome: "failed" },
+    { ...first, id: "alpha-old", started: "2026-11-01", outcome: "failed" },
+  ]);
+  const counts = () => filters.map((b) => b.count.textContent);
+  const all = counts();
+  $("#con-search").value = "beta";
+  vm.runInContext('conFilter = "failed"; renderConsole()', ctx);
+  const rows = $("#runs-history").children.map(({ item }) => item?.cards?.map((c) => c.id) || [item?.id]);
+  console.log(JSON.stringify([all, counts(), rows]));
+}
 else if (scenario === "fail-stats" || scenario === "fail-downloads") failedRuns(scenario.slice(5));
 else if (scenario === "back-to-chip") {
   ctx.innerWidth = 500;
@@ -763,6 +778,15 @@ def test_failed_runs_leave_a_pending_tool_loader_in_place():
 def test_history_outcomes_count_and_keep_whole_jobs_without_running_jobs():
     mixed = ["downloaded", "downloaded", "failed"]
     assert switcher("mixed-history") == [["(1)", "(1)", "(1)", "(0)", "(0)"], [[mixed], [mixed]]]
+
+
+@pytest.mark.parametrize("identity", ["episode-id", "legacy"])
+def test_catch_up_history_counts_and_keeps_same_number_episodes_from_different_series(identity):
+    assert switcher("mixed-series-history", identity) == [
+        ["(1)", "(1)", "(1)", "(0)", "(0)"],
+        ["(1)", "(0)", "(1)", "(0)", "(0)"],
+        [["alpha-new", "beta"]],
+    ]
 
 
 def test_back_from_a_running_download_returns_focus_to_its_chip():

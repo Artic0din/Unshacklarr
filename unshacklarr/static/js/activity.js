@@ -246,8 +246,9 @@ function jobsOf(cards) {
   jobs.forEach((j) => {  // one card per episode: its try going on or queued, else its latest
     const best = new Map();
     for (const c of j.cards) {
-      const was = best.get(c.sxxeyy), rank = (x) => (x.waiting || isLive(x) ? 2 : 1);
-      if (!was || rank(c) > rank(was) || (rank(c) === rank(was) && c.started > was.started)) best.set(c.sxxeyy, c);
+      const episode = JSON.stringify([c.instance || "", c.tvdbId || c.series, c.episodeId ?? c.sxxeyy]);
+      const was = best.get(episode), rank = (x) => (x.waiting || isLive(x) ? 2 : 1);
+      if (!was || rank(c) > rank(was) || (rank(c) === rank(was) && c.started > was.started)) best.set(episode, c);
     }
     j.cards = [...best.values()].sort((a, b) => a.sxxeyy.localeCompare(b.sxxeyy));
   });
