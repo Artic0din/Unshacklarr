@@ -7475,8 +7475,8 @@ def test_two_logouts_at_once_both_stay_logged_out(tmp_path, monkeypatch):
     both_read = threading.Barrier(2, timeout=0.5)
     real_read = web.read_json
 
-    def read_then_wait(path, empty):
-        value = real_read(path, empty)
+    def read_then_wait(path, empty, strict=False):
+        value = real_read(path, empty, strict=strict)
         if path == web.LOGGED_OUT_FILE:
             try:
                 both_read.wait()  # the two reads before either write, if nothing keeps them apart

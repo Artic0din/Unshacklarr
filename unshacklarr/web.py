@@ -643,20 +643,21 @@ _json_cache: dict[Path, tuple[tuple, object]] = {}
 _json_cache_lock = threading.Lock()
 
 
-def read_json_cached(path: Path, default):
+def read_json_cached(path: Path, default, *, strict: bool = False):
     """Read-only JSON cache keyed by (mtime_ns, size, ino); callers must not mutate the returned value."""
     try:
         st = path.stat()
         stamp = (st.st_mtime_ns, st.st_size, st.st_ino)
-    except FileNotFoundError:
-        with _json_cache_lock:
-            _json_cache.pop(path, None)
+    except OSError as error:
+        _invalidate_json_cache(path)
+        if strict and not isinstance(error, FileNotFoundError):
+            raise
         return default
     with _json_cache_lock:
         hit = _json_cache.get(path)
         if hit is not None and hit[0] == stamp:
             return hit[1]
-    parsed = read_json(path, default)
+    parsed = read_json(path, default, strict=strict)
     if parsed is not default:
         with _json_cache_lock:
             _json_cache[path] = (stamp, parsed)
@@ -952,41 +953,49 @@ CONFIG_LOCK = threading.Lock()  # a Save and the sync's own writes (a learned re
 def write_config(config: dict) -> None:
     global config_read
     config_read = ((), {})  # read afresh next time, whatever the clock says
-    clear_sonarr_series_cache()
     clear_unwritable_cache()
     # the session secret, the password hash and the API keys: its owner only, whatever it was before
     write_atomic(SERIES_FILE, yaml.safe_dump(config, allow_unicode=True, sort_keys=False), PRIVATE)
-    sonarr_sync.apply_settings(sonarr_sync.load_settings(config))
+    with _sonarr_series_lock:
+        previous = (sonarr_sync.SONARR, sonarr_sync.HEADERS)
+        sonarr_sync.apply_settings(sonarr_sync.load_settings(config))
+        if previous != (sonarr_sync.SONARR, sonarr_sync.HEADERS):
+            sonarr_sync._series_by_tvdb.pop("", None)
+        clear_sonarr_series_cache()
 
 
 SONARR_SERIES_TTL = 30.0
-_sonarr_series_lock = threading.Lock()
+_sonarr_series_lock = threading.RLock()
+_sonarr_series_generation = 0
 _sonarr_series_cache: tuple[tuple[str, str], float, list[dict]] = (("", ""), 0.0, [])
 
 
 def clear_sonarr_series_cache() -> None:
-    global _sonarr_series_cache
+    global _sonarr_series_cache, _sonarr_series_generation
     with _sonarr_series_lock:
+        _sonarr_series_generation += 1
         _sonarr_series_cache = (("", ""), 0.0, [])
 
 
 def sonarr_series() -> list[dict]:
     global _sonarr_series_cache
-    key = (sonarr_sync.SONARR, sonarr_sync.HEADERS.get("X-Api-Key", ""))
     now = time.monotonic()
     with _sonarr_series_lock:
+        generation = _sonarr_series_generation
+        url, headers = sonarr_sync.SONARR, sonarr_sync.HEADERS
+        key = (url, headers.get("X-Api-Key", ""))
         c_key, fetched, entries = _sonarr_series_cache
         if c_key == key and fetched and now - fetched < SONARR_SERIES_TTL:
             return list(entries)
-    r = requests.get(f"{sonarr_sync.SONARR}/api/v3/series", headers=sonarr_sync.HEADERS,
-                     timeout=sonarr_sync.SONARR_READ_TIMEOUT)
+    r = requests.get(f"{url}/api/v3/series", headers=headers, timeout=sonarr_sync.SONARR_READ_TIMEOUT)
     r.raise_for_status()
     raw = r.json()
     entries = sorted((series_entry(s) for s in raw), key=lambda s: s["title"].lower())
     done_at = time.monotonic()
     with _sonarr_series_lock:
-        _sonarr_series_cache = (key, done_at, entries)
-    sonarr_sync._series_by_tvdb[""] = (done_at, {s["tvdbId"]: s for s in raw if s.get("tvdbId")})
+        if generation == _sonarr_series_generation:
+            _sonarr_series_cache = (key, done_at, entries)
+            sonarr_sync._series_by_tvdb[""] = (done_at, {s["tvdbId"]: s for s in raw if s.get("tvdbId")})
     return list(entries)
 
 
@@ -2842,11 +2851,14 @@ def cookie_state() -> dict:
 
 UNWRITABLE_TTL = 60.0
 _unwritable_lock = threading.Lock()
+_unwritable_generation = 0
 _unwritable_cache: dict[tuple[str, str, str], tuple[float, list[str]]] = {}
 
 
 def clear_unwritable_cache() -> None:
+    global _unwritable_generation
     with _unwritable_lock:
+        _unwritable_generation += 1
         _unwritable_cache.clear()
 
 
@@ -2858,12 +2870,14 @@ def cached_unwritable_files(cookies_dir: Path, most: int = 20) -> list[str]:
     )
     now = time.monotonic()
     with _unwritable_lock:
+        generation = _unwritable_generation
         hit = _unwritable_cache.get(key)
         if hit is not None and now - hit[0] < UNWRITABLE_TTL:
             return list(hit[1])
     found = unwritable_files(cookies_dir, most=most)
     with _unwritable_lock:
-        _unwritable_cache[key] = (time.monotonic(), list(found))
+        if generation == _unwritable_generation:
+            _unwritable_cache[key] = (time.monotonic(), list(found))
     return found
 
 
@@ -3872,7 +3886,7 @@ def brand_logos(country: str) -> dict[str, dict]:
 
 
 NETWORKS_LOCK = threading.Lock()
-TMDB_CONCURRENCY = 4
+TMDB_CONCURRENCY = 8
 _tmdb_semaphores: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 _tmdb_inflight: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
@@ -3917,9 +3931,18 @@ async def networks(request):
             async with limit:
                 try:
                     found = await asyncio.to_thread(tmdb_network, tmdb_id)
+                    entry = {**found, "checked": datetime.now(timezone.utc).isoformat()}
                 except requests.RequestException:
                     return tmdb_id, None  # try again next time
-                return tmdb_id, {**found, "checked": datetime.now(timezone.utc).isoformat()}
+                except Exception as error:
+                    print(f"TMDB network lookup {tmdb_id} failed: {type(error).__name__}", flush=True)
+                    return tmdb_id, None
+                try:
+                    # Commit before releasing singleflight, even if all the waiters disconnected.
+                    await asyncio.to_thread(_merge_json_cache, NETWORKS_CACHE, NETWORKS_LOCK, {str(tmdb_id): entry})
+                except Exception as error:
+                    print(f"TMDB network cache write for {tmdb_id} failed: {type(error).__name__}", flush=True)
+                return tmdb_id, entry
 
         tasks = []
         for i in todo:
@@ -3930,9 +3953,7 @@ async def networks(request):
                 task.add_done_callback(lambda t, k=i, m=inflight: m.pop(k, None) if m.get(k) is t else None)
             tasks.append(asyncio.shield(task))
         results = await asyncio.gather(*tasks)
-        fetched = {str(tid): data for tid, data in results if data is not None}
-        if fetched:
-            cache = await asyncio.to_thread(_merge_json_cache, NETWORKS_CACHE, NETWORKS_LOCK, fetched)
+        cache = {**cache, **{str(tid): data for tid, data in results if data is not None}}
     logos = await asyncio.to_thread(brand_logos, country) if tmdb_key() else {}
     try:
         domains = await asyncio.to_thread(service_domains)
@@ -6485,7 +6506,8 @@ def logged_in(request, auth: dict) -> bool:
         return False
     _, signed, signature = session
     expected = hmac.new(auth["secret"].encode(), signed.encode(), "sha256").hexdigest()
-    return hmac.compare_digest(signature.encode(), expected.encode()) and signature not in read_json_cached(LOGGED_OUT_FILE, {})
+    return (hmac.compare_digest(signature.encode(), expected.encode())
+            and signature not in read_json_cached(LOGGED_OUT_FILE, {}, strict=True))
 
 
 def setup_code_ok(body: dict) -> bool:
@@ -6504,7 +6526,8 @@ def forget_session(value: str) -> None:
         return
     expires, _, signature = session
     with LOGGED_OUT_LOCK:
-        closed = {sig: until for sig, until in read_json(LOGGED_OUT_FILE, {}).items() if until > time.time()}  # the expired ones go
+        closed = {sig: until for sig, until in read_json(LOGGED_OUT_FILE, {}, strict=True).items()
+                  if until > time.time()}  # the expired ones go
         write_atomic(LOGGED_OUT_FILE, json.dumps({**closed, signature: expires}), PRIVATE)
         _invalidate_json_cache(LOGGED_OUT_FILE)
 

@@ -5,6 +5,7 @@ import concurrent.futures
 import copy
 import importlib
 import json
+import threading
 import time
 from types import SimpleNamespace
 
@@ -40,11 +41,10 @@ def test_networks_concurrent_preserves_cache_deduplicates_and_does_not_starve_bu
     monkeypatch.setattr(web, "tmdb_network", slow_tmdb)
 
     async def run():
-        loop = asyncio.get_running_loop()
-        # Simulate a small 2-core NAS executor (6 workers) to ensure TMDB concurrency stays bounded below it.
-        prev = getattr(loop, "_default_executor", None)
-        small = concurrent.futures.ThreadPoolExecutor(max_workers=6)
-        loop.set_default_executor(small)
+        # Exercise the production executor's minimum size on a 2-core NAS.
+        monkeypatch.setattr(web.os, "cpu_count", lambda: 2)
+        executor = web.configure_executor(None)
+        await anext(executor)
         try:
             app = aiohttp.web.Application()
             app.router.add_get("/api/networks", web.networks)
@@ -80,8 +80,7 @@ def test_networks_concurrent_preserves_cache_deduplicates_and_does_not_starve_bu
             finally:
                 await runner.cleanup()
         finally:
-            loop._default_executor = prev
-            small.shutdown(wait=True)
+            await executor.aclose()
 
     asyncio.run(run())
 
@@ -90,6 +89,141 @@ def test_networks_concurrent_preserves_cache_deduplicates_and_does_not_starve_bu
     assert set(saved) == expected_ids, f"lost cache entries: missing={expected_ids - set(saved)}"
     # Singleflight: each of the 20 IDs should have been queried only once despite overlap on 10..14.
     assert len(calls) == 20, f"expected 20 deduplicated TMDB calls, got {len(calls)}"
+
+
+def test_networks_persists_lookup_when_request_is_cancelled(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "tmdb_key", lambda: "fake-key")
+    release = threading.Event()
+
+    async def run():
+        loop = asyncio.get_running_loop()
+        started = asyncio.Event()
+
+        def fetch(tmdb_id):
+            loop.call_soon_threadsafe(started.set)
+            assert release.wait(5), "TMDB lookup was never released"
+            return {"name": "Network", "network_country": "US", "providers": {}}
+
+        monkeypatch.setattr(web, "tmdb_network", fetch)
+        request = asyncio.create_task(web.networks(SimpleNamespace(query={"tmdb": "1"})))
+        try:
+            await asyncio.wait_for(started.wait(), timeout=5)
+            owner = web._tmdb_gate()[1][1]
+            request.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await request
+        finally:
+            release.set()
+        await owner
+
+    asyncio.run(run())
+    assert web.NETWORKS_CACHE.exists(), "cancelled request lost the completed TMDB lookup"
+    assert json.loads(web.NETWORKS_CACHE.read_text())["1"]["name"] == "Network"
+
+
+def test_networks_older_batch_does_not_overwrite_newer_lookup(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "tmdb_key", lambda: "fake-key")
+    monkeypatch.setattr(web, "brand_logos", lambda country: {})
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    release = threading.Event()
+    calls = 0
+
+    async def run():
+        loop = asyncio.get_running_loop()
+        slow_started = asyncio.Event()
+
+        def fetch(tmdb_id):
+            nonlocal calls
+            if tmdb_id == 2:
+                loop.call_soon_threadsafe(slow_started.set)
+                assert release.wait(5), "slow TMDB lookup was never released"
+                name = "Slow"
+            else:
+                calls += 1
+                name = "Old" if calls == 1 else "New"
+            return {"name": name, "network_country": "US", "providers": {}}
+
+        monkeypatch.setattr(web, "tmdb_network", fetch)
+        older = asyncio.create_task(web.networks(SimpleNamespace(query={"tmdb": "1,2"})))
+        try:
+            await asyncio.wait_for(slow_started.wait(), timeout=5)
+            owner = web._tmdb_gate()[1].get(1)
+            if owner is not None:
+                await owner
+            # Expire ID 1 while the original batch is still waiting for ID 2.
+            web.NETWORKS_CACHE.write_text(json.dumps({"1": {"checked": ""}}))
+            newer = await web.networks(SimpleNamespace(query={"tmdb": "1"}))
+            assert json.loads(newer.text)["1"]["name"] == "New"
+        finally:
+            release.set()
+            await older
+
+    asyncio.run(run())
+    saved = json.loads(web.NETWORKS_CACHE.read_text())
+    assert saved["1"]["name"] == "New"
+    assert saved["2"]["name"] == "Slow"
+
+
+@pytest.mark.parametrize("failure", ["lookup", "cache-write"])
+def test_networks_error_does_not_drop_successful_lookups(tmp_path, monkeypatch, failure):
+    web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "tmdb_key", lambda: "fake-key")
+    monkeypatch.setattr(web, "brand_logos", lambda country: {})
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+
+    def fetch(tmdb_id):
+        if failure == "lookup" and tmdb_id == 1:
+            raise ValueError("unexpected TMDB response")
+        return {"name": "Network", "network_country": "US", "providers": {}}
+
+    monkeypatch.setattr(web, "tmdb_network", fetch)
+    if failure == "cache-write":
+        def denied(*args):
+            raise PermissionError("network cache not writable")
+
+        monkeypatch.setattr(web, "write_atomic", denied)
+    response = asyncio.run(web.networks(SimpleNamespace(query={"tmdb": "1,2"})))
+    assert response.status == 200
+    assert set(json.loads(response.text)) == ({"2"} if failure == "lookup" else {"1", "2"})
+
+
+def test_networks_cold_batch_starts_eight_lookups_at_once(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "tmdb_key", lambda: "fake-key")
+    monkeypatch.setattr(web, "brand_logos", lambda country: {})
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    started, release = threading.Event(), threading.Event()
+    lock = threading.Lock()
+    active = 0
+
+    def fetch(tmdb_id):
+        nonlocal active
+        with lock:
+            active += 1
+            if active == 8:
+                started.set()
+        assert release.wait(5), "TMDB lookups were never released"
+        return {"name": "Network", "network_country": "US", "providers": {}}
+
+    monkeypatch.setattr(web, "tmdb_network", fetch)
+
+    async def run():
+        executor = web.configure_executor(None)
+        await anext(executor)
+        try:
+            pending = asyncio.create_task(web.networks(SimpleNamespace(query={"tmdb": "1,2,3,4,5,6,7,8"})))
+            try:
+                assert await asyncio.to_thread(started.wait, 2), "fewer than eight TMDB lookups started"
+            finally:
+                release.set()
+                response = await pending
+            assert len(json.loads(response.text)) == 8
+        finally:
+            await executor.aclose()
+
+    asyncio.run(run())
 
 
 def test_runs_live_skips_scanning_completed_history_files(tmp_path, monkeypatch):
@@ -146,6 +280,31 @@ def test_cookie_state_caches_unwritable_files_and_invalidates_on_write(tmp_path,
     assert walks == 2
 
 
+def test_unwritable_scan_started_before_clear_cannot_repopulate_cache(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    started, release = threading.Event(), threading.Event()
+
+    def scan(folder, most):
+        if not started.is_set():
+            started.set()
+            assert release.wait(5), "old scan was never released"
+            return ["old-cookie.txt"]
+        return []
+
+    monkeypatch.setattr(web, "unwritable_files", scan)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        old_scan = pool.submit(web.cached_unwritable_files, tmp_path)
+        try:
+            assert started.wait(5), "old scan never started"
+            web.clear_unwritable_cache()
+            assert web.cached_unwritable_files(tmp_path) == []
+        finally:
+            release.set()
+        assert old_scan.result(timeout=5) == ["old-cookie.txt"]
+
+    assert web.cached_unwritable_files(tmp_path) == []
+
+
 def test_sonarr_series_caches_briefly_and_invalidates(tmp_path, monkeypatch):
     web = _reload_web(tmp_path, monkeypatch)
     calls = 0
@@ -173,6 +332,58 @@ def test_sonarr_series_caches_briefly_and_invalidates(tmp_path, monkeypatch):
     third = web.sonarr_series()
     assert calls == 2
     assert third[0]["title"] == "Show v2"
+
+
+@pytest.mark.parametrize("save_settings", [False, True], ids=["clear", "settings-save"])
+def test_sonarr_series_inflight_fetch_cannot_repopulate_caches(tmp_path, monkeypatch, save_settings):
+    web = _reload_web(tmp_path, monkeypatch)
+    old_url, new_url = "http://old-sonarr.test", "http://new-sonarr.test"
+    old_settings = {"sonarr_url": old_url, "sonarr_api_key": "old-key"}
+    web.write_config({"settings": old_settings})
+    started, release = threading.Event(), threading.Event()
+
+    def fake_get(url, *, headers, **kwargs):
+        if not started.is_set():
+            assert (url, headers["X-Api-Key"]) == (f"{old_url}/api/v3/series", "old-key")
+            started.set()
+            assert release.wait(5), "old fetch was never released"
+            title = "Old Library"
+        else:
+            expected_url, expected_key = (new_url, "new-key") if save_settings else (old_url, "old-key")
+            assert (url, headers["X-Api-Key"]) == (f"{expected_url}/api/v3/series", expected_key)
+            title = "Fresh Library"
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: [{"id": 1, "tvdbId": 100, "title": title}])
+
+    monkeypatch.setattr(web.requests, "get", fake_get)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        def start_old_fetch():
+            fetch = pool.submit(web.sonarr_series)
+            assert started.wait(5), "old fetch never started"
+            return fetch
+
+        try:
+            if save_settings:
+                original_write = web.write_atomic
+
+                def write_during_fetch(*args):
+                    nonlocal old_fetch
+                    old_fetch = start_old_fetch()
+                    original_write(*args)
+
+                old_fetch = None
+                monkeypatch.setattr(web, "write_atomic", write_during_fetch)
+                web.write_config({"settings": {"sonarr_url": new_url, "sonarr_api_key": "new-key"}})
+                assert old_fetch is not None
+            else:
+                old_fetch = start_old_fetch()
+                web.clear_sonarr_series_cache()
+            assert web.sonarr_series()[0]["title"] == "Fresh Library"
+        finally:
+            release.set()
+        assert old_fetch.result(timeout=5)[0]["title"] == "Old Library"
+
+    assert web.sonarr_sync.sonarr_series({100})[100]["title"] == "Fresh Library"
+    assert web.sonarr_series()[0]["title"] == "Fresh Library"
 
 
 def test_missing_of_managed_skips_zero_missing_only_when_stats_are_fresh_and_complete(tmp_path, monkeypatch):
@@ -239,6 +450,48 @@ def test_missing_of_managed_skips_zero_missing_only_when_stats_are_fresh_and_com
     assert [i["tvdbId"] for i in items] == [2, 3, 4]
 
 
+def test_json_cache_stat_error_uses_default(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    path = web.NETWORKS_CACHE
+    path.write_text('{"1": "Network"}')
+    assert web.read_json_cached(path, {}) == {"1": "Network"}
+    original_stat = type(path).stat
+
+    def stat(target, *args, **kwargs):
+        if target == path:
+            raise PermissionError("cache stat denied")
+        return original_stat(target, *args, **kwargs)
+
+    monkeypatch.setattr(type(path), "stat", stat)
+    default = {}
+    assert web.read_json_cached(path, default) is default
+
+
+@pytest.mark.parametrize("operation", ["stat", "read_text"])
+def test_unreadable_revocation_file_fails_closed(tmp_path, monkeypatch, operation):
+    web = _reload_web(tmp_path, monkeypatch)
+    auth = {"secret": "test-session-secret"}
+    cookie = web.session_value(auth)
+    req = SimpleNamespace(cookies={web.SESSION_COOKIE: cookie})
+    assert web.logged_in(req, auth), "a missing revocation file is valid"
+    web.forget_session(cookie)
+    with monkeypatch.context() as patch:
+        path_type = type(web.LOGGED_OUT_FILE)
+        original = getattr(path_type, operation)
+
+        def denied(path, *args, **kwargs):
+            if path == web.LOGGED_OUT_FILE:
+                raise PermissionError("revocation file unreadable")
+            return original(path, *args, **kwargs)
+
+        patch.setattr(path_type, operation, denied)
+        with pytest.raises(PermissionError, match="revocation file unreadable"):
+            web.logged_in(req, auth)
+        if operation == "read_text":
+            with pytest.raises(PermissionError, match="revocation file unreadable"):
+                web.forget_session(cookie)
+
+
 def test_password_required_avoids_deepcopy_and_caches_logged_out(tmp_path, monkeypatch):
     web = _reload_web(tmp_path, monkeypatch)
     web.write_config({
@@ -252,11 +505,11 @@ def test_password_required_avoids_deepcopy_and_caches_logged_out(tmp_path, monke
     read_json_calls = 0
     real_read_json = web.read_json
 
-    def counting_read_json(path, default):
+    def counting_read_json(path, default, strict=False):
         nonlocal read_json_calls
         if path == web.LOGGED_OUT_FILE:
             read_json_calls += 1
-        return real_read_json(path, default)
+        return real_read_json(path, default, strict=strict)
 
     monkeypatch.setattr(web, "read_json", counting_read_json)
     monkeypatch.setattr(copy, "deepcopy", lambda obj: pytest.fail("password_required must not deepcopy config"))
