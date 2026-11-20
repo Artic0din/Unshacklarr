@@ -322,8 +322,8 @@ def test_translations_load_where_the_system_encoding_is_not_utf8(tmp_path, monke
     from unshacklarr import i18n
     (tmp_path / "ja.json").write_text(json.dumps({"Downloaded: {0}": "東京でダウンロード: {0}"}, ensure_ascii=False), encoding="utf8")
     read_text = pathlib.Path.read_text
-    monkeypatch.setattr(pathlib.Path, "read_text", lambda self, encoding=None, errors=None, newline=None:
-                        read_text(self, encoding=encoding or "cp1252", errors=errors, newline=newline))
+    monkeypatch.setattr(pathlib.Path, "read_text", lambda self, encoding=None, *args, **kwargs:  # newline: Python 3.13+
+                        read_text(self, encoding or "cp1252", *args, **kwargs))
     monkeypatch.setattr(i18n, "FOLDER", tmp_path)
     i18n.catalog.cache_clear()
     assert i18n.tr("Downloaded: Silo", "ja") == "東京でダウンロード: Silo"

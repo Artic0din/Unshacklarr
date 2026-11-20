@@ -1041,6 +1041,7 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .dock { position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px;
   border-radius: 14px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--sh-lg);
   font-size: 13px; margin-top: auto; }
+.dock[hidden] { display: none; }  /* its display above would undo [hidden]: a tool pane would keep the last job's bar */
 .dock .d-ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--field-bg);
   border: 1px solid var(--line); color: var(--accent); flex: none; }
 .dock svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
