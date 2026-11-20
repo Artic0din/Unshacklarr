@@ -225,6 +225,49 @@ console.log(JSON.stringify(out));
                      "elsewhere": ["Delete", None, False]}  # taken back: the next click only asks again
 
 
+def test_per_service_clear_cache_requires_two_click_confirmation():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm"), path = require("path");
+const core = fs.readFileSync(process.argv[1], "utf8");
+const opts = fs.readFileSync(path.join(path.dirname(process.argv[1]), "settings-options.js"), "utf8");
+const target = () => { const l = {}; return { l, addEventListener(t, f) { (l[t] ||= []).push(f); }, removeEventListener(t, f) { l[t] = (l[t] || []).filter((x) => x !== f); } }; };
+const doc = target();
+const calls = [], toasts = [];
+let clearBtn = null;
+const el = (tag, props = {}, ...kids) => {
+  const n = { tag, dataset: {}, ...target(), ...props, kids, contains: (x) => x === n, closest: () => null, replaceChildren() {} };
+  if (tag === "button" && props.textContent === "Clear cache") clearBtn = n;
+  return n;
+};
+const ctx = {
+  document: doc, el, $: () => ({ replaceChildren() {} }),
+  S: { config: { settings: {}, service_defaults: { NF: { options: {}, service_options: {} } } }, services: ["NF"], dlOptions: [] },
+  COUNT: { option: (n) => `${n} options` },
+  svcName: (t) => t === "NF" ? "Netflix" : t,
+  optionsEditor() {}, ladderClash() {}, ladderNamed() {}, ladderChips() {}, field: () => ({}),
+  loadServiceOptions: async () => [],
+  renderCommands() {}, dirty() {}, toast: (m, err) => toasts.push([m, !!err]),
+  api: async (url, o) => { calls.push([url, o?.method]); return { freed_bytes: 2048 }; },
+  encodeURIComponent, Math, Object, Promise,
+};
+vm.createContext(ctx);
+vm.runInContext(core.match(/^const sureSay.*?^function confirmClick\(.*?^\}/ms)[0], ctx);
+vm.runInContext(opts.match(/^async function renderServiceDefaults\(\) \{.*?^\}/ms)[0], ctx);
+(async () => {
+  await ctx.renderServiceDefaults();
+  await clearBtn.onclick({ target: clearBtn });
+  const afterFirst = { calls: calls.length, label: clearBtn.textContent };
+  await clearBtn.onclick({ target: clearBtn });
+  const afterSecond = { calls, label: clearBtn.textContent, toasts };
+  console.log(JSON.stringify({ afterFirst, afterSecond }));
+})();
+""")
+    assert shown["afterFirst"]["calls"] == 0
+    assert "Netflix" in shown["afterFirst"]["label"] and "?" in shown["afterFirst"]["label"]
+    assert shown["afterSecond"]["calls"] == [["/api/unshackle/cache/NF/clear", "POST"]]
+    assert shown["afterSecond"]["label"] == "Clear cache"
+
+
 PAGE = JS.parent / "index.html"
 I18N = JS.parent / "i18n"
 

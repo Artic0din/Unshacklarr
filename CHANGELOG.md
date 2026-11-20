@@ -140,6 +140,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Per-service Clear cache now asks for confirmation first.** Clicking Clear cache in Settings › Per service asks to
+  confirm before clearing the service's logins, tokens, and sessions. (#334)
 - **A tool in Activity no longer shows the last job's bar.** Opening Waiting, Catch up, Upgrades, Languages or Stats
   after a download left that download's bar at the bottom of the pane; it is hidden now. (#363)
 - **An episode under its own number is no longer hidden for a small difference in its title.** Kath & Kim on Netflix

@@ -4661,5 +4661,8 @@
  "Unexpected {0} in the reply": [
   "what"
  ],
- "search results": []
+ "search results": [],
+ "Clear {0} cache? It signs out": [
+  "svcName(tag)"
+ ]
 }

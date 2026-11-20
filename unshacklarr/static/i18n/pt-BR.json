@@ -2508,5 +2508,6 @@
  "Not run: the service has no search": "Não executado: o serviço não tem busca",
  "A download is running: check again when it ends": "Há um download em andamento: verifique de novo quando terminar",
  "Unexpected {0} in the reply": "{0} inesperados na resposta",
- "search results": "resultados da busca"
+ "search results": "resultados da busca",
+ "Clear {0} cache? It signs out": "Limpar o cache de {0}? Isso desconecta"
 }
