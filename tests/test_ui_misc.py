@@ -238,6 +238,41 @@ console.log(JSON.stringify({ drawnWhileTyping, waiting: waiting.map(([, ms]) => 
     assert seen == {"drawnWhileTyping": 0, "waiting": [150], "draws": 1}
 
 
+def test_series_filter_disclosure_keeps_filters_open_but_returns_focus_for_actions():
+    seen = node(r"""
+const events = [], listeners = {};
+const toggle = {
+  attributes: { "aria-expanded": "false" },
+  getAttribute(name) { return this.attributes[name]; },
+  setAttribute(name, value) { this.attributes[name] = String(value); },
+  focus: () => events.push("focus: filters"),
+};
+const ctx = sandbox({ $: (sel) => sel === "#series-options-toggle" ? toggle : {
+  addEventListener: (name, fn, capture) => { listeners[name] = { fn, capture }; },
+} });
+vm.runInContext(grab(read(process.argv[1]), /function bindSeriesOptions\(\) \{[\s\S]*?\n\}\n/), ctx);
+ctx.bindSeriesOptions();
+const expanded = () => toggle.getAttribute("aria-expanded") === "true";
+const click = (id) => listeners.click.fn({ target: { closest: (selector) => selector.split(", ").includes(id) } });
+const open = () => toggle.onclick();
+open();
+click("#f-sort");
+events.push(expanded());
+listeners.keydown.fn({ key: "Escape", target: { closest: () => true }, preventDefault() {} });
+events.push(expanded());
+for (const action of ["#bulk-open", "#sel-toggle"]) {
+  open();
+  click(action);
+  events.push(`${action}: ${expanded() ? "open" : "closed"}`);
+}
+console.log(JSON.stringify([listeners.click.capture, ...events]));
+""", str(JS / "navigation.js"))
+    assert seen == [
+        True, True, "focus: filters", False,
+        "focus: filters", "#bulk-open: closed", "focus: filters", "#sel-toggle: closed",
+    ]
+
+
 @pytest.mark.parametrize("title,asks", [("Show", 1), (None, 0)])
 def test_change_and_download_only_asks_the_service_for_a_series_with_a_main_page(title, asks):
     asked = node(r"""

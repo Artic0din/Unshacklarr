@@ -143,6 +143,25 @@ document.querySelectorAll("#tab-series .seg button").forEach((b) => b.onclick = 
 });
 ["#f-service", "#f-library", "#f-sort", "#f-missing", "#f-monitored"].forEach((id) => $(id).onchange = renderWall);
 
+function bindSeriesOptions() {
+  const toggle = $("#series-options-toggle");
+  const expanded = () => toggle.getAttribute("aria-expanded") === "true";
+  const close = () => {
+    if (!expanded()) return false;
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.focus();
+    return true;
+  };
+  toggle.onclick = () => toggle.setAttribute("aria-expanded", String(!expanded()));
+  $("#tab-series .toolbar").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && e.target.closest("#series-options-toggle, #series-options") && close()) e.preventDefault();
+  });
+  $("#series-options").addEventListener("click", (e) => {
+    if (e.target.closest("#bulk-open, #sel-toggle")) close();
+  }, true);  // Suggest's dialog must open after focus moves back to the visible trigger.
+}
+bindSeriesOptions();
+
 /* The service filter lists only the services some series actually uses. */
 function renderServiceFilter() {
   const used = [...new Set(Object.values(S.config.series).flatMap((c) => [c.service, ...Object.values(c.season_pages || {}).map((p) => p.service)]).filter(Boolean))].sort();

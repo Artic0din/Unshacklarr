@@ -44,10 +44,11 @@ def test_a_finished_card_names_its_whole_line_when_it_is_cut_short():
     assert "el(\"small\", { textContent: tookLine(c, live), title: tookLine(c, live) })" in js
 
 
-def test_the_series_filter_goes_to_a_second_row_instead_of_overflowing_its_buttons():
+def test_series_statuses_wrap_and_secondary_controls_disclose_instead_of_scrolling_sideways():
     phone = media("max-width: 700px")
-    has(phone, ".seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));")
-    assert "overflow-wrap: anywhere" in squash(phone[phone.index(".seg button {"):][:200])
+    has(CSS, ".toolbar .seg { display: flex; flex-wrap: wrap;")
+    has(phone, ".toolbar .seg { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); width: 100%; }")
+    has(phone, '#series-options-toggle[aria-expanded="false"] + #series-options { display: none; }')
 
 
 def test_the_setup_error_wraps_inside_the_card_when_it_sits_under_its_field():

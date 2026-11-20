@@ -53,31 +53,37 @@
 
 <main id="main" tabindex="-1">
   <section id="tab-series" hidden>
-    <div class="seg" role="group" aria-label="Which series">
-      <button data-managed="" aria-pressed="true">All <span></span></button>
-      <button data-managed="*" aria-pressed="false">Downloading <span></span></button>
-      <button data-managed="-" aria-pressed="false">Not downloading <span></span></button>
-      <button data-managed="h" aria-pressed="false" title="Series hidden from the Schedule" hidden>Hidden <span></span></button>
-      <button data-managed="f" aria-pressed="false" title="Series whose last 3 downloads failed" hidden>Failing <span></span></button>
-    </div>
     <div class="toolbar">
-      <input type="search" id="search" placeholder="Search series" aria-label="Search series">
-      <div class="toolbar-row">
-      <select id="f-service" aria-label="Filter by service">
-        <option value="">All services</option>
-      </select>
-      <select id="f-library" aria-label="Filter by Sonarr library" hidden>
-        <option value="">All libraries</option>
-      </select>
-      <select id="f-sort" aria-label="Sort">
-        <option value="title">Sort by title</option>
-        <option value="missing">Sort by missing episodes</option>
-        <option value="year">Sort by year, newest first</option>
-      </select>
-      <label class="pill"><input type="checkbox" id="f-missing"> Missing episodes <span id="f-missing-n"></span></label>
-      <label class="pill"><input type="checkbox" id="f-monitored"> Monitored <span id="f-monitored-n"></span></label>
-      <button class="btn small" id="bulk-open" title="Services for your series, found on TMDB">Suggest services</button>
-      <button class="btn small" id="sel-toggle" type="button" aria-pressed="false">Select</button>
+      <div class="seg" role="group" aria-label="Which series">
+        <button type="button" data-managed="" aria-pressed="true">All <span></span></button>
+        <button type="button" data-managed="*" aria-pressed="false">Downloading <span></span></button>
+        <button type="button" data-managed="-" aria-pressed="false">Not downloading <span></span></button>
+        <button type="button" data-managed="h" aria-pressed="false" title="Series hidden from the Schedule" hidden>Hidden <span></span></button>
+        <button type="button" data-managed="f" aria-pressed="false" title="Series whose last 3 downloads failed" hidden>Failing <span></span></button>
+      </div>
+      <input type="search" id="search" placeholder="Search" aria-label="Search series">
+      <button class="btn" id="series-options-toggle" type="button" aria-expanded="false" aria-controls="series-options">Filters and actions
+        <span class="series-filtered"><span class="sr-only">Filters active</span></span>
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div id="series-options">
+        <select id="f-service" aria-label="Filter by service">
+          <option value="">All services</option>
+        </select>
+        <select id="f-library" aria-label="Filter by Sonarr library" hidden>
+          <option value="">All libraries</option>
+        </select>
+        <select id="f-sort" aria-label="Sort">
+          <option value="title">Sort by title</option>
+          <option value="missing">Sort by missing episodes</option>
+          <option value="year">Sort by year, newest first</option>
+        </select>
+        <div id="series-actions">
+          <label class="pill"><input type="checkbox" id="f-missing"> Missing episodes <span id="f-missing-n"></span></label>
+          <label class="pill"><input type="checkbox" id="f-monitored"> Monitored <span id="f-monitored-n"></span></label>
+          <button class="btn small" id="bulk-open" type="button" title="Services for your series, found on TMDB">Suggest services</button>
+          <button class="btn small" id="sel-toggle" type="button" aria-pressed="false">Select</button>
+        </div>
       </div>
     </div>
     <div class="wall" id="wall" aria-busy="true"><span class="sr-only" role="status">Loading series…</span><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
