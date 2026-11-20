@@ -124,10 +124,10 @@
 .cd-head h2 { margin: 0; font-size: var(--fs-title3); }
 .cd-head small { color: var(--muted); font-size: var(--fs-sub); }
 .cd-head .act { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.cd-top, .cd-foot, .steps .s, .cd-head .line2 { display: none; }
+.cd-top, .cd-foot, .step-caption, .cd-head .line2 { display: none; }
 .steps { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
 .steps > span { display: grid; min-width: 0; overflow: hidden; text-overflow: ellipsis; gap: 7px; font-size: var(--fs-footnote); color: var(--muted); }
-.steps :is(.l, .s) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.steps .l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .steps > span::before { content: ""; height: 4px; border-radius: 2px; background: var(--well); }
 .steps .done { color: var(--text); } .steps .done::before { background: var(--ok); }
 .steps .now { color: var(--text); font-weight: 600; }
@@ -139,8 +139,8 @@
 .steps .warn { color: var(--warn); font-weight: 600; } .steps .warn::before { background: var(--warn); }
 .steps .halt { color: var(--muted); font-weight: 600; } .steps .halt::before { background: var(--muted); }
 /* failed and stopped carry a mark of their own too, not only a colour; the state's word is in .sr-only */
-.steps .fail :is(.l, .s)::before { content: "\2715\00a0"; content: "\2715\00a0" / ""; }
-.steps .halt :is(.l, .s)::before { content: "\25A0\00a0"; content: "\25A0\00a0" / ""; }
+:is(.steps .fail .l, .step-caption.fail)::before { content: "\2715\00a0"; content: "\2715\00a0" / ""; }
+:is(.steps .halt .l, .step-caption.halt)::before { content: "\25A0\00a0"; content: "\25A0\00a0" / ""; }
 .cd-stats { display: flex; gap: 28px; flex-wrap: wrap; }
 .cd-stats div { display: grid; } .cd-stats small { color: var(--muted); font-size: var(--fs-footnote); }
 .cd-stats b { font-size: var(--fs-title3); font-variant-numeric: tabular-nums; }

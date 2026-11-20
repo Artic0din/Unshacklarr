@@ -980,7 +980,6 @@ addEventListener("scroll", () => {  // a phone: the list is the page
 }, { passive: true });
 
 const STEPS = ["Queued", "Downloading", "Decrypting and muxing", "Joining parts", "Renaming", "Sonarr import"];
-const STEPS_SHORT = ["Queued", "Download", "Mux", "Join", "Rename", "Import"];
 const STEP_STATE = { done: "Done", now: "Running", fail: "Failed", halt: "Stopped", "": "Waiting" };  // each step's state in words (warn: the outcome's own), the bar's colour aside
 function stepStates(c) {
   // past the last step ("done") only a success or a kept file gets here: anything else ended on the last step, not after it
@@ -1177,11 +1176,14 @@ function trackDone(t) {
 const tracksOpen = new Set();  // attempts whose downloaded tracks were unfolded: they stay so as it moves on
 /* An attempt's steps, each with its state in words and the current one marked, so no state rests on a colour. */
 function stepList(c) {
-  return el("div", { className: "steps", role: "list", ariaLabel: "Steps" },
-    ...stepStates(c).flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms`, ...(["now", "fail", "halt"].includes(st) ? { ariaCurrent: "step" } : {}) },
-      el("span", { className: "l", textContent: STEPS[i] }),
-      el("span", { className: "s", textContent: STEPS_SHORT[i] }),
-      el("span", { className: "sr-only", textContent: st === "halt" ? OUTCOME[c.outcome] || STEP_STATE.halt : STEP_STATE[st] || OUTCOME[c.outcome] }))]));  // halted: why, in the outcome's own word
+  const states = stepStates(c);
+  const active = states.findIndex((st) => ["now", "fail", "halt", "warn"].includes(st));
+  return el("div", {},
+    el("div", { className: "steps", role: "list", ariaLabel: "Steps" },
+      ...states.flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms`, ...(["now", "fail", "halt"].includes(st) ? { ariaCurrent: "step" } : {}) },
+        el("span", { className: "l", textContent: STEPS[i] }),
+        el("span", { className: "sr-only", textContent: st === "halt" ? OUTCOME[c.outcome] || STEP_STATE.halt : STEP_STATE[st] || OUTCOME[c.outcome] }))])),
+    active < 0 ? "" : el("div", { className: `step-caption ${states[active]}`, ariaHidden: "true", textContent: STEPS[active] }));
 }
 /* An attempt's steps, what waits for you, its figures or its end, and its tracks: in its own view and in a job's card. */
 function runBody(c) {

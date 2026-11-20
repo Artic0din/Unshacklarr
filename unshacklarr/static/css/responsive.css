@@ -341,8 +341,10 @@
   .cd-head h2, .cd-head .line1, .cd-head .act { display: none; }
   .cd-head .line2 { display: block; }
   .cd-head .line2 b { display: block; color: var(--text); font-size: var(--fs-body); }
-  .steps { gap: 5px; } .steps > span { font-size: var(--fs-footnote); }
-  .steps .l { display: none; } .steps .s { display: inline; }
+  .steps { gap: 5px; }
+  .steps .l { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); }
+  .step-caption { display: block; margin-top: 7px; font-size: var(--fs-footnote); font-weight: 600; }
+  .step-caption.fail { color: var(--err); } .step-caption.warn { color: var(--warn); } .step-caption.halt { color: var(--muted); }
   .cd-stats { gap: 12px 22px; } .cd-stats b { font-size: var(--fs-headline); white-space: nowrap; }
   .cd-stats div:nth-child(4) { display: none; }
   .cd-foot { display: flex; flex-wrap: wrap; gap: 10px; }

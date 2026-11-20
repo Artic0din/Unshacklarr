@@ -1228,9 +1228,9 @@ def test_each_download_step_says_its_state_and_the_current_one_is_marked():
     shown = node(r"""
 const ctx = sandbox({ afterTracks: () => false });
 const src = read(process.argv[1]);
-for (const re of [/^const OUTCOME = [^\n]*\n/m, /^const STEPS = [^\n]*\n/m, /^const STEPS_SHORT = [^\n]*\n/m, /^const STEP_STATE = [^\n]*\n/m,
+for (const re of [/^const OUTCOME = [^\n]*\n/m, /^const STEPS = [^\n]*\n/m, /^const STEP_STATE = [^\n]*\n/m,
   /^function stepStates\(.*?^\}/ms, /^function stepList\(.*?^\}/ms]) vm.runInContext(grab(src, re), ctx);
-const read_ = (c) => ctx.stepList(c).kids.map((s) => [s.className, s.ariaCurrent ?? null, s.kids[2].textContent]);
+const read_ = (c) => ctx.stepList(c).kids[0].kids.map((s) => [s.className, s.ariaCurrent ?? null, s.kids[1].textContent]);
 console.log(JSON.stringify({
   running: read_({ step: "downloading", outcome: "running", parts: 1 }),
   failed: read_({ step: "renaming", outcome: "failed", parts: 1 }),
@@ -1238,6 +1238,11 @@ console.log(JSON.stringify({
   interrupted: read_({ step: "downloading", outcome: "interrupted", parts: 1 }),
   unavailable: read_({ step: "searching", outcome: "unavailable", parts: 1 }),
   kept: read_({ step: "done", outcome: "kept", parts: 1 }),
+  captions: [
+    { step: "downloading", outcome: "running" },
+    { step: "done", outcome: "kept" },
+    { step: "done", outcome: "downloaded" },
+  ].map((c) => ctx.stepList(c).kids[1]?.textContent ?? null),
 }));
 """, str(JS / "activity.js"))
     assert shown["running"] == [["done", None, "Done"], ["now", "step", "Running"], ["", None, "Waiting"], ["", None, "Waiting"], ["", None, "Waiting"]]
@@ -1247,6 +1252,7 @@ console.log(JSON.stringify({
     assert ["halt", "step", "Interrupted"] in shown["interrupted"]  # a halt says why, not always "Stopped"
     assert ["halt", "step", "Not out yet"] in shown["unavailable"]
     assert shown["kept"][-1] == ["warn", None, "Kept"]  # the outcome's own word, not a colour
+    assert shown["captions"] == ["Downloading", "Sonarr import", None]
 
 
 def test_the_weekly_bars_come_with_their_numbers_as_a_table():
