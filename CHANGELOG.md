@@ -136,6 +136,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Per-service Clear cache now asks for confirmation first.** Clicking Clear cache in Settings › Per service asks to
+  confirm before clearing the service's logins, tokens, and sessions. (#334)
 - **An episode under its own number is no longer hidden for a small difference in its title.** Kath & Kim on Netflix
   lists S01E08 "The Wedding" and S03E01 "Cactus"; Sonarr calls them "Wedding" and "Cactus Hour", so both showed as
   not on the service and were not downloaded. Under the same number, a title that is the other's first or last
