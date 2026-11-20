@@ -49,7 +49,8 @@ def contrast(a, b):
 TEXT = [("text", "bg"), ("text", "panel"), ("text", "well"), ("text", "field-bg"), ("text", "accent-tint"),
         ("muted", "bg"), ("muted", "panel"), ("muted", "well"), ("accent", "bg"), ("accent", "panel"), ("accent", "accent-tint"),
         ("accent-ink", "accent"), ("ok", "panel"), ("ok", "bg"), ("ok", "well"), ("ok", "ok-tint"), ("accent-ink", "ok"), ("warn", "bg"), ("warn", "panel"), ("warn-ink", "warn"), ("warn", "warn-tint"),
-        ("err", "err-tint"), ("muted", "well"),
+        ("err", "err-tint"), ("muted", "well"), ("ok", "select"),
+        ("text", "ok-tint"), ("muted", "ok-tint"), ("warn", "ok-tint"),
         ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg"),
         ("text", "select"), ("muted", "select"), ("text", "term-bg")]
 EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
@@ -87,11 +88,24 @@ def test_ok_text_on_its_own_tint_is_readable():
     assert not low
 
 
-@pytest.mark.parametrize("badge", [".ck-pill.ok", ".sched-st.ok", ".chip.disk", ".chip.o-downloaded"])
+@pytest.mark.parametrize("badge", [
+    ".ck-pill.ok", ".sched-st.ok", ".chip.disk", ".chip.o-downloaded",
+    ".ep-on", ".ep-on.other", ".res.r1080", ".poster .svc", ".sched-card .svc",
+])
 def test_a_done_or_healthy_badge_is_green_not_the_accent(badge):
-    rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", CSS, flags=re.S))
-    last = [body for sel, body in rules if badge in [name.strip() for name in sel.split(",")]][-1]  # the later rule wins
-    assert "var(--ok-tint)" in last and "var(--accent" not in last
+    last = rules_of(badge)[-1]  # the later rule wins
+    assert "color: var(--ok)" in last
+    assert "background: var(--ok-tint)" in last
+
+
+@pytest.mark.parametrize("badge", [".ep-off", ".chip.o-unavailable", ".ck-pill.absent"])
+def test_an_absent_status_badge_is_muted_and_outlined_without_fill(badge):
+    last = rules_of(badge)[-1]
+    assert "color: var(--muted)" in last
+    assert "background: transparent" in last
+    assert "border-width: 1px" in last
+    assert "border-style: solid" in last
+    assert "border-color: var(--line)" in last
 
 
 def test_browser_chrome_and_installed_app_match_the_dark_background():

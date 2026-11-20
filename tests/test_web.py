@@ -1332,7 +1332,7 @@ const promptState = (input) => {
     const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
     console.log(JSON.stringify({
       attention: !!row.dataset.attention,
-      cookieStatus: find(row, (node) => node.className === "ck-pill")?.textContent,
+      cookieStatus: find(row, (node) => node.className?.split(" ").includes("ck-pill"))?.textContent,
     }));
   }
   if (scenario === "validated_cookies_with_pairing_support_missing") {

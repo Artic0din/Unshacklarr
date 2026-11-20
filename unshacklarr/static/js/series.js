@@ -300,7 +300,7 @@ async function loadEpisodes(s, keep = false) {  // keep: a reload after a downlo
       const list = epSeasons[n], disk = list.filter((e) => e.hasFile).length, miss = list.filter((e) => state(e) === "miss").length;
       const b = el("button", { onclick: () => { epSeason = n; renderSeason(); }, title: s.seasonTitles?.[n] || "" },
         el("b", { textContent: n === 0 ? "Specials" : `S${String(n).padStart(2, "0")}` }),
-        el("small", { className: miss ? "gap" : "", textContent: miss ? `${miss} missing` : `${disk}/${list.length}` }));
+        el("small", { className: miss ? "gap" : disk === list.length ? "complete" : "", textContent: miss ? `${miss} missing` : `${disk}/${list.length}` }));
       b.dataset.season = n;
       return b;
     }))] : []),
@@ -741,7 +741,7 @@ function renderCatchUp() {
     el("div", {}, el("b", { textContent: !missing.length && !upgrades.length ? "Available on other services" : !missing.length ? `${COUNT.episode(upgrades.length)} may be better on ${svc}`
       : there.length ? `${svc} has ${there.length} of your ${COUNT.missingEpisode(missing.length)}` : `${svc} has none of your ${COUNT.missingEpisode(missing.length)}` }),
       ...(bySeason.length ? [el("small", { textContent: bySeason.map(([n, list]) => `${Number(n) === 0 ? "Specials" : `S${pad2(n)}`} (${list.length})`).join(" · ") })] : []),
-      ...(upgrades.length && missing.length ? [el("small", { className: "renum", textContent: epUp ? `${upgrades.length} on disk ${svc} has in better quality (Activity, Upgrades)` : `${upgrades.length} on disk in a lower resolution than asked: ${svc} may have better` })] : []),
+      ...(upgrades.length && missing.length ? [el("small", { className: epUp ? "renum" : "renum warn", textContent: epUp ? `${upgrades.length} on disk ${svc} has in better quality (Activity, Upgrades)` : `${upgrades.length} on disk in a lower resolution than asked: ${svc} may have better` })] : []),
       ...(renumbered ? [el("small", { className: "renum", textContent: renumbered > 1 ? `${renumbered} episodes have another number on ${svc}: Download takes care of them` : `1 episode has another number on ${svc}: Download takes care of it` })] : []),
       // a whole season on a show of its own there (SBS: Has Fallen's S02 is "Apollo Has Fallen"): offered, saved with the series
       ...Object.entries(epPages).map(([season, p]) => el("small", { className: "renum" },

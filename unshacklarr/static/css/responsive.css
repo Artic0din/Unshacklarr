@@ -322,7 +322,7 @@
   .cal-eps { display: none; }
   .cal-count { display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; }
   .cal-count i { font-style: normal; font-size: var(--fs-caption); min-width: 18px; padding: 0 4px; border-radius: var(--r-md); background: var(--bg); color: var(--muted); text-align: center; }
-  .cal-count i.mine { background: var(--well); color: var(--text); font-weight: 700; }
+  .cal-count i.mine { background: var(--ok-tint); color: var(--ok); font-weight: 700; }
   .board, .sched-cards { grid-template-columns: 1fr; }
   .sched-card .thumb { width: 34px; }
   .sc-foot .icon-hide { width: 36px; height: 36px; }

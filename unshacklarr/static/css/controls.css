@@ -267,11 +267,12 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
   color: var(--muted); background: var(--well); }
 .sched-card .svc { white-space: normal; overflow-wrap: anywhere; }  /* a long name in a narrow day column */
 .poster .svc { display: block; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; }  /* a long name stays inside its poster; its panel has the whole name */
-.poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip { color: var(--text); }  /* a service: just its name */
-.ep-on, .ep-on.other, .new-badge, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest, .rg-chip, .sched-st.try,
+.svc-block-head b, .sv-chip { color: var(--text); }  /* a service: just its name */
+.new-badge, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest,
 .news-list .new .news-kind, .news-list .improved .news-kind { color: var(--text); background: var(--well); }
-.ck-pill.ok, .sched-st.ok, .chip.disk, .chip.o-downloaded { color: var(--ok); background: var(--ok-tint); }
-.ep-up, .ck-pill.warn, .sched-st.wait, .chip.miss, .chip.ask, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
+.ep-off, .chip.o-unavailable, .ck-pill.absent { color: var(--muted); background: transparent; border-width: 1px; border-style: solid; border-color: var(--line); }
+.ep-on, .ep-on.other, .poster .svc, .sched-card .svc, .rg-chip, .ck-pill.ok, .sched-st.ok, .chip.disk, .chip.o-downloaded { color: var(--ok); background: var(--ok-tint); }
+.ep-up, .ck-pill.warn, .sched-st.try, .sched-st.wait, .chip.miss, .chip.ask, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
 .ck-pill.bad, .sched-st.late, .rg-chip.bad, .chip.o-failed, .news-list .security .news-kind { color: var(--err); background: var(--err-tint); }
 
 .nav-busy, #bell .count, .inbox-filters b, .seg button span, .con-filters button span, .toolbar .pill span,

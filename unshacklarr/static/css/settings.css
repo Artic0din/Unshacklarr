@@ -267,7 +267,8 @@ input[type=checkbox].switch:checked { background: var(--muted); } input[type=che
 .wz-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .wz-steps li { position: relative; }
 .wz-steps li + li::before { content: ""; position: absolute; left: 22px; top: -14px; height: 22px; width: 2px; background: var(--line); transition: background .3s; }
-.wz-steps li.done::before, .wz-steps li.on::before { background: var(--field-line-hover); }
+.wz-steps li.on::before { background: var(--field-line-hover); }
+.wz-steps li.done::before { background: var(--ok); }
 .wz-steps button { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px; border: 0; border-radius: var(--r-md);
   background: none; color: var(--muted); font: inherit; text-align: left; cursor: pointer; transition: background .2s; }
 @media (hover: hover) { .wz-steps button:not(:disabled):hover { background: color-mix(in srgb, var(--text) 4%, transparent); } } .wz-steps button:disabled { cursor: default; }

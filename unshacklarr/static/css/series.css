@@ -48,7 +48,7 @@
 .poster .art img { width: 100%; height: 100%; object-fit: cover; display: block; filter: var(--dim); transition: filter .15s; }
 .poster.on .art img { filter: none; }
 @media (hover: hover) { .poster:hover .art img { filter: none; } }
-.poster.on .art { box-shadow: 0 0 0 2px var(--field-line-hover); }
+.poster.on .art { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 45%, var(--line)); }
 .poster .svc { position: absolute; left: 6px; bottom: 6px; background: var(--well); color: var(--text);
   font-size: var(--fs-footnote); font-weight: 700; padding: 2px 7px; border-radius: var(--r-sm); }
 .poster .name { display: block; margin-top: 7px; font-weight: 600; font-size: var(--fs-callout); line-height: 1.3; }
@@ -106,6 +106,7 @@ body.drawer-open .savebar { display: none; }
 .seasons button b { display: block; font-size: var(--fs-callout); }
 .seasons button small { color: var(--muted); font-size: var(--fs-footnote); font-variant-numeric: tabular-nums; }
 .seasons button small.gap { color: var(--warn); }
+.seasons button small.complete { color: var(--ok); }
 .seasons button[aria-pressed="true"] { border-color: var(--field-line-hover); background: var(--select); }
 .ep-tools { display: grid; gap: 12px; margin: 10px 0 12px; }
 .ep-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -120,7 +121,7 @@ body.drawer-open .savebar { display: none; }
 .ep-sel button { border: 0; border-left: 1px solid var(--line); background: none; color: var(--text); padding: 8px 14px; font: inherit; font-size: var(--fs-callout); cursor: pointer; white-space: nowrap; }
 @media (hover: hover) { .ep-sel button:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 5%, transparent); } } .ep-sel button:disabled { color: var(--muted); cursor: default; }
 .ep-sel button[hidden] { display: none; }
-.ep-sel .svc { color: var(--text); font-weight: 600; } .ep-sel .odd { color: var(--warn); }
+.ep-sel .svc { color: var(--ok); font-weight: 600; } .ep-sel .odd { color: var(--warn); }
 .ep-view { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; } .ep-view .pill { padding: 6px 12px; font-size: var(--fs-callout); }
 .ep-status { color: var(--muted); font-size: var(--fs-callout); text-align: end; }
 .ep-list { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); list-style: none; margin: 0; padding: 4px 0; }
@@ -178,19 +179,18 @@ body.drawer-open .savebar { display: none; }
 .tip code { font: 600 var(--fs-footnote) ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); } .tip .diff { color: var(--warn); }
 .ep-on { cursor: help; }
 .seasons .avail { display: block; font-size: var(--fs-footnote); font-weight: 600; color: var(--ok); } .seasons .avail.none { color: var(--muted); font-weight: 500; }
-.seasons button.has-avail { box-shadow: inset 0 -2px 0 var(--field-line-hover); }
+.seasons button.has-avail { box-shadow: inset 0 -2px 0 var(--ok); }
 .ep-catchup:not([hidden]) { display: flex; align-items: center; gap: 14px; justify-content: space-between; flex-wrap: wrap; margin: 4px 0 6px;
-  padding: 12px 16px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--well); }
+  padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--line)); border-radius: var(--r-md); background: var(--ok-tint); }
 .ep-catchup b { display: block; font-size: var(--fs-body); } .ep-catchup small { color: var(--muted); font-size: var(--fs-sub); }
 .ep-catchup.none { border-color: var(--line); background: none; } .ep-catchup.none b { color: var(--muted); font-weight: 500; }
 .ep-check small { margin-left: 4px; font-weight: 500; color: var(--muted); font-size: var(--fs-footnote); }
 .ep-on, .ep-off { margin-left: 8px; font-style: normal; font-size: var(--fs-footnote); font-weight: 600; padding: 1px 7px; border-radius: var(--r-md); }
-.ep-on { color: var(--text); background: var(--well); }
 .ep-up { margin-left: 8px; font-style: normal; font-size: var(--fs-footnote); font-weight: 600; padding: 1px 7px; border-radius: var(--r-md); cursor: help;
   color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .catchup-acts { display: flex; gap: 8px; flex-wrap: wrap; }
-.ep-on.other { color: var(--text); background: var(--well); }
-.ep-catchup small.renum { display: block; color: var(--text); } .ep-off { color: var(--muted); border: 1px solid var(--line); }
+.ep-catchup small.renum { display: block; color: var(--ok); }
+.ep-catchup small.renum.warn { color: var(--warn); }
 .ep-state.disk { color: var(--ok); } .ep-state.miss { color: var(--warn); } .ep-state.soon { color: var(--muted); }
 .ep-file-line { display: none; }
 .ep-head { display: grid; gap: 12px; padding: 8px 16px 6px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); letter-spacing: .02em; }
@@ -236,8 +236,8 @@ body.drawer-open .savebar { display: none; }
 .odd, .spec .odd, .t small .odd { color: var(--warn); }
 .odd-legend { display: block; font-size: var(--fs-footnote); font-weight: 500; color: var(--warn); margin-top: 2px; }
 .res { display: inline-block; min-width: 46px; text-align: center; font-size: var(--fs-footnote); font-weight: 700; padding: 2px 6px; border-radius: var(--r-sm); }
-.res.r1080 { background: color-mix(in srgb, var(--text) 24%, var(--well)); color: var(--text); }
-.res.r720 { background: color-mix(in srgb, var(--text) 12%, var(--well)); color: var(--text); } .res.rsd { background: var(--well); color: var(--text); }
+.res.r1080 { background: var(--ok-tint); color: var(--ok); }
+.res.r720 { background: color-mix(in srgb, var(--text) 12%, var(--well)); color: var(--text); } .res.rsd { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
 .res.odd { background: none; box-shadow: inset 0 0 0 1.5px var(--warn); color: var(--warn); }
 .ep time { color: var(--muted); font-size: var(--fs-sub); font-variant-numeric: tabular-nums; }
 .chip { font-size: var(--fs-footnote); padding: 1px 7px; border-radius: var(--r-md); border: 1px solid currentColor; white-space: nowrap; }
