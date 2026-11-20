@@ -100,12 +100,13 @@ const posts = [], toasts = [], opened = [];
 let finishPost;
 const target = args[0] || "";
 const sonarrs = [{ name: "4K", quality_ladder: ["2160"] }, { name: "Unset" }];
-const ctx = { $, el, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
+const ctx = { $, el, URL, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
   S: { config: { settings: { sonarrs }, series: { 72: { service: "NF", season_pages: { 2: { service: "DSNP" } } } } },
     serviceNames: { NF: "Netflix", DSNP: "Disney+" }, series: [] },
   savedSonarr: (n) => n === "4K" ? "4K Saved" : n, mainSonarr: () => "Main",
   markPicked() {}, renderDock() {}, loading() {}, posterSrc() {}, posterFail() {}, ago: () => "yesterday",
-  toast: (...data) => toasts.push(data), episodeTitle: (_, __, title) => title, trWith: (key) => key,
+  toast: (...data) => toasts.push(data), episodeTitle: (_, __, title) => title,
+  trWith: (key, ...fill) => key.replace(/\{(\d+)\}/g, (_, i) => fill[i]),
   AbortSignal, tr: (text) => text,
   fetch: async (path, options) => {
     const ok = (body) => ({ ok: true, json: async () => body });
@@ -129,14 +130,18 @@ const ctx = { $, el, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
   following: null, isLive: (c) => c.outcome === "running", isQueued: (c) => c.step === "queued",
   thumb() {}, posterOf() {}, day() {}, time() {}, clearTimeout() {}, runCards: [],
   outcomeOf: (c) => c.outcome, hovering: () => "", stepStates: () => [], icon() {}, glideBars() {}, jobDone: () => el("div"),
+  duration: () => "1 min", stepList: () => el("div"), checksNote() {}, cardActs: () => [],
+  renderConsole: () => ctx.renderJob(job),
   openServiceRow: (...data) => opened.push(data),
 };
+let job;
 vm.createContext(ctx);
 vm.runInContext(`let picked_run;\n` +
   [src.slice(src.indexOf("let missingDays"), src.indexOf('$("#con-missing").onclick')),
     src.slice(src.indexOf("let upgrade"), src.indexOf('$("#con-upgrades").onclick')),
     grab("api", core), grab("responseError", core), line("svcName", series), grab("seasonTag", series), line("fixSignIn"),
-    ...["signInFailed", "signInAction", "cardKind", "jobState", "renderJob"].map((n) => grab(n))
+    line("JOB_TRANSIENT"),
+    ...["signInFailed", "signInAction", "cardKind", "jobState", "jobFailure", "renderJob", "runBody"].map((n) => grab(n))
   ].join("\n"), ctx);
 (async () => {
   if (scenario === "job") {
@@ -144,12 +149,29 @@ vm.runInContext(`let picked_run;\n` +
     const auth = target !== "unclassified" ? { auth_failures: { DSNP: "expired" }, auth_failure_backends: { DSNP: "secondary" } }
       : { cause: "Login failed" };
     const waiting = target === "live" ? { outcome: "running", step: "queued", waiting: true, paused: true } : {};
-    ctx.renderJob({ job: "job1", cards: [{ ...card, id: "a", episodeId: 123, ...waiting }, { ...card, ...auth, id: "b", episodeId: 456 }] });
+    const first = target === "mixed" ? { cause: "Connection timed out" } : { ...auth, ...waiting };
+    ctx.renderJob({ job: "job1", cards: [{ ...card, ...first, id: "a", episodeId: 123 }, { ...card, ...auth, id: "b", episodeId: 456 }] });
     const buttons = $("#cd-foot").children;
     const fix = buttons.find((b) => b.textContent === "Fix sign-in");
     fix?.onclick();
     console.log(JSON.stringify({ primary: buttons.filter((b) => b.className.includes("primary")).map((b) => b.textContent),
       opened, fk: fix?.dataset?.fk ?? null }));
+    return;
+  }
+  if (scenario === "failure-reasons") {
+    const failures = JSON.parse(target);
+    job = { job: "job1", cards: failures.map((failure, i) => ({
+      id: `run${i}`, episodeId: i + 1, sxxeyy: `S01E${String(i + 1).padStart(2, "0")}`, tvdbId: 72, series: "Example", service: "AMZN",
+      outcome: "failed", started: "2026-01-01T00:00:00Z", ended: "2026-01-01T00:01:00Z",
+      ...(typeof failure === "string" ? { cause: failure } : failure),
+    })) };
+    ctx.renderJob(job);
+    const text = () => walk($("#cd-main")).flatMap((n) => typeof n.textContent === "string" ? [n.textContent] : []);
+    const groups = $("#cd-main").children.flatMap(walk).find((n) => n.className === "cd-note err")?.children.map((n) => n.textContent);
+    const folded = text();
+    const retry = $("#cd-foot").children.find((b) => b.dataset?.fk === "retry");
+    walk($("#cd-main")).find((n) => n.dataset?.fk === "card:run0").onclick();
+    console.log(JSON.stringify({ folded, groups: groups ?? null, expanded: text(), retry: retry.textContent, primary: retry.className.includes("primary") }));
     return;
   }
   if (scenario === "upgrades") {
@@ -273,11 +295,165 @@ def test_catch_up_row_and_bulk_do_not_queue_the_same_episode(order, sent):
 @pytest.mark.parametrize(("classification", "primary", "opened", "fk"), [
     ("classified", ["Fix sign-in"], [["DSNP", "secondary"]], "sign-in"),
     ("live", ["Fix sign-in"], [["DSNP", "secondary"]], "sign-in"),
+    ("mixed", ["Retry 2 failed"], [["DSNP", "secondary"]], "sign-in"),
     ("unclassified", ["Retry 2 failed"], [], None),
 ])
 def test_failed_job_footer_offers_sign_in_only_for_classified_failure(classification, primary, opened, fk):
     result = node(ACTIVITY_ACTIONS, str(JS), "job", classification)
     assert result == {"primary": primary, "opened": opened, "fk": fk}
+
+
+@pytest.mark.parametrize(("other", "summary", "primary"), [
+    ([], [], False),
+    (["404 Client Error: Not Found for url: https://example.test/three"], ["404 Not Found"], True),
+    (["HTTP 403: Forbidden"], ["403 Forbidden"], True),
+    (["503 Server Error: Service Unavailable for url: https://example.test/three", "Connection timed out"],
+     ["503 Service Unavailable", "Connection timed out"], True),
+])
+def test_job_summarizes_failure_reasons_and_keeps_episode_details(other, summary, primary):
+    raw = "451 Client Error: Unavailable for Legal Reason for url: https://example.test/"
+    causes = [f"AMZN through Unshackle: HTTP 422: An unexpected error occurred: {raw}manifest?ep=1 (ref a0e2e9)",
+              raw + "manifest?ep=2", *other]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
+    assert len(result["groups"]) == 1 + len(summary)
+    assert result["groups"][0].startswith("2 episodes: 451 Unavailable for Legal Reason")
+    if not other:
+        assert result["groups"] == ["2 episodes: 451 Unavailable for Legal Reason"]
+        assert sum("451 Unavailable for Legal Reason" in text for text in result["folded"]) == 1
+    assert all("https://" not in text for text in result["folded"])
+    assert result["folded"].count("failed") == len(causes)
+    assert causes[0] in result["expanded"]
+    assert all(group.startswith(f"1 episode: {reason}") for group, reason in zip(result["groups"][1:], summary))
+    assert result["retry"] == f"Retry {len(causes)} failed"
+    assert result["primary"] is primary
+
+
+def test_job_groups_same_status_by_provider_not_endpoint():
+    raw = "403 Client Error: Forbidden for url: https://example.test/"
+    failures = [raw + "licence?request=first (ref abc123)",
+                raw + "licence?request=second (ref def456)",
+                raw + "episodes/first-episode/manifest.mpd?request=third",
+                raw + "episodes/second-episode/manifest.mpd?request=fourth",
+                {"service": "DSNP", "cause": raw + "episodes/third-episode/manifest.mpd"}]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(failures))
+    assert result["groups"] == [
+        "4 episodes: 403 Forbidden · AMZN (S01E01, S01E02, S01E03, S01E04)",
+        "1 episode: 403 Forbidden · Disney+ (S01E05)",
+    ]
+
+
+def test_job_groups_same_reason_across_operations_without_a_url():
+    causes = ["Amazon widevine licence HTTP 403: Denied (ref a0e2e9)",
+              "Manifest HTTP 403: Denied (ref b1e3f0)"]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
+    assert result["groups"] == ["2 episodes: 403 Denied"]
+
+
+def test_job_groups_eleven_prime_451s_across_endpoints_but_keeps_403_separate():
+    denied = "Amazon widevine licence HTTP 403: Denied"
+    raw = "451 Client Error: Unavailable for Legal Reason for url: https://"
+    causes = [denied, *[raw + f"first.example/v1/playback?episode={i}" for i in range(10)],
+              raw + "second.example/v2/manifest.mpd"]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
+    assert result["groups"] == [
+        "1 episode: 403 Denied (S01E01)",
+        "11 episodes: 451 Unavailable for Legal Reason "
+        "(S01E02, S01E03, S01E04, S01E05, S01E06, S01E07, S01E08, S01E09, S01E10, S01E11, S01E12)",
+    ]
+    assert result["primary"] is True
+
+
+def test_job_groups_netflix_failures_with_different_or_truncated_references():
+    prefix = (
+        "NF through Unshackle: HTTP 400: Invalid input: Netflix MSL request failed: "
+        "{'code': 'FAIL', 'detail': 'manifest/playapi-105: Viewable not available - validation error. "
+    )
+    complete = prefix + "(E3-first-reference)'} (ref abc123)"
+    truncated = prefix + "(E3-second-truncated-reference (ref def456)"
+    cards = [{"service": "NF", "cause": cause} for cause in [complete, truncated]]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(cards))
+    assert result["groups"] == ["2 episodes: 400 Viewable not available - validation error."]
+    assert complete in result["expanded"]
+
+
+@pytest.mark.parametrize("first_line", ["HTTP 451: Unavailable for Legal Reason",
+                                       "451 Client Error: Unavailable for Legal Reason"])
+def test_job_parses_multiline_451_and_demotes_retry(first_line):
+    cause = f"\n  {first_line}\r\nTraceback from https://example.test/path?token=internal"
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps([cause, first_line]))
+    assert result["groups"] == ["2 episodes: 451 Unavailable for Legal Reason"]
+    assert result["primary"] is False
+    assert cause in result["expanded"]
+
+
+def test_job_groups_multiline_causes_by_first_http_error():
+    causes = ["Provider request failed\nHTTP 451: Denied\nHTTP 403: Forbidden",
+              "Provider request failed\n503 Server Error: Service Unavailable"]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
+    assert result["groups"] == [
+        "1 episode: 451 Denied (S01E01)",
+        "1 episode: 503 Service Unavailable (S01E02)",
+    ]
+
+
+def test_job_keeps_retry_primary_for_connection_reset_after_451():
+    cause = "HTTP 451: Denied\nTemporary failure: connection reset"
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps([cause, cause]))
+    assert result["groups"] == ["2 episodes: 451 Denied"]
+    assert result["primary"] is True
+
+
+def test_job_transient_pattern_matches_backend():
+    from unshacklarr.sync import TRANSIENT
+
+    source = (JS / "activity.js").read_text(encoding="utf-8")
+    classifier = re.search(r"^const JOB_TRANSIENT = /(.+)/([a-z]*);$", source, re.MULTILINE)
+    assert classifier is not None
+    assert classifier.groups() == (TRANSIENT.pattern, "i" if TRANSIENT.flags & re.IGNORECASE else "")
+
+
+def test_job_groups_long_reasons_by_full_sanitized_text():
+    prefix = "The sign-in request did not complete. " * 3
+    cancelled = f"HTTP 401: {prefix}Sign-in was cancelled"
+    rejected = f"HTTP 401: {prefix}Sign-in was rejected"
+    causes = [cancelled + " (ref abc123)", cancelled + " (ref def456)", rejected]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
+    label = "401 The sign-in request did not complete. The sign-in request did not complete. The sign-in request did…"
+    assert result["groups"] == [
+        f"2 episodes: {label} (S01E01, S01E02)",
+        f"1 episode: {label} (S01E03)",
+    ]
+
+
+def test_single_episode_job_shows_clean_reason_on_card_without_summary():
+    cause = "HTTP 403: Denied ?request=first"
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps([cause]))
+    assert result["groups"] is None
+    assert "403 Denied · took 1 min" in result["folded"]
+    assert cause in result["expanded"]
+
+
+@pytest.mark.parametrize("cause", [
+    "HTTP 403: Temporarily denied",
+    "HTTP 404: Not found",
+    "HTTP 451: Temporarily denied",
+    "HTTP 451: Denied\nService is temporarily unavailable",
+])
+def test_job_keeps_retry_primary_unless_failures_are_clearly_permanent(cause):
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps([cause, cause]))
+    assert result["retry"] == "Retry 2 failed"
+    assert result["primary"] is True
+
+
+def test_job_lists_affected_episodes_only_when_failure_reasons_differ():
+    denied = "download worker failed: RuntimeError: Amazon widevine licence HTTP 403: Denied"
+    blocked = "451 Client Error: Unavailable for Legal Reason for url: https://example.test/playback"
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps([denied, blocked, blocked]))
+    assert result["groups"] == [
+        "1 episode: 403 Denied (S01E01)",
+        "2 episodes: 451 Unavailable for Legal Reason (S01E02, S01E03)",
+    ]
+    assert denied in result["expanded"]
 
 
 def test_upgrades_explains_which_files_the_quality_ladder_selects():

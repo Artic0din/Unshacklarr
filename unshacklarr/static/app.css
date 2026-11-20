@@ -1172,7 +1172,8 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .dock .d-sep { width: 1px; height: 24px; background: var(--line); flex: none; }
 .dock .d-open { width: 34px; height: 34px; border-radius: 9px; border: 0; background: var(--accent); color: var(--accent-ink);
   display: grid; place-items: center; flex: none; cursor: pointer; padding: 0; }
-.con-detail:has(.cd-foot [data-fk="sign-in"]) .dock .d-open { border: 1px solid var(--line); background: var(--field-bg); color: var(--text); }
+.con-detail:has(.cd-foot :is([data-fk="sign-in"], [data-fk="retry"].primary)) .dock .d-open { border: 1px solid var(--line); background: var(--field-bg); color: var(--text); }
+.con-detail:has(.cd-foot [data-fk="retry"].primary) .dock .d-acts .retry { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .dock .d-open svg { stroke-width: 2.4; }
 .con-detail.docked > .cd-raw { display: none; }  /* the output opens in the bar */
 .dock.open { flex-wrap: wrap; row-gap: 10px; }

@@ -354,16 +354,59 @@ function metaChip(svg, text) {
   chip.append(text);
   return chip;
 }
+// Match sync.py's TRANSIENT classifier for both current and historical cards.
+const JOB_TRANSIENT = /timed? ?out|timeout|connection (reset|refused|aborted|error)|remote end closed|temporarily|NETWORK_ERROR|SERVICE_UNAVAILABLE|SERVER_DRAINING|\b424\b|max retries|\b50[234]\b|service unavailable|bad gateway|name resolution|network is unreachable/i;
+function jobFailure(c) {
+  const reasonLimit = 100;
+  const cause = c.cause || "", lines = cause.trim().split(/\r?\n/);
+  // The service error can be wrapped in the backend's own HTTP status (often 422).
+  let http;
+  for (const line of lines) {
+    http = line.match(/\b(\d{3}) (?:Client|Server) Error:\s*(.*)/i) || line.match(/\bHTTP (\d{3}):\s*(.*)/i);
+    if (http) break;
+  }
+  const [, status, message = lines[0]] = http || [];
+  // A diagnostic payload can end mid-field when the backend truncates it.
+  const detail = message.match(/['"]detail['"]:\s*(['"])(.*?)(?:\1(?=\s*[,}])|$)/i)?.[2];
+  const clean = (detail?.replace(/^[\w/-]+:\s+/, "") || message)
+    .replace(/\s*\((?:ref\s+|E\d+-)[^)]*(?:\)|$)/gi, "")
+    .replace(/\bE\d+-[\w+/=.-]+/gi, "")
+    .replace(/(?:\bfor url:\s*)?https?:\/\/[^\s)]+/gi, "")
+    .replace(/\S*\?[\w%-]+=[^\s)]+/g, "")
+    .replace(/\s+/g, " ").trim();
+  const short = clean.length > reasonLimit ? `${clean.slice(0, reasonLimit).trimEnd()}…` : clean;
+  return {
+    reason: [status, clean].filter(Boolean).join(" "),
+    label: [status, short].filter(Boolean).join(" "),
+    nonTransient: !JOB_TRANSIENT.test(cause) && (status === "451" || Boolean(signInFailed(c))),
+  };
+}
 /* A job: a card per episode, in order, unfolding to its details, and one output for them all. */
 function renderJob(j) {
   const first = j.cards[0], st = jobState(j), started = new Date(Math.min(...j.cards.map((c) => new Date(c.started))));
   const series = S.series.find((x) => x.tvdbId === first.tvdbId);
   const retryable = j.cards.filter((c) => c.episodeId && ["failed", "stopped", "interrupted"].includes(c.outcome));  // not the cancelled ones: taken out on purpose
+  const failures = new Map(), reasons = new Map(), providersPerReason = new Map();
+  for (const c of j.cards) {
+    if (cardKind(c) !== "failed") continue;
+    const failure = jobFailure(c);
+    failures.set(c.id, failure);
+    if (failure.reason) {
+      const { reason, label } = failure, key = JSON.stringify([c.service, reason]);
+      if (!reasons.has(key)) {
+        reasons.set(key, { reason, label, service: c.service, episodes: [] });
+        providersPerReason.set(reason, (providersPerReason.get(reason) || 0) + 1);
+      }
+      reasons.get(key).episodes.push(c.sxxeyy);
+    }
+  }
+  const retryPrimary = retryable.some((c) => !failures.get(c.id)?.nonTransient);
+  const groupFailures = j.cards.length > 1 && reasons.size > 0;
   const title = new Set(j.cards.map((c) => c.series)).size > 1 ? `${j.cards.length} episodes` : `${first.series} · ${j.cards.length} episodes`;
   $("#cd-top-title").textContent = title;
-  const signIn = signInAction(j.cards.find(signInFailed));
+  const signIn = signInAction(j.cards.find(signInFailed), !retryPrimary);
   const acts = [series ? el("button", { className: "btn small", textContent: "Open series", dataset: { fk: "open" }, onclick: () => openDrawer(series) }) : "",
-    st.live && st.n.queued ? el("button", { className: `btn small${st.paused && !signIn ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause", dataset: { fk: "pause" },
+    st.live && st.n.queued ? el("button", { className: `btn small${st.paused && !signIn && !retryPrimary ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause", dataset: { fk: "pause" },
       title: st.paused ? "The next episode starts" : "The current download finishes; the next one waits",
       onclick: (e) => pauseJob(j, !st.paused, e.target) }) : "",
     st.live && st.n.queued ? el("button", { className: "btn small", textContent: "Options", dataset: { fk: "options" }, title: "Download options for the episodes still to come in this job",
@@ -371,7 +414,7 @@ function renderJob(j) {
     st.live ? el("button", { className: "btn small danger", textContent: "Stop the job", dataset: { fk: "stop" }, title: "Stops the current download. The queued episodes don't start",
       onclick: (e) => stopJob(j, e.target) }) : "",
     signIn,
-    retryable.length ? el("button", { className: `btn small${signIn ? "" : " primary"}`, textContent: `Retry ${retryable.length} failed`, dataset: { fk: "retry" },
+    retryable.length ? el("button", { className: `btn small${retryPrimary ? " primary" : ""}`, textContent: `Retry ${retryable.length} failed`, dataset: { fk: "retry" },
       title: st.live ? "Downloads them again, before the episodes still to come" : "Downloads them again, in this job",
       onclick: (e) => retryJob(j, retryable, e.target) }) : "",
     !st.live ? el("button", { className: "btn small danger", textContent: "Delete the job", dataset: { focusKey: `delete:${j.job}`, fk: "delete" }, title: "Removes every episode of this job from the history",
@@ -394,30 +437,31 @@ function renderJob(j) {
   const followed = j.cards.find((c) => c.id === following);
   const next = followed && !isDownloading(followed) && !isQueued(followed) && j.cards.find(isDownloading);
   if (next) { openCards.delete(followed.id); openCards.add(next.id); following = next.id; }
-  const tookLine = (c, live) => !live && c.ended ? [c.cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "";
   const shown = j.cards.filter((c) => !jobHidden.has(cardKind(c)));
   const cards = shown.map((c) => {
     // a card that doesn't move (done, queued, folded) is the same element as at the last draw: a job of 200 episodes
     // redrawn each second rebuilt 200 cards and froze the page
     const still = !openCards.has(c.id) && (c.waiting || !isLive(c));
-    const sig = still && JSON.stringify([c.outcome, c.ended, c.cause, c.size, c.waiting, c.paused]);
+    const failure = failures.get(c.id), cause = failure ? (groupFailures ? "" : failure.label) : c.cause;
+    const sig = still && JSON.stringify([c.outcome, c.ended, cause, c.size, c.waiting, c.paused]);
     const kept = still && jobCards.get(c.id);
     if (kept && kept.sig === sig) return kept.li;
-    const li = jobCard(c);
+    const li = jobCard(c, cause);
     if (still) jobCards.set(c.id, { sig, li }); else jobCards.delete(c.id);
     return li;
   });
-  function jobCard(c) {
+  function jobCard(c, cause) {
     const live = isLive(c);
     const label = c.waiting ? "Queued" : live ? (FINISHING.has(c.step) ? { joining: "Joining parts", finishing: "Finishing", renaming: "Renaming", importing: "Importing" }[c.step]
       : isQueued(c) ? "Waiting for a slot" : afterTracks(c) || `Downloading ${Math.round(Number(c.live?.progress) || 0)}%`) : outcomeOf(c);
     const tone = c.waiting ? "" : live ? "now" : c.outcome === "downloaded" ? "ok" : c.outcome === "failed" ? "err" : c.outcome === "kept" || c.outcome === "import" ? "warn" : "";
     const downloading = isDownloading(c);
+    const tookLine = !live && c.ended ? [cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "";
     const detail = downloading ? el("div", { className: "jmeta" },  // how fast, how long still: in sight, not a grey line
         ...[...(afterTracks(c) ? [[ICON_CLOCK, muxLeft(c) ? `${afterTracks(c)} · ${muxLeft(c)} left` : `${afterTracks(c)} · ${since(c.mux_from || c.tracks_in)}`]] : [[ICON_SPEED, speedOf(c)], [ICON_CLOCK, timeLeft(c) && `${timeLeft(c)} left`]]), [ICON_GLOBE, proxyOf(c), "extra"], [ICON_FILM, videoOf(c), "extra"],
           [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${svcName(c.service)}`, "extra"]]
           .filter(([, t]) => t).map(([svg, t, extra]) => { const chip = metaChip(svg, t); if (extra) chip.classList.add(extra); return chip; }))
-      : el("small", { textContent: tookLine(c, live), title: tookLine(c, live) });  // ellipsised when narrow: the whole line on hover
+      : el("small", { textContent: tookLine, title: tookLine });  // ellipsised when narrow: the whole line on hover
     const open = openCards.has(c.id) && !c.waiting;
     const acts = open ? cardActs(c) : [];
     const fold = () => {
@@ -456,7 +500,15 @@ function renderJob(j) {
   if (!list) { list = el("ol", { className: "job-cards", dataset: { job: j.job } }); jobCards.clear(); }
   cards.forEach((li, i) => { if (list.children[i] !== li) list.insertBefore(li, list.children[i] || null); });
   while (list.children.length > cards.length) list.lastChild.remove();
-  const sum = st.live ? overall : el("div", { style: "display:grid;gap:12px" }, jobDone(j, st), counts), box = list.parentElement;
+  const summary = groupFailures ? el("div", { className: "cd-note err" }, ...Array.from(reasons.values(), ({ reason, label, service, episodes }) => {
+    const count = episodes.length, names = episodes.filter(Boolean).join(", ");
+    const title = providersPerReason.get(reason) > 1 ? `${label} · ${svcName(service)}` : label;
+    const text = reasons.size === 1 || !names
+      ? count === 1 ? trWith("1 episode: {0}", title) : trWith("{0} episodes: {1}", count, title)
+      : count === 1 ? trWith("1 episode: {0} ({1})", title, names) : trWith("{0} episodes: {1} ({2})", count, title, names);
+    return el("span", { textContent: text });
+  })) : "";
+  const sum = el("div", { style: "display:grid;gap:12px" }, ...(st.live ? [overall] : [jobDone(j, st), counts]), summary), box = list.parentElement;
   if (box?.isConnected) { box.children[0].replaceWith(head); box.children[1].replaceWith(sum); }  // the list stays where it is
   else $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, head, sum, list));
   glideBars($("#cd-main"));
@@ -1062,9 +1114,9 @@ function signInFailed(c) {
   return service ? { service, backend: c.auth_failure_backends?.[service] ?? c.backend ?? "" } : null;
 }
 const fixSignIn = (c) => { const { service, backend } = signInFailed(c); openServiceRow(service, backend); };
-function signInAction(c) {
+function signInAction(c, primary = true) {
   const signIn = c && signInFailed(c);
-  return signIn ? el("button", { className: "btn small primary", textContent: "Fix sign-in", title: `Check ${svcName(signIn.service)} in Settings › Services & Devices › Services`, dataset: { fk: "sign-in" }, onclick: () => fixSignIn(c) }) : "";
+  return signIn ? el("button", { className: `btn small${primary ? " primary" : ""}`, textContent: "Fix sign-in", title: `Check ${svcName(signIn.service)} in Settings › Services & Devices › Services`, dataset: { fk: "sign-in" }, onclick: () => fixSignIn(c) }) : "";
 }
 /* What can be done with an attempt: stop it, import it anyway, fix its sign-in, retry it, forget it. */
 function runActs(c) {

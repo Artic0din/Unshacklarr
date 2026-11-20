@@ -41,7 +41,7 @@ def test_a_live_card_stacks_speed_and_time_under_the_episode_while_narrow():
 
 def test_a_finished_card_names_its_whole_line_when_it_is_cut_short():
     js = (STATIC / "js" / "activity.js").read_text()
-    assert "el(\"small\", { textContent: tookLine(c, live), title: tookLine(c, live) })" in js
+    assert 'el("small", { textContent: tookLine, title: tookLine })' in js
 
 
 def test_series_secondary_controls_stay_hidden_until_disclosed_on_phones():

@@ -80,6 +80,8 @@
  ],
  "1 episode queued": [],
  "1 episode queued, replacing its file": [],
+ "1 episode: {0}": [],
+ "1 episode: {0} ({1})": [],
  "1 hour": [],
  "1 key": [],
  "1 ladder": [],
@@ -3850,6 +3852,8 @@
  "{0} episodes queued, replacing their files": [
   "picked.length"
  ],
+ "{0} episodes: {1}": [],
+ "{0} episodes: {1} ({2})": [],
  "{0} episode{1} queued again": [
   "ids.length",
   "ids.length > 1 ? \"s\" : \"\""
