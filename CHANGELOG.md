@@ -140,6 +140,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Switching Sonarr connections no longer lets an in-flight sync lookup put the old library back in the cache.** (#368)
 - **The Remote CDMs heading has room on phones.** The add button wraps below the heading and description on narrow screens. (#369)
 - **Clearing series file name, season map, join parts, or episode name now clears the unsaved save bar.** Normalizing
   empty and default series fields (including `sonarr_order` when no numbering overrides remain) during comparison means
