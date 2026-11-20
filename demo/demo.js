@@ -452,11 +452,10 @@
   /* ---- The strip that says it all is fake, and the setup's shortcuts ---- */
   const css = document.createElement("style");
   css.textContent = `
-    :root { --demo-h: 38px; }
+    :root { --demo-h: 38px; --header-top: var(--demo-h); }
     body { padding-top: var(--demo-h); }
     .gate, .drawer, .backdrop { top: var(--demo-h) !important; }
     .lang-corner { top: calc(var(--demo-h) + 14px) !important; }
-    @media (max-width: 760px) { header { top: var(--demo-h) !important; } }
     body.gated > #demo-bar { display: flex !important; }
     #demo-bar { position: fixed; inset: 0 0 auto 0; height: var(--demo-h); z-index: 1000; display: flex; align-items: center; gap: 10px;
       padding: 0 12px; background: repeating-linear-gradient(-45deg, #f59e0b, #f59e0b 14px, #fbbf24 14px, #fbbf24 28px);

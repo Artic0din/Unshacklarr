@@ -37,7 +37,32 @@ def rule_for(css, *needles, side):
 
 def test_phone_page_keeps_focus_clear_of_the_measured_header_and_bars():
     page = [body for sel, body in padding_rules(phone_blocks()) if sel == "html"]
-    assert page and "var(--head-h" in page[0] and "var(--bars-h" in page[0]
+    assert page and "var(--header-bottom)" in page[0] and "var(--bars-h" in page[0]
+    assert "--header-bottom: calc(var(--header-top, 0px) + var(--head-h" in phone_blocks()
+
+
+def test_header_blurs_a_single_background_layer_without_trapping_the_phone_nav():
+    layers = re.findall(r"(?m)^\s*header::before \{([^}]*)\}", CSS)
+    assert sum("blur(" in layer for layer in layers) == 1
+    assert not any("gradient(" in layer for layer in layers)  # no glow of its own: it would stay pinned while the page's scrolls away
+    assert all("backdrop-filter" not in rule for rule in re.findall(r"(?m)^\s*header \{([^}]*)\}", CSS))
+    assert "z-index: -1" in layers[0] and "pointer-events: none" in layers[0]
+    assert re.search(r"@media \(prefers-reduced-transparency: reduce\), \(prefers-contrast: more\) \{"
+                     r"\s*header::before \{[^}]*background: var\(--bg\);[^}]*backdrop-filter: none;", CSS)
+
+
+def test_desktop_header_inbox_settings_and_scroll_padding_share_the_measured_offset():
+    assert "--header-top:" not in CSS  # the demo injects its override before this stylesheet
+    assert "--header-bottom: calc(var(--header-top, 0px) + var(--head-h, 65px))" in CSS
+    for selector, prop in ((".set-nav", "top"), ("#inbox-dialog.menu", "inset"), ("html", "scroll-padding-block-start")):
+        assert re.search(rf"{re.escape(selector)} \{{[^}}]*{prop}: [^;]*var\(--header-bottom\)", CSS)
+    header = re.search(r"(?m)^header \{([^}]*)\}", CSS)[1]
+    assert "position: sticky" in header and "top: var(--header-top, 0px)" in header  # pinned, under the demo bar
+    assert not re.search(r"(?m)^[ \t]+header \{[^}]*\btop:", CSS)  # no narrower layout moves it back
+    assert re.search(r"#inbox-dialog\.menu\[open\] \{[^}]*max-height: calc\(100dvh - var\(--header-bottom\)", CSS)
+    assert "dialog.style.top" not in (STATIC / "js" / "inbox.js").read_text()
+    demo = (STATIC.parents[1] / "demo" / "demo.js").read_text()
+    assert "--header-top: var(--demo-h)" in demo
 
 
 @pytest.mark.parametrize("pane", ["serve log", "empty Activity"])

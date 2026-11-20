@@ -69,6 +69,26 @@ def test_the_notifications_heading_keeps_its_own_width_and_the_row_may_wrap():
     has(media("max-width: 340px"), "#inbox-clear { order: 1; margin-left: auto; }")
 
 
+def test_inbox_filters_wrap_whole_pills_instead_of_clipping_the_last_one():
+    rule = re.search(r"\.inbox-filters \{([^}]*)\}", CSS)[1]
+    assert "flex-wrap: wrap" in rule and "overflow-x" not in rule
+    has(CSS, ".inbox-filters button { display: inline-flex; flex: none;")
+    assert "white-space: nowrap" in re.search(r"\.inbox-filters button \{([^}]*)\}", CSS)[1]
+
+
+def test_main_nav_pills_keep_the_current_page_distinct_and_touch_targets_at_44px():
+    has(CSS, "nav a { background: none; border: 0; padding: 6px 12px; border-radius: 999px;")
+    has(CSS, 'nav a[aria-current="page"] { background: var(--accent-tint); color: var(--accent); }')
+    has(media("max-width: 700px"), "nav { position: fixed; left: 0; right: 0; bottom: 0;")
+    has(media("max-width: 700px"), "nav a { min-inline-size: 44px; }")
+
+
+def test_phone_header_health_indicators_do_not_rely_on_colour():
+    compact = media("max-width: 1240px")
+    for state in ("warn", "down"):
+        assert re.search(rf"\.health \.dot\.{state} \{{[^}}]*clip-path: polygon", compact)
+
+
 def test_the_remote_cdms_heading_has_room_when_its_add_button_wraps():
     phone = media("max-width: 700px")
     has(phone, ".sx-head:has(> .btn) { flex-wrap: wrap; }")
@@ -77,12 +97,20 @@ def test_the_remote_cdms_heading_has_room_when_its_add_button_wraps():
 
 def test_a_phone_shows_the_apps_name_whole_or_its_labelled_logo_never_a_cut_name():
     phone = media("max-width: 700px")
-    has(phone, ".version-chip { display: none; }")  # Settings has the version and what's new
     has(phone, "header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; container-type: inline-size; }")
     has(CSS, "@container (width < 9.25rem) { .brand span { display: none; } }")
     assert "text-overflow: ellipsis" not in squash(phone[phone.index("header h1 {"):][:400])
     assert 'id="home" aria-label="Unshacklarr, schedule"' in (STATIC / "index.html").read_text()
-    assert 'id="set-version"' in (STATIC / "index.html").read_text()
+
+
+def test_version_is_one_whats_new_control_in_settings_not_in_the_header():
+    html = (STATIC / "index.html").read_text()
+    assert 'id="version"' not in html.split("</header>")[0]
+    assert re.search(r'<button [^>]*id="set-version"[^>]*><span class="version-chip" id="version"', html)
+    has(CSS, ".version-chip.beta { color: var(--warn);")
+    assert '$("#set-version").onclick = openNews;' in (STATIC / "js" / "news.js").read_text()
+    nav = (STATIC / "js" / "navigation.js").read_text()
+    assert 'querySelectorAll(".set-nav [data-sec]").forEach((x) => x.onclick' in nav
 
 
 def test_every_small_control_on_a_phone_is_44px_to_the_finger():
