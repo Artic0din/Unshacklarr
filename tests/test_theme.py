@@ -322,4 +322,6 @@ def test_glow_paints_once_on_the_root_never_tiled_by_a_short_body():
     root = block("\nhtml {")
     assert "gradient" not in body and "background" not in body
     assert "radial-gradient" in root and "no-repeat" in root and "var(--bg)" in root
-    assert re.search(r"/\s*100%\s+\d+(\.\d+)?rem", root), "a fixed height, so a page shorter than the glow cannot cut it"
+    glow_height = float(re.search(r"ellipse [\d.]+rem ([\d.]+)rem", root)[1])
+    tile_height = float(re.search(r"/\s*100%\s+([\d.]+)rem", root)[1])
+    assert tile_height > glow_height, "the tile must reach past the glow's fade, or its bottom edge shows as a line"
