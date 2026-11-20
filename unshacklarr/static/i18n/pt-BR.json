@@ -2049,6 +2049,8 @@
  "Downloads will fail unless you add a cookie file.": "Os downloads vão falhar a menos que você adicione um arquivo de cookies.",
  "Its downloads will fail: replace them in Settings › Services & Devices › Services.": "Os downloads dele vão falhar: substitua-os em Configurações › Serviços e dispositivos › Serviços.",
  "Managed on that server": "Gerenciado nesse servidor",
+ "Managed": "Gerenciados",
+ "Not managed": "Não gerenciados",
  "Needed to manage them in Settings › Services & Devices › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": "Necessária para gerenciá-los em Configurações › Serviços e dispositivos › Serviços. Vazia: o Unshacklarr pergunta ao Unshackle, o que funciona quando os dois rodam neste computador.",
  "No series": "Nenhuma série",
  "No service is known yet. Unshackle lists them once it answers.": "Nenhum serviço é conhecido ainda. O Unshackle os lista quando responde.",

@@ -1329,6 +1329,7 @@
  "Make room in the library, or lower the room kept free in Settings": [],
  "Maker": [],
  "Maker and model": [],
+ "Managed": [],
  "Managed on that server": [],
  "Managed where Unshackle runs": [],
  "ManualImport": [],
@@ -1613,6 +1614,7 @@
  "Not imported: {0}": [
   "job[4]"
  ],
+ "Not managed": [],
  "Not needed": [],
  "Not on the service": [],
  "Not on {0}": [

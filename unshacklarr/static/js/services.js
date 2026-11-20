@@ -208,7 +208,7 @@ function renderServices() {
     if (!m.cookieFiles.length) {
       if (m.cookieless) return [el("span", { className: "muted", textContent: "Not needed" })];
       const both = m.methods === null || m.methods.includes("credentials");
-      const pill = el("span", { className: `ck-pill${m.missing ? " bad" : ""}`, textContent: m.missing ? "Missing" : "No cookie file" });
+      const pill = el("span", { className: `ck-pill ${m.missing ? "bad" : "absent"}`, textContent: m.missing ? "Missing" : "No cookie file" });
       return [el("div", { className: "sv-file" },
         el("div", { className: "sv-file-top" }, m.missing ? hoverTip(pill, () => [both ? "Downloads will fail unless you add a cookie file, or set its username and password in unshackle.yaml."
           : "Downloads will fail unless you add a cookie file."]) : pill),

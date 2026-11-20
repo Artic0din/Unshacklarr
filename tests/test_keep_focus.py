@@ -436,7 +436,7 @@ if (scenario === "week") {
 if (scenario === "month") {
   const grid = page(), dayBox = make("div");
   Object.assign(ctx, { Date, Map, Math, Intl, cal: null, $: (sel) => sel === "#cal-grid" ? grid : dayBox, renderRange() {}, inScope: () => true, LOCALE: "en-GB",
-    COUNT: { episode: (n) => `${n} episodes` }, time: () => "", day: () => "", schedCard: () => make("article"), syncDetails() {}, SCROLL: "auto" });
+    COUNT: { episode: (n) => `${n} episodes` }, tr: (text) => text, time: () => "", day: () => "", schedCard: () => make("article"), syncDetails() {}, SCROLL: "auto" });
   run(["startOfDay", "addDays", "isoDay", "weekStartOf", "monthStartOf", "dayOfKey", "whenOf", "byWhen"].map((n) => line(schedule, n)).join("\n") + "\n"
     + line(schedule, "cal").replace("const ", "var ") + "\n" + fn(schedule, "pickDay") + "\n" + ["focusFirstEpisode", "keepCardFocus", "renderMonth"].map((n) => fn(schedule, n)).join("\n"));
   run("cal.month = new Date(2026, 10, 1); cal.byDay = new Map(); cal.pick = null");

@@ -1330,9 +1330,11 @@ const promptState = (input) => {
     vm.runInContext('servicesCookies = { folder: "/cookies", files: { HULU: [] } }', box);
     box.renderServices();
     const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
+    const pill = find(row, (node) => node.className?.split(" ").includes("ck-pill"));
     console.log(JSON.stringify({
       attention: !!row.dataset.attention,
-      cookieStatus: find(row, (node) => node.className === "ck-pill")?.textContent,
+      cookieStatus: pill?.textContent,
+      cookieClass: pill?.className,
     }));
   }
   if (scenario === "validated_cookies_with_pairing_support_missing") {
@@ -1565,6 +1567,7 @@ def test_validated_pairing_service_does_not_require_a_cookie_file():
     assert run_authentication_ui("validated_pairing_without_cookies") == {
         "attention": False,
         "cookieStatus": "No cookie file",
+        "cookieClass": "ck-pill absent",
     }
 
 

@@ -2056,6 +2056,8 @@
  "Downloads will fail unless you add a cookie file.": "Cookie ファイルを追加しない限り、ダウンロードは失敗します。",
  "Its downloads will fail: replace them in Settings › Services & Devices › Services.": "ダウンロードは失敗します。設定 › サービスとデバイス › サービスで置き換えてください。",
  "Managed on that server": "そのサーバーで管理されています",
+ "Managed": "管理対象",
+ "Not managed": "管理対象外",
  "Needed to manage them in Settings › Services & Devices › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": "設定 › サービスとデバイス › サービスで管理するために必要です。空欄の場合: Unshacklarr が Unshackle に尋ねます。両方がこのコンピューターで動いていれば機能します。",
  "No series": "シリーズなし",
  "No service is known yet. Unshackle lists them once it answers.": "サービスはまだ不明です。Unshackle が応答すると一覧に表示されます。",
