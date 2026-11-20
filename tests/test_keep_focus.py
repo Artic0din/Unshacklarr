@@ -39,6 +39,7 @@ class Node {
   focus() { this.focusCalls++; if (this.isConnected && !this.disabled) doc.activeElement = this; }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k] ?? null; }
+  removeAttribute(k) { delete this.attrs[k]; }
   setSelectionRange(a, b, direction) { this.selected = [a, b, direction]; }
   scrollIntoView() {}
 }
@@ -241,7 +242,11 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   }
   delete out.scrolledTo;
   const nav = buttons.connections, heading = anchors["sonarr-sec"].children[0];
-  run("settingsList = true");
+  doc.activeElement = root;
+  run("settingsList = false; settingsSec = 'connections'");
+  nav.setAttribute("aria-current", "true");
+  ctx.showSettingsList(true, false);
+  out.list = [doc.activeElement === root, nav.getAttribute("aria-current")];
   ctx.showSettingsSec("sonarr");
   out.opened = [doc.activeElement === heading, heading.tabIndex, run("settingsList")];
   doc.activeElement = root;
@@ -641,6 +646,7 @@ def test_escape_closes_the_language_menu_and_returns_to_its_button():
 
 def test_a_phone_section_opens_on_its_heading_and_back_returns_to_its_item():
     result = run_scenario("settings")
+    assert result["list"] == [True, None]
     assert result["opened"] == [True, -1, False]
     assert result["back"] == [True, True]
     assert result["wide"]

@@ -88,12 +88,13 @@ function leaveSettingsSec() {
   cancelSettingsJump();
   leaveSettingsNews(settingsSec);
 }
-function showSettingsList(on) {
-  const fromSec = on && phoneLayout() && inSettingsSec();
+function showSettingsList(on, restoreFocus = true) {
+  const fromSec = on && restoreFocus && phoneLayout() && inSettingsSec();
   if (fromSec) leaveSettingsSec();
   else if (on) cancelSettingsJump();
   settingsList = on && phoneLayout();
   $(".set-layout").classList.toggle("at-list", settingsList);
+  if (settingsList) document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.removeAttribute("aria-current"));
   if (fromSec) document.querySelector(`.set-nav [data-sec="${settingsSec}"]`).focus({ preventScroll: true });  // the item it came from
 }
 function showSettingsSec(name, fromRoute = false, push = false, target = null, restoring = false) {
@@ -312,7 +313,7 @@ window.addEventListener("beforeunload", (e) => { if (!$("#savebar").hidden) e.pr
 
 showTab(parseRoute().tab, true, true);  // the right tab straight away, before the data comes
 if (parseRoute().sec) showSettingsSec(parseRoute().sec, true);
-else if (currentTab === "settings") showSettingsList(true);
+else if (currentTab === "settings") showSettingsList(true, false);
 
 /* Pull to reload, in the installed app (iPhone, Android): the browser gives it in a tab, not there. From the top of a
    page, pulled down far enough and let go: the page loads again. Not over an open window, nor from a list that

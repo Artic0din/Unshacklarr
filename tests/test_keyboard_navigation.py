@@ -199,7 +199,7 @@ const ctx = sandbox({
   phoneLayout: () => true, inSettingsSec: () => false, leaveNews() {}, closeDetails() {}, navigate() {},
   $: (sel) => ({ textContent: "Sonarr", classList: { toggle() {} } }),
 });
-vm.runInContext([/^const PAGE_NAME = .*$/m, /^function updateTitle\(\) \{.*?^\}/ms, /^function showSettingsList\(on\) \{.*?^\}/ms, /^function showTab\(.*?^\}/ms]
+vm.runInContext([/^const PAGE_NAME = .*$/m, /^function updateTitle\(\) \{.*?^\}/ms, /^function showSettingsList\(.*?^\}/ms, /^function showTab\(.*?^\}/ms]
   .map((re) => grab(src, re)).join("\n"), ctx);
 ctx.showTab("settings");  // Settings tapped on a phone while a section was open: its list
 const out = { list: doc.title };
