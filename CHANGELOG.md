@@ -99,7 +99,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
-- Grouped repeated Activity failures by provider and source, listed affected episodes for mixed failures, and kept Retry prominent unless every retry candidate was legally blocked or needed sign-in. (#358)
+- Grouped repeated Activity failures by provider, HTTP status, and short reason, listed affected episodes for mixed failures, and kept Retry prominent unless every retry candidate was legally blocked or needed sign-in. (#358)
 - Grouped Settings into six sections with shorter headers and jump links, while keeping existing Settings links working. (#354)
 - Kept Series wall filters on one desktop toolbar and made every filter and action reachable on phones without sideways scrolling. (#352)
 - Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.

@@ -355,37 +355,24 @@ function metaChip(svg, text) {
   return chip;
 }
 function jobFailure(c) {
-  const cause = (c.cause || "").replace(/\s*\(ref [^)]+\)/gi, "").trim();
+  const reasonLimit = 100;
+  const cause = (c.cause || "").trim().split(/\r?\n/, 1)[0];
   // The service error can be wrapped in the backend's own HTTP status (often 422).
-  const http = cause.match(/\b(\d{3}) (?:Client|Server) Error:\s*(.+?)(?:\s+for url:\s*https?:\/\/|$)/i)
-    || cause.match(/\bHTTP (\d{3}):\s*(.+?)(?:\s+for url:\s*https?:\/\/|$)/i);
-  const [, status, reason] = http || [];
-  const url = cause.match(/\bfor url:\s*(https?:\/\/[^\s)]+)/i)?.[1] || cause.match(/https?:\/\/[^\s)]+/i)?.[0];
-  let endpoint = "";
-  if (url) {
-    try {
-      const { host, pathname } = new URL(url);
-      // Keep operation names, not title identifiers or episode-specific manifest filenames.
-      endpoint = host + pathname.replace(/\/(assets?|episodes?|titles?)\/[^/]+/gi, "/$1/:id")
-        .replace(/\/(?:\d+|[a-f0-9-]{16,}|B0[A-Z0-9]{8})(?=\/|$)/gi, "/:id")
-        .replace(/\/[^/]+\.(mpd|m3u8)$/i, "/:id.$1");
-    } catch { /* A malformed URL can still have a useful error reason. */ }
-  }
-  const stagePattern = /\b(?:licen[cs]e|manifest)\b/i;
-  const stage = (cause.slice(0, http?.index).match(stagePattern)?.[0] || endpoint.match(stagePattern)?.[0]
-    || (/\.(mpd|m3u8)$/i.test(endpoint) ? "manifest" : "")).toLowerCase().replace("licence", "license");
-  const message = (reason ? `${status} ${reason.trim()}` : cause).replace(/https?:\/\/[^\s)]+/gi, "").trim();
-  const operation = endpoint.split("/").filter(Boolean).at(-1) || "";
-  const source = stage === "license" ? tr("License server") : stage === "manifest" ? tr("Manifest")
-    : /^[a-z][a-z0-9_-]{0,31}$/i.test(operation) ? operation : endpoint.split("/")[0];
-  const provider = svcName(c.service);
+  const [, status, message = cause] = cause.match(/\b(\d{3}) (?:Client|Server) Error:\s*(.*)/i)
+    || cause.match(/\bHTTP (\d{3}):\s*(.*)/i) || [];
+  // A diagnostic payload can end mid-field when the backend truncates it.
+  const detail = message.match(/['"]detail['"]:\s*(['"])(.*?)(?:\1(?=\s*[,}])|$)/i)?.[2];
+  const clean = (detail?.replace(/^[\w/-]+:\s+/, "") || message)
+    .replace(/\s*\((?:ref\s+|E\d+-)[^)]*(?:\)|$)/gi, "")
+    .replace(/\bE\d+-[\w+/=.-]+/gi, "")
+    .replace(/(?:\bfor url:\s*)?https?:\/\/[^\s)]+/gi, "")
+    .replace(/\S*\?[\w%-]+=[^\s)]+/g, "")
+    .replace(/\s+/g, " ").trim();
+  const short = clean.length > reasonLimit ? `${clean.slice(0, reasonLimit).trimEnd()}…` : clean;
   return {
-    reason: message,
-    key: JSON.stringify([c.service, stage, endpoint, message]),
-    source: [provider, source].filter(Boolean).join(" · "),
-    endpointSource: endpoint ? [provider, endpoint].filter(Boolean).join(" · ") : "",
+    reason: [status, short].filter(Boolean).join(" "),
     // sync.py's TRANSIENT classifier treats "temporarily" as retryable even when the status looks permanent.
-    nonTransient: !/temporarily/i.test(message) && (status === "451" || Boolean(signInFailed(c))),
+    nonTransient: !/temporarily/i.test(c.cause || "") && (status === "451" || Boolean(signInFailed(c))),
   };
 }
 /* A job: a card per episode, in order, unfolding to its details, and one output for them all. */
@@ -393,19 +380,18 @@ function renderJob(j) {
   const first = j.cards[0], st = jobState(j), started = new Date(Math.min(...j.cards.map((c) => new Date(c.started))));
   const series = S.series.find((x) => x.tvdbId === first.tvdbId);
   const retryable = j.cards.filter((c) => c.episodeId && ["failed", "stopped", "interrupted"].includes(c.outcome));  // not the cancelled ones: taken out on purpose
-  const failures = new Map(), reasons = new Map(), sourcesPerReason = new Map();
+  const failures = new Map(), reasons = new Map(), providersPerReason = new Map();
   for (const c of j.cards) {
     if (cardKind(c) !== "failed") continue;
     const failure = jobFailure(c);
     failures.set(c.id, failure);
     if (failure.reason) {
-      if (!reasons.has(failure.key)) {
-        reasons.set(failure.key, { ...failure, episodes: [] });
-        const sources = sourcesPerReason.get(failure.reason) || new Map();
-        sources.set(failure.source, (sources.get(failure.source) || 0) + 1);
-        sourcesPerReason.set(failure.reason, sources);
+      const { reason } = failure, key = JSON.stringify([c.service, reason]);
+      if (!reasons.has(key)) {
+        reasons.set(key, { reason, service: c.service, episodes: [] });
+        providersPerReason.set(reason, (providersPerReason.get(reason) || 0) + 1);
       }
-      reasons.get(failure.key).episodes.push(c.sxxeyy);
+      reasons.get(key).episodes.push(c.sxxeyy);
     }
   }
   const retryPrimary = retryable.some((c) => !failures.get(c.id)?.nonTransient);
@@ -508,11 +494,9 @@ function renderJob(j) {
   if (!list) { list = el("ol", { className: "job-cards", dataset: { job: j.job } }); jobCards.clear(); }
   cards.forEach((li, i) => { if (list.children[i] !== li) list.insertBefore(li, list.children[i] || null); });
   while (list.children.length > cards.length) list.lastChild.remove();
-  const summary = groupFailures ? el("div", { className: "cd-note err" }, ...Array.from(reasons.values(), ({ reason, source, endpointSource, episodes }) => {
+  const summary = groupFailures ? el("div", { className: "cd-note err" }, ...Array.from(reasons.values(), ({ reason, service, episodes }) => {
     const count = episodes.length, names = episodes.filter(Boolean).join(", ");
-    const sources = sourcesPerReason.get(reason), sourceCount = sources.get(source);
-    const caption = sourceCount > 1 ? endpointSource || source : source;
-    const label = caption && (sources.size > 1 || sourceCount > 1) ? `${reason} · ${caption}` : reason;
+    const label = providersPerReason.get(reason) > 1 ? `${reason} · ${svcName(service)}` : reason;
     const text = reasons.size === 1 || !names
       ? count === 1 ? trWith("1 episode: {0}", label) : trWith("{0} episodes: {1}", count, label)
       : count === 1 ? trWith("1 episode: {0} ({1})", label, names) : trWith("{0} episodes: {1} ({2})", count, label, names);

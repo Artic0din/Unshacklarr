@@ -160,7 +160,7 @@ vm.runInContext(`let picked_run;\n` +
   if (scenario === "failure-reasons") {
     const failures = JSON.parse(target);
     job = { job: "job1", cards: failures.map((failure, i) => ({
-      id: `run${i}`, episodeId: i + 1, sxxeyy: `S01E0${i + 1}`, tvdbId: 72, series: "Example", service: "AMZN",
+      id: `run${i}`, episodeId: i + 1, sxxeyy: `S01E${String(i + 1).padStart(2, "0")}`, tvdbId: 72, series: "Example", service: "AMZN",
       outcome: "failed", started: "2026-01-01T00:00:00Z", ended: "2026-01-01T00:01:00Z",
       ...(typeof failure === "string" ? { cause: failure } : failure),
     })) };
@@ -170,7 +170,7 @@ vm.runInContext(`let picked_run;\n` +
     const folded = text();
     const retry = $("#cd-foot").children.find((b) => b.dataset?.fk === "retry");
     walk($("#cd-main")).find((n) => n.dataset?.fk === "card:run0").onclick();
-    console.log(JSON.stringify({ folded, groups, expanded: text(), retry: retry.textContent, primary: retry.className.includes("primary") }));
+    console.log(JSON.stringify({ folded, groups: groups ?? null, expanded: text(), retry: retry.textContent, primary: retry.className.includes("primary") }));
     return;
   }
   if (scenario === "upgrades") {
@@ -327,7 +327,7 @@ def test_job_summarizes_failure_reasons_and_keeps_episode_details(other, summary
     assert result["primary"] is primary
 
 
-def test_job_groups_same_status_by_provider_and_endpoint_without_episode_ids():
+def test_job_groups_same_status_by_provider_not_endpoint():
     raw = "403 Client Error: Forbidden for url: https://example.test/"
     failures = [raw + "licence?request=first (ref abc123)",
                 raw + "licence?request=second (ref def456)",
@@ -336,33 +336,69 @@ def test_job_groups_same_status_by_provider_and_endpoint_without_episode_ids():
                 {"service": "DSNP", "cause": raw + "episodes/third-episode/manifest.mpd"}]
     result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(failures))
     assert result["groups"] == [
-        "2 episodes: 403 Forbidden · AMZN · License server (S01E01, S01E02)",
-        "2 episodes: 403 Forbidden · AMZN · Manifest (S01E03, S01E04)",
-        "1 episode: 403 Forbidden · Disney+ · Manifest (S01E05)",
+        "4 episodes: 403 Forbidden · AMZN (S01E01, S01E02, S01E03, S01E04)",
+        "1 episode: 403 Forbidden · Disney+ (S01E05)",
     ]
 
 
-def test_job_distinguishes_license_server_from_manifest_without_a_url():
+def test_job_groups_same_reason_across_operations_without_a_url():
     causes = ["Amazon widevine licence HTTP 403: Denied (ref a0e2e9)",
               "Manifest HTTP 403: Denied (ref b1e3f0)"]
     result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
-    assert result["groups"] == [
-        "1 episode: 403 Denied · AMZN · License server (S01E01)",
-        "1 episode: 403 Denied · AMZN · Manifest (S01E02)",
-    ]
+    assert result["groups"] == ["2 episodes: 403 Denied"]
 
 
-def test_job_disambiguates_endpoints_with_the_same_operation_name():
-    raw = "403 Client Error: Forbidden for url: https://"
-    causes = [raw + "first.example/v1/playback", raw + "second.example/v2/playback"]
+def test_job_groups_eleven_prime_451s_across_endpoints_but_keeps_403_separate():
+    denied = "Amazon widevine licence HTTP 403: Denied"
+    raw = "451 Client Error: Unavailable for Legal Reason for url: https://"
+    causes = [denied, *[raw + f"first.example/v1/playback?episode={i}" for i in range(10)],
+              raw + "second.example/v2/manifest.mpd"]
     result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
     assert result["groups"] == [
-        "1 episode: 403 Forbidden · AMZN · first.example/v1/playback (S01E01)",
-        "1 episode: 403 Forbidden · AMZN · second.example/v2/playback (S01E02)",
+        "1 episode: 403 Denied (S01E01)",
+        "11 episodes: 451 Unavailable for Legal Reason "
+        "(S01E02, S01E03, S01E04, S01E05, S01E06, S01E07, S01E08, S01E09, S01E10, S01E11, S01E12)",
     ]
+    assert result["primary"] is True
 
 
-@pytest.mark.parametrize("cause", ["HTTP 403: Temporarily denied", "HTTP 404: Not found", "HTTP 451: Temporarily denied"])
+def test_job_groups_netflix_failures_with_different_or_truncated_references():
+    prefix = (
+        "NF through Unshackle: HTTP 400: Invalid input: Netflix MSL request failed: "
+        "{'code': 'FAIL', 'detail': 'manifest/playapi-105: Viewable not available - validation error. "
+    )
+    complete = prefix + "(E3-first-reference)'} (ref abc123)"
+    truncated = prefix + "(E3-second-truncated-reference (ref def456)"
+    cards = [{"service": "NF", "cause": cause} for cause in [complete, truncated]]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(cards))
+    assert result["groups"] == ["2 episodes: 400 Viewable not available - validation error."]
+    assert complete in result["expanded"]
+
+
+@pytest.mark.parametrize("first_line", ["HTTP 451: Unavailable for Legal Reason",
+                                       "451 Client Error: Unavailable for Legal Reason"])
+def test_job_parses_multiline_451_and_demotes_retry(first_line):
+    cause = f"\n  {first_line}\r\nTraceback from https://example.test/path?token=internal"
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps([cause, first_line]))
+    assert result["groups"] == ["2 episodes: 451 Unavailable for Legal Reason"]
+    assert result["primary"] is False
+    assert cause in result["expanded"]
+
+
+def test_single_episode_job_shows_clean_reason_on_card_without_summary():
+    cause = "HTTP 403: Denied ?request=first"
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps([cause]))
+    assert result["groups"] is None
+    assert "403 Denied · took 1 min" in result["folded"]
+    assert cause in result["expanded"]
+
+
+@pytest.mark.parametrize("cause", [
+    "HTTP 403: Temporarily denied",
+    "HTTP 404: Not found",
+    "HTTP 451: Temporarily denied",
+    "HTTP 451: Denied\nService is temporarily unavailable",
+])
 def test_job_keeps_retry_primary_unless_failures_are_clearly_permanent(cause):
     result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps([cause, cause]))
     assert result["retry"] == "Retry 2 failed"

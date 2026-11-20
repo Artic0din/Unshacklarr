@@ -1846,8 +1846,6 @@
  "1 episode: {0} ({1})": "1 episodio: {0} ({1})",
  "{0} episodes: {1}": "{0} episodios: {1}",
  "{0} episodes: {1} ({2})": "{0} episodios: {1} ({2})",
- "License server": "Servidor de licencias",
- "Manifest": "Manifiesto",
  "Ask the service again about {0}": "Volver a preguntar al servicio por {0}",
  "Check": "Comprobar",
  "Downloaded from {0}, each episode its own programme": "Descargada de {0}, cada episodio es un programa propio",

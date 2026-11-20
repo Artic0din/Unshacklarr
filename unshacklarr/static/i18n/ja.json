@@ -1872,8 +1872,6 @@
  "1 episode: {0} ({1})": "1 話：{0}（{1}）",
  "{0} episodes: {1}": "{0} 話：{1}",
  "{0} episodes: {1} ({2})": "{0} 話：{1}（{2}）",
- "License server": "ライセンスサーバー",
- "Manifest": "マニフェスト",
  "Ask the service again about {0}": "{0} についてサービスに再確認",
  "Check": "確認",
  "Downloaded from {0}, each episode its own programme": "{0} からダウンロード。各エピソードは個別の番組",
