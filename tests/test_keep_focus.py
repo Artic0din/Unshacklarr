@@ -248,13 +248,16 @@ if (scenario === "week") {
   ctx.renderWeek();
   const original = openButton(key);
   original.focus();
-  second.airDateUtc = `${day}T08:00:00Z`;
-  ctx.renderWeek();
-  out.focus = named(doc.activeElement);
-  out.onReplacement = !original.isConnected && doc.activeElement === openButton(key);
-  // its episode leaves the week while focused: the keyboard goes on to the first episode (focusFirstEpisode), not the body
   let fellBack = 0;
   ctx.focusFirstEpisode = () => { fellBack++; };
+  // it moves, and an earlier episode now leads the day: focus follows the same card, not the first one
+  second.airDateUtc = `${day}T08:00:00Z`;
+  ctx.episodes.unshift({ tvdbId: 3, series: "Earlier", sxxeyy: "S01E01", airDateUtc: `${day}T06:00:00Z` });
+  ctx.renderWeek();
+  out.focus = named(doc.activeElement);
+  out.onReplacement = !original.isConnected && doc.activeElement === openButton(key) && doc.activeElement !== openButton("open|false|3|S01E01");
+  out.fellBackOnMove = fellBack;
+  // its episode leaves the week while focused: the keyboard goes on to the first episode (focusFirstEpisode), not the body
   ctx.episodes.splice(ctx.episodes.indexOf(second), 1);
   ctx.renderWeek();
   out.fellBackWhenGone = fellBack;
@@ -491,7 +494,7 @@ def test_the_live_tick_keeps_the_focus_on_the_control_in_use():
 
 
 def test_a_week_card_keeps_focus_when_episodes_reorder():
-    assert run_scenario("week") == {"focus": "open|false|2|S01E01", "onReplacement": True, "fellBackWhenGone": 1, "fellBackAgain": 1}
+    assert run_scenario("week") == {"focus": "open|false|2|S01E01", "onReplacement": True, "fellBackOnMove": 0, "fellBackWhenGone": 1, "fellBackAgain": 1}
 
 
 def test_a_picked_month_day_keeps_the_focus_and_says_it_is_pressed():
