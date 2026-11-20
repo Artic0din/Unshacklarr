@@ -648,7 +648,7 @@ async function showMissing() {
     const season = Number(/^S(\d+)E/.exec(it.sxxeyy)?.[1]);
     const service = seasonTag(season, it.tvdbId);
     const button = el("button", { type: "button", className: "btn small", textContent: "Download",
-      ariaLabel: `Download ${it.series} ${it.sxxeyy}`, disabled: !!unset, onclick: () => download([it.episodeId]) });
+      ariaLabel: trWith("Download {0} {1}", it.series, it.sxxeyy), disabled: !!unset, onclick: () => download([it.episodeId]) });
     rowButtons.set(it.episodeId, button);
     return el("div", { className: "left-row miss-row" }, el("img", { alt: "", loading: "lazy", src: poster, onerror: posterFail(it.series) }),
       el("div", {}, el("b", { textContent: `${it.series} ${it.sxxeyy}` }),

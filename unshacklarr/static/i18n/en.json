@@ -803,10 +803,7 @@
  ],
  "Download window": [],
  "Download window times look like 01:00": [],
- "Download {0} {1}": [
-  "it.series",
-  "it.sxxeyy"
- ],
+ "Download {0} {1}": [],
  "Downloaded": [],
  "Downloaded from {0}": [
   "svcName(conf.service)"

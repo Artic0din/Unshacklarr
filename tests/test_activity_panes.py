@@ -103,7 +103,7 @@ const ctx = { $, el, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
     serviceNames: { NF: "Netflix", DSNP: "Disney+" }, series: [] },
   savedSonarr: (n) => n === "4K" ? "4K Saved" : n, mainSonarr: () => "Main",
   markPicked() {}, renderDock() {}, loading() {}, posterSrc() {}, posterFail() {}, ago: () => "yesterday",
-  toast: (...data) => toasts.push(data), episodeTitle: (_, __, title) => title,
+  toast: (...data) => toasts.push(data), episodeTitle: (_, __, title) => title, trWith: (key) => key,
   api: async (path, options) => {
     if (options.method === "POST") {
       posts.push({ path, body: JSON.parse(options.body) });
