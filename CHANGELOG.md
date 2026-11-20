@@ -8,6 +8,10 @@ Every change worth knowing, newest first. The format follows
 
 ### Security
 
+- **cryptography 50.0.2.** Its wheels carry OpenSSL 4.0.3, a security release whose most severe fix is High. Push
+  notifications are signed and encrypted with it.
+- **oauthlib 4.0.1.** Fixes CVE-2026-49272, a device-flow token endpoint that handed out a bearer token without a
+  valid device code. Unshacklarr runs no OAuth server, so it was not exposed; oauthlib comes with Apprise.
 - **No one can lock the owner out of signing in.** Wrong passwords are limited per client only, no longer 30 for
   everyone together, and `X-Real-IP` is believed only from the proxy's addresses listed in Settings, Account. Behind
   a reverse proxy, list its addresses there, even without signing in through it: until then, every client behind it
@@ -136,6 +140,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **A tool in Activity no longer shows the last job's bar.** Opening Waiting, Catch up, Upgrades, Languages or Stats
+  after a download left that download's bar at the bottom of the pane; it is hidden now. (#363)
 - **Web requests no longer stall behind slow TMDB, cache, or Sonarr scans.** Shared worker-pool sizing, deduplicated
   TMDB network lookups with serialized off-loop cache writes, mtime-cached read-only config/auth/JSON readers, direct
   live-card reads for `GET /api/runs?live=1`, cached `unwritable_files()` checks, a short-TTL `sonarr_series()` cache,
