@@ -99,6 +99,9 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Kept Series wall filters on one desktop toolbar and made every filter and action reachable on phones without sideways scrolling. (#352)
+- Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.
+- Corrected which Series controls the Filters and actions button announced as collapsed on desktop.
 - Moved Activity tools into a compact switcher, added shortcuts to running downloads, and kept the download detail pane full size. (#353)
 
 - Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
@@ -150,6 +153,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Kept selected library names and sort labels from getting cut off in the Series filters.
+- Kept Sort with the Series filters when a longer label needed more room.
 - Revealed running download shortcuts again when returning from their details, and kept the scroll cue visible in older browsers when more shortcuts were off-screen.
 - Fixed Activity's shifting layout and kept keyboard focus and the selected view in place as downloads updated.
 - Translated the episode subtitle button's screen-reader label and showed a text status instead of empty file cells for episodes without files.

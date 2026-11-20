@@ -73,10 +73,6 @@ a.btn:not([hidden]) { display: inline-flex; align-items: center; }  /* its text 
 
 main { padding: var(--sp-6); max-width: 2400px; margin: 0 auto; }  /* a large screen shows more, not wider margins */
 section[hidden] { display: none; }
-.toolbar { display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-6); flex-wrap: wrap; }
-.toolbar input[type=search] { flex: 1; min-width: 200px; max-width: 360px; }
-.toolbar select { width: auto; }
-.toolbar-row { display: contents; }  /* its own row on a phone only */
 .ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .ico.inl { width: 1em; height: 1em; margin-right: .3em; vertical-align: -.15em; }  /* a tick or cross opening a line of text */
 /* The same paths as a mask, for an icon a ::before or ::after has to draw: in currentColor, as .ico */
@@ -204,6 +200,48 @@ label.check { display: inline-flex; gap: 8px; align-items: center; cursor: point
 .muted { color: var(--muted); }
 
 /* The poster wall: the one bold element. Unmapped series recede, mapped ones carry their service. */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-4); font-size: var(--fs-sub); }
+.toolbar .seg { display: flex; flex-wrap: wrap; margin: 0; width: fit-content; overflow: visible; }
+.toolbar .seg button { padding: 0 var(--sp-1); min-inline-size: 44px; max-inline-size: 100%; white-space: normal; overflow-wrap: normal; }
+.toolbar .seg button[aria-pressed="true"] { text-decoration: underline; text-underline-offset: .24em; }
+.toolbar .seg button span { display: inline; margin: 0; white-space: nowrap; }
+.toolbar input[type=search] { flex: 1 1 0; min-inline-size: 5rem; }
+#series-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); max-inline-size: 100%; overflow-x: auto; }
+#series-filters select { field-sizing: content; width: auto; min-inline-size: max-content; }
+#series-filters select:focus { outline-offset: -2px; }  /* keep the ring inside the scroller */
+.toolbar :is(.pill, .btn.small) { padding-inline: var(--sp-2); }
+#series-options { display: contents; }
+#series-options-toggle { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); padding-inline: var(--sp-2); }
+#series-options-toggle[aria-expanded="true"] .ico { transform: rotate(180deg); }
+.series-filtered { display: none; width: var(--sp-2); height: var(--sp-2); border-radius: 50%; background: currentColor; }
+.toolbar:has(#series-actions input:checked) .series-filtered { display: block; }
+#series-actions { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+#series-options-toggle[aria-expanded="false"] + #series-options #series-actions { display: none; }
+@media (max-width: 1400px) {
+  .toolbar .seg { flex-basis: 100%; }
+  .toolbar .seg button { flex-grow: 1; }
+}
+@media (min-width: 701px) and (max-width: 850px) {
+  .toolbar, #series-filters { column-gap: var(--sp-1); }
+  #series-options-toggle { max-inline-size: 7rem; }
+}
+@media (max-width: 700px) {
+  .toolbar .seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .toolbar .seg:has(> :first-child:nth-last-child(4 of :not([hidden]))) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .toolbar .seg:has(> :nth-child(5 of :not([hidden]))) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .toolbar .seg:has(> :nth-child(5 of :not([hidden]))) > button { grid-column: span 2; }
+  .toolbar .seg:has(> :nth-child(5 of :not([hidden]))) > button:nth-child(n+4) { grid-column: span 3; }
+  #series-options { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+    padding: var(--sp-2); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); }
+  #series-options-toggle[aria-expanded="false"] + #series-options { display: none; }
+  #series-filters { display: grid; flex-basis: 100%; grid-template-columns: minmax(0, 1fr); }
+  .toolbar:has(:is(#f-service, #f-library) option:checked:not([value=""])) .series-filtered { display: block; }
+}
+@media (max-width: 360px) {
+  #series-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  #series-actions .pill { white-space: normal; }
+}
 .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 18px; align-items: start; }
 .poster { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; display: flex; flex-direction: column; }
 .poster .art { order: -1; display: block; aspect-ratio: 2 / 3; border-radius: var(--r-sm); background: var(--panel); position: relative; overflow: hidden; }
@@ -1565,9 +1603,6 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
   .seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); width: 100%; margin-bottom: 10px; }  /* more choices than fit: a second row */
   .seg button { padding: 9px 6px; font-size: var(--fs-sub); white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
   .seg button span { display: block; margin: 2px 0 0; }
-  .toolbar { gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-  #search { flex: 0 0 100%; max-width: none; }
-  .toolbar select { flex: 1 1 calc(50% - 4px); min-width: 0; }
   .wall { grid-template-columns: repeat(3, 1fr); gap: 14px 10px; }
   .poster .name { font-size: var(--fs-sub); }
   .poster .meta { font-size: var(--fs-footnote); }
@@ -1696,14 +1731,6 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
   body.drawer-open .toasts { top: calc(128px + env(safe-area-inset-top)); }
   .toast { border-radius: var(--r-lg); padding: 10px 14px; font-size: var(--fs-callout); animation: toast-in .22s ease-out; }
 
-  /* Series: each choice on one line, and the filters under the search in one row that scrolls sideways
-     off the right edge, so the posters start on the first screen */
-  #tab-series .seg { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  #tab-series .seg button { white-space: nowrap; padding-inline: 10px; }
-  #tab-series .seg button span { display: inline; margin: 0 0 0 4px; }
-  .toolbar-row { position: relative; display: flex; flex: 0 0 calc(100% + 32px); gap: 8px; margin: -4px -16px; padding: 4px 16px; overflow-x: auto; }  /* relative: the pills' hidden checkboxes scroll with it, not widen the page */
-  .toolbar-row::after { content: ""; flex: 0 0 8px; }
-  .toolbar .toolbar-row > * { flex: none; }
 }
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: opacity .15s !important; animation: none !important; } }  /* a short cross-fade stays: it moves nothing; * alone skips ::before/::after */
 .fb-known { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: var(--fs-sub); color: var(--muted); }
@@ -2128,7 +2155,8 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .seg button, .seg.small button { min-height: calc(var(--ctl-h) - 8px); padding-block: 0; }
   .btn.small, .inbox-filters button, .con-filters button { min-height: var(--ctl-h-sm); padding-block: 0; }
   .sc-foot .icon-hide { width: var(--ctl-h-sm); height: var(--ctl-h-sm); }
-  :is(.toolbar, .sched-tools, .cd-head .act) .btn.small { min-height: var(--ctl-h); padding-inline: 14px; font-size: inherit; }
+  :is(.sched-tools, .cd-head .act) .btn.small { min-height: var(--ctl-h); padding-inline: 14px; font-size: inherit; }
+  .toolbar .btn.small { min-height: var(--ctl-h); }
 }
 /* Phones and touch tablets: every control 44 px to the finger (Apple HIG). Where the mark is smaller by design, an
    invisible slop centred on it makes up the rest without moving anything: a percentage inset is of the control's size. */

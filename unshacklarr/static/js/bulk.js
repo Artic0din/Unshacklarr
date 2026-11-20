@@ -7,7 +7,11 @@ const selBar = el("div", { className: "sel-bar", id: "sel-bar", hidden: true },
     renderWall(); renderSel();
   } }),
   el("button", { type: "button", className: "btn small", textContent: "Clear", onclick: () => { SEL.ids.clear(); renderWall(); renderSel(); } }),
-  el("button", { type: "button", className: "btn small primary", id: "sel-edit", textContent: "Change…", onclick: () => openSel() }));
+  el("button", { type: "button", className: "btn small primary", id: "sel-edit", textContent: "Change…", onclick: () => openSel() }),
+  el("button", { type: "button", className: "btn small", textContent: "Done", onclick: () => {
+    setSeriesSelection(false);
+    $("#series-options-toggle").focus();
+  } }));
 $("#wall").after(selBar);
 function renderSel() {
   $("#sel-toggle").setAttribute("aria-pressed", String(SEL.on));
@@ -21,12 +25,13 @@ function pickSeries(tvdb) {
   renderWall();
   renderSel();
 }
-$("#sel-toggle").onclick = () => {
-  SEL.on = !SEL.on;
+function setSeriesSelection(on) {
+  SEL.on = on;
   if (!SEL.on) SEL.ids.clear();
   renderWall();
   renderSel();
-};
+}
+$("#sel-toggle").onclick = () => setSeriesSelection(!SEL.on);
 let selOptions = {};
 function openSel() {
   $("#sel-title").textContent = `Change ${SEL.ids.size} series`;
