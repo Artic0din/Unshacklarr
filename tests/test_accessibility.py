@@ -140,16 +140,14 @@ def test_a_service_row_link_reaches_the_backend_that_downloads_it():
     shown = node(r"""
 const fs = require("fs"), vm = require("vm"), path = require("path");
 const src = fs.readFileSync(path.join(path.dirname(process.argv[1]), "services.js"), "utf8");
-const focused = [];
-const row = (id) => ({ id, scrollIntoView() {}, focus() { focused.push(id); } });
+const row = (id) => ({ id });
 const rows = { "sv-HULU": row("sv-HULU"), "sv-HULU@vpn": row("sv-HULU@vpn"), "sv-NF": row("sv-NF") };
 rows["sv-STAN@nas"] = row("sv-STAN@nas");  // a service only on another server, no backend set for it
-const ctx = { SCROLL: "auto", CSS: { escape: (x) => x }, S: { config: { service_defaults: { HULU: { backend: "vpn" } } } },
+const ctx = { CSS: { escape: (x) => x }, S: { config: { service_defaults: { HULU: { backend: "vpn" } } } },
   document: { getElementById: (id) => rows[id] || null, querySelector: (sel) => Object.values(rows).find((r) => sel.includes('^="') && r.id.startsWith(sel.split('^="')[1].split('"')[0])) || null } };
 vm.createContext(ctx);
-vm.runInContext("let servicesReveal = '';\n" + src.match(/^function revealService\(.*?^\}/ms)[0] + "\nthis.go = (s) => { servicesReveal = s; revealService(); };", ctx);
-ctx.go("HULU"); ctx.go("NF"); ctx.go("STAN");
-console.log(JSON.stringify(focused));
+vm.runInContext(src.match(/^function serviceRow\(.*?^\}/ms)[0], ctx);
+console.log(JSON.stringify(["HULU", "NF", "STAN"].map((service) => ctx.serviceRow({ service }).id)));
 """)
     assert shown == ["sv-HULU@vpn", "sv-NF", "sv-STAN@nas"]
 

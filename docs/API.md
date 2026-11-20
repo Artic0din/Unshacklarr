@@ -8,7 +8,7 @@ The page itself uses other `/api/...` routes. Those change with the page: don't 
 
 ## The key
 
-Create it in **Settings › Account › API key**. It is shown once: copy it then. Unshacklarr keeps
+Create it in **Settings › General › Account & Backups › API key**. It is shown once: copy it then. Unshacklarr keeps
 only its hash, so a lost key is replaced, never read back. Replacing it stops the old one at once;
 changing the password doesn't.
 
@@ -72,7 +72,7 @@ replaced only by a better one, as the series' quality profile ranks them; `"repl
 anyway, as the page's Replace anyway. Answers `{"queued": 2}`, or `429` while too many downloads asked are still
 going.
 
-Two optional fields: `"sonarr": "sonarr-2"` downloads for another Sonarr set up in Settings › Sonarr (its own
+Two optional fields: `"sonarr": "sonarr-2"` downloads for another Sonarr set up in Settings › Connections › Sonarr (its own
 episode ids and TVDB lookup, its ladder, imported into it), and `"retry": true` downloads it as a retry, as the
 page's Retry does: with the numbering its last attempt was given (by title on the page, say), Replace anyway when
 that attempt had it, and the `"audio"` it was asked in when the retry gives none; `400` when the episodes were last
@@ -114,7 +114,7 @@ backwards. A code no Sonarr episode answers to, or more than one, gives `404` na
 
 `"audio"` (one language, `"fr"`) says that language has just come on the service, and Unshacklarr decides per episode
 from the file Sonarr has: no file, the episode is downloaded; a file that has it, the service's is downloaded again in
-its place; a file without it gets it as Settings, Download options, *Audio upgrade* says: the track added to the file
+its place; a file without it gets it as Settings › Downloading › Download options, *Audio upgrade* says: the track added to the file
 (asked about in the bell first when the file is not from the series' service), or the whole episode again. Each
 episode downloaded asks for that language first, the series' own audio languages after it as fallbacks (`--a-lang en`
 becomes `fr,en`), and its file is accepted with that language even when the series accepts only others. An episode

@@ -690,12 +690,12 @@ function renderSeriesState() {
   box.classList.remove("ok", "down", "warn");
   if (cls) box.classList.add(cls);
   $("#ds-state-text").textContent = text;
-  // What failed, and where to mend it: the service's row in Settings, Services
+  // What failed, and where to mend it: the service's row in Settings › Services & Devices › Services
   const why = () => el("span", { textContent: sick.cause || "See the history in Activity for why." });
-  const mend = () => el("button", { type: "button", className: "btn small", textContent: `Check ${svcName(conf.service)} in Settings › Services`, onclick: () => openServiceRow(conf.service) });
+  const mend = () => el("button", { type: "button", className: "btn small", textContent: `Check ${svcName(conf.service)} in Settings › Services & Devices › Services`, onclick: () => openServiceRow(conf.service) });
   $("#ds-fix").hidden = !sick;
   $("#ds-fix").replaceChildren(...(sick ? [why(),
-    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services." }), mend()] : []));
+    el("span", { textContent: "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services & Devices › Services." }), mend()] : []));
   // the same, above the episodes: the drawer opens there, and Settings is a tab away; the way to Services only for a sign-in
   const signIn = sick && serviceModels().some((m) => m.service === conf.service && m.attention);
   $("#d-fail").hidden = !sick;

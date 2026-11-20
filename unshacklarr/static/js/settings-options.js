@@ -33,7 +33,7 @@ async function renderServiceDefaults() {
     const count = Object.keys(levels.options).length + Object.keys(levels.service_options).length + (levels.backend ? 1 : 0) + (levels.ladder ? 1 : 0);
     const servers = S.config.settings.backends || [];
     const backend = el("select", { onchange: (e) => { if (e.target.value) levels.backend = e.target.value; else delete levels.backend; dirty(); } },
-      el("option", { value: "", textContent: "The main one (Settings, Unshackle)" }), ...servers.map((b) => el("option", { value: b.name, textContent: b.name })));
+      el("option", { value: "", textContent: "The main one (Settings › Connections › Unshackle)" }), ...servers.map((b) => el("option", { value: b.name, textContent: b.name })));
     backend.value = levels.backend || "";
     const clash = el("div", { className: "ladder-clash" });
     const clashes = () => ladderClash(clash, ladderNamed(levels.ladder || S.config.settings.quality_ladder), levels.options, renderServiceDefaults);
@@ -58,7 +58,7 @@ async function renderServiceDefaults() {
         el("button", { className: "btn small danger", textContent: "Remove", onclick: () => { delete all[tag]; dirty(); renderServiceDefaults(); } })),
       el("div", { className: "sx-grid svc-picks" },
         ...(servers.length || levels.backend ? [field("Unshackle server", backend, `Where ${svcName(tag)} downloads.`)] : []),
-        field("Quality ladder", ladder, "Default: the one of Settings, Quality.", clash)),
+        field("Quality ladder", ladder, "Default: the one of Settings › Quality & Upgrades › Quality.", clash)),
       el("span", { className: "sub", textContent: "Download options" }), dl,
       el("span", { className: "sub", textContent: `Options of ${svcName(tag)}` }), own,  // any flag, even none listed (a remote server's)
       el("small", { className: "help dx-remote-note", hidden: true, dataset: { tag, known: specs.some((s) => s.remote) ? "1" : "" },
@@ -81,7 +81,7 @@ $("#svc-add").onchange = (e) => {
 /* What Settings' Per service sets for the series' service, so its page shows it applies; one the series sets
    itself replaces it, struck through here. */
 function renderInherited(conf) {
-  const svc = conf.service, per = S.config.service_defaults?.[svc] || {}, src = `Settings, Per service: ${svcName(svc)}`;
+  const svc = conf.service, per = S.config.service_defaults?.[svc] || {}, src = `Settings › Downloading › Download options › Per service: ${svcName(svc)}`;
   const layer = (values) => Object.entries(values || {}).filter(([, v]) => v !== false && v !== "" && v != null).map(([f, v]) => [f, v, src]);
   inheritedRows($("#d-inherited"), layer(svc && per.options), conf.options, () => optionsEditor($("#d-opts"), S.dlOptions, conf.options));
   const own = layer(svc && per.service_options);
@@ -185,7 +185,7 @@ $("#sx-name").addEventListener("input", (e) => {
   help.textContent = why || "The name shown on each series to tell the libraries apart when you have more than one Sonarr. Leave empty to use “Sonarr”.";
 });
 function showMode() {
-  $(".set-sec[data-sec=unshackle]").dataset.mode = $("#mode-select").value;
+  $("#unshackle-sec").dataset.mode = $("#mode-select").value;
   pickTile($(".ux-tiles"), $("#mode-select").value);
 }
 document.querySelectorAll(".ux-tiles .wz-tile").forEach((t) => t.onclick = () => {
@@ -523,7 +523,7 @@ function renderRegion() {
     ...(mine && mine !== tz ? [" This browser is on ", el("button", { type: "button", className: "linkish", textContent: mine.replaceAll("_", " "), onclick: () => { $("#tz-select").value = mine; $("#tz-select").dispatchEvent(new Event("input")); settingsZone.sync(); } }), "."] : []));
 }
 $("#tz-select").addEventListener("input", () => renderRegion());
-setInterval(() => { if (currentTab === "settings" && settingsSec === "region" && !document.hidden && S.config.settings) renderRegion(); }, 30000);  // its clock, while in sight
+setInterval(() => { if (showingSettings("region") && !document.hidden && S.config.settings) renderRegion(); }, 30000);  // its clock, while in sight
 /* Notifications: the addresses (each by its app's name: an address holds its secret), what each takes,
    what is sent, the quiet hours, a preview, and what went out lately. */
 const LEVEL_NAMES = { success: "Downloaded", warning: "Needs a look", error: "Failed" };
@@ -869,7 +869,7 @@ async function refreshLog() {
   // another Sonarr whose ladder was never chosen: nothing downloads for it, said here too
   const paused = (S.config?.settings?.sonarrs || []).filter((i) => !i.quality_ladder).map((i) => i.name);
   if (paused.length) $("#sync-state").append(el("span", { className: "status-err", textContent:
-    ` Paused for ${paused.join(", ")}: choose a quality ladder in Settings, Sonarr.` }));
+    ` Paused for ${paused.join(", ")}: choose a quality ladder in Settings › Connections › Sonarr.` }));
   $("#sync").disabled = running;
   $("#sync-label").textContent = running ? "Sync running…" : "Run sync now";
   $("#sync").classList.toggle("spin", running);

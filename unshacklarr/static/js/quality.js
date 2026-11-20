@@ -1,5 +1,5 @@
-/* Quality ladders (Settings, Quality), the other Unshackle servers (Settings, Unshackle) and what follows a download
-   (Settings, Automation): their editors, and the pickers a service and a series show for them. */
+/* Quality ladders (Settings › Quality & Upgrades › Quality), the other Unshackle servers (Settings › Connections › Unshackle) and what follows a download
+   (Settings › Downloading › Automation): their editors, and the pickers a service and a series show for them. */
 const CODECS = [["", "Any codec"], ["AVC", "H.264"], ["HEVC", "H.265"], ["AV1", "AV1"], ["VP9", "VP9"], ["VP8", "VP8"], ["VC1", "VC-1"]];
 const RANGES = [["", "Any range"], ["SDR", "SDR"], ["HDR10", "HDR10"], ["HDR10P", "HDR10+"], ["DV", "Dolby Vision"], ["HLG", "HLG"], ["HYBRID", "Hybrid (DV + HDR10)"]];
 const ladders = () => (S.config.quality_ladders ??= []);
@@ -63,7 +63,7 @@ function ladderChips(value, inherited, onchange) {
     type: "button", ariaPressed: String(now === v), onclick: () => { now = v; paint(); onchange(v === def ? "" : v); } },
     el("span", { textContent: label }), ...(v === def ? [el("small", { className: "chip-default", textContent: "default" })] : [])))));
   paint();
-  return el("div", { className: "ladder-pick" }, box, el("a", { className: "ax-edit", href: "#/settings/quality", textContent: "Edit ladders" }));
+  return el("div", { className: "ladder-pick" }, box, el("a", { className: "ax-edit", href: settingsHref("quality"), textContent: "Edit ladders" }));
 }
 const ladderNamed = (name) => (name && name !== "off" && ladders().find((l) => l.name === name)) || null;
 /* What a ladder decides itself: these options would only fight it (sync.apply_ladder drops or replaces them). */
@@ -121,6 +121,7 @@ function renderQuality() {
     onclick: () => { set.quality_ladder = l ? l.name : ""; dirty(); renderQuality(); } }))));
   keepFocus($("#ql-list"), () => $("#ql-list").replaceChildren(...(list.length ? list.map(ladderCard)
     : [el("section", { className: "sx-card" }, el("p", { className: "dx-empty", textContent: "No ladder yet. Create one with New ladder, or bring back the built-in ones." }))])));
+  renderNews();  // the news target inside the ladder card was replaced
 }
 
 function ladderCard(lad) {
@@ -257,7 +258,7 @@ $("#ql-reset").onclick = (e) => {
   dirty(); renderQuality(); renderServiceDefaults();
 };
 
-/* Settings, Unshackle: the other servers, each with its own address, key and downloads folder. */
+/* Settings › Connections › Unshackle: the other servers, each with its own address, key and downloads folder. */
 const URL_OK = /^https?:\/\/[^\s/@]+(\/\S*)?$/;
 function renderBackends() {
   const list = (S.config.settings.backends ??= []);
@@ -335,7 +336,7 @@ $("#ub-add").onclick = () => {
   $("#ub-list .ub-block:last-child input[type=url]")?.focus();
 };
 
-/* Settings, Sonarr: other instances (a 4K one), each with its address, key, downloads folder as it sees it, and its
+/* Settings › Connections › Sonarr: other instances (a 4K one), each with its address, key, downloads folder as it sees it, and its
    own ladder and import over the series'. */
 function renderSonarrs() {
   const list = (S.config.settings.sonarrs ??= []);
@@ -431,7 +432,7 @@ $("#sn-add").onclick = () => {
   $("#sn-list .ub-block:last-child input[type=url]")?.focus();
 };
 
-/* Settings, Automation: Sonarr imports each download, or it waits for an import by hand. */
+/* Settings › Downloading › Automation: Sonarr imports each download, or it waits for an import by hand. */
 function renderImportMode() {
   if (!S.config?.settings) return;
   const only = S.config.settings.download_only === true;
@@ -512,7 +513,7 @@ for (const [id, on] of [["#ug-all", true], ["#ug-none", false]]) $(id).onclick =
   dirty(); renderUpgradeSeries();
 };
 
-/* Settings, Upgrades, Release group: the switch, and the group each series' downloads carry (asked of the server) */
+/* Settings › Quality & Upgrades › Upgrades, Release group: the switch, and the group each series' downloads carry (asked of the server) */
 let ugGroups = null;
 async function renderUpgradeGroups(fetch = true) {
   const on = !!S.config.settings?.upgrade_other_groups, box = $("#ug-groups");
@@ -530,7 +531,7 @@ async function renderUpgradeGroups(fetch = true) {
     el("small", { textContent: !all ? "For every series." : g.series.length === 1 ? `For 1 series: ${listed(g.series)}.` : `For ${g.series.length} series: ${listed(g.series)}.` }))),
     ...(none.length ? [el("div", { className: "ug-group warn" },
       el("small", { textContent: !groups.length
-        ? "No release group is set. Set a Group Tag in Settings, Download options: your downloads then carry it, and this switch can tell them apart."
+        ? "No release group is set. Set a Group Tag in Settings › Downloading › Download options: your downloads then carry it, and this switch can tell them apart."
         : none.length === 1 ? `1 series has no group and is left as it is: ${listed(none)}. Set a Group Tag in Download options to include it.`
         : `${none.length} series have no group and are left as they are: ${listed(none)}. Set a Group Tag in Download options to include them.` }))] : []));
 }
@@ -722,8 +723,8 @@ $("#d-fb-service").onchange = (e) => setFallback("service", e.target.value);
 $("#d-fb-url").oninput = (e) => setFallback("title", e.target.value.trim());
 
 /* A series' page, Source, Libraries: each Sonarr that has the series, switched on or off for it (main_off,
-   sonarrs[name].off), with the ladder and After the download it downloads by (What to get for Sonarr, Settings ›
-   Sonarr for the others) and what it misses, one click from Episodes. Advanced: options for one library's copies.
+   sonarrs[name].off), with the ladder and After the download it downloads by (What to get for Sonarr, Settings › Connections › Sonarr
+   for the others) and what it misses, one click from Episodes. Advanced: options for one library's copies.
    From #10, with mj23au. */
 function renderLibraries(conf) {
   const found = S.sonarrsOf?.[current?.tvdbId] || [], set = S.config.settings || {};

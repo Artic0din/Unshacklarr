@@ -129,7 +129,7 @@ const nav = { kids: [], querySelector: (sel) => (sel === ":scope > .sv-attn" ? b
   : { after: (x) => nav.kids.push(Object.assign(x, { remove() { x.removed = true; } })) }) };
 const ctx = sandbox({
   svcName: (t) => t, usesService: (c, t) => c.service === t, ago: () => "now", servicesCookies: null,
-  document: { querySelector: (sel) => (sel === '.set-nav [data-sec="services"]' ? nav : null) },
+  document: { querySelector: (sel) => (sel === '.set-nav [data-sec="services-devices"]' ? nav : null) },
   S: { config: { series: { 1: { service: "DSNP" }, 2: { service: "AMZN" } } }, authenticationLive: [],
     authentication: { DSNP: { state: "validated" }, AMZN: { state: "validated" }, ATVP: { state: "validated" }, HULU: { state: "validated" },
       MAX: { state: "unknown" }, TF1: { state: "needs_user_action" } },
@@ -184,7 +184,7 @@ fix.find((k) => k.tag === "button")?.onclick();
 console.log(JSON.stringify({ hidden: node("#d-fail").hidden, texts: [node("#d-fail-text").textContent, ...fix.map((k) => k.textContent)], opened }));
 """, str(JS / "core.js"))
     assert shown == {"hidden": False, "texts": ["Its last 3 downloads from RMCBFM failed", "RMC BFM Play: your session has expired",
-                                                "Check RMCBFM in Settings › Services"], "opened": ["RMCBFM"]}
+                                                "Check RMCBFM in Settings › Services & Devices › Services"], "opened": ["RMCBFM"]}
 
 
 def test_a_failure_that_is_not_a_sign_in_does_not_send_you_to_the_services():

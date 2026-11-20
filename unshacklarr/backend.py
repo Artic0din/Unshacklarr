@@ -150,7 +150,7 @@ class UnshackleError(Exception):
 PASSING = ("NETWORK_ERROR", "SERVICE_UNAVAILABLE", "SERVER_DRAINING")  # serve's error codes worth another try
 PROXY_REFUSED = re.compile(r"does not resolve country codes into proxies|in a different region from yours", re.IGNORECASE)
 PROXY_HINT = ("Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): "
-              "allow it in Settings, Unshackle")
+              "allow it in Settings › Connections › Unshackle")
 
 
 def response_error(response: requests.Response) -> tuple[dict, str, str | None]:
@@ -182,7 +182,7 @@ def unshackle_python(command: str) -> tuple[str, Path]:
     if not found:
         raise UnshackleError(
             f"The {command or 'unshackle'!r} command was not found. Install Unshackle, "
-            "or give the full path to its command in Settings, Unshackle."
+            "or give the full path to its command in Settings › Connections › Unshackle."
         )
     script = Path(found).resolve()
     venv = script.parent.parent
@@ -430,7 +430,7 @@ class Unshackle:
         if self.mode == "remote":
             url = str(self.settings.get("unshackle_url") or "").rstrip("/")
             if not url:
-                raise UnshackleError("Set the address of unshackle serve in Settings, Unshackle")
+                raise UnshackleError("Set the address of unshackle serve in Settings › Connections › Unshackle")
             key = str(self.settings.get("unshackle_api_key") or "")
             if key in EXAMPLE_KEYS:  # the value of .env.example: anyone who read it knows it
                 raise UnshackleError("The API key of unshackle serve is still the example one: put a long random one in "
@@ -453,10 +453,10 @@ class Unshackle:
             host = f"{to.scheme}://{to.netloc.rpartition('@')[2]}" if to.netloc else ""
             if host and path and to.path.endswith(path):  # the same route under another address: that address to type
                 raise UnshackleError(no_credentials(f"{url} redirects to {host}{to.path[:-len(path)]}: use that address "
-                                                    "for unshackle serve in Settings, Unshackle"))
+                                                    "for unshackle serve in Settings › Connections › Unshackle"))
             # another route: no address can be told from it, so none is offered as the one to type
             raise UnshackleError(no_credentials(f"{url} redirects to {host + to.path if host else 'another address'}, "
-                                                "which is not unshackle serve's: check its address in Settings, Unshackle"))
+                                                "which is not unshackle serve's: check its address in Settings › Connections › Unshackle"))
         if r.status_code == 429:  # a limit set on the key (Unshackle 6): waited for, not a lost job
             err = UnshackleError("unshackle serve is busy: its limit of requests for this key is reached")
             asked = str(r.headers.get("Retry-After") or "60")
@@ -471,7 +471,7 @@ class Unshackle:
                 if provider_auth_failed:
                     message = f"{message}. Check this service's sign-in/session in Unshackle."
                 else:
-                    message = "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle."
+                    message = "Unshackle rejected the internal API key. Check the server API key in Settings › Connections › Unshackle."
             if not provider_auth_failed and "requested CDM is not permitted" in message:  # --cdm, Unshackle 6: the operator's opt-in
                 message = ("Unshackle refuses to pick the CDM device named in --cdm: allow it in unshackle.yaml "
                            "with serve: cdm_overrides: true (or a list of devices), then restart Unshackle")

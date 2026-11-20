@@ -1,59 +1,157 @@
-/* Settings sections: one shown at a time, remembered in the URL (#/settings/automation). On a phone,
+/* Settings sections: one shown at a time, remembered in the URL. On a phone,
    #/settings is the list of sections, and a section is a page of its own that goes back to it. */
-let settingsSec = "unshackle", settingsList = false, secFromList = false;
+const LEGACY_SETTINGS_MAP = {
+  sonarr:        { sec: "connections", anchor: "sonarr-sec", load: () => renderSonarrState() },
+  unshackle:     { sec: "connections", anchor: "unshackle-sec", load: () => loadUnshackleStatus() },
+  downloads:     { sec: "downloading", anchor: "downloads-sec" },
+  automation:    { sec: "downloading", anchor: "automation-sec", load: () => { renderAutomation(); renderImportMode(); renderLearnWindow(); } },
+  quality:       { sec: "quality-upgrades", anchor: "quality-sec", load: () => renderQuality() },
+  upgrades:      { sec: "quality-upgrades", anchor: "upgrades-sec", load: () => { renderUpgradeSeries(); return renderUpgradeGroups(); } },
+  services:      { sec: "services-devices", anchor: "services-sec", load: () => loadServices() },
+  cookies:       { sec: "services-devices", anchor: "services-sec" },
+  cdm:           { sec: "services-devices", anchor: "cdm-sec", load: () => loadCdm() },
+  notifications: { sec: "notifications", anchor: "notifications-sec", load: () => { renderPush().catch(() => {}); loadSent(); } },
+  interface:     { sec: "general", anchor: "interface-sec", load: () => renderInterface() },
+  region:        { sec: "general", anchor: "region-sec", load: () => renderRegion() },
+  history:       { sec: "general", anchor: "history-sec", load: () => loadHistory() },
+  account:       { sec: "general", anchor: "account-sec", load: () => loadAccount() },
+};
+const settingsPages = Object.values(LEGACY_SETTINGS_MAP);
+const legacySettings = (name) => Object.hasOwn(LEGACY_SETTINGS_MAP, name) ? LEGACY_SETTINGS_MAP[name] : null;
+let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false;
+let loadedSettings = null, settingsJump = null;
 const inSettingsSec = () => currentTab === "settings" && !settingsList;  // a section on screen, not the phone's list
+const showingSettings = (name) => inSettingsSec() && legacySettings(name)?.sec === settingsSec;
+const settingsHref = (name) => `#/settings/${name}`;
+function cancelSettingsJump() {
+  settingsJump?.observer?.disconnect();
+  settingsJump = null;
+}
+function applySettingsJump(jump) {
+  if (settingsJump !== jump || !inSettingsSec()) return;
+  const { target, heading } = jump;
+  const anchor = target?.service ? (target.id ? document.getElementById(target.id) : serviceRow(target))
+    : target ? document.querySelector(target) : heading;
+  if (!anchor) return;
+  if (target) {
+    const fold = anchor.closest("details");
+    if (fold) fold.open = true;
+    anchor.scrollIntoView({ block: target.service ? "center" : "start" });
+  } else scrollTo({ top: 0 });
+  if (!jump.focused) {
+    const label = target && !target.service && [...anchor.querySelectorAll("h2, h3, h4, label")].find((node) =>
+      node.getClientRects().length && !node.closest("[hidden], details:not([open])"));
+    focusHeading(label || anchor);
+    jump.focused = true;
+  }
+  if (target?.service && !target.id) {
+    const entry = history.state?.settings;
+    if (entry?.target?.service) history.replaceState({ settings: { ...entry, target: { ...target, id: anchor.id } } }, "");
+  }
+  if (!target || target.service || loadedSettings?.settled) cancelSettingsJump();
+  else if (!jump.observer) {
+    // While the loaders run, a health redraw can move the anchored subsection.
+    jump.observer = new ResizeObserver(() => applySettingsJump(jump));
+    jump.observer.observe(anchor.closest(".set-sec"));
+  }
+}
+function startSettingsJump(target, restoring) {
+  // The record's identity is the navigation token; queued callbacks cannot revive a cancelled jump.
+  const jump = settingsJump = { target, heading: $(`.set-sec[data-sec="${settingsSec}"] h2`) };
+  const apply = () => { jump.ready = true; applySettingsJump(jump); };
+  if (document.documentElement.classList.contains("i18n-wait")) {
+    i18nReady.then(() => {
+      if (settingsJump !== jump) return;
+      if (document.activeElement === document.body) apply();
+      else cancelSettingsJump();
+    });
+  } else if (restoring) requestAnimationFrame(apply);  // after the browser restores the entry's scroll
+  else apply();
+}
+function loadSettingsSec() {
+  if (!inSettingsSec() || !S.config.settings || loadedSettings?.sec === settingsSec) return;
+  const entry = loadedSettings = { sec: settingsSec };
+  const pending = [];
+  for (const page of settingsPages) {
+    if (page.sec !== entry.sec) continue;
+    const task = page.load?.();
+    if (task?.then) pending.push(task.catch(console.error));
+  }
+  Promise.all(pending).then(() => {
+    entry.settled = true;
+    if (loadedSettings !== entry) return;
+    if (settingsJump?.ready) applySettingsJump(settingsJump);
+  });
+}
+function leaveSettingsSec() {
+  loadedSettings = null;
+  cancelSettingsJump();
+  leaveSettingsNews(settingsSec);
+}
 function showSettingsList(on) {
   const fromSec = on && phoneLayout() && inSettingsSec();
-  if (fromSec) leaveNews((n) => n.sec === settingsSec);  // back to the list: the section is left
+  if (fromSec) leaveSettingsSec();
+  else if (on) cancelSettingsJump();
   settingsList = on && phoneLayout();
   $(".set-layout").classList.toggle("at-list", settingsList);
   if (fromSec) document.querySelector(`.set-nav [data-sec="${settingsSec}"]`).focus({ preventScroll: true });  // the item it came from
 }
-function showSettingsSec(name, fromRoute = false) {
-  if (name === "cookies") name = "services";  // the cookies page before: its files are on each service's row now
-  if (!document.querySelector(`.set-sec[data-sec="${name}"]`)) name = "unshackle";
-  if (name !== settingsSec && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);
-  const fromList = settingsList;
-  secFromList = fromList && !fromRoute;
+function showSettingsSec(name, fromRoute = false, push = false, target = null, restoring = false) {
+  const page = legacySettings(name), sec = page?.sec || (settingsPages.some((item) => item.sec === name) ? name : "connections");
+  const changedSection = sec !== settingsSec;
+  if (changedSection && inSettingsSec()) leaveSettingsSec();
+  cancelSettingsJump();
+  const fromList = currentTab === "settings" && settingsList && phoneLayout();
   showSettingsList(false);
-  settingsSec = name;
-  document.querySelectorAll(".set-sec").forEach((x) => x.hidden = x.dataset.sec !== name);
-  document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.setAttribute("aria-current", x.dataset.sec === name));
-  document.querySelector(`.set-nav [data-sec="${name}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  if (name === "unshackle" && S.dlOptions.length && currentTab === "settings") loadUnshackleStatus();
-  if (name === "services" && S.dlOptions.length) loadServices();
-  if (name === "cdm" && S.dlOptions.length) loadCdm();
-  if (name === "history" && S.dlOptions.length) loadHistory();
-  if (name === "account") loadAccount();
-  if (name === "notifications") { renderPush().catch(() => {}); if (S.dlOptions.length) loadSent(); }
-  if (name === "automation") { renderAutomation(); renderImportMode(); renderLearnWindow(); }
-  if (name === "quality") renderQuality();
-  if (name === "upgrades") { renderUpgradeSeries(); renderUpgradeGroups(); }
-  if (name === "interface") renderInterface();
-  if (!fromRoute && currentTab === "settings") { navigate(fromList); updateTitle(); }  // from the list: back returns to it
-  if (fromList) { scrollTo({ top: 0 }); focusHeading(document.querySelector(`.set-sec[data-sec="${name}"]`).querySelector("h2, h3")); }
+  settingsSec = sec;
+  settingsRoute = page ? name : sec;
+  document.querySelectorAll(".set-sec").forEach((x) => x.hidden = x.dataset.sec !== sec);
+  document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.setAttribute("aria-current", x.dataset.sec === sec));
+  loadSettingsSec();
+  if (fromRoute) target = history.state?.settings?.target ?? null;
+  else if (inSettingsSec()) {
+    const fromListEntry = fromList || (!push && history.state?.settings?.fromList);
+    navigate(push || fromList, { target, fromList: Boolean(fromListEntry) });
+    updateTitle();
+  }
+  target ??= page && page.sec !== name ? `#${page.anchor}` : null;
+  if (target || changedSection || fromList || !fromRoute || !routed) startSettingsJump(target, restoring);
+}
+function openSettings(name, target) {
+  const fromTab = currentTab !== "settings";
+  if (fromTab) showTab("settings", true);
+  if (currentTab === "settings") showSettingsSec(name, false, fromTab, target);
 }
 document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.onclick = () => showSettingsSec(x.dataset.sec));
+$("#tab-settings").addEventListener("click", (e) => {
+  const link = e.target.closest(".set-jumps a");
+  if (!link || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  showSettingsSec(link.hash.split("/").pop());
+});
 $("#set-back").onclick = () => {
-  if (secFromList) return history.back();  // the list is the page before: the phone's back does the same
+  if (history.state?.settings?.fromList) return history.back();
   showSettingsList(true);
   navigate(false);
   updateTitle();
   scrollTo({ top: 0 });
 };
-showSettingsSec("unshackle", true);
-
 /* The URL holds where you are (#/schedule, #/series/s/111421/settings…): a refresh
    lands on the same page, and back (or the phone's back gesture) closes a series. */
 let currentTab = "schedule", drawerTab = null, drawerPushed = false;
 const HASH_OF = { log: "activity", yaml: "unshackle.yaml" }, TAB_OF = { activity: "log", terminal: "log", defaults: "settings", "unshackle.yaml": "yaml" };  // #/terminal: its name before
 function routeHash() {
-  const sub = currentTab === "settings" && !settingsList ? `/${settingsSec}` : "";
-  return `#/${HASH_OF[currentTab] || currentTab}${sub}` + (current ? `/s/${current.tvdbId}/${drawerTab}` : "");
+  const hash = inSettingsSec() ? settingsHref(settingsRoute) : `#/${HASH_OF[currentTab] || currentTab}`;
+  return hash + (current ? `/s/${current.tvdbId}/${drawerTab}` : "");
 }
-function navigate(push) {
+function navigate(push, settings) {
   const hash = routeHash();
-  if (location.hash !== hash) history[push ? "pushState" : "replaceState"](null, "", hash);
+  if (location.hash === hash && !settings) return;
+  cancelSettingsJump();
+  if (!settings && inSettingsSec() && location.hash.split("/s/")[0] === settingsHref(settingsRoute)) {
+    settings = history.state?.settings;
+  }
+  history[push && location.hash !== hash ? "pushState" : "replaceState"](settings ? { settings } : null, "", hash);
 }
 function parseRoute() {
   let [tab, ...rest] = location.hash.replace(/^#\/?/, "").split("/");
@@ -71,15 +169,19 @@ function updateTitle() {
     : section ? tr(`Settings: ${section} · Unshacklarr`) : tr(`${PAGE_NAME[currentTab]} · Unshacklarr`);
 }
 let routed = false;
-function applyRoute() {
+function applyRoute(event) {
+  if (event) cancelSettingsJump();
   if (location.hash.startsWith("#/inbox")) {  // a push notification touched: the bell's list over the current page
     history.replaceState(null, "", `#/${HASH_OF[currentTab] || currentTab}`);
     openInbox();
   }
   const route = parseRoute();
-  if (route.sec) showSettingsSec(route.sec, true);
-  else if (route.tab === "settings") showSettingsList(true);  // a phone: the list of sections
+  const alreadyOpen = inSettingsSec() && route.sec === settingsRoute;
   if (!routed || route.tab !== currentTab) showTab(route.tab, true);  // closing a series keeps its tab as it was
+  if (route.sec) {
+    if (alreadyOpen && (!event || route.id || current)) loadSettingsSec();
+    else showSettingsSec(route.sec, true, false, null, Boolean(event));
+  } else if (route.tab === "settings") { showSettingsList(true); loadSettingsSec(); }
   routed = true;
   const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
   if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
@@ -88,6 +190,13 @@ function applyRoute() {
   updateTitle();
 }
 window.addEventListener("popstate", applyRoute);
+// Startup can scroll without user input; only input should interrupt a jump that is still loading.
+for (const event of ["wheel", "touchmove", "pointerdown"]) {
+  window.addEventListener(event, (e) => { if (e.isTrusted) cancelSettingsJump(); }, { passive: true });
+}
+window.addEventListener("keydown", (e) => {
+  if (e.isTrusted && ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Tab"].includes(e.key)) cancelSettingsJump();
+});
 
 // The page's scroll padding, so focus stops clear of what is pinned: the header as tall as it is (a status row under it
 // makes it taller), and how far up the bars pinned to the bottom reach, stacked, wrapped or expanded as they are now.
@@ -110,10 +219,13 @@ function showTab(name, fromRoute = false, quiet = false) {
     if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }
     uyReset();
   }
-  if (name !== currentTab && inSettingsSec()) leaveNews((n) => n.sec === settingsSec);
+  if (name !== currentTab && currentTab === "settings") {
+    if (inSettingsSec()) leaveSettingsSec();
+    showSettingsList(false);
+  }
+  if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   currentTab = name;
   closeDetails(false);  // the Schedule's popover belongs to its card
-  if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   updateTitle();  // after the list is chosen: a phone's Settings tab names the list, not the section it left
   document.querySelectorAll("nav [data-tab]").forEach((b) => {
     if (b.dataset.tab === (name === "yaml" ? "settings" : name)) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
@@ -123,8 +235,7 @@ function showTab(name, fromRoute = false, quiet = false) {
   if (quiet) return;
   if (name === "log") { refreshLog(); openActivity(); }
   else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
-  if (name === "settings" && settingsSec === "unshackle" && S.dlOptions.length) loadUnshackleStatus();
-  if (name === "settings" && settingsSec === "services" && S.dlOptions.length) loadServices();
+  if (name === "settings" && !fromRoute) loadSettingsSec();
   if (name === "schedule") loadSchedule();
 }
 document.querySelectorAll("nav [data-tab]").forEach((b) => b.onclick = (e) => {
@@ -199,6 +310,7 @@ window.addEventListener("beforeunload", (e) => { if (!$("#savebar").hidden) e.pr
 
 showTab(parseRoute().tab, true, true);  // the right tab straight away, before the data comes
 if (parseRoute().sec) showSettingsSec(parseRoute().sec, true);
+else if (currentTab === "settings") showSettingsList(true);
 
 /* Pull to reload, in the installed app (iPhone, Android): the browser gives it in a tab, not there. From the top of a
    page, pulled down far enough and let go: the page loads again. Not over an open window, nor from a list that

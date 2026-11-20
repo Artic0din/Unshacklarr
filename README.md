@@ -128,13 +128,13 @@ You need:
 > Answering a service's question during a download (a code sent by e-mail) needs Unshackle 6.0 or later;
 > downloading through a remote server (`--remote`) and answering its login questions need a version after 6.0.0.
 > With a version after 6.0.0, a `serve: dashboard: key:` in `unshackle.yaml` (any long random string) also gives
-> Settings › Unshackle its log, errors by service and remote sessions, and a restart that waits for the downloads.
-> Settings › Unshackle › *Supports* says which of these your Unshackle allows; a series set to `--remote` on an
+> Settings › Connections › Unshackle its log, errors by service and remote sessions, and a restart that waits for the downloads.
+> Settings › Connections › Unshackle › *Supports* says which of these your Unshackle allows; a series set to `--remote` on an
 > Unshackle that cannot run it is told in the bell.
 >
 > **Unshackle 6** lets an API key use the proxies of `unshackle.yaml` (a country code such as `au`, or a
 > provider) only once it is allowed. Run by Unshacklarr on the same computer, its key always is; with
-> Docker or another server, Settings › Unshackle offers to allow it the first time a download is refused.
+> Docker or another server, Settings › Connections › Unshackle offers to allow it the first time a download is refused.
 > By hand: a key listed under `serve: users:` loses the rights the unlisted admin key has, so list it
 > with all of them, then restart Unshackle (5.4 reads `server_cdm` and the devices, and ignores the rest):
 >
@@ -224,7 +224,7 @@ is unreachable until it has started again. For a new Unshackle, when nothing is 
 `docker compose build --pull unshackle && docker compose up -d`.
 
 **On a Synology NAS:** its shutdown marks the containers as stopped, so `restart: unless-stopped` leaves them off
-after a reboot. Use `restart: always` there. On a small NAS, Settings › Unshackle › Downloads at once set to 1
+after a reboot. Use `restart: always` there. On a small NAS, Settings › Connections › Unshackle › Downloads at once set to 1
 keeps the disks from being saturated.
 
 <details>
@@ -283,7 +283,7 @@ Behind a reverse proxy:
 - **Pass on the client's address and the scheme**: `X-Real-IP`, as the login limit counts tries per
   address, and `X-Forwarded-Proto`, so that the session cookie is marked `Secure` over HTTPS.
   Nginx Proxy Manager sends both.
-- **List the proxy's addresses**: Settings, Account, *Sign in through a reverse proxy*,
+- **List the proxy's addresses**: Settings › General › Account & Backups, *Sign in through a reverse proxy*,
   *The proxy's addresses*: the proxy's own address as Unshacklarr sees it (its container's IP,
   such as `172.18.0.5`), even when you do not sign in through it. `X-Real-IP` is believed from
   those addresses only, so that no one else can claim another address to get more tries.
@@ -299,7 +299,7 @@ Behind a reverse proxy:
   Traefik keep it; plain Nginx needs `proxy_set_header Host $http_host;` (`$host` drops a port such
   as `:8443`).
 - **Sign in once, at the proxy** (optional): when Authelia or Authentik already asks who you are,
-  Settings, Account, *Sign in through a reverse proxy* takes the header that names you (`Remote-User`),
+  Settings › General › Account & Backups, *Sign in through a reverse proxy* takes the header that names you (`Remote-User`),
   believed from the proxy's addresses only; the password is still asked again before the most
   sensitive changes.
 
@@ -319,9 +319,9 @@ and Sonarr (to import them). Each may see it at another path:
 
 | Setting | The downloads folder… | Empty means |
 |---|---|---|
-| **Downloads folder** (Settings › Unshackle) | as Unshacklarr sees it | a `downloads` folder in Unshacklarr's settings folder |
+| **Downloads folder** (Settings › Connections › Unshackle) | as Unshacklarr sees it | a `downloads` folder in Unshacklarr's settings folder |
 | **Downloads folder, as Unshackle sees it** (Remote only) | as `unshackle serve` sees it | the same path |
-| **Downloads folder, as Sonarr sees it** (Settings › Sonarr) | as Sonarr sees it | the same path |
+| **Downloads folder, as Sonarr sees it** (Settings › Connections › Sonarr) | as Sonarr sees it | the same path |
 
 With the example compose file, both containers mount `DOWNLOADS_DIR` at `/downloads`; a Sonarr that
 mounts its parent folder at `/downloads` sees it as `/downloads/unshacklarr`, the value of
@@ -331,28 +331,28 @@ mounts its parent folder at `/downloads` sees it as `/downloads/unshacklarr`, th
 > A folder that stays there is an episode waiting for Sonarr: it is not downloaded again. When
 > Sonarr keeps its own file (the download was not better), you get a warning, and the folder waits
 > in Activity › Waiting, to import anyway or delete. After 14 days it is deleted
-> (Settings › Automation › Delete them after; 0 keeps them).
+> (Settings › Downloading › Automation › Delete them after; 0 keeps them).
 
-**Download only** (Settings › Automation › After the download, or a series' own page): the episode is
+**Download only** (Settings › Downloading › Automation › After the download, or a series' own page): the episode is
 downloaded, checked and named, then waits in Activity › Waiting for you to import it by
 hand. Those folders are never deleted on their own.
 
-**Other Unshackle servers** (Settings › Unshackle): more `unshackle serve`, one behind a VPN say, each
+**Other Unshackle servers** (Settings › Connections › Unshackle): more `unshackle serve`, one behind a VPN say, each
 with its address, API key and the downloads folder as it sees it. A service downloads with the one
-picked for it in Settings › Download options › Per service; a service only one of them has goes to it.
+picked for it in Settings › Downloading › Download options › Per service; a service only one of them has goes to it.
 Its downloads folder left empty is the main server's. Each one is watched: its state shows in Settings, and you
 are told when it goes down and when it is back.
 
-**Other Sonarr instances** (Settings › Sonarr): a second Sonarr with its own library, each with a name, its address,
+**Other Sonarr instances** (Settings › Connections › Sonarr): a second Sonarr with its own library, each with a name, its address,
 API key, the downloads folder as it sees it, and its own quality ladder and After the download. The series set up in
 Unshacklarr are downloaded for each instance that has them (by TVDB id), into folders named after it
 (`unshackle-sonarr-2-<tvdb>-SxxEyy`), and imported into it. Episodes, Catch up and Upgrades work with each one;
 new episodes come at their release time and with the automatic sync, as for the main Sonarr. The main Sonarr can be named
-too (Settings › Sonarr › Name); a badge on each series names the libraries it is in.
+too (Settings › Connections › Sonarr › Name); a badge on each series names the libraries it is in.
 
 **Upgrades** (Activity): the episodes on disk in a lower quality than the series' quality ladder asks for, that the
 service now has better. They are checked automatically every 7 days, each episode's answer kept 30 days, and replaced
-only when you tick them (Settings › Upgrades).
+only when you tick them (Settings › Quality & Upgrades › Upgrades).
 
 **Muxing progress** (Activity): once every track is in, Unshackle decrypts them and muxes the file. Activity shows how
 far the mux is when Unshacklarr can read Unshackle's work folder (its `directories: temp`): on the same computer it
@@ -376,7 +376,7 @@ the `unshackle dl` command it amounts to. Every option `unshackle serve` takes i
 added (`--cdm`, `--proxy-download`, `--forced-subs-only`, `--require-audio`…) say so, as an older Unshackle
 ignores them without a word.
 
-**Quality ladders** (Settings › Quality) go further than a fixed `--quality`: an ordered list of steps
+**Quality ladders** (Settings › Quality & Upgrades › Quality) go further than a fixed `--quality`: an ordered list of steps
 (a codec, a range, a height from… to…), tried against the episode's real tracks just before the
 download. The first step it has a track for sets the quality, codec and range asked for; when none does,
 the episode fails with the tracks it has, and nothing outside the ladder is downloaded. Three come
@@ -387,7 +387,7 @@ then en), used unless the series or its service sets `--a-lang` or `--s-lang`.
 
 ### 🔑 Cookies and CDMs
 
-Settings › Services (its cookie files, on each service's row beside its sign-in) and Settings › CDM manage Unshackle's own files: its cookie files, its Widevine
+Settings › Services & Devices › Services (its cookie files, on each service's row beside its sign-in) and Settings › Services & Devices › Devices (CDM) manage Unshackle's own files: its cookie files, its Widevine
 (`.wvd`) and PlayReady (`.prd`) devices, and which device each service uses (the `cdm:` section of
 `unshackle.yaml`, where only that service's line changes). Unshackle reads them anew for every
 download. Unshacklarr must see those files:
@@ -423,16 +423,16 @@ change that.
 
 These are off until you turn them on:
 
-- **Add audio track** (Settings › Download options › Languages). When your preferred audio
+- **Add audio track** (Settings › Downloading › Download options › Languages). When your preferred audio
   language becomes available, only that audio track is downloaded and added to the file in your library. Sonarr then
   imports the updated file. Unshacklarr needs access to your library: set its folder as Sonarr sees it and as
   Unshacklarr sees it. If the file can't be found, the whole episode is downloaded instead.
 - **Fallback service** (on a series page, in Source). A second service and the series URL on it, used when the main
   service doesn't have the episode yet, or not in an accepted language. If that service numbers episodes
   differently, set its `season_map` or `episode_offset` under `fallback:` in `config.yaml`.
-- **Auto release times** (Settings › Automation). When 3 episodes of a series come out at the same time, that time
+- **Auto release times** (Settings › Downloading › Automation). When 3 episodes of a series come out at the same time, that time
   becomes its release time. Release times you set yourself are never changed.
-- **Download window** (Settings › Automation). Automatic downloads only run between two times, which can span
+- **Download window** (Settings › Downloading › Automation). Automatic downloads only run between two times, which can span
   midnight. Release-time downloads can follow it too. Episodes you start by hand are not affected.
 
 After an update, the version button at the bottom of the Settings list opens **What's new**.
@@ -440,7 +440,7 @@ It lists the new options, and each one shows a "New" badge until you have seen i
 
 ## 💾 Backups
 
-Settings › Account › *Backups* downloads every setting but the password (the series, their options,
+Settings › General › Account & Backups › *Backups* downloads every setting but the password (the series, their options,
 the ladders, the notifications, the API keys: keep the file private), and *Restore from a file* puts one back.
 Set *Back up automatically every N days*, and a backup is also saved in the data folder's `backups` folder, the
 newest few kept. To rebuild an install, put a backup in that folder (or keep the file at hand), start
@@ -450,7 +450,7 @@ Unshacklarr, and choose *Restore from a backup* in the setup: the setup code and
 
 Other programs (a script, Home Assistant, iOS Shortcuts) can check on Unshacklarr, start a sync or
 a download, stop one, answer a service's question and read the notifications, with a key created in
-Settings › Account:
+Settings › General › Account & Backups:
 
 ```bash
 curl -H "X-Api-Key: <your key>" http://localhost:8788/api/v1/status

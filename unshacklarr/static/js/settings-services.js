@@ -8,7 +8,7 @@ function nextSyncAt(now, every, zone) {
   const wall = Date.UTC(at.year, at.month - 1, at.day, hour), guess = new Date(wall - offset(now)), exact = new Date(wall - offset(guess));
   return parts(exact).hour === hour % 24 ? exact : guess;  // an hour the clocks skip: the offset before them, as Python takes it
 }
-/* Settings, Automation: when the next sync comes (on the hour, every so many hours of the day), the interval as chips */
+/* Settings › Downloading › Automation: when the next sync comes (on the hour, every so many hours of the day), the interval as chips */
 function renderAutomation() {
   const select = $("[data-set=sync_every_hours]");
   if (!select) return;
@@ -73,7 +73,7 @@ document.querySelectorAll(".rt-seg button").forEach((b) => b.onclick = () => {
   $(id).addEventListener("focus", (e) => e.target.select());  // "Other": what is typed replaces it
 });
 
-/* Settings, Sonarr: where it is, whether it answers (the health check, or the last test), a way to open it */
+/* Settings › Connections › Sonarr: where it is, whether it answers (the health check, or the last test), a way to open it */
 function renderSonarrState(st = S.health?.sonarr || {}, tested = false) {
   const set = S.config.settings || {}, box = $("#sx-state");
   if (!box) return;
@@ -85,10 +85,7 @@ function renderSonarrState(st = S.health?.sonarr || {}, tested = false) {
   box.querySelector("b").textContent = st.ok ? `Connected${st.version ? ` · Sonarr ${st.version}` : ""}` : st.ok === false ? "Unreachable" : "Checking…";
   box.querySelector("small").textContent = st.ok ? (tested ? "Tested just now" : "Checked a moment ago") : st.ok === false ? String(st.error || "").replace(/^Sonarr is unreachable: /, "") : "";
 }
-document.querySelectorAll("[data-health]").forEach((b) => b.onclick = () => {
-  showTab("settings", true);  // not the phone's list: the section itself
-  showSettingsSec(b.dataset.health);
-});
+document.querySelectorAll("[data-health]").forEach((b) => b.onclick = () => openSettings(b.dataset.health));
 
 const CLEAR_CACHE_WHY = "Deletes Unshackle's cache, sign-ins included: services sign in again next time";
 let confirmingClear = false;  // the question under Maintenance is open
