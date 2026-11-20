@@ -497,6 +497,10 @@ function fileLine(f, odd) {  // the same, in one line (phones)
     f.size ? size(f.size) : ""].filter(Boolean);
   return el("small", { className: "ep-file-line" }, resBadge(f, odd.height), ...parts.flatMap((p, i) => i ? [" · ", p] : [p]));
 }
+function setSubtitleExpanded(chip, detail, expanded) {
+  detail.hidden = !expanded;
+  chip.setAttribute("aria-expanded", String(expanded));
+}
 function subtitleSummary(tracks, required, why, id, number, expanded) {
   const normalize = (code) => {
     try { return new Intl.Locale(code).baseName.toLowerCase(); }
@@ -515,10 +519,7 @@ function subtitleSummary(tracks, required, why, id, number, expanded) {
   const detail = el("div", { id: `ep-subs-${id}`, className: "ep-subs-detail", hidden: !expanded, textContent: tracks.join(", ") });
   const chip = el("button", { type: "button", className: "ep-subs-chip", textContent: `+${remaining}`,
     ariaLabel: `+${remaining}: Show subtitles for ${number}`,
-    onclick: () => {
-      detail.hidden = !detail.hidden;
-      chip.setAttribute("aria-expanded", String(!detail.hidden));
-    } });
+    onclick: () => setSubtitleExpanded(chip, detail, detail.hidden) });
   chip.setAttribute("aria-controls", detail.id);
   chip.setAttribute("aria-expanded", String(expanded));
   cell.append(chip);
@@ -1091,9 +1092,23 @@ async function startDownload(numbering = null) {
 }
 $("#backdrop").onclick = () => closeDrawer();
 $("#d-back").onclick = () => closeDrawer();
+function dismissEpisodeSubtitles(target) {
+  const chip = $("#ep-list").querySelector('.ep-subs-chip[aria-expanded="true"]');
+  if (!chip) return null;
+  const detail = document.getElementById(chip.getAttribute("aria-controls"));
+  if (target && (chip.contains(target) || detail.contains(target))) return null;
+  setSubtitleExpanded(chip, detail, false);
+  return chip;
+}
+// Dismiss before another chip opens or a drawer control redraws the list.
+$("#drawer").addEventListener("click", (e) => dismissEpisodeSubtitles(e.target), true);
 document.addEventListener("keydown", (e) => {  // a dialog's Escape closes it alone
   if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
-  if ($("#drawer").classList.contains("open")) e.preventDefault();  // "unsaved changes" opens in this keydown: left alone, the same Escape would cancel it
+  if ($("#drawer").classList.contains("open")) {
+    e.preventDefault();  // "unsaved changes" opens in this keydown: left alone, the same Escape would cancel it
+    const chip = dismissEpisodeSubtitles();
+    if (chip?.getClientRects().length) { chip.focus(); return; }
+  }
   closeDrawer();
 });
 

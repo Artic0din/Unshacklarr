@@ -208,6 +208,17 @@ def test_the_segmented_controls_ring_is_drawn_inside_its_scroller():
     assert any(re.search(r"outline-offset:\s*-2px", body) for body in rules_of(".seg button:focus-visible"))
 
 
+def test_the_subtitle_chip_focus_ring_fits_inside_the_clipped_cell():
+    assert any(re.search(r"outline-offset:\s*-2px", body) for body in rules_of(".ep-subs-chip:focus-visible"))
+
+
+def test_expanded_subtitles_span_the_episode_row_without_contributing_to_column_widths():
+    assert any(
+        "grid-column: 1 / -1" in body and "contain: inline-size" in body
+        for body in rules_of(".ep-subs-detail")
+    )
+
+
 def test_the_lime_focus_ring_stands_out_on_dark_surfaces_and_selection():
     assert "outline: 2px solid var(--accent)" in rule(":focus-visible")
     assert "background: var(--select)" in rule('.seg button[aria-pressed="true"]')

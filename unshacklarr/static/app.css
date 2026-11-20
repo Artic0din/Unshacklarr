@@ -305,7 +305,7 @@ body.drawer-open .savebar { display: none; }
   .ep-list.compact { grid-template-columns: auto 40px minmax(0, 1fr) var(--cols) auto; }
   .ep-list.compact.stack { grid-template-columns: auto 40px var(--cols-s) auto; }
   .ep-list.compact.stack .ep-status { grid-row: 1 / span 2; grid-column: -2; }
-  .ep-subs-detail { grid-column: 1 / -1; }
+  .ep-subs-detail { grid-column: 1 / -1; contain: inline-size; }  /* the disclosure does not size the shared columns */
 }
 /* An episode's state as an icon: on disk, missing (can be fetched), not aired yet. */
 .ep-state { width: 22px; height: 22px; justify-self: end; display: grid; place-items: center; }
@@ -352,6 +352,7 @@ body.drawer-open .savebar { display: none; }
 .ep-list.stack .col.subs { overflow: visible; }
 .ep-subs-chip { flex: none; padding: 2px 7px; min-height: 26px; border: 1px solid var(--field-line); border-radius: var(--r-md);
   background: var(--select); font: inherit; font-variant-numeric: tabular-nums; color: var(--text); cursor: pointer; }
+.ep-subs-chip:focus-visible { outline-offset: -2px; }
 .ep-subs-detail:not([hidden]) { padding: 8px 16px; border-top: 1px solid var(--line); background: var(--well);
   color: var(--muted); font-size: var(--fs-callout); overflow-wrap: anywhere; }
 @media (min-width: 701px) {

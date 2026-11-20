@@ -62,7 +62,7 @@ def test_episode_subtitle_summary_prioritizes_required_languages_and_discloses_e
 const src = read(process.argv[1]), ctx = sandbox({ el: (tag, props, ...kids) => ({
   tag, ...props, kids, setAttribute(k, v) { this[k] = v; }, append(k) { kids.push(k); },
 }), flagged: (text) => text });
-vm.runInContext(grab(src, /function subtitleSummary\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(src, /function setSubtitleExpanded\b[\s\S]*?function subtitleSummary\b[\s\S]*?\n}\n/), ctx);
 const tracks = ["en", "ara", "cat", "cze", "fr", "fre-CA", ...Array(27).fill("es")];
 const { cell, detail } = ctx.subtitleSummary(tracks, "fr-CA", "", 5, "E05", false);
 const chip = cell.kids[1];

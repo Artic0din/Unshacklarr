@@ -36,6 +36,7 @@ let handler = null, closed = 0, prevented = 0, drawerOpen = true, dialogOpen = f
 const ctx = sandbox({
   document: { addEventListener: (type, fn) => { if (type === "keydown") handler = fn; }, querySelector: (sel) => (sel === "dialog[open]" && dialogOpen ? {} : null) },
   $: () => ({ classList: { contains: () => drawerOpen } }),
+  dismissEpisodeSubtitles: () => null,
   closeDrawer: () => { closed++; },
 });
 vm.runInContext(grab(src, /document\.addEventListener\("keydown", \(e\) => \{  \/\/ a dialog's Escape[\s\S]*?\n\}\);/), ctx);
@@ -47,6 +48,47 @@ console.log(JSON.stringify(out));
 """, str(JS / "series.js"))
     # the Escape that opens the question must not also cancel it: the browser's own handling is stopped
     assert shown == {"escape": [1, 1], "other": [0, 0], "insideDialog": [0, 0], "drawerShut": [1, 0]}
+
+
+@pytest.mark.parametrize("dismiss", ["Escape", "outside click"])
+def test_open_episode_subtitles_dismiss_before_the_drawer(dismiss):
+    shown = node(r"""
+const src = read(process.argv[1]), dismiss = process.argv[2];
+const listeners = {}, outside = {}, inside = {}, chipText = {};
+let focus = "elsewhere", closed = 0;
+const detail = { hidden: false, contains: (target) => target === inside };
+const chip = {
+  expanded: "true", contains: (target) => target === chip || target === chipText,
+  getAttribute: () => "ep-subs-5", setAttribute: (_, value) => { chip.expanded = value; },
+  getClientRects: () => [{}], focus: () => { focus = "chip"; },
+};
+const drawer = { classList: { contains: () => !closed },
+  addEventListener: (type, fn) => { listeners[type] = fn; } };
+const list = { querySelector: () => chip.expanded === "true" ? chip : null };
+const ctx = sandbox({
+  $: (sel) => ({ "#drawer": drawer, "#ep-list": list }[sel] ?? {}),
+  document: { addEventListener: drawer.addEventListener, querySelector: () => null, getElementById: () => detail },
+  closeDrawer: () => { closed++; },
+});
+vm.runInContext(grab(src, /function setSubtitleExpanded\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(src, /^.*#backdrop.*onclick = \(\) => closeDrawer\(\);[\s\S]*?(?=\/\* Settings' shortcuts)/m), ctx);
+const snapshot = () => ({ hidden: detail.hidden, expanded: chip.expanded, focus, closed });
+const pressEscape = () => listeners.keydown({ key: "Escape", preventDefault() {} });
+const click = (target) => listeners.click?.({ target });
+click(inside);
+click(chipText);
+const insideClicks = snapshot();
+if (dismiss === "Escape") pressEscape();
+else click(outside);
+const dismissed = snapshot();
+pressEscape();
+console.log(JSON.stringify({ insideClicks, dismissed, drawerClosesNext: closed === 1 }));
+""", str(JS / "series.js"), dismiss)
+    assert shown == {
+        "insideClicks": {"hidden": False, "expanded": "true", "focus": "elsewhere", "closed": 0},
+        "dismissed": {"hidden": True, "expanded": "false", "focus": "chip" if dismiss == "Escape" else "elsewhere", "closed": 0},
+        "drawerClosesNext": True,
+    }
 
 
 def test_closing_a_series_opened_from_a_schedule_card_returns_to_that_card_after_a_redraw():
