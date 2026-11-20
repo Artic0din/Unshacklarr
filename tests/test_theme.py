@@ -90,7 +90,7 @@ def test_ok_text_on_its_own_tint_is_readable():
 
 @pytest.mark.parametrize("badge", [
     ".ck-pill.ok", ".sched-st.ok", ".chip.disk", ".chip.o-downloaded", ".rg-chip.ok",
-    ".ep-on", ".ep-on.other", ".res.r1080", ".poster.on:not(:has(.sick)) .svc", ".sched-card .svc",
+    ".ep-on", ".ep-on.other", ".res.r1080", ".poster.on:not(:has(.sick)) .svc",
 ])
 def test_a_done_or_healthy_badge_is_green_not_the_accent(badge):
     rules = rules_of(badge)
@@ -109,6 +109,30 @@ def test_region_country_chips_are_neutral():
 def test_complete_season_counts_are_green():
     rules = rules_of(".seasons button small.complete")
     assert rules and "color: var(--ok)" in rules[-1]
+
+
+def test_catch_up_status_colours_win_on_renumbered_lines():
+    assert "color: var(--ok)" in rules_of(".ep-catchup .ok")[-1]
+    assert "color: var(--warn)" in rules_of(".ep-catchup .warn")[-1]
+    # The more specific small.renum rule must not override either status colour.
+    assert all(not re.search(r"\bcolor\s*:", body) for body in rules_of(".ep-catchup small.renum"))
+
+
+def test_managed_schedule_cards_have_a_neutral_border():
+    assert "border-color: var(--line-strong)" in rules_of(".sched-card.mine")[-1]
+
+
+def test_schedule_service_chip_is_neutral():
+    last = [body for body in rules_of(".sched-card .svc") if re.search(r"\bcolor\s*:", body)][-1]
+    assert "color: var(--muted)" in last
+    assert "background: var(--well)" in last
+
+
+def test_late_schedule_status_is_amber_like_waiting_for_import():
+    last = rules_of(".sched-st.late")[-1]
+    assert last == rules_of(".sched-st.wait")[-1]
+    assert "color: var(--warn)" in last
+    assert "background: var(--warn-tint)" in last
 
 
 def test_a_poster_with_a_failure_icon_has_no_green_service_chip_or_frame():

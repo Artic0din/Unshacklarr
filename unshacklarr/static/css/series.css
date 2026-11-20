@@ -189,7 +189,7 @@ body.drawer-open .savebar { display: none; }
 .ep-up { margin-left: 8px; font-style: normal; font-size: var(--fs-footnote); font-weight: 600; padding: 1px 7px; border-radius: var(--r-md); cursor: help;
   color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .catchup-acts { display: flex; gap: 8px; flex-wrap: wrap; }
-.ep-catchup small.renum { display: block; color: var(--text); }
+.ep-catchup small.renum { display: block; }
 .ep-catchup .ok { color: var(--ok); }
 .ep-catchup .warn { color: var(--warn); }
 .ep-state.disk { color: var(--ok); } .ep-state.miss { color: var(--warn); } .ep-state.soon { color: var(--muted); }

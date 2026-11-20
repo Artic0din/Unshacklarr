@@ -157,29 +157,32 @@ const ctx = sandbox({
   epBusy: new Set(), epElsewhere: {}, epPages: {}, epUp: null,
   seriesSvcs: () => "SBS", state: () => "disk", belowAsked: () => true,
   pad2: (n) => String(n).padStart(2, "0"),
-  COUNT: { episode: () => "1 episode", upgrade: () => "1 upgrade", missingEpisode: () => "1 missing episode" },
+  COUNT: { episode: () => "1 episode", upgrade: () => "1 upgrade", missingEpisode: (n) => `${n} missing episodes` },
 });
 vm.runInContext(grab(read(process.argv[1]), /^function renderCatchUp\(.*?^\}/ms), ctx);
 function result() {
+  box.children = [];
   ctx.renderCatchUp();
   const [message, actions] = box.children;
-  return [message.kids[0].className, message.kids[0].textContent, actions.kids[0].className];
+  return [box.hidden, message.kids[0].className, message.kids[0].textContent, actions.kids[0].className,
+    message.kids.filter((el) => el.tag === "small").map((el) => el.className)];
 }
 const possible = result();
 ctx.epUp = new Set([1]);
 const confirmed = result();
 ctx.state = () => "miss";
 ctx.belowAsked = () => false;
+ctx.epSeasons[2] = [{ id: 2, seasonNumber: 2, episodeNumber: 1 }];
 console.log(JSON.stringify([possible, confirmed, result()]));
 """, str(JS / "series.js"))
     assert shown == [
-        ["warn", "1 episode may be better on SBS", "btn small"],
-        ["ok", "1 on disk SBS has in better quality (Activity, Upgrades)", "btn small"],
-        ["ok", "SBS has 1 of your 1 missing episode", "btn primary small"],
+        [False, "warn", "1 episode may be better on SBS", "btn small", []],
+        [False, "ok", "1 on disk SBS has in better quality (Activity, Upgrades)", "btn small", []],
+        [False, "ok", "SBS has 1 of your 2 missing episodes", "btn primary small", [None, "renum ok"]],
     ]
 
 
-def test_catch_up_warns_about_a_possible_resolution_upgrade_alongside_missing_episodes():
+def test_catch_up_distinguishes_possible_and_confirmed_upgrades_alongside_missing_episodes():
     shown = node(r"""
 const box = { replaceChildren(...children) { this.children = children; } };
 const ctx = sandbox({
@@ -201,23 +204,51 @@ vm.runInContext([
   grab(src, /^const belowAsked = .*?^\};/ms),
   grab(src, /^function renderCatchUp\(.*?^\}/ms),
 ].join("\n"), ctx);
-ctx.renderCatchUp();
-const note = box.children[0].kids.find((el) => el.tag === "small" && el.textContent.includes("lower resolution"));
-console.log(JSON.stringify([box.hidden, note.className, note.textContent]));
+function result(text) {
+  ctx.renderCatchUp();
+  const note = box.children[0].kids.find((el) => el.tag === "small" && el.textContent.includes(text));
+  return [box.hidden, note.className, note.textContent];
+}
+const possible = result("lower resolution");
+ctx.epUp = new Set([1]);
+console.log(JSON.stringify([possible, result("better quality")]));
 """, str(JS / "series.js"))
-    assert shown == [False, "renum warn", "1 on disk in a lower resolution than asked: SBS may have better"]
+    assert shown == [
+        [False, "renum warn", "1 on disk in a lower resolution than asked: SBS may have better"],
+        [False, "renum ok", "1 on disk SBS has in better quality (Activity, Upgrades)"],
+    ]
 
 
-def test_month_labels_managed_episodes_without_calling_them_downloaded():
+def test_catch_up_heading_is_neutral_when_no_missing_episodes_are_available():
+    shown = node(r"""
+const box = { replaceChildren(...children) { this.children = children; } };
+const ctx = sandbox({
+  $: () => box, document: { querySelectorAll: () => [] },
+  current: { tvdbId: 1 }, S: { config: { series: { 1: {} } } },
+  epSeasons: { 1: [{ id: 1, seasonNumber: 1 }], 2: [{ id: 2, seasonNumber: 2 }] },
+  epAvail: {}, epBusy: new Set(), epElsewhere: {}, epPages: {}, epUp: null,
+  seriesSvcs: () => "SBS", state: () => "miss", belowAsked: () => false,
+  COUNT: { episode: (n) => `${n} episodes`, missingEpisode: (n) => `${n} missing episodes` },
+});
+vm.runInContext(grab(read(process.argv[1]), /^function renderCatchUp\(.*?^\}/ms), ctx);
+ctx.renderCatchUp();
+const heading = box.children[0].kids[0];
+console.log(JSON.stringify([box.hidden, heading.className, heading.textContent]));
+""", str(JS / "series.js"))
+    assert shown == [False, "none", "SBS has none of your 2 missing episodes"]
+
+
+def test_month_tooltips_and_accessible_day_labels_describe_management():
     shown = node(r"""
 const late = { managed: true, series: "A", fromLate: true, service: "SBS" };
 const waiting = { managed: true, series: "B", waitingImport: true };
 const downloaded = { managed: true, series: "C", hasFile: true };
 const future = { managed: true, series: "D", airDateUtc: "2999-01-01T00:00:00Z" };
+const unmanaged = { managed: false, series: "E" };
 const first = new Date(2026, 10, 1);
 const grid = { replaceChildren(...children) { this.children = children; } };
 const ctx = sandbox({
-  cal: { month: first, byDay: new Map([[1, [late, waiting, downloaded]], [2, [future]]]) },
+  cal: { month: first, byDay: new Map([[1, [late, waiting, downloaded]], [2, [future, unmanaged]]]) },
   weekStartOf: (d) => d, addDays: (d, offset) => new Date(d.getFullYear(), d.getMonth(), 1 + offset),
   isoDay: (d) => d.getDate(), LOCALE: "en", COUNT: { episode: (n) => `${n} episodes` }, tr: (text) => text,
   renderRange() {}, inScope: () => true, byWhen: () => 0, monthTime: () => "20:00", svcName: (tag) => tag,
@@ -229,14 +260,17 @@ ctx.renderMonth();
 const [firstDay, secondDay] = grid.children.slice(7, 9);
 console.log(JSON.stringify({
   episodes: [firstDay, secondDay].flatMap((d) => d.kids[2].kids.map((e) => [e.className, e.title || ""])),
-  count: firstDay.kids[1].kids.map((e) => [e.title || "", e.textContent]),
-  dayLabel: firstDay.ariaLabel,
+  count: secondDay.kids[1].kids.map((e) => [e.title || "", e.textContent]),
+  dayLabels: [firstDay.ariaLabel, secondDay.ariaLabel],
 }));
 """, str(JS / "schedule.js"))
     assert shown == {
-        "episodes": [["cal-ep mine", "Downloading"]] * 4,
-        "count": [["Downloading", 3]],
-        "dayLabel": "Sunday, November 1: 3 episodes, Downloading: 3",
+        "episodes": [["cal-ep mine", "Managed"]] * 4 + [["cal-ep", "Not managed"]],
+        "count": [["Managed", 1], ["Not managed", 1]],
+        "dayLabels": [
+            "Sunday, November 1: 3 episodes, Managed: 3",
+            "Monday, November 2: 2 episodes, Managed: 1, Not managed: 1",
+        ],
     }
 
 

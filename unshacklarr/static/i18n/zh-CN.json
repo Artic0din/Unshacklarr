@@ -2061,6 +2061,8 @@
  "Downloads will fail unless you add a cookie file.": "除非添加 Cookie 文件，否则下载会失败。",
  "Its downloads will fail: replace them in Settings › Services & Devices › Services.": "它的下载会失败:请在 设置 › 服务和设备 › 服务 中替换。",
  "Managed on that server": "在那台服务器上管理",
+ "Managed": "已管理",
+ "Not managed": "未管理",
  "Needed to manage them in Settings › Services & Devices › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": "用于在 设置 › 服务和设备 › 服务 中管理它们。留空:Unshacklarr 会询问 Unshackle，两者在同一台电脑上运行时有效。",
  "No series": "没有剧集",
  "No service is known yet. Unshackle lists them once it answers.": "暂时不知道任何服务。Unshackle 响应后会列出它们。",

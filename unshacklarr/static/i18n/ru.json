@@ -2064,6 +2064,8 @@
  "Downloads will fail unless you add a cookie file.": "Загрузки будут завершаться ошибкой, пока вы не добавите файл cookies.",
  "Its downloads will fail: replace them in Settings › Services & Devices › Services.": "Его загрузки завершатся ошибкой: замените их в Настройки › Сервисы и устройства › Сервисы.",
  "Managed on that server": "Управляется на том сервере",
+ "Managed": "Управляемые",
+ "Not managed": "Неуправляемые",
  "Needed to manage them in Settings › Services & Devices › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": "Нужна, чтобы управлять ими в Настройки › Сервисы и устройства › Сервисы. Пусто: Unshacklarr спросит у Unshackle, это работает, если оба запущены на этом компьютере.",
  "No series": "Нет сериалов",
  "No service is known yet. Unshackle lists them once it answers.": "Ни один сервис пока не известен. Unshackle перечислит их, как только ответит.",

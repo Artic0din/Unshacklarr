@@ -68,7 +68,7 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
 .sched-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
 .sched-cards[hidden] { display: none; }
 .sched-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); }
-.sched-card.mine { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.sched-card.mine { border-color: var(--line-strong); }
 .sched-card.other { background: none; }
 .sc-when .tm { font: 700 var(--fs-footnote) system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); font-variant-numeric: tabular-nums; }
 .sc-when .tm small { margin-inline-start: 4px; font-size: inherit; font-weight: 600; color: var(--text); }
@@ -88,7 +88,7 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
 .sc-foot .icon-hide { width: 28px; height: 28px; }
 .board .sc-foot :is(.sched-st, .svc) { padding-inline: 5px; }
 .board .sc-foot .icon-hide { width: 24px; height: 24px; }
-/* Managed: filled service badge and an accent edge. Not managed: a dashed "add" button. */
+/* The service badge indicates management, not download status. */
 .sched-card .svc { padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--text); font-size: var(--fs-footnote); font-weight: 700; letter-spacing: .02em; overflow-wrap: anywhere; }
 .icon-hide:focus-visible { opacity: 1; }
 @media (hover: hover) { .sched-card:hover .icon-hide { opacity: 1; } }
