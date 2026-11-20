@@ -420,14 +420,22 @@ def test_a_template_with_a_dot_separator_is_read_whole_before_its_pieces():
     assert page_translate("fr", [json.dumps(text) for text in SIGN_IN_LABELS]) == list(SIGN_IN_LABELS.values())
 
 
-def test_known_service_names_fill_short_templates_without_translating_unrelated_text():
-    texts = ["on Apple TV+", "Not on Netflix", "upgrade on Disney+", "No CDM for Stan", "Options of Binge",
-             "Open Apple TV+", "Find it on Apple TV+", "Could not start unshackle serve with Python: Permission denied",
-             "Open an unrelated document"]
-    assert page_translate("de", list(map(json.dumps, texts))) == [
+def test_explicit_service_labels_translate_in_german():
+    labels = [("on", "Apple TV+"), ("Not on", "Netflix"), ("upgrade on", "Disney+"), ("No CDM for", "Stan"),
+              ("Options of", "Binge"), ("Open", "Apple TV+"), ("Find it on", "Apple TV+")]
+    assert page_translate("de", [f"trWith({json.dumps(prefix + ' {0}')}, {json.dumps(service)})"
+                                 for prefix, service in labels]) == [
         "bei Apple TV+", "Nicht bei Netflix", "Upgrade bei Disney+", "Kein CDM für Stan", "Optionen von Binge",
-        "Apple TV+ öffnen", "Bei Apple TV+ suchen", "unshackle serve konnte mit Python nicht gestartet werden: Permission denied",
-        "Open an unrelated document",
+        "Apple TV+ öffnen", "Bei Apple TV+ suchen",
+    ]
+
+
+def test_raw_names_containing_a_service_are_not_translated_as_labels():
+    titles = ["Open Netflix", "Open Apple TV+", "Not on Netflix", "Open an unrelated document"]
+    assert page_translate("de", list(map(json.dumps, titles))) == titles
+    error = "Could not start unshackle serve with Python: Permission denied"
+    assert page_translate("de", [json.dumps(error)]) == [
+        "unshackle serve konnte mit Python nicht gestartet werden: Permission denied",
     ]
 
 

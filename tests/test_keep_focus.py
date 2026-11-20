@@ -261,7 +261,8 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   ctx.showOption({ sec: "automation", target: "#ax-window-card" });
   out.news = [location.hash, panels.find((n) => !n.hidden).dataset.sec, doc.activeElement === option];
   Object.assign(ctx, { getSelection: () => "", INBOX_ICONS: {}, LOCALE: "en", inboxSeenAt: null,
-    renderServices: () => ctx.revealService(), svcName: (s) => s });
+    renderServices: () => ctx.revealService(), svcName: (s) => s,
+    trWith: (template, label) => template.replace("{0}", label) });
   const row = make("div", { id: "sv-EXAMPLE", closest: () => null, scrollIntoView() { out.serviceScrolled = true; } });
   root.append(row); anchors[row.id] = row;
   run(["openServiceRow", "serviceRow", "revealService"].map((name) => fn(read("services.js"), name)).join("\n"));

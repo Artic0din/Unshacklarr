@@ -76,7 +76,7 @@ function inboxRow(g, n, cap = INBOX_EP_LIMIT) {  // the menu caps a job's episod
   const open = () => {
     if (!String(getSelection()).trim()) closeInbox(() => g.series ? openDrawer(g.series) : openServiceRow(i.service));
   };
-  return el("div", { ...props, className: `${props.className} link`, role: "button", tabIndex: 0, title: `Open ${g.series ? g.name : svcName(i.service)}`, onclick: open,
+  return el("div", { ...props, className: `${props.className} link`, role: "button", tabIndex: 0, title: g.series ? `Open ${g.name}` : trWith("Open {0}", svcName(i.service)), onclick: open,
     onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } } }, art, body, time);
 }
 const clearable = (items) => items.filter((i) => !(i.action && !i.action.done));  // what the server clears: all but what still waits for you

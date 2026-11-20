@@ -207,6 +207,7 @@ def test_a_notification_about_a_service_opens_its_row():
 const src = read(process.argv[1]);
 const opened = [];
 const ctx = sandbox({ S: { series: [] }, svcName: (t) => `${t} name`, openServiceRow: (s) => opened.push(s), getSelection: () => "",
+  trWith: (template, label) => template.replace("{0}", label),
   $: () => ({ close() {} }), ago: () => "now", LOCALE: "en", inboxSeenAt: "", history: { state: null } });
 for (const re of [/^const INBOX_ICONS = \{[\s\S]*?^\};/m, /^function inboxGroups\(.*?^\}/ms, /^function inboxRow\(.*?^\}/ms, /^function closeInbox\(.*?^\}/ms]) vm.runInContext(grab(src, re), ctx);
 const item = { id: "a", at: new Date().toISOString(), level: "warning", title: "HULU cookies expire in 4 days", message: "m", service: "HULU" };

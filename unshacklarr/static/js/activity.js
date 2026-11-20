@@ -3,7 +3,7 @@
 const TERM_COLS = 110;
 const OUTCOME = { running: "Running", downloaded: "Downloaded", failed: "Failed", kept: "Kept", import: "Import needed", interrupted: "Interrupted", stopped: "Stopped", unavailable: "Not out yet", cancelled: "Cancelled" };
 /* A separate programme no search found has aired: it is not on the service, rather than not out yet */
-const outcomeOf = (c) => c.outcome === "unavailable" && c.notOn ? `Not on ${c.notOn}` : OUTCOME[c.outcome] || c.outcome;
+const outcomeOf = (c) => c.outcome === "unavailable" && c.notOn ? trWith("Not on {0}", c.notOn) : OUTCOME[c.outcome] || c.outcome;
 const KIND = { auto: "automatic sync", burst: "release time", manual: "started by hand", retry: "retried by hand", upgrade: "better language" };
 let term = null, termFit = null, termSocket = null, termFor = null, runsShown = 50, runsTimer = null;
 let runCards = [], picked_run = null, conFilter = "all";
@@ -462,7 +462,7 @@ function renderJob(j) {
     const tookLine = !live && c.ended ? [cause, `took ${duration(new Date(c.ended) - new Date(c.started))}`, c.size && size(c.size)].filter(Boolean).join(" · ") : "";
     const detail = downloading ? el("div", { className: "jmeta" },  // how fast, how long still: in sight, not a grey line
         ...[...(afterTracks(c) ? [[ICON_CLOCK, muxLeft(c) ? `${afterTracks(c)} · ${muxLeft(c)} left` : `${afterTracks(c)} · ${since(c.mux_from || c.tracks_in)}`]] : [[ICON_SPEED, speedOf(c)], [ICON_CLOCK, timeLeft(c) && `${timeLeft(c)} left`]]), [ICON_GLOBE, proxyOf(c), "extra"], [ICON_FILM, videoOf(c), "extra"],
-          [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && `${c.serviceEpisode} on ${svcName(c.service)}`, "extra"]]
+          [ICON_SWAP, c.serviceEpisode && c.serviceEpisode !== c.sxxeyy && trWith("{0} on {1}", c.serviceEpisode, svcName(c.service)), "extra"]]
           .filter(([, t]) => t).map(([svg, t, extra]) => { const chip = metaChip(svg, t); if (extra) chip.classList.add(extra); return chip; }))
       : el("small", { textContent: tookLine, title: tookLine });  // ellipsised when narrow: the whole line on hover
     const open = openCards.has(c.id) && !c.waiting;

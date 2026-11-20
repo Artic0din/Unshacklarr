@@ -115,12 +115,8 @@ function trTemplate(key, depth, joined) {
     if (p.joined !== joined || !key.includes(p.anchor)) continue;
     const m = p.re.exec(key);
     // a template with little text of its own ("{0} ago", "{0} of {1}") takes short fillers only, not a whole sentence
-    // Accept numbers, known labels and service names, not arbitrary phrases.
-    if (m && p.weak && m.slice(1).some((x) => {
-      const fill = x.trim();
-      return x.length > 24 || !(!fill || /\d/.test(fill) || T[fill] !== undefined
-        || S.services.includes(fill) || Object.values(S.serviceNames).includes(fill));
-    })) continue;
+    // ... and only numbers, or texts it has a translation for: "5 min ago", not "Set up Unshacklarr in a few steps"
+    if (m && p.weak && m.slice(1).some((x) => x.length > 24 || !(/\d/.test(x) || T[x.trim()] !== undefined || !x.trim()))) continue;
     if (m) return plural(p.to, +m[1]).replace(/\{(\d+)\}/g, (_, i) => tr(m[+i + 1] ?? "", depth + 1));
   }
   return undefined;
@@ -975,7 +971,7 @@ async function knownProfiles(service) {
   let r;
   try { r = await api(`/api/profiles/${encodeURIComponent(service)}`); } catch { return; }
   if (S.config.series[current?.tvdbId]?.service !== service || !r.profiles.length) return;
-  box.replaceChildren(el("span", { textContent: `On ${svcName(service)}:` }), ...r.profiles.map((p) => el("button", { type: "button", className: "chip-btn", textContent: p,
+  box.replaceChildren(el("span", { textContent: trWith("On {0}:", svcName(service)) }), ...r.profiles.map((p) => el("button", { type: "button", className: "chip-btn", textContent: p,
     onclick: () => {
       const list = $("#d-fallback").value.split(/[\s,]+/).filter(Boolean);
       if (!list.includes(p)) { $("#d-fallback").value = [...list, p].join(", "); $("#d-fallback").dispatchEvent(new Event("input")); }

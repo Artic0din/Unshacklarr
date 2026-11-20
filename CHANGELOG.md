@@ -169,6 +169,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Kept series and Sonarr names unchanged while translating service labels.
 - Kept unread notifications and the retry button intact when reopening the Inbox during a slow load.
 - Stopped late Activity responses from opening downloads behind another tab or an overlay.
 - Cleared stale run details when returning to Activity from another tab.
