@@ -52,8 +52,17 @@ async function hideSeries(d, hidden, quiet = false) {
   renderWall();  // its Hidden filter and badges
   if (!$("#tab-schedule").hidden) rerenderSchedule(); else renderHiddenButton();
   // its cards are gone with the button that was pressed: the keyboard goes on to the first episode left, not to the body
-  if (hidden && document.activeElement === document.body && !$("#tab-schedule").hidden)
-    ([...document.querySelectorAll("#tab-schedule .sc-open")].find((b) => !b.closest("details:not([open])") && b.getClientRects().length) || $("#cal-today")).focus({ preventScroll: true });  // shown, not in a closed Late list or the other view
+  if (hidden && document.activeElement === document.body && !$("#tab-schedule").hidden) focusFirstEpisode();
+}
+/* Where the keyboard goes when its card is gone: the first episode shown (not in a closed Late list or the other view), else Today. */
+function focusFirstEpisode() {
+  ([...document.querySelectorAll("#tab-schedule .sc-open")].find((b) => !b.closest("details:not([open])") && b.getClientRects().length) || $("#cal-today")).focus({ preventScroll: true });
+}
+/* keepFocus for a list of cards: one redrawn away leaves the keyboard on the first episode, never on the body. */
+function keepCardFocus(box, draw) {
+  const had = box.contains(document.activeElement);
+  keepFocus(box, draw);
+  if (had && document.activeElement === document.body) focusFirstEpisode();
 }
 /* The series page's own switch, saved at once like the Schedule's. */
 const EYE_OPEN = '<path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z"/><circle cx="12" cy="12" r="3"/>', EYE_SHUT = '<path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a17.6 17.6 0 0 1-2.2 3.3M6.6 6.6C3.6 8.6 2 12 2 12s3 8 10 8a10 10 0 0 0 5.4-1.6M14.1 14.1a3 3 0 0 1-4.2-4.2M2 2l20 20"/>';
@@ -201,7 +210,7 @@ function renderWeek() {
       ...(list.length ? list.map((e) => schedCard(e, whenText(e))) : [el("p", { className: "day-empty", textContent: "Nothing that day." })]));
   });
   board.style.setProperty("--week-columns", tracks.join(" "));
-  keepFocus(board, () => board.replaceChildren(...days));
+  keepCardFocus(board, () => board.replaceChildren(...days));
   syncDetails();
 }
 function moveWeek(step) {
@@ -276,7 +285,7 @@ function renderMonth() {
   keepFocus($("#cal-grid"), () => $("#cal-grid").replaceChildren(...heads, ...cells));
   const picked = cal.pick && (cal.byDay.get(cal.pick) || []).filter(inScope);
   const listBox = $("#cal-day");
-  keepFocus(listBox, () => listBox.replaceChildren(...(picked ? [
+  keepCardFocus(listBox, () => listBox.replaceChildren(...(picked ? [
     el("h3", { className: "sched-day", textContent: day(dayOfKey(cal.pick)) }),
     picked.length ? el("div", { className: "sched-cards" }, ...picked.sort(byWhen).map((d) => schedCard(d, whenText(d))))
       : el("p", { className: "muted", textContent: "Nothing that day." })] : [])));

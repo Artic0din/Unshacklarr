@@ -2542,6 +2542,7 @@ const code = [
   pick(series, /^\$\("#d-filename"\)\.oninput = .*$/m),
   pick(series, /^\$\("#d-seasons"\)\.oninput = .*?^\};$/ms),
   pick(schedule, /^async function hideSeries\(.*?^\}/ms),
+  pick(schedule, /^function focusFirstEpisode\(.*?^\}/ms),
 ].join("\n");
 const nodes = {};
 // a browser still gives a button in a closed <details> a box, but it cannot take focus
@@ -2554,7 +2555,7 @@ const box = {
   api: () => Promise.resolve(box.hiddenAfter),
   renderCommands() {}, renderInherited() {}, renderPreview() {}, renderHideToggle() {}, renderWall() {}, rerenderSchedule() {},
   renderHiddenButton() {}, toast() {}, S: null,
-  document: { body: {}, get activeElement() { return this.body; },  // the pressed Hide went with its cards
+  document: { body: {}, active: null, get activeElement() { return this.active || this.body; },  // the pressed Hide went with its cards
     querySelectorAll: (sel) => (sel === "#tab-schedule .sc-open" ? openers : []) },
 };
 vm.createContext(box);
@@ -2606,7 +2607,11 @@ const fresh = () => {
   box.hiddenAfter = [];
   await page.hideSeries({ tvdbId: 7, series: "Show" }, false);
   out.showingLeavesBarHidden = bars["#savebar"].hidden;
-  out.focusAfterHiding = focused;  // hiding moves the keyboard to the first episode left; showing again moves nothing
+  out.focusAfterHiding = focused.slice();  // hiding moves the keyboard to the first episode left; showing again moves nothing
+  box.document.active = { name: "Hide in the series drawer" };  // hidden from elsewhere: the keyboard is not on the Schedule
+  box.hiddenAfter = [7];
+  await page.hideSeries({ tvdbId: 7, series: "Show" }, true);
+  out.focusLeftAlone = focused.length === out.focusAfterHiding.length;
   console.log(JSON.stringify(out));
 })();
 """
@@ -2636,6 +2641,7 @@ def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hid
         "restoredOffsetDrawerUnchanged": True,  # and closing the series asks nothing
         "hiddenListIsNoPendingChange": True,  # saved at once by itself, never by Save
         "focusAfterHiding": ["first episode shown"],  # not one inside a closed Late list
+        "focusLeftAlone": True,
     }
 
 

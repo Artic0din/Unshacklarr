@@ -237,7 +237,7 @@ if (scenario === "week") {
     whenText: () => "", posterSrc: () => "", posterFail: () => null, statusPill: () => "", networkBadge: () => "" });
   run(["cal", "startOfDay", "addDays", "isoDay", "weekStartOf", "triesAt", "whenOf", "byWhen", "FINALE"]
     .map((n) => line(schedule, n)).join("\n") + "\n"
-    + ["hideButton", "schedCard", "renderWeek"].map((n) => fn(schedule, n)).join("\n"));
+    + ["hideButton", "schedCard", "focusFirstEpisode", "keepCardFocus", "renderWeek"].map((n) => fn(schedule, n)).join("\n"));
   const day = "2026-11-02";
   const first = { tvdbId: 1, series: "First", sxxeyy: "S01E01", airDateUtc: `${day}T10:00:00Z` };
   const second = { tvdbId: 2, series: "Second", sxxeyy: "S01E01", airDateUtc: `${day}T12:00:00Z` };
@@ -252,6 +252,14 @@ if (scenario === "week") {
   ctx.renderWeek();
   out.focus = named(doc.activeElement);
   out.onReplacement = !original.isConnected && doc.activeElement === openButton(key);
+  // its episode leaves the week while focused: the keyboard goes on to the first episode (focusFirstEpisode), not the body
+  let fellBack = 0;
+  ctx.focusFirstEpisode = () => { fellBack++; };
+  ctx.episodes.splice(ctx.episodes.indexOf(second), 1);
+  ctx.renderWeek();
+  out.fellBackWhenGone = fellBack;
+  ctx.renderWeek();  // nothing focused in the board now: a plain redraw moves nothing
+  out.fellBackAgain = fellBack;
 }
 
 if (scenario === "month") {
@@ -259,7 +267,7 @@ if (scenario === "month") {
   Object.assign(ctx, { Date, Map, Math, Intl, cal: null, $: (sel) => sel === "#cal-grid" ? grid : dayBox, renderRange() {}, inScope: () => true, LOCALE: "en-GB",
     COUNT: { episode: (n) => `${n} episodes` }, time: () => "", day: () => "", schedCard: () => make("article"), syncDetails() {}, SCROLL: "auto" });
   run(["startOfDay", "addDays", "isoDay", "weekStartOf", "monthStartOf", "dayOfKey", "whenOf", "byWhen"].map((n) => line(schedule, n)).join("\n") + "\n"
-    + line(schedule, "cal").replace("const ", "var ") + "\n" + fn(schedule, "pickDay") + "\n" + fn(schedule, "renderMonth"));
+    + line(schedule, "cal").replace("const ", "var ") + "\n" + fn(schedule, "pickDay") + "\n" + ["focusFirstEpisode", "keepCardFocus", "renderMonth"].map((n) => fn(schedule, n)).join("\n"));
   run("cal.month = new Date(2026, 10, 1); cal.byDay = new Map(); cal.pick = null");
   ctx.renderMonth();
   const cells = () => grid.children.filter((c) => c.tag === "button");
@@ -483,7 +491,7 @@ def test_the_live_tick_keeps_the_focus_on_the_control_in_use():
 
 
 def test_a_week_card_keeps_focus_when_episodes_reorder():
-    assert run_scenario("week") == {"focus": "open|false|2|S01E01", "onReplacement": True}
+    assert run_scenario("week") == {"focus": "open|false|2|S01E01", "onReplacement": True, "fellBackWhenGone": 1, "fellBackAgain": 1}
 
 
 def test_a_picked_month_day_keeps_the_focus_and_says_it_is_pressed():
