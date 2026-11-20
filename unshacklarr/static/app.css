@@ -19,6 +19,7 @@
   --font-figure: -apple-system, "SF Pro Display", system-ui, sans-serif;
   --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
+  --header-bottom: calc(var(--header-top, 0px) + var(--head-h, 65px));
   --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2314170b' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");  /* a tick on a light fill, in --accent-ink */
   --sh-xs: 0 1px 2px 0 #0000004d;
   --sh-sm: 0 1px 2px 0 #00000066, 0 1px 3px 0 #00000066;
@@ -43,10 +44,24 @@ h1, h2, h3 { line-height: 1.2; letter-spacing: -.01em; text-wrap: balance; }
 .skip:not(:focus) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 main:focus { outline: none; }  /* the skip link's target, not a control */
 
-header { display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-3) var(--sp-6); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header { position: sticky; top: var(--header-top, 0px); z-index: 8; display: flex; align-items: center;
+  gap: var(--sp-6); padding: var(--sp-3) var(--sp-6); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+/* Blurring the header itself would trap the phone's fixed nav inside it. */
+header::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-color: var(--bg); }
+/* no glow of its own: a copy pinned here would not scroll away with the page's; the blur below shows the page's through it */
+@media (min-width: 701px) {
+  html { scroll-padding-block-start: calc(var(--header-bottom) + var(--sp-2)); }
+  @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+    header::before { background-color: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  header::before { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 header h1 { font-size: var(--fs-title3); font-weight: 700; margin: 0; }
 nav { display: flex; gap: 4px; }
-nav a { background: none; border: 0; padding: 6px 12px; border-radius: var(--r-sm); color: var(--muted); cursor: pointer; text-decoration: none; line-height: normal; }
+nav a { background: none; border: 0; padding: 6px 12px; border-radius: 999px; color: var(--muted); cursor: pointer; text-decoration: none; line-height: normal; }
+@media (hover: hover) { nav a:not([aria-current="page"]):hover { background: var(--well); color: var(--text); } }
 nav a[aria-current="page"] { background: var(--accent-tint); color: var(--accent); }
 .btn { background: var(--panel); color: inherit; border: 1px solid var(--field-line); border-radius: var(--r-sm); padding: 7px 14px; cursor: pointer; }  /* a field's edge: it shows on any surface */
 a.btn { text-decoration: none; }  /* a link drawn as a button: the button's colour, no underline */
@@ -96,9 +111,11 @@ nav .short { display: none; }
 .inbox-head:has(.inbox-clear[data-sure]) { flex-wrap: wrap; }  /* the question has a row of its own: the title is not squeezed away */
 .inbox-clear[data-sure] { order: 1; flex: 1 0 100%; color: var(--err); border-color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); font-weight: 600; }
 /* The menu: under the bell, over the page, which stays usable */
-#inbox-dialog.menu { position: fixed; inset: 64px 16px auto auto; margin: 0; width: min(420px, calc(100vw - 32px)); padding: 16px 16px 8px;
+#inbox-dialog.menu { position: fixed; inset: calc(var(--header-bottom) + var(--sp-2)) 16px auto auto; margin: 0; width: min(420px, calc(100vw - 32px)); padding: 16px 16px 8px;
   box-shadow: var(--sh-lg); z-index: 50; animation: inbox-drop .16s ease-out; }
 #inbox-dialog.menu #inbox-list { max-height: min(62vh, 560px); }
+#inbox-dialog.menu[open] { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; max-height: calc(100dvh - var(--header-bottom) - var(--sp-2) - 8px); }
+#inbox-dialog.menu #inbox-list { flex: 1 1 auto; min-height: min(9rem, 30dvh); }  /* wrapped filters take their room from the list, which keeps a row or two in sight */
 #inbox-dialog.menu .inbox-head h2 { font-size: var(--fs-headline); }
 #inbox-dialog:not(.menu) #inbox-full { display: none; }
 @keyframes inbox-drop { from { opacity: 0; transform: translateY(-6px); } }
@@ -123,8 +140,8 @@ nav .short { display: none; }
 #inbox-filters:not([hidden]) + #inbox-list { height: min(70vh, 640px); }  /* with filters, a fixed height: switching them never resizes the popup */
 @media (max-width: 340px) { #inbox-clear { order: 1; margin-left: auto; } }  /* too narrow for all four on a line: Clear on a row under the title, the close button stays up */
 .inbox-head small { display: block; color: var(--muted); font-size: var(--fs-sub); font-weight: 400; margin-top: 2px; }
-.inbox-filters { display: flex; gap: 6px; margin: 0 0 10px; overflow-x: auto; }
-.inbox-filters button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
+.inbox-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.inbox-filters button { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
   background: none; color: var(--muted); font: inherit; font-size: var(--fs-sub); cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
 .inbox-filters button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .inbox-filters i { width: 7px; height: 7px; border-radius: 50%; background: var(--lv, var(--muted)); }
@@ -428,11 +445,6 @@ body.drawer-open .savebar { display: none; }
 .brand a { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; border-radius: var(--r-md); }
 .brand a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 .brand .logo { flex: none; }
-.version-chip { flex: none; margin-left: -4px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--field-bg);
-  color: var(--muted); font: 600 var(--fs-footnote)/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; }
-.version-chip.beta { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 10%, var(--field-bg)); }  /* a test build of a branch */
-.version-chip:focus-visible { border-color: var(--accent); }
-@media (hover: hover) { .version-chip:hover { border-color: var(--field-line-hover); color: var(--text); } }
 .gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px 16px; overflow-y: auto; background: var(--bg); }
 .gate[hidden] { display: none; }
 .gate-card { width: min(560px, 100%); text-align: center; }
@@ -740,7 +752,8 @@ input.bad { border-color: var(--err); } .field small.bad { color: var(--err); } 
 body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !important; }  /* setup asks through the confirm dialog too */
 /* Settings: sections in a side menu, one at a time, as label | control rows. */
 .set-layout { display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 32px; align-items: start; }  /* the whole width, as the other pages: no empty band on the right */
-.set-nav { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 2px; min-height: calc(100dvh - 109px); }  /* the version at the bottom */
+.set-nav { position: sticky; top: calc(var(--header-bottom) + var(--sp-4)); display: flex; flex-direction: column; gap: 2px;
+  min-height: calc(100dvh - var(--header-bottom) - 44px); }  /* the version at the bottom */
 .set-nav button { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 0; border-radius: var(--r-md); background: none;
   color: var(--muted); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 @media (hover: hover) { .set-nav button:hover { background: var(--panel); color: var(--text); } }
@@ -762,9 +775,12 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .pw-meter[data-score="3"] i:nth-child(-n+3) { background: color-mix(in srgb, var(--ok) 70%, var(--warn)); } .pw-meter[data-score="3"] span { color: var(--ok); }
 .pw-meter[data-score="4"] i { background: var(--ok); } .pw-meter[data-score="4"] span { color: var(--ok); }
 .pw-match { display: block; margin-top: 6px; font-size: var(--fs-footnote); } .pw-match.good { color: var(--ok); } .pw-match.bad { color: var(--err); }
-.set-nav .set-version { margin: auto 4px 0; padding: 18px 0 0; border: 0; background: none; font: inherit; font-size: var(--fs-footnote); color: var(--muted); text-align: left; cursor: pointer; }
-@media (hover: hover) { .set-nav .set-version:hover { color: var(--text); text-decoration: underline; } }
-.set-nav .set-version::after { content: none; } .set-nav button.set-version { display: block; min-height: 0; box-shadow: none; }
+.set-nav button.set-version { display: block; align-self: start; max-width: 100%; margin: auto 4px 0; padding: 4px; box-shadow: none; }
+.set-nav .set-version[hidden] { display: none; }
+.set-nav .set-version::after { content: none; }
+.set-nav .version-chip { display: inline-block; max-width: 100%; overflow-wrap: anywhere; padding: 3px 9px; border: 1px solid var(--line);
+  border-radius: 999px; background: var(--field-bg); color: var(--muted); font: 600 var(--fs-footnote)/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.version-chip.beta { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 10%, var(--field-bg)); }  /* a test build of a branch */
 .set-group > button .ico { color: var(--text); opacity: .85; }
 .set-sec[hidden] { display: none; }
 .field > small { white-space: pre-line; }
@@ -1456,6 +1472,9 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
   .health span:not(.dot) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   /* a service that is down or has an update says so in words here too, not by the dot's colour alone */
   .health button:is([data-state=warn], [data-state=down]) span:not(.dot) { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
+  .health .dot:is(.warn, .down) { width: 12px; height: 12px; border-radius: 0; }
+  .health .dot.warn { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .health .dot.down { clip-path: polygon(15% 0, 50% 35%, 85% 0, 100% 15%, 65% 50%, 100% 85%, 85% 100%, 50% 65%, 15% 100%, 0 85%, 35% 50%, 0 15%); }
   #sync { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
   /* the label and "Last sync …" stay in the accessibility tree (the button is described by them), only out of sight */
   #sync .sync-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -1475,11 +1494,9 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
    touch targets are 44 px and fields 16 px (iOS zooms into anything smaller). */
 @media (max-width: 700px) {
   body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
-  /* No backdrop-filter here: it would make the header the containing block of the fixed tab bar. */
-  header { position: sticky; top: 0; z-index: 8; background: var(--bg);
-    padding: calc(10px + env(safe-area-inset-top)) 16px 10px; gap: 8px; flex-wrap: nowrap; }
+  :root { --header-bottom: calc(var(--header-top, 0px) + var(--head-h, 72px + env(safe-area-inset-top))); }
+  header { padding: calc(10px + env(safe-area-inset-top)) 16px 10px; gap: 8px; flex-wrap: nowrap; }
   header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; container-type: inline-size; } .brand a { min-width: 0; }
-  .version-chip { display: none; }  /* Settings has the version and what's new: the app's name keeps the room */
   /* ...on a row of its own under the title, so the header's buttons stay on screen */
   header:has(.health :is([data-state=warn], [data-state=down])) { flex-wrap: wrap; }
   header:has(.health :is([data-state=warn], [data-state=down])) .health { order: 10; flex-basis: 100%; margin-left: 0; }
@@ -1491,9 +1508,8 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
     gap: 0; margin: 0; max-width: none; background: color-mix(in srgb, var(--panel) 96%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--line);
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
   nav a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; min-height: 52px;
-    font-size: var(--fs-caption); font-weight: 600; border-radius: var(--r-md); }
+    font-size: var(--fs-caption); font-weight: 600; }
   nav a .ico { width: 22px; height: 22px; }
-  nav a[aria-current="page"] { background: none; color: var(--accent); }
   nav .long { display: none; }
   nav .short { display: inline; }
   main { padding: 12px 16px 24px; }
@@ -1553,7 +1569,7 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
 @media (hover: hover) { .set-nav button:hover { background: var(--panel); box-shadow: none; } }
   .set-nav button:active { background: var(--well); }
   .set-nav .ico { grid-row: 1 / 3; align-self: center; width: 30px; height: 30px; padding: 6px; border-radius: var(--r-md); background: var(--well); color: var(--text); }
-  .set-nav span { font-size: var(--fs-body); }
+  .set-nav [data-sec] span { font-size: var(--fs-body); }
   .set-nav small { display: block; grid-column: 2; font-size: var(--fs-sub); font-weight: 400; color: var(--muted); }
   .set-nav .sv-attn { grid-column: 3; grid-row: 1 / 3; align-self: center; margin: 0; }
   .set-nav button::after { content: ""; grid-column: 4; grid-row: 1 / 3; align-self: center; width: 18px; height: 18px; color: var(--muted); background: currentColor; -webkit-mask: var(--ic-chevron) center / contain no-repeat; mask: var(--ic-chevron) center / contain no-repeat; }
@@ -1639,7 +1655,8 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
   .icon-hide { opacity: .8; width: 36px; height: 36px; }
 
   .modal { margin: auto auto 0; width: 100%; max-width: none; border-radius: var(--r-lg) var(--r-lg) 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
-  #inbox-dialog.menu { inset: 60px 8px auto 8px; width: auto; border-radius: var(--r-lg); padding-bottom: 8px; }
+  #inbox-dialog.menu { inset-inline: 8px; width: auto; border-radius: var(--r-lg); padding-bottom: 8px; }
+  #inbox-dialog.menu[open] { max-height: calc(100dvh - var(--header-bottom) - var(--sp-2) - var(--bars-h, 72px)); }  /* above the tab bar, as tall as it is measured */
   .modal-actions { flex-direction: column-reverse; }
   .modal-actions .btn { width: 100%; }
   .savebar { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); justify-content: space-between; flex-wrap: wrap; }
@@ -1749,7 +1766,7 @@ details.sx-card > summary.sx-head { padding-right: 28px; } details.sx-card > sum
 }
 /* Phones: the header above; below, the tab bar and the bars over it, as far up as they reach (--bars-h, measured: stacked, wrapped or expanded) */
 @media (max-width: 700px) {
-  html { scroll-padding-top: var(--head-h, calc(72px + env(safe-area-inset-top))); scroll-padding-bottom: var(--bars-h, calc(72px + env(safe-area-inset-bottom))); }  /* --head-h: the header as tall as it is, a status row under it included */
+  html { scroll-padding-top: var(--header-bottom); scroll-padding-bottom: var(--bars-h, calc(72px + env(safe-area-inset-bottom))); }
   body:has(#savebar:not([hidden])):has(#dock:not([hidden])) main { padding-bottom: calc(96px + var(--save-h, 56px) + 8px); }  /* the dock moves up by the same amount */
   /* the series page has no tab bar: its sticky head (and the settings' shortcuts under it) above */
   html:has(body.drawer-open) { scroll-padding-top: calc(var(--d-head, 118px) + 8px); }
@@ -1986,37 +2003,35 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 @media (max-width: 700px) { .ck-fields textarea, #d-progmap { font-size: 16px; } }
 
 /* Settings, Services: a row a service; at phone width each row stacks, its cells named by their own labels */
-.sv-card { padding-inline: 12px; min-width: 0; } #sv-list { overflow-x: auto; }  /* on a narrow window the table scrolls inside its card, never the page */
-.sv-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sub); }
-.sv-table th, .sv-table td { text-align: left; vertical-align: middle; padding: 12px 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.sv-card { padding-inline: 12px; min-width: 0; } #sv-list { container-type: inline-size; }
+.sv-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--fs-sub); }
+.sv-table th, .sv-table td { text-align: start; vertical-align: top; padding: 12px 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .sv-table thead th { border-top: 0; padding-top: 4px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; }
-.sv-table tbody th { font-weight: 600; font-size: var(--fs-callout); overflow-wrap: normal; }  /* a name breaks between words only */
-/* a row needing attention: framed in red all round, its cells drawing the frame (a row takes no border of its own) */
-.sv-row[data-attention] > * { box-shadow: inset 0 1px var(--err), inset 0 -1px var(--err); }
-.sv-row[data-attention] > :first-child { box-shadow: inset 1px 0 var(--err), inset 0 1px var(--err), inset 0 -1px var(--err); }
-.sv-row[data-attention] > :last-child { box-shadow: inset -1px 0 var(--err), inset 0 1px var(--err), inset 0 -1px var(--err); }
+.sv-table thead th:first-child { width: 25%; }
+.sv-table thead th:last-child { width: 15%; }
+.sv-table tbody th { font-size: var(--fs-callout); border-inline-start: 1px solid var(--sv-edge, transparent); }
+.sv-name { overflow-wrap: normal; }
+.sv-backend { display: block; color: var(--muted); font-size: var(--fs-sub); font-weight: 400; }
+.sv-row[data-attention] { --sv-edge: var(--err); }
 .sv-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sv-k { display: none; }
 .sv-table td small { display: block; color: var(--muted); font-size: var(--fs-sub); }
-/* the sign-in state as a pill, its button at the end of the line, as a cookie file's */
-.sv-table .sv-label { justify-self: start; padding: 2px 9px; border-radius: 10px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.sv-table .sv-label { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
 .sv-label[data-tone="ok"] { color: var(--ok); background: var(--ok-tint); }
 .sv-label[data-tone="bad"] { color: var(--err); background: var(--err-tint); }
 .sv-check[data-tone="bad"] { color: var(--err); }
-.sv-signin { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; align-items: center; column-gap: 12px; }
+.sv-signin { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .sv-signin > .sv-ctl { margin-top: 0; }
-.sv-signin > .sv-ctl:has(input) { grid-column: 1 / -1; margin-top: 6px; }  /* a code to type: its own line */
+.sv-signin + .sv-check { margin-top: 6px; }
 .sv-ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.sv-ctl .btn { text-align: center; }
 .sv-ctl input { min-width: 0; width: 100%; max-width: 16rem; }
-/* a cookie file on one line: its name, state and age, its buttons at the end */
-.sv-file { display: grid; grid-template-columns: minmax(9.5rem, 1fr) auto; align-items: center; column-gap: 12px; }
-.sv-file > .sv-ctl { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; }
-.sv-file > .sv-confirm { grid-column: 1 / -1; margin-top: 6px; }
+.sv-file > .sv-confirm { margin-top: 6px; }
 .sv-file + .sv-file { margin-top: 12px; }
 .sv-file-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .sv-file-top b { font: 600 var(--fs-sub) ui-monospace, SFMono-Regular, Menlo, monospace; }
-.sv-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.sv-chip { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: var(--fs-footnote); }
+.sv-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.sv-chip { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: var(--fs-footnote); font-weight: 400; color: var(--muted); }
 .sv-confirm, .st-confirm { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--err) 45%, transparent); border-radius: var(--r-md); font-size: var(--fs-sub); }
 .sv-confirm .sv-ctl { margin-top: 0; }
 #sv-note:not(:empty) { margin: 12px 10px 0; }
@@ -2027,26 +2042,16 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .wz-signin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; color: var(--muted); font-size: var(--fs-callout); }
 .wz-signin p { margin: 0; }
 @media (max-width: 700px) { .sv-card { padding-inline: 16px; } }
-/* the table needs about 825px beside the sidebar; narrower, each row stacks (no column hides past an edge) */
-@media (max-width: 1180px) {
-  .sv-table, .sv-table tbody, .sv-table tr, .sv-table th, .sv-table td { display: block; }
+/* Stack against the card's width, including when the Settings sidebar takes part of the viewport. */
+@container (max-width: 36rem) {
+  .sv-table, .sv-table tbody, .sv-table th, .sv-table td { display: block; }
   .sv-table thead { display: none; }
-  .sv-table tr { padding: 10px 0; border-top: 1px solid var(--line); }
-  .sv-table tr:first-child { border-top: 0; }
-  .sv-table th, .sv-table td { border: 0; padding: 6px 0; }
+  .sv-table tbody tr { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: 10px 16px; padding: 12px 8px; border-block-start: 1px solid var(--line); border-inline-start: 1px solid var(--sv-edge, transparent); }
+  .sv-table tbody tr:first-child { border-block-start: 0; }
+  .sv-table tbody th, .sv-table tbody td { border: 0; padding: 0; }
   .sv-k { display: block; margin-bottom: 2px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; }
-  .sv-row[data-attention] > * { box-shadow: none !important; }
-  .sv-file { grid-template-columns: minmax(0, 1fr); } .sv-file > .sv-ctl { grid-column: 1; grid-row: auto; margin-top: 6px; }  /* its buttons under it */
-  .sv-signin { grid-template-columns: minmax(0, 1fr); } .sv-signin > .sv-ctl { margin-top: 6px; }
-  .sv-row[data-attention] { box-shadow: inset 0 0 0 1px var(--err); border-radius: var(--r-md); padding-inline: 10px; }
 }
-.sv-table td .btn, .sv-table td:nth-child(5) { white-space: nowrap; }
-.sv-table td .btn { min-width: 7.125rem; text-align: center; }  /* one width for every button in the table: Reauthenticate's */
-/* where the table has the room for it: a cell's buttons side by side, a cookie file's details never squeezed; narrower, they wrap */
-@media (min-width: 1440px) { .sv-table td .sv-ctl:not(:has(input)) { flex-wrap: nowrap; } }
-/* three buttons on a cookie file (Check, Replace, Delete) fit on one line from 1600px; narrower, they wrap */
-@media (min-width: 1440px) and (max-width: 1599px) { .sv-table td .sv-file > .sv-ctl:has(> :nth-child(3)) { flex-wrap: wrap; } }
-@media (min-width: 1181px) { .sv-table td .sv-signin > .sv-ctl:not(:has(input)) { flex-wrap: wrap; justify-content: flex-end; } }  /* Retry and Cancel stack: the table keeps its width */
 
 /* A ladder picker: Edit ladders after its chips; the options it takes over, and the video it picks under a command */
 .ladder-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: var(--gap-field); }
@@ -2100,14 +2105,14 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
    invisible slop centred on it makes up the rest without moving anything: a percentage inset is of the control's size. */
 @media (max-width: 700px), (pointer: coarse) {
   :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
-    #d-meta a, .ds-nav a, .ax-seg button, #version, .inbox-filters button, .dock .d-ico) { position: relative; }
+    #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico) { position: relative; }
   :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
-    #d-meta a, .ds-nav a, .ax-seg button, #version, .inbox-filters button, .dock .d-ico)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
+    #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
   details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
   .btn, .btn.small, nav a, .pill, .ax-seg button, .inbox-filters button, .con-filters button, .set-nav button,
   .set-back, .hidden-btn, .sched-filter .pill, .cd-tracks-fold > summary, .ds-sub summary,
   :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: 44px; }
-  nav a { display: inline-flex; align-items: center; }
+  nav a { min-inline-size: 44px; }
   .hidden-btn { height: auto; }
   .cd-back, .dock .d-open, .dock .d-acts button { width: 44px; height: 44px; }
   .jact { min-width: 44px; min-height: 44px; }
@@ -2123,6 +2128,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .ep-sel button { min-width: 44px; min-height: 44px; }  /* its frame clips: no room for a slop */
   .set-nav button.set-version { min-height: 44px; }
 }
+@media (pointer: coarse) { .cdm-opt { min-height: 44px; align-content: center; } }
 @media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }  /* its icon-only size up to 1240px is 40px */
 /* Dropdowns drawn as fields, in every browser: Safari otherwise sizes its native ones on its own, ignoring the heights above.
    The arrow is two gradients in the look's muted colour, so it follows light and dark. */

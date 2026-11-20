@@ -46,16 +46,36 @@ async function markNews(ids) {
 
 /* The badges: on each new option's title, its card outlined. */
 const newsTitle = (box) => box.querySelector(".sx-head h3, summary b, .sub") || (box.matches("label, span[id]") ? box : null);  // a field's own label
+let newsBoxes = new Map();
 function renderNews() {
-  const unseen = newsUnseen(), ids = new Set(unseen.map((n) => n.id));
-  document.querySelectorAll(".new-badge").forEach((b) => { if (!ids.has(b.dataset.news)) b.remove(); });
-  document.querySelectorAll(".is-new").forEach((b) => { if (!ids.has(b.dataset.newsId)) b.classList.remove("is-new"); });
-  for (const n of unseen) {
-    const box = document.querySelector(n.target), title = box && newsTitle(box);
-    if (box && !box.matches("label, span[id]")) box.classList.add("is-new");  // a field's label: its badge is enough
-    if (title && !title.querySelector(`.new-badge[data-news="${n.id}"]`)) title.append(el("span", { className: "new-badge", textContent: "New", dataset: { news: n.id } }));
-    if (box) watchNews(box, n.id);
+  const boxes = new Map(), titles = new Set();
+  for (const n of newsUnseen()) {
+    const box = document.querySelector(n.target);
+    if (!box) continue;
+    if (!boxes.has(box)) boxes.set(box, []);
+    boxes.get(box).push(n.id);
+    const title = newsTitle(box);
+    if (title) titles.add(title);
   }
+  for (const badge of document.querySelectorAll(".new-badge")) {
+    if (!titles.delete(badge.parentElement)) badge.remove();
+  }
+  for (const title of titles) title.append(el("span", { className: "new-badge", textContent: "New" }));
+  for (const box of newsBoxes.keys()) {
+    if (boxes.has(box)) continue;
+    newsSeen.unobserve(box);
+    clearTimeout(newsTimers.get(box));
+    newsTimers.delete(box);
+    box.classList.remove("is-new", "new-blink");
+    box.removeEventListener("click", clickNews);
+  }
+  for (const box of boxes.keys()) {
+    if (newsBoxes.has(box)) continue;
+    if (!box.matches("label, span[id]")) box.classList.add("is-new");  // a field's label: its badge is enough
+    box.addEventListener("click", clickNews);
+    newsSeen.observe(box);
+  }
+  newsBoxes = boxes;
 }
 
 /* Seen when its section is left: every new option there, looked at or not. */
@@ -68,18 +88,16 @@ function leaveNews(test) {
 const newsTimers = new Map();
 const newsSeen = new IntersectionObserver((entries) => {
   for (const e of entries) {
-    const id = e.target.dataset.newsId;
+    const box = e.target;
+    if (!newsBoxes.has(box)) continue;
     if (e.isIntersecting && (e.intersectionRatio >= 0.5 || e.intersectionRect.height >= innerHeight * 0.4)) {
-      e.target.classList.add("new-blink");  // it blinks as it comes into sight, not off screen
-      if (!newsTimers.has(id)) newsTimers.set(id, setTimeout(() => { newsSeen.unobserve(e.target); newsTimers.delete(id); markNews([id]); }, 2500));
-    } else { clearTimeout(newsTimers.get(id)); newsTimers.delete(id); }
+      box.classList.add("new-blink");  // it blinks as it comes into sight, not off screen
+      if (!newsTimers.has(box)) newsTimers.set(box, setTimeout(() => markNews(newsBoxes.get(box) || []), 2500));
+    } else { clearTimeout(newsTimers.get(box)); newsTimers.delete(box); }
   }
 }, { threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5] });  // tall ones cross the lower steps
-function watchNews(box, id) {
-  newsSeen.observe(box);  // again when new again: observing twice is harmless
-  if (box.dataset.newsId) return;
-  box.dataset.newsId = id;
-  box.addEventListener("click", () => { if (newsUnseen().some((n) => n.id === id)) markNews([id]); });
+function clickNews({ currentTarget }) {
+  markNews(newsBoxes.get(currentTarget) || []);
 }
 
 /* The What's new window: one row per release, the installed one open; a newer one links to GitHub. */
@@ -134,7 +152,7 @@ async function openNews() {
   }
   list.replaceChildren(...rows);
 }
-$("#version").onclick = $("#set-version").onclick = openNews;
+$("#set-version").onclick = openNews;
 $("#news-close").onclick = $("#news-x").onclick = () => $("#news-dlg").close();
 $("#news-dlg").addEventListener("click", (e) => {  // a click outside the window (on the dimmed page) closes it
   const r = e.currentTarget.getBoundingClientRect();

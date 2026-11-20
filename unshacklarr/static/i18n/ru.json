@@ -1076,7 +1076,7 @@
  "· checking…": "· проверка…",
  "· in": "· через",
  "· in use": "· используется",
- "⚠ No CDM for this service": "⚠ Нет CDM для этого сервиса",
+ "No CDM for this service": "Нет CDM для этого сервиса",
  "+ Add a service": "+ Добавить сервис",
  "+ Add an address": "+ Добавить адрес",
  ", and to this device.": ", и на это устройство.",

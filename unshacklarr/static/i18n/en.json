@@ -1398,6 +1398,7 @@
  "Nextcloud, Synology, QNAP, kDrive, pCloud… The folder must already exist.": [],
  "No CDM": [],
  "No CDM folder": [],
+ "No CDM for this service": [],
  "No CDM for {0}": [
   "svcName(tag)"
  ],
@@ -4538,7 +4539,6 @@
  "● Connected{0}": [
   "st.version ? ` · Sonarr ${st.version}` : \"\""
  ],
- "⚠ No CDM for this service": [],
  "An audio track add stopped midway in this folder: it holds audio only, not a video to import": [],
  "Back to Activity": [],
  "Back to Settings": [],

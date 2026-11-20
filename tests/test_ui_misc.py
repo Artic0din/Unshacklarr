@@ -513,11 +513,105 @@ console.log(JSON.stringify([ctx.BACK_NAME.schedule, ctx.BACK_NAME.log, ctx.BACK_
 
 
 def test_the_page_draws_no_emoji():
+    from html import unescape
     import re
-    emoji = re.compile("[\U0001F000-\U0001FFFF⏩-⏿]")  # flags are regional-indicator pairs: both in this range
-    found = [f"{path.name}:{n}" for path in JS.glob("*.js")
-             for n, line in enumerate(path.read_text().splitlines(), 1) if emoji.search(line)]
+
+    emoji = re.compile(r"[\U0001F000-\U0001FFFF\u23e9-\u23ff\u26a0\u2700-\u27bf]")
+    status_marks = str.maketrans("", "", "\u2713\u2717")
+    found = [f"{path.name}:{n}" for path in [STATIC / "index.html", *JS.glob("*.js")]
+             for n, line in enumerate(path.read_text().splitlines(), 1) if emoji.search(unescape(line).translate(status_marks))]
     assert not found
+
+
+def test_an_inbox_job_shows_six_episode_chips_and_counts_the_rest():
+    short, long, full = node(r"""
+const ctx = sandbox({ LOCALE: "en", ago: () => "Now" });
+vm.runInContext(read(process.argv[1]).split("const clearable")[0], ctx);
+const at = new Date().toISOString();
+const chips = (count, cap) => {
+  const eps = Array.from({ length: count }, (_, i) => `S01E${String(count - i).padStart(2, "0")}`);
+  const row = ctx.inboxRow({ name: "Show", level: "error", eps, items: [{ at }] }, 0, cap);
+  return row.kids[1].kids[0].kids[1].kids.map((chip) => chip.textContent);
+};
+console.log(JSON.stringify([chips(6), chips(12), chips(12, Infinity).length]));
+""", str(JS / "inbox.js"))
+    first_six = [f"S01E0{i}" for i in range(1, 7)]
+    assert short == first_six
+    assert long == [*first_six, "+6"]
+    assert full == 12  # the full Inbox names every episode: touch and keyboard users cannot read a tooltip
+
+
+def test_the_inbox_menu_caps_a_job_at_six_episodes_and_the_full_inbox_names_them_all():
+    menu, full = node(r"""
+let menu = true;
+const list = { classList: { toggle() {} }, replaceChildren(...kids) { this.kids = kids; } };
+const ctx = sandbox({ LOCALE: "en", ago: () => "Now", S: { series: [] }, keepFocus: (_box, draw) => draw(),
+  $: (sel) => sel === "#inbox-dialog" ? { classList: { contains: () => menu } } : sel === "#inbox-list" ? list : any });
+vm.runInContext(read(process.argv[1]).split("/* The bell opens")[0], ctx);  // the renderer, not the page's event wiring
+const at = new Date().toISOString();
+const items = Array.from({ length: 12 }, (_, i) => ({ title: `Failed: Show S01E${String(i + 1).padStart(2, "0")}`, at, level: "error", batch: "job1" }));
+vm.runInContext(`inboxData = { items: ${JSON.stringify(items)}, read_at: "" }`, ctx);
+const chips = () => { ctx.renderInbox(); return list.kids[1].kids[1].kids[0].kids[1].kids.map((chip) => chip.textContent); };
+const inMenu = chips();
+menu = false;
+console.log(JSON.stringify([inMenu, chips()]));
+""", str(JS / "inbox.js"))
+    episodes = [f"S01E{i:02d}" for i in range(1, 13)]
+    assert menu == [*episodes[:6], "+6"]
+    assert full == episodes
+
+
+def test_options_sharing_a_title_have_one_badge_and_keep_each_unread_id():
+    states = node(r"""
+const badges = [], classes = new Set(), posts = [];
+const title = {
+  append(badge) {
+    badge.parentElement = this;
+    badge.remove = () => badges.splice(badges.indexOf(badge), 1);
+    badges.push(badge);
+  },
+  querySelector: (selector) => badges.find((b) => selector === ".new-badge" || selector.includes(`"${b.dataset.news}"`)),
+};
+const box = {
+  dataset: {},
+  classList: { add: (name) => classes.add(name), remove: (...names) => names.forEach((name) => classes.delete(name)) },
+  matches: () => false, querySelector: () => title,
+  addEventListener: (_, fn) => { box.click = () => fn({ currentTarget: box }); box.listening = true; },
+  removeEventListener() { box.listening = false; },
+};
+let unobserved = 0;
+let intersect, finish;
+const S = { news: { installed: "1.5.0", seen: [] } };
+const ctx = sandbox({
+  S, innerHeight: 800,
+  document: {
+    querySelector: (selector) => selector === "#svc-defaults" ? box : null,
+    querySelectorAll: (selector) => selector === ".new-badge" ? [...badges] : classes.has("is-new") ? [box] : [],
+  },
+  IntersectionObserver: class { constructor(fn) { intersect = fn; } observe() {} unobserve() { unobserved += 1; } },
+  setTimeout: (fn) => { finish = fn; return 1; }, clearTimeout() {},
+  api: (_, { body }) => posts.push(JSON.parse(body).ids),
+});
+vm.runInContext(read(process.argv[1]).split("/* The What's new window")[0], ctx);
+ctx.renderNews();
+const initial = badges.map((b) => b.textContent);
+ctx.markNews(["service-cache"]);
+const stillUnread = badges.map((b) => b.textContent);
+intersect([{ target: box, isIntersecting: true, intersectionRatio: 1 }]);
+finish();
+const cleared = badges.length;
+S.news.seen = ["service-cache", "any-service-option"];
+ctx.renderNews();
+const watched = unobserved;
+box.click();  // its last unread option seen: the box is not new any more
+const released = [unobserved - watched, box.listening, classes.has("is-new")];  // no longer new: no observer, no click handler, no outline
+console.log(JSON.stringify([initial, stillUnread, cleared, badges.length, posts, released]));
+""", str(JS / "news.js"))
+    assert states == [
+        ["New"], ["New"], 0, 0,
+        [["service-cache"], ["any-service-option", "ladder-chips"], ["ladder-chips"]],
+        [1, False, False],
+    ]
 
 # A tiny stand-in for the DOM a pop-up touches: nodes that keep what is set on them and a shared "focused" node.
 POP_DOM = r"""
@@ -633,6 +727,87 @@ console.log(JSON.stringify({ rowTag: row.tag, rowRole: row.role ?? null, rowTab:
 """, str(JS / "cookies-cdm.js"))
     assert seen == {"rowTag": "div", "rowRole": None, "rowTab": None, "summary": ["button", "button", "false"], "menu": ["button", True], "nested": 0, "unfolds": True}
 
+
+def test_local_and_remote_device_rows_show_service_names_and_keep_default():
+    seen = node(r"""
+const src = read(process.argv[1]), series = read(process.argv[2]);
+const used_by = ["rmcbfm", "DEFAULT", "UNKNOWN"];  // a key in lower case names the same service
+const rows = [];
+let localVisible = false;
+const collect = (tag, props, ...kids) => {
+  if (props?.className === "used") rows.push(kids.map((kid) => kid.textContent));
+  if (props?.className === "cdm-sum") localVisible = true;
+  return el(tag, props, ...kids);
+};
+const ctx = sandbox({ el: collect, $: () => any, keepFocus: (_box, draw) => draw(),
+  cdmData: { folder: "/cdm", devices: [{ name: "alpha", kind: "Widevine", used_by }], remote: [{ name: "remote", used_by }], services: [], map: {} },
+  cdmFilter: "all", cdmQuery: "", cdmTesting: false, cdmShowUnused: false, cdmRunning: new Set(), cdmOpen: new Set(), cdmJust: new Set(),
+  S: { config: { series: {}, settings: {} }, serviceNames: { RMCBFM: "RMC BFM Play" } },
+  COUNT: { device: String }, cdmShort: (d) => d.name });
+vm.runInContext(grab(series, /^const svcName = .*$/m)
+  + "\n" + grab(src, /^const cdmUsageName = .*$/m)
+  + "\n" + grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + ["cdmTitle", "cdmStatus", "renderCdm", "remoteRow"].map((name) => grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+ctx.renderCdm();
+const labels = rows.splice(0);
+const visible = (query) => {
+  localVisible = false;
+  ctx.cdmQuery = query;
+  ctx.renderCdm();
+  return localVisible;
+};
+console.log(JSON.stringify({ labels, byName: visible("rmc bfm play"), byCode: visible("rmcbfm") }));
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"))
+    assert seen == {"labels": [["RMC BFM Play", "default", "UNKNOWN"]] * 2, "byName": True, "byCode": True}
+
+
+
+def test_cdm_alerts_name_services_not_their_codes():
+    alerts = node(r"""
+const src = read(process.argv[1]), series = read(process.argv[2]);
+const text = (n) => typeof n === "string" ? n : [n.textContent || "", ...(n.kids || []).map(text)].join("");
+const found = [];
+const collect = (tag, props, ...kids) => {
+  const node = el(tag, props, ...kids);
+  if (props?.className === "cdm-alert") found.push(node);
+  return node;
+};
+const failing = { name: "alpha", kind: "Widevine", used_by: ["rmcbfm"], test: { ok: false, error: "No license", at: "2026-11-20T00:00:00Z" } };
+const ctx = sandbox({ el: collect, $: () => any, keepFocus: (_box, draw) => draw(), tr: (s) => s, ago: () => "now",
+  cdmData: { folder: "/cdm", devices: [failing], remote: [], services: [], map: { RMCBFM: "ghost" } },  // a device no longer in the folder
+  cdmFilter: "all", cdmQuery: "", cdmTesting: false, cdmShowUnused: false, cdmRunning: new Set(), cdmOpen: new Set(), cdmJust: new Set(),
+  S: { config: { series: {}, settings: {} }, serviceNames: { RMCBFM: "RMC BFM Play" } },
+  COUNT: { device: String, key: String, problem: String }, cdmShort: (d) => d.name });
+vm.runInContext(grab(series, /^const svcName = .*$/m)
+  + "\n" + grab(src, /^const cdmUsageName = .*$/m)
+  + "\n" + grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + ["cdmTitle", "cdmStatus", "renderCdm", "remoteRow"].map((name) => grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+ctx.renderCdm();
+console.log(JSON.stringify(found.map((a) => text(a).replace(/Pick a device$/, "").trim())));
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"))
+    assert alerts == ["RMC BFM Play uses ghost, which is not in the CDM folder", "alpha, used by RMC BFM Play: No license, tested now"]
+
+def test_device_picker_finds_and_labels_devices_by_service_name():
+    seen = node(r"""
+const src = read(process.argv[1]), series = read(process.argv[2]);
+let search, list;
+const ctx = sandbox({ el: (tag, props, ...kids) => ({ ...el(tag, { value: "", ...props }, ...kids), replaceChildren(...k) { this.kids = k; }, append(...k) { this.kids.push(...k); }, get children() { return this.kids; } }), cdmPopAt: (_anchor, _title, q, box) => { [search, list] = [q, box]; return false; },
+  cdmData: { devices: [{ name: "alpha", kind: "Widevine", used_by: ["RMCBFM"] }], remote: [], map: {} },
+  S: { serviceNames: { RMCBFM: "RMC BFM Play" } }, cdmShort: (d) => d.name, trWith: (template, value) => template.replace("{0}", value) });
+vm.runInContext(grab(series, /^const svcName = .*$/m) + "\n" + grab(src, /^const cdmUsageName = .*$/m) + "\n"
+  + ["cdmTitle", "cdmPicker"].map((name) => grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+const shown = (text) => {
+  search.value = text;
+  search.oninput();
+  return list.kids.filter((k) => k.className?.startsWith("cdm-opt")).map((k) => k.kids[1].textContent);
+};
+ctx.cdmPicker({}, "default", "");
+console.log(JSON.stringify({ byName: shown("rmc bfm play"), byCode: shown("rmcbfm") }));
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"))
+    assert seen == {"byName": ["Used by RMC BFM Play"], "byCode": ["Used by RMC BFM Play"]}
+
+
+
 def test_the_header_says_an_update_or_a_check_in_words_not_by_the_dot_alone():
     shown = node(r"""
 const buttons = Object.fromEntries(["unshackle", "sonarr"].map((n) => [n, { dataset: {}, title: "", dot: { className: "" }, small: { textContent: "" },
@@ -720,3 +895,18 @@ console.log(JSON.stringify({ root: [root.className, root.kids.map((k) => k.tag)]
     assert shown["before"] == [["Off", "false", None, None], ["UHD", "false", None, None], ["HD", "true", None, None]]
     assert shown["after"][0][1] == "true" and shown["after"][2][1] == "false"
     assert shown["picked"] == ["off"]
+
+
+def test_settings_version_button_names_a_release_or_a_test_build_and_hides_without_a_version():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const block = grab(src, /const \[, branch, commit\] = [\s\S]*?\$\("#set-version"\)\.hidden = !data\.version;/);
+const run = (data) => {
+  const version = { textContent: "", beta: false, classList: { toggle(_, on) { version.beta = on; } } }, button = { hidden: false };
+  const ctx = sandbox({ data, $: (selector) => selector === "#version" ? version : button });
+  vm.runInContext(block, ctx);
+  return [version.textContent, version.beta, button.hidden];
+};
+console.log(JSON.stringify([run({ version: "1.5.0", build: "" }), run({ version: "1.5.0", build: "feat-shell-abc1234" }), run({ version: "", build: "" })]));
+""", str(JS / "setup.js"))
+    assert shown == [["Unshacklarr 1.5.0", False, False], ["Unshacklarr feat-shell · abc1234", True, False], ["", False, True]]

@@ -1073,7 +1073,7 @@
  "· checking…": "· 正在检查…",
  "· in": "· 还有",
  "· in use": "· 使用中",
- "⚠ No CDM for this service": "⚠ 此服务没有 CDM",
+ "No CDM for this service": "此服务没有 CDM",
  "+ Add a service": "+ 添加服务",
  "+ Add an address": "+ 添加地址",
  ", and to this device.": "，以及此设备。",

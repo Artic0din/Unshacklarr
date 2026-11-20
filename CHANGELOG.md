@@ -101,9 +101,11 @@ Every change worth knowing, newest first. The format follows
 
 - Moved Activity tools into a compact switcher, added shortcuts to running downloads, and kept the download detail pane full size. (#353)
 
+- Kept the header in view while scrolling, moved version details to Settings, and made Inbox filters and episode lists easier to read on small screens. (#351)
+- Gave service names more room in Settings and showed service names instead of codes on CDM devices. (#357)
 - Switched to a dark theme with lime highlights and removed the light theme and Appearance setting. (#375)
 
-- Fewer things ask for attention. The Settings sections no longer carry a "New" badge, the version in the header no longer counts new options (it still opens What's new), and Activity hides a history filter with nothing under it, keeping All and the one you picked.
+- Fewer things ask for attention. The Settings sections no longer carry a "New" badge, the version no longer counts new options, and Activity hides a history filter with nothing under it, keeping All and the one you picked.
 - Less stands between you and the content. On a phone, the Series filters sit in one row that scrolls sideways under the search, and each choice above them takes one line. The Schedule puts Reload beside the sync line and Week/Month beside its filter. In Activity, the five shortcuts sit in two columns, so the history starts higher on every screen.
 - **Success has its own green, apart from the teal accent.** Healthy status dots, "Downloaded" notifications, valid cookie pills, a working CDM and finished job steps no longer share the teal that marks what is selected or being downloaded. (#280)
 - Buttons, dropdowns, search boxes and filters share two heights everywhere (36px in toolbars and forms, 30px in rows and cards), dropdowns look the same in Safari, plain buttons have a visible edge, cards and rows that need attention are framed in their colour instead of a bar on the left, Settings uses the whole width, Interface and Region cards sit side by side with a Language dropdown, the Services table reads Service, Sign-in methods, Sign-in, Cookies, Used by, Actions with each cookie file on one line and Add only when there is none, notifications are two-line rows, and the job bar at the bottom of Activity is readable in the light look.
