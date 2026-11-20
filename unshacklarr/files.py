@@ -42,17 +42,20 @@ def read_json(path: Path, empty, strict: bool = False, invalid_raises: bool = Fa
     strict, for a read that is written back: only a missing file is `empty`; another read error (a NAS share gone
     for a moment) raises, so the write is skipped instead of replacing the file it could not read."""
     try:
-        return json.loads(Path(path).read_text())
+        content = json.loads(Path(path).read_text())
     except FileNotFoundError:
         return empty
     except OSError:
         if strict:
             raise
         return empty
-    except ValueError as error:
+    except (ValueError, RecursionError) as error:  # RecursionError: nested past the parser's depth
         if invalid_raises:  # a file whose content must not be guessed (the revoked sessions): malformed fails closed
             raise OSError(f"Invalid JSON in {path}") from error
         return empty
+    if invalid_raises and not isinstance(content, type(empty)):  # valid JSON, but not the shape it must have
+        raise OSError(f"Invalid JSON in {path}: not a {type(empty).__name__}")
+    return content
 
 
 def write_atomic(path: Path, content: bytes | str, mode: int | None = None) -> None:

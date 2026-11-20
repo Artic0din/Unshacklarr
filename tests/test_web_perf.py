@@ -754,6 +754,10 @@ def test_a_malformed_revocation_file_keeps_revoked_sessions_out(tmp_path, monkey
         web.logged_in(req, auth)  # fails closed: the revoked cookie is not accepted again
     with pytest.raises(OSError, match="Invalid JSON"):
         web.forget_session(cookie)  # and a logout does not replace the list it could not read
+    for content in ("[]", "null", "[" * 100000):  # valid JSON of the wrong shape, or nested past the parser's depth
+        web.LOGGED_OUT_FILE.write_text(content)
+        with pytest.raises(OSError, match="Invalid JSON"):
+            web.logged_in(req, auth)
     # other state read for a write keeps healing itself: a malformed file is read as empty and written anew
     other = tmp_path / "state.json"
     other.write_text("{")
