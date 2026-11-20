@@ -58,6 +58,20 @@ console.log(JSON.stringify(vm.runInContext("RELEASE_DAYS", ctx)));
     assert days == list(range(-sync.EARLY_DAYS_MAX, 2))
 
 
+def test_old_activity_dates_show_the_local_month_and_year_instead_of_elapsed_days():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const now = Date.parse("2026-11-20T12:00:00Z");
+process.env.TZ = "Europe/Paris";
+const ctx = sandbox({ LOCALE: "de", Date: class extends Date { static now() { return now; } } });
+vm.runInContext(grab(src, /function ago\b[\s\S]*?\n}\n/), ctx);
+const dates = ["2026-10-21T12:00:00Z", "2026-11-19T12:00:00Z", "1993-10-31T23:30:00Z"].map(ctx.ago);
+process.env.TZ = "America/Los_Angeles";
+console.log(JSON.stringify([...dates, ctx.ago("1993-11-01")]));
+""", str(JS / "settings-options.js"))
+    assert shown == ["Okt. 2026", "1 d ago", "Nov. 1993", "Nov. 1993"]
+
+
 def test_episode_subtitle_summary_prioritizes_required_languages_and_discloses_every_track():
     summary = node(r"""
 const src = read(process.argv[1]), ctx = sandbox({ el: (tag, props, ...kids) => ({

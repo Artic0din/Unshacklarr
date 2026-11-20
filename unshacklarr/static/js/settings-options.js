@@ -854,8 +854,11 @@ $("#discard").onclick = discardChanges;
 
 let logTimer = null;
 function ago(iso) {
-  const min = Math.round((Date.now() - new Date(iso)) / 60000);
-  return min < 1 ? "just now" : min < 60 ? `${min} min ago` : min < 1440 ? `${Math.round(min / 60)} h ago` : `${Math.round(min / 1440)} d ago`;
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00` : iso);
+  const ageMinutes = (Date.now() - date) / 60000, minutesPerDay = 1440;
+  if (ageMinutes >= 30 * minutesPerDay) return date.toLocaleDateString(LOCALE, { month: "short", year: "numeric" });
+  const min = Math.round(ageMinutes);
+  return min < 1 ? "just now" : min < 60 ? `${min} min ago` : min < minutesPerDay ? `${Math.round(min / 60)} h ago` : `${Math.round(min / minutesPerDay)} d ago`;
 }
 async function refreshLog() {
   if (document.hidden) { clearTimeout(logTimer); logTimer = setTimeout(refreshLog, 60000); return; }  // out of sight: back on sight

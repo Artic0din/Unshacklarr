@@ -111,6 +111,7 @@ Every change worth knowing, newest first. The format follows
 - Fixed Activity filters to count whole jobs and show all their outcomes.
 - Fixed phone Back navigation to return from an Activity detail to its opener in the list.
 - Fixed translations for service names, series search and several setup and file errors.
+- Replaced old elapsed-day counts with the month and year.
 - Added service names and individual downloads to Catch up, tightened Waiting and Upgrades, and added Fix sign-in to failed jobs that need it. (#353)
 
 - Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
