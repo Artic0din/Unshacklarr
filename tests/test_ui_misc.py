@@ -804,7 +804,7 @@ def test_every_news_target_gets_a_new_badge():
 
     markup = Markup()
     markup.feed((STATIC / "index.html").read_text())
-    missing = node(r"""
+    missing, advanced_summary_badged = node(r"""
 const root = JSON.parse(fs.readFileSync(0, "utf8"));
 const matches = (n, selector) => {
   const attr = /^(\w+)\[(\w+)(?:="([^"]+)")?\]$/.exec(selector);
@@ -821,6 +821,7 @@ function setup(n, parent) {
   n.parent = parent;
   n.matches = (sel) => sel.split(", ").some((part) => matches(n, part));
   n.querySelector = (selectors) => [...walk(n)].slice(1).find((child) => selectors.split(", ").some((sel) => {
+    if (sel.startsWith(":scope > ")) return child.parent === n && matches(child, sel.slice(9));
     const [outer, inner] = sel.split(" ");
     if (!inner) return matches(child, outer);
     if (!matches(child, inner)) return false;
@@ -839,6 +840,10 @@ function setup(n, parent) {
   for (const k of n.kids.filter((kid) => kid && typeof kid === "object")) setup(k, n);
 }
 setup(root);
+const advanced = root.querySelector("#d-libs-adv");
+const summary = advanced.querySelector("summary");
+const nestedField = el("div", {}, el("label", { textContent: "Per-library option" }));
+advanced.replaceChildren(nestedField, ...advanced.kids);
 const ctx = sandbox({ S: { config: { settings: {} }, news: { seen: [] } }, document: {
   querySelector: (sel) => root.querySelector(sel), querySelectorAll: (sel) => [...walk(root)].filter((n) => matches(n, sel)),
 }, IntersectionObserver: class { observe() {} unobserve() {} },
@@ -852,12 +857,14 @@ vm.runInContext("let fieldIds = 0;\n" + ["renderQuality", "ladderCard"].map((nam
 ctx.renderQuality();
 ctx.renderNews();
 ctx.renderQuality();
-console.log(JSON.stringify(ctx.options.filter(({ target }) => {
+const missing = ctx.options.filter(({ target }) => {
   const box = root.querySelector(target);
   return !box || [...walk(box)].filter((n) => matches(n, ".new-badge")).length !== 1;
-}).map(({ id }) => id)));
+}).map(({ id }) => id);
+console.log(JSON.stringify([missing, Boolean(summary.querySelector(".new-badge"))]));
 """, str(JS / "news.js"), str(JS / "quality.js"), input_text=json.dumps(markup.stack[0]))
     assert missing == []
+    assert advanced_summary_badged
 
 
 def test_options_sharing_a_title_have_one_badge_and_keep_each_unread_id():

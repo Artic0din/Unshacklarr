@@ -46,7 +46,7 @@ async function markNews(ids) {
 
 /* The badges: on each new option's title, its card outlined. */
 const newsTitle = (box) => box.querySelector(".sx-head h3, .sx-head h4, summary b, .sub")
-  || (box.matches("label, span[id]") ? box : box.querySelector("summary, label"));
+  || (box.matches("label, span[id]") ? box : box.querySelector(":scope > summary, :scope > label, :scope > h3, :scope > h4"));
 let newsBoxes = new Map();
 function renderNews() {
   const boxes = new Map(), titles = new Set();

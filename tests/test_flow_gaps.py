@@ -40,8 +40,14 @@ def node(body, *args):
 SETTINGS_NAV = r"""
 const listeners = {}, location = { hash: "#/settings/cdm" };
 const window = { scrollY: 0, addEventListener: (name, fn) => { listeners[name] = fn; } };
-const select = { classList: { contains: () => false, toggle() {} }, setAttribute() {},
-  addEventListener: (name, fn) => { listeners[name] = fn; } };
+function element() {
+  const listeners = {};
+  return {
+    listeners, classList: { contains: () => false, toggle() {} }, setAttribute() {},
+    addEventListener: (name, fn) => { listeners[name] = fn; },
+  };
+}
+const body = element(), settingsTab = element(), settingsBack = element();
 let cdmTop = 400, focused, finishServices, finishCdm, sectionResized, accountLoads = 0, keyPrompt = false, backCalls = 0;
 let translating = process.argv[2] === "translated", finishTranslation;
 const i18nReady = new Promise((resolve) => { finishTranslation = resolve; });
@@ -103,8 +109,8 @@ const ctx = sandbox({
     disconnect() { if (sectionResized === this.callback) sectionResized = null; }
   },
   document: { querySelector: (selector) => selector === ".up-mode" ? audioTarget : selector.startsWith(".set-nav ") ? listItem : anchors[selector.slice(1)],
-    querySelectorAll: () => [], body: select, getElementById: (id) => anchors[id],
-    get activeElement() { return focused || select; },
+    querySelectorAll: () => [], body, getElementById: (id) => anchors[id],
+    get activeElement() { return focused || body; },
     documentElement: { classList: { contains: (name) => name === "i18n-wait" && translating } } },
   history,
   focusHeading: (node) => { if (node && !translating) focused = node; },
@@ -118,13 +124,15 @@ const ctx = sandbox({
 function $(selector) {
   if (selector === '.set-sec[data-sec="connections"] h2') return connectionsHeading;
   if (selector === '.set-sec[data-sec="notifications"] h2') return notificationsHeading;
-  return ["#tab-settings", "#set-back"].includes(selector) ? select : { ...select, addEventListener() {} };
+  if (selector === "#tab-settings") return settingsTab;
+  if (selector === "#set-back") return settingsBack;
+  return element();
 }
 const source = read(process.argv[1]);
 vm.runInContext(source.slice(0, source.indexOf('showTab(parseRoute().tab')) +
   grab(source, /^showTab\(parseRoute\(\).tab.*\nif \(parseRoute\(\).sec\).*\nelse if .*$/m), ctx);
 const enter = (hash) => { history.replaceState(null, "", hash); ctx.applyRoute(); };
-const jump = (hash) => listeners.click({ preventDefault() {}, target: { closest: () => ({ hash }) } });
+const jump = (hash) => settingsTab.listeners.click({ preventDefault() {}, target: { closest: () => ({ hash }) } });
 const services = () => {
   const src = read(process.argv[2]);
   Object.assign(ctx, { CSS: { escape: (value) => value }, renderServices: () => ctx.revealService() });
@@ -224,7 +232,7 @@ def test_health_jump_from_schedule_goes_back_to_visible_settings_list():
 enter("#/settings");
 enter("#/schedule");
 ctx.openSettings("unshackle");
-select.onclick();
+settingsBack.onclick();
 console.log(JSON.stringify({ backCalls, hash: location.hash, focused: focused === listItem }));
 """, str(JS / "navigation.js"))
     assert seen == {"backCalls": 0, "hash": "#/settings", "focused": True}
@@ -237,7 +245,7 @@ ctx.showTab("settings");
 ctx.showSettingsSec("notifications");
 history.back();
 history.forward();
-select.onclick();
+settingsBack.onclick();
 const appBack = location.hash;
 history.back();
 console.log(JSON.stringify({ appBack, browserBack: location.hash }));
@@ -266,7 +274,7 @@ def test_forward_restores_the_exact_settings_target_with_its_scroll(target):
     assert seen == {"first": expected, "forward": expected}
 
 
-@pytest.mark.parametrize("interruption", ["devices", "wheel"])
+@pytest.mark.parametrize("interruption", ["devices", "wheel", "schedule"])
 def test_late_service_row_does_not_override_newer_navigation_or_scroll(interruption):
     seen = node(SETTINGS_NAV + r"""
 (async () => {
@@ -274,7 +282,11 @@ def test_late_service_row_does_not_override_newer_navigation_or_scroll(interrupt
   services();
   delete anchors["sv-HULU"];
   await ctx.openServiceRow("HULU");
-  if (process.argv[3] === "devices") jump("#/settings/cdm");
+  if (process.argv[3] === "schedule") {
+    enter("#/schedule");
+    window.scrollY = 600;
+    listItem.focus();
+  } else if (process.argv[3] === "devices") jump("#/settings/cdm");
   else {
     listeners.wheel({ isTrusted: true });
     window.scrollY = 250;
@@ -285,9 +297,12 @@ def test_late_service_row_does_not_override_newer_navigation_or_scroll(interrupt
   console.log(JSON.stringify({ hash: location.hash, scroll: window.scrollY, retainedFocus: before === focused }));
 })();
 """, str(JS / "navigation.js"), str(JS / "services.js"), interruption)
-    devices = interruption == "devices"
-    assert seen == {"hash": "#/settings/cdm" if devices else "#/settings/services",
-                    "scroll": 400 if devices else 250, "retainedFocus": True}
+    route, scroll = {
+        "devices": ("#/settings/cdm", 400),
+        "wheel": ("#/settings/services", 250),
+        "schedule": ("#/schedule", 600),
+    }[interruption]
+    assert seen == {"hash": route, "scroll": scroll, "retainedFocus": True}
 
 
 @pytest.mark.parametrize("focus_taken", ["none", "user"])
