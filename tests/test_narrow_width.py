@@ -60,6 +60,12 @@ def test_the_notifications_heading_keeps_its_own_width_and_the_row_may_wrap():
     has(media("max-width: 340px"), "#inbox-clear { order: 1; margin-left: auto; }")
 
 
+def test_the_remote_cdms_heading_has_room_when_its_add_button_wraps():
+    phone = media("max-width: 700px")
+    has(phone, ".sx-head:has(> .btn) { flex-wrap: wrap; }")
+    has(phone, "#cdm-list .sx-head:has(> .btn) > div { flex-basis: min(200px, calc(100% - 50px)); }")
+
+
 def test_a_phone_shows_the_apps_name_whole_or_its_labelled_logo_never_a_cut_name():
     phone = media("max-width: 700px")
     has(phone, ".version-chip { display: none; }")  # Settings has the version and what's new
