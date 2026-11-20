@@ -189,6 +189,36 @@ def test_activity_switcher_sizes_follow_the_pointer_even_on_a_narrow_window():
     has(media("pointer: coarse"), ".con-toolbar { --con-target: 44px; }")
 
 
+def test_month_grid_fits_seven_44px_dates_at_320px():
+    has(CSS, ".cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));")
+    has(media("max-width: 363px"), ".cal-grid { margin-inline: calc(3px - var(--sp-4)); column-gap: 1px; }")
+
+
+def test_inbox_clear_is_at_least_44px_high_on_touch():
+    touch = media("max-width: 700px), (pointer: coarse")
+    assert re.search(r"[^{}]*\.inbox-clear\b[^{}]*\{\s*min-height: 44px;", touch)
+
+
+def test_activity_stats_wrap_german_labels_without_splitting_service_figures():
+    has(CSS, ".legend { display: flex; flex-wrap: wrap;")
+    narrow = media("max-width: 400px")
+    has(narrow, ".svc-table :is(th, td) { padding-inline: var(--sp-1); overflow-wrap: anywhere; hyphens: auto; }")
+    has(narrow, ".svc-scroll td:nth-child(5) { white-space: nowrap; }")
+
+
+def test_device_chips_and_job_counts_are_at_least_44px_on_touch():
+    touch = media("pointer: coarse")
+    has(touch, ".cdm-opt, button.cdm-chip, .job-counts button { min-height: 44px;")
+    has(touch, "button.cdm-chip, .job-counts button { min-width: 44px;")
+
+
+def test_phone_job_stats_wrap_as_groups_without_splitting_figures():
+    has(CSS, ".cd-stats { display: flex; gap: 28px; flex-wrap: wrap; }")
+    phone = media("max-width: 700px")
+    has(phone, ".cd-stats { gap: 12px 22px; }")
+    assert re.search(r"\.cd-stats b \{[^}]*white-space: nowrap;", phone)
+
+
 def test_activity_sync_status_takes_space_inside_the_pane_not_below_it():
     page = (STATIC / "index.html").read_text()
     activity = page[page.index('id="tab-log"'):page.index('id="tab-yaml"')]
