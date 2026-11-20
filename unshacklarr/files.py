@@ -37,10 +37,10 @@ def no_credentials(text) -> str:
     return SENSITIVE_HEADER.sub(lambda match: f"{(match.group(1) or match.group(2)).rstrip()} ***", masked)
 
 
-def read_json(path: Path, empty, strict: bool = False):
-    """A JSON file's content, or `empty` when it is missing, unreadable or malformed.
-    In strict mode only a missing file is `empty`; other read and decode failures raise OSError
-    so callers do not use or overwrite state they could not read."""
+def read_json(path: Path, empty, strict: bool = False, invalid_raises: bool = False):
+    """A JSON file's content, or `empty` when it is missing or unreadable (never half-written: see write_atomic).
+    strict, for a read that is written back: only a missing file is `empty`; another read error (a NAS share gone
+    for a moment) raises, so the write is skipped instead of replacing the file it could not read."""
     try:
         return json.loads(Path(path).read_text())
     except FileNotFoundError:
@@ -50,7 +50,7 @@ def read_json(path: Path, empty, strict: bool = False):
             raise
         return empty
     except ValueError as error:
-        if strict:
+        if invalid_raises:  # a file whose content must not be guessed (the revoked sessions): malformed fails closed
             raise OSError(f"Invalid JSON in {path}") from error
         return empty
 

@@ -648,7 +648,7 @@ _json_cache: dict[Path, tuple[tuple, object]] = {}
 _json_cache_lock = threading.Lock()
 
 
-def read_json_cached(path: Path, default, *, strict: bool = False):
+def read_json_cached(path: Path, default, *, strict: bool = False, invalid_raises: bool = False):
     """Read-only JSON cache keyed by (mtime_ns, size, ino); callers must not mutate the returned value."""
     try:
         st = path.stat()
@@ -662,7 +662,7 @@ def read_json_cached(path: Path, default, *, strict: bool = False):
         hit = _json_cache.get(path)
         if hit is not None and hit[0] == stamp:
             return hit[1]
-    parsed = read_json(path, default, strict=strict)
+    parsed = read_json(path, default, strict=strict, invalid_raises=invalid_raises)
     if parsed is not default:
         with _json_cache_lock:
             _json_cache[path] = (stamp, parsed)
@@ -6582,7 +6582,7 @@ def logged_in(request, auth: dict) -> bool:
     _, signed, signature = session
     expected = hmac.new(auth["secret"].encode(), signed.encode(), "sha256").hexdigest()
     return (hmac.compare_digest(signature.encode(), expected.encode())
-            and signature not in read_json_cached(LOGGED_OUT_FILE, {}, strict=True))
+            and signature not in read_json_cached(LOGGED_OUT_FILE, {}, strict=True, invalid_raises=True))
 
 
 def setup_code_ok(body: dict) -> bool:
@@ -6601,7 +6601,7 @@ def forget_session(value: str) -> None:
         return
     expires, _, signature = session
     with LOGGED_OUT_LOCK:
-        closed = {sig: until for sig, until in read_json(LOGGED_OUT_FILE, {}, strict=True).items()
+        closed = {sig: until for sig, until in read_json(LOGGED_OUT_FILE, {}, strict=True, invalid_raises=True).items()
                   if until > time.time()}  # the expired ones go
         write_atomic(LOGGED_OUT_FILE, json.dumps({**closed, signature: expires}), PRIVATE)
         _invalidate_json_cache(LOGGED_OUT_FILE)

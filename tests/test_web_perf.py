@@ -742,14 +742,23 @@ def test_json_cache_stat_error_uses_default(tmp_path, monkeypatch):
     assert web.read_json_cached(path, default) is default
 
 
-def test_json_cache_rejects_malformed_json_in_strict_mode(tmp_path, monkeypatch):
+def test_a_malformed_revocation_file_keeps_revoked_sessions_out(tmp_path, monkeypatch):
     web = _reload_web(tmp_path, monkeypatch)
-    path = tmp_path / "state.json"
-    path.write_text("{")
-    default = {}
-    assert web.read_json_cached(path, default) is default
+    auth = {"secret": "test-session-secret"}
+    cookie = web.session_value(auth)
+    req = SimpleNamespace(cookies={web.SESSION_COOKIE: cookie})
+    web.forget_session(cookie)
+    assert not web.logged_in(req, auth)
+    web.LOGGED_OUT_FILE.write_text("{")  # torn or hand-edited: the list of revoked sessions can't be read
     with pytest.raises(OSError, match="Invalid JSON"):
-        web.read_json_cached(path, default, strict=True)
+        web.logged_in(req, auth)  # fails closed: the revoked cookie is not accepted again
+    with pytest.raises(OSError, match="Invalid JSON"):
+        web.forget_session(cookie)  # and a logout does not replace the list it could not read
+    # other state read for a write keeps healing itself: a malformed file is read as empty and written anew
+    other = tmp_path / "state.json"
+    other.write_text("{")
+    assert web.read_json(other, {}, strict=True) == {}
+    assert web.read_json_cached(other, {}, strict=True) == {}
 
 
 @pytest.mark.parametrize("operation", ["stat", "read_text"])
@@ -790,11 +799,11 @@ def test_password_required_avoids_deepcopy_and_caches_logged_out(tmp_path, monke
     read_json_calls = 0
     real_read_json = web.read_json
 
-    def counting_read_json(path, default, strict=False):
+    def counting_read_json(path, default, strict=False, **kwargs):
         nonlocal read_json_calls
         if path == web.LOGGED_OUT_FILE:
             read_json_calls += 1
-        return real_read_json(path, default, strict=strict)
+        return real_read_json(path, default, strict=strict, **kwargs)
 
     monkeypatch.setattr(web, "read_json", counting_read_json)
     monkeypatch.setattr(copy, "deepcopy", lambda obj: pytest.fail("password_required must not deepcopy config"))
