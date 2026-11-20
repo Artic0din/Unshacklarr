@@ -478,6 +478,10 @@ const node = (props = {}) => ({
   ...props,
 });
 const elements = { "#con-search": node({ value: "" }) };
+const filters = ["all", "downloaded", "failed", "kept", "stopped"].map((f) => {
+  const count = node();
+  return node({ dataset: { f }, count, querySelector: () => count });
+});
 const buttons = [...html.matchAll(/id="(con-[^"]+)" data-con-view="([^"]+)" aria-pressed="([^"]+)"/g)].map(([, id, conView, pressed]) =>
   elements[`#${id}`] = node({ dataset: { conView }, attrs: { "aria-pressed": pressed } }));
 const $ = (s) => {
@@ -501,9 +505,10 @@ const ctx = { $, innerWidth: 1000, el: (tag, props) => node(props),
   document: Object.assign(doc, { getElementById: (id) => elements[`#${id}`], querySelectorAll: (s) => ({
     ".con-views [data-con-view]": buttons, "#con-running .chip": $("#con-running").children,
     "#con .crow": [...$("#runs-live").children, ...$("#runs-history").children],
+    "#tab-log .con-filters button": filters,
   })[s] || [] }), glideBars() {}, emptyHistory: () => node(),
   scrollTo() {}, focusHeading: (heading) => heading.focus(), getComputedStyle: () => ({ scrollPaddingInlineEnd: "0px" }),
-  itemRow: (item) => node({ dataset: { hk: `row:${ctx.keyOf(item)}` }, onclick: () => ctx.pickRun(ctx.keyOf(item)) }),
+  itemRow: (item) => node({ item, dataset: { hk: `row:${ctx.keyOf(item)}` }, onclick: () => ctx.pickRun(ctx.keyOf(item)) }),
   renderDetail: (card) => { detail = card.id; }, renderJob: (job) => { detail = `job:${job.job}`; },
   nothingPicked: () => { detail = null; $("#cd-main").replaceChildren(); }, keepFocus: (_, draw) => draw(),
   loading: () => node({ className: "loading" }), renderDock() {}, failed: (textContent) => node({ textContent }),
@@ -592,6 +597,19 @@ if (scenario === "chip-overflow") {
   strip.clientWidth = 800; resize();
   console.log(JSON.stringify([atStart, atEnd, backAtStart, cue()]));
 }
+else if (scenario === "mixed-history") {
+  const cards = ["downloaded", "downloaded", "failed"].map((outcome, i) => ({
+    ...history, batch: "mixed", id: `r${i}`, sxxeyy: `S01E0${i + 1}`, outcome,
+  }));
+  addRuns([...cards, active, { ...queued, outcome: "downloaded" }]);
+  const counts = filters.map((b) => b.count.textContent);
+  const rows = ["downloaded", "failed"].map((filter) => {
+    ctx.filter = filter;
+    vm.runInContext("conFilter = filter; renderConsole()", ctx);
+    return $("#runs-history").children.map(({ item }) => item?.cards?.map((c) => c.outcome) || [item?.outcome]);
+  });
+  console.log(JSON.stringify([counts, rows]));
+}
 else if (scenario === "fail-stats" || scenario === "fail-downloads") failedRuns(scenario.slice(5));
 else if (scenario === "back-to-chip") {
   ctx.innerWidth = 500;
@@ -658,6 +676,11 @@ def test_pending_runs_do_not_override_an_explicit_selection(selection, expected)
 def test_failed_runs_leave_a_pending_tool_loader_in_place():
     assert switcher("fail-stats") == [["stats"], True, "Could not load the downloads: network offline"]
     assert switcher("fail-downloads") == [["downloads"], False, "Could not load the downloads: network offline"]
+
+
+def test_history_outcomes_count_and_keep_whole_jobs_without_running_jobs():
+    mixed = ["downloaded", "downloaded", "failed"]
+    assert switcher("mixed-history") == [["(1)", "(1)", "(1)", "(0)", "(0)"], [[mixed], [mixed]]]
 
 
 def test_back_from_a_running_download_returns_focus_to_its_chip():

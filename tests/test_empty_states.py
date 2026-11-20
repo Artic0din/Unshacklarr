@@ -123,7 +123,7 @@ const src = read(process.argv[1]), [pressed] = process.argv.slice(2);
 const chips = ["all", "downloaded", "failed", "kept", "stopped"].map((f) => box({ dataset: { f } }));
 const runCards = [{ series: "A", outcome: "downloaded" }, { series: "B", outcome: "failed" }];
 const ctx = sandbox({ runCards, conFilter: pressed, runsShown: 50, landOnLive: false, picked_run: "serve", innerWidth: 500,
-  isLive: () => false, jobsOf: () => [], glideBars() {}, $: () => box(),
+  isLive: () => false, jobsOf: (cards) => cards, itemRow: () => box(), glideBars() {}, $: () => box(),
   document: { querySelector: () => box(), querySelectorAll: (sel) => (sel.includes("con-filters") ? chips : []) } });
 vm.runInContext(grab(src, /function emptyHistory\b[\s\S]*?\n}\n/) + grab(src, /function renderConsole\b[\s\S]*?\n}\n(?=\/\* Episodes picked)/), ctx);
 ctx.renderConsole();
