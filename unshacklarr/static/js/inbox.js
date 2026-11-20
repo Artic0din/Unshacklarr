@@ -69,7 +69,9 @@ function inboxRow(g, n, cap = INBOX_EP_LIMIT) {  // the menu caps a job's episod
   // a service's (its cookies): its row in Settings › Services & Devices › Services
   if (!g.series && !i.service) return el("div", props, art, body, time);
   // not a <button>: its text can be selected (an error to copy); a click that selects doesn't open the series
-  const open = () => { if (String(getSelection()).trim()) return; $("#inbox-dialog").close(); g.series ? openDrawer(g.series) : openServiceRow(i.service); };
+  const open = () => {
+    if (!String(getSelection()).trim()) closeInbox(() => g.series ? openDrawer(g.series) : openServiceRow(i.service));
+  };
   return el("div", { ...props, className: `${props.className} link`, role: "button", tabIndex: 0, title: `Open ${g.series ? g.name : svcName(i.service)}`, onclick: open,
     onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } } }, art, body, time);
 }
@@ -114,7 +116,14 @@ async function openInbox(mode = "full") {
   dialog.classList.toggle("menu", mode === "menu");
   const bell = $("#bell").getBoundingClientRect();
   dialog.style.right = mode === "menu" && !phoneLayout() ? `${Math.max(8, innerWidth - bell.right)}px` : "";
-  if (!dialog.open) mode === "menu" ? dialog.show() : dialog.showModal();
+  if (!dialog.open) {
+    if (mode === "menu") dialog.show();
+    else {
+      if (!history.state?.inbox) history.pushState({ ...history.state, inbox: true }, "");
+      $("#bell").focus({ preventScroll: true });
+      dialog.showModal();
+    }
+  }
   $("#inbox-list").replaceChildren(loading("Reading the notifications…"));
   $("#inbox-clear").hidden = $("#inbox-filters").hidden = true;
   $("#inbox-summary").textContent = "";
@@ -129,6 +138,30 @@ async function openInbox(mode = "full") {
   renderInbox(true);
   try { inboxData = await api("/api/inbox/read", { method: "POST" }); } catch { /* the next refresh picks up the server's unread count */ }
 }
+let afterInboxClose = null;
+function closeInbox(afterClose = () => {}) {
+  if (history.state?.inbox) {
+    if (afterInboxClose) return;
+    afterInboxClose = afterClose;
+    return history.back();
+  }
+  $("#inbox-dialog").close();
+  afterClose();
+}
+function syncInboxRoute() {
+  const dialog = $("#inbox-dialog");
+  const samePage = location.hash === routeHash();
+  if (history.state?.inbox) {
+    if (samePage && (!dialog.open || dialog.classList.contains("menu"))) openInbox();
+    return samePage;
+  }
+  if (!afterInboxClose && (!dialog.open || dialog.classList.contains("menu"))) return false;
+  if (dialog.open) dialog.close();
+  const next = afterInboxClose;
+  afterInboxClose = null;
+  next?.();
+  return samePage;
+}
 $("#bell").onclick = (e) => {
   e.stopPropagation();
   $("#inbox-dialog").open ? $("#inbox-dialog").close() : openInbox("menu");
@@ -140,10 +173,15 @@ document.addEventListener("click", (e) => {  // the menu closes with a click any
   if (menu.open && menu.classList.contains("menu") && !e.composedPath().includes(menu)) menu.close();
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#inbox-dialog").classList.contains("menu")) $("#inbox-dialog").close(); });
-$("#inbox-close").onclick = () => $("#inbox-dialog").close();
+$("#inbox-close").onclick = () => closeInbox();
 $("#inbox-dialog").addEventListener("click", (e) => {  // a click outside the panel (on the backdrop) closes it
   const r = $("#inbox-dialog").getBoundingClientRect();
-  if (e.target === $("#inbox-dialog") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $("#inbox-dialog").close();
+  if (e.target === $("#inbox-dialog") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) closeInbox();
+});
+$("#inbox-dialog").addEventListener("cancel", (e) => {
+  if (!history.state?.inbox) return;
+  e.preventDefault();
+  closeInbox();
 });
 $("#inbox-dialog").addEventListener("close", refreshInbox);
 $("#inbox-clear").onclick = async (e) => {

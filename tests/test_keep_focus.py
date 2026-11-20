@@ -255,7 +255,7 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   const row = make("div", { id: "sv-EXAMPLE", closest: () => null, scrollIntoView() { out.serviceScrolled = true; } });
   root.append(row); anchors[row.id] = row;
   run(["openServiceRow", "serviceRow", "revealService"].map((name) => fn(read("services.js"), name)).join("\n"));
-  run(fn(read("inbox.js"), "inboxRow"));
+  run(["inboxRow", "closeInbox"].map((name) => fn(read("inbox.js"), name)).join("\n"));
   ctx.inboxRow({ items: [{ service: "EXAMPLE", at: "2025-01-01" }], eps: [], level: "error" }, 0, 4).onclick();
   out.inbox = [location.hash, panels.find((n) => !n.hidden).dataset.sec, doc.activeElement === row];
   delete out.scrolledTo;

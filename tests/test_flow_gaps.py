@@ -102,6 +102,7 @@ function traverse(delta) {
 }
 const ctx = sandbox({
   $, window, location, current: null, S: { config: {} }, termSocket: null, i18nReady,
+  syncInboxRoute: () => false,
   requestAnimationFrame: (fn) => frames.push(fn),
   phoneLayout: () => true,
   ResizeObserver: class {

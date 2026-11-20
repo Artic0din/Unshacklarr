@@ -170,6 +170,7 @@ function updateTitle() {
 }
 let routed = false;
 function applyRoute(event) {
+  if (event && syncInboxRoute()) return;
   if (event) cancelSettingsJump();
   if (location.hash.startsWith("#/inbox")) {  // a push notification touched: the bell's list over the current page
     history.replaceState(null, "", `#/${HASH_OF[currentTab] || currentTab}`);
@@ -188,6 +189,7 @@ function applyRoute(event) {
   else if (series && route.view) showDrawerTab(route.view, true);
   else if (!series && current) closeDrawer(true);
   updateTitle();
+  if (history.state?.inbox && !$("#inbox-dialog").open) openInbox();
 }
 window.addEventListener("popstate", applyRoute);
 // Startup can scroll without user input; only input should interrupt a jump that is still loading.

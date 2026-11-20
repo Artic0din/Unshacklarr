@@ -818,6 +818,59 @@ vm.runInContext(read(process.argv[1]), ctx);
     assert result == {"failed": [True, 0, False, True, False], "recovered": [1, True, "inbox-empty"]}
 
 
+def test_browser_back_closes_full_inbox_without_leaving_its_page():
+    result = node(r"""
+const location = { hash: "#/series" };
+const entries = [{ state: null, hash: "#/schedule" }, { state: { settings: { target: "#section" } }, hash: location.hash }];
+let index = 1, focus = "bell", modal = false, menu = false, invoker, closesBeforePop = false;
+const dialog = {
+  style: {}, classList: { toggle(_name, value) { menu = value; }, contains: () => menu },
+  addEventListener() {}, show() { this.open = true; focus = "inbox-title"; },
+  showModal() { this.open = modal = true; invoker = focus; focus = "inbox-title"; },
+  close() { this.open = false; if (modal) focus = invoker; modal = false; },
+};
+const bell = { focus() { focus = "bell"; }, getBoundingClientRect: () => ({}) }, closeButton = {};
+const history = {
+  get state() { return entries[index].state; },
+  pushState(state) { entries.splice(++index, entries.length, { state, hash: location.hash }); },
+  back() {
+    if (closesBeforePop) dialog.close();
+    location.hash = entries[--index].hash;
+    ctx.applyRoute({ state: this.state });
+  },
+};
+const ctx = sandbox({
+  location, history, current: null, currentTab: "series", routed: true, S: { series: [] },
+  cancelSettingsJump() {}, inSettingsSec: () => false, updateTitle() {}, routeHash: () => "#/series",
+  parseRoute: () => ({ tab: location.hash.slice(2) }), showTab() {},
+  phoneLayout: () => true, setInterval() {}, api: async () => { throw Error("503"); },
+  $: (sel) => ({ "#inbox-dialog": dialog, "#bell": bell, "#inbox-close": closeButton })[sel] || any,
+});
+vm.runInContext(read(process.argv[1]), ctx);
+vm.runInContext(grab(read(process.argv[2]), /function applyRoute\b[\s\S]*?\n}\n/), ctx);
+(async () => {
+  await ctx.openInbox("menu");
+  const menuIndex = index;
+  focus = "inbox-full";
+  await ctx.openInbox();
+  const full = [modal, index, history.state?.settings?.target];
+  history.back();
+  const back = [dialog.open, location.hash, focus];
+  await ctx.openInbox();
+  closesBeforePop = true;
+  closeButton.onclick();
+  closesBeforePop = false;
+  await ctx.openInbox();
+  closeButton.onclick();
+  console.log(JSON.stringify({ menuIndex, full, back, close: [dialog.open, index] }));
+})();
+""", str(JS / "inbox.js"), str(JS / "navigation.js"))
+    assert result == {
+        "menuIndex": 1, "full": [True, 2, "#section"],
+        "back": [False, "#/series", "bell"], "close": [False, 1],
+    }
+
+
 def test_every_news_target_gets_a_new_badge():
     class Markup(HTMLParser):
         def __init__(self):

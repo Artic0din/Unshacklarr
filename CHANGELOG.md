@@ -158,7 +158,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
-- Preserved unread notifications when the Inbox failed to load, added a retry, and hid Clear until notifications were available.
+- Preserved unread notifications when the Inbox failed to load, added a retry, and made browser Back close the full Inbox without leaving the page.
 - Restored the exact Settings shortcut on browser Forward, fixed Back on phones, and kept focus on the newest jump as translations and service rows loaded.
 - Kept service shortcuts focused on the right row, restored New badges on their own setting titles, and fixed Settings Back and Notifications on phones.
 - Kept the Devices heading in view after loading, moved focus to newly opened Settings sections, and fixed the Add audio track shortcut's focus.
