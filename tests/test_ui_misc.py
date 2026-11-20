@@ -57,6 +57,171 @@ console.log(JSON.stringify(vm.runInContext("RELEASE_DAYS", ctx)));
     assert days == list(range(-sync.EARLY_DAYS_MAX, 2))
 
 
+def test_episode_subtitle_summary_prioritizes_required_languages_and_discloses_every_track():
+    summary = node(r"""
+const src = read(process.argv[1]), ctx = sandbox({ el: (tag, props, ...kids) => ({
+  tag, ...props, kids, setAttribute(k, v) { this[k] = v; }, append(k) { kids.push(k); },
+}), flagged: (text) => text,
+  trWith: (key, count, episode) => key === "+{0}: Show subtitles for {1}" ? `+${count} : Sous-titres pour ${episode}` : key,
+});
+vm.runInContext(grab(src, /function setSubtitleExpanded\b[\s\S]*?function subtitleSummary\b[\s\S]*?\n}\n/), ctx);
+const tracks = ["en", "ara", "cat", "cze", "fr", "fre-CA", ...Array(27).fill("es")];
+const { cell, detail } = ctx.subtitleSummary(tracks, "fr-CA", "", 5, "E05", false);
+const chip = cell.kids[1];
+const closed = detail.hidden;
+chip.onclick();
+const opened = !detail.hidden && chip["aria-expanded"] === "true";
+chip.onclick();
+console.log(JSON.stringify({
+  preview: cell.kids[0], chip: chip.textContent, name: chip.ariaLabel, closed, opened,
+  collapsedAgain: detail.hidden && chip["aria-expanded"] === "false",
+  detail: detail.textContent, short: ctx.subtitleSummary(["en"], "", "", 1, "E01", false).cell.kids,
+}));
+""", str(JS / "series.js"))
+    assert summary == {
+        "preview": "fre-CA, fr",
+        "chip": "+31",
+        "name": "+31 : Sous-titres pour E05",
+        "closed": True,
+        "opened": True,
+        "collapsedAgain": True,
+        "detail": ", ".join(["en", "ara", "cat", "cze", "fr", "fre-CA", *(["es"] * 27)]),
+        "short": ["en"],
+    }
+
+
+EPISODE_SANDBOX = r"""
+const src = read(process.argv[1]);
+const hasClass = (node, name) => typeof node.className === "string" && node.className.split(" ").includes(name);
+function* descendants(node) {
+  for (const kid of node.kids ?? []) {
+    if (typeof kid !== "object") continue;
+    yield kid;
+    yield* descendants(kid);
+  }
+}
+const document = { querySelectorAll: () => [], querySelector: () => null, activeElement: null };
+const list = { style: { setProperty() {} }, classList: { toggle(_, value) { list.compact = value; } },
+  querySelectorAll: (sel) => sel === ".ep-subs-detail:not([hidden])"
+    ? [...descendants(list)].filter(k => hasClass(k, "ep-subs-detail") && !k.hidden) : [],
+  querySelector: (sel) => [...descendants(list)].find(k => k["aria-controls"] && sel === `[aria-controls="${k["aria-controls"]}"]`),
+  replaceChildren(...kids) { list.kids = kids; document.activeElement = null; },
+};
+const ep = { id: 4, seasonNumber: 2, episodeNumber: 5, airDateUtc: "2099-11-21", title: "Future" };
+const onDisk = { id: 5, seasonNumber: 2, episodeNumber: 6, title: "On disk",
+  hasFile: true, file: { subtitles: ["en", "fr", "es"] } };
+const ctx = sandbox({
+  $: (sel) => sel === "#ep-list" ? list : sel === "#ep-avail" ? null : any,
+  document,
+  epSeasons: { 2: [ep] }, epSeason: 2, epBusy: new Map(), epQualities: {}, current: { tvdbId: 1 },
+  S: { config: { series: {}, settings: {} } },
+  hideOnDisk: false, epAvail: null, tipFor: null, isOutlier: () => false,
+  state: (e) => e.file ? "disk" : "soon", stateIcon: () => ({ className: "ep-state" }),
+  seasonNorm: () => null, fileTooltip: () => "", picked: new Set(), pad2: (x) => String(x).padStart(2, "0"),
+  COLUMNS: [{ id: "subs", file: true, label: "Subtitles" }],
+  colsNow: [{ id: "subs", on: true }],
+  flagged: (text) => text,
+  el: (tag, props, ...kids) => {
+    const node = el(tag, props, ...kids);
+    return Object.assign(node, {
+      querySelector: () => null, append: (kid) => node.kids.push(kid),
+      setAttribute: (key, value) => { node[key] = value; },
+      getAttribute: (key) => node[key],
+      closest: (sel) => sel.split(", ").some(part =>
+        part === node.tag || (part.startsWith(".") && hasClass(node, part.slice(1)))) ? node : null,
+      focus(options) { document.activeElement = node; node.focusOptions = options; },
+      click() {
+        if (node.type === "checkbox" && !node.disabled) {
+          node.checked = !node.checked;
+          node.onchange?.();
+        }
+      },
+      style: { setProperty() {} },
+      classList: { add: (name) => { node.className += ` ${name}`; } },
+    });
+  },
+});
+vm.runInContext(grab(src, /function setSubtitleExpanded\b[\s\S]*?function subtitleSummary\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(src, /function renderSeason\b[\s\S]*?\n}\n/), ctx);
+"""
+
+
+def test_episodes_without_file_specs_show_status_instead_of_empty_columns():
+    rows = node(EPISODE_SANDBOX + r"""
+const noFileRow = () => {
+  const row = list.kids[1].kids[0].kids;
+  return { compact: list.compact, status: row.find(k => hasClass(k, "ep-status"))?.textContent,
+    blanks: row.filter(k => hasClass(k, "spec") && hasClass(k, "blank")).length };
+};
+const subtitles = () => {
+  const [row, detail] = list.kids[2].kids;
+  const cell = row.kids.find(k => hasClass(k, "subs"));
+  const chip = cell?.kids.find(k => hasClass(k, "ep-subs-chip"));
+  return { preview: cell?.kids[0], chip: chip?.textContent,
+    detail: detail?.textContent, linked: !!detail && chip?.["aria-controls"] === detail.id,
+    mobileCell: !!cell && hasClass(cell, "ep-mobile-subs"),
+    mobileDetail: !!detail && hasClass(detail, "ep-mobile-subs") };
+};
+ctx.renderSeason();
+const compact = noFileRow();
+ctx.epSeasons[2].push(onDisk);
+ctx.renderSeason();
+const mixed = noFileRow(), column = subtitles();
+ctx.colsNow[0].on = false;
+ctx.renderSeason();
+console.log(JSON.stringify({ compact, mixed, column, mobile: subtitles() }));
+""", str(JS / "series.js"))
+    assert rows["compact"] == {"compact": True, "status": "Not aired", "blanks": 0}
+    assert rows["mixed"] == {"compact": False, "status": "Not aired", "blanks": 0}
+    summary = {"preview": "en, fr", "chip": "+1", "detail": "en, fr, es", "linked": True}
+    assert rows["column"] == {**summary, "mobileCell": False, "mobileDetail": False}
+    assert rows["mobile"] == {**summary, "mobileCell": True, "mobileDetail": True}
+
+
+def test_redrawing_the_season_keeps_subtitles_open_and_focus_on_the_new_chip():
+    redraw = node(EPISODE_SANDBOX + r"""
+const chip = () => [...descendants(list)].find(k => hasClass(k, "ep-subs-chip"));
+ctx.epSeasons[2] = [onDisk];
+ctx.renderSeason();
+const original = chip();
+original.onclick();
+original.focus();
+ctx.renderSeason();
+const rebuilt = chip();
+const detail = [...descendants(list)].find(k => k.id === rebuilt.getAttribute("aria-controls"));
+console.log(JSON.stringify({ hidden: detail.hidden, expanded: rebuilt.getAttribute("aria-expanded"),
+  focusRestored: rebuilt !== original && document.activeElement === rebuilt, focusOptions: rebuilt.focusOptions }));
+""", str(JS / "series.js"))
+    assert redraw == {
+        "hidden": False, "expanded": "true", "focusRestored": True, "focusOptions": {"preventScroll": True},
+    }
+
+
+def test_clicking_an_episode_row_selects_it_without_the_subtitle_chip_changing_selection():
+    clicks = node(EPISODE_SANDBOX + r"""
+ctx.epSeasons[2] = [onDisk];
+ctx.renderSeason();
+const row = [...descendants(list)].find(k => hasClass(k, "ep"));
+const chip = [...descendants(row)].find(k => hasClass(k, "ep-subs-chip"));
+const box = [...descendants(row)].find(k => k.type === "checkbox");
+const picks = () => ({ checked: box.checked, picked: ctx.picked.has(onDisk.id) });
+const before = picks();
+row.onclick({ target: row });
+const afterRow = picks();
+chip.onclick();
+row.onclick({ target: chip });
+const afterChip = { ...picks(), expanded: chip.getAttribute("aria-expanded") };
+row.onclick({ target: row });
+console.log(JSON.stringify({ before, afterRow, afterChip, afterSecondRow: picks() }));
+""", str(JS / "series.js"))
+    assert clicks == {
+        "before": {"checked": False, "picked": False},
+        "afterRow": {"checked": True, "picked": True},
+        "afterChip": {"checked": True, "picked": True, "expanded": "true"},
+        "afterSecondRow": {"checked": False, "picked": False},
+    }
+
+
 # Safari before 17.4 has no Object.groupBy
 NO_GROUP_BY = "const NoGroupBy = Object.fromEntries(Object.getOwnPropertyNames(Object).filter((k) => k !== 'groupBy').map((k) => [k, Object[k]]));"
 

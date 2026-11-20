@@ -696,7 +696,6 @@
       <div class="field" id="d-libs-field" hidden>
         <span id="d-libs-l">Libraries</span>
         <div class="d-libs" id="d-libs" role="group" aria-labelledby="d-libs-l"></div>
-        <small>New episodes are downloaded for each library switched on, with its own quality ladder (Settings, Sonarr).</small>
         <details class="d-libs-adv" id="d-libs-adv"><summary>Advanced</summary><div id="d-libs-adv-body"></div></details>
       </div>
       <div class="ds-tools">
@@ -730,7 +729,7 @@
         <div class="field">
           <label for="d-release-day">On</label>
           <select id="d-release-day"></select>
-          <small>Counted from the air date in Sonarr. Pick a day before when a streaming platform gets the episodes ahead of the TV channel.</small>
+          <small>Relative to Sonarr's air date.</small>
         </div>
         <div class="field">
           <label for="d-release-gap">Next episode</label>
@@ -777,17 +776,15 @@
         <div class="field">
           <span id="d-spoiler-l">Episode titles</span>
           <div class="ax-seg" id="d-spoiler-seg" role="group" aria-labelledby="d-spoiler-l"></div>
-          <small>Hidden titles are blurred until you click or tap them. Default follows Settings, Interface, No spoilers.</small>
         </div>
         <div class="field">
           <span id="d-notify-l">Notifications</span>
           <div class="ax-seg" id="d-notify-seg" role="group" aria-labelledby="d-notify-l"></div>
-          <small>What is sent for this series' episodes. The bell in the page always keeps everything.</small>
         </div>
         <div class="field">
           <label for="d-audio">Accepted audio languages</label>
           <input type="text" id="d-audio" spellcheck="false">
-          <small>For example fr, en, or orig for the series' original language. An episode with none of them is not downloaded. It is tried again at each sync.</small>
+          <small>Use orig for the original language. Episodes without a match are retried at the next sync.</small>
         </div>
         <div class="field">
           <label for="d-prefer">Upgrade the audio to</label>
@@ -813,12 +810,11 @@
         <span>Download options</span>
         <div class="opts inh-list" id="d-inherited" hidden></div>
         <div class="opts" id="d-opts"></div>
-        <small>For this series only. They take priority over the options set for its service.</small>
       </div>
       <div class="field">
         <label for="d-fallback">Fallback profiles</label>
         <input type="text" id="d-fallback" spellcheck="false" autocomplete="off" placeholder="Example: alt, backup">
-        <small>If the service refuses the sign-in, the download is tried again with these profiles, in order. Useful for a second account while the first one's cookies are renewed.</small>
+        <small>If sign-in fails, try these profiles in order.</small>
         <div class="fb-known" id="d-fallback-known" hidden></div>
       </div>
     </section>
@@ -852,12 +848,12 @@
         <div class="field">
           <label for="d-seasons">Seasons on the service</label>
           <input type="text" id="d-seasons" placeholder="Example: 34=29" autocomplete="off" autocapitalize="off" spellcheck="false">
-          <small>Sonarr's season = the service's season, comma-separated.</small>
+          <small>Sonarr season = service season, comma-separated. <code>34=29</code></small>
         </div>
         <div class="field" id="d-pages-field">
           <label for="d-pages">Seasons listed as separate shows</label>
           <textarea id="d-pages" rows="2" spellcheck="false" placeholder="S02 https://www.sbs.com.au/ondemand/tv-series/apollo-has-fallen"></textarea>
-          <small>For a season the service lists as a separate show. One line per season: Sonarr's season, then the show's URL. If the episodes are not in season 1 of that show, add its season number at the end.</small>
+          <small>One per line. Append the service's season number if it isn't 1. <code>S02 &lt;url&gt;</code></small>
         </div>
         <div class="field">
           <label for="d-offset">Episode offset</label>

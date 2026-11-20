@@ -676,7 +676,6 @@
   "d.series",
   "e.message"
  ],
- "Counted from the air date in Sonarr. Pick a day before when a streaming platform gets the episodes ahead of the TV channel.": [],
  "Country": [],
  "Country and time zone": [],
  "Country, time zone": [],
@@ -1004,16 +1003,13 @@
  ],
  "For Gmail, Outlook or iCloud: use an app password, created in your account's security settings (not your usual password).": [],
  "For a file from another source, choose to be asked or to add the audio anyway": [],
- "For a season the service lists as a separate show. One line per season: Sonarr's season, then the show's URL. If the episodes are not in season 1 of that show, add its season number at the end.": [],
  "For a series like BBC Documentaries, where each episode is its own programme on the service: each one is found by its title, so the series needs no URL.": [],
  "For at most": [],
  "For every series": [],
  "For every series it downloads, over the series' own.": [],
  "For every series.": [],
- "For example fr, en, or orig for the series' original language. An episode with none of them is not downloaded. It is tried again at each sync.": [],
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": [],
  "For the episodes still to come in this job. It starts from the options they have now; what you change is for this job only, the series itself does not change.": [],
- "For this series only. They take priority over the options set for its service.": [],
  "For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.": [],
  "For when every episode comes in that many parts. Until all parts are out, nothing is imported and the episode is tried again. An episode is never imported half-done.": [],
  "For {0} series: {1}.": [
@@ -1072,6 +1068,7 @@
  "Hidden from the schedule: show it again": [],
  "Hidden series": [],
  "Hidden titles are blurred until you click or tap them. Default follows Settings, Interface, No spoilers.": [],
+ "Hide": [],
  "Hide on disk": [],
  "Hide these episodes": [],
  "Hide this series from the schedule": [],
@@ -1086,7 +1083,6 @@
  "How many episodes each Unshackle server downloads together. 1 is gentler on a small NAS. 0: as many as Unshackle allows, 2 by default.": [],
  "How often": [],
  "Hybrid (DV + HDR10)": [],
- "If the service refuses the sign-in, the download is tried again with these profiles, in order. Useful for a second account while the first one's cookies are renewed.": [],
  "If this service numbers episodes differently, set its numbering in config.yaml.": [],
  "Import": [],
  "Import anyway": [],
@@ -1380,7 +1376,6 @@
  "New episodes airing from {0} are downloaded automatically. For older ones, tick them in Episodes.": [
   "new Date(conf.since).toLocaleDateString(LOCALE, { day: \"numeric\", month: \"long\", year: \"numeric\" })"
  ],
- "New episodes are downloaded for each library switched on, with its own quality ladder (Settings, Sonarr).": [],
  "New keys, from its group key": [],
  "New ladder": [],
  "New password": [],
@@ -2358,7 +2353,6 @@
  "Sonarr's import is still running after {0} min: check Activity in Sonarr": [
   "IMPORT_WAIT // 60"
  ],
- "Sonarr's season = the service's season, comma-separated.": [],
  "Sonarr: {0} min.": [
   "s.runtime"
  ],
@@ -3059,7 +3053,6 @@
  "What a message looks like": [],
  "What downloads the episodes": [],
  "What is kept": [],
- "What is sent for this series' episodes. The bell in the page always keeps everything.": [],
  "What to get": [],
  "What to send, and when": [],
  "What {0} gets": [
@@ -3292,7 +3285,6 @@
  "no release in GitHub's answer ({0})": [
   "r.status_code"
  ],
- "no subs": [],
  "no video": [],
  "no {0} subtitles on {1}: downloading {2}": [
   "', '.join(sorted(missing))",
@@ -3428,9 +3420,6 @@
  "status": [],
  "step": [],
  "stopped": [],
- "subs {0}": [
-  "f.subtitles.join(\", \")"
- ],
  "subtitles asked for are missing ({0}): downloading again {1}": [
   "cause[:120]",
   "what"
@@ -4655,5 +4644,14 @@
  "search results": [],
  "Clear {0} cache? It signs out": [
   "svcName(tag)"
- ]
+ ],
+ "+{0}: Show subtitles for {1}": [
+  "remaining",
+  "number"
+ ],
+ "Relative to Sonarr's air date.": [],
+ "Use orig for the original language. Episodes without a match are retried at the next sync.": [],
+ "If sign-in fails, try these profiles in order.": [],
+ "Sonarr season = service season, comma-separated.": [],
+ "One per line. Append the service's season number if it isn't 1.": []
 }
