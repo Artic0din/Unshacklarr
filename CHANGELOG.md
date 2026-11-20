@@ -146,7 +146,8 @@ Every change worth knowing, newest first. The format follows
   TMDB network lookups with serialized off-loop cache writes, mtime-cached read-only config/auth/JSON readers, direct
   live-card reads for `GET /api/runs?live=1`, cached `unwritable_files()` checks, a short-TTL `sonarr_series()` cache,
   and fresh-statistics filtering in `missing_of_managed()` keep fast API endpoints responsive under load.
-  Switching Sonarr connections no longer lets an older lookup restore the previous library, and one failed TMDB lookup no longer blocks the rest. (#356)
+  After you switch Sonarr connections, an older lookup from the web interface no longer saves the previous library.
+  One failed TMDB lookup no longer blocks the rest. (#356)
 - **An episode under its own number is no longer hidden for a small difference in its title.** Kath & Kim on Netflix
   lists S01E08 "The Wedding" and S03E01 "Cactus"; Sonarr calls them "Wedding" and "Cactus Hour", so both showed as
   not on the service and were not downloaded. Under the same number, a title that is the other's first or last

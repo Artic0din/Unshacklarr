@@ -7,6 +7,7 @@ import importlib
 import json
 import threading
 import time
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import aiohttp
@@ -47,6 +48,7 @@ def test_networks_concurrent_preserves_cache_deduplicates_and_does_not_starve_bu
         await anext(executor)
         try:
             app = aiohttp.web.Application()
+            app.cleanup_ctx.append(web.flush_networks_on_cleanup)
             app.router.add_get("/api/networks", web.networks)
             app.router.add_get("/api/busy", web.busy)
             app.router.add_get("/api/log", web.sync_log)
@@ -106,16 +108,15 @@ def test_networks_persists_lookup_when_request_is_cancelled(tmp_path, monkeypatc
             return {"name": "Network", "network_country": "US", "providers": {}}
 
         monkeypatch.setattr(web, "tmdb_network", fetch)
-        request = asyncio.create_task(web.networks(SimpleNamespace(query={"tmdb": "1"})))
-        try:
-            await asyncio.wait_for(started.wait(), timeout=5)
-            owner = web._tmdb_gate()[1][1]
-            request.cancel()
-            with pytest.raises(asyncio.CancelledError):
-                await request
-        finally:
-            release.set()
-        await owner
+        async with asynccontextmanager(web.flush_networks_on_cleanup)(None):
+            request = asyncio.create_task(web.networks(SimpleNamespace(query={"tmdb": "1"})))
+            try:
+                await asyncio.wait_for(started.wait(), timeout=5)
+                request.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await request
+            finally:
+                release.set()
 
     asyncio.run(run())
     assert web.NETWORKS_CACHE.exists(), "cancelled request lost the completed TMDB lookup"
@@ -146,19 +147,22 @@ def test_networks_older_batch_does_not_overwrite_newer_lookup(tmp_path, monkeypa
             return {"name": name, "network_country": "US", "providers": {}}
 
         monkeypatch.setattr(web, "tmdb_network", fetch)
-        older = asyncio.create_task(web.networks(SimpleNamespace(query={"tmdb": "1,2"})))
-        try:
-            await asyncio.wait_for(slow_started.wait(), timeout=5)
-            owner = web._tmdb_gate()[1].get(1)
-            if owner is not None:
-                await owner
-            # Expire ID 1 while the original batch is still waiting for ID 2.
-            web.NETWORKS_CACHE.write_text(json.dumps({"1": {"checked": ""}}))
-            newer = await web.networks(SimpleNamespace(query={"tmdb": "1"}))
-            assert json.loads(newer.text)["1"]["name"] == "New"
-        finally:
-            release.set()
-            await older
+        async with asynccontextmanager(web.flush_networks_on_cleanup)(None):
+            older = asyncio.create_task(web.networks(SimpleNamespace(query={"tmdb": "1,2"})))
+            try:
+                await asyncio.wait_for(slow_started.wait(), timeout=5)
+                lookups = web._network_lookups[loop]
+                owner = lookups.inflight.get(1)
+                if owner is not None:
+                    await owner
+                await lookups.flush_task
+                # Expire ID 1 while the original batch is still waiting for ID 2.
+                web.NETWORKS_CACHE.write_text(json.dumps({"1": {"checked": ""}}))
+                newer = await web.networks(SimpleNamespace(query={"tmdb": "1"}))
+                assert json.loads(newer.text)["1"]["name"] == "New"
+            finally:
+                release.set()
+                await older
 
     asyncio.run(run())
     saved = json.loads(web.NETWORKS_CACHE.read_text())
@@ -184,7 +188,11 @@ def test_networks_error_does_not_drop_successful_lookups(tmp_path, monkeypatch, 
             raise PermissionError("network cache not writable")
 
         monkeypatch.setattr(web, "write_atomic", denied)
-    response = asyncio.run(web.networks(SimpleNamespace(query={"tmdb": "1,2"})))
+    async def run():
+        async with asynccontextmanager(web.flush_networks_on_cleanup)(None):
+            return await web.networks(SimpleNamespace(query={"tmdb": "1,2"}))
+
+    response = asyncio.run(run())
     assert response.status == 200
     assert set(json.loads(response.text)) == ({"2"} if failure == "lookup" else {"1", "2"})
 
@@ -224,6 +232,81 @@ def test_networks_cold_batch_starts_eight_lookups_at_once(tmp_path, monkeypatch)
             await executor.aclose()
 
     asyncio.run(run())
+
+
+def test_networks_coalesces_cold_cache_writes(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "tmdb_key", lambda: "fake-key")
+    monkeypatch.setattr(web, "brand_logos", lambda country: {})
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    monkeypatch.setattr(web, "tmdb_network", lambda tid: {"name": f"Net{tid}", "network_country": "US", "providers": {}})
+    ids = {str(i) for i in range(1, 21)}
+    writes = 0
+    write_atomic = web.write_atomic
+
+    def count_write(path, content):
+        nonlocal writes
+        if path == web.NETWORKS_CACHE:
+            writes += 1
+        write_atomic(path, content)
+
+    monkeypatch.setattr(web, "write_atomic", count_write)
+
+    async def run():
+        response = await web.networks(SimpleNamespace(query={"tmdb": ",".join(sorted(ids))}))
+        assert set(json.loads(response.text)) == ids
+
+        async def wait_for_cache():
+            while set(web.read_json(web.NETWORKS_CACHE, {})) != ids:
+                await asyncio.sleep(0.01)
+
+        await asyncio.wait_for(wait_for_cache(), timeout=5)
+
+    asyncio.run(run())
+    assert writes <= 2, f"20 cold lookups rewrote the cache {writes} times"
+
+
+def test_networks_retries_cache_merge_after_read_failure(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "tmdb_key", lambda: "fake-key")
+    monkeypatch.setattr(web, "brand_logos", lambda country: {})
+    monkeypatch.setattr(web, "service_domains", lambda: {})
+    monkeypatch.setattr(web, "tmdb_network", lambda tid: {"name": f"Net{tid}", "network_country": "US", "providers": {}})
+    path = web.NETWORKS_CACHE
+    existing = {"1": {"name": "Existing"}}
+    path.write_text(json.dumps(existing))
+    assert web.read_json_cached(path, {}) == existing
+    read_text = type(path).read_text
+    failed_read = threading.Event()
+    readable = False
+
+    def read_cache(target, *args, **kwargs):
+        if target == path and not readable:
+            failed_read.set()
+            raise OSError("temporary NAS read failure")
+        return read_text(target, *args, **kwargs)
+
+    monkeypatch.setattr(type(path), "read_text", read_cache)
+
+    async def run():
+        nonlocal readable
+        response = await web.networks(SimpleNamespace(query={"tmdb": "2"}))
+        assert json.loads(response.text)["2"]["name"] == "Net2"
+        assert await asyncio.to_thread(failed_read.wait, 5), "cache merge never tried to read the file"
+        assert json.loads(read_text(path)) == existing, "failed read wiped existing cache entries"
+        readable = True
+
+        response = await web.networks(SimpleNamespace(query={"tmdb": "3"}))
+        assert json.loads(response.text)["3"]["name"] == "Net3"
+
+        async def wait_for_cache():
+            while set(json.loads(path.read_text())) != {"1", "2", "3"}:
+                await asyncio.sleep(0.01)
+
+        await asyncio.wait_for(wait_for_cache(), timeout=5)
+
+    asyncio.run(run())
+    assert json.loads(path.read_text())["2"]["name"] == "Net2"
 
 
 def test_runs_live_skips_scanning_completed_history_files(tmp_path, monkeypatch):

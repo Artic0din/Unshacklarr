@@ -31,6 +31,7 @@ import unicodedata
 import weakref
 import zlib
 import zoneinfo
+from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode, parse_qs, unquote, urlparse
@@ -669,14 +670,18 @@ def _invalidate_json_cache(path: Path) -> None:
         _json_cache.pop(path, None)
 
 
-def _merge_json_cache(path: Path, lock: threading.Lock, updates: dict) -> dict:
-    """Atomically merge `updates` into a JSON dict file on disk under `lock` and refresh the in-memory cache."""
+def _merge_json_cache(path: Path, lock: threading.Lock, updates: dict) -> bool:
+    """Atomically merge `updates` under `lock`; leave unreadable files intact."""
     with lock:
-        current = read_json(path, {})
+        try:
+            current = read_json(path, {}, strict=True)
+        except OSError as error:
+            print(f"Could not read {path.name} for cache update: {type(error).__name__}", flush=True)
+            return False
         current.update(updates)
         write_atomic(path, json.dumps(current))
         _invalidate_json_cache(path)
-        return current
+        return True
 
 
 def _load_config_cached() -> dict:
@@ -3886,22 +3891,76 @@ def brand_logos(country: str) -> dict[str, dict]:
 
 
 NETWORKS_LOCK = threading.Lock()
+NETWORKS_FLUSH_DELAY = 0.05  # seconds to collect nearby completions before rewriting the cache
 TMDB_CONCURRENCY = 8
-_tmdb_semaphores: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
-_tmdb_inflight: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
-def _tmdb_gate() -> tuple[asyncio.Semaphore, dict[int, asyncio.Task]]:
-    loop = asyncio.get_running_loop()
-    sem = _tmdb_semaphores.get(loop)
-    if sem is None:
-        sem = asyncio.Semaphore(TMDB_CONCURRENCY)
-        _tmdb_semaphores[loop] = sem
-    inflight = _tmdb_inflight.get(loop)
-    if inflight is None:
-        inflight = {}
-        _tmdb_inflight[loop] = inflight
-    return sem, inflight
+class _NetworkLookups:
+    def __init__(self) -> None:
+        self.limit = asyncio.Semaphore(TMDB_CONCURRENCY)
+        self.inflight: dict[int, asyncio.Task[tuple[int, dict | None]]] = {}
+        self.pending: dict[str, dict] = {}
+        self.flush_task: asyncio.Task[None] | None = None
+        self.writes = 0
+
+    async def read_cache(self) -> dict:
+        while True:
+            writes = self.writes
+            cache = await asyncio.to_thread(read_json_cached, NETWORKS_CACHE, {})
+            # A disk snapshot taken before a flush can outlive the pending entries it is missing.
+            if writes == self.writes:
+                return cache | self.pending if self.pending else cache
+
+    def start_flush(self) -> None:
+        if self.pending and (self.flush_task is None or self.flush_task.done()):
+            self.flush_task = asyncio.create_task(self.flush(NETWORKS_FLUSH_DELAY))
+
+    async def flush(self, delay: float) -> None:
+        while self.pending:
+            if delay:
+                await asyncio.sleep(delay)
+            batch = self.pending.copy()
+            try:
+                saved = await asyncio.to_thread(_merge_json_cache, NETWORKS_CACHE, NETWORKS_LOCK, batch)
+            except Exception as error:
+                print(f"TMDB network cache write failed: {type(error).__name__}", flush=True)
+                saved = False
+            if saved:
+                self.writes += 1
+                for key, entry in batch.items():
+                    # A lookup may have replaced this result while the write was in progress.
+                    if self.pending[key] is entry:
+                        del self.pending[key]
+            elif len(batch) == len(self.pending) and all(self.pending[key] is entry for key, entry in batch.items()):
+                return  # No new results arrived. Retry on the next request or during cleanup.
+
+    async def lookup(self, tmdb_id: int) -> tuple[int, dict | None]:
+        async with self.limit:
+            try:
+                found = await asyncio.to_thread(tmdb_network, tmdb_id)
+                entry = {**found, "checked": datetime.now(timezone.utc).isoformat()}
+            except requests.RequestException:
+                return tmdb_id, None  # try again next time
+            except Exception as error:
+                print(f"TMDB network lookup {tmdb_id} failed: {type(error).__name__}", flush=True)
+                return tmdb_id, None
+        # Persist independently of the waiters, and don't hold a TMDB slot for disk I/O.
+        self.pending[str(tmdb_id)] = entry
+        self.start_flush()
+        return tmdb_id, entry
+
+
+_network_lookups: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, _NetworkLookups] = weakref.WeakKeyDictionary()
+
+
+async def flush_networks_on_cleanup(_app: web.Application) -> AsyncIterator[None]:
+    yield
+    lookups = _network_lookups.pop(asyncio.get_running_loop(), None)
+    if lookups is not None:
+        await asyncio.gather(*lookups.inflight.values())
+        if lookups.flush_task is not None:
+            await lookups.flush_task
+        await lookups.flush(delay=0)
 
 
 async def networks(request):
@@ -3911,7 +3970,12 @@ async def networks(request):
     except ValueError:
         raise web.HTTPBadRequest(text="tmdb must be comma-separated numbers")
     country = sonarr_sync.SETTINGS["country"]
-    cache = await asyncio.to_thread(read_json_cached, NETWORKS_CACHE, {})
+    loop = asyncio.get_running_loop()
+    lookups = _network_lookups.get(loop)
+    if lookups is None:
+        lookups = _network_lookups[loop] = _NetworkLookups()
+    cache = await lookups.read_cache()
+    lookups.start_flush()
     fresh_after = (datetime.now(timezone.utc) - timedelta(days=NETWORKS_DAYS)).isoformat()
 
     def stale(entry: dict) -> bool:
@@ -3925,30 +3989,12 @@ async def networks(request):
 
     todo = [i for i in ids if stale(cache.get(str(i)) or {})]
     if todo and tmdb_key():
-        limit, inflight = _tmdb_gate()  # shared across concurrent requests so TMDB cannot starve the threadpool
-
-        async def one(tmdb_id: int) -> tuple[int, dict | None]:
-            async with limit:
-                try:
-                    found = await asyncio.to_thread(tmdb_network, tmdb_id)
-                    entry = {**found, "checked": datetime.now(timezone.utc).isoformat()}
-                except requests.RequestException:
-                    return tmdb_id, None  # try again next time
-                except Exception as error:
-                    print(f"TMDB network lookup {tmdb_id} failed: {type(error).__name__}", flush=True)
-                    return tmdb_id, None
-                try:
-                    # Commit before releasing singleflight, even if all the waiters disconnected.
-                    await asyncio.to_thread(_merge_json_cache, NETWORKS_CACHE, NETWORKS_LOCK, {str(tmdb_id): entry})
-                except Exception as error:
-                    print(f"TMDB network cache write for {tmdb_id} failed: {type(error).__name__}", flush=True)
-                return tmdb_id, entry
-
+        inflight = lookups.inflight
         tasks = []
         for i in todo:
             task = inflight.get(i)
             if task is None or task.done():
-                task = asyncio.create_task(one(i))
+                task = asyncio.create_task(lookups.lookup(i))
                 inflight[i] = task
                 task.add_done_callback(lambda t, k=i, m=inflight: m.pop(k, None) if m.get(k) is t else None)
             tasks.append(asyncio.shield(task))
@@ -7269,6 +7315,7 @@ async def configure_executor(_app):
 app = web.Application(middlewares=[compress, same_origin_only, password_required])
 app.on_response_prepare.append(security_headers)
 app.cleanup_ctx.append(configure_executor)
+app.cleanup_ctx.append(flush_networks_on_cleanup)
 app.cleanup_ctx.append(background(watch_releases))
 app.cleanup_ctx.append(background(run_automatic_syncs))
 app.cleanup_ctx.append(stop_unshackle)
