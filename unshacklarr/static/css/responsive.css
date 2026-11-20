@@ -28,7 +28,6 @@
   border-radius: 999px; cursor: pointer; max-width: 100%; }
 .bulk-rows label:has(input:checked) { border-color: var(--field-line-hover); background: var(--select); }
 .bulk-rows label small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
-.bulk-rows input { accent-color: var(--accent); }
 .bulk-rows .none { color: var(--muted); font-size: var(--fs-sub); }
 .modal-actions .muted { margin-right: auto; align-self: center; font-size: var(--fs-sub); }
 .release-seen { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0 4px; padding: 8px 12px; border-radius: var(--r-md);

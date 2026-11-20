@@ -27,7 +27,7 @@
   --sh-lg: 0 2px 4px 0 #00000066, 0 8px 24px 0 #00000099;
 }
 * { box-sizing: border-box; }
-input[type=checkbox] { accent-color: var(--accent); }
+input[type=checkbox] { accent-color: var(--text); }
 ::placeholder { color: var(--muted); opacity: 1; }  /* an example, not a value: dimmer than any text typed */
 html { -webkit-tap-highlight-color: transparent;
   background: radial-gradient(ellipse 58rem 19rem at 15% 0, rgb(132 145 47 / .14), transparent) 0 0 / 100% 24rem no-repeat, var(--bg); }
