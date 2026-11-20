@@ -137,6 +137,11 @@ def test_a_phone_bar_over_the_save_bar_stands_on_it_as_tall_as_it_is():
         assert any(bar in sel and "var(--save-h" in bottom for sel, bottom in rules), f"{bar}: not stacked on the save bar"
 
 
+def test_phone_page_end_clears_the_dock_raised_by_the_save_bar():
+    rule = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\) main \{ padding-bottom: ([^;]+);", phone_blocks())
+    assert rule and "var(--save-h" in rule[1], "page padding must grow with the save bar"
+
+
 def test_an_open_dock_on_the_save_bar_gives_its_output_the_save_bars_height():
     """Raised onto the save bar, the dock's open output would reach behind the header: it loses the save bar's height."""
     rule = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\) \.dock\.open > \.cd-raw \.term \{([^}]*)\}", phone_blocks())

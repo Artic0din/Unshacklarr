@@ -1736,6 +1736,7 @@ details.sx-card > summary.sx-head { padding-right: 28px; } details.sx-card > sum
 /* Phones: the header above; below, the tab bar and the bars over it, as far up as they reach (--bars-h, measured: stacked, wrapped or expanded) */
 @media (max-width: 700px) {
   html { scroll-padding-top: var(--head-h, calc(72px + env(safe-area-inset-top))); scroll-padding-bottom: var(--bars-h, calc(72px + env(safe-area-inset-bottom))); }  /* --head-h: the header as tall as it is, a status row under it included */
+  body:has(#savebar:not([hidden])) main { padding-bottom: calc(96px + var(--save-h, 56px) + 8px); }  /* the dock moves up by the same amount */
   /* the series page has no tab bar: its sticky head (and the settings' shortcuts under it) above */
   html:has(body.drawer-open) { scroll-padding-top: calc(var(--d-head, 118px) + 8px); }
   html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: calc(var(--d-head, 118px) + 64px); }
