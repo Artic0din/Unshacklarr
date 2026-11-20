@@ -555,9 +555,10 @@ const box = {
   dataset: {},
   classList: { add: (name) => classes.add(name), remove: (...names) => names.forEach((name) => classes.delete(name)) },
   matches: () => false, querySelector: () => title,
-  addEventListener: (_, fn) => { box.click = () => fn({ currentTarget: box }); },
-  removeEventListener() {},
+  addEventListener: (_, fn) => { box.click = () => fn({ currentTarget: box }); box.listening = true; },
+  removeEventListener() { box.listening = false; },
 };
+let unobserved = 0;
 let intersect, finish;
 const S = { news: { installed: "1.5.0", seen: [] } };
 const ctx = sandbox({
@@ -566,7 +567,7 @@ const ctx = sandbox({
     querySelector: (selector) => selector === "#svc-defaults" ? box : null,
     querySelectorAll: (selector) => selector === ".new-badge" ? [...badges] : classes.has("is-new") ? [box] : [],
   },
-  IntersectionObserver: class { constructor(fn) { intersect = fn; } observe() {} unobserve() {} },
+  IntersectionObserver: class { constructor(fn) { intersect = fn; } observe() {} unobserve() { unobserved += 1; } },
   setTimeout: (fn) => { finish = fn; return 1; }, clearTimeout() {},
   api: (_, { body }) => posts.push(JSON.parse(body).ids),
 });
@@ -580,12 +581,15 @@ finish();
 const cleared = badges.length;
 S.news.seen = ["service-cache", "any-service-option"];
 ctx.renderNews();
-box.click();
-console.log(JSON.stringify([initial, stillUnread, cleared, badges.length, posts]));
+const watched = unobserved;
+box.click();  // its last unread option seen: the box is not new any more
+const released = [unobserved - watched, box.listening, classes.has("is-new")];  // no longer new: no observer, no click handler, no outline
+console.log(JSON.stringify([initial, stillUnread, cleared, badges.length, posts, released]));
 """, str(JS / "news.js"))
     assert states == [
         ["New"], ["New"], 0, 0,
         [["service-cache"], ["any-service-option", "ladder-chips"], ["ladder-chips"]],
+        [1, False, False],
     ]
 
 # A tiny stand-in for the DOM a pop-up touches: nodes that keep what is set on them and a shared "focused" node.
@@ -789,3 +793,18 @@ console.log(JSON.stringify({ root: [root.className, root.kids.map((k) => k.tag)]
     assert shown["before"] == [["Off", "false", None, None], ["UHD", "false", None, None], ["HD", "true", None, None]]
     assert shown["after"][0][1] == "true" and shown["after"][2][1] == "false"
     assert shown["picked"] == ["off"]
+
+
+def test_settings_version_button_names_a_release_or_a_test_build_and_hides_without_a_version():
+    shown = node(r"""
+const src = read(process.argv[1]);
+const block = grab(src, /const \[, branch, commit\] = [\s\S]*?\$\("#set-version"\)\.hidden = !data\.version;/);
+const run = (data) => {
+  const version = { textContent: "", beta: false, classList: { toggle(_, on) { version.beta = on; } } }, button = { hidden: false };
+  const ctx = sandbox({ data, $: (selector) => selector === "#version" ? version : button });
+  vm.runInContext(block, ctx);
+  return [version.textContent, version.beta, button.hidden];
+};
+console.log(JSON.stringify([run({ version: "1.5.0", build: "" }), run({ version: "1.5.0", build: "feat-shell-abc1234" }), run({ version: "", build: "" })]));
+""", str(JS / "setup.js"))
+    assert shown == [["Unshacklarr 1.5.0", False, False], ["Unshacklarr feat-shell · abc1234", True, False], ["", False, True]]

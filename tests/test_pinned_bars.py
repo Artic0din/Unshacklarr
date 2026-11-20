@@ -56,6 +56,10 @@ def test_desktop_header_inbox_settings_and_scroll_padding_share_the_measured_off
     assert "--header-bottom: calc(var(--header-top, 0px) + var(--head-h, 65px))" in CSS
     for selector, prop in ((".set-nav", "top"), ("#inbox-dialog.menu", "inset"), ("html", "scroll-padding-block-start")):
         assert re.search(rf"{re.escape(selector)} \{{[^}}]*{prop}: [^;]*var\(--header-bottom\)", CSS)
+    header = re.search(r"(?m)^header \{([^}]*)\}", CSS)[1]
+    assert "position: sticky" in header and "top: var(--header-top, 0px)" in header  # pinned, under the demo bar
+    assert not re.search(r"(?m)^[ \t]+header \{[^}]*\btop:", CSS)  # no narrower layout moves it back
+    assert re.search(r"#inbox-dialog\.menu\[open\] \{[^}]*max-height: calc\(100dvh - var\(--header-bottom\)", CSS)
     assert "dialog.style.top" not in (STATIC / "js" / "inbox.js").read_text()
     demo = (STATIC.parents[1] / "demo" / "demo.js").read_text()
     assert "--header-top: var(--demo-h)" in demo
