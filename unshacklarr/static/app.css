@@ -189,7 +189,8 @@ label.check { display: inline-flex; gap: 8px; align-items: center; cursor: point
 .toolbar .seg button[aria-pressed="true"] { text-decoration: underline; text-underline-offset: .24em; }
 .toolbar .seg button span { display: inline; margin: 0; white-space: nowrap; }
 .toolbar input[type=search] { flex: 1 1 0; min-inline-size: 5rem; }
-.toolbar select { field-sizing: content; width: auto; max-width: 100%; }
+#series-filters { display: flex; gap: var(--sp-2); max-inline-size: 100%; }
+#series-filters select { field-sizing: content; width: auto; min-inline-size: 0; }
 .toolbar :is(.pill, .btn.small) { padding-inline: var(--sp-2); }
 #series-options { display: contents; }
 #series-options-toggle { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); padding-inline: var(--sp-2); }
@@ -203,7 +204,7 @@ label.check { display: inline-flex; gap: 8px; align-items: center; cursor: point
   .toolbar .seg button { flex-grow: 1; }
 }
 @media (min-width: 701px) and (max-width: 850px) {
-  .toolbar { column-gap: var(--sp-1); }
+  .toolbar, #series-filters { column-gap: var(--sp-1); }
   #series-options-toggle { max-inline-size: 7rem; }
 }
 @media (max-width: 700px) {
@@ -216,7 +217,7 @@ label.check { display: inline-flex; gap: 8px; align-items: center; cursor: point
   #series-options { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
     padding: var(--sp-2); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); }
   #series-options-toggle[aria-expanded="false"] + #series-options { display: none; }
-  #series-options > select { width: 100%; }
+  #series-filters { display: grid; flex-basis: 100%; grid-template-columns: minmax(0, 1fr); }
   .toolbar:has(:is(#f-service, #f-library) option:checked:not([value=""])) .series-filtered { display: block; }
 }
 @media (max-width: 360px) {

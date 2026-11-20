@@ -67,17 +67,19 @@
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
       </button>
       <div id="series-options">
-        <select id="f-service" aria-label="Filter by service">
-          <option value="">All services</option>
-        </select>
-        <select id="f-library" aria-label="Filter by Sonarr library" hidden>
-          <option value="">All libraries</option>
-        </select>
-        <select id="f-sort" aria-label="Sort">
-          <option value="title">Sort by title</option>
-          <option value="missing">Sort by missing episodes</option>
-          <option value="year">Sort by year, newest first</option>
-        </select>
+        <div id="series-filters">
+          <select id="f-service" aria-label="Filter by service">
+            <option value="">All services</option>
+          </select>
+          <select id="f-library" aria-label="Filter by Sonarr library" hidden>
+            <option value="">All libraries</option>
+          </select>
+          <select id="f-sort" aria-label="Sort">
+            <option value="title">Sort by title</option>
+            <option value="missing">Sort by missing episodes</option>
+            <option value="year">Sort by year, newest first</option>
+          </select>
+        </div>
         <div id="series-actions">
           <label class="pill"><input type="checkbox" id="f-missing"> Missing episodes <span id="f-missing-n"></span></label>
           <label class="pill"><input type="checkbox" id="f-monitored"> Monitored <span id="f-monitored-n"></span></label>

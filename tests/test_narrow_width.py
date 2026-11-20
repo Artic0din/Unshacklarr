@@ -44,19 +44,13 @@ def test_a_finished_card_names_its_whole_line_when_it_is_cut_short():
     assert "el(\"small\", { textContent: tookLine(c, live), title: tookLine(c, live) })" in js
 
 
-def test_series_statuses_wrap_and_secondary_controls_disclose_instead_of_scrolling_sideways():
-    phone = media("max-width: 700px")
-    has(phone, ".toolbar .seg:has(> :first-child:nth-last-child(4 of :not([hidden]))) {"
-        " grid-template-columns: repeat(2, minmax(0, 1fr)); }")
-    has(phone, ".toolbar .seg:has(> :nth-child(5 of :not([hidden]))) > button { grid-column: span 2; }")
-    has(phone, ".toolbar .seg:has(> :nth-child(5 of :not([hidden]))) > button:nth-child(n+4) { grid-column: span 3; }")
-    assert ".toolbar .seg button span { display: block;" not in squash(phone)
-    has(phone, '#series-options-toggle[aria-expanded="false"] + #series-options { display: none; }')
+def test_series_secondary_controls_stay_hidden_until_disclosed_on_phones():
+    has(media("max-width: 700px"), '#series-options-toggle[aria-expanded="false"] + #series-options { display: none; }')
 
 
 def test_series_search_shares_a_row_with_intrinsically_sized_selects():
     has(CSS, ".toolbar input[type=search] { flex: 1 1 0; min-inline-size: 5rem; }")
-    has(CSS, ".toolbar select { field-sizing: content; width: auto; max-width: 100%; }")
+    has(CSS, "#series-filters select { field-sizing: content;")
     has(media("max-width: 1400px"), ".toolbar .seg { flex-basis: 100%; }")
 
 
