@@ -242,15 +242,16 @@ def test_phone_back_after_forward_does_not_duplicate_the_settings_list():
     seen = node(SETTINGS_NAV + r"""
 enter("#/schedule");
 ctx.showTab("settings");
+const list = location.hash;
 ctx.showSettingsSec("notifications");
-history.back();
+traverse(-1);
 history.forward();
 settingsBack.onclick();
 const appBack = location.hash;
-history.back();
-console.log(JSON.stringify({ appBack, browserBack: location.hash }));
+traverse(-1);
+console.log(JSON.stringify({ list, backCalls, appBack, browserBack: location.hash }));
 """, str(JS / "navigation.js"))
-    assert seen == {"appBack": "#/settings", "browserBack": "#/schedule"}
+    assert seen == {"list": "#/settings", "backCalls": 1, "appBack": "#/settings", "browserBack": "#/schedule"}
 
 
 @pytest.mark.parametrize("target", ["service", "show-me"])
@@ -260,17 +261,25 @@ def test_forward_restores_the_exact_settings_target_with_its_scroll(target):
   enter("#/schedule");
   services();
   const service = process.argv[3] === "service";
-  if (service) await ctx.openServiceRow("HULU");
-  else ctx.openSettings("downloads", ".up-mode");
-  const expected = service ? row : audioTarget;
+  const vpnRow = { ...row, id: "sv-HULU@vpn",
+    scrollIntoView: () => { window.scrollY = 1200; }, focus: () => { focused = vpnRow; } };
+  if (service) {
+    anchors[vpnRow.id] = vpnRow;
+    ctx.S.config.service_defaults = { HULU: { backend: "vpn" } };
+    await ctx.openServiceRow("HULU");
+  } else ctx.openSettings("downloads", ".up-mode");
+  const expected = service ? vpnRow : audioTarget;
   const first = [window.scrollY, focused === expected];
   history.back();
+  // Forward must restore the original row even if a fresh lookup would use the main server.
+  if (service) delete ctx.S.config.service_defaults.HULU;
   focused = listItem;
+  window.scrollY = 0;
   history.forward();
   console.log(JSON.stringify({ first, forward: [window.scrollY, focused === expected] }));
 })();
 """, str(JS / "navigation.js"), str(JS / "services.js"), target)
-    expected = [1000 if target == "service" else 500, True]
+    expected = [1200 if target == "service" else 500, True]
     assert seen == {"first": expected, "forward": expected}
 
 
