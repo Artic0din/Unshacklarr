@@ -784,6 +784,40 @@ console.log(JSON.stringify([inMenu, chips()]));
     assert full == episodes
 
 
+def test_inbox_fetch_failure_preserves_unread_and_can_retry():
+    result = node(r"""
+const nodes = Object.fromEntries(["dialog", "list", "clear", "filters", "summary"].map((id) => [`#inbox-${id}`, {
+  classList: { toggle() {}, contains: () => true }, dataset: {}, addEventListener() {}, replaceChildren(...kids) { this.kids = kids; },
+}]));
+Object.assign(nodes, {
+  "#inbox-dialog": { ...nodes["#inbox-dialog"], style: {}, show() { this.open = true; } },
+  "#bell": { getBoundingClientRect: () => ({}), setAttribute() {} }, "#bell-count": { hidden: false },
+});
+let unavailable = true, posts = 0;
+const ctx = sandbox({
+  $: (sel) => nodes[sel] || any, phoneLayout: () => true, setInterval() {},
+  keepFocus: (_box, draw) => draw(), failed: (text, retry) => ({ text, retry }),
+  api: async (path) => {
+    if (path === "/api/inbox/read") posts++;
+    if (unavailable) throw Error("503");
+    return { items: [], unread: path === "/api/inbox" ? 1 : 0 };
+  },
+});
+vm.runInContext(read(process.argv[1]), ctx);
+(async () => {
+  await ctx.openInbox("menu");
+  const retry = nodes["#inbox-list"].kids[0]?.retry;
+  let clearThrew = false;
+  try { await nodes["#inbox-clear"].onclick({ currentTarget: nodes["#inbox-clear"] }); } catch { clearThrew = true; }
+  const failed = [Boolean(retry), posts, nodes["#bell-count"].hidden, nodes["#inbox-clear"].hidden, clearThrew];
+  unavailable = false;
+  await retry?.();
+  console.log(JSON.stringify({ failed, recovered: [posts, nodes["#bell-count"].hidden, nodes["#inbox-list"].kids[0]?.className] }));
+})();
+""", str(JS / "inbox.js"))
+    assert result == {"failed": [True, 0, False, True, False], "recovered": [1, True, "inbox-empty"]}
+
+
 def test_every_news_target_gets_a_new_badge():
     class Markup(HTMLParser):
         def __init__(self):

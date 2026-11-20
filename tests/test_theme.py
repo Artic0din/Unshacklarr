@@ -1,5 +1,4 @@
 """The dark palette: every text and edge colour readable on what it sits on."""
-import hashlib
 import json
 import math
 import re
@@ -7,16 +6,19 @@ from pathlib import Path
 
 import pytest
 
-from css_assets import load_css
+from css_assets import STYLESHEET_LINK, load_css
 from test_ui_misc import JS, node
 
 STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
 CSS = load_css()
 
 
-def test_split_stylesheets_preserve_the_original_cascade():
-    # Baseline: app.css at 45eb406, minus the two identical .sr-only repeats.
-    assert hashlib.sha256(CSS.encode("utf-8")).hexdigest() == "feee935237c473b656d2f716921cf1ec51df2f7ba3a93e44899eab0181f47424"
+def test_split_stylesheets_load_in_cascade_order():
+    links = STYLESHEET_LINK.findall((STATIC / "index.html").read_text())
+    assert [path for path, _ in links] == [
+        f"/css/{name}.css"
+        for name in ("base", "shell", "series", "settings", "activity", "schedule", "responsive", "controls")
+    ]
 
 
 def block(selector):

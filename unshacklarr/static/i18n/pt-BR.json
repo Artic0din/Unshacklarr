@@ -157,6 +157,7 @@
  "Could not copy: select it instead": "Não foi possível copiar: selecione o texto",
  "Could not copy: select the command instead": "Não foi possível copiar: selecione o comando",
  "Could not load series: {0}": "Não foi possível carregar as séries: {0}",
+ "Could not load notifications": "Não foi possível carregar as notificações",
  "Could not load the calendar: {0}": "Não foi possível carregar o calendário: {0}",
  "Could not load the downloads: {0}": "Não foi possível carregar os downloads: {0}",
  "Could not load the episodes: {0}": "Não foi possível carregar os episódios: {0}",

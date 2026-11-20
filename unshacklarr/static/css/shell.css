@@ -57,6 +57,7 @@ nav .short { display: none; }
 .inbox-clear, .inbox-x { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: none; color: var(--muted);
   font: inherit; font-size: var(--fs-sub); cursor: pointer; border-radius: 999px; transition: background .15s, color .15s; }
 .inbox-clear { padding: 6px 12px; } .inbox-x { width: 34px; height: 34px; }
+.inbox-clear[hidden] { display: none; }
 .inbox-clear, .inbox-x { border: 1px solid var(--line); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .inbox-head:has(.inbox-clear[data-sure]) { flex-wrap: wrap; }  /* the question has a row of its own: the title is not squeezed away */

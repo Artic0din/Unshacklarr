@@ -1,7 +1,7 @@
 /* The bell: every notification kept by the server; what waits for you (a code to enter) first. */
 let inboxData = null;
 async function refreshInbox() {
-  try { inboxData = await api("/api/inbox"); } catch { return; }
+  try { inboxData = await api("/api/inbox"); } catch { return false; }
   const n = $("#inbox-dialog").open ? 0 : inboxData.unread;
   $("#bell-count").hidden = !n;
   $("#bell-count").textContent = n > 99 ? "99+" : String(n);
@@ -10,6 +10,7 @@ async function refreshInbox() {
   $("#bell-count").className = `count ${worst}`;
   $("#bell").setAttribute("aria-label", n ? `Notifications, ${n} new` : "Notifications");
   if ($("#inbox-dialog").open) renderInbox();
+  return true;
 }
 /* Text with its https links clickable; nothing of it ever read as HTML. */
 function linkified(text) {
@@ -114,13 +115,19 @@ async function openInbox(mode = "full") {
   const bell = $("#bell").getBoundingClientRect();
   dialog.style.right = mode === "menu" && !phoneLayout() ? `${Math.max(8, innerWidth - bell.right)}px` : "";
   if (!dialog.open) mode === "menu" ? dialog.show() : dialog.showModal();
-  if (!inboxData) { $("#inbox-list").replaceChildren(loading("Reading the notifications…")); $("#inbox-clear").hidden = true; }  // nothing to clear, or count, until it is read
+  $("#inbox-list").replaceChildren(loading("Reading the notifications…"));
+  $("#inbox-clear").hidden = $("#inbox-filters").hidden = true;
+  $("#inbox-summary").textContent = "";
   inboxFilter = "all";
-  await refreshInbox();
+  const loaded = await refreshInbox();
+  if (!dialog.open || dialog.classList.contains("menu") !== (mode === "menu")) return;
+  if (!loaded) {
+    $("#inbox-list").replaceChildren(failed("Could not load notifications", () => openInbox(mode)));
+    return;
+  }
   inboxSeenAt = inboxData?.read_at ?? null;  // what came since the last look is marked new while the list is open
   renderInbox(true);
-  try { inboxData = await api("/api/inbox/read", { method: "POST" }); } catch { /* the badge stays until next time */ }
-  $("#bell-count").hidden = true;
+  try { inboxData = await api("/api/inbox/read", { method: "POST" }); } catch { /* the next refresh picks up the server's unread count */ }
 }
 $("#bell").onclick = (e) => {
   e.stopPropagation();
@@ -140,6 +147,7 @@ $("#inbox-dialog").addEventListener("click", (e) => {  // a click outside the pa
 });
 $("#inbox-dialog").addEventListener("close", refreshInbox);
 $("#inbox-clear").onclick = async (e) => {
+  if (!inboxData || e.currentTarget.hidden) return;
   const gone = clearable(inboxData.items).length;
   e.currentTarget.dataset.asked = String(gone);
   if (!confirmClick(e.currentTarget, `Clear ${COUNT.notification(gone)}? They cannot be brought back`, $("#inbox-clear span"))) return;
