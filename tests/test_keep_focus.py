@@ -146,6 +146,11 @@ if (scenario === "cdm") {  // a device's test result reorders the list: the focu
   run("cdmData.devices[1].test = null");  // and back again
   ctx.renderCdm();
   out.row = [rows(), label(doc.activeElement)];
+  out.defaultAction = ["", "alpha", "none", "missing"].map((name) => {
+    run(`cdmData.map.default = ${JSON.stringify(name)}`);
+    ctx.renderCdm();
+    return find(list, (n) => n.dataset?.key === "svc:default").className.split(" ").includes("primary");
+  });
 }
 
 if (scenario === "chips") {  // a slide-out's chips are rebuilt at each pick
@@ -618,6 +623,7 @@ def test_a_device_keeps_the_focus_when_a_test_result_reorders_the_devices():
         "before": ["alpha", "bravo"],
         "menu": [["bravo", "alpha"], "Actions for alpha", True],
         "row": [["alpha", "bravo"], "row:Widevine:alpha"],
+        "defaultAction": [True, False, False, True],
     }
 
 
