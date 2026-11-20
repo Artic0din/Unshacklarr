@@ -34,7 +34,6 @@
   <h1 class="brand"><a href="#/schedule" id="home" aria-label="Unshacklarr, schedule"><svg class="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
   <circle cx="32" cy="32" r="31" fill="#e1f23a"/><circle cx="32" cy="32" r="27.6" fill="none" stroke="#14170b" stroke-opacity=".18" stroke-width="1.4"/><path d="M25 25.5v-5a7 7 0 0 1 14 0" fill="none" stroke="#14170b" stroke-width="4.4" stroke-linecap="round"/><rect x="13" y="25" width="38" height="24" rx="5" fill="#14170b"/><path d="M32 29.5v10M27.3 35 32 39.7l4.7-4.7" fill="none" stroke="#e1f23a" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M25 53.5h14" stroke="#14170b" stroke-width="3.6" stroke-linecap="round"/>
 </svg><span>Unshacklarr</span></a></h1>
-  <button class="version-chip" id="version" type="button" title="What's new in each version" hidden></button>
   <nav aria-label="Main">
     <a href="#/schedule" data-tab="schedule" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Schedule</span></a>
     <a href="#/series" data-tab="series"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h10"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span>Series</span></a>
@@ -145,7 +144,7 @@
         <button data-sec="history"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Activity history</span><small>What Activity keeps</small></button>
         <button data-sec="account"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Account</span><small>Password, sessions, API key</small></button>
         </div>
-        <button class="set-version" id="set-version" type="button"></button>
+        <button class="set-version" id="set-version" type="button" title="What's new in each version" hidden><span class="version-chip" id="version"></span></button>
       </div>
       <div class="set-body">
       <button class="set-back" id="set-back" type="button">Settings</button>
@@ -890,7 +889,7 @@
   </div>
   <div class="ep-bar" id="ep-bar" hidden>
     <span id="ep-count"></span>
-    <span class="ep-cdm" id="ep-cdm" hidden>⚠ No CDM for this service</span>
+    <span class="ep-cdm" id="ep-cdm" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3zm0 6v5m0 3h.01"/></svg><span>No CDM for this service</span></span>
     <button class="btn" id="ep-clear">Clear</button>
     <button class="btn" id="ep-go-edit" title="Change the numbering and file names for this download only"><span class="long">Change and download…</span><span class="short">Change…</span></button>
     <button class="btn primary" id="ep-go">Download</button>
