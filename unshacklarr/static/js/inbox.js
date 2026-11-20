@@ -125,7 +125,8 @@ $("#bell").onclick = (e) => {
 $("#inbox-full").onclick = () => openInbox("full");
 document.addEventListener("click", (e) => {  // the menu closes with a click anywhere else
   const menu = $("#inbox-dialog");
-  if (menu.open && menu.classList.contains("menu") && !menu.contains(e.target)) menu.close();
+  // by the path at dispatch: a filter redraws its own buttons on click, so the target is detached by now
+  if (menu.open && menu.classList.contains("menu") && !e.composedPath().includes(menu)) menu.close();
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#inbox-dialog").classList.contains("menu")) $("#inbox-dialog").close(); });
 $("#inbox-close").onclick = () => $("#inbox-dialog").close();

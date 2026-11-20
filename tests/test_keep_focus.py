@@ -443,6 +443,8 @@ def test_quality_editor_and_notify_chips_keep_focus_on_redraw():
 def test_inbox_filters_and_cdm_chip_focus_ring():
     inbox_js = (JS / "inbox.js").read_text()
     assert 'keepFocus($("#inbox-filters")' in inbox_js
+    # the click that redraws the filters must not read as a click outside the menu and close it
+    assert "!e.composedPath().includes(menu)" in inbox_js and "!menu.contains(e.target)" not in inbox_js
     css = (JS.parent / "app.css").read_text()
     cdm_rule = next(line for line in css.splitlines() if line.startswith(".cdm-chip:focus-visible"))
     assert "outline: none" not in cdm_rule
