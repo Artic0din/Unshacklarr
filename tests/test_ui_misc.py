@@ -727,6 +727,87 @@ console.log(JSON.stringify({ rowTag: row.tag, rowRole: row.role ?? null, rowTab:
 """, str(JS / "cookies-cdm.js"))
     assert seen == {"rowTag": "div", "rowRole": None, "rowTab": None, "summary": ["button", "button", "false"], "menu": ["button", True], "nested": 0, "unfolds": True}
 
+
+def test_local_and_remote_device_rows_show_service_names_and_keep_default():
+    seen = node(r"""
+const src = read(process.argv[1]), series = read(process.argv[2]);
+const used_by = ["rmcbfm", "DEFAULT", "UNKNOWN"];  // a key in lower case names the same service
+const rows = [];
+let localVisible = false;
+const collect = (tag, props, ...kids) => {
+  if (props?.className === "used") rows.push(kids.map((kid) => kid.textContent));
+  if (props?.className === "cdm-sum") localVisible = true;
+  return el(tag, props, ...kids);
+};
+const ctx = sandbox({ el: collect, $: () => any, keepFocus: (_box, draw) => draw(),
+  cdmData: { folder: "/cdm", devices: [{ name: "alpha", kind: "Widevine", used_by }], remote: [{ name: "remote", used_by }], services: [], map: {} },
+  cdmFilter: "all", cdmQuery: "", cdmTesting: false, cdmShowUnused: false, cdmRunning: new Set(), cdmOpen: new Set(), cdmJust: new Set(),
+  S: { config: { series: {}, settings: {} }, serviceNames: { RMCBFM: "RMC BFM Play" } },
+  COUNT: { device: String }, cdmShort: (d) => d.name });
+vm.runInContext(grab(series, /^const svcName = .*$/m)
+  + "\n" + grab(src, /^const cdmUsageName = .*$/m)
+  + "\n" + grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + ["cdmTitle", "cdmStatus", "renderCdm", "remoteRow"].map((name) => grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+ctx.renderCdm();
+const labels = rows.splice(0);
+const visible = (query) => {
+  localVisible = false;
+  ctx.cdmQuery = query;
+  ctx.renderCdm();
+  return localVisible;
+};
+console.log(JSON.stringify({ labels, byName: visible("rmc bfm play"), byCode: visible("rmcbfm") }));
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"))
+    assert seen == {"labels": [["RMC BFM Play", "default", "UNKNOWN"]] * 2, "byName": True, "byCode": True}
+
+
+
+def test_cdm_alerts_name_services_not_their_codes():
+    alerts = node(r"""
+const src = read(process.argv[1]), series = read(process.argv[2]);
+const text = (n) => typeof n === "string" ? n : [n.textContent || "", ...(n.kids || []).map(text)].join("");
+const found = [];
+const collect = (tag, props, ...kids) => {
+  const node = el(tag, props, ...kids);
+  if (props?.className === "cdm-alert") found.push(node);
+  return node;
+};
+const failing = { name: "alpha", kind: "Widevine", used_by: ["rmcbfm"], test: { ok: false, error: "No license", at: "2026-11-20T00:00:00Z" } };
+const ctx = sandbox({ el: collect, $: () => any, keepFocus: (_box, draw) => draw(), tr: (s) => s, ago: () => "now",
+  cdmData: { folder: "/cdm", devices: [failing], remote: [], services: [], map: { RMCBFM: "ghost" } },  // a device no longer in the folder
+  cdmFilter: "all", cdmQuery: "", cdmTesting: false, cdmShowUnused: false, cdmRunning: new Set(), cdmOpen: new Set(), cdmJust: new Set(),
+  S: { config: { series: {}, settings: {} }, serviceNames: { RMCBFM: "RMC BFM Play" } },
+  COUNT: { device: String, key: String, problem: String }, cdmShort: (d) => d.name });
+vm.runInContext(grab(series, /^const svcName = .*$/m)
+  + "\n" + grab(src, /^const cdmUsageName = .*$/m)
+  + "\n" + grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + ["cdmTitle", "cdmStatus", "renderCdm", "remoteRow"].map((name) => grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+ctx.renderCdm();
+console.log(JSON.stringify(found.map((a) => text(a).replace(/Pick a device$/, "").trim())));
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"))
+    assert alerts == ["RMC BFM Play uses ghost, which is not in the CDM folder", "alpha, used by RMC BFM Play: No license, tested now"]
+
+def test_device_picker_finds_and_labels_devices_by_service_name():
+    seen = node(r"""
+const src = read(process.argv[1]), series = read(process.argv[2]);
+let search, list;
+const ctx = sandbox({ el: (tag, props, ...kids) => ({ ...el(tag, { value: "", ...props }, ...kids), replaceChildren(...k) { this.kids = k; }, append(...k) { this.kids.push(...k); }, get children() { return this.kids; } }), cdmPopAt: (_anchor, _title, q, box) => { [search, list] = [q, box]; return false; },
+  cdmData: { devices: [{ name: "alpha", kind: "Widevine", used_by: ["RMCBFM"] }], remote: [], map: {} },
+  S: { serviceNames: { RMCBFM: "RMC BFM Play" } }, cdmShort: (d) => d.name, trWith: (template, value) => template.replace("{0}", value) });
+vm.runInContext(grab(series, /^const svcName = .*$/m) + "\n" + grab(src, /^const cdmUsageName = .*$/m) + "\n"
+  + ["cdmTitle", "cdmPicker"].map((name) => grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+const shown = (text) => {
+  search.value = text;
+  search.oninput();
+  return list.kids.filter((k) => k.className?.startsWith("cdm-opt")).map((k) => k.kids[1].textContent);
+};
+ctx.cdmPicker({}, "default", "");
+console.log(JSON.stringify({ byName: shown("rmc bfm play"), byCode: shown("rmcbfm") }));
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"))
+    assert seen == {"byName": ["Used by RMC BFM Play"], "byCode": ["Used by RMC BFM Play"]}
+
+
+
 def test_the_header_says_an_update_or_a_check_in_words_not_by_the_dot_alone():
     shown = node(r"""
 const buttons = Object.fromEntries(["unshackle", "sonarr"].map((n) => [n, { dataset: {}, title: "", dot: { className: "" }, small: { textContent: "" },

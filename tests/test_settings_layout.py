@@ -23,14 +23,26 @@ def media_width(selector):
     return None
 
 
-def test_a_cookie_file_keeps_room_for_its_name_at_every_width():
-    assert "minmax(9.5rem, 1fr) auto" in rule(".sv-file")
-    wide = re.search(r"@media \(min-width: 1440px\) \{(.*?)\n", CSS).group(1)
-    assert ".sv-file" not in wide  # the room is not something only a wide window gets
+def test_service_actions_use_their_own_width_and_lines():
+    assert "flex-wrap: wrap" in rule(".sv-ctl")
+    assert not re.search(r"\.sv-(?:table|file|ctl)[^{]*\{[^}]*\b(?:min-width:\s*7\.125rem|flex-wrap:\s*nowrap)", CSS)
+    assert "overflow-wrap: normal" in rule(".sv-name")
+    assert "width: 25%" in rule(".sv-table thead th:first-child")
 
 
 def test_the_services_table_stacks_before_a_column_would_hide_past_an_edge():
-    assert media_width(".sv-table, .sv-table tbody") >= 1180  # its columns need about 825px beside the sidebar
+    assert "container-type: inline-size" in rule("#sv-list")
+    stacks = re.search(r"@container \(max-width: (\d+)rem\) \{((?:[^{}]|\{[^{}]*\})*)\}", CSS)
+    assert stacks and int(stacks.group(1)) >= 36  # four columns need about 576px inside the card
+    assert ".sv-table thead { display: none; }" in stacks.group(2)
+    assert "minmax(min(100%, 13rem), 1fr)" in stacks.group(2)  # one track at phone widths, with no forced minimum
+
+
+def test_service_attention_colours_only_the_leading_edge():
+    assert "--sv-edge: var(--err)" in rule(".sv-row[data-attention]")
+    assert "border-inline-start: 1px solid var(--sv-edge" in rule(".sv-table tbody th")
+    assert "border-inline-start: 1px solid var(--sv-edge" in rule(".sv-table tbody tr")
+    assert not re.search(r"\.sv-row\[data-attention\][^{]*\{[^}]*box-shadow", CSS)
 
 
 def test_a_ladder_step_stacks_before_its_selects_collapse():

@@ -160,7 +160,7 @@ function cdmPicker(anchor, service, current, also = []) {
     el("b", { textContent: main, title: main }), ...(sub ? [el("small", { textContent: sub })] : []));
   const draw = () => {
     const text = q.value.trim().toLowerCase();
-    const fits = (d) => !text || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")}`.toLowerCase().includes(text);
+    const fits = (d) => !text || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")} ${d.used_by.map(cdmUsageName).join(" ")}`.toLowerCase().includes(text);
     list.replaceChildren(
       ...(service !== "default" && !text ? [opt("", "The default device", byDefault ? cdmShort(byDefault) : ""),
         opt("none", "No CDM", "No DRM, nothing to decrypt")] : []),
@@ -168,7 +168,7 @@ function cdmPicker(anchor, service, current, also = []) {
         .flatMap(([name, kind]) => {
           const found = devices.filter(kind).filter(fits);
           return found.length ? [el("small", { className: "cdm-pop-h", textContent: name }),
-            ...found.map((d) => opt(d.name, cdmShort(d), d.used_by.length ? `Used by ${d.used_by.join(", ")}` : ""))] : [];
+            ...found.map((d) => opt(d.name, cdmShort(d), d.used_by.length ? trWith("Used by {0}", d.used_by.map(cdmUsageName).join(", ")) : ""))] : [];
         }));
     if (!list.children.length) list.append(el("p", { className: "muted", textContent: "No device matches." }));
   };
@@ -180,6 +180,8 @@ function cdmPicker(anchor, service, current, also = []) {
 const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
   el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: svg }),
     el("div", {}, el("h3", { textContent: title }), el("p", { textContent: text })), ...(extra ? [extra] : [])), ...body);
+// unshackle.yaml reads a service key in any case: "rmcbfm" is RMC BFM Play too
+const cdmUsageName = (tag) => tag.toLowerCase() === "default" ? "default" : svcName(Object.keys(S.serviceNames || {}).find((known) => known.toLowerCase() === tag.toLowerCase()) || tag);
 /* No device to list: what was asked for named, with a way back to the whole list. */
 function emptyDevices(known) {
   if (!known) return el("p", { className: "muted cdm-empty", textContent: "No device yet: add a .wvd or .prd file." });
@@ -250,14 +252,15 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
       const svcs = name === def ? ["the default"] : groups.get(name);
       const fix = el("button", { type: "button", className: "btn small primary cdm-pop-btn", dataset: { key: `fix:${name}` }, textContent: "Pick a device",
         onclick: (e) => name === def ? cdmPicker(e.currentTarget, "default", name) : cdmPicker(e.currentTarget, svcs[0], name, svcs.slice(1)) });
-      return el("div", { className: "cdm-alert" }, el("span", {}, el("b", { textContent: svcs.join(", ") }), svcs.length === 1 ? ` uses ${name}, which is not in the CDM folder` : ` use ${name}, which is not in the CDM folder`), fix);
+      return el("div", { className: "cdm-alert" }, el("span", {}, el("b", { textContent: svcs.map(cdmUsageName).join(", ") }), svcs.length === 1 ? ` uses ${name}, which is not in the CDM folder` : ` use ${name}, which is not in the CDM folder`), fix);
     }),
     ...data.devices.filter((d) => d.used_by.length && problem(d)).map((d) => el("div", { className: "cdm-alert" },
-      el("span", {}, el("b", { textContent: cdmShort(d) }), `, used by ${d.used_by.join(", ")}: ${cdmStatus(d)[2]}`))),
+      el("span", {}, el("b", { textContent: cdmShort(d) }), `, used by ${d.used_by.map(cdmUsageName).join(", ")}: ${cdmStatus(d)[2]}`))),
   ];
   // Devices: one line each, those in use or in trouble first, the others folded
   const matches = (d) => ({ all: true, Widevine: d.kind === "Widevine", PlayReady: d.kind === "PlayReady", used: d.used_by.length > 0, problems: problem(d) }[cdmFilter])
-    && (!cdmQuery.trim() || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")}`.toLowerCase().includes(cdmQuery.trim().toLowerCase()));  // the same trimmed query the empty line names
+    && (!cdmQuery.trim() || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")} ${d.used_by.map(cdmUsageName).join(" ")}`
+      .toLowerCase().includes(cdmQuery.trim().toLowerCase()));  // the same trimmed query the empty line names
   const found = data.devices.filter(matches).sort((a, b) => (b.used_by.length > 0) - (a.used_by.length > 0) || (cdmTesting ? 0 : (problem(b) ? 1 : 0) - (problem(a) ? 1 : 0)));  // no jumping about while a batch is tested
   const folding = cdmFilter === "all" && !cdmQuery.trim() && !cdmShowUnused;
   const list = folding ? found.filter((d) => d.used_by.length || problem(d)) : found;
@@ -313,7 +316,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
       el("span", { className: "who" }, el("b", { textContent: cdmTitle(d).replace(/^(.{6,}?)\s+\1\b/i, "$1") }),
         el("small", { textContent: d.folder ? `${d.name}/` : `${d.name}.${d.kind === "Widevine" ? "wvd" : "prd"}` })),
       el("span", { className: "kind" }, el("i", { textContent: `${d.kind === "PlayReady" ? "PlayReady" : "Widevine"}${lvl ? ` ${lvl}` : ""}` }), ...(d.info?.vmp ? [el("i", { textContent: "VMP" })] : [])),
-      el("span", { className: "used" }, ...(d.used_by.length ? d.used_by.map((u) => el("span", { className: "cdm-chip static", textContent: u.toLowerCase() === "default" ? "default" : u }))
+      el("span", { className: "used" }, ...(d.used_by.length ? d.used_by.map((u) => el("span", { className: "cdm-chip static", textContent: cdmUsageName(u) }))
         : [el("small", { textContent: "not in use" })])),
       el("span", { className: `st ${tone}`, title: why, textContent: word }));
     return el("div", { className: `cdm-dev t-${tone}${cdmOpen.has(d.name) ? " open" : ""}${cdmJust.has(d.name) ? " just" : ""}` }, summary, menu,
@@ -366,7 +369,7 @@ function remoteRow(r) {
   return el("div", { className: "cdm-dev t-mut" }, el("span", { className: "dot", ariaHidden: "true" }),
     el("span", { className: "who" }, el("b", { textContent: r.name }), el("small", { textContent: where || r.label })),
     el("span", { className: "kind" }, el("i", { textContent: r.label })),
-    el("span", { className: "used" }, ...(r.used_by.length ? r.used_by.map((u) => el("span", { className: "cdm-chip static", textContent: u })) : [el("small", { textContent: "not in use" })])),
+    el("span", { className: "used" }, ...(r.used_by.length ? r.used_by.map((u) => el("span", { className: "cdm-chip static", textContent: cdmUsageName(u) })) : [el("small", { textContent: "not in use" })])),
     el("span", { className: "st", textContent: r.has_secret ? "key saved" : "" }), menu);
 }
 function editRemote(r) {
