@@ -168,7 +168,7 @@ function cdmPicker(anchor, service, current, also = []) {
         .flatMap(([name, kind]) => {
           const found = devices.filter(kind).filter(fits);
           return found.length ? [el("small", { className: "cdm-pop-h", textContent: name }),
-            ...found.map((d) => opt(d.name, cdmShort(d), d.used_by.length ? `Used by ${d.used_by.map(cdmUsageName).join(", ")}` : ""))] : [];
+            ...found.map((d) => opt(d.name, cdmShort(d), d.used_by.length ? trWith("Used by {0}", d.used_by.map(cdmUsageName).join(", ")) : ""))] : [];
         }));
     if (!list.children.length) list.append(el("p", { className: "muted", textContent: "No device matches." }));
   };
@@ -180,7 +180,8 @@ function cdmPicker(anchor, service, current, also = []) {
 const cdmCard = (svg, title, text, extra, ...body) => el("div", { className: "sx-card" },
   el("div", { className: "sx-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: svg }),
     el("div", {}, el("h3", { textContent: title }), el("p", { textContent: text })), ...(extra ? [extra] : [])), ...body);
-const cdmUsageName = (tag) => tag.toLowerCase() === "default" ? "default" : svcName(tag);
+// unshackle.yaml reads a service key in any case: "rmcbfm" is RMC BFM Play too
+const cdmUsageName = (tag) => tag.toLowerCase() === "default" ? "default" : svcName(Object.keys(S.serviceNames || {}).find((known) => known.toLowerCase() === tag.toLowerCase()) || tag);
 /* No device to list: what was asked for named, with a way back to the whole list. */
 function emptyDevices(known) {
   if (!known) return el("p", { className: "muted cdm-empty", textContent: "No device yet: add a .wvd or .prd file." });

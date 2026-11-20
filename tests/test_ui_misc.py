@@ -637,7 +637,7 @@ console.log(JSON.stringify({ rowTag: row.tag, rowRole: row.role ?? null, rowTab:
 def test_local_and_remote_device_rows_show_service_names_and_keep_default():
     seen = node(r"""
 const src = read(process.argv[1]), series = read(process.argv[2]);
-const used_by = ["RMCBFM", "DEFAULT", "UNKNOWN"];
+const used_by = ["rmcbfm", "DEFAULT", "UNKNOWN"];  // a key in lower case names the same service
 const rows = [];
 let localVisible = false;
 const collect = (tag, props, ...kids) => {
@@ -674,7 +674,7 @@ const src = read(process.argv[1]), series = read(process.argv[2]);
 let search, list;
 const ctx = sandbox({ el: (tag, props, ...kids) => ({ ...el(tag, { value: "", ...props }, ...kids), replaceChildren(...k) { this.kids = k; }, append(...k) { this.kids.push(...k); }, get children() { return this.kids; } }), cdmPopAt: (_anchor, _title, q, box) => { [search, list] = [q, box]; return false; },
   cdmData: { devices: [{ name: "alpha", kind: "Widevine", used_by: ["RMCBFM"] }], remote: [], map: {} },
-  S: { serviceNames: { RMCBFM: "RMC BFM Play" } }, cdmShort: (d) => d.name });
+  S: { serviceNames: { RMCBFM: "RMC BFM Play" } }, cdmShort: (d) => d.name, trWith: (template, value) => template.replace("{0}", value) });
 vm.runInContext(grab(series, /^const svcName = .*$/m) + "\n" + grab(src, /^const cdmUsageName = .*$/m) + "\n"
   + ["cdmTitle", "cdmPicker"].map((name) => grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
 const shown = (text) => {
