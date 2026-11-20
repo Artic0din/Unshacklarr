@@ -179,13 +179,14 @@ function applyRoute(event) {
   }
   const route = parseRoute();
   const alreadyOpen = inSettingsSec() && route.sec === settingsRoute;
+  const sameTab = routed && route.tab === currentTab;
   if (!routed || route.tab !== currentTab) showTab(route.tab, true);  // closing a series keeps its tab as it was
   if (route.sec) {
     if (alreadyOpen && (!event || route.id || current)) loadSettingsSec();
     else showSettingsSec(route.sec, true, false, null, Boolean(event));
   } else if (route.tab === "settings") { showSettingsList(true); loadSettingsSec(); }
   routed = true;
-  if (currentTab === "log") syncActivityRoute();
+  if (currentTab === "log" && !route.id) syncActivityRoute(sameTab);
   const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
   if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
   else if (series && route.view) showDrawerTab(route.view, true);
@@ -219,6 +220,7 @@ function measureBars() {
 const barsSeen = new ResizeObserver(measureBars);
 [$("header"), ...BOTTOM_BARS].forEach((n) => barsSeen.observe(n));
 function showTab(name, fromRoute = false, quiet = false) {
+  const changedTab = name !== currentTab;
   if (currentTab === "yaml" && name !== "yaml") {  // leaving the editor: it forgets the password and the file
     if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }
     uyReset();
@@ -237,7 +239,11 @@ function showTab(name, fromRoute = false, quiet = false) {
   document.querySelectorAll("main > section").forEach((s) => s.hidden = s.id !== "tab-" + name);
   if (!fromRoute) navigate(true);
   if (quiet || $("#initial-state-error")?.hidden === false) return;
-  if (name === "log") { refreshLog(); openActivity(); }
+  if (name === "log") {
+    if (!fromRoute && changedTab) syncActivityRoute(false);
+    refreshLog();
+    openActivity();
+  }
   else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
   if (name === "settings" && !fromRoute) loadSettingsSec();
   if (name === "schedule") loadSchedule();

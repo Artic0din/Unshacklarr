@@ -169,6 +169,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Cleared stale run details when returning to Activity from another tab.
 - Restored the open Activity detail when reloading on a phone so Back returned to the list.
 
 - Fixed cramped mobile layouts and focus indicators, made routine controls neutral, and added a retry when startup data failed to load.

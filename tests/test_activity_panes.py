@@ -494,28 +494,36 @@ const $ = (s) => {
 };
 let detail = null;
 const pending = {};
-const entries = [null];
+const location = { hash: "#/activity" };
+const entries = [{ state: null, hash: location.hash }];
 let entry = 0;
 const historyStack = {
-  get state() { return entries[entry]; },
-  pushState(state) { entries.splice(++entry, Infinity, state); },
-  replaceState(state) { entries[entry] = state; },
-  back() { if (entry > 0) { entry--; ctx.syncActivityRoute?.(); } },
-  forward() { if (entry < entries.length - 1) { entry++; ctx.syncActivityRoute?.(); } },
+  get state() { return entries[entry].state; },
+  pushState(state, _, hash = location.hash) { entries.splice(++entry, Infinity, { state, hash }); location.hash = hash; },
+  replaceState(state, _, hash = location.hash) { entries[entry] = { state, hash }; location.hash = hash; },
+  back() { traverse(-1); },
+  forward() { traverse(1); },
 };
+function traverse(delta) {
+  if (!entries[entry + delta]) return;
+  location.hash = entries[entry += delta].hash;
+  ctx.applyRoute({});
+}
+const panes = ["log", "schedule", "series"].map((id) =>
+  elements[`#tab-${id}`] = node({ id: `tab-${id}`, hidden: id !== "log" }));
 const strip = $("#con-running"), classes = new Set();
 let scroll = () => {}, resize = () => {};
 Object.assign(strip, { scrollLeft: 0, scrollWidth: 800, clientWidth: 300,
   addEventListener: (event, listener) => { if (event === "scroll") scroll = listener; },
   classList: { toggle: (name, on) => on ? classes.add(name) : classes.delete(name) },
 });
-const ctx = { $, innerWidth: 1000, history: historyStack, location: { hash: "#/activity" }, el: (tag, props) => node(props),
+const ctx = { $, innerWidth: 1000, history: historyStack, location, el: (tag, props) => node(props),
   CSS: { supports: () => process.argv[3] !== "chip-overflow" },
   ResizeObserver: class { constructor(callback) { resize = callback; } observe() {} },
   document: Object.assign(doc, { getElementById: (id) => elements[`#${id}`], querySelectorAll: (s) => ({
     ".con-views [data-con-view]": buttons, "#con-running .chip": $("#con-running").children,
     "#con .crow": [...$("#runs-live").children, ...$("#runs-history").children],
-    "#tab-log .con-filters button": filters,
+    "#tab-log .con-filters button": filters, "main > section": panes,
   })[s] || [] }), glideBars() {}, emptyHistory: () => node(),
   scrollTo() {}, focusHeading: (heading) => heading.focus(), getComputedStyle: () => ({ scrollPaddingInlineEnd: "0px" }),
   itemRow: (item) => node({ item, dataset: { hk: `row:${ctx.keyOf(item)}` }, onclick: () => ctx.pickRun(ctx.keyOf(item)) }),
@@ -545,9 +553,11 @@ for (const name of ["recordActivityDetail", "syncActivityRoute", "closeActivityD
 }
 vm.runInContext("let activityDetail = null", ctx);
 const navigation = require("fs").readFileSync(require("path").join(require("path").dirname(process.argv[1]), "navigation.js"), "utf8");
-vm.runInContext("let routed = false, currentTab = 'log', current = null;\n" +
-  navigation.match(/^function applyRoute\b[\s\S]*?^}/m)[0], Object.assign(ctx, {
-  parseRoute: () => ({ tab: "log" }), inSettingsSec: () => false, showTab() {}, updateTitle() {},
+vm.runInContext("let routed = true, currentTab = 'log', current = null, termSocket = null;\n" +
+  ["routeHash", "navigate", "parseRoute", "applyRoute", "showTab"].map((name) =>
+    navigation.match(new RegExp(`^function ${name}\\b[\\s\\S]*?^}`, "m"))[0]).join("\n"), Object.assign(ctx, {
+  HASH_OF: { log: "activity" }, TAB_OF: { activity: "log" }, inSettingsSec: () => false,
+  updateTitle() {}, closeDetails() {}, cancelSettingsJump() {}, loadSchedule() {}, refreshLog() {}, syncInboxRoute: () => false,
 }));
 const active = { id: "live", series: "Show", sxxeyy: "S01E01", outcome: "running", step: "downloading", batch: "batch" };
 const queued = { ...active, id: "queued", sxxeyy: "S01E02", waiting: true, step: "queued" };
@@ -660,12 +670,25 @@ else if (scenario === "phone-history") {
 else if (scenario === "reload-stats") {
   ctx.innerWidth = 390;
   $("#con-stats").onclick();
-  vm.runInContext("picked_run = activityDetail = null", ctx);
+  vm.runInContext("routed = false; picked_run = activityDetail = null", ctx);
   addRuns([]);
   ctx.applyRoute();
   const reloaded = pressed();
   historyStack.back();
   console.log(JSON.stringify([reloaded, pressed(), doc.activeElement === $("#con-stats")]));
+}
+else if (scenario === "reenter-activity") {
+  ctx.innerWidth = Number(process.argv[4]);
+  addRuns([history]);
+  $("#runs-history").children[0].onclick();
+  const opened = detail;
+  ctx.showTab("schedule");
+  ctx.showTab("log");
+  const reentered = [detail, historyStack.state];
+  historyStack.back();
+  const back = location.hash;
+  historyStack.back();
+  console.log(JSON.stringify([opened, reentered, back, location.hash, detail]));
 }
 else if (scenario === "downloads-width") {
   addRuns([active, history]);
@@ -739,6 +762,14 @@ def test_phone_activity_browser_and_in_app_back_restore_the_list_and_opener():
 
 def test_phone_activity_reload_restores_stats_before_browser_back():
     assert switcher("reload-stats") == [["stats"], ["downloads"], True]
+
+
+def test_reentering_activity_from_schedule_uses_the_destination_detail():
+    assert switcher("reenter-activity", "390") == ["old", [None, None], "#/schedule", "#/activity", "old"]
+
+
+def test_reentering_wide_activity_keeps_the_side_by_side_run_selection():
+    assert switcher("reenter-activity", "1440") == ["old", ["old", None], "#/schedule", "#/activity", "old"]
 
 
 def test_pressed_downloads_keeps_wide_detail_but_returns_to_the_narrow_list():

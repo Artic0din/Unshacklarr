@@ -594,14 +594,14 @@ function recordActivityDetail(id, tool = false) {
   activityDetail = { id, tool, backKey: runBackKey, hash: location.hash };
   history[current ? "replaceState" : "pushState"]({ ...history.state, activity: activityDetail }, "");
 }
-function syncActivityRoute() {
+function syncActivityRoute(restoreFocus = true) {
   const detail = history.state?.activity;
   if (detail?.hash === location.hash) {
     if (activityDetail?.id === detail.id && picked_run === detail.id) return;
     activityDetail = detail;
     if (detail.tool) $(`#con-${detail.id}`).onclick();
     else pickRun(detail.id, detail.backKey);
-  } else if (activityDetail?.hash === location.hash) closeActivityDetail();
+  } else if (activityDetail || (!restoreFocus && innerWidth <= 700 && picked_run)) closeActivityDetail(restoreFocus);
 }
 function pickRun(id, backKey = null) {
   landOnLive = false;
@@ -968,12 +968,13 @@ $("#con-downloads").onclick = (e) => {
   $("#con").classList.remove("open"); picked_run = null; renderConsole();
 };
 $("#cd-back").onclick = () => history.state?.activity ? history.back() : closeActivityDetail();
-function closeActivityDetail() {
+function closeActivityDetail(restoreFocus = true) {
   landOnLive = false;
   activityDetail = null;
   const from = picked_run, trigger = runBackKey;
   runBackKey = null;
   $("#con").classList.remove("open"); picked_run = null; renderConsole();
+  if (!restoreFocus) return;
   if (trigger) {
     const chip = $(`#con-running [data-fk="${trigger}"]`);
     if (chip) {
