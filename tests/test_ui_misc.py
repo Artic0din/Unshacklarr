@@ -667,6 +667,28 @@ console.log(JSON.stringify({ labels, byName: visible("rmc bfm play"), byCode: vi
     assert seen == {"labels": [["RMC BFM Play", "default", "UNKNOWN"]] * 2, "byName": True, "byCode": True}
 
 
+
+def test_device_picker_finds_and_labels_devices_by_service_name():
+    seen = node(r"""
+const src = read(process.argv[1]), series = read(process.argv[2]);
+let search, list;
+const ctx = sandbox({ el: (tag, props, ...kids) => ({ ...el(tag, { value: "", ...props }, ...kids), replaceChildren(...k) { this.kids = k; }, append(...k) { this.kids.push(...k); }, get children() { return this.kids; } }), cdmPopAt: (_anchor, _title, q, box) => { [search, list] = [q, box]; return false; },
+  cdmData: { devices: [{ name: "alpha", kind: "Widevine", used_by: ["RMCBFM"] }], remote: [], map: {} },
+  S: { serviceNames: { RMCBFM: "RMC BFM Play" } }, cdmShort: (d) => d.name });
+vm.runInContext(grab(series, /^const svcName = .*$/m) + "\n" + grab(src, /^const cdmUsageName = .*$/m) + "\n"
+  + ["cdmTitle", "cdmPicker"].map((name) => grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+const shown = (text) => {
+  search.value = text;
+  search.oninput();
+  return list.kids.filter((k) => k.className?.startsWith("cdm-opt")).map((k) => k.kids[1].textContent);
+};
+ctx.cdmPicker({}, "default", "");
+console.log(JSON.stringify({ byName: shown("rmc bfm play"), byCode: shown("rmcbfm") }));
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"))
+    assert seen == {"byName": ["Used by RMC BFM Play"], "byCode": ["Used by RMC BFM Play"]}
+
+
+
 def test_the_header_says_an_update_or_a_check_in_words_not_by_the_dot_alone():
     shown = node(r"""
 const buttons = Object.fromEntries(["unshackle", "sonarr"].map((n) => [n, { dataset: {}, title: "", dot: { className: "" }, small: { textContent: "" },

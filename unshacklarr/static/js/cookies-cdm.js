@@ -160,7 +160,7 @@ function cdmPicker(anchor, service, current, also = []) {
     el("b", { textContent: main, title: main }), ...(sub ? [el("small", { textContent: sub })] : []));
   const draw = () => {
     const text = q.value.trim().toLowerCase();
-    const fits = (d) => !text || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")}`.toLowerCase().includes(text);
+    const fits = (d) => !text || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")} ${d.used_by.map(cdmUsageName).join(" ")}`.toLowerCase().includes(text);
     list.replaceChildren(
       ...(service !== "default" && !text ? [opt("", "The default device", byDefault ? cdmShort(byDefault) : ""),
         opt("none", "No CDM", "No DRM, nothing to decrypt")] : []),
@@ -168,7 +168,7 @@ function cdmPicker(anchor, service, current, also = []) {
         .flatMap(([name, kind]) => {
           const found = devices.filter(kind).filter(fits);
           return found.length ? [el("small", { className: "cdm-pop-h", textContent: name }),
-            ...found.map((d) => opt(d.name, cdmShort(d), d.used_by.length ? `Used by ${d.used_by.join(", ")}` : ""))] : [];
+            ...found.map((d) => opt(d.name, cdmShort(d), d.used_by.length ? `Used by ${d.used_by.map(cdmUsageName).join(", ")}` : ""))] : [];
         }));
     if (!list.children.length) list.append(el("p", { className: "muted", textContent: "No device matches." }));
   };
@@ -251,10 +251,10 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
       const svcs = name === def ? ["the default"] : groups.get(name);
       const fix = el("button", { type: "button", className: "btn small primary cdm-pop-btn", dataset: { key: `fix:${name}` }, textContent: "Pick a device",
         onclick: (e) => name === def ? cdmPicker(e.currentTarget, "default", name) : cdmPicker(e.currentTarget, svcs[0], name, svcs.slice(1)) });
-      return el("div", { className: "cdm-alert" }, el("span", {}, el("b", { textContent: svcs.join(", ") }), svcs.length === 1 ? ` uses ${name}, which is not in the CDM folder` : ` use ${name}, which is not in the CDM folder`), fix);
+      return el("div", { className: "cdm-alert" }, el("span", {}, el("b", { textContent: svcs.map(cdmUsageName).join(", ") }), svcs.length === 1 ? ` uses ${name}, which is not in the CDM folder` : ` use ${name}, which is not in the CDM folder`), fix);
     }),
     ...data.devices.filter((d) => d.used_by.length && problem(d)).map((d) => el("div", { className: "cdm-alert" },
-      el("span", {}, el("b", { textContent: cdmShort(d) }), `, used by ${d.used_by.join(", ")}: ${cdmStatus(d)[2]}`))),
+      el("span", {}, el("b", { textContent: cdmShort(d) }), `, used by ${d.used_by.map(cdmUsageName).join(", ")}: ${cdmStatus(d)[2]}`))),
   ];
   // Devices: one line each, those in use or in trouble first, the others folded
   const matches = (d) => ({ all: true, Widevine: d.kind === "Widevine", PlayReady: d.kind === "PlayReady", used: d.used_by.length > 0, problems: problem(d) }[cdmFilter])
