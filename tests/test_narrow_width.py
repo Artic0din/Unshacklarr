@@ -69,10 +69,13 @@ def test_the_setup_error_wraps_inside_the_card_when_it_sits_under_its_field():
     has(media("max-width: 1180px"), "transform: none; margin-top: 8px; width: auto; max-width: 100%; }")
 
 
-def test_the_notifications_heading_keeps_its_own_width_and_the_row_may_wrap():
+def test_inbox_actions_stay_together_and_clear_keeps_its_name_when_icon_only():
     has(CSS, ".inbox-head { display: flex; flex-wrap: wrap;")
     has(CSS, ".inbox-head div { flex: 1 1 auto; min-width: min-content; }")
-    has(media("max-width: 340px"), "#inbox-clear { order: 1; margin-left: auto; }")
+    narrow = media("max-width: 340px")
+    has(narrow, ".inbox-actions:not(:has([data-sure])) { display: flex;")
+    has(narrow, ".inbox-clear:not([data-sure]) span { position: absolute;")
+    assert re.search(r'id="inbox-clear"[^>]*>.*?</svg><span>Clear</span>', (STATIC / "index.html").read_text())
 
 
 def test_inbox_filters_wrap_whole_pills_instead_of_clipping_the_last_one():

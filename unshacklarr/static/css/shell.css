@@ -90,7 +90,12 @@ nav .short { display: none; }
 .uy-diff .add { color: var(--ok); } .uy-diff .del { color: var(--err); } .uy-diff .gap { color: var(--muted); } .inbox-head div { flex: 1 1 auto; min-width: min-content; } .inbox-head h2 { margin: 0; font-size: var(--fs-title3); outline: none; }
 #inbox-list { max-height: min(70vh, 640px); overflow-y: auto; margin: 0 -8px; padding: 0 8px; overscroll-behavior: contain; }
 #inbox-filters:not([hidden]) + #inbox-list { height: min(70vh, 640px); }  /* with filters, a fixed height: switching them never resizes the popup */
-@media (max-width: 340px) { #inbox-clear { order: 1; margin-left: auto; } }  /* too narrow for all four on a line: Clear on a row under the title, the close button stays up */
+.inbox-actions { display: contents; }
+@media (max-width: 340px) {
+  .inbox-actions:not(:has([data-sure])) { display: flex; gap: 6px; margin-inline-start: auto; }
+  .inbox-clear:not([data-sure]) { width: 44px; padding: 0; }
+  .inbox-clear:not([data-sure]) span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .inbox-head small { display: block; color: var(--muted); font-size: var(--fs-sub); font-weight: 400; margin-top: 2px; }
 .inbox-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .inbox-filters button { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
