@@ -29,9 +29,10 @@
 * { box-sizing: border-box; }
 input[type=checkbox] { accent-color: var(--accent); }
 ::placeholder { color: var(--muted); opacity: 1; }  /* an example, not a value: dimmer than any text typed */
-html { -webkit-tap-highlight-color: transparent; }
+html { -webkit-tap-highlight-color: transparent;
+  background: radial-gradient(ellipse 58rem 19rem at 15% 0, rgb(132 145 47 / .14), transparent) 0 0 / 100% 24rem no-repeat, var(--bg); }
 html.i18n-wait body { visibility: hidden; }  /* until the translation is in */
-body { margin: 0; background: var(--bg);
+body { margin: 0;
   color: var(--text); font: var(--fs-body)/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 a { color: var(--text); text-underline-offset: .16em; }
 ::selection { color: var(--text); background: var(--select); }
@@ -47,7 +48,7 @@ header { position: sticky; top: var(--header-top, 0px); z-index: 8; display: fle
   gap: var(--sp-6); padding: var(--sp-3) var(--sp-6); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 /* Blurring the header itself would trap the phone's fixed nav inside it. */
 header::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-color: var(--bg);
-  background-image: radial-gradient(ellipse 50rem 9rem at 15% 0, color-mix(in srgb, var(--accent-tint) 60%, transparent), transparent); }
+  background-image: radial-gradient(ellipse 58rem 19rem at 15% 0, rgb(132 145 47 / .14), transparent); }  /* the page glow, so the header and the page under it read as one */
 @media (min-width: 701px) {
   html { scroll-padding-block-start: calc(var(--header-bottom) + var(--sp-2)); }
   @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
