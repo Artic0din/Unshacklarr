@@ -6579,8 +6579,19 @@ def logged_in(request, auth: dict) -> bool:
         return False
     _, signed, signature = session
     expected = hmac.new(auth["secret"].encode(), signed.encode(), "sha256").hexdigest()
-    return (hmac.compare_digest(signature.encode(), expected.encode())
-            and signature not in read_json_cached(LOGGED_OUT_FILE, {}, strict=True, invalid_raises=True))
+    if not hmac.compare_digest(signature.encode(), expected.encode()):
+        return False
+    revoked = revoked_sessions()
+    return revoked is not None and signature not in revoked  # a list it can't read: no session is trusted
+
+
+def revoked_sessions() -> dict | None:
+    """The sessions closed before their end, or None when the list can't be read or makes no sense: then none is
+    trusted (logged_in), and the next login with the password starts afresh (login)."""
+    try:
+        return read_json_cached(LOGGED_OUT_FILE, {}, strict=True, invalid_raises=True)
+    except OSError:
+        return None
 
 
 def setup_code_ok(body: dict) -> bool:
@@ -7047,12 +7058,27 @@ async def login(request):
     password = str((await json_object(request)).get("password") or "")
     if not await password_try(request, password):
         raise web.HTTPUnauthorized(text="Wrong password")
+    if revoked_sessions() is None:  # the list of revoked sessions is lost: a new secret ends every old session, then an empty list
+        await asyncio.to_thread(restart_sessions)
     return with_session(request, web.json_response({"logged_in": True}), read_config()["auth"])
+
+
+def restart_sessions() -> None:
+    with CONFIG_LOCK:
+        config = read_config()
+        config["auth"] = {**config["auth"], "secret": secrets.token_hex(32)}
+        write_config(config)
+    with LOGGED_OUT_LOCK:
+        write_atomic(LOGGED_OUT_FILE, "{}", PRIVATE)
+        _invalidate_json_cache(LOGGED_OUT_FILE)
 
 
 async def logout(request):
     if logged_in(request, read_config()["auth"]):
-        await asyncio.to_thread(forget_session, request.cookies[SESSION_COOKIE])
+        try:
+            await asyncio.to_thread(forget_session, request.cookies[SESSION_COOKIE])
+        except OSError:
+            pass  # the list can't be written now: the cookie still goes from this browser
     response = web.json_response({"logged_in": False})
     response.del_cookie(SESSION_COOKIE, path="/")
     return response
