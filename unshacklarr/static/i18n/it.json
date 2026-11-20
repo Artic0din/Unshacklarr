@@ -264,7 +264,6 @@
  "Failed: {0}": "Fallito: {0}",
  "Failing": "In errore",
  "Fair": "Discreta",
- "Files Sonarr did not take": "File non presi da Sonarr",
  "Filter by service": "Filtra per servizio",
  "Finish the setup": "Completa la configurazione",
  "Finishing": "Finalizzazione",
@@ -727,7 +726,6 @@
  "The history in Activity has Unshackle's full output.": "La cronologia in Attività contiene l'output completo di Unshackle.",
  "The history is already empty": "La cronologia è già vuota",
  "The kind is Widevine or PlayReady": "Il tipo è Widevine o PlayReady",
- "The last weeks, and each service": "Le ultime settimane, e ogni servizio",
  "The message did not go through ({0}): turn notifications off and on again": "Il messaggio non è arrivato ({0}): disattiva e riattiva le notifiche",
  "The missing episodes {0} has": "Gli episodi mancanti che ha {0}",
  "The new download is in {0}; delete it or import it by hand.": "Il nuovo download è in {0}; eliminalo o importalo a mano.",
@@ -1565,7 +1563,6 @@
  "Could not list {0}'s episodes: {1}": "Impossibile elencare gli episodi di {0}: {1}",
  "Download it": "Scaricalo",
  "Download the {0}": "Scarica i {0}",
- "Episodes your series are still missing": "Episodi che mancano ancora alle tue serie",
  "Example: en-AU, en": "Esempio: en-AU, en",
  "Find {0} on {1}": "Cerca {0} su {1}",
  "Move this ladder down": "Sposta giù questa scala",
@@ -1601,7 +1598,6 @@
  "Checked {0}{1}{2}": "Controllato {0}{1}{2}",
  "Counted from the air date in Sonarr. Pick a day before when a streaming platform gets the episodes ahead of the TV channel.": "Contato dalla data di messa in onda in Sonarr. Scegli il giorno prima quando una piattaforma di streaming riceve gli episodi prima del canale TV.",
  "Downloaded from {0}": "Scaricato da {0}",
- "Files a service has in better quality": "File che un servizio ha in qualità migliore",
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": "Ad esempio fr. L'episodio deve avere sottotitoli completi in almeno una di esse. I sottotitoli forzati non contano.",
  "Joining the parts": "Unione delle parti",
  "Muxing": "Unione delle tracce",
@@ -2241,7 +2237,6 @@
  "Download the {0} again": "Riscarica i {0}",
  "Episode order changed: {0}": "Ordine degli episodi cambiato: {0}",
  "Every file has your audio languages.": "Tutti i file hanno le tue lingue audio.",
- "Files without your audio languages": "File senza le tue lingue audio",
  "Languages reads each file's tracks from Sonarr 5; this Sonarr is version {0}": "Languages legge le tracce di ogni file da Sonarr 5; questo Sonarr è la versione {0}",
  "None of the series' accepted audio languages: download the episode again from its service.": "Nessuna delle lingue audio accettate della serie: riscarica l'episodio dal suo servizio.",
  "Nothing found yet.": "Ancora nulla.",
@@ -2472,5 +2467,6 @@
  "A download is running: check again when it ends": "Un download è in corso: controlla di nuovo quando termina",
  "Unexpected {0} in the reply": "{0} inattesi nella risposta",
  "search results": "risultati della ricerca",
- "Clear {0} cache? It signs out": "Svuotare la cache di {0}? Disconnette"
+ "Clear {0} cache? It signs out": "Svuotare la cache di {0}? Disconnette",
+ "Loading…": "Caricamento…"
 }

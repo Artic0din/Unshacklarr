@@ -64,7 +64,7 @@ const foot = { children: ["Delete the job"], replaceChildren(...kids) { this.chi
 let output = "";
 const nodes = {
   "#dock": dock, "#cd-raw": raw, "#cd-foot": foot, "#con": { classList: new Set() },
-  "#cd-main": { replaceChildren() {} },
+  "#cd-main": { replaceChildren() {} }, "#cd-top-title": {},
   "#con-detail": { classList: { toggle: (name, on) => on ? detailClasses.add(name) : detailClasses.delete(name) } },
 };
 const ctx = vm.createContext({

@@ -68,6 +68,87 @@ def node(script, *args):
     return json.loads(out.stdout)
 
 
+def test_switcher_follows_run_selection_and_only_shows_chips_for_running_downloads():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8"), html = fs.readFileSync(process.argv[2], "utf8");
+const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const line = (name) => src.match(new RegExp(`^const ${name} = .*;$`, "m"))[0];
+const node = (props = {}) => ({
+  children: [], attrs: {}, dataset: {}, classList: { toggle() {}, add() {}, remove() {} },
+  setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; },
+  replaceChildren(...children) { this.children = children; }, get childElementCount() { return this.children.length; },
+  ...props,
+});
+const elements = { "#con-search": node({ value: "" }) };
+const buttons = [...html.matchAll(/id="(con-[^"]+)" data-con-view="([^"]+)" aria-pressed="([^"]+)"/g)].map(([, id, conView, pressed]) =>
+  elements[`#${id}`] = node({ dataset: { conView }, attrs: { "aria-pressed": pressed } }));
+const $ = (s) => elements[s] ??= node();
+let detail = null;
+const ctx = { $, innerWidth: 1000, el: (tag, props) => node(props),
+  document: { querySelectorAll: (s) => ({
+    ".con-views [data-con-view]": buttons, "#con-running .chip": $("#con-running").children,
+    "#con .crow": [...$("#runs-live").children, ...$("#runs-history").children],
+  })[s] || [] }, glideBars() {}, emptyHistory: () => node(),
+  itemRow: (item) => node({ dataset: { hk: `row:${ctx.keyOf(item)}` }, onclick: () => ctx.pickRun(ctx.keyOf(item)) }),
+  renderDetail: (card) => { detail = card.id; }, renderJob: (job) => { detail = `job:${job.job}`; },
+  nothingPicked: () => { detail = null; }, keepFocus: (_, draw) => draw(), loading() {}, renderDock() {},
+  api: () => new Promise(() => {}),
+};
+vm.createContext(ctx);
+vm.runInContext(`let picked_run = null, runBackKey, landOnLive = false, conFilter = "all", runCards = [], runsShown = 50;\n` +
+  ["itemKey", "isLive", "isQueued"].map(line).join("\n") + "\n" +
+  src.match(/^function renderConsole.*$/m)[0] + "\n" +
+  ["drawRunningChips", "drawConsole", "jobsOf", "markPicked", "pickRun", "openActivityTool", "showStats"].map(grab).join("\n") +
+  '\nthis.keyOf = itemKey;\n' + src.match(/^\$\("#con-stats"\)\.onclick = .*;$/m)[0] + "\n" +
+  src.match(/^\$\("#con-downloads"\)\.onclick = .*?^\};/ms)[0], ctx);
+const pressed = () => buttons.filter((b) => b.attrs["aria-pressed"] === "true").map((b) => b.dataset.conView);
+const snapshot = () => [pressed(), $("#con-running").hidden, detail];
+const addRuns = (cards, liveOnly = false) => {
+  ctx.cards = cards;
+  vm.runInContext(`runCards = cards; renderConsole(${liveOnly})`, ctx);
+};
+const active = { id: "live", series: "Show", sxxeyy: "S01E01", outcome: "running", step: "downloading", batch: "batch" };
+const queued = { ...active, id: "queued", sxxeyy: "S01E02", waiting: true, step: "queued" };
+const history = { id: "old", series: "Older", outcome: "downloaded" };
+const states = [pressed()];
+addRuns([queued, history]);
+states.push(snapshot());
+addRuns([active, queued, history]);
+const chip = $("#con-running").children[0];
+const chipCount = $("#con-running").childElementCount;
+addRuns([{ ...active, live: { progress: 10 } }, queued, history], true);
+const steady = chip === $("#con-running").children[0];
+$("#con-stats").onclick();
+states.push(snapshot());
+$("#runs-history").children[0].onclick();
+states.push(snapshot());
+$("#con-stats").onclick();
+$("#runs-live").children[0].onclick();
+states.push(snapshot());
+$("#runs-history").children[0].onclick();
+chip.onclick();
+states.push(snapshot(), chip.attrs["aria-current"]);
+vm.runInContext('picked_run = "serve"; markPicked(picked_run); landOnLive = true; renderConsole()', ctx);
+states.push(snapshot());
+$("#con-downloads").onclick({ currentTarget: $("#con-downloads") });
+states.push(snapshot());
+addRuns([history]);
+states.push($("#con-running").hidden);
+console.log(JSON.stringify({ states, chipCount, steady }));
+""", str(JS / "activity.js"), str(JS.parent / "index.html"))
+    assert shown == {
+        "chipCount": 1,
+        "steady": True,
+        "states": [
+            ["downloads"], [["downloads"], True, "queued"], [["stats"], True, "queued"],
+            [["downloads"], False, "old"], [["downloads"], False, "job:batch"],
+            [["downloads"], False, "job:batch"], "true", [[], True, "job:batch"],
+            [["downloads"], False, "job:batch"], True,
+        ],
+    }
+
+
 @pytest.mark.parametrize("suggestions", [{"2": {"service": "SBS", "count": 8}}, {}])
 @pytest.mark.parametrize("failure", [False, True])
 def test_series_refresh_displays_new_search_before_a_slower_saved_result(suggestions, failure):

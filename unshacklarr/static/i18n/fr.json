@@ -265,7 +265,6 @@
  "Failing": "En échec",
  "Fair": "Moyen",
  "File": "Fichier",
- "Files Sonarr did not take": "Fichiers que Sonarr n'a pas pris",
  "Filter by service": "Filtrer par service",
  "Finish the setup": "Terminer la configuration",
  "Finishing": "Finalisation",
@@ -726,7 +725,6 @@
  "The history in Activity has Unshackle's full output.": "L'historique dans Activité contient la sortie complète d'Unshackle.",
  "The history is already empty": "L'historique est déjà vide",
  "The kind is Widevine or PlayReady": "Le type est Widevine ou PlayReady",
- "The last weeks, and each service": "Les dernières semaines, et chaque service",
  "The message did not go through ({0}): turn notifications off and on again": "Le message n'est pas passé ({0}): désactiver puis réactiver les notifications",
  "The missing episodes {0} has": "Les épisodes manquants disponibles sur {0}",
  "The new download is in {0}; delete it or import it by hand.": "Le nouveau téléchargement est dans {0}; le supprimer ou l'importer à la main.",
@@ -1567,7 +1565,6 @@
  "Could not list {0}'s episodes: {1}": "Impossible de lister les épisodes de {0} : {1}",
  "Download it": "Le télécharger",
  "Download the {0}": "Télécharger les {0}",
- "Episodes your series are still missing": "Les épisodes qui manquent encore à vos séries",
  "Example: en-AU, en": "Exemple : en-AU, en",
  "Find {0} on {1}": "Chercher {0} sur {1}",
  "Move this ladder down": "Descendre cette échelle",
@@ -1609,7 +1606,6 @@
  "Check now": "Vérifier maintenant",
  "Check now asks each service what it has, one episode at a time.": "Vérifier maintenant demande à chaque service ce qu'il propose, un épisode à la fois.",
  "Checked {0}{1}{2}": "Vérifié {0}{1}{2}",
- "Files a service has in better quality": "Fichiers qu'un service propose en meilleure qualité",
  "Not checked yet.": "Pas encore vérifié.",
  "Nothing better found yet.": "Rien de mieux trouvé pour l'instant.",
  "Nothing better on the services: every file is already on the best step they have.": "Rien de mieux sur les services: chaque fichier est déjà à la meilleure étape qu'ils proposent.",
@@ -2273,7 +2269,6 @@
  "Download the {0} again": "Retélécharger les {0}",
  "Episode order changed: {0}": "Ordre des épisodes changé : {0}",
  "Every file has your audio languages.": "Tous les fichiers ont vos langues audio.",
- "Files without your audio languages": "Fichiers sans vos langues audio",
  "Languages reads each file's tracks from Sonarr 5; this Sonarr is version {0}": "Languages lit les pistes de chaque fichier depuis Sonarr 5 ; ce Sonarr est en version {0}",
  "None of the series' accepted audio languages: download the episode again from its service.": "Aucune des langues audio acceptées de la série : retéléchargez l'épisode depuis son service.",
  "Nothing found yet.": "Rien trouvé pour l'instant.",
@@ -2507,5 +2502,6 @@
  "A download is running: check again when it ends": "Un téléchargement est en cours : vérifiez à nouveau quand il se termine",
  "Unexpected {0} in the reply": "{0} inattendus dans la réponse",
  "search results": "résultats de recherche",
- "Clear {0} cache? It signs out": "Vider le cache de {0} ? Cela déconnecte"
+ "Clear {0} cache? It signs out": "Vider le cache de {0} ? Cela déconnecte",
+ "Loading…": "Chargement…"
 }

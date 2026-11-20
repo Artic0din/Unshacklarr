@@ -268,7 +268,6 @@
  "Failing": "Сбоит",
  "Fair": "Средний",
  "File": "Файл",
- "Files Sonarr did not take": "Файлы, не принятые Sonarr",
  "Filter by service": "Фильтр по сервису",
  "Finish the setup": "Завершить настройку",
  "Finishing": "Завершение",
@@ -737,7 +736,6 @@
  "The history in Activity has Unshackle's full output.": "Полный вывод Unshackle — в истории на вкладке «Активность».",
  "The history is already empty": "История уже пуста",
  "The kind is Widevine or PlayReady": "Тип: Widevine или PlayReady",
- "The last weeks, and each service": "Последние недели и каждый сервис",
  "The message did not go through ({0}): turn notifications off and on again": "Сообщение не доставлено ({0}): выключите и снова включите уведомления",
  "The missing episodes {0} has": "Недостающие эпизоды, которые есть на {0}",
  "The new download is in {0}; delete it or import it by hand.": "Новая загрузка в {0}; удалите её или импортируйте вручную.",
@@ -1578,7 +1576,6 @@
  "Could not list {0}'s episodes: {1}": "Не удалось получить список эпизодов {0}: {1}",
  "Download it": "Скачать",
  "Download the {0}": "Скачать все {0}",
- "Episodes your series are still missing": "Эпизоды, которых всё ещё не хватает вашим сериалам",
  "Example: en-AU, en": "Пример: en-AU, en",
  "Find {0} on {1}": "Найти {0} на {1}",
  "Move this ladder down": "Переместить лестницу вниз",
@@ -1615,7 +1612,6 @@
  "Counted from the air date in Sonarr. Pick a day before when a streaming platform gets the episodes ahead of the TV channel.": "Отсчитывается от даты эфира в Sonarr. Выберите день до эфира, если стриминговая платформа получает эпизоды раньше телеканала.",
  "Downloaded from {0}": "Скачано с {0}",
  "E-mail": "Эл. почта",
- "Files a service has in better quality": "Файлы, которые есть на сервисе в лучшем качестве",
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": "Например, fr. У эпизода должны быть полные субтитры хотя бы на одном из них. Форсированные субтитры не считаются.",
  "Joining the parts": "Склейка частей",
  "Not checked yet.": "Ещё не проверено.",
@@ -2303,7 +2299,6 @@
  "Download the {0} again": "Скачать {0} снова",
  "Episode order changed: {0}": "Порядок серий изменён: {0}",
  "Every file has your audio languages.": "Во всех файлах есть ваши языки аудио.",
- "Files without your audio languages": "Файлы без ваших языков аудио",
  "Languages reads each file's tracks from Sonarr 5; this Sonarr is version {0}": "Languages читает дорожки каждого файла из Sonarr 5; этот Sonarr версии {0}",
  "None of the series' accepted audio languages: download the episode again from its service.": "Нет ни одного из принятых языков аудио сериала: скачайте серию заново из её службы.",
  "Nothing found yet.": "Пока ничего не найдено.",
@@ -2539,5 +2534,6 @@
  "A download is running: check again when it ends": "Идёт загрузка: повторите проверку, когда она закончится",
  "Unexpected {0} in the reply": "Неожиданные {0} в ответе",
  "search results": "результаты поиска",
- "Clear {0} cache? It signs out": "Очистить кэш {0}? Потребуется новый вход"
+ "Clear {0} cache? It signs out": "Очистить кэш {0}? Потребуется новый вход",
+ "Loading…": "Загрузка…"
 }

@@ -266,7 +266,6 @@
  "Failing": "Con fallos",
  "Fair": "Aceptable",
  "File": "Archivo",
- "Files Sonarr did not take": "Archivos que Sonarr no aceptó",
  "Filter by service": "Filtrar por servicio",
  "Finish the setup": "Terminar la configuración",
  "Finishing": "Finalizando",
@@ -729,7 +728,6 @@
  "The history in Activity has Unshackle's full output.": "El historial en Actividad tiene la salida completa de Unshackle.",
  "The history is already empty": "El historial ya está vacío",
  "The kind is Widevine or PlayReady": "El tipo es Widevine o PlayReady",
- "The last weeks, and each service": "Las últimas semanas y cada servicio",
  "The message did not go through ({0}): turn notifications off and on again": "El mensaje no llegó ({0}): desactiva y vuelve a activar las notificaciones",
  "The missing episodes {0} has": "Los episodios que faltan y que tiene {0}",
  "The new download is in {0}; delete it or import it by hand.": "La nueva descarga está en {0}; elimínala o impórtala a mano.",
@@ -1536,7 +1534,6 @@
  "Could not list {0}'s episodes: {1}": "No se pudieron listar los episodios de {0}: {1}",
  "Download it": "Descargarlo",
  "Download the {0}": "Descargar los {0}",
- "Episodes your series are still missing": "Episodios que aún les faltan a tus series",
  "Example: en-AU, en": "Ejemplo: en-AU, en",
  "Find {0} on {1}": "Buscar {0} en {1}",
  "Move this ladder down": "Bajar esta escalera",
@@ -1571,7 +1568,6 @@
  "Checked {0}{1}{2}": "Comprobado {0}{1}{2}",
  "Counted from the air date in Sonarr. Pick a day before when a streaming platform gets the episodes ahead of the TV channel.": "Se cuenta desde la fecha de emisión en Sonarr. Elige un día antes cuando una plataforma de streaming recibe los episodios antes que la cadena de televisión.",
  "Downloaded from {0}": "Descargado de {0}",
- "Files a service has in better quality": "Archivos que un servicio tiene en mejor calidad",
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": "Por ejemplo fr. El episodio debe tener subtítulos completos en al menos uno de ellos. Los subtítulos forzados no cuentan.",
  "Get cookies.txt LOCALLY for Chrome ↗": "Get cookies.txt LOCALLY para Chrome ↗",
  "Give \"episodeIds\", or \"tvdbId\" and \"episodes\" such as [\"S01E02\"]": "Indica \"episodeIds\", o \"tvdbId\" y \"episodes\" como [\"S01E02\"]",
@@ -2219,7 +2215,6 @@
  "Download the {0} again": "Volver a descargar los {0}",
  "Episode order changed: {0}": "Orden de episodios cambiado: {0}",
  "Every file has your audio languages.": "Todos los archivos tienen tus idiomas de audio.",
- "Files without your audio languages": "Archivos sin tus idiomas de audio",
  "Languages reads each file's tracks from Sonarr 5; this Sonarr is version {0}": "Languages lee las pistas de cada archivo desde Sonarr 5; este Sonarr es la versión {0}",
  "None of the series' accepted audio languages: download the episode again from its service.": "Ninguno de los idiomas de audio aceptados de la serie: vuelve a descargar el episodio desde su servicio.",
  "Nothing found yet.": "Nada encontrado aún.",
@@ -2450,5 +2445,6 @@
  "A download is running: check again when it ends": "Hay una descarga en curso: comprueba de nuevo cuando termine",
  "Unexpected {0} in the reply": "{0} inesperados en la respuesta",
  "search results": "resultados de búsqueda",
- "Clear {0} cache? It signs out": "¿Borrar la caché de {0}? Cerrará la sesión"
+ "Clear {0} cache? It signs out": "¿Borrar la caché de {0}? Cerrará la sesión",
+ "Loading…": "Cargando…"
 }

@@ -269,7 +269,6 @@
  "Failing": "失敗が続いています",
  "Fair": "普通",
  "File": "ファイル",
- "Files Sonarr did not take": "Sonarr が取り込まなかったファイル",
  "Filter by service": "サービスで絞り込み",
  "Finish the setup": "セットアップを完了",
  "Finishing": "仕上げ中",
@@ -736,7 +735,6 @@
  "The history in Activity has Unshackle's full output.": "Unshackle の出力全体はアクティビティの履歴にあります。",
  "The history is already empty": "履歴はすでに空です",
  "The kind is Widevine or PlayReady": "種類は Widevine または PlayReady です",
- "The last weeks, and each service": "直近の数週間とサービスごと",
  "The message did not go through ({0}): turn notifications off and on again": "メッセージが届きませんでした（{0}）。通知をオフにしてから再度オンにしてください",
  "The missing episodes {0} has": "{0} にある欠落エピソード",
  "The new download is in {0}; delete it or import it by hand.": "新しいダウンロードは {0} にあります。削除するか手動でインポートしてください。",
@@ -1572,7 +1570,6 @@
  "Could not list {0}'s episodes: {1}": "{0} のエピソードを一覧できませんでした：{1}",
  "Download it": "ダウンロード",
  "Download the {0}": "{0} 件をダウンロード",
- "Episodes your series are still missing": "シリーズにまだ足りないエピソード",
  "Example: en-AU, en": "例：en-AU, en",
  "Find {0} on {1}": "{1} で {0} を探す",
  "Move this ladder down": "このラダーを下へ移動",
@@ -1607,7 +1604,6 @@
  "Checked {0}{1}{2}": "確認：{0}{1}{2}",
  "Counted from the air date in Sonarr. Pick a day before when a streaming platform gets the episodes ahead of the TV channel.": "Sonarr の放送日から数えます。配信プラットフォームがテレビ局より先にエピソードを公開する場合は、前の日を選んでください。",
  "Downloaded from {0}": "{0} からダウンロード済み",
- "Files a service has in better quality": "サービスにより良い画質があるファイル",
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": "例：fr。エピソードには少なくともいずれか1つの完全な字幕が必要です。強制字幕は数えません。",
  "Joining the parts": "パートを結合中",
  "Not checked yet.": "まだ確認していません。",
@@ -2245,7 +2241,6 @@
  "Download the {0} again": "{0} 件を再ダウンロード",
  "Episode order changed: {0}": "エピソードの順序が変わりました：{0}",
  "Every file has your audio languages.": "すべてのファイルに音声言語があります。",
- "Files without your audio languages": "音声言語のないファイル",
  "Languages reads each file's tracks from Sonarr 5; this Sonarr is version {0}": "Languages は Sonarr 5 から各ファイルのトラックを読み取ります。この Sonarr のバージョンは {0} です",
  "None of the series' accepted audio languages: download the episode again from its service.": "シリーズの許可された音声言語がありません：サービスからエピソードを再ダウンロードしてください。",
  "Nothing found yet.": "まだ見つかりません。",
@@ -2476,5 +2471,6 @@
  "A download is running: check again when it ends": "ダウンロード中です。終わってからもう一度確認してください",
  "Unexpected {0} in the reply": "応答に予期しない {0} が含まれています",
  "search results": "検索結果",
- "Clear {0} cache? It signs out": "{0}のキャッシュを削除しますか？サインアウトされます"
+ "Clear {0} cache? It signs out": "{0}のキャッシュを削除しますか？サインアウトされます",
+ "Loading…": "読み込み中…"
 }

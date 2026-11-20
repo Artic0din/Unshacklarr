@@ -262,7 +262,6 @@
  "Failing": "Fehlerhaft",
  "Fair": "Mittel",
  "File": "Datei",
- "Files Sonarr did not take": "Von Sonarr nicht übernommene Dateien",
  "Filter by service": "Nach Dienst filtern",
  "Finish the setup": "Einrichtung abschließen",
  "Finishing": "Wird abgeschlossen",
@@ -723,7 +722,6 @@
  "The history in Activity has Unshackle's full output.": "Der Verlauf unter Aktivität enthält Unshackles vollständige Ausgabe.",
  "The history is already empty": "Der Verlauf ist bereits leer",
  "The kind is Widevine or PlayReady": "Die Art ist Widevine oder PlayReady",
- "The last weeks, and each service": "Die letzten Wochen und jeder Dienst",
  "The message did not go through ({0}): turn notifications off and on again": "Die Nachricht kam nicht an ({0}): schalte die Benachrichtigungen aus und wieder ein",
  "The missing episodes {0} has": "Die fehlenden Episoden, die {0} hat",
  "The new download is in {0}; delete it or import it by hand.": "Der neue Download liegt in {0}; lösche ihn oder importiere ihn manuell.",
@@ -1543,7 +1541,6 @@
  "Could not list {0}'s episodes: {1}": "Die Episoden von {0} konnten nicht aufgelistet werden: {1}",
  "Download it": "Herunterladen",
  "Download the {0}": "Die {0} herunterladen",
- "Episodes your series are still missing": "Episoden, die deinen Serien noch fehlen",
  "Example: en-AU, en": "Beispiel: en-AU, en",
  "Find {0} on {1}": "{0} auf {1} suchen",
  "Move this ladder down": "Diese Leiter nach unten verschieben",
@@ -1579,7 +1576,6 @@
  "Counted from the air date in Sonarr. Pick a day before when a streaming platform gets the episodes ahead of the TV channel.": "Ab dem Ausstrahlungsdatum in Sonarr gezählt. Wähle einen Tag vorher, wenn eine Streamingplattform die Episoden vor dem Fernsehsender bekommt.",
  "Download": "Herunterladen",
  "Downloaded from {0}": "Heruntergeladen von {0}",
- "Files a service has in better quality": "Dateien, die ein Dienst in besserer Qualität hat",
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": "Zum Beispiel fr. Die Episode muss in mindestens einer davon vollständige Untertitel haben. Erzwungene Untertitel zählen nicht.",
  "Get cookies.txt LOCALLY for Chrome ↗": "Get cookies.txt LOCALLY für Chrome ↗",
  "Import": "Importieren",
@@ -2234,7 +2230,6 @@
  "Download the {0} again": "Die {0} erneut laden",
  "Episode order changed: {0}": "Folgenreihenfolge geändert: {0}",
  "Every file has your audio languages.": "Alle Dateien haben deine Audiosprachen.",
- "Files without your audio languages": "Dateien ohne deine Audiosprachen",
  "Languages reads each file's tracks from Sonarr 5; this Sonarr is version {0}": "Languages liest die Spuren jeder Datei aus Sonarr 5; dieses Sonarr ist Version {0}",
  "None of the series' accepted audio languages: download the episode again from its service.": "Keine der akzeptierten Audiosprachen der Serie: lade die Folge erneut von ihrem Dienst.",
  "Nothing found yet.": "Noch nichts gefunden.",
@@ -2465,5 +2460,6 @@
  "A download is running: check again when it ends": "Ein Download läuft: Prüfen Sie erneut, wenn er endet",
  "Unexpected {0} in the reply": "Unerwartete {0} in der Antwort",
  "search results": "Suchergebnisse",
- "Clear {0} cache? It signs out": "Cache von {0} leeren? Meldet ab"
+ "Clear {0} cache? It signs out": "Cache von {0} leeren? Meldet ab",
+ "Loading…": "Wird geladen…"
 }
