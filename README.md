@@ -431,8 +431,8 @@ These are off until you turn them on:
 - **Download window** (Settings › Automation). Automatic downloads only run between two times, which can span
   midnight. Release-time downloads can follow it too. Episodes you start by hand are not affected.
 
-After an update, the **What's new** button in the header lists the new options, and each one shows a "New" badge
-until you have seen it.
+After an update, the version button at the bottom of the Settings list opens **What's new**.
+It lists the new options, and each one shows a "New" badge until you have seen it.
 
 ## 💾 Backups
 
