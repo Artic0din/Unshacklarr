@@ -1941,37 +1941,35 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 @media (max-width: 700px) { .ck-fields textarea, #d-progmap { font-size: 16px; } }
 
 /* Settings, Services: a row a service; at phone width each row stacks, its cells named by their own labels */
-.sv-card { padding-inline: 12px; min-width: 0; } #sv-list { overflow-x: auto; }  /* on a narrow window the table scrolls inside its card, never the page */
-.sv-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sub); }
-.sv-table th, .sv-table td { text-align: left; vertical-align: middle; padding: 12px 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.sv-card { padding-inline: 12px; min-width: 0; } #sv-list { container-type: inline-size; }
+.sv-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--fs-sub); }
+.sv-table th, .sv-table td { text-align: start; vertical-align: top; padding: 12px 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .sv-table thead th { border-top: 0; padding-top: 4px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; }
-.sv-table tbody th { font-weight: 600; font-size: var(--fs-callout); overflow-wrap: normal; }  /* a name breaks between words only */
-/* a row needing attention: framed in red all round, its cells drawing the frame (a row takes no border of its own) */
-.sv-row[data-attention] > * { box-shadow: inset 0 1px var(--err), inset 0 -1px var(--err); }
-.sv-row[data-attention] > :first-child { box-shadow: inset 1px 0 var(--err), inset 0 1px var(--err), inset 0 -1px var(--err); }
-.sv-row[data-attention] > :last-child { box-shadow: inset -1px 0 var(--err), inset 0 1px var(--err), inset 0 -1px var(--err); }
+.sv-table thead th:first-child { width: 25%; }
+.sv-table thead th:last-child { width: 15%; }
+.sv-table tbody th { font-size: var(--fs-callout); border-inline-start: 1px solid var(--sv-edge, transparent); }
+.sv-name { overflow-wrap: normal; }
+.sv-backend { display: block; color: var(--muted); font-size: var(--fs-sub); font-weight: 400; }
+.sv-row[data-attention] { --sv-edge: var(--err); }
 .sv-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sv-k { display: none; }
 .sv-table td small { display: block; color: var(--muted); font-size: var(--fs-sub); }
-/* the sign-in state as a pill, its button at the end of the line, as a cookie file's */
-.sv-table .sv-label { justify-self: start; padding: 2px 9px; border-radius: 10px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.sv-table .sv-label { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
 .sv-label[data-tone="ok"] { color: var(--ok); background: var(--ok-tint); }
 .sv-label[data-tone="bad"] { color: var(--err); background: var(--err-tint); }
 .sv-check[data-tone="bad"] { color: var(--err); }
-.sv-signin { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; align-items: center; column-gap: 12px; }
+.sv-signin { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .sv-signin > .sv-ctl { margin-top: 0; }
-.sv-signin > .sv-ctl:has(input) { grid-column: 1 / -1; margin-top: 6px; }  /* a code to type: its own line */
+.sv-signin + .sv-check { margin-top: 6px; }
 .sv-ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.sv-ctl .btn { text-align: center; }
 .sv-ctl input { min-width: 0; width: 100%; max-width: 16rem; }
-/* a cookie file on one line: its name, state and age, its buttons at the end */
-.sv-file { display: grid; grid-template-columns: minmax(9.5rem, 1fr) auto; align-items: center; column-gap: 12px; }
-.sv-file > .sv-ctl { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; }
-.sv-file > .sv-confirm { grid-column: 1 / -1; margin-top: 6px; }
+.sv-file > .sv-confirm { margin-top: 6px; }
 .sv-file + .sv-file { margin-top: 12px; }
 .sv-file-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .sv-file-top b { font: 600 var(--fs-sub) ui-monospace, SFMono-Regular, Menlo, monospace; }
-.sv-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.sv-chip { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: var(--fs-footnote); }
+.sv-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.sv-chip { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: var(--fs-footnote); font-weight: 400; color: var(--muted); }
 .sv-confirm, .st-confirm { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--err) 45%, transparent); border-radius: var(--r-md); font-size: var(--fs-sub); }
 .sv-confirm .sv-ctl { margin-top: 0; }
 #sv-note:not(:empty) { margin: 12px 10px 0; }
@@ -1982,26 +1980,16 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .wz-signin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; color: var(--muted); font-size: var(--fs-callout); }
 .wz-signin p { margin: 0; }
 @media (max-width: 700px) { .sv-card { padding-inline: 16px; } }
-/* the table needs about 825px beside the sidebar; narrower, each row stacks (no column hides past an edge) */
-@media (max-width: 1180px) {
-  .sv-table, .sv-table tbody, .sv-table tr, .sv-table th, .sv-table td { display: block; }
+/* Stack against the card's width, including when the Settings sidebar takes part of the viewport. */
+@container (max-width: 36rem) {
+  .sv-table, .sv-table tbody, .sv-table th, .sv-table td { display: block; }
   .sv-table thead { display: none; }
-  .sv-table tr { padding: 10px 0; border-top: 1px solid var(--line); }
-  .sv-table tr:first-child { border-top: 0; }
-  .sv-table th, .sv-table td { border: 0; padding: 6px 0; }
+  .sv-table tbody tr { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: 10px 16px; padding: 12px 8px; border-block-start: 1px solid var(--line); border-inline-start: 1px solid var(--sv-edge, transparent); }
+  .sv-table tbody tr:first-child { border-block-start: 0; }
+  .sv-table tbody th, .sv-table tbody td { border: 0; padding: 0; }
   .sv-k { display: block; margin-bottom: 2px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; }
-  .sv-row[data-attention] > * { box-shadow: none !important; }
-  .sv-file { grid-template-columns: minmax(0, 1fr); } .sv-file > .sv-ctl { grid-column: 1; grid-row: auto; margin-top: 6px; }  /* its buttons under it */
-  .sv-signin { grid-template-columns: minmax(0, 1fr); } .sv-signin > .sv-ctl { margin-top: 6px; }
-  .sv-row[data-attention] { box-shadow: inset 0 0 0 1px var(--err); border-radius: var(--r-md); padding-inline: 10px; }
 }
-.sv-table td .btn, .sv-table td:nth-child(5) { white-space: nowrap; }
-.sv-table td .btn { min-width: 7.125rem; text-align: center; }  /* one width for every button in the table: Reauthenticate's */
-/* where the table has the room for it: a cell's buttons side by side, a cookie file's details never squeezed; narrower, they wrap */
-@media (min-width: 1440px) { .sv-table td .sv-ctl:not(:has(input)) { flex-wrap: nowrap; } }
-/* three buttons on a cookie file (Check, Replace, Delete) fit on one line from 1600px; narrower, they wrap */
-@media (min-width: 1440px) and (max-width: 1599px) { .sv-table td .sv-file > .sv-ctl:has(> :nth-child(3)) { flex-wrap: wrap; } }
-@media (min-width: 1181px) { .sv-table td .sv-signin > .sv-ctl:not(:has(input)) { flex-wrap: wrap; justify-content: flex-end; } }  /* Retry and Cancel stack: the table keeps its width */
 
 /* A ladder picker: Edit ladders after its chips; the options it takes over, and the video it picks under a command */
 .ladder-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: var(--gap-field); }
@@ -2081,6 +2069,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .ep-sel button { min-width: 44px; min-height: 44px; }  /* its frame clips: no room for a slop */
   .set-nav button.set-version { min-height: 44px; }
 }
+@media (pointer: coarse) { .cdm-opt { min-height: 44px; align-content: center; } }
 @media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }  /* its icon-only size up to 1240px is 40px */
 /* Dropdowns drawn as fields, in every browser: Safari otherwise sizes its native ones on its own, ignoring the heights above.
    The arrow is two gradients in the look's muted colour, so it follows light and dark. */

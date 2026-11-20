@@ -126,7 +126,7 @@ if (scenario === "cdm") {  // a device's test result reorders the list: the focu
     hideTip() {}, onTop() {}, COUNT: new Proxy({}, { get: () => (n) => `${n}` }), api: async () => ({}), toast() {}, confirmClick: () => true,
     $: (sel) => sel === "#cdm-state" ? state : sel === "#cdm-devices" ? null : at(sel) });
   run([/^let cdmData = .*$/m, /^const cdmOpen = .*$/m, /^const cdmRunning = .*$/m, /^let cdmPop = .*$/m, /^const closeCdmPop = .*$/m].map((re) => cdm.match(re)[0]).join("\n") + "\n" + cdm.match(/^const cdmCard = [\s\S]*?\.\.\.body\);$/m)[0] + "\n"
-    + ["cdmTitle", "cdmStatus", "cdmShort", "renderCdm"].map((n) => fn(cdm, n)).join("\n"));
+    + cdm.match(/^const cdmUsageName = .*$/m)[0] + "\n" + ["cdmTitle", "cdmStatus", "cdmShort", "renderCdm"].map((n) => fn(cdm, n)).join("\n"));
   const device = (name) => ({ name, kind: "Widevine", folder: false, used_by: ["Netflix"], info: null, test: null, level: "L3" });
   run("cdmData = " + JSON.stringify({ folder: "/cdm", map: {}, services: [], remote: [], devices: [device("alpha"), device("bravo")] }));
   ctx.renderCdm();
