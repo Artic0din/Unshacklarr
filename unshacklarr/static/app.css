@@ -1204,7 +1204,7 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
 .board .sc-open { max-width: 100%; font-size: var(--fs-callout); line-height: 1.25; }
 @media (hover: hover) { .sc-open:hover { text-decoration: underline; } }
 .sc-open[aria-expanded="true"] { background: var(--select); color: var(--text); }
-.sc-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px; }
+.sc-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }  /* a 44px Hide on touch: the badges centred on it, no gap above them */
 .sc-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; min-width: 0; }
 .sc-foot .icon-hide { width: 28px; height: 28px; }
 .board .sc-foot :is(.sched-st, .svc) { padding-inline: 5px; }
@@ -1937,7 +1937,6 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 @media (prefers-contrast: more) {
   :root { --muted: #d5d8cd; --line: #626757; --line-strong: #858b7b; --field-line: #a4a999; --field-line-hover: #c2c7b7; }
 }
-#next-sync b { font-variant-numeric: tabular-nums; }
 /* iOS zooms the page on focus of a field under 16px: these monospace boxes set their own size above */
 @media (max-width: 700px) { .ck-fields textarea, #d-progmap { font-size: 16px; } }
 

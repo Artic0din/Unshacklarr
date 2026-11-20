@@ -51,6 +51,9 @@ async function hideSeries(d, hidden, quiet = false) {
   renderHideToggle();
   renderWall();  // its Hidden filter and badges
   if (!$("#tab-schedule").hidden) rerenderSchedule(); else renderHiddenButton();
+  // its cards are gone with the button that was pressed: the keyboard goes on to the first episode left, not to the body
+  if (hidden && document.activeElement === document.body && !$("#tab-schedule").hidden)
+    ($("#tab-schedule .sc-open:not([hidden])") || $("#cal-today")).focus({ preventScroll: true });
 }
 /* The series page's own switch, saved at once like the Schedule's. */
 const EYE_OPEN = '<path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z"/><circle cx="12" cy="12" r="3"/>', EYE_SHUT = '<path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a17.6 17.6 0 0 1-2.2 3.3M6.6 6.6C3.6 8.6 2 12 2 12s3 8 10 8a10 10 0 0 0 5.4-1.6M14.1 14.1a3 3 0 0 1-4.2-4.2M2 2l20 20"/>';
@@ -98,7 +101,7 @@ function renderCalendar() {
   if (cal.fetched.has(`${isoDay(start)}+${month ? 42 : 7}`)) month ? renderMonth() : renderWeek();
 }
 function hideButton(d) {  // hidden series are not listed here: Series, Hidden brings them back
-  const b = el("button", { className: "icon-hide", title: "Hide this series from the schedule (Series, Hidden brings it back)", ariaLabel: `Hide ${d.series} from the schedule`,
+  const b = el("button", { className: "icon-hide", dataset: { fk: `hide|${d.tvdbId}|${d.sxxeyy}` }, title: "Hide this series from the schedule (Series, Hidden brings it back)", ariaLabel: `Hide ${d.series} from the schedule`,
     onclick: (e) => { e.preventDefault(); e.stopPropagation(); hideSeries(d, true); } });
   b.innerHTML = `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${EYE_SHUT}</svg>`;
   return b;
@@ -316,7 +319,7 @@ function schedCard(d, when) {
   const series = S.series.find((x) => x.tvdbId === d.tvdbId), name = series?.title || d.series;
   const thumb = el("img", { className: "thumb", alt: "", loading: "lazy", src: posterSrc(series?.poster, name), onerror: posterFail(name) });
   const key = `${Boolean(d.fromLate)}|${d.tvdbId}|${d.sxxeyy}`;  // the same episode can be in the late list and on the board
-  const open = el("button", { type: "button", className: "sc-open", ariaExpanded: "false", ariaHasPopup: "dialog",
+  const open = el("button", { type: "button", className: "sc-open", dataset: { fk: `open|${key}` }, ariaExpanded: "false", ariaHasPopup: "dialog",
     textContent: `${d.series} ${d.sxxeyy}`, onclick: () => open.getAttribute("aria-expanded") === "true" ? closeDetails() : openDetails(open, d, key) });
   const title = d.title && d.title !== "TBA" ? d.title : "";
   return el("article", { className: `sched-card ${d.managed ? "mine" : "other"}`, dataset: { key } },
@@ -346,6 +349,7 @@ function detailsNode(d) {
     ...(d.waitingImport ? [el("span", { textContent: "Already downloaded: waiting for Sonarr's import" })] : [])];
   const command = plan.command ? el("details", { className: "cmd" },
     el("summary", { textContent: "Show command" }), el("code", { textContent: plan.command })) : null;
+  command?.addEventListener("toggle", placeDetails);  // open, it is taller: kept inside the window
   const copy = el("button", { type: "button", className: "btn small", textContent: "Copy command", onclick: async () => {
     try { await navigator.clipboard.writeText(plan.command); toast("Command copied"); }
     catch { command.open = true; toast("Could not copy: select the command instead", true); }
