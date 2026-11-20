@@ -894,7 +894,7 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 }
 @media (max-width: 700px) {
   .con-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .con-toolbar:has(#con-downloads[aria-pressed="true"]) { grid-template-rows: auto var(--chip-slot); }
+  .con-toolbar:has(#con-downloads[aria-pressed="true"]):has(.con-running:not([hidden])) { grid-template-rows: auto var(--chip-slot); }  /* the chips' row only while something runs: no empty band */
 }
 @media (max-width: 520px) {
   #tab-log .con-views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -133,7 +133,8 @@ def test_activity_keeps_a_single_line_for_running_chips_without_moving_the_panes
     assert 'class="con-toolbar"' in page
     toolbar = page[page.index('class="con-toolbar"'):page.index('id="con"')]
     assert toolbar.index('class="seg con-views"') < toolbar.index('id="con-running"')
-    has(media("max-width: 700px"), '.con-toolbar:has(#con-downloads[aria-pressed="true"]) { grid-template-rows: auto var(--chip-slot); }')
+    # the phone reserves the chips' row only while something runs: idle, there is no empty band under the switcher
+    has(media("max-width: 700px"), '.con-toolbar:has(#con-downloads[aria-pressed="true"]):has(.con-running:not([hidden])) { grid-template-rows: auto var(--chip-slot); }')
     has(CSS, "padding-block: var(--sp-1) 0; overflow-x: auto; overflow-y: hidden;")
 
 
