@@ -18,7 +18,7 @@ function showSettingsSec(name, fromRoute = false) {
   showSettingsList(false);
   settingsSec = name;
   document.querySelectorAll(".set-sec").forEach((x) => x.hidden = x.dataset.sec !== name);
-  document.querySelectorAll(".set-nav button").forEach((x) => x.setAttribute("aria-current", x.dataset.sec === name));
+  document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.setAttribute("aria-current", x.dataset.sec === name));
   document.querySelector(`.set-nav [data-sec="${name}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   if (name === "unshackle" && S.dlOptions.length && currentTab === "settings") loadUnshackleStatus();
   if (name === "services" && S.dlOptions.length) loadServices();
@@ -33,7 +33,7 @@ function showSettingsSec(name, fromRoute = false) {
   if (!fromRoute && currentTab === "settings") { navigate(fromList); updateTitle(); }  // from the list: back returns to it
   if (fromList) { scrollTo({ top: 0 }); focusHeading(document.querySelector(`.set-sec[data-sec="${name}"]`).querySelector("h2, h3")); }
 }
-document.querySelectorAll(".set-nav button").forEach((x) => x.onclick = () => showSettingsSec(x.dataset.sec));
+document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.onclick = () => showSettingsSec(x.dataset.sec));
 $("#set-back").onclick = () => {
   if (secFromList) return history.back();  // the list is the page before: the phone's back does the same
   showSettingsList(true);

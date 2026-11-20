@@ -513,11 +513,80 @@ console.log(JSON.stringify([ctx.BACK_NAME.schedule, ctx.BACK_NAME.log, ctx.BACK_
 
 
 def test_the_page_draws_no_emoji():
+    from html import unescape
     import re
-    emoji = re.compile("[\U0001F000-\U0001FFFF⏩-⏿]")  # flags are regional-indicator pairs: both in this range
-    found = [f"{path.name}:{n}" for path in JS.glob("*.js")
-             for n, line in enumerate(path.read_text().splitlines(), 1) if emoji.search(line)]
+
+    emoji = re.compile(r"[\U0001F000-\U0001FFFF\u23e9-\u23ff\u26a0\u2700-\u27bf]")
+    status_marks = str.maketrans("", "", "\u2713\u2717")
+    found = [f"{path.name}:{n}" for path in [STATIC / "index.html", *JS.glob("*.js")]
+             for n, line in enumerate(path.read_text().splitlines(), 1) if emoji.search(unescape(line).translate(status_marks))]
     assert not found
+
+
+def test_an_inbox_job_shows_six_episode_chips_and_counts_the_rest():
+    short, long = node(r"""
+const ctx = sandbox({ LOCALE: "en", ago: () => "Now" });
+vm.runInContext(read(process.argv[1]).split("const clearable")[0], ctx);
+const at = new Date().toISOString();
+const chips = (count) => {
+  const eps = Array.from({ length: count }, (_, i) => `S01E${String(count - i).padStart(2, "0")}`);
+  const row = ctx.inboxRow({ name: "Show", level: "error", eps, items: [{ at }] }, 0);
+  return row.kids[1].kids[0].kids[1].kids.map((chip) => chip.textContent);
+};
+console.log(JSON.stringify([chips(6), chips(12)]));
+""", str(JS / "inbox.js"))
+    first_six = [f"S01E0{i}" for i in range(1, 7)]
+    assert short == first_six
+    assert long == [*first_six, "+6"]
+
+
+def test_options_sharing_a_title_have_one_badge_and_keep_each_unread_id():
+    states = node(r"""
+const badges = [], classes = new Set(), posts = [];
+const title = {
+  append(badge) {
+    badge.parentElement = this;
+    badge.remove = () => badges.splice(badges.indexOf(badge), 1);
+    badges.push(badge);
+  },
+  querySelector: (selector) => badges.find((b) => selector === ".new-badge" || selector.includes(`"${b.dataset.news}"`)),
+};
+const box = {
+  dataset: {},
+  classList: { add: (name) => classes.add(name), remove: (...names) => names.forEach((name) => classes.delete(name)) },
+  matches: () => false, querySelector: () => title,
+  addEventListener: (_, fn) => { box.click = () => fn({ currentTarget: box }); },
+  removeEventListener() {},
+};
+let intersect, finish;
+const S = { news: { installed: "1.5.0", seen: [] } };
+const ctx = sandbox({
+  S, innerHeight: 800,
+  document: {
+    querySelector: (selector) => selector === "#svc-defaults" ? box : null,
+    querySelectorAll: (selector) => selector === ".new-badge" ? [...badges] : classes.has("is-new") ? [box] : [],
+  },
+  IntersectionObserver: class { constructor(fn) { intersect = fn; } observe() {} unobserve() {} },
+  setTimeout: (fn) => { finish = fn; return 1; }, clearTimeout() {},
+  api: (_, { body }) => posts.push(JSON.parse(body).ids),
+});
+vm.runInContext(read(process.argv[1]).split("/* The What's new window")[0], ctx);
+ctx.renderNews();
+const initial = badges.map((b) => b.textContent);
+ctx.markNews(["service-cache"]);
+const stillUnread = badges.map((b) => b.textContent);
+intersect([{ target: box, isIntersecting: true, intersectionRatio: 1 }]);
+finish();
+const cleared = badges.length;
+S.news.seen = ["service-cache", "any-service-option"];
+ctx.renderNews();
+box.click();
+console.log(JSON.stringify([initial, stillUnread, cleared, badges.length, posts]));
+""", str(JS / "news.js"))
+    assert states == [
+        ["New"], ["New"], 0, 0,
+        [["service-cache"], ["any-service-option", "ladder-chips"], ["ladder-chips"]],
+    ]
 
 # A tiny stand-in for the DOM a pop-up touches: nodes that keep what is set on them and a shared "focused" node.
 POP_DOM = r"""

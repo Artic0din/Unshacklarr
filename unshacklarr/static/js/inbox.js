@@ -19,6 +19,7 @@ function linkified(text) {
 const copyCode = async (code) => { try { await navigator.clipboard.writeText(code); toast("Code copied"); } catch { /* on screen anyway */ } };
 /* One line per series and kind of news on a given day: "Downloaded · Faites entrer l'accusé" with its episodes. */
 const INBOX_LEVELS = { success: "Downloaded", warning: "Warnings", error: "Failed" };
+const INBOX_EP_LIMIT = 6;
 const INBOX_ICONS = {
   success: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', warning: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   error: '<path d="M7 7l10 10M17 7L7 17"/>', info: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>',
@@ -51,9 +52,13 @@ function inboxRow(g, n) {
   // two lines: the series and its episodes; then what happened, in its colour, and the message
   const kind = g.kind ? [el("span", { className: "inbox-kind", textContent: g.batch && g.items.length > 1 ? `${g.kind} · job` : g.kind })] : [];
   const message = i.message ? linkified(g.items.length > 1 ? i.message.replace(/^Aired \S+, /, "") : i.message) : [];
+  const episodes = g.eps.slice().sort();
+  const chips = episodes.slice(0, INBOX_EP_LIMIT).map((e) => el("span", { textContent: e }));
+  const extra = episodes.slice(INBOX_EP_LIMIT);
+  if (extra.length) chips.push(el("span", { textContent: `+${extra.length}`, title: extra.join(", ") }));
   const body = el("span", { className: "inbox-main" },
     el("span", { className: "inbox-l1" }, el("b", { textContent: g.name }),
-      ...(g.eps.length ? [el("span", { className: "inbox-eps" }, ...g.eps.slice().sort().map((e) => el("span", { textContent: e })))] : [])),
+      ...(chips.length ? [el("span", { className: "inbox-eps" }, ...chips)] : [])),
     ...(kind.length || message.length ? [el("p", {}, ...kind, ...(kind.length && message.length ? [" · "] : []), ...message)] : []));
   const time = el("time", { dateTime: i.at, title: when.toLocaleString(LOCALE, { dateStyle: "full", timeStyle: "short" }),
     textContent: Date.now() - when < 86400000 ? ago(i.at) : when.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) });
@@ -106,8 +111,7 @@ async function openInbox(mode = "full") {
   const dialog = $("#inbox-dialog");
   if (dialog.open && dialog.classList.contains("menu") !== (mode === "menu")) dialog.close();
   dialog.classList.toggle("menu", mode === "menu");
-  const bell = $("#bell").getBoundingClientRect();  // the menu hangs from the bell
-  dialog.style.top = mode === "menu" ? `${bell.bottom + 8}px` : "";
+  const bell = $("#bell").getBoundingClientRect();
   dialog.style.right = mode === "menu" && !phoneLayout() ? `${Math.max(8, innerWidth - bell.right)}px` : "";
   if (!dialog.open) mode === "menu" ? dialog.show() : dialog.showModal();
   if (!inboxData) { $("#inbox-list").replaceChildren(loading("Reading the notifications…")); $("#inbox-clear").hidden = true; }  // nothing to clear, or count, until it is read

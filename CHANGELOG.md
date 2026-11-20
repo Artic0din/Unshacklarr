@@ -99,6 +99,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Kept the header in view while scrolling, moved version details to Settings, and made Inbox filters and episode lists easier to read on small screens. (#351)
 - Switched to a dark theme with lime highlights and removed the light theme and Appearance setting. (#375)
 
 - Fewer things ask for attention. The Settings sections no longer carry a "New" badge, the version in the header no longer counts new options (it still opens What's new), and Activity hides a history filter with nothing under it, keeping All and the one you picked.
