@@ -1,4 +1,8 @@
 {
+ "Could not start unshackle serve with {0}: {1}": "{0}でunshackle serveを起動できませんでした: {1}",
+ "Season {0} will be downloaded from {1}. Click Save, then check again.": "シーズン{0}は{1}からダウンロードされます。「保存」をクリックしてから、もう一度確認してください。",
+ "This page is out of date. Reload it, then make your change again.": "このページは最新ではありません。再読み込みしてから、もう一度変更してください。",
+ "Unshacklarr cannot read this file: check its permissions, or replace it": "Unshacklarrがこのファイルを読み込めません。権限を確認するか、ファイルを置き換えてください。",
  "Unshackle rejected the internal API key. Check the server API key in Settings › Connections › Unshackle.": "Unshackleが内部APIキーを拒否しました。設定 › 接続 › UnshackleでサーバーのAPIキーを確認してください。",
  "(sign in, then Settings, API). With it, the Schedule shows each series' channel and streaming services. For a series not in English, it also finds episodes by their title: Sonarr only has English titles.": "（ログイン後、設定 › API）。これにより、スケジュールに各シリーズのチャンネルと配信サービスが表示されます。英語以外のシリーズでは、タイトルからもエピソードを探します：Sonarr には英語のタイトルしかありません。",
  "(changed)": "（変更あり）",

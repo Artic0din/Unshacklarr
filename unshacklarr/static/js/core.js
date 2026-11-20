@@ -115,8 +115,12 @@ function trTemplate(key, depth, joined) {
     if (p.joined !== joined || !key.includes(p.anchor)) continue;
     const m = p.re.exec(key);
     // a template with little text of its own ("{0} ago", "{0} of {1}") takes short fillers only, not a whole sentence
-    // ... and only numbers, or texts it has a translation for: "5 min ago", not "Set up Unshacklarr in a few steps"
-    if (m && p.weak && m.slice(1).some((x) => x.length > 24 || !(/\d/.test(x) || T[x.trim()] !== undefined || !x.trim()))) continue;
+    // Accept numbers, known labels and service names, not arbitrary phrases.
+    if (m && p.weak && m.slice(1).some((x) => {
+      const fill = x.trim();
+      return x.length > 24 || !(!fill || /\d/.test(fill) || T[fill] !== undefined
+        || S.services.includes(fill) || Object.values(S.serviceNames).includes(fill));
+    })) continue;
     if (m) return plural(p.to, +m[1]).replace(/\{(\d+)\}/g, (_, i) => tr(m[+i + 1] ?? "", depth + 1));
   }
   return undefined;
@@ -824,7 +828,7 @@ function markInvalid(input, message, on = true) {
 
 /* The series' channel may have a catch-up service here, picked and looked up on by its name. */
 function networkButton(s, tag) {
-  return el("button", { type: "button", ariaLabel: `Find it on ${svcName(tag)}`, onclick: () => {
+  return el("button", { type: "button", ariaLabel: trWith("Find it on {0}", svcName(tag)), onclick: () => {
     const sel = $("#d-service");
     if (sel.value !== tag) { sel.value = tag; sel.dispatchEvent(new Event("change")); }
     showFind(false);
@@ -935,7 +939,7 @@ function renderFind(service) {
   $("#d-find-out").replaceChildren();
   $("#d-find-count").textContent = "";
   $("#d-find-open").hidden = !service;
-  $("#d-find-open").textContent = service ? `Find it on ${svcName(service)}` : "";
+  $("#d-find-open").textContent = service ? trWith("Find it on {0}", svcName(service)) : "";
 }
 $("#d-find-open").onclick = () => {
   showFind($("#d-find").hidden);

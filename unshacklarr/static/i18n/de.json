@@ -1,4 +1,8 @@
 {
+ "Could not start unshackle serve with {0}: {1}": "unshackle serve konnte mit {0} nicht gestartet werden: {1}",
+ "Season {0} will be downloaded from {1}. Click Save, then check again.": "Staffel {0} wird von {1} heruntergeladen. Klicke auf Speichern und prüfe dann erneut.",
+ "This page is out of date. Reload it, then make your change again.": "Diese Seite ist nicht mehr aktuell. Lade sie neu und nimm die Änderung erneut vor.",
+ "Unshacklarr cannot read this file: check its permissions, or replace it": "Unshacklarr kann diese Datei nicht lesen. Prüfe ihre Berechtigungen oder ersetze sie.",
  "Unshackle rejected the internal API key. Check the server API key in Settings › Connections › Unshackle.": "Unshackle hat den internen API-Schlüssel abgelehnt. Prüfe den Server-API-Schlüssel unter Einstellungen › Verbindungen › Unshackle.",
  "(sign in, then Settings, API). With it, the Schedule shows each series' channel and streaming services. For a series not in English, it also finds episodes by their title: Sonarr only has English titles.": "(melde dich an, dann Einstellungen, API). Damit zeigt der Kalender Sender und Streamingdienste jeder Serie. Bei einer nicht englischsprachigen Serie findet er Episoden auch über ihren Titel: Sonarr hat nur englische Titel.",
  "(changed)": "(geändert)",
@@ -1360,7 +1364,7 @@
  "Download a backup": "Sicherung herunterladen",
  "Example: alt, backup": "Beispiel: alt, backup",
  "Example: fr": "Beispiel: fr",
- "Find it on {0}": "Auf {0} finden",
+ "Find it on {0}": "Bei {0} suchen",
  "Its series entry {0} is not in the format Unshacklarr writes": "Sein Serieneintrag {0} hat nicht das Format, in dem Unshacklarr schreibt",
  "Its {0} section is not in the format Unshacklarr writes": "Sein Abschnitt {0} hat nicht das Format, in dem Unshacklarr schreibt",
  "Kept without {0} audio: {1}": "Ohne {0}-Audio behalten: {1}",

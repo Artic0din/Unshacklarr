@@ -1,4 +1,8 @@
 {
+ "Could not start unshackle serve with {0}: {1}": "Не удалось запустить unshackle serve с помощью {0}: {1}",
+ "Season {0} will be downloaded from {1}. Click Save, then check again.": "Сезон {0} будет скачан с {1}. Нажмите «Сохранить», затем повторите проверку.",
+ "This page is out of date. Reload it, then make your change again.": "Эта страница устарела. Перезагрузите её и внесите изменение заново.",
+ "Unshacklarr cannot read this file: check its permissions, or replace it": "Unshacklarr не может прочитать этот файл. Проверьте права доступа или замените файл.",
  "Unshackle rejected the internal API key. Check the server API key in Settings › Connections › Unshackle.": "Unshackle отклонил внутренний API-ключ. Проверьте API-ключ сервера в разделе «Настройки › Подключения › Unshackle.",
  "(sign in, then Settings, API). With it, the Schedule shows each series' channel and streaming services. For a series not in English, it also finds episodes by their title: Sonarr only has English titles.": "(войдите, затем Settings, API). С ним «Расписание» показывает канал и стриминговые сервисы каждого сериала. Для сериала не на английском он также находит эпизоды по названию: у Sonarr названия только на английском.",
  "(changed)": "(изменено)",

@@ -1,4 +1,8 @@
 {
+ "Could not start unshackle serve with {0}: {1}": "无法使用 {0} 启动 unshackle serve：{1}",
+ "Season {0} will be downloaded from {1}. Click Save, then check again.": "第 {0} 季将从 {1} 下载。点击“保存”，然后重新检查。",
+ "This page is out of date. Reload it, then make your change again.": "此页面已过期。请重新加载页面，然后再次修改。",
+ "Unshacklarr cannot read this file: check its permissions, or replace it": "Unshacklarr 无法读取此文件。请检查文件权限，或替换该文件。",
  "Unshackle rejected the internal API key. Check the server API key in Settings › Connections › Unshackle.": "Unshackle 拒绝了内部 API 密钥。请在设置 › 连接 › Unshackle中检查服务器 API 密钥。",
  "(sign in, then Settings, API). With it, the Schedule shows each series' channel and streaming services. For a series not in English, it also finds episodes by their title: Sonarr only has English titles.": "（登录后进入 Settings › API）。有了它，日程会显示每部剧集的电视台和流媒体服务。对于非英语剧集，它还能按标题查找单集：Sonarr 只有英文标题。",
  "(changed)": "（已更改）",

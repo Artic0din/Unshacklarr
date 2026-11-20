@@ -1008,9 +1008,7 @@
  "Filters active": [],
  "Filters and actions": [],
  "Find a series": [],
- "Find it on {0}": [
-  "svcName(service)"
- ],
+ "Find it on {0}": [],
  "Find {0} on {1}": [
   "s.title",
   "svcName(tag)"

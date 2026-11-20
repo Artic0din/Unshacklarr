@@ -26,6 +26,7 @@ const ctx = {
   failed: (t) => ({ failed: t }),
   ago: () => "now",
   svcName: (t) => t,
+  trWith: (template, name) => template.replace("{0}", name),
   S: { networkServices: scenario.networkServices, services: scenario.services, config: { tmdb_countries: ["AU"] } },
   api: async () => ({ links: scenario.links, brands: scenario.brands, checked: "x" }),
   current: series,
