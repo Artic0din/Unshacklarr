@@ -7,7 +7,7 @@ function authenticationLabel(observation) {
   const method = AUTH_METHOD_LABELS[observation.method] || "sign-in";
   const next = AUTH_METHOD_LABELS[observation.next_method] || "sign-in";
   const named = method[0].toUpperCase() + method.slice(1);
-  if (observation.state === "ready") return "Not signed in";  // no session now (not "yet": it may have been before); the ways in have their own column
+  if (observation.state === "ready") return "Not signed in";  // no session now (not "yet": it may have been before)
   if (observation.state === "session_present") return `${named} session available`;
   if (observation.state === "session_expired") return `${named} session expired`;
   if (observation.state === "session_rejected") return `${named} session rejected`;
@@ -85,7 +85,7 @@ function signInCheck() {
 }
 
 const CHECK_STAGES = { search: "Search", list: "Listing", tracks: "Tracks" };
-const SERVICE_COLUMNS = ["Service", "Signs in with", "Sign-in status", "Cookies", "Used by"];
+const SERVICE_COLUMNS = ["Service", "Sign-in status", "Cookies", "Used by"];
 let servicesCookies = null;  // /api/cookies: the files of Unshackle's own cookies folder, by service
 let servicesDrawn = "";      // what the table was drawn from: a refresh that changes nothing leaves it (and the focus) alone
 let servicesAsked = "";      // the cookie file whose deletion is being confirmed: "SERVICE/profile"
@@ -143,7 +143,7 @@ function serviceModels() {
     const attention = status.state === "needs_user_action" || SIGN_IN_FAILED.includes(observation?.state)
       || Boolean(used && (missing || cookieFiles?.some((f) => f.st[0] === "bad")));
     return { key, service, backend, name: svcName(service) + (backend ? ` · ${backend}` : ""), label, tone, state: status.state, signedIn, cookiesOnly, setup, listed,
-      methods: listed ? methods : null, anonymous: status.state === "anonymous", cookieFiles, cookieless, missing, used, attention, check };
+      methods: listed ? methods : null, cookieFiles, cookieless, missing, used, attention, check };
   }).sort((a, b) => b.attention - a.attention || (b.used || 0) - (a.used || 0) || a.name.localeCompare(b.name));
 }
 
@@ -157,25 +157,27 @@ function renderServices() {
   const activePrompt = document.activeElement?.dataset?.authenticationService ? document.activeElement : null;
   let activePromptReused = false;
 
-  const signInCell = (m) => {
+  // Leave maintenance actions secondary if there is a more direct way to sign in.
+  const priority = { signIn: 0, repair: 1, renew: 2, check: 3, maintenance: 4 };
+  const signInCell = (m, prefer) => {
     const controls = [];
     if (m.setup) {
       if (["timed_out", "cancelled", "error"].includes(m.setup.state)) {
-        if (m.listed && !m.cookiesOnly) controls.push(el("button", { className: `btn small${m.tone === "bad" ? " primary" : ""}`, textContent: "Retry", onclick: () => startServiceAuthentication(m.service, m.backend) }));
+        if (m.listed && !m.cookiesOnly) controls.push(prefer(priority.signIn, el("button", { className: "btn small", textContent: "Retry", onclick: () => startServiceAuthentication(m.service, m.backend) })));
       } else if (m.setup.prompt) {
         const reusePrompt = activePrompt?.dataset.authenticationService === m.service
           && activePrompt.dataset.authenticationBackend === m.backend && activePrompt.placeholder === m.setup.prompt;
         const input = reusePrompt ? activePrompt : el("input", { type: "text", ariaLabel: m.setup.prompt, placeholder: m.setup.prompt,
           autocomplete: "one-time-code", dataset: { authenticationService: m.service, authenticationBackend: m.backend } });
         activePromptReused ||= reusePrompt;
-        controls.push(input, el("button", { className: "btn small", textContent: "Submit", onclick: () => answerServiceAuthentication(m.service, m.backend, input) }));
+        controls.push(input, prefer(priority.signIn, el("button", { className: "btn small", textContent: "Submit", onclick: () => answerServiceAuthentication(m.service, m.backend, input) })));
       }
       if (!["authenticated", "timed_out", "cancelled"].includes(m.setup.state)) {
         controls.push(el("button", { className: "btn small", textContent: "Cancel", onclick: () => cancelServiceAuthentication(m.service, m.backend) }));
       }
     } else if (m.listed && m.state !== "anonymous" && !m.cookiesOnly) {
-      controls.push(el("button", { className: `btn small${m.tone === "bad" ? " primary" : ""}`, textContent: m.signedIn || m.state === "needs_user_action" ? "Sign in again" : "Sign in",
-        onclick: () => startServiceAuthentication(m.service, m.backend) }));
+      controls.push(prefer(priority.signIn, el("button", { className: "btn small", textContent: m.signedIn || m.state === "needs_user_action" ? "Sign in again" : "Sign in",
+        onclick: () => startServiceAuthentication(m.service, m.backend) })));
     }
     return [el("div", { className: "sv-signin" }, el("small", { className: "sv-label", textContent: m.label, dataset: m.tone ? { tone: m.tone } : {} }),
       ...(controls.length ? [el("div", { className: "sv-ctl" }, ...controls)] : [])), ...checkLines(m)];
@@ -194,13 +196,16 @@ function renderServices() {
   };
   // a cookie-only service's sign-in check, in the Cookies column; none while a check runs
   const checking = (m) => m.setup && !["authenticated", "timed_out", "cancelled", "error"].includes(m.setup.state);
-  const checkButtons = (m) => m.cookiesOnly && m.state !== "anonymous" && !checking(m) ? [el("button", { className: "btn small", textContent: "Check",
-    ariaLabel: `Check the cookies for ${svcName(m.service)}`, onclick: () => startServiceAuthentication(m.service, m.backend) })] : [];
 
-  const cookieCell = (m) => {
-    const check = checkButtons(m), checkCtl = check.length ? [el("div", { className: "sv-ctl" }, ...check)] : [];
-    if (m.backend) return [el("span", { className: "muted", textContent: "—" }), el("small", { textContent: "Managed on that server" }), ...checkCtl];
-    if (!cookies?.folder) return [el("span", { className: "muted", textContent: "—" }), ...checkCtl];
+  const cookieCell = (m, prefer) => {
+    const checkButtons = () => m.cookiesOnly && m.state !== "anonymous" && !checking(m) ? [prefer(priority.check, el("button", { className: "btn small", textContent: "Check",
+      ariaLabel: `Check the cookies for ${svcName(m.service)}`, onclick: () => startServiceAuthentication(m.service, m.backend) }))] : [];
+    const checkCtl = () => {
+      const buttons = checkButtons();
+      return buttons.length ? [el("div", { className: "sv-ctl" }, ...buttons)] : [];
+    };
+    if (m.backend) return [el("span", { className: "muted", textContent: "—" }), el("small", { textContent: "Managed on that server" }), ...checkCtl()];
+    if (!cookies?.folder) return [el("span", { className: "muted", textContent: "—" }), ...checkCtl()];
     if (!m.cookieFiles.length) {
       if (m.cookieless) return [el("span", { className: "muted", textContent: "Not needed" })];
       const both = m.methods === null || m.methods.includes("credentials");
@@ -208,8 +213,8 @@ function renderServices() {
       return [el("div", { className: "sv-file" },
         el("div", { className: "sv-file-top" }, m.missing ? hoverTip(pill, () => [both ? "Downloads will fail unless you add a cookie file, or set its username and password in unshackle.yaml."
           : "Downloads will fail unless you add a cookie file."]) : pill),
-        el("div", { className: "sv-ctl" }, el("button", { className: `btn small${m.missing ? " primary" : ""}`, textContent: "Add", ariaLabel: `Add cookies for ${svcName(m.service)}`,
-          onclick: () => openCookieDialog(m.service, "default", true) })))];
+        el("div", { className: "sv-ctl" }, prefer(m.missing ? priority.repair : priority.maintenance, el("button", { className: "btn small", textContent: "Add", ariaLabel: `Add cookies for ${svcName(m.service)}`,
+          onclick: () => openCookieDialog(m.service, "default", true) }))))];
     }
     // the check signs in with the profile its series use, not a file picked here: beside the only file, else under them all
     const single = m.cookieFiles.length === 1, working = m.cookieFiles.some((f) => f.st[0] !== "bad");  // a broken file: Replace, not a check bound to fail
@@ -232,25 +237,35 @@ function renderServices() {
       return el("div", { className: "sv-file" },
         el("div", { className: "sv-file-top" }, el("b", { textContent: file }), hoverTip(el("span", { className: `ck-pill ${cls}`, textContent: word }), () => [why])),
         ...(f.unreadable ? [] : [el("small", { textContent: [f.count === 1 ? "1 cookie" : `${f.count} cookies`, `updated ${ago_days(f.updated)}`].join(" · ") })]),
-        ...(servicesAsked === ask ? [sure] : [el("div", { className: "sv-ctl" }, ...(i === checkOn ? check : []),
-          el("button", { className: `btn small${cls === "bad" || cls === "warn" ? " primary" : ""}`, textContent: "Replace", ariaLabel: `Replace ${file}`, onclick: () => openCookieDialog(m.service, f.profile) }), del)]));
-    }), ...(!single && working ? checkCtl : [])];
+        ...(servicesAsked === ask ? [sure] : [el("div", { className: "sv-ctl" }, ...(i === checkOn ? checkButtons() : []),
+          prefer(cls === "bad" ? priority.repair : cls === "warn" ? priority.renew : priority.maintenance,
+            el("button", { className: "btn small", textContent: "Replace", ariaLabel: `Replace ${file}`, onclick: () => openCookieDialog(m.service, f.profile) })), del)]));
+    }), ...(!single && working ? checkCtl() : [])];
   };
 
-  const methodsCell = (m) => m.methods === null ? [el("span", { className: "muted", textContent: "—" })]
-    : m.methods.length ? [el("div", { className: "sv-chips" }, ...m.methods.map((x) => el("span", { className: "sv-chip", textContent: AUTH_METHOD_NAMES[x] || x })))]
-    : m.anonymous ? [el("span", { textContent: "No sign-in required" })]
-    : [el("span", { className: "muted", textContent: "—" })];  // listed without methods (its server unreachable): not known
   // the count, and the series behind it: "Show series" sits with what it shows, not under a column of its own
   const usedCell = (m) => [el("span", { className: m.used === null ? "muted" : "", textContent: m.used === null ? "—" : m.used === 0 ? "No series" : m.used === 1 ? "1 series" : `${m.used} series` }),
     ...(m.used ? [el("div", { className: "sv-ctl" }, el("button", { className: "btn small", textContent: "Show series", onclick: () => showSeriesOf(m.service) }))] : [])];
 
-  const cells = [methodsCell, signInCell, cookieCell, usedCell];
-  const table = el("table", { className: "sv-table" },
+  const row = (m) => {
+    const actions = [];
+    const prefer = (rank, button) => { actions[rank] ||= button; return button; };
+    const cells = [signInCell(m, prefer), cookieCell(m, prefer), usedCell(m)];
+    // lime only where something is wrong (the row needs attention, or a cookie file is bad or expiring): healthy rows stay quiet
+    const first = actions.findIndex(Boolean);
+    if (first >= 0 && (m.attention || first === priority.repair || first === priority.renew)) actions[first].className += " primary";
+    return el("tr", { role: "row", className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, id: `sv-${m.key}` },
+      el("th", { role: "rowheader", scope: "row" },
+        el("b", { className: "sv-name", textContent: svcName(m.service) }),
+        ...(m.backend ? [el("small", { className: "sv-backend", textContent: m.backend })] : []),
+        ...(m.methods?.length ? [el("div", { className: "sv-chips", role: "group", ariaLabel: "Signs in with" },
+          ...m.methods.map((x) => el("span", { className: "sv-chip", textContent: AUTH_METHOD_NAMES[x] || x })))] : [])),
+      ...cells.map((children, i) => el("td", { role: "cell" }, el("span", { className: "sv-k", textContent: SERVICE_COLUMNS[i + 1] }), ...children)));
+  };
+  // Keep the table semantics when narrow layouts change the cells' display.
+  const table = el("table", { role: "table", className: "sv-table" },
     el("thead", {}, el("tr", {}, ...SERVICE_COLUMNS.map((name) => el("th", { scope: "col", textContent: name })))),
-    el("tbody", {}, ...models.map((m) => el("tr", { className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, id: `sv-${m.service}${m.backend ? `@${m.backend}` : ""}` },
-      el("th", { scope: "row" }, el("span", { className: "sv-k", textContent: SERVICE_COLUMNS[0] }), el("b", { className: "sv-name", textContent: m.name })),
-      ...cells.map((build, i) => el("td", {}, el("span", { className: "sv-k", textContent: SERVICE_COLUMNS[i + 1] }), ...build(m)))))));
+    el("tbody", { role: "rowgroup" }, ...models.map(row)));
   // Files Unshackle can't write (owned by root after a docker exec): a service then fails on a cache or token it can't save
   const locked = cookies?.unwritable?.length ? [el("div", { className: "sv-locked" },
     el("p", { className: "status-err", textContent: "Unshackle can't write these files. Give them back to the container's user, for example with chown." }),
