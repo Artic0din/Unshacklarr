@@ -146,6 +146,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Kept selected library names and sort labels from getting cut off in the Series filters.
 - Kept Sort with the Series filters when a longer label needed more room.
 - **The background glow no longer repeats in bands down a short page, such as a list that is still loading.**
 - **The unshackle serve log now shows after viewing a download, and empty Activity no longer shows the old download's bar.** (#365)

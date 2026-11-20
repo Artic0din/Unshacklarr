@@ -189,8 +189,9 @@ label.check { display: inline-flex; gap: 8px; align-items: center; cursor: point
 .toolbar .seg button[aria-pressed="true"] { text-decoration: underline; text-underline-offset: .24em; }
 .toolbar .seg button span { display: inline; margin: 0; white-space: nowrap; }
 .toolbar input[type=search] { flex: 1 1 0; min-inline-size: 5rem; }
-#series-filters { display: flex; gap: var(--sp-2); max-inline-size: 100%; }
-#series-filters select { field-sizing: content; width: auto; min-inline-size: 0; }
+#series-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); max-inline-size: 100%; overflow-x: auto; }
+#series-filters select { field-sizing: content; width: auto; min-inline-size: max-content; }
+#series-filters select:focus { outline-offset: -2px; }  /* keep the ring inside the scroller */
 .toolbar :is(.pill, .btn.small) { padding-inline: var(--sp-2); }
 #series-options { display: contents; }
 #series-options-toggle { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); padding-inline: var(--sp-2); }
