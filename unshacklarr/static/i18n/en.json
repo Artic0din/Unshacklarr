@@ -80,6 +80,7 @@
  ],
  "1 episode queued": [],
  "1 episode: {0}": [],
+ "1 episode: {0} ({1})": [],
  "1 episode queued, replacing its file": [],
  "1 hour": [],
  "1 key": [],
@@ -1272,6 +1273,7 @@
  "Library": [],
  "Library folder, as Sonarr sees it": [],
  "Library folder, as Unshacklarr sees it": [],
+ "License server": [],
  "License each track with both Widevine and PlayReady. Needs a CDM for each DRM system.": [],
  "Line {0}, column {1}{2}": [
   "line.number",
@@ -1307,6 +1309,7 @@
  "Maker and model": [],
  "Managed on that server": [],
  "Managed where Unshackle runs": [],
+ "Manifest": [],
  "ManualImport": [],
  "Matrix": [],
  "Max workers/threads to download with per-track. Default depends on the downloader.": [],
@@ -3745,6 +3748,7 @@
   "n"
  ],
  "{0} episodes: {1}": [],
+ "{0} episodes: {1} ({2})": [],
  "{0} episodes": [
   "eps.length"
  ],

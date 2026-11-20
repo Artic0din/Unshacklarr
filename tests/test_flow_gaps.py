@@ -65,8 +65,9 @@ def test_a_phone_keeps_finished_job_actions_that_are_not_in_the_dock():
     assert re.search(rf"\.con-detail\.docked-acts \.cd-foot \.btn:not\({footer_actions}\)\s*\{{\s*display:\s*none", CSS)
 
 
-def test_output_disclosure_uses_neutral_tokens_when_sign_in_is_present():
-    rule = re.search(r'\.con-detail:has\(\.cd-foot \[data-fk="sign-in"\]\) \.dock \.d-open\s*\{([^}]+)\}', CSS)
+def test_mobile_output_disclosure_is_neutral_when_sign_in_or_primary_retry_is_present():
+    actions = r'\[data-fk="sign-in"\], \[data-fk="retry"\]\.primary'
+    rule = re.search(rf'\.con-detail:has\(\.cd-foot :is\({actions}\)\) \.dock \.d-open\s*\{{([^}}]+)\}}', CSS)
     assert rule
     assert "background: var(--field-bg)" in rule[1]
     assert "color: var(--text)" in rule[1]
