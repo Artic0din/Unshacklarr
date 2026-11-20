@@ -424,7 +424,7 @@ body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 96px; }
 .status-warn { color: var(--warn); font-size: var(--fs-sub); margin: 0 0 8px; }
 /* The series' settings shortcuts: a bar of its own, the card in view lit */
 .ds-nav { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-  margin: 0 0 4px; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--panel);
+  margin: 0 0 4px; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-lg); --scroll-cover: var(--panel); background-color: var(--panel);
   box-shadow: var(--sh-sm); }
 .ds-nav::-webkit-scrollbar { display: none; }
 .ds-nav a { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: var(--fs-callout); font-weight: 600; padding: 8px 14px;

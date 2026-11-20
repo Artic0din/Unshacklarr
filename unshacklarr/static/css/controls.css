@@ -318,7 +318,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
   #bell, .inbox-x { width: 44px; height: 44px; }
   .seg { overflow: visible; }  /* it wraps here, never scrolls: the slop reaches past its frame */
   .con-filters { row-gap: 8px; }  /* a wrapped row's slop would cover the row above */
-  #d-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(44px - 1lh) .3em; }  /* wrapped, its links 44 px apart */
+  #d-meta a { display: inline-flex; align-items: center; min-height: 44px; }
   .seg button { min-height: 44px; }  /* wrapped rows touch: no room for a slop (Week and Month, one row, keep theirs) */
   .health { gap: 0; } .health button { min-width: 44px; min-height: 44px; padding: 0 8px; justify-content: center; }
   .ds .sx-grid :is(select, input[type=time], input[type=date]) { min-height: 44px; }
