@@ -95,7 +95,7 @@
 .weeks .stack { display: flex; flex-direction: column-reverse; align-self: end; width: min(44px, 100%); border-radius: var(--r-sm); overflow: hidden; min-height: 2px; background: var(--well); }
 .weeks .stack i { display: block; } .weeks .ok { background: var(--ok); } .weeks .kp { background: var(--warn); } .weeks .ko { background: var(--err); }
 .weeks small { color: var(--muted); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; } .weeks b { font-size: var(--fs-footnote); }
-.legend { display: flex; gap: 16px; font-size: var(--fs-footnote); color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) 16px; font-size: var(--fs-footnote); color: var(--muted); }
 .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
 .svc-scroll { overflow-x: auto; --cover: var(--panel);  /* shadows at the edges that still hide columns: the surface under the table covers each once that edge is reached */
   background: linear-gradient(to right, var(--cover) 30%, transparent) left / 28px 100% no-repeat local,
@@ -107,6 +107,10 @@
 .svc-table td { padding: 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .svc-table tbody th { color: var(--text); font-size: var(--fs-sub); font-weight: 400; }
 .svc-table .bad { color: var(--err); font-weight: 600; } .svc-table .fine { color: var(--ok); }
+@media (max-width: 400px) {
+  .svc-table :is(th, td) { padding-inline: var(--sp-1); overflow-wrap: anywhere; hyphens: auto; }
+  .svc-scroll td:nth-child(5) { white-space: nowrap; }
+}
 .con-empty { padding: 8px; font-size: var(--fs-sub); color: var(--muted); }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); animation: pulse 1.6s infinite; }
 @keyframes pulse { 70% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent); } 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } }

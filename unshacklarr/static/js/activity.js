@@ -924,7 +924,7 @@ async function showStats() {
       el("td", { className: v.failed ? "bad" : "", textContent: v.failed }), el("td", { textContent: v.kept }),
       el("td", { className: v.success === null ? "" : v.success < 70 ? "bad" : "fine", textContent: fmt(v.success, "%") }),
       el("td", { textContent: v.last_success ? ago(v.last_success) : "never" }), el("td", { textContent: v.average ? duration(v.average * 1000) : "–" })))));
-  $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:22px" },
+  $("#cd-main").replaceChildren(el("div", { style: "display:grid;grid-template-columns:minmax(0,1fr);gap:22px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Stats" }),
       el("small", { className: "line1", textContent: st.since ? `From the history kept since ${day(new Date(st.since))}` : "Nothing in the history yet" }))),
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
