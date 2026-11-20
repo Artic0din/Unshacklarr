@@ -328,8 +328,9 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .ep-subs-chip, .ep-check, .ep-view .pill, .ep-view .cols-btn { min-width: 44px; min-height: 44px; }
   .set-nav button.set-version { min-height: 44px; }
 }
-@media (pointer: coarse) { .cdm-opt { min-height: 44px; align-content: center; } }
 @media (pointer: coarse) {
+  .cdm-opt, button.cdm-chip, .job-counts button { min-height: 44px; align-content: center; }
+  button.cdm-chip, .job-counts button { min-width: 44px; box-sizing: border-box; }
   #tab-settings :is(.set-nav button, .set-jumps a, .sx-actions .btn, .sx-grid input:not(.switch), .sx-grid select,
     .sx-switch-target, .ax-bursts, .rt-custom, .ql-icon, .nt-quiet-row > label) { min-height: 44px; min-width: 44px; }
 }
