@@ -2224,7 +2224,7 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), options = js("settings-options.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const NUMBERED = .*$/m), pick(core, /^function cleanSeries\(.*?^\}/ms), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(core, /^\/\/ Each other Sonarr's name as the server knows it.*?^const savedSonarr = [^\n]*$/ms),
   pick(options, /^async function save\(\) \{.*?^\}/ms),
@@ -2491,10 +2491,14 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), series = js("series.js"), schedule = js("schedule.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const NUMBERED = .*$/m), pick(core, /^function cleanSeries\(.*?^\}/ms), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(core, /^let drawerSnapshot = null;$/m), pick(core, /^const drawerChanged = .*$/m),
   pick(series, /^let oneOff = null;.*?(?=^\$\("#d-join"\))/ms),
+  pick(series, /^\$\("#d-join"\)\.onchange = .*$/m),
+  pick(series, /^\$\("#d-epname"\)\.onchange = .*$/m),
+  pick(series, /^\$\("#d-filename"\)\.oninput = .*$/m),
+  pick(series, /^\$\("#d-seasons"\)\.oninput = .*?^\};$/ms),
   pick(schedule, /^async function hideSeries\(.*?^\}/ms),
 ].join("\n");
 const nodes = {};
@@ -2507,7 +2511,7 @@ const box = {
   renderHiddenButton() {}, toast() {}, S: null,
 };
 vm.createContext(box);
-vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), baseline: () => { savedConfig = configKey(S.config); }, snapshot: () => { drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(S.config.series[7]) }; }, drawerChanged };", box);
+vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), change: (id, props) => $(id).onchange({ target: props }), baseline: () => { savedConfig = configKey(S.config); }, snapshot: () => { drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(S.config.series[7]) }; }, drawerChanged };", box);
 const page = box.page;
 const fresh = () => {
   box.S = { config: { settings: { theme: "dark" }, hidden_series: [], series: { 7: { service: "iV", title: "https://example.com/show" } } } };
@@ -2517,12 +2521,22 @@ const fresh = () => {
 (async () => {
   const out = {};
   for (const [name, id, typed] of [["episodeOffset", "#d-offset", "5"], ["seasonOffset", "#d-soffset", "2"],
-      ["seasonFrom", "#d-sfrom", "3"], ["episodeTable", "#d-epmap", "S01E01=S01E02"]]) {
-    fresh(); page.input(id, typed);
+      ["seasonFrom", "#d-sfrom", "3"], ["episodeTable", "#d-epmap", "S01E01=S01E02"],
+      ["fileName", "#d-filename", "Alias"], ["seasonMap", "#d-seasons", "1=2"]]) {
+    fresh(); page.snapshot(); page.input(id, typed);
+    if (id === "#d-seasons") box.S.config.series[7].sonarr_order = "official";  // #d-adv listener stamps sonarr_order
     const shown = !bars["#savebar"].hidden;
     page.input(id, "");
-    out[name] = shown && bars["#savebar"].hidden && bars["#d-save"].hidden;
+    out[name] = shown && bars["#savebar"].hidden && bars["#d-save"].hidden && !page.drawerChanged();
   }
+  fresh(); page.snapshot(); page.change("#d-join", { checked: false });
+  const joinShown = !bars["#savebar"].hidden;
+  page.change("#d-join", { checked: true });
+  out.joinParts = joinShown && bars["#savebar"].hidden && bars["#d-save"].hidden && !page.drawerChanged();
+  fresh(); page.snapshot(); page.change("#d-epname", { value: "keep" });
+  const epNameShown = !bars["#savebar"].hidden;
+  page.change("#d-epname", { value: "joined" });
+  out.episodeName = epNameShown && bars["#savebar"].hidden && bars["#d-save"].hidden && !page.drawerChanged();
   fresh(); Object.assign(box.S.config.series[7], { episode_offset: 5, season_offset: 2 }); page.baseline();
   page.input("#d-offset", ""); page.input("#d-offset", "5");  // cleared and typed again: it comes back after season_offset
   out.restoredOffsetBarHidden = bars["#savebar"].hidden;
@@ -2562,6 +2576,7 @@ def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hid
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == {
         "episodeOffset": True, "seasonOffset": True, "seasonFrom": True, "episodeTable": True,  # typed, then cleared: nothing to save
+        "fileName": True, "seasonMap": True, "joinParts": True, "episodeName": True,  # #335: cleared or back to default
         "hidingLeavesBarHidden": True,  # saved at once, so it is not a pending change
         "changeThenUndoAfterHiding": True,
         "showingLeavesBarHidden": True,
