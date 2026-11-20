@@ -544,6 +544,11 @@ for (const name of ["recordActivityDetail", "syncActivityRoute", "closeActivityD
   if (src.includes(`function ${name}(`)) vm.runInContext(grab(name), ctx);
 }
 vm.runInContext("let activityDetail = null", ctx);
+const navigation = require("fs").readFileSync(require("path").join(require("path").dirname(process.argv[1]), "navigation.js"), "utf8");
+vm.runInContext("let routed = false, currentTab = 'log', current = null;\n" +
+  navigation.match(/^function applyRoute\b[\s\S]*?^}/m)[0], Object.assign(ctx, {
+  parseRoute: () => ({ tab: "log" }), inSettingsSec: () => false, showTab() {}, updateTitle() {},
+}));
 const active = { id: "live", series: "Show", sxxeyy: "S01E01", outcome: "running", step: "downloading", batch: "batch" };
 const queued = { ...active, id: "queued", sxxeyy: "S01E02", waiting: true, step: "queued" };
 const history = { id: "old", series: "Older", outcome: "downloaded" };
@@ -652,6 +657,16 @@ else if (scenario === "phone-history") {
   historyStack.back();
   console.log(JSON.stringify([opened, browserBack, browserForward, buttonBack, stats, pressed(), doc.activeElement === $("#con-stats")]));
 }
+else if (scenario === "reload-stats") {
+  ctx.innerWidth = 390;
+  $("#con-stats").onclick();
+  vm.runInContext("picked_run = activityDetail = null", ctx);
+  addRuns([]);
+  ctx.applyRoute();
+  const reloaded = pressed();
+  historyStack.back();
+  console.log(JSON.stringify([reloaded, pressed(), doc.activeElement === $("#con-stats")]));
+}
 else if (scenario === "downloads-width") {
   addRuns([active, history]);
   $("#runs-history").children[0].onclick();
@@ -720,6 +735,10 @@ def test_back_from_a_running_download_returns_focus_to_its_chip():
 
 def test_phone_activity_browser_and_in_app_back_restore_the_list_and_opener():
     assert switcher("phone-history") == ["old", [None, True], "old", [None, True], ["stats"], ["downloads"], True]
+
+
+def test_phone_activity_reload_restores_stats_before_browser_back():
+    assert switcher("reload-stats") == [["stats"], ["downloads"], True]
 
 
 def test_pressed_downloads_keeps_wide_detail_but_returns_to_the_narrow_list():

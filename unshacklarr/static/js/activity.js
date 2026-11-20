@@ -603,7 +603,6 @@ function syncActivityRoute() {
     else pickRun(detail.id, detail.backKey);
   } else if (activityDetail?.hash === location.hash) closeActivityDetail();
 }
-window.addEventListener("popstate", syncActivityRoute);
 function pickRun(id, backKey = null) {
   landOnLive = false;
   runBackKey = backKey;

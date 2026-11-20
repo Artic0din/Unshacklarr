@@ -185,6 +185,7 @@ function applyRoute(event) {
     else showSettingsSec(route.sec, true, false, null, Boolean(event));
   } else if (route.tab === "settings") { showSettingsList(true); loadSettingsSec(); }
   routed = true;
+  if (currentTab === "log") syncActivityRoute();
   const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
   if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
   else if (series && route.view) showDrawerTab(route.view, true);

@@ -169,6 +169,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Restored the open Activity detail when reloading on a phone so Back returned to the list.
+
 - Fixed cramped mobile layouts and focus indicators, made routine controls neutral, and added a retry when startup data failed to load.
 - Preserved unread notifications when the Inbox failed to load, added a retry, and made browser Back close the full Inbox without leaving the page.
   Enlarged touch targets and kept Activity figures readable on narrow screens.
