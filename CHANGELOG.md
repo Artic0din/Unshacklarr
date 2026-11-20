@@ -99,6 +99,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
+
 - Switched to a dark theme with lime highlights and removed the light theme and Appearance setting. (#375)
 
 - Fewer things ask for attention. The Settings sections no longer carry a "New" badge, the version in the header no longer counts new options (it still opens What's new), and Activity hides a history filter with nothing under it, keeping All and the one you picked.

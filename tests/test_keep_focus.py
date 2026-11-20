@@ -244,6 +244,24 @@ if (scenario === "month") {
   out.after = [doc.activeElement === now[10], now.filter((c) => c.ariaPressed === "true").length, now[10].ariaPressed];
 }
 
+if (scenario === "network-logo") {
+  Object.assign(ctx, { S: { series: [{ tvdbId: 1, tmdbId: 2 }] },
+    networksById: { 2: { name: "Original network", providers: [{ name: "Streaming service", logo: "https://image.tmdb.org/logo.png" }] } } });
+  Node.prototype.remove = function () { this.parent.children = this.parent.children.filter((n) => n !== this); this.parent = null; };
+  const helper = /^function schedLogo\b/m.test(schedule) ? fn(schedule, "schedLogo") : "";
+  run(`${helper}\n${fn(schedule, "networkBadge")}`);
+  const badge = ctx.networkBadge({ tvdbId: 1 });
+  out.pending = find(badge, (n) => n.textContent === "Streaming service")?.textContent;
+  find(badge, (n) => n.tag === "img")?.onerror?.();
+  out.failed = find(badge, (n) => n.textContent === "Streaming service")?.textContent;
+  out.hasBrokenImage = Boolean(find(badge, (n) => n.tag === "img"));
+  ctx.networksById[2].providers = [];
+  ctx.networksById[2].logo = "https://image.tmdb.org/network.png";
+  const network = ctx.networkBadge({ tvdbId: 1, managed: true });
+  find(network, (n) => n.tag === "img")?.onload?.();
+  out.loaded = [...network.walk()].map((n) => n.alt ?? n.textContent).filter(Boolean);
+}
+
 if (scenario === "open-series") {  // "Open the series" in the popover: the card's own button is the opener
   const trigger = make("button", { closest: () => ({ getBoundingClientRect: () => ({ left: 100, right: 268, top: 300 }) }) });
   const pop = make("div", { offsetWidth: 380, scrollHeight: 300, style: {}, hidden: true }), dlg = make("dialog", { open: false, close() { this.open = false; } });
@@ -424,6 +442,15 @@ def test_a_picked_month_day_keeps_the_focus_and_says_it_is_pressed():
 
 def test_the_series_opened_from_a_popover_returns_to_its_card():
     assert run_scenario("open-series") == {"openedFrom": ["card"]}
+
+
+def test_schedule_logo_keeps_its_readable_name_until_the_image_loads():
+    assert run_scenario("network-logo") == {
+        "pending": "Streaming service",
+        "failed": "Streaming service",
+        "hasBrokenImage": False,
+        "loaded": ["Original network"],
+    }
 
 
 def test_quality_editor_and_notify_chips_keep_focus_on_redraw():

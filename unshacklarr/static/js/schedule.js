@@ -1,4 +1,4 @@
-/* Schedule: the late episodes, then Sonarr's calendar as a week board or a month grid, one chosen day for both.
+/* Schedule: Sonarr's calendar as a week board or a month grid, one chosen day for both.
    Episodes come from /api/calendar a week or a month at a time; the filter and views only re-render them. */
 const EARLY_DAYS_MAX = 14;  // as in sync.py: a service puts an episode out up to two weeks before it airs
 // date: the chosen day, the one Week and Month share; month: the first of the month the grid shows; pick: the day Month lists
@@ -9,8 +9,7 @@ async function loadSchedule() {
   renderHiddenButton();
   closeDetails(false);
   cal.byDay.clear(); cal.fetched.clear(); cal.placed.clear();
-  cal.date ??= startOfDay(new Date());
-  cal.month ??= monthStartOf(cal.date);
+  $(".sched-tools").inert = false;
   await (schedView() === "month" ? loadMonth() : loadWeek());
 }
 
@@ -19,7 +18,7 @@ async function loadLate() {
   try { data = await api("/api/schedule"); }
   catch (e) { $("#next-sync").replaceChildren(failed(`Could not load the schedule: ${e.message}`, () => loadSchedule())); return; }
   const next = new Date(data.nextSync);
-  $("#next-sync").replaceChildren("Next automatic sync at ", el("b", { textContent: time(next) }), " · in ", el("b", { textContent: until(next) }));
+  $("#next-sync").textContent = trWith("Next sync at {0}", time(next));
   const newestFirst = [...data.missing].sort((a, b) => (b.airDateUtc || "").localeCompare(a.airDateUtc || ""));
   const names = newestFirst.map((d) => `${d.series} ${d.sxxeyy}`);
   $("#late-n").textContent = `${names.length} late`;
@@ -29,12 +28,6 @@ async function loadLate() {
   $("#sched-missing").replaceChildren(...newestFirst.map((d) => schedCard({ ...d, fromLate: true }, d.airDateUtc ? day(new Date(d.airDateUtc)) : "")));
   $("#sched-late").hidden = !newestFirst.length;
   syncDetails();
-  $("#late-toggle").onclick = () => {
-    const open = $("#sched-missing").hidden;
-    $("#sched-missing").hidden = !open;
-    $("#late-toggle").textContent = open ? "Hide" : "Show";
-    $("#late-toggle").setAttribute("aria-expanded", open);
-  };
 }
 
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
@@ -99,7 +92,11 @@ function rerenderSchedule() {
   renderHiddenButton();
   renderCalendar();
 }
-const renderCalendar = () => schedView() === "month" ? renderMonth() : renderWeek();
+function renderCalendar() {
+  const month = schedView() === "month";
+  const start = weekStartOf(month ? cal.month : cal.date);
+  if (cal.fetched.has(`${isoDay(start)}+${month ? 42 : 7}`)) month ? renderMonth() : renderWeek();
+}
 function hideButton(d) {  // hidden series are not listed here: Series, Hidden brings them back
   const b = el("button", { className: "icon-hide", title: "Hide this series from the schedule (Series, Hidden brings it back)", ariaLabel: `Hide ${d.series} from the schedule`,
     onclick: (e) => { e.preventDefault(); e.stopPropagation(); hideSeries(d, true); } });
@@ -115,32 +112,37 @@ async function fetchNetworks(episodes) {
   ids.forEach((i) => networksById[i] = null);  // asked: don't ask twice
   try { Object.assign(networksById, await api(`/api/networks?tmdb=${ids.join(",")}`)); }
   catch { return; }  // just no logos this time
-  // a range still loading shows its spinner: it draws the logos itself when it lands
-  if (cal.fetched.has(schedView() === "month" ? `${isoDay(weekStartOf(cal.month))}+42` : `${isoDay(weekStartOf(cal.date))}+7`)) renderCalendar();
+  renderCalendar();
 }
-function networkBadge(d, extra = "") {
+function schedLogo(name, src, title = name) {
+  const badge = el("span", { className: "sched-logo", title }, el("span", { textContent: name }));
+  if (src) {
+    const img = el("img", { alt: name, ariaHidden: "true", loading: "lazy",
+      onload: () => { img.ariaHidden = null; badge.classList.add("loaded"); badge.replaceChildren(img); },
+      onerror: () => img.remove(), src });
+    badge.append(img);
+  }
+  return badge;
+}
+function networkBadge(d) {
   const tmdbId = S.series.find((x) => x.tvdbId === d.tvdbId)?.tmdbId;
   const net = networksById[tmdbId];
   if (!net) return "";
   // A channel of your country (M6 in FR) is watched there anyway, on air or its replay: no warning then
   const home = net.network_country && net.network_country === net.country;
   const networkTip = home ? `On ${net.name}, a channel in ${net.country}. TMDB lists no streaming service for it` : `Network: ${net.name}`;
-  const network = !net.name ? "" : net.logo
-    ? el("span", { className: "net", title: networkTip }, el("img", { src: net.logo, alt: net.name, loading: "lazy" }))
-    : el("span", { className: "net text", title: networkTip, textContent: net.name });
+  const network = net.name ? schedLogo(net.name, net.logo, networkTip) : "";
   // Where it streams in the first "Where to watch" country; else a warning, but not for a channel of that
   // country nor for a series Unshackle already downloads (its service is what counts then)
   const local = net.providers.length
     ? el("span", { className: "prov", title: `In ${net.country}: ${net.providers.map((p) => p.name).join(", ")}` },
-        ...net.providers.slice(0, 3).map((p) => p.logo
-          ? el("img", { src: p.logo, alt: p.name, title: p.name, loading: "lazy" })
-          : el("i", { textContent: p.name.slice(0, 2), title: p.name })))
+        ...net.providers.slice(0, 3).map((p) => schedLogo(p.name, p.logo)))
     : home || d.managed ? ""
     : el("span", { className: "chip nofr", textContent: `No streaming in ${net.country}`,
         title: `TMDB (from JustWatch) lists no streaming service in ${net.country} for this series` });
   // The French services say where to watch it; the original network only helps when there are none
   // (which also folds a network that is its own service, like Canal+, into one logo).
-  return el("span", { className: `badges ${extra}` }, ...(net.providers.length ? [local] : [network, local]));
+  return el("span", { className: "badges" }, ...(net.providers.length ? [local] : [network, local]));
 }
 
 /* Fetch [from, from + days) once; episodes land in cal.byDay by local day. The route filters by air date, so it is
@@ -182,17 +184,21 @@ const countText = (list) => {  // "2 episodes · 1 downloading"
 function renderWeek() {
   const start = weekStartOf(cal.date), now = new Date(), today = isoDay(now), tomorrow = isoDay(addDays(startOfDay(now), 1));
   renderRange();
-  $("#week-board").replaceChildren(...Array.from({ length: 7 }, (_, i) => {
+  const board = $("#week-board"), tracks = [];
+  const days = Array.from({ length: 7 }, (_, i) => {
     const date = addDays(start, i), key = isoDay(date);
     const list = (cal.byDay.get(key) || []).filter(inScope).sort(byWhen);
     const month = i === 0 || date.getDate() === 1;  // the month once the week turns
+    tracks.push(list.length ? "minmax(0, 1fr)" : "minmax(0, .65fr)");
     return el("div", { className: "day" + (key === today ? " today" : ""), role: "group", ariaLabel: date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" }) },
-      el("h3", { className: "day-h" }, el("b", { textContent: date.toLocaleDateString(LOCALE, { weekday: "short" }) }),
+      el("h4", { className: "day-h" }, el("b", { textContent: date.toLocaleDateString(LOCALE, { weekday: "short" }) }),
         el("span", { className: "num", textContent: date.toLocaleDateString(LOCALE, { day: "numeric", month: month ? "short" : undefined }) }),
         ...(key === today ? [el("span", { className: "rel", textContent: "Today" })] : key === tomorrow ? [el("span", { className: "rel", textContent: "Tomorrow" })] : [])),
       list.length ? el("small", { className: "n", textContent: countText(list) }) : "",
       ...(list.length ? list.map((e) => schedCard(e, whenText(e))) : [el("p", { className: "day-empty", textContent: "Nothing that day." })]));
-  }));
+  });
+  board.style.setProperty("--week-columns", tracks.join(" "));
+  keepFocus(board, () => board.replaceChildren(...days));
   syncDetails();
 }
 function moveWeek(step) {
@@ -266,10 +272,11 @@ function renderMonth() {
   }
   keepFocus($("#cal-grid"), () => $("#cal-grid").replaceChildren(...heads, ...cells));
   const picked = cal.pick && (cal.byDay.get(cal.pick) || []).filter(inScope);
-  $("#cal-day").replaceChildren(...(picked ? [
+  const listBox = $("#cal-day");
+  keepFocus(listBox, () => listBox.replaceChildren(...(picked ? [
     el("h3", { className: "sched-day", textContent: day(dayOfKey(cal.pick)) }),
     picked.length ? el("div", { className: "sched-cards" }, ...picked.sort(byWhen).map((d) => schedCard(d, whenText(d))))
-      : el("p", { className: "muted", textContent: "Nothing that day." })] : []));
+      : el("p", { className: "muted", textContent: "Nothing that day." })] : [])));
   syncDetails();
 }
 function moveMonth(step) {
@@ -288,7 +295,7 @@ function switchView(view) {
 function renderRange() {
   const month = schedView() === "month", start = weekStartOf(cal.date);
   $("#cal-range").textContent = month ? cal.month.toLocaleDateString(LOCALE, { month: "long", year: "numeric" })
-    : new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "long", year: "numeric" }).formatRange(start, addDays(start, 6));
+    : new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "short", year: "numeric" }).formatRange(start, addDays(start, 6));
   $("#cal-prev").ariaLabel = month ? "Previous month" : "Previous week";
   $("#cal-next").ariaLabel = month ? "Next month" : "Next week";
 }
@@ -313,14 +320,15 @@ function schedCard(d, when) {
     textContent: `${d.series} ${d.sxxeyy}`, onclick: () => open.getAttribute("aria-expanded") === "true" ? closeDetails() : openDetails(open, d, key) });
   const title = d.title && d.title !== "TBA" ? d.title : "";
   return el("article", { className: `sched-card ${d.managed ? "mine" : "other"}`, dataset: { key } },
-    el("div", { className: "sc-when" }, typeof when === "string" ? el("span", { className: "tm", textContent: when }) : when),
     el("div", { className: "sc-main" }, thumb, el("span", { className: "what" }, open,
+      el("span", { className: "sc-when" }, typeof when === "string" ? el("span", { className: "tm", textContent: when }) : when),
       ...(FINALE[d.finale] ? [el("span", { className: "finale-tag", textContent: FINALE[d.finale] })] : []),
-      el("small", {}, episodeTitle(d.tvdbId, d.sxxeyy, title)))),
-    el("div", { className: "sc-foot" }, statusPill(d), networkBadge(d),
+      title ? el("small", {}, episodeTitle(d.tvdbId, d.sxxeyy, title)) : "")),
+    el("div", { className: "sc-foot" }, el("div", { className: "sc-badges" }, statusPill(d),
       d.managed ? el("span", { className: "svc", textContent: svcName(d.service) }) : "",
+      networkBadge(d),
       !d.managed && !d.hasFile ? el("button", { type: "button", className: "btn small add", textContent: "+ Add", ariaLabel: `Add ${d.series} to Unshackle`,
-        onclick: () => series && openDrawer(series, "settings") }) : "",
+        onclick: () => series && openDrawer(series, "settings") }) : ""),
       d.fromLate ? "" : hideButton(d)));
 }
 
@@ -336,8 +344,11 @@ function detailsNode(d) {
       series && S.config.series[d.tvdbId]?.release_time ? `, then every ${S.config.settings?.burst_every_seconds ?? 30} s for ${S.config.settings?.burst_minutes ?? 10} min` : ", at the sync")] : []),
     ...(onService ? [el("span", {}, "Asked for as ", el("b", { textContent: onService }))] : []),
     ...(d.waitingImport ? [el("span", { textContent: "Already downloaded: waiting for Sonarr's import" })] : [])];
-  const copy = el("button", { type: "button", className: "btn small", textContent: "Copy", onclick: async () => {
-    try { await navigator.clipboard.writeText(plan.command); toast("Command copied"); } catch { toast("Could not copy: select the command instead", true); }
+  const command = plan.command ? el("details", { className: "cmd" },
+    el("summary", { textContent: "Show command" }), el("code", { textContent: plan.command })) : null;
+  const copy = el("button", { type: "button", className: "btn small", textContent: "Copy command", onclick: async () => {
+    try { await navigator.clipboard.writeText(plan.command); toast("Command copied"); }
+    catch { command.open = true; toast("Could not copy: select the command instead", true); }
   } });
   const now = el("button", { type: "button", className: "btn small primary", textContent: "Download now", onclick: async () => {
     now.disabled = true;
@@ -347,15 +358,15 @@ function detailsNode(d) {
   const buttons = [...(plan.download ? [now] : []),
     ...(d.run ? [el("button", { type: "button", className: "btn small", textContent: "See in Activity", title: "Open its last download: its steps and output",
       onclick: () => { closeDetails(false); showTab("log"); pickRun(d.run); } })] : []),
-    ...(series ? [el("button", { type: "button", className: "btn small", textContent: "Open the series", onclick: () => { closeDetails(); openDrawer(series); } })] : [])];
+    ...(series ? [el("button", { type: "button", className: "btn small", textContent: "Open the series", onclick: () => { closeDetails(); openDrawer(series); } })] : []),
+    ...(command ? [copy] : [])];
   const close = el("button", { type: "button", className: "inbox-x", ariaLabel: "Close", onclick: () => closeDetails() });
   close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
   return el("div", { className: "sd" },
     el("div", { className: "sd-head" }, el("h2", { id: "sched-det-h", textContent: `${d.series} ${d.sxxeyy}` }), close),
+    ...(buttons.length ? [el("div", { className: "btns" }, ...buttons)] : []),
     ...(facts.length ? [el("div", { className: "facts" }, ...facts)] : []),
-    ...(plan.command ? [el("div", { className: "cmd" }, el("code", { textContent: plan.command }), copy)]
-      : plan.skipped ? [el("p", { className: "muted", textContent: "Skipped: the episode offset puts it before the service's first episode." })] : []),
-    ...(buttons.length ? [el("div", { className: "btns" }, ...buttons)] : []));
+    command || (plan.skipped ? el("p", { className: "muted", textContent: "Skipped: the episode offset puts it before the service's first episode." }) : ""));
 }
 function openDetails(trigger, d, key) {
   if (det.trigger) closeDetails(false);
@@ -413,6 +424,9 @@ addEventListener("resize", () => { if (det.trigger && det.phone !== phoneLayout(
 $("#sched-dlg").addEventListener("close", () => closeDetails());
 
 const LOCALE = LANG === "en" ? "en-GB" : LANG;  // English: a 24-hour clock, the day before the month
+cal.date = startOfDay(new Date());
+cal.month = monthStartOf(cal.date);
+renderRange();
 const time = (d, timeZone) => isNaN(d) ? "" : d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", timeZone });
 function day(d) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
