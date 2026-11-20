@@ -103,6 +103,7 @@ Every change worth knowing, newest first. The format follows
 - Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.
 - Corrected which Series controls the Filters and actions button announced as collapsed on desktop.
 - Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
+- Made the Series drawer more compact, with expandable subtitle lists, fewer toolbar rows, and clearer episode status when file details are unavailable. (#352)
 
 - Kept the header in view while scrolling, moved version details to Settings, and made Inbox filters and episode lists easier to read on small screens. (#351)
 - Gave service names more room in Settings and showed service names instead of codes on CDM devices. (#357)
@@ -152,6 +153,8 @@ Every change worth knowing, newest first. The format follows
 
 - Kept selected library names and sort labels from getting cut off in the Series filters.
 - Kept Sort with the Series filters when a longer label needed more room.
+- Translated the episode subtitle button's screen-reader label and showed a text status instead of empty file cells for episodes without files.
+- Fixed expanded episode subtitles pushing status icons off-screen, clipping keyboard focus rings, and closing the whole drawer on Escape. (#352)
 - **The background glow no longer repeats in bands down a short page, such as a list that is still loading.**
 - **The unshackle serve log now shows after viewing a download, and empty Activity no longer shows the old download's bar.** (#365)
 - **Switching Sonarr connections no longer lets an in-flight sync lookup put the old library back in the cache.** (#368)

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from test_ui_misc import JS, node
+
 STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
 CSS = (STATIC / "app.css").read_text()
 
@@ -208,6 +210,17 @@ def test_the_segmented_controls_ring_is_drawn_inside_its_scroller():
     assert any(re.search(r"outline-offset:\s*-2px", body) for body in rules_of(".seg button:focus-visible"))
 
 
+def test_the_subtitle_chip_focus_ring_fits_inside_the_clipped_cell():
+    assert any(re.search(r"outline-offset:\s*-2px", body) for body in rules_of(".ep-subs-chip:focus-visible"))
+
+
+def test_expanded_subtitles_span_the_episode_row_without_contributing_to_column_widths():
+    assert any(
+        "grid-column: 1 / -1" in body and "contain: inline-size" in body
+        for body in rules_of(".ep-subs-detail")
+    )
+
+
 def test_the_lime_focus_ring_stands_out_on_dark_surfaces_and_selection():
     assert "outline: 2px solid var(--accent)" in rule(":focus-visible")
     assert "background: var(--select)" in rule('.seg button[aria-pressed="true"]')
@@ -285,6 +298,22 @@ def test_a_status_with_words_takes_its_own_row_wherever_the_words_cannot_fit(wid
     # "Unreachable" and "Update available" need about 130 px each: at 941 one pushed the sync button alone onto a second row
     assert re.search(r"\.health \{ order: 10; flex-basis: 100%", css_at(width))
     assert "#bell { margin-left: auto; }" in css_at(width)
+
+
+def test_a_compact_episode_check_button_keeps_its_name_when_the_text_is_hidden():
+    assert re.search(r"\.ep-check-label(?:,\s*[^{}]+)?\s*\{\s*display:\s*none;", css_at(390))
+    rendered = node(r"""
+const check = { attrs: {}, setAttribute(key, value) { this.attrs[key] = value; },
+  append(...kids) { this.kids = kids; },
+};
+const ctx = sandbox({ $: (sel) => sel === ".ep-check" ? check : null, epChecked: null });
+vm.runInContext(grab(read(process.argv[1]), /^function checkLabel\b.*?^\}/ms), ctx);
+ctx.checkLabel("Check ABC iview");
+console.log(JSON.stringify({
+  name: check.attrs["aria-label"], text: check.kids.find(k => k.className === "ep-check-label")?.textContent,
+}));
+""", str(JS / "series.js"))
+    assert rendered == {"name": "Check ABC iview", "text": "Check ABC iview"}
 
 
 @pytest.mark.parametrize("width", [941, 1041, 1100])
