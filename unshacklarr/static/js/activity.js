@@ -153,7 +153,10 @@ function emptyHistory(query, filter) {
     ...(query ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", dataset: { fk: "empty-clear" }, onclick: () => { $("#con-search").value = ""; renderConsole(); $("#con-search").focus(); } })] : []),
     ...(filter !== "all" ? [el("button", { type: "button", className: "btn small", textContent: "Show all", dataset: { fk: "empty-all" }, onclick: () => { setConFilter("all"); document.querySelector('#tab-log .con-filters [data-f="all"]').focus(); } })] : []));
 }
-const nothingPicked = () => $("#cd-main").replaceChildren(el("div", { className: "con-none" }, el("b", { textContent: "Nothing picked" }), "Pick a download on the left to see where it stands."));
+const nothingPicked = () => {
+  $("#cd-raw").hidden = true; renderDock(null); $("#cd-foot").replaceChildren();
+  $("#cd-main").replaceChildren(el("div", { className: "con-none" }, el("b", { textContent: "Nothing picked" }), "Pick a download on the left to see where it stands."));
+};
 /* Each tick redraws the lists and the detail: the control in use is found again by its data-fk. */
 function renderConsole(liveOnly = false) { keepFocus($("#con"), () => drawConsole(liveOnly)); }
 function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same downloads moving on
