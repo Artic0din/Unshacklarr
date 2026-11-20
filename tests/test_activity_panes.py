@@ -206,7 +206,7 @@ vm.runInContext(`let picked_run;\n` +
   }
   console.log(JSON.stringify({ posts, toasts, bulkHidden: bulk.hidden, chips: rows.map((r) =>
     walk(r).find((n) => n.className === "sv-chip")?.textContent),
-    nativelyDisabledDuring, buttons: buttons.map((b) => b && { primary: b.className.includes("primary"), disabled: unavailable(b) }) }));
+    nativelyDisabledDuring, buttons: buttons.map((b) => b && { primary: b.className.includes("primary"), disabled: unavailable(b), native: !!b.disabled }) }));
 })();
 """
 
@@ -218,7 +218,7 @@ def test_catch_up_row_download_uses_same_sonarr_as_bulk(target, sonarr):
     assert row["posts"] == [{"path": "/api/download", "body": {"episodeIds": [456], **sonarr}}]
     assert bulk["posts"] == [{"path": "/api/download", "body": {"episodeIds": [123, 456], **sonarr}}]
     assert row["chips"] == ["Netflix", "Disney+"]
-    assert row["buttons"] == [{"primary": False, "disabled": False}, {"primary": False, "disabled": True}]
+    assert row["buttons"] == [{"primary": False, "disabled": False, "native": False}, {"primary": False, "disabled": True, "native": False}]
 
 
 @pytest.mark.parametrize("action", ["row", "bulk"])
@@ -267,7 +267,7 @@ def test_catch_up_can_retry_when_download_response_fails(failure):
 def test_catch_up_row_and_bulk_do_not_queue_the_same_episode(order, sent):
     result = node(ACTIVITY_ACTIONS, str(JS), order)
     assert [request["body"]["episodeIds"] for request in result["posts"]] == sent
-    assert all(b["disabled"] for b in result["buttons"])
+    assert all(b["disabled"] and not b["native"] for b in result["buttons"])  # held rows keep keyboard focus
 
 
 @pytest.mark.parametrize(("classification", "primary", "opened", "fk"), [
