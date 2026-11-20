@@ -21,14 +21,14 @@ const NEWS = [
   { id: "upgrade-spread", version: "1.5.0", title: "Spread the questions", sec: "upgrades", target: "#ug-spread-field" },
   { id: "upgrade-new", version: "1.5.0", title: "Check new series", sec: "upgrades", target: "#ug-new-field" },
   { id: "downloads-at-once", version: "1.5.0", title: "Downloads at once", sec: "unshackle", target: "#ux-at-once-field" },
-  { id: "orig-audio", version: "1.6.0", title: "orig in the accepted audio languages", sec: "downloads", target: "#dx-audio" },
-  { id: "service-cache", version: "1.6.0", title: "Clear one service's cache", sec: "downloads", target: "#svc-defaults" },
-  { id: "any-service-option", version: "1.6.0", title: "Any service option", sec: "downloads", target: "#svc-defaults" },
+  { id: "orig-audio", version: "1.6.0", title: "orig in the accepted audio languages", sec: "downloads", target: "#dx-audio-field" },
+  { id: "service-cache", version: "1.6.0", title: "Clear one service's cache", sec: "downloads", target: "#dx-services-card" },
+  { id: "any-service-option", version: "1.6.0", title: "Any service option", sec: "downloads", target: "#dx-services-card" },
   { id: "sonarr-service-options", version: "1.6.0", title: "Service options per Sonarr", series: true, target: "#d-libs-adv" },
   { id: "after-download", version: "1.6.0", title: "After download", sec: "notifications", target: "#nt-after-card" },
   { id: "ladder-blind", version: "1.6.0", title: "Try unlisted codecs", sec: "quality", target: ".ql-blind" },
-  { id: "ladder-chips", version: "1.6.0", title: "Ladders as chips, a bitrate per step", sec: "downloads", target: "#svc-defaults" },
-  { id: "dl-generate-dv-sample", version: "1.6.0", title: "--generate-dv", sec: "downloads", target: "section.sx-card:has(#defaults)" },
+  { id: "ladder-chips", version: "1.6.0", title: "Ladders as chips, a bitrate per step", sec: "downloads", target: "#dx-services-card" },
+  { id: "dl-generate-dv-sample", version: "1.6.0", title: "--generate-dv", sec: "downloads", target: "#dx-defaults-card" },
 ];
 const NEWS_KINDS = { new: "New", improved: "Improved", fix: "Fix", security: "Security", note: "Note" };
 const versionKey = (v) => String(v || "0").split(".").map((n) => parseInt(n, 10) || 0).reduce((a, n) => a * 1000 + n, 0);
@@ -45,7 +45,8 @@ async function markNews(ids) {
 }
 
 /* The badges: on each new option's title, its card outlined. */
-const newsTitle = (box) => box.querySelector(".sx-head h3, summary b, .sub") || (box.matches("label, span[id]") ? box : null);  // a field's own label
+const newsTitle = (box) => box.querySelector(".sx-head h3, .sx-head h4, summary b, .sub")
+  || (box.matches("label, span[id]") ? box : box.querySelector(":scope > summary, :scope > label, :scope > h3, :scope > h4"));
 let newsBoxes = new Map();
 function renderNews() {
   const boxes = new Map(), titles = new Set();
@@ -83,6 +84,9 @@ function leaveNews(test) {
   const ids = newsUnseen().filter(test).map((n) => n.id);
   if (ids.length) markNews(ids);
 }
+function leaveSettingsNews(sec) {
+  leaveNews((n) => legacySettings(n.sec)?.sec === sec);
+}
 /* Seen: in sight for 2.5 seconds, or clicked. In sight: half of it on screen, or, for one taller than the screen,
    a good part of the screen filled with it. */
 const newsTimers = new Map();
@@ -111,9 +115,7 @@ function showOption(n) {
     if (s) openDrawer(s, "settings");
     setTimeout(() => { const box = document.querySelector(n.target), fold = box?.closest("details"); if (fold) fold.open = true; box?.scrollIntoView({ behavior: SCROLL, block: "center" }); }, 400);  // in a folded section: opened
   } else {
-    showTab("settings");
-    showSettingsSec(n.sec);
-    setTimeout(() => document.querySelector(n.target)?.scrollIntoView({ behavior: SCROLL, block: "center" }), 200);
+    openSettings(n.sec, n.target);
   }
 }
 function releaseRow(r, installed, latest) {

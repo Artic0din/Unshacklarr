@@ -37,6 +37,352 @@ def node(body, *args):
     return json.loads(out.stdout)
 
 
+SETTINGS_NAV = r"""
+const listeners = {}, location = { hash: "#/settings/cdm" };
+const window = { scrollY: 0, addEventListener: (name, fn) => { listeners[name] = fn; } };
+function element() {
+  const listeners = {};
+  return {
+    listeners, classList: { contains: () => false, toggle() {} }, setAttribute() {},
+    addEventListener: (name, fn) => { listeners[name] = fn; },
+  };
+}
+const body = element(), settingsTab = element(), settingsBack = element();
+let cdmTop = 400, focused, finishServices, finishCdm, sectionResized, accountLoads = 0, keyPrompt = false, backCalls = 0;
+let translating = process.argv[2] === "translated", finishTranslation;
+const i18nReady = new Promise((resolve) => { finishTranslation = resolve; });
+const frames = [];
+const flushFrames = () => frames.splice(0).forEach((fn) => fn());
+const heading = { id: "cdm-heading", getClientRects: () => [{}], closest: () => null };
+const section = {};
+const connectionsHeading = { id: "connections-heading" };
+const hiddenLabel = { getClientRects: () => [], closest: () => null };
+const visibleLabel = { getClientRects: () => [{}], closest: () => null };
+const listItem = { focus: () => { focused = listItem; } };
+const row = { id: "sv-HULU", closest: () => section, querySelectorAll: () => [], getClientRects: () => [{}],
+  scrollIntoView: () => { window.scrollY = 1000; }, focus: () => { focused = row; } };
+const servicesAnchor = { ...row, closest: (selector) => selector === ".set-sec" ? section : null,
+  querySelectorAll: () => [], scrollIntoView: () => { window.scrollY = 400; } };
+const notificationsHeading = { id: "notifications-heading", getClientRects: () => [{}], closest: () => null };
+const audioTarget = {
+  closest: (selector) => selector === ".set-sec" ? section : null,
+  scrollIntoView: () => { window.scrollY = 500; },
+  querySelector: () => hiddenLabel,
+  querySelectorAll: () => process.argv[2] === "visible-label" ? [hiddenLabel, visibleLabel] : [hiddenLabel],
+};
+const anchors = {
+  "services-sec": servicesAnchor, "sv-HULU": row,
+  "unshackle-sec": { ...servicesAnchor, closest: () => null },
+  "notifications-sec": { ...servicesAnchor, closest: () => null, querySelectorAll: () => [notificationsHeading] },
+  "cdm-sec": {
+    closest: (selector) => selector === ".set-sec" ? section : null,
+    querySelector: () => heading, querySelectorAll: () => [heading],
+    scrollIntoView: () => { window.scrollY = cdmTop; },
+  },
+  "region-sec": { closest: () => null, querySelector: () => null, querySelectorAll: () => [], scrollIntoView() {} },
+  "account-sec": { closest: () => null, querySelector: () => heading, querySelectorAll: () => [heading],
+    scrollIntoView: () => { window.scrollY = 1938; } },
+};
+const entries = [{ hash: location.hash, state: null }];
+let index = 0;
+const history = {
+  get state() { return entries[index].state; },
+  replaceState(state, _, hash = location.hash) { entries[index] = { state, hash }; location.hash = hash; },
+  pushState(state, _, hash) { entries.splice(++index, Infinity, { state, hash }); location.hash = hash; },
+  back() { backCalls++; traverse(-1); },
+  forward() { traverse(1); },
+};
+function traverse(delta) {
+  if (!entries[index + delta]) return;
+  index += delta;
+  location.hash = entries[index].hash;
+  listeners.popstate({ state: history.state });
+  flushFrames();
+}
+const ctx = sandbox({
+  $, window, location, current: null, S: { config: {} }, termSocket: null, i18nReady,
+  requestAnimationFrame: (fn) => frames.push(fn),
+  phoneLayout: () => true,
+  ResizeObserver: class {
+    constructor(callback) { this.callback = callback; }
+    observe(node) { if (node === section) sectionResized = this.callback; }
+    disconnect() { if (sectionResized === this.callback) sectionResized = null; }
+  },
+  document: { querySelector: (selector) => selector === ".up-mode" ? audioTarget : selector.startsWith(".set-nav ") ? listItem : anchors[selector.slice(1)],
+    querySelectorAll: () => [], body, getElementById: (id) => anchors[id],
+    get activeElement() { return focused || body; },
+    documentElement: { classList: { contains: (name) => name === "i18n-wait" && translating } } },
+  history,
+  focusHeading: (node) => { if (node && !translating) focused = node; },
+  loadServices: () => new Promise((resolve) => {
+    finishServices = resolve;
+  }),
+  loadCdm: () => new Promise((resolve) => { finishCdm = resolve; }),
+  loadAccount: () => { accountLoads++; keyPrompt = false; },
+  scrollTo: ({ top }) => { window.scrollY = top; },
+});
+function $(selector) {
+  if (selector === '.set-sec[data-sec="connections"] h2') return connectionsHeading;
+  if (selector === '.set-sec[data-sec="notifications"] h2') return notificationsHeading;
+  if (selector === "#tab-settings") return settingsTab;
+  if (selector === "#set-back") return settingsBack;
+  return element();
+}
+const source = read(process.argv[1]);
+vm.runInContext(source.slice(0, source.indexOf('showTab(parseRoute().tab')) +
+  grab(source, /^showTab\(parseRoute\(\).tab.*\nif \(parseRoute\(\).sec\).*\nelse if .*$/m), ctx);
+const enter = (hash) => { history.replaceState(null, "", hash); ctx.applyRoute(); };
+const jump = (hash) => settingsTab.listeners.click({ preventDefault() {}, target: { closest: () => ({ hash }) } });
+const services = () => {
+  const src = read(process.argv[2]);
+  Object.assign(ctx, { CSS: { escape: (value) => value }, renderServices: () => ctx.revealService() });
+  vm.runInContext(["serviceRow", "revealService", "openServiceRow"].map((name) =>
+    grab(src, new RegExp(`^(async )?function ${name}\\b[\\s\\S]*?\\n}\\n`, "m"))).join("\n"), ctx);
+};
+"""
+
+
+@pytest.mark.parametrize("interruption", [
+    "none", "layout", "startup-scroll", "wheel", "touchmove", "keydown", "tab", "pointerdown", "route",
+])
+def test_delayed_services_keep_the_cdm_heading_in_view_only_if_the_jump_is_still_active(interruption):
+    seen = node(SETTINGS_NAV + r"""
+(async () => {
+  const before = cdmTop - window.scrollY;
+  const focusedCdm = focused === heading;
+  if (process.argv[2] === "startup-scroll") {
+    window.scrollY += 120;
+    listeners.scroll?.();
+  }
+  const beforeState = window.scrollY;
+  ctx.S.config.settings = {};
+  ctx.applyRoute();
+  const movedOnState = window.scrollY !== beforeState;
+  const notifyResize = sectionResized;
+  const interruption = process.argv[2];
+  if (["wheel", "touchmove", "keydown", "tab", "pointerdown"].includes(interruption)) {
+    const event = interruption === "tab" ? "keydown" : interruption;
+    listeners[event]?.({ isTrusted: true, key: interruption === "tab" ? "Tab" : "PageDown" });
+    window.scrollY += 120;
+    listeners.scroll?.();
+  }
+  if (process.argv[2] === "layout") {
+    cdmTop += 35;
+    window.scrollY += 35;
+    listeners.scroll?.();
+  }
+  if (process.argv[2] === "route") enter("#/schedule");
+  const scrollBeforeRender = window.scrollY;
+  cdmTop += 6000; // A health refresh can render the rows before the section's loader finishes.
+  notifyResize?.();
+  const topWhileLoading = cdmTop - window.scrollY;
+  finishServices();
+  finishCdm();
+  await new Promise(setImmediate);
+  const top = cdmTop - window.scrollY, moved = window.scrollY !== scrollBeforeRender;
+  cdmTop += 250;
+  notifyResize?.();
+  console.log(JSON.stringify({ before, focusedCdm, movedOnState, topWhileLoading, top, moved,
+    shiftAfterLoading: cdmTop - window.scrollY - top }));
+})();
+""", str(JS / "navigation.js"), interruption)
+    assert seen["before"] == 0
+    assert seen["focusedCdm"]
+    assert not seen["movedOnState"]
+    assert seen["shiftAfterLoading"] == 250
+    if interruption in ("none", "layout", "startup-scroll"):
+        assert seen["topWhileLoading"] == 0
+        assert seen["top"] == 0
+    else:
+        assert not seen["moved"]
+
+
+def test_settings_route_focuses_a_new_section_and_preserves_position_on_restore():
+    seen = node(SETTINGS_NAV + r"""
+enter("#/settings/account");
+const accountScroll = window.scrollY;
+enter("#/settings/connections");
+const opened = { scroll: window.scrollY, focused: focused === connectionsHeading };
+window.scrollY = 300;
+ctx.applyRoute();
+console.log(JSON.stringify({ accountScroll, opened, restored: window.scrollY }));
+""", str(JS / "navigation.js"))
+    assert seen == {"accountScroll": 1938, "opened": {"scroll": 0, "focused": True}, "restored": 300}
+
+
+def test_service_row_jump_takes_priority_while_settings_loads():
+    seen = node(SETTINGS_NAV + r"""
+(async () => {
+  services();
+  enter("#/schedule");
+  ctx.S.config.settings = {};
+  await ctx.openServiceRow("HULU");
+  sectionResized?.();
+  finishServices();
+  finishCdm();
+  await new Promise(setImmediate);
+  console.log(JSON.stringify({ scroll: window.scrollY, focused: focused === row }));
+})();
+""", str(JS / "navigation.js"), str(JS / "services.js"))
+    assert seen == {"scroll": 1000, "focused": True}
+
+
+def test_health_jump_from_schedule_goes_back_to_visible_settings_list():
+    seen = node(SETTINGS_NAV + r"""
+enter("#/settings");
+enter("#/schedule");
+ctx.openSettings("unshackle");
+settingsBack.onclick();
+console.log(JSON.stringify({ backCalls, hash: location.hash, focused: focused === listItem }));
+""", str(JS / "navigation.js"))
+    assert seen == {"backCalls": 0, "hash": "#/settings", "focused": True}
+
+
+def test_phone_back_after_forward_does_not_duplicate_the_settings_list():
+    seen = node(SETTINGS_NAV + r"""
+enter("#/schedule");
+ctx.showTab("settings");
+const list = location.hash;
+ctx.showSettingsSec("notifications");
+traverse(-1);
+history.forward();
+settingsBack.onclick();
+const appBack = location.hash;
+traverse(-1);
+console.log(JSON.stringify({ list, backCalls, appBack, browserBack: location.hash }));
+""", str(JS / "navigation.js"))
+    assert seen == {"list": "#/settings", "backCalls": 1, "appBack": "#/settings", "browserBack": "#/schedule"}
+
+
+@pytest.mark.parametrize("target", ["service", "show-me"])
+def test_forward_restores_the_exact_settings_target_with_its_scroll(target):
+    seen = node(SETTINGS_NAV + r"""
+(async () => {
+  enter("#/schedule");
+  services();
+  const service = process.argv[3] === "service";
+  const vpnRow = { ...row, id: "sv-HULU@vpn",
+    scrollIntoView: () => { window.scrollY = 1200; }, focus: () => { focused = vpnRow; } };
+  if (service) {
+    anchors[vpnRow.id] = vpnRow;
+    ctx.S.config.service_defaults = { HULU: { backend: "vpn" } };
+    await ctx.openServiceRow("HULU");
+  } else ctx.openSettings("downloads", ".up-mode");
+  const expected = service ? vpnRow : audioTarget;
+  const first = [window.scrollY, focused === expected];
+  history.back();
+  // Forward must restore the original row even if a fresh lookup would use the main server.
+  if (service) delete ctx.S.config.service_defaults.HULU;
+  focused = listItem;
+  window.scrollY = 0;
+  history.forward();
+  console.log(JSON.stringify({ first, forward: [window.scrollY, focused === expected] }));
+})();
+""", str(JS / "navigation.js"), str(JS / "services.js"), target)
+    expected = [1200 if target == "service" else 500, True]
+    assert seen == {"first": expected, "forward": expected}
+
+
+@pytest.mark.parametrize("interruption", ["devices", "wheel", "schedule"])
+def test_late_service_row_does_not_override_newer_navigation_or_scroll(interruption):
+    seen = node(SETTINGS_NAV + r"""
+(async () => {
+  enter("#/schedule");
+  services();
+  delete anchors["sv-HULU"];
+  await ctx.openServiceRow("HULU");
+  if (process.argv[3] === "schedule") {
+    enter("#/schedule");
+    window.scrollY = 600;
+    listItem.focus();
+  } else if (process.argv[3] === "devices") jump("#/settings/cdm");
+  else {
+    listeners.wheel({ isTrusted: true });
+    window.scrollY = 250;
+  }
+  const before = focused;
+  anchors["sv-HULU"] = row;
+  ctx.renderServices();
+  console.log(JSON.stringify({ hash: location.hash, scroll: window.scrollY, retainedFocus: before === focused }));
+})();
+""", str(JS / "navigation.js"), str(JS / "services.js"), interruption)
+    route, scroll = {
+        "devices": ("#/settings/cdm", 400),
+        "wheel": ("#/settings/services", 250),
+        "schedule": ("#/schedule", 600),
+    }[interruption]
+    assert seen == {"hash": route, "scroll": scroll, "retainedFocus": True}
+
+
+@pytest.mark.parametrize("focus_taken", ["none", "user"])
+def test_initial_settings_route_focuses_only_after_translations_reveal_it(focus_taken):
+    seen = node(SETTINGS_NAV + r"""
+(async () => {
+  const hiddenFocus = Boolean(focused);
+  translating = false;
+  if (process.argv[3] === "user") listItem.focus();
+  finishTranslation();
+  await new Promise(setImmediate);
+  flushFrames();
+  console.log(JSON.stringify({ hiddenFocus, focused: focused === heading ? "devices" : focused === listItem ? "user" : "body" }));
+})();
+""", str(JS / "navigation.js"), "translated", focus_taken)
+    assert seen == {"hiddenFocus": False, "focused": "devices" if focus_taken == "none" else "user"}
+
+
+def test_leaving_downloading_marks_downloads_and_automation_news_seen():
+    seen = node(SETTINGS_NAV + r"""
+const news = read(process.argv[2]);
+const marked = [];
+Object.assign(ctx, {
+  newsUnseen: () => [{ id: "audio", sec: "downloads" }, { id: "window", sec: "automation" }, { id: "device", sec: "cdm" }],
+  markNews: (ids) => marked.push(...ids),
+});
+vm.runInContext(grab(news, /^function leaveNews\b[\s\S]*?\n}\n/m) +
+  grab(news, /^function leaveSettingsNews\b[\s\S]*?\n}\n/m), ctx);
+ctx.leaveSettingsNews("downloading");
+console.log(JSON.stringify(marked));
+""", str(JS / "navigation.js"), str(JS / "news.js"))
+    assert seen == ["audio", "window"]
+
+
+def test_notifications_opens_at_top_with_heading_focus():
+    seen = node(SETTINGS_NAV + r"""
+enter("#/settings");
+window.scrollY = 300;
+ctx.showSettingsSec("notifications");
+console.log(JSON.stringify({ hash: location.hash, scroll: window.scrollY, focused: focused === notificationsHeading }));
+""", str(JS / "navigation.js"))
+    assert seen == {"hash": "#/settings/notifications", "scroll": 0, "focused": True}
+
+
+@pytest.mark.parametrize("candidate", ["hidden-label", "visible-label"])
+def test_settings_show_me_moves_focus_past_hidden_labels(candidate):
+    seen = node(SETTINGS_NAV + r"""
+ctx.openSettings("downloads", ".up-mode");
+console.log(JSON.stringify({ scroll: window.scrollY, focused: focused ===
+  (process.argv[2] === "visible-label" ? visibleLabel : audioTarget) }));
+""", str(JS / "navigation.js"), candidate)
+    assert seen == {"scroll": 500, "focused": True}
+
+
+def test_settings_jump_keeps_the_api_key_prompt_open_but_reentering_loads_account_again():
+    seen = node(SETTINGS_NAV + r"""
+enter("#/settings/general");
+const beforeState = accountLoads;
+ctx.S.config.settings = {};
+ctx.applyRoute();
+const afterState = accountLoads;
+keyPrompt = true;
+jump("#/settings/region");
+const openAfterJump = keyPrompt, afterJump = accountLoads;
+enter("#/schedule");
+enter("#/settings/general");
+console.log(JSON.stringify({ beforeState, afterState, afterJump, openAfterJump, afterReturn: accountLoads }));
+""", str(JS / "navigation.js"))
+    assert seen == {"beforeState": 0, "afterState": 1, "afterJump": 1, "openAfterJump": True, "afterReturn": 2}
+
+
 def test_a_jobs_bar_has_open_series_for_a_phone_whose_head_and_foot_are_hidden():
     seen = node(r"""
 const src = read(process.argv[1]);
@@ -218,7 +564,7 @@ def test_an_attempt_its_sign_in_failed_offers_the_sign_in_first_and_retry_after(
     seen = node(RUN_ACTS, str(JS / "activity.js"))
     # a retry would fail the same way: the service's row in Settings, where its sign-in is renewed, comes first
     assert seen["refused"][:2] == [["Fix sign-in", True], ["Retry", False]]
-    assert seen["title"] == "Check HULU+ in Settings › Services"  # where it leads, short enough for a phone's bar
+    assert seen["title"] == "Check HULU+ in Settings › Services & Devices › Services"  # where it leads, short enough for a phone's bar
     # the server it failed on, not the one set for the service now; a card of the first schema: its own backend
     assert seen["opened"][:2] == [["HULU", "vpn"], ["HULU", "eu"]]
     assert seen["plain"][0] == ["Retry", True]  # any other failure: retrying is still the thing to do
@@ -230,12 +576,11 @@ def test_an_attempt_its_sign_in_failed_offers_the_sign_in_first_and_retry_after(
 
 REVEAL = r"""
 const src = read(process.argv[1]);
-const rows = new Set(["sv-HULU", "sv-HULU@vpn", "sv-HULU@eu"]), shown = [];
-const ctx = sandbox({ S: { config: { service_defaults: { HULU: { backend: "eu" } } } }, SCROLL: "auto", CSS: { escape: (s) => s },
-  document: { getElementById: (id) => (rows.has(id) ? { id, scrollIntoView() { shown.push(id); }, focus() {} } : null), querySelector: () => null } });
-vm.runInContext("let servicesReveal = '';\n" + grab(src, /^function revealService\b[\s\S]*?\n}\n/m) + "globalThis.go = (s) => { servicesReveal = s; revealService(); };", ctx);
-for (const s of ["HULU@vpn", "HULU@", "HULU"]) ctx.go(s);
-console.log(JSON.stringify(shown));
+const rows = new Set(["sv-HULU", "sv-HULU@vpn", "sv-HULU@eu"]);
+const ctx = sandbox({ S: { config: { service_defaults: { HULU: { backend: "eu" } } } }, CSS: { escape: (s) => s },
+  document: { getElementById: (id) => (rows.has(id) ? { id } : null), querySelector: () => null } });
+vm.runInContext(grab(src, /^function serviceRow\b[\s\S]*?\n}\n/m), ctx);
+console.log(JSON.stringify(["vpn", "", undefined].map((backend) => ctx.serviceRow({ service: "HULU", backend }).id)));
 """
 
 

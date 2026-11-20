@@ -641,7 +641,7 @@ async function showLeftovers() {
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Waiting in downloads" }),
-      el("small", { className: "line1", textContent: r.days > 0 ? `Deleted on their own after ${r.days} days (Settings, Automation).` : "Kept until you delete them (Settings, Automation)." }))),
+      el("small", { className: "line1", textContent: r.days > 0 ? `Deleted on their own after ${r.days} days (Settings › Downloading › Automation).` : "Kept until you delete them (Settings › Downloading › Automation)." }))),
     ...(rows.length ? [el("div", {}, ...rows)] : [el("p", { className: "muted", textContent: "Nothing waits: every download went to Sonarr." })])));
 }
 $("#con-left").onclick = openActivityTool(showLeftovers);
@@ -662,7 +662,7 @@ function sonarrPicker(picked, pick) {
 }
 function unsetNote(name) {
   const inst = (S.config.settings.sonarrs || []).find((i) => i.name === name);
-  return inst && !inst.quality_ladder ? el("p", { className: "status-err", textContent: `Sonarr ${name} has no quality ladder chosen: nothing is downloaded for it until you choose one in Settings, Sonarr.` }) : null;
+  return inst && !inst.quality_ladder ? el("p", { className: "status-err", textContent: `Sonarr ${name} has no quality ladder chosen: nothing is downloaded for it until you choose one in Settings › Connections › Sonarr.` }) : null;
 }
 async function showMissing() {
   picked_run = "missing";
@@ -826,7 +826,7 @@ async function showUpgrades(fresh = true) {
   });
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:14px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Upgrades" }),
-      el("small", { textContent: "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings, Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265)." }))),
+      el("small", { textContent: "Your quality ladder decides which files can be upgraded. Checks run in batches of up to 10 episodes per series. Results are kept for the time set in Settings › Quality & Upgrades › Upgrades. Replacing a file can improve it even when Sonarr ranks both versions the same (for example, 1080p H.264 and H.265)." }))),
     ...[sonarrPicker(sonarr, (n) => { upgradeSonarr = n; upgradePick.clear(); upgradeOpen.clear(); showUpgrades(); }), unsetNote(sonarr)].filter(Boolean),
     el("div", { className: "miss-bar" }, el("span", { className: "muted", textContent: state }), el("span", { className: "up-acts" }, selAll, check, go)),
     ...(rows.length ? [el("div", {}, ...rows)] : scan.running || r.checked ? [el("p", { className: "muted", textContent: scan.running ? "Nothing better found yet." : "Nothing better on the services: every file is already on the best step they have." })] : [])));
@@ -891,7 +891,7 @@ async function showLanguages(fresh = true) {
       el("span", { className: "up-acts" }, all, go)), el("div", {}, ...rows)];
   };
   const parts = [
-    ...section("preferred", "Without the preferred audio", "Watch for it: once the series' service has that language, it is added to the file or the episode is downloaded again, as set in Settings, Download options.",
+    ...section("preferred", "Without the preferred audio", "Watch for it: once the series' service has that language, it is added to the file or the episode is downloaded again, as set in Settings › Downloading › Download options.",
       (n) => (n === 1 ? "Watch for it" : `Watch for the ${n}`)),
     ...section("accepted", "Without an accepted audio", "None of the series' accepted audio languages: download the episode again from its service.",
       (n) => (n === 1 ? "Download it again" : `Download the ${n} again`)),
@@ -1126,7 +1126,7 @@ function signInFailed(c) {
 const fixSignIn = (c) => { const { service, backend } = signInFailed(c); openServiceRow(service, backend); };
 function signInAction(c, primary = true) {
   const signIn = c && signInFailed(c);
-  return signIn ? el("button", { className: `btn small${primary ? " primary" : ""}`, textContent: "Fix sign-in", title: `Check ${svcName(signIn.service)} in Settings › Services`, dataset: { fk: "sign-in" }, onclick: () => fixSignIn(c) }) : "";
+  return signIn ? el("button", { className: `btn small${primary ? " primary" : ""}`, textContent: "Fix sign-in", title: `Check ${svcName(signIn.service)} in Settings › Services & Devices › Services`, dataset: { fk: "sign-in" }, onclick: () => fixSignIn(c) }) : "";
 }
 /* What can be done with an attempt: stop it, import it anyway, fix its sign-in, retry it, forget it. */
 function runActs(c) {

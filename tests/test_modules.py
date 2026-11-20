@@ -60,7 +60,7 @@ def test_authentication_errors_identify_the_server_or_provider(tmp_path, provide
         assert "sign-in/session" in message and "refused the API key" not in message
     else:
         assert caught.value.error_code == ""
-        assert "internal API key" in message and "Settings, Unshackle" in message
+        assert "internal API key" in message and "Settings › Connections › Unshackle" in message
 
 
 @responses.activate
@@ -627,7 +627,7 @@ def test_unshackle_6s_refused_proxy_and_its_limit_of_requests_are_said_plainly(t
         backend.call("POST", "/api/download", json={"proxy": "au"})
         raise AssertionError("refused")
     except UnshackleError as e:
-        assert "Settings, Unshackle" in str(e) and backend.proxy_refused
+        assert "Settings › Connections › Unshackle" in str(e) and backend.proxy_refused
     try:
         backend.call("GET", "/api/download/jobs/j1")
         raise AssertionError("limited")

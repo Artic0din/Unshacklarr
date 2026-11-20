@@ -428,7 +428,7 @@ def inbox_add(level: str, title: str, message: str, action: dict | None = None, 
     if key:
         item["key"] = key  # the same problem told again ("expire in 4 days", then 3): its new line replaces the old one
     if service:
-        item["service"] = service  # the page opens that service's row in Settings, Services
+        item["service"] = service  # the page opens that service's row in Settings › Services & Devices › Services
 
     def add(inbox):
         inbox["items"] = [item, *(i for i in inbox["items"] if not key or i.get("key") != key)]
@@ -2310,7 +2310,7 @@ def slot_job(run: EpisodeRun | None) -> str:
 
 @contextlib.contextmanager
 def download_slot(server: str, run: EpisodeRun | None = None):
-    """Settings › Unshackle, Downloads at once: past that many on a server, a download waits for one to end
+    """Settings › Connections › Unshackle, Downloads at once: past that many on a server, a download waits for one to end
     (a small NAS kept to one; by mj23au, #10). 0: as many as serve takes, which queues the rest itself.
     A slot is a job's, not an episode's: a job keeps it from one episode to its next until it ends (release_job), so
     picks run whole, in the order they were made: Season 1 picked before Season 2 is done first (#10, by mj23au)."""
@@ -3166,7 +3166,7 @@ def no_cdm(tag: str, config: dict | None = None, backend: Unshackle | None = Non
     if not cdm or any(str(k).lower() in ("default", tag.lower()) and v for k, v in cdm.items()):
         return ""
     return (f"No CDM for {tag}: unshackle.yaml sets no device for it and no default device. "
-            "Pick one in Settings, CDM, or No CDM if it has no DRM")
+            "Pick one in Settings › Services & Devices › Devices (CDM), or No CDM if it has no DRM")
 
 
 def release_group_of(show: dict, config: dict) -> tuple[str, str]:
@@ -4413,7 +4413,7 @@ def import_leftover(folder: str) -> None:
         raise RuntimeError("An audio track add stopped midway in this folder: it holds audio only, not a video to import")
     m = FOLDER.fullmatch(folder)
     if m.group(1) and m.group(1) not in SONARRS:
-        raise RuntimeError(f"The Sonarr named {m.group(1)} is no longer in Settings, Sonarr")
+        raise RuntimeError(f"The Sonarr named {m.group(1)} is no longer in Settings › Connections › Sonarr")
     with on_instance(SONARRS.get(m.group(1) or "")):
         import_into_sonarr(out, m.group(1) or "", int(m.group(2)), int(m.group(3)), int(m.group(4)))
 
@@ -4494,9 +4494,9 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
         if episode_ids:  # picked by hand or a release burst: the per-episode lock is enough
             inst = SONARRS.get(sonarr) if sonarr else None  # picked in another Sonarr's episodes: its ids, its ladder
             if sonarr and not inst:
-                raise RuntimeError(f"The Sonarr named {sonarr} is no longer in Settings, Sonarr")
+                raise RuntimeError(f"The Sonarr named {sonarr} is no longer in Settings › Connections › Sonarr")
             if unset_ladder(inst):
-                raise RuntimeError(f"Choose a quality ladder for Sonarr {sonarr} in Settings, Sonarr first")
+                raise RuntimeError(f"Choose a quality ladder for Sonarr {sonarr} in Settings › Connections › Sonarr first")
             with on_instance(inst):
                 return sync(instance_config(inst, config) if inst else config, settings, chosen_episodes(episode_ids),
                             manual=True, replace=replace, kind=kind, numbering=numbering, batch=batch, proxy=proxy, video=video, audio=audio,
@@ -4506,7 +4506,7 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
             return 0
         try:
             if not in_download_window():
-                print("Outside the download window (Settings, Automation): the sync waits for it.", flush=True)
+                print("Outside the download window (Settings › Downloading › Automation): the sync waits for it.", flush=True)
                 return 0
             try:  # the main Sonarr down: told once per cause, and the other Sonarrs still synced
                 failed = sync(config, settings, automatic_episodes(config), kind="auto")
@@ -4566,7 +4566,7 @@ def sync_instance(inst: dict, config: dict, settings: dict) -> int:
     if unset_ladder(inst):  # told once, then nothing downloads for it until a ladder is chosen
         if first_warning(f"sonarr-unset:{inst['name']}"):
             notify(settings, "warning", f"Sonarr {inst['name']} has no quality ladder chosen",
-                   "Nothing is downloaded for it until you choose one in Settings, Sonarr: a ladder, Off, or Same as each series.")
+                   "Nothing is downloaded for it until you choose one in Settings › Connections › Sonarr: a ladder, Off, or Same as each series.")
         return 0
     with on_instance(inst):
         try:
@@ -5059,7 +5059,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Failed: {label}", f"{hint}\n{cause[:1200]}", batch=batch, details=episode_details(ep, show)))
                             run.finish("failed", cause, hint)
                         elif login_failure(cause):
-                            hint = f"{asked_from['service']} refused Unshackle: its cookies may have expired. Update them in Settings › Services."
+                            hint = f"{asked_from['service']} refused Unshackle: its cookies may have expired. Update them in Settings › Services & Devices › Services."
                             tell_failure(run, cause, lambda: notify_series(show, settings, "error", f"Sign-in failed on {asked_from['service']}: {label}", f"{hint}\n{cause[:1200]}", batch=batch))
                             run.finish("failed", cause, hint, auth_failed=authentication_failed)
                         else:

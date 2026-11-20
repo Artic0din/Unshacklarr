@@ -89,7 +89,6 @@ const SERVICE_COLUMNS = ["Service", "Sign-in status", "Cookies", "Used by"];
 let servicesCookies = null;  // /api/cookies: the files of Unshackle's own cookies folder, by service
 let servicesDrawn = "";      // what the table was drawn from: a refresh that changes nothing leaves it (and the focus) alone
 let servicesAsked = "";      // the cookie file whose deletion is being confirmed: "SERVICE/profile"
-let servicesReveal = "";     // a service to scroll to once the table is there
 
 // a sign-in that ended badly (cancelled is your own doing; waiting and renewing are under way)
 const SIGN_IN_FAILED = ["session_expired", "session_rejected", "fallback", "timed_out", "error"];
@@ -254,7 +253,8 @@ function renderServices() {
     // lime only where something is wrong (the row needs attention, or a cookie file is bad or expiring): healthy rows stay quiet
     const first = actions.findIndex(Boolean);
     if (first >= 0 && (m.attention || first === priority.repair || first === priority.renew)) actions[first].className += " primary";
-    return el("tr", { role: "row", className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, id: `sv-${m.key}` },
+    return el("tr", { role: "row", className: "sv-row", tabIndex: -1,
+      dataset: { fk: `sv-${m.key}`, ...(m.attention ? { attention: "true" } : {}) }, id: `sv-${m.key}` },
       el("th", { role: "rowheader", scope: "row" },
         el("b", { className: "sv-name", textContent: svcName(m.service) }),
         ...(m.backend ? [el("small", { className: "sv-backend", textContent: m.backend })] : []),
@@ -270,7 +270,11 @@ function renderServices() {
   const locked = cookies?.unwritable?.length ? [el("div", { className: "sv-locked" },
     el("p", { className: "status-err", textContent: "Unshackle can't write these files. Give them back to the container's user, for example with chown." }),
     el("ul", { className: "ck-locked" }, ...cookies.unwritable.map((path) => el("li", {}, el("code", { textContent: path })))))] : [];
-  box.replaceChildren(...locked, ...(models.length ? [table] : [el("p", { className: "muted", textContent: "No service is known yet. Unshackle lists them once it answers." })]));
+  const active = document.activeElement;
+  const focusedRow = active?.matches?.(".sv-row") && box.contains(active) ? active : null;
+  const rowPosition = focusedRow?.getBoundingClientRect();
+  const draw = () => box.replaceChildren(...locked, ...(models.length ? [table] : [el("p", { className: "muted", textContent: "No service is known yet. Unshackle lists them once it answers." })]));
+  if (focusedRow) keepFocus(box, draw); else draw();
   if (activePromptReused) activePrompt.focus();
 
   // The top of the page: the cookies folder, and what the statuses add up to
@@ -282,8 +286,12 @@ function renderServices() {
   paintServicesBadge(needing.length);
   $("#sv-folder").textContent = cookies?.folder || "";
   $("#sv-note").textContent = !cookies ? "" : cookies.folder ? ""
-    : S.config.settings.unshackle_mode === "remote" ? "To manage them here too, mount its Cookies folder and set its path in Settings, Unshackle, Folders."
+    : S.config.settings.unshackle_mode === "remote" ? "To manage them here too, mount its Cookies folder and set its path in Settings › Connections › Unshackle, Folders."
     : cookies.error || "";
+  // A refresh can reorder the focused row without changing the user's place in it.
+  if (rowPosition && rowPosition.bottom > 0 && rowPosition.top < innerHeight && document.activeElement.id === focusedRow.id) {
+    scrollBy({ top: document.activeElement.getBoundingClientRect().top - rowPosition.top });
+  }
   revealService();
 }
 let servicesCookiesAsked = null;  // the cookie files read once for the badge, before Services is opened
@@ -294,21 +302,17 @@ function loadServiceCookies() {
 function needingText(n) { return n === 1 ? "1 service needs attention" : `${n} services need attention`; }
 /* The count of the rows that need attention, beside Services in the Settings list, from any page. */
 function paintServicesBadge(n = serviceModels().filter((m) => m.attention).length) {
-  const nav = document.querySelector('.set-nav [data-sec="services"]');
+  const nav = document.querySelector('.set-nav [data-sec="services-devices"]');
   if (!nav) return;
   nav.querySelector(":scope > .sv-attn")?.remove();
   if (n) nav.querySelector(":scope > span").after(el("b", { className: "ck-pill bad sv-attn", textContent: String(n), title: needingText(n) }));
 }
-/* Scrolled to and focused, when another page sent you to one service's row. */
+function serviceRow({ service, backend = S.config.service_defaults?.[service]?.backend }) {
+  return (backend && document.getElementById(`sv-${service}@${backend}`)) || document.getElementById(`sv-${service}`)
+    || document.querySelector(`[id^="sv-${CSS.escape(service)}@"]`);
+}
 function revealService() {
-  // "SERVICE@backend": that server's row (where a download's sign-in failed, "" the main one); else the one set for it
-  const [service, named] = servicesReveal.split("@"), backend = named ?? S.config.service_defaults?.[service]?.backend;
-  const row = service && ((backend && document.getElementById(`sv-${service}@${backend}`)) || document.getElementById(`sv-${service}`)
-    || document.querySelector(`[id^="sv-${CSS.escape(service)}@"]`));  // only on another server
-  if (!row) return;
-  servicesReveal = "";
-  row.scrollIntoView({ block: "center", behavior: SCROLL });
-  row.focus({ preventScroll: true });
+  if (settingsJump?.ready && settingsJump.target?.service) applySettingsJump(settingsJump);
 }
 async function loadServices() {
   if (!servicesDrawn) $("#sv-list").replaceChildren(loading("Checking the services…"));
@@ -322,13 +326,11 @@ async function loadServices() {
   }
   renderServices();
 }
-/* From another page (a failing series, a refused download): Settings, Services, at the service's row; with a
+/* From another page (a failing series, a refused download): Settings › Services & Devices › Services, at the service's row; with a
    backend, that server's row. */
 async function openServiceRow(service, backend) {
   if (current && !await closeDrawer(true)) return;
-  servicesReveal = backend === undefined ? service : `${service}@${backend}`;
-  showTab("settings");
-  showSettingsSec("services");
+  openSettings("services", { service, backend });
   renderServices();
 }
 function showSeriesOf(service) {  // every series of that service: the other filters cleared, as they could hide some

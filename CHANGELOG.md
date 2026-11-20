@@ -100,6 +100,7 @@ Every change worth knowing, newest first. The format follows
 ### Changed
 
 - Grouped repeated Activity failures by provider and source, listed affected episodes for mixed failures, and kept Retry prominent unless every retry candidate was legally blocked or needed sign-in. (#358)
+- Grouped Settings into six sections with shorter headers and jump links, while keeping existing Settings links working. (#354)
 - Kept Series wall filters on one desktop toolbar and made every filter and action reachable on phones without sideways scrolling. (#352)
 - Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.
 - Corrected which Series controls the Filters and actions button announced as collapsed on desktop.
@@ -155,6 +156,10 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Restored the exact Settings shortcut on browser Forward, fixed Back on phones, and kept focus on the newest jump as translations and service rows loaded.
+- Kept service shortcuts focused on the right row, restored New badges on their own setting titles, and fixed Settings Back and Notifications on phones.
+- Kept the Devices heading in view after loading, moved focus to newly opened Settings sections, and fixed the Add audio track shortcut's focus.
+- Kept Settings jump targets in view as data loaded, preserved open forms between jumps, and corrected card heading levels and missing translations.
 - Prevented repeat submissions in Catch up and let users retry if the request failed or a refreshed list still showed the episode as missing. (#353)
 
 - Prevented repeat Catch up downloads after switching views, kept keyboard focus on failed requests, and showed Fix sign-in even while other episodes were still queued.
