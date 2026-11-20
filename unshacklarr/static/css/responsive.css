@@ -344,7 +344,7 @@
   .cd-head .line2 b { display: block; color: var(--text); font-size: var(--fs-body); }
   .steps { gap: 5px; } .steps > span { font-size: var(--fs-footnote); }
   .steps .l { display: none; } .steps .s { display: inline; }
-  .cd-stats { gap: 22px; flex-wrap: nowrap; } .cd-stats b { font-size: var(--fs-headline); }
+  .cd-stats { gap: 12px 22px; } .cd-stats b { font-size: var(--fs-headline); white-space: nowrap; }
   .cd-stats div:nth-child(4) { display: none; }
   .cd-foot { display: flex; flex-wrap: wrap; gap: 10px; }
   .cd-foot .btn { flex: 1; min-height: 44px; }
