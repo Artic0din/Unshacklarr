@@ -396,6 +396,7 @@ class FakeTerminal { loadAddon() {} open() {} reset() {} resize() {} write(t) { 
 let hidden = false, onVisibility;
 const box = { hidden: false, open: true, replaceChildren() {}, classList: { add() {} }, textContent: "" };
 const ctx = { window: { Terminal: FakeTerminal }, Terminal: FakeTerminal, FitAddon: { FitAddon: class { proposeDimensions() {} } }, ResizeObserver: class { observe() {} },
+  getComputedStyle: () => ({ getPropertyValue: () => "#111111" }),
   term: null, termFit: null, termSocket: null, termFor: null, termQuery: "", termResume: null, liveFeed: null, liveNext: null, picked_run: null, TERM_COLS: 110,
   $: () => box, el: () => ({}), termFilter: () => (b) => b, WebSocket: FakeSocket, location: { protocol: "http:", host: "x" }, api: async () => ({ log: "serve line" }), showTab() {}, markPicked() {},
   openActivity() {}, document: { get hidden() { return hidden; }, addEventListener: (_, fn) => { onVisibility = fn; }, querySelectorAll: () => [] } };

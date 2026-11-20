@@ -31,15 +31,6 @@
         "reason": "agent: .pulse is a live 'downloading' status dot; reduced-motion override at app.css turns it off"
       },
       {
-        "rule": "cream-palette",
-        "value": "*",
-        "files": [
-          "unshacklarr/static/index.html"
-        ],
-        "createdAt": "2026-11-17T10:45:01.577Z",
-        "reason": "agent: deliberate Molt light-theme token --bg #f6f3ee shipped in #280 (CHANGELOG: warm neutrals with one teal)"
-      },
-      {
         "rule": "flat-type-hierarchy",
         "value": "*",
         "files": [

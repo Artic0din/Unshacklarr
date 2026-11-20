@@ -98,6 +98,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Switched to a dark theme with lime highlights and removed the light theme and Appearance setting. (#375)
+
 - Fewer things ask for attention. The Settings sections no longer carry a "New" badge, the version in the header no longer counts new options (it still opens What's new), and Activity hides a history filter with nothing under it, keeping All and the one you picked.
 - Less stands between you and the content. On a phone, the Series filters sit in one row that scrolls sideways under the search, and each choice above them takes one line. The Schedule puts Reload beside the sync line and Week/Month beside its filter. In Activity, the five shortcuts sit in two columns, so the history starts higher on every screen.
 - **Success has its own green, apart from the teal accent.** Healthy status dots, "Downloaded" notifications, valid cookie pills, a working CDM and finished job steps no longer share the teal that marks what is selected or being downloaded. (#280)

@@ -85,10 +85,13 @@ async function retryRun(c, button) {
 function openTerm() {
   if (!window.Terminal) { $("#log-state").textContent = "The terminal could not load: reload the page."; return false; }
   if (!term) {
+    const colours = getComputedStyle(document.documentElement);
+    const colour = (name) => colours.getPropertyValue(name).trim();
+    const background = colour("--term-bg");
     term = new Terminal({
       convertEol: true, disableStdin: true, scrollback: 20000, fontSize: 13, cursorBlink: false,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-      theme: { background: "#12110f", foreground: "#f1ede6", cursor: "#12110f", selectionBackground: "#33302b" }  // --term-bg: the output stays dark in either theme,
+      theme: { background, foreground: colour("--text"), cursor: background, selectionBackground: colour("--select") },
     });
     termFit = new FitAddon.FitAddon();
     term.loadAddon(termFit);
@@ -127,4 +130,3 @@ $("#sync").onclick = async () => {
   try { await api("/api/sync", { method: "POST" }); showTab("log"); }
   catch (e) { toast(e.message, true); }
 };
-

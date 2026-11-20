@@ -256,7 +256,7 @@ function jobState(j) {
   const paused = j.cards.some((c) => c.waiting && c.paused);
   const words = [paused && "paused", n.done && `${n.done} done`, n.downloading && `${n.downloading} downloading`, n.finishing && `${n.finishing} finishing`,
     n.queued && `${n.queued} queued`, n.failed && `${n.failed} failed`, n.stopped && `${n.stopped} stopped`, n.cancelled && `${n.cancelled} cancelled`].filter(Boolean);
-  return { n, live, paused, words, progress: Math.round(100 * progress / j.cards.length) };
+  return { n, live, running: n.downloading + n.finishing > 0, paused, words, progress: Math.round(100 * progress / j.cards.length) };
 }
 function jobRow(j) {
   const first = j.cards[0], st = jobState(j), key = `job:${j.job}`;
@@ -265,7 +265,7 @@ function jobRow(j) {
     thumb(`row:${key}`, posterOf(first)),
     el("span", {}, el("b", {}, el("span", { textContent: series }), el("em", { textContent: `${j.cards.length} episodes` })),
       el("small", { textContent: (st.live ? st.words : [...st.words, ...jobTotals(j)]).join(" · ") }),
-      ...(st.live ? [el("span", { className: "bar" }, el("i", { style: `width:${st.progress}%`, dataset: { k: `row:${key}` } }))] : [])),
+      ...(st.live ? [el("span", { className: st.running ? "bar" : "bar idle" }, el("i", { style: `width:${st.progress}%`, dataset: { k: `row:${key}` } }))] : [])),
     st.live ? pulse()
       : el("span", { className: `chip o-${st.n.failed ? "failed" : st.n.stopped && !st.n.done ? "stopped" : "downloaded"}`,
           textContent: st.n.failed ? `${st.n.failed} failed` : !st.n.done && (st.n.stopped || st.n.cancelled) ? "Stopped" : `${st.n.done}/${j.cards.length}` }));
@@ -350,7 +350,7 @@ function renderJob(j) {
       title: jobHidden.has(k) ? "Show these episodes" : "Hide these episodes", onclick: () => { jobHidden.has(k) ? jobHidden.delete(k) : jobHidden.add(k); renderConsole(); } },
       el("b", { textContent: st.n[k] }), label)));
   const overall = el("div", { className: "job-sum" }, counts,
-    el("span", { className: "bar" }, el("i", { style: `width:${st.progress}%`, dataset: { k: `job:${j.job}` } })));
+    el("span", { className: st.running ? "bar" : "bar idle" }, el("i", { style: `width:${st.progress}%`, dataset: { k: `job:${j.job}` } })));
   const isDownloading = (c) => isLive(c) && !c.waiting && !FINISHING.has(c.step) && !isQueued(c);
   const followed = j.cards.find((c) => c.id === following);
   const next = followed && !isDownloading(followed) && !isQueued(followed) && j.cards.find(isDownloading);
@@ -425,7 +425,7 @@ function renderJob(j) {
   if ($("#cd-raw").open && termFor !== `job:${j.job}`) streamJob(j.job);
   const now = j.cards.find(isDownloading) || j.cards.find((c) => isLive(c) && !c.waiting && !isQueued(c));
   renderDock({ ...(now ? dockOf(now) : { ep: `${j.cards.length} episodes`, line: st.words.join(" · "),
-    pct: st.live ? `${st.progress}%` : st.n.failed ? `${st.n.failed} failed` : "✓", tone: st.live ? "" : st.n.failed ? "err" : "ok", progress: st.progress }),
+    pct: st.live ? `${st.progress}%` : st.n.failed ? `${st.n.failed} failed` : "✓", tone: st.live ? "" : st.n.failed ? "err" : "ok", progress: st.progress, running: st.running }),
     acts: [
       series ? { key: "open", label: "Open series", icon: DOCK.series, go: () => openDrawer(series) } : null,
       st.live && st.n.queued ? { key: "pause", label: st.paused ? "Resume the job" : "Pause the job", icon: st.paused ? DOCK.play : DOCK.pause, cls: st.paused ? "on" : "",
@@ -862,7 +862,7 @@ function dockOf(c) {  // one download: where it stands, in a line
   const line = live ? [afterTracks(c) || (FINISHING.has(c.step) ? c.step : track && `downloading ${track}`), speedOf(c), timeLeft(c) && `${timeLeft(c)} left`].filter(Boolean).join(" · ")
     : [outcomeOf(c), c.cause].filter(Boolean).join(" · ");
   return { ep: c.sxxeyy, line, pct: live ? `${pct}%` : c.outcome === "downloaded" ? "✓" : "", tone: live ? "" : c.outcome === "downloaded" ? "ok" : c.outcome === "failed" ? "err" : "",
-    progress: live ? pct : 100, acts: [] };
+    progress: live ? pct : 100, running: live && !isQueued(c) && !c.prompt, acts: [] };
 }
 function renderDock(d) {
   const dock = $("#dock"), detail = $("#con-detail");
@@ -879,7 +879,10 @@ function renderDock(d) {
   }
   const [b, span, em] = dock.querySelector(".d-l1").children;
   b.textContent = d.ep; span.textContent = d.line; span.title = d.line; em.textContent = d.pct; em.className = d.tone || "";
-  dock.querySelector(".bar i").style.width = `${d.progress}%`;
+  dock.classList.toggle("running", d.running);
+  const bar = dock.querySelector(".bar");
+  bar.className = d.running ? "bar" : d.tone === "ok" ? "bar done" : "bar idle";
+  bar.firstElementChild.style.width = `${d.progress}%`;
   const acts = dock.querySelector(".d-acts"), key = d.acts.map((a) => `${a.key}:${a.label}`).join("|");
   if (acts.dataset.key !== key) {  // rebuilt only when they change: a press is not lost to a redraw
     acts.dataset.key = key;
