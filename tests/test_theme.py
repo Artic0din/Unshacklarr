@@ -143,7 +143,8 @@ def test_the_active_country_option_has_a_bar_not_only_a_tint():
 
 
 def test_a_failed_or_stopped_step_has_a_mark_and_the_word_is_there_for_everyone():
-    assert "\\2715" in rule(".steps .fail :is(.l, .s)::before") and "\\25A0" in rule(".steps .halt :is(.l, .s)::before")
+    assert "\\2715" in rule(":is(.steps .fail .l, .step-caption.fail)::before")
+    assert "\\25A0" in rule(":is(.steps .halt .l, .step-caption.halt)::before")
     assert "clip" in rule(".sr-only")
 
 
