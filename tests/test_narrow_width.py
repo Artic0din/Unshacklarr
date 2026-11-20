@@ -115,6 +115,11 @@ def test_late_episodes_keep_their_count_visible_and_their_details_collapsed_init
     details = re.search(r'<details class="late-banner">(.*?)</details>', html, re.S)
     assert details is not None
     assert re.search(r'<summary>.*id="late-n".*</summary>.*id="late-sum".*id="sched-missing"', details[1], re.S)
+    for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", media("max-width: 700px")):
+        if re.search(r"\.late-banner(?:\s+|\s*>\s*)summary\b", selectors):
+            assert not re.search(r"\b(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse))\b", body), (
+                f"Phone CSS hides the late count: {selectors.strip()} {{{body}}}"
+            )
 
 
 def test_a_posters_service_badge_stays_inside_its_poster_and_names_itself():

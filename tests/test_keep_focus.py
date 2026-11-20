@@ -50,6 +50,7 @@ vm.createContext(ctx);
 const run = (code) => vm.runInContext(code, ctx);
 run(fn(core, "el") + "\n" + line(core, "CONTROLS") + "\n" + fn(core, "keepFocus") + "\n" + fn(core, "focusHeading"));
 const out = {};
+let pending;
 const scenario = process.argv[2];
 
 if (scenario === "helper") {
@@ -228,6 +229,31 @@ if (scenario === "tick") {  // the live feed redraws a job's actions: the one in
   out.again = named(doc.activeElement);
 }
 
+if (scenario === "week") {
+  const board = page();
+  board.style = { setProperty() {} };
+  Object.assign(ctx, { Date, $: () => board, S: { series: [] }, LOCALE: "en-GB", EYE_SHUT: "",
+    countText: (list) => `${list.length} episodes`, renderRange() {}, inScope: () => true, syncDetails() {},
+    whenText: () => "", posterSrc: () => "", posterFail: () => null, statusPill: () => "", networkBadge: () => "" });
+  run(["cal", "startOfDay", "addDays", "isoDay", "weekStartOf", "triesAt", "whenOf", "byWhen", "FINALE"]
+    .map((n) => line(schedule, n)).join("\n") + "\n"
+    + ["hideButton", "schedCard", "renderWeek"].map((n) => fn(schedule, n)).join("\n"));
+  const day = "2026-11-02";
+  const first = { tvdbId: 1, series: "First", sxxeyy: "S01E01", airDateUtc: `${day}T10:00:00Z` };
+  const second = { tvdbId: 2, series: "Second", sxxeyy: "S01E01", airDateUtc: `${day}T12:00:00Z` };
+  ctx.episodes = [first, second];
+  run(`cal.date = new Date(2026, 10, 2); cal.byDay.set("${day}", episodes);`);
+  const openButton = (key) => find(board, (n) => n.className === "sc-open" && n.dataset.fk === key);
+  const key = "open|false|2|S01E01";
+  ctx.renderWeek();
+  const original = openButton(key);
+  original.focus();
+  second.airDateUtc = `${day}T08:00:00Z`;
+  ctx.renderWeek();
+  out.focus = named(doc.activeElement);
+  out.onReplacement = !original.isConnected && doc.activeElement === openButton(key);
+}
+
 if (scenario === "month") {
   const grid = page(), dayBox = make("div");
   Object.assign(ctx, { Date, Map, Math, Intl, cal: null, $: (sel) => sel === "#cal-grid" ? grid : dayBox, renderRange() {}, inScope: () => true, LOCALE: "en-GB",
@@ -275,6 +301,26 @@ if (scenario === "open-series") {  // "Open the series" in the popover: the card
   button.focus();
   button.onclick();
   out.openedFrom = opened;
+}
+
+if (scenario === "copy-command") {
+  Node.prototype.addEventListener = function () {};
+  const toasts = [], writes = [];
+  Object.assign(ctx, { S: { series: [] }, placeDetails() {}, toast: (...args) => toasts.push(args),
+    navigator: { clipboard: { async writeText(text) { writes.push(text); throw new Error("Clipboard denied"); } } } });
+  run(line(schedule, "shellQuote") + "\n" + ["detailsPlan", "detailsNode"].map((n) => fn(schedule, n)).join("\n"));
+  const details = ctx.detailsNode({ tvdbId: 1, series: "Show", sxxeyy: "S01E01", managed: true,
+    command: ["unshackle", "Show Name"] });
+  const command = find(details, (n) => n.tag === "details" && n.className === "cmd");
+  const copy = find(details, (n) => n.tag === "button" && n.textContent === "Copy command");
+  out.closedInitially = !command.open;
+  out.summary = find(command, (n) => n.tag === "summary")?.textContent;
+  pending = copy.onclick().then(() => {
+    out.openAfterRejection = command.open === true;
+    out.command = find(command, (n) => n.tag === "code")?.textContent;
+    out.writes = writes;
+    out.toasts = toasts;
+  });
 }
 
 if (scenario === "quality") {
@@ -376,7 +422,7 @@ if (scenario === "notify") {
   failBtn.onclick();
   out.notify = [doc.activeElement?.textContent === "Failures only", doc.activeElement?.ariaPressed === "true"];
 }
-console.log(JSON.stringify(out));
+Promise.resolve(pending).then(() => console.log(JSON.stringify(out)));
 """
 
 
@@ -436,12 +482,27 @@ def test_the_live_tick_keeps_the_focus_on_the_control_in_use():
     assert run_scenario("tick") == {"pause": ["pause", True], "again": "pause"}
 
 
+def test_a_week_card_keeps_focus_when_episodes_reorder():
+    assert run_scenario("week") == {"focus": "open|false|2|S01E01", "onReplacement": True}
+
+
 def test_a_picked_month_day_keeps_the_focus_and_says_it_is_pressed():
     assert run_scenario("month") == {"before": 0, "after": [True, 1, "true"]}
 
 
 def test_the_series_opened_from_a_popover_returns_to_its_card():
     assert run_scenario("open-series") == {"openedFrom": ["card"]}
+
+
+def test_failed_command_copy_opens_the_command_and_shows_a_toast():
+    assert run_scenario("copy-command") == {
+        "closedInitially": True,
+        "summary": "Show command",
+        "openAfterRejection": True,
+        "command": "unshackle 'Show Name'",
+        "writes": ["unshackle 'Show Name'"],
+        "toasts": [["Could not copy: select the command instead", True]],
+    }
 
 
 def test_schedule_logo_keeps_its_readable_name_until_the_image_loads():
