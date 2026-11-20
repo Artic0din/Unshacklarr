@@ -44,10 +44,19 @@ def test_a_finished_card_names_its_whole_line_when_it_is_cut_short():
     assert "el(\"small\", { textContent: tookLine(c, live), title: tookLine(c, live) })" in js
 
 
-def test_the_series_filter_goes_to_a_second_row_instead_of_overflowing_its_buttons():
-    phone = media("max-width: 700px")
-    has(phone, ".seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));")
-    assert "overflow-wrap: anywhere" in squash(phone[phone.index(".seg button {"):][:200])
+def test_series_secondary_controls_stay_hidden_until_disclosed_on_phones():
+    has(media("max-width: 700px"), '#series-options-toggle[aria-expanded="false"] + #series-options { display: none; }')
+
+
+def test_series_search_shares_a_row_with_intrinsically_sized_selects():
+    has(CSS, ".toolbar input[type=search] { flex: 1 1 0; min-inline-size: 5rem; }")
+    has(CSS, "#series-filters select { field-sizing: content;")
+    has(media("max-width: 1400px"), ".toolbar .seg { flex-basis: 100%; }")
+
+
+def test_series_selects_wrap_as_a_group_instead_of_shrinking_selected_labels():
+    has(CSS, "#series-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); max-inline-size: 100%; overflow-x: auto; }")
+    has(CSS, "#series-filters select { field-sizing: content; width: auto; min-inline-size: max-content; }")
 
 
 def test_the_setup_error_wraps_inside_the_card_when_it_sits_under_its_field():

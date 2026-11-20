@@ -984,6 +984,8 @@
  "Files your quality ladder says could be better. Check now asks each service what it has, up to 10 episodes of a series at a time, and keeps each answer for the days set in Settings, Upgrades. Replace downloads the better ones over your files, even when Sonarr ranks both the same (H.264 and H.265 in 1080p).": [],
  "Filter by Sonarr library": [],
  "Filter by service": [],
+ "Filters active": [],
+ "Filters and actions": [],
  "Find a series": [],
  "Find it on {0}": [
   "svcName(service)"
