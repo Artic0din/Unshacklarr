@@ -155,6 +155,7 @@ Every change worth knowing, newest first. The format follows
   confirm before clearing the service's logins, tokens, and sessions. (#334)
 - **A tool in Activity no longer shows the last job's bar.** Opening Waiting, Catch up, Upgrades, Languages or Stats
   after a download left that download's bar at the bottom of the pane; it is hidden now. (#363)
+- **On phones, the last items in an Activity job scroll clear of the dock even when the save bar is visible.** (#363)
 - **Web requests no longer stall behind slow TMDB, cache, or Sonarr scans.** Shared worker-pool sizing, deduplicated
   TMDB network lookups with serialized off-loop cache writes, mtime-cached read-only config/auth/JSON readers, direct
   live-card reads for `GET /api/runs?live=1`, cached `unwritable_files()` checks, a short-TTL `sonarr_series()` cache,
