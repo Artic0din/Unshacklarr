@@ -128,6 +128,32 @@ def test_activitys_history_filters_and_clear_are_big_enough_to_tap_on_a_phone():
     has(CSS, ".con-gh { display: flex; justify-content: space-between; align-items: center;")  # its label level with Clear…
 
 
+def test_activity_keeps_a_single_line_for_running_chips_without_moving_the_panes():
+    page = (STATIC / "index.html").read_text()
+    assert 'class="con-toolbar"' in page
+    toolbar = page[page.index('class="con-toolbar"'):page.index('id="con"')]
+    assert toolbar.index('class="seg con-views"') < toolbar.index('id="con-running"')
+    has(media("max-width: 700px"), '.con-toolbar:has(#con-downloads[aria-pressed="true"]) { grid-template-rows: auto var(--chip-slot); }')
+    has(CSS, "padding-block: var(--sp-1) 0; overflow-x: auto; overflow-y: hidden;")
+
+
+def test_activity_switcher_sizes_follow_the_pointer_even_on_a_narrow_window():
+    has(CSS, ".con-toolbar { --con-target: 36px;")
+    has(CSS, "#tab-log .con-views button { min-height: var(--con-target);")
+    has(media("pointer: coarse"), ".con-toolbar { --con-target: 44px; }")
+
+
+def test_activity_sync_status_takes_space_inside_the_pane_not_below_it():
+    page = (STATIC / "index.html").read_text()
+    activity = page[page.index('id="tab-log"'):page.index('id="tab-yaml"')]
+    running = activity[activity.index('id="runs-live"'):activity.index("<span>History")]
+    assert 'id="sync-state"' in running
+
+
+def test_activity_has_no_unused_stats_icon_styles():
+    assert ".stats-ico" not in CSS
+
+
 def test_coarse_pointer_devices_keep_44px_touch_targets_above_700px():
     """Tablets (e.g. iPad portrait at 768-820px) match (pointer: coarse), not phone width (#333)."""
     assert "@media (min-width: 701px) and (pointer: fine) {" in CSS

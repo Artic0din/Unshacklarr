@@ -228,6 +228,28 @@ if (scenario === "tick") {  // the live feed redraws a job's actions: the one in
   out.again = named(doc.activeElement);
 }
 
+if (scenario === "finish") {
+  const tab = page(), chips = make("div"), history = make("div"), downloads = make("button", { textContent: "Downloads" });
+  tab.append(downloads, chips, history);
+  const live = { id: "one", batch: "batch", series: "Show", sxxeyy: "S01E01", outcome: "running", step: "downloading" };
+  const second = { ...live, id: "two", sxxeyy: "S01E02" };
+  Object.assign(ctx, {
+    $: (sel) => ({ "#tab-log": tab, "#con-running": chips, "#con-downloads": downloads })[sel] ??
+      find(history, (n) => sel === `#runs-history [data-fk="${n.dataset.fk}"]`),
+    drawConsole: () => {
+      ctx.drawRunningChips(ctx.job ? [{ job: "batch", cards: [live, second] }] : []);
+      history.replaceChildren(...(ctx.job ? [] : [make("button", { dataset: { fk: "row:job:batch" }, noBox: ctx.hidden })]));
+    },
+  });
+  run(["itemKey", "isLive", "isQueued"].map((n) => line(activity, n)).join("\n") + "\n" +
+    ["drawRunningChips", "renderConsole"].map((n) => fn(activity, n)).join("\n"));
+  for (const hidden of [false, true]) {
+    ctx.job = true; ctx.renderConsole(); chips.children[0].focus();
+    ctx.job = false; ctx.hidden = hidden; ctx.renderConsole();
+    out[hidden ? "hidden" : "visible"] = named(doc.activeElement);
+  }
+}
+
 if (scenario === "month") {
   const grid = page(), dayBox = make("div");
   Object.assign(ctx, { Date, Map, Math, Intl, cal: null, $: (sel) => sel === "#cal-grid" ? grid : dayBox, renderRange() {}, inScope: () => true, LOCALE: "en-GB",
@@ -416,6 +438,10 @@ def test_a_phone_download_opens_on_its_heading_and_back_returns_to_its_row():
 
 def test_the_live_tick_keeps_the_focus_on_the_control_in_use():
     assert run_scenario("tick") == {"pause": ["pause", True], "again": "pause"}
+
+
+def test_a_finished_running_chip_moves_focus_to_history_or_downloads():
+    assert run_scenario("finish") == {"visible": "row:job:batch", "hidden": "Downloads"}
 
 
 def test_a_picked_month_day_keeps_the_focus_and_says_it_is_pressed():

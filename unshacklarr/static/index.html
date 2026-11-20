@@ -581,19 +581,22 @@
   </section>
 
   <section id="tab-log" hidden>
-    <div class="seg con-views" role="group" aria-label="Activity">
-      <button type="button" id="con-downloads" data-con-view="downloads" aria-pressed="true">Downloads</button>
-      <button type="button" id="con-left" data-con-view="left" aria-pressed="false">Waiting <span id="con-left-n"></span></button>
-      <button type="button" id="con-missing" data-con-view="missing" aria-pressed="false">Catch up</button>
-      <button type="button" id="con-upgrades" data-con-view="upgrades" aria-pressed="false">Upgrades</button>
-      <button type="button" id="con-languages" data-con-view="languages" aria-pressed="false">Languages</button>
-      <button type="button" id="con-stats" data-con-view="stats" aria-pressed="false">Stats</button>
+    <div class="con-toolbar">
+      <div class="seg con-views" role="group" aria-label="Activity">
+        <button type="button" id="con-downloads" data-con-view="downloads" aria-pressed="true">Downloads</button>
+        <button type="button" id="con-left" data-con-view="left" aria-pressed="false">Waiting <span id="con-left-n"></span></button>
+        <button type="button" id="con-missing" data-con-view="missing" aria-pressed="false">Catch up</button>
+        <button type="button" id="con-upgrades" data-con-view="upgrades" aria-pressed="false">Upgrades</button>
+        <button type="button" id="con-languages" data-con-view="languages" aria-pressed="false">Languages</button>
+        <button type="button" id="con-stats" data-con-view="stats" aria-pressed="false">Stats</button>
+      </div>
+      <div class="con-running" id="con-running" role="group" aria-label="Running" hidden></div>
     </div>
-    <div class="con-running" id="con-running" role="group" aria-label="Running" hidden></div>
     <div class="con" id="con">
       <aside class="con-list" aria-label="Downloads">
         <div class="con-gh"><span>Running</span><b id="con-live-n"></b></div>
         <div id="runs-live"></div>
+        <p class="con-state" id="sync-state"></p>
         <div class="con-gh"><span>History</span><button class="gh-act" id="hist-clear" type="button">Clear…</button></div>
         <input type="search" class="con-search" id="con-search" placeholder="Search a series" aria-label="Search the history">
         <div class="con-filters" role="group" aria-label="Show">
@@ -606,7 +609,8 @@
       </aside>
       <div class="con-detail" id="con-detail">
         <div class="cd-top"><button class="cd-back" id="cd-back" aria-label="Back to the downloads"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><h2 id="cd-top-title"></h2></div>
-        <div id="cd-main"><div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading the downloads…</div></div>
+        <div id="cd-main"><div id="downloads-loading" class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading the downloads…</div></div>
+        <p class="con-state" id="log-state"></p>
         <details class="cd-raw" id="cd-raw" hidden><summary>
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 4 4-4 4M12 16h7"/></svg><span class="t">Output</span>
             <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></summary>
@@ -615,7 +619,6 @@
         <div class="dock" id="dock" hidden></div>
       </div>
     </div>
-    <p class="con-state" id="log-state"></p>
   </section>
   <section id="tab-yaml" class="uy-page" hidden aria-labelledby="uy-title">
     <div class="uy-head">

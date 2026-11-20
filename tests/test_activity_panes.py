@@ -68,8 +68,7 @@ def node(script, *args):
     return json.loads(out.stdout)
 
 
-def test_switcher_follows_run_selection_and_only_shows_chips_for_running_downloads():
-    shown = node(r"""
+SWITCHER = r"""
 const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8"), html = fs.readFileSync(process.argv[2], "utf8");
 const grab = (name) => src.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
@@ -83,8 +82,11 @@ const node = (props = {}) => ({
 const elements = { "#con-search": node({ value: "" }) };
 const buttons = [...html.matchAll(/id="(con-[^"]+)" data-con-view="([^"]+)" aria-pressed="([^"]+)"/g)].map(([, id, conView, pressed]) =>
   elements[`#${id}`] = node({ dataset: { conView }, attrs: { "aria-pressed": pressed } }));
-const $ = (s) => elements[s] ??= node();
+const $ = (s) => s.startsWith("#cd-main > ")
+  ? $("#cd-main").children.find((n) => [`.${n.className}`, `#${n.id}`].includes(s.slice(11)))
+  : elements[s] ??= node();
 let detail = null;
+const pending = {};
 const ctx = { $, innerWidth: 1000, el: (tag, props) => node(props),
   document: { querySelectorAll: (s) => ({
     ".con-views [data-con-view]": buttons, "#con-running .chip": $("#con-running").children,
@@ -92,14 +94,15 @@ const ctx = { $, innerWidth: 1000, el: (tag, props) => node(props),
   })[s] || [] }, glideBars() {}, emptyHistory: () => node(),
   itemRow: (item) => node({ dataset: { hk: `row:${ctx.keyOf(item)}` }, onclick: () => ctx.pickRun(ctx.keyOf(item)) }),
   renderDetail: (card) => { detail = card.id; }, renderJob: (job) => { detail = `job:${job.job}`; },
-  nothingPicked: () => { detail = null; }, keepFocus: (_, draw) => draw(), loading() {}, renderDock() {},
-  api: () => new Promise(() => {}),
+  nothingPicked: () => { detail = null; $("#cd-main").replaceChildren(); }, keepFocus: (_, draw) => draw(),
+  loading: () => node({ className: "loading" }), renderDock() {}, failed: (textContent) => node({ textContent }),
+  clearTimeout() {}, setTimeout() {}, activityLater() {}, forgetGoneRuns() {}, followLive() {},
+  api: (path) => new Promise((resolve, reject) => { pending[path] = { resolve, reject }; }),
 };
 vm.createContext(ctx);
-vm.runInContext(`let picked_run = null, runBackKey, landOnLive = false, conFilter = "all", runCards = [], runsShown = 50;\n` +
+vm.runInContext(`let picked_run = null, runBackKey, landOnLive = false, conFilter = "all", runCards = [], runsShown = 50, runsSeq = 0, runsTimer, liveFeed;\n` +
   ["itemKey", "isLive", "isQueued"].map(line).join("\n") + "\n" +
-  src.match(/^function renderConsole.*$/m)[0] + "\n" +
-  ["drawRunningChips", "drawConsole", "jobsOf", "markPicked", "pickRun", "openActivityTool", "showStats"].map(grab).join("\n") +
+  ["openActivity", "renderConsole", "drawRunningChips", "drawConsole", "jobsOf", "markPicked", "pickRun", "openActivityTool", "showStats"].map(grab).join("\n") +
   '\nthis.keyOf = itemKey;\n' + src.match(/^\$\("#con-stats"\)\.onclick = .*;$/m)[0] + "\n" +
   src.match(/^\$\("#con-downloads"\)\.onclick = .*?^\};/ms)[0], ctx);
 const pressed = () => buttons.filter((b) => b.attrs["aria-pressed"] === "true").map((b) => b.dataset.conView);
@@ -111,6 +114,33 @@ const addRuns = (cards, liveOnly = false) => {
 const active = { id: "live", series: "Show", sxxeyy: "S01E01", outcome: "running", step: "downloading", batch: "batch" };
 const queued = { ...active, id: "queued", sxxeyy: "S01E02", waiting: true, step: "queued" };
 const history = { id: "old", series: "Older", outcome: "downloaded" };
+async function lateRuns(selection) {
+  // On phones opening Activity from the menu would automatically open the first live download.
+  ctx.innerWidth = 500;
+  ctx.scrollTo = ctx.focusHeading = () => {};
+  if (selection !== "stats") addRuns([active, history]); // Cached rows remain available during a refresh.
+  vm.runInContext("landOnLive = true", ctx);
+  const request = ctx.openActivity();
+  if (selection === "stats") $("#con-stats").onclick();
+  if (selection === "downloads") $("#con-downloads").onclick({ currentTarget: $("#con-downloads") });
+  if (selection === "run") $("#runs-history").children[0].onclick();
+  pending["/api/runs"].resolve([active, history]);
+  await request;
+  console.log(JSON.stringify([pressed(), detail]));
+}
+async function failedRuns(selection) {
+  const request = ctx.openActivity();
+  if (selection === "stats") $("#con-stats").onclick();
+  else {
+    const id = html.match(/id="cd-main"><div ([^>]+)/)[1].match(/\bid="([^"]+)"/)?.[1];
+    $("#cd-main").replaceChildren(node({ className: "loading", id }));
+  }
+  const loader = $("#cd-main").children[0];
+  pending["/api/runs"].reject(Error("network offline"));
+  await request;
+  console.log(JSON.stringify([pressed(), $("#cd-main").children[0] === loader, $("#runs-live").children[0].textContent]));
+}
+function switchViews() {
 const states = [pressed()];
 addRuns([queued, history]);
 states.push(snapshot());
@@ -136,7 +166,20 @@ states.push(snapshot());
 addRuns([history]);
 states.push($("#con-running").hidden);
 console.log(JSON.stringify({ states, chipCount, steady }));
-""", str(JS / "activity.js"), str(JS.parent / "index.html"))
+}
+const scenario = process.argv[3];
+if (scenario === "fail-stats" || scenario === "fail-downloads") failedRuns(scenario.slice(5));
+else if (scenario) lateRuns(scenario);
+else switchViews();
+"""
+
+
+def switcher(*args):
+    return node(SWITCHER, str(JS / "activity.js"), str(JS.parent / "index.html"), *args)
+
+
+def test_switcher_follows_run_selection_and_only_shows_chips_for_running_downloads():
+    shown = switcher()
     assert shown == {
         "chipCount": 1,
         "steady": True,
@@ -147,6 +190,20 @@ console.log(JSON.stringify({ states, chipCount, steady }));
             [["downloads"], False, "job:batch"], True,
         ],
     }
+
+
+@pytest.mark.parametrize(("selection", "expected"), [
+    ("stats", [["stats"], None]),
+    ("downloads", [["downloads"], None]),
+    ("run", [["downloads"], "old"]),
+])
+def test_pending_runs_do_not_override_an_explicit_selection(selection, expected):
+    assert switcher(selection) == expected
+
+
+def test_failed_runs_leave_a_pending_tool_loader_in_place():
+    assert switcher("fail-stats") == [["stats"], True, "Could not load the downloads: network offline"]
+    assert switcher("fail-downloads") == [["downloads"], False, "Could not load the downloads: network offline"]
 
 
 @pytest.mark.parametrize("suggestions", [{"2": {"service": "SBS", "count": 8}}, {}])

@@ -50,7 +50,7 @@ async function openActivity() {
   catch (e) {
     if (seq !== runsSeq) return;
     $("#runs-live").replaceChildren(failed(`Could not load the downloads: ${e.message}`, openActivity));
-    if ($("#cd-main > .loading")) nothingPicked();  // the list says it failed, with its retry: the detail stops loading
+    if ($("#cd-main > #downloads-loading")) nothingPicked();
     clearTimeout(runsTimer);
     runsTimer = setTimeout(activityLater, 10000);  // back from a sleep, the network may not be up yet: tried again
     return;
@@ -158,7 +158,14 @@ const nothingPicked = () => {
   $("#cd-main").replaceChildren(el("div", { className: "con-none" }, el("b", { textContent: "Nothing picked" }), "Pick a download on the left to see where it stands."));
 };
 /* Each tick redraws the lists and the detail: the control in use is found again by its data-fk. */
-function renderConsole(liveOnly = false) { keepFocus($("#tab-log"), () => drawConsole(liveOnly)); }
+function renderConsole(liveOnly = false) {
+  const key = document.activeElement?.dataset.fk;
+  keepFocus($("#tab-log"), () => drawConsole(liveOnly));
+  if (key?.startsWith("chip:") && document.activeElement === document.body) {
+    const row = $(`#runs-history [data-fk="row:${key.slice(5)}"]`);
+    (row?.getClientRects().length ? row : $("#con-downloads")).focus();
+  }
+}
 function drawRunningChips(items) {
   const row = $("#con-running");
   const chips = items.flatMap((item) => {
@@ -512,6 +519,7 @@ function markPicked(key) {
 }
 let runBackKey = null;
 function pickRun(id, backKey = null) {
+  landOnLive = false;
   runBackKey = backKey;
   picked_run = id;
   $("#con").classList.add("open");
@@ -520,6 +528,7 @@ function pickRun(id, backKey = null) {
 }
 function openActivityTool(show) {
   return () => {
+    landOnLive = false;
     runBackKey = null;
     $("#cd-main").replaceChildren(loading("Loading…"));
     show();
@@ -830,11 +839,13 @@ async function showStats() {
 }
 $("#con-stats").onclick = openActivityTool(showStats);
 $("#con-downloads").onclick = (e) => {
+  landOnLive = false;
   if (innerWidth > 700 && e.currentTarget.getAttribute("aria-pressed") === "true") return;
   runBackKey = null;
   $("#con").classList.remove("open"); picked_run = null; renderConsole();
 };
 $("#cd-back").onclick = () => {
+  landOnLive = false;
   const from = picked_run, trigger = runBackKey;
   runBackKey = null;
   $("#con").classList.remove("open"); picked_run = null; renderConsole();

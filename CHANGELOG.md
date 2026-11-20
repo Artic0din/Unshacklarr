@@ -145,6 +145,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Fixed Activity's shifting layout and kept keyboard focus and the selected view in place as downloads updated.
 - **The background glow no longer repeats in bands down a short page, such as a list that is still loading.**
 - **The unshackle serve log now shows after viewing a download, and empty Activity no longer shows the old download's bar.** (#365)
 - **Switching Sonarr connections no longer lets an in-flight sync lookup put the old library back in the cache.** (#368)
