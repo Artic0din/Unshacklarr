@@ -661,6 +661,40 @@ def test_sonarr_series_inflight_fetch_cannot_repopulate_caches(tmp_path, monkeyp
     assert web.sonarr_series()[0]["title"] == "Fresh Library"
 
 
+def test_sync_sonarr_series_inflight_fetch_cannot_restore_old_library(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    old_url, new_url = "http://old-sonarr.test", "http://new-sonarr.test"
+    web.write_config({"settings": {"sonarr_url": old_url, "sonarr_api_key": "old-key"}})
+    started, release = threading.Event(), threading.Event()
+
+    def fake_get(url, *, headers, **kwargs):
+        connection = (url, headers["X-Api-Key"])
+        if connection == (f"{old_url}/api/v3/series", "old-key"):
+            started.set()
+            assert release.wait(5), "old fetch was never released"
+            series_id = 1
+        else:
+            assert connection == (f"{new_url}/api/v3/series", "new-key")
+            series_id = 2
+        return SimpleNamespace(
+            status_code=200, content=b"", raise_for_status=lambda: None,
+            json=lambda: [{"id": series_id, "tvdbId": 100}],
+        )
+
+    monkeypatch.setattr(sync.requests, "get", fake_get)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        old_fetch = pool.submit(sync.sonarr_series, {100})
+        try:
+            assert started.wait(5), "old fetch never started"
+            web.write_config({"settings": {"sonarr_url": new_url, "sonarr_api_key": "new-key"}})
+        finally:
+            release.set()
+        assert old_fetch.result(timeout=5)[100]["id"] == 1
+
+    assert sync.sonarr_series({100})[100]["id"] == 2
+
+
 def test_missing_of_managed_skips_zero_missing_only_when_stats_are_fresh_and_complete(tmp_path, monkeypatch):
     web = _reload_web(tmp_path, monkeypatch)
     now = web.datetime(2026, 10, 7, tzinfo=web.timezone.utc)

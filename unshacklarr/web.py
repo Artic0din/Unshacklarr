@@ -969,7 +969,7 @@ def write_config(config: dict) -> None:
 
 
 def _apply_config_settings(config: dict) -> None:
-    with _sonarr_series_lock:
+    with sonarr_sync._sonarr_series_lock:
         previous = (sonarr_sync.SONARR, sonarr_sync.HEADERS)
         sonarr_sync.apply_settings(sonarr_sync.load_settings(config))
         if previous != (sonarr_sync.SONARR, sonarr_sync.HEADERS):
@@ -978,23 +978,21 @@ def _apply_config_settings(config: dict) -> None:
 
 
 SONARR_SERIES_TTL = 30.0
-_sonarr_series_lock = threading.RLock()
-_sonarr_series_generation = 0
 _sonarr_series_cache: tuple[tuple[str, str], float, list[dict]] = (("", ""), 0.0, [])
 
 
 def clear_sonarr_series_cache() -> None:
-    global _sonarr_series_cache, _sonarr_series_generation
-    with _sonarr_series_lock:
-        _sonarr_series_generation += 1
+    global _sonarr_series_cache
+    with sonarr_sync._sonarr_series_lock:
+        sonarr_sync._sonarr_series_generation += 1
         _sonarr_series_cache = (("", ""), 0.0, [])
 
 
 def sonarr_series() -> list[dict]:
     global _sonarr_series_cache
     now = time.monotonic()
-    with _sonarr_series_lock:
-        generation = _sonarr_series_generation
+    with sonarr_sync._sonarr_series_lock:
+        generation = sonarr_sync._sonarr_series_generation
         url, headers = sonarr_sync.SONARR, sonarr_sync.HEADERS
         key = (url, headers.get("X-Api-Key", ""))
         c_key, fetched, entries = _sonarr_series_cache
@@ -1005,8 +1003,8 @@ def sonarr_series() -> list[dict]:
     raw = r.json()
     entries = sorted((series_entry(s) for s in raw), key=lambda s: s["title"].lower())
     done_at = time.monotonic()
-    with _sonarr_series_lock:
-        if generation == _sonarr_series_generation:
+    with sonarr_sync._sonarr_series_lock:
+        if generation == sonarr_sync._sonarr_series_generation:
             _sonarr_series_cache = (key, done_at, entries)
             sonarr_sync._series_by_tvdb[""] = (done_at, {s["tvdbId"]: s for s in raw if s.get("tvdbId")})
     return list(entries)

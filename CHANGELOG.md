@@ -140,6 +140,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Switching Sonarr connections no longer lets an in-flight sync lookup put the old library back in the cache.** (#368)
 - **Clearing series file name, season map, join parts, or episode name now clears the unsaved save bar.** Normalizing
   empty and default series fields (including `sonarr_order` when no numbering overrides remain) during comparison means
   undoing an edit no longer leaves the save bar stuck open. (#335)
