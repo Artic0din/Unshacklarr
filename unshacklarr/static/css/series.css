@@ -181,16 +181,17 @@ body.drawer-open .savebar { display: none; }
 .seasons .avail { display: block; font-size: var(--fs-footnote); font-weight: 600; color: var(--ok); } .seasons .avail.none { color: var(--muted); font-weight: 500; }
 .seasons button.has-avail { box-shadow: inset 0 -2px 0 var(--ok); }
 .ep-catchup:not([hidden]) { display: flex; align-items: center; gap: 14px; justify-content: space-between; flex-wrap: wrap; margin: 4px 0 6px;
-  padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--line)); border-radius: var(--r-md); background: var(--ok-tint); }
+  padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r-md); }
 .ep-catchup b { display: block; font-size: var(--fs-body); } .ep-catchup small { color: var(--muted); font-size: var(--fs-sub); }
-.ep-catchup.none { border-color: var(--line); background: none; } .ep-catchup.none b { color: var(--muted); font-weight: 500; }
+.ep-catchup b.none { color: var(--muted); font-weight: 500; }
 .ep-check small { margin-left: 4px; font-weight: 500; color: var(--muted); font-size: var(--fs-footnote); }
 .ep-on, .ep-off { margin-left: 8px; font-style: normal; font-size: var(--fs-footnote); font-weight: 600; padding: 1px 7px; border-radius: var(--r-md); }
 .ep-up { margin-left: 8px; font-style: normal; font-size: var(--fs-footnote); font-weight: 600; padding: 1px 7px; border-radius: var(--r-md); cursor: help;
   color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .catchup-acts { display: flex; gap: 8px; flex-wrap: wrap; }
-.ep-catchup small.renum { display: block; color: var(--ok); }
-.ep-catchup small.renum.warn { color: var(--warn); }
+.ep-catchup small.renum { display: block; color: var(--text); }
+.ep-catchup .ok { color: var(--ok); }
+.ep-catchup .warn { color: var(--warn); }
 .ep-state.disk { color: var(--ok); } .ep-state.miss { color: var(--warn); } .ep-state.soon { color: var(--muted); }
 .ep-file-line { display: none; }
 .ep-head { display: grid; gap: 12px; padding: 8px 16px 6px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); letter-spacing: .02em; }

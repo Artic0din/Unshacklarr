@@ -170,6 +170,7 @@ Every change worth knowing, newest first. The format follows
 ### Fixed
 
 - Restored green for available episodes, managed series and high-quality files, with quieter outlines for unavailable episodes.
+- Distinguished possible catch-up upgrades in amber from confirmed results in green.
 - Restored 44 px input heights on touch in the Series drawer settings.
 - Made Escape dismiss a tooltip without also closing the Series drawer or Inbox.
 - Restored translations for the device picker and other short labels that name a service.

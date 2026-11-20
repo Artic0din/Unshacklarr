@@ -99,6 +99,39 @@ def node(body, *args):
     return json.loads(out.stdout)
 
 
+def test_catch_up_distinguishes_possible_upgrades_from_confirmed_results():
+    shown = node(r"""
+const box = { classList: { toggle() {} }, replaceChildren(...children) { this.children = children; } };
+const episode = { id: 1, seasonNumber: 1, episodeNumber: 1 };
+const ctx = sandbox({
+  $: () => box, document: { querySelectorAll: () => [] },
+  current: { tvdbId: 1 }, S: { config: { series: { 1: {} } } },
+  epSeasons: { 1: [episode] }, epAvail: { 1: { service: "S01E02" } },
+  epBusy: new Set(), epElsewhere: {}, epPages: {}, epUp: null,
+  seriesSvcs: () => "SBS", state: () => "disk", belowAsked: () => true,
+  pad2: (n) => String(n).padStart(2, "0"),
+  COUNT: { episode: () => "1 episode", upgrade: () => "1 upgrade", missingEpisode: () => "1 missing episode" },
+});
+vm.runInContext(grab(read(process.argv[1]), /^function renderCatchUp\(.*?^\}/ms), ctx);
+function result() {
+  ctx.renderCatchUp();
+  const [message, actions] = box.children;
+  return [message.kids[0].className, message.kids[0].textContent, actions.kids[0].className];
+}
+const possible = result();
+ctx.epUp = new Set([1]);
+const confirmed = result();
+ctx.state = () => "miss";
+ctx.belowAsked = () => false;
+console.log(JSON.stringify([possible, confirmed, result()]));
+""", str(JS / "series.js"))
+    assert shown == [
+        ["warn", "1 episode may be better on SBS", "btn small"],
+        ["ok", "1 on disk SBS has in better quality (Activity, Upgrades)", "btn small"],
+        ["ok", "SBS has 1 of your 1 missing episode", "btn primary small"],
+    ]
+
+
 def test_a_failed_attempt_never_shows_its_last_steps_done():
     shown = node(r"""
 const ctx = sandbox({ afterTracks: () => false });
