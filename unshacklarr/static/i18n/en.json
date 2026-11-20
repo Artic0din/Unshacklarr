@@ -79,6 +79,7 @@
   "svc"
  ],
  "1 episode queued": [],
+ "1 episode: {0}": [],
  "1 episode queued, replacing its file": [],
  "1 hour": [],
  "1 key": [],
@@ -3743,6 +3744,7 @@
  "{0} earlier checks": [
   "n"
  ],
+ "{0} episodes: {1}": [],
  "{0} episodes": [
   "eps.length"
  ],

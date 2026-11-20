@@ -99,6 +99,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Grouped repeated episode failures in Activity, kept the original errors in episode details, and made Retry secondary when none of the failures are likely to clear on retry. (#358)
 - Kept Series wall filters on one desktop toolbar and made every filter and action reachable on phones without sideways scrolling. (#352)
 - Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.
 - Corrected which Series controls the Filters and actions button announced as collapsed on desktop.

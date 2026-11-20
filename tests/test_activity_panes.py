@@ -105,7 +105,8 @@ const ctx = { $, el, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
     serviceNames: { NF: "Netflix", DSNP: "Disney+" }, series: [] },
   savedSonarr: (n) => n === "4K" ? "4K Saved" : n, mainSonarr: () => "Main",
   markPicked() {}, renderDock() {}, loading() {}, posterSrc() {}, posterFail() {}, ago: () => "yesterday",
-  toast: (...data) => toasts.push(data), episodeTitle: (_, __, title) => title, trWith: (key) => key,
+  toast: (...data) => toasts.push(data), episodeTitle: (_, __, title) => title,
+  trWith: (key, ...fill) => key.replace(/\{(\d+)\}/g, (_, i) => fill[i]),
   AbortSignal, tr: (text) => text,
   fetch: async (path, options) => {
     const ok = (body) => ({ ok: true, json: async () => body });
@@ -129,14 +130,17 @@ const ctx = { $, el, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
   following: null, isLive: (c) => c.outcome === "running", isQueued: (c) => c.step === "queued",
   thumb() {}, posterOf() {}, day() {}, time() {}, clearTimeout() {}, runCards: [],
   outcomeOf: (c) => c.outcome, hovering: () => "", stepStates: () => [], icon() {}, glideBars() {}, jobDone: () => el("div"),
+  duration: () => "1 min", stepList: () => el("div"), checksNote() {}, cardActs: () => [],
+  renderConsole: () => ctx.renderJob(job),
   openServiceRow: (...data) => opened.push(data),
 };
+let job;
 vm.createContext(ctx);
 vm.runInContext(`let picked_run;\n` +
   [src.slice(src.indexOf("let missingDays"), src.indexOf('$("#con-missing").onclick')),
     src.slice(src.indexOf("let upgrade"), src.indexOf('$("#con-upgrades").onclick')),
     grab("api", core), grab("responseError", core), line("svcName", series), grab("seasonTag", series), line("fixSignIn"),
-    ...["signInFailed", "signInAction", "cardKind", "jobState", "renderJob"].map((n) => grab(n))
+    ...["signInFailed", "signInAction", "cardKind", "jobState", "jobFailure", "renderJob", "runBody"].map((n) => grab(n))
   ].join("\n"), ctx);
 (async () => {
   if (scenario === "job") {
@@ -144,12 +148,27 @@ vm.runInContext(`let picked_run;\n` +
     const auth = target !== "unclassified" ? { auth_failures: { DSNP: "expired" }, auth_failure_backends: { DSNP: "secondary" } }
       : { cause: "Login failed" };
     const waiting = target === "live" ? { outcome: "running", step: "queued", waiting: true, paused: true } : {};
-    ctx.renderJob({ job: "job1", cards: [{ ...card, id: "a", episodeId: 123, ...waiting }, { ...card, ...auth, id: "b", episodeId: 456 }] });
+    const first = target === "mixed" ? { cause: "Connection timed out" } : { ...auth, ...waiting };
+    ctx.renderJob({ job: "job1", cards: [{ ...card, ...first, id: "a", episodeId: 123 }, { ...card, ...auth, id: "b", episodeId: 456 }] });
     const buttons = $("#cd-foot").children;
     const fix = buttons.find((b) => b.textContent === "Fix sign-in");
     fix?.onclick();
     console.log(JSON.stringify({ primary: buttons.filter((b) => b.className.includes("primary")).map((b) => b.textContent),
       opened, fk: fix?.dataset?.fk ?? null }));
+    return;
+  }
+  if (scenario === "failure-reasons") {
+    const causes = JSON.parse(target);
+    job = { job: "job1", cards: causes.map((cause, i) => ({
+      id: `run${i}`, episodeId: i + 1, tvdbId: 72, series: "Example", service: "AMZN",
+      outcome: "failed", started: "2026-01-01T00:00:00Z", ended: "2026-01-01T00:01:00Z", cause,
+    })) };
+    ctx.renderJob(job);
+    const text = () => walk($("#cd-main")).flatMap((n) => typeof n.textContent === "string" ? [n.textContent] : []);
+    const folded = text();
+    const retry = $("#cd-foot").children.find((b) => b.dataset?.fk === "retry");
+    walk($("#cd-main")).find((n) => n.dataset?.fk === "card:run0").onclick();
+    console.log(JSON.stringify({ folded, expanded: text(), retry: retry.textContent, primary: retry.className.includes("primary") }));
     return;
   }
   if (scenario === "upgrades") {
@@ -273,11 +292,32 @@ def test_catch_up_row_and_bulk_do_not_queue_the_same_episode(order, sent):
 @pytest.mark.parametrize(("classification", "primary", "opened", "fk"), [
     ("classified", ["Fix sign-in"], [["DSNP", "secondary"]], "sign-in"),
     ("live", ["Fix sign-in"], [["DSNP", "secondary"]], "sign-in"),
+    ("mixed", ["Retry 2 failed"], [["DSNP", "secondary"]], "sign-in"),
     ("unclassified", ["Retry 2 failed"], [], None),
 ])
 def test_failed_job_footer_offers_sign_in_only_for_classified_failure(classification, primary, opened, fk):
     result = node(ACTIVITY_ACTIONS, str(JS), "job", classification)
     assert result == {"primary": primary, "opened": opened, "fk": fk}
+
+
+@pytest.mark.parametrize(("other", "summary", "primary"), [
+    ([], [], False),
+    (["404 Client Error: Not Found for url: https://example.test/three"], ["1 episode: 404 Not Found"], False),
+    (["HTTP 403: Forbidden"], ["1 episode: 403 Forbidden"], False),
+    (["503 Server Error: Service Unavailable for url: https://example.test/three", "Connection timed out"],
+     ["1 episode: 503 Service Unavailable", "1 episode: Connection timed out"], True),
+])
+def test_job_summarizes_failure_reasons_and_keeps_episode_details(other, summary, primary):
+    raw = "451 Client Error: Unavailable for Legal Reason for url: https://example.test/"
+    causes = [f"AMZN through Unshackle: HTTP 422: An unexpected error occurred: {raw}one (ref a0e2e9)", raw + "two", *other]
+    result = node(ACTIVITY_ACTIONS, str(JS), "failure-reasons", json.dumps(causes))
+    assert result["folded"].count("2 episodes: 451 Unavailable for Legal Reason") == 1
+    assert all("https://" not in text for text in result["folded"])
+    assert result["folded"].count("failed") == len(causes)
+    assert causes[0] in result["expanded"]
+    assert [text for text in result["folded"] if text.startswith("1 episode: ")] == summary
+    assert result["retry"] == f"Retry {len(causes)} failed"
+    assert result["primary"] is primary
 
 
 def test_upgrades_explains_which_files_the_quality_ladder_selects():

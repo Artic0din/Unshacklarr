@@ -1902,6 +1902,8 @@
  "season finale": "финал сезона",
  "series finale": "финал сериала",
  "1 episode": "1 эпизод",
+ "1 episode: {0}": "1 эпизод: {0}",
+ "{0} episodes: {1}": "Эпизодов: {0}. Причина: {1}",
  "Ask the service again about {0}": "Снова спросить сервис о {0}",
  "Check": "Проверить",
  "Downloaded from {0}, each episode its own programme": "Загружается с {0}, каждый эпизод — отдельная программа",

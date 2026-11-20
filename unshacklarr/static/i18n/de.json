@@ -1884,6 +1884,8 @@
  "season finale": "Staffelfinale",
  "series finale": "Serienfinale",
  "1 episode": "1 Folge",
+ "1 episode: {0}": "1 Folge: {0}",
+ "{0} episodes: {1}": "{0} Folgen: {1}",
  "Ask the service again about {0}": "Den Dienst erneut zu {0} fragen",
  "Check": "Prüfen",
  "Downloaded from {0}, each episode its own programme": "Von {0} geladen, jede Folge ein eigenes Programm",
