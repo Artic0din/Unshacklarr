@@ -413,13 +413,16 @@ const toggle = {
   setAttribute(name, value) { this.attributes[name] = String(value); },
   focus: () => events.push("focus: filters"),
 };
-const search = {}, sort = {}, library = {};
+const search = {}, sort = {}, library = {}, poster = {};
 const controls = {
   contains: (target) => target === sort || target === library,
   addEventListener: (name, fn, capture) => { listeners[name] = { fn, capture }; },
 };
 const narrow = { matches: false, addEventListener: (name, fn) => { listeners[name] = { fn }; } };
-const ctx = sandbox({ $: (sel) => sel === "#series-options-toggle" ? toggle : controls, matchMedia: () => narrow });
+const ctx = sandbox({ $: (sel) => sel === "#series-options-toggle" ? toggle : controls, matchMedia: () => narrow,
+  document: {}, window: { addEventListener: (name, fn) => { listeners[`window:${name}`] = { fn }; } },
+  requestAnimationFrame: (fn) => { listeners.afterTab = { fn }; },
+});
 const nav = read(process.argv[1]);
 vm.runInContext(nav.slice(nav.indexOf("function bindSeriesOptions("), nav.indexOf("function renderServiceFilter(")), ctx);
 const controlled = [toggle.getAttribute("aria-controls")];
@@ -441,11 +444,18 @@ events.push(expanded());
 listeners.keydown.fn({ key: "Escape", target: sort, preventDefault() {} });
 events.push(expanded());
 press();
-listeners.focusout.fn({ target: toggle, relatedTarget: sort });
-listeners.focusout.fn({ target: sort, relatedTarget: library });
+listeners.focusout?.fn({ target: toggle, relatedTarget: sort });
+listeners.focusout?.fn({ target: sort, relatedTarget: library });
 events.push(`inside: ${expanded() ? "open" : "closed"}`);
-listeners.focusout.fn({ target: library, relatedTarget: search });
-events.push(`outside: ${expanded() ? "open" : "closed"}`);
+listeners.focusout?.fn({ target: library, relatedTarget: poster });
+if (expanded()) events.push("poster opened drawer");
+listeners["window:click"]?.fn({ composedPath: () => [poster] });
+events.push(`after click: ${expanded() ? "open" : "closed"}`);
+toggle.setAttribute("aria-expanded", "true");
+listeners.keydown.fn({ key: "Tab", target: library });
+ctx.document.activeElement = search;
+listeners.afterTab?.fn();
+events.push(`after Tab: ${expanded() ? "open" : "closed"}`);
 for (const action of ["#bulk-open", "#sel-toggle"]) {
   press();
   click(action);
@@ -456,7 +466,7 @@ console.log(JSON.stringify([controlled, listeners.click.capture, ...events]));
     assert seen == [
         ["series-actions", "series-options", "series-actions"],
         True, True, False, True, "focus: filters", False,
-        "inside: open", "outside: closed",
+        "inside: open", "poster opened drawer", "after click: closed", "after Tab: closed",
         "focus: filters", "#bulk-open: closed", "focus: filters", "#sel-toggle: closed",
     ]
 

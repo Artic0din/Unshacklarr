@@ -105,6 +105,7 @@ Every change worth knowing, newest first. The format follows
 - Grouped Settings into six sections with shorter headers and jump links, while keeping existing Settings links working. (#354)
 - Kept Series wall filters on one desktop toolbar and made every filter and action reachable on phones without sideways scrolling. (#352)
 - Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.
+- Fixed poster taps when Series filters were expanded.
 - Corrected which Series controls the Filters and actions button announced as collapsed on desktop.
 - Moved Activity tools into a compact switcher, added shortcuts to running downloads, and kept the download detail pane full size. (#353)
 - Added service names and individual downloads to Catch up, tightened Waiting and Upgrades, and added Fix sign-in to failed jobs that need it. (#353)

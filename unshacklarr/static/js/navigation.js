@@ -275,10 +275,15 @@ function bindSeriesOptions() {
   };
   toggle.onclick = () => toggle.setAttribute("aria-expanded", String(!expanded()));
   toolbar.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && inDisclosure(e.target) && close()) e.preventDefault();
+    if (!expanded() || !inDisclosure(e.target)) return;
+    if (e.key === "Escape" && close()) e.preventDefault();
+    if (e.key === "Tab") requestAnimationFrame(() => {
+      if (!inDisclosure(document.activeElement)) close(false);
+    });
   });
-  toolbar.addEventListener("focusout", (e) => {
-    if (e.relatedTarget && inDisclosure(e.target) && !inDisclosure(e.relatedTarget)) close(false);
+  window.addEventListener("click", (e) => {
+    const path = e.composedPath();
+    if (!path.includes(toggle) && !path.includes(options)) close(false);
   });
   options.addEventListener("click", (e) => {
     if (e.target.closest("#bulk-open, #sel-toggle")) close();
