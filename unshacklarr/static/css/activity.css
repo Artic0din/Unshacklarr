@@ -219,7 +219,7 @@
 @media (hover: hover) { .dock .d-acts button:hover { border-color: var(--field-line-hover); } }
 .dock .d-acts .stop { color: var(--err); } .dock .d-acts .retry, .dock .d-acts .on { color: var(--text); }
 .dock .d-sep { width: 1px; height: 24px; background: var(--line); flex: none; }
-.dock .d-open { width: 34px; height: 34px; border-radius: 9px; border: 0; background: var(--accent); color: var(--accent-ink);
+.dock .d-open { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--field-bg); color: var(--text);
   display: grid; place-items: center; flex: none; cursor: pointer; padding: 0; }
 .con-detail:has(.cd-foot :is([data-fk="sign-in"], [data-fk="retry"].primary)) .dock .d-open { border: 1px solid var(--line); background: var(--field-bg); color: var(--text); }
 .con-detail:has(.cd-foot [data-fk="retry"].primary) .dock .d-acts .retry { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }

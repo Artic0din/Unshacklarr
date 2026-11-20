@@ -1099,7 +1099,7 @@ function cardActs(c) {
   return [
     setupButton(c),
     live && c.job_id ? act("stop", "Stop", stopRun, "danger") : "",
-    !live && c.outcome === "kept" ? act("import", "Import anyway", importKept, "primary") : "",
+    !live && c.outcome === "kept" ? act("import", "Import anyway", importKept) : "",
     !live && c.outcome === "import" ? act("import", "Import", importKept, "primary") : "",
     signIn ? act("signin", "Fix sign-in", fixSignIn, "primary") : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? act("retry", "Retry", retryRun, signIn ? "" : "primary") : "",
@@ -1125,7 +1125,7 @@ function runActs(c) {
     setupButton(c),
     signIn,
     live && c.job_id ? el("button", { className: "btn small danger", textContent: "Stop", dataset: { fk: "stop" }, onclick: (e) => stopRun(c, e.target) }) : "",
-    !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: "btn small primary", textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
+    !live && (c.outcome === "kept" || c.outcome === "import") ? el("button", { className: `btn small${c.outcome === "import" ? " primary" : ""}`, textContent: c.outcome === "kept" ? "Import anyway" : "Import", dataset: { fk: "import" }, onclick: (e) => importKept(c, e.target) }) : "",
     !live && c.episodeId && !["downloaded", "kept", "import"].includes(c.outcome) ? el("button", { className: `btn small${signIn ? "" : " primary"}`, textContent: "Retry", dataset: { fk: "retry" }, onclick: (e) => retryRun(c, e.target) }) : "",
     !live ? el("button", { className: "btn small", textContent: "Save diagnostic", dataset: { fk: "diagnostic" }, title: "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens",
       onclick: () => downloadDiagnostic(c) }) : "",
