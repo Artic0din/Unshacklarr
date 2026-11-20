@@ -237,7 +237,7 @@
   .uy-page:not([hidden]) { height: calc(100dvh - 164px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .uy-tools:not([hidden]) { width: 100%; } .uy-tools select { flex: 1; min-width: 0; }
 
-  input[type=text], input[type=url], input[type=search], input[type=number], input[type=time], input[type=password], textarea, select { font-size: 16px; min-height: 44px; }
+  input[type=text], input[type=url], input[type=search], input[type=number], input[type=time], input[type=date], input[type=password], textarea, select { font-size: 16px; min-height: 44px; }
   .btn { min-height: 44px; }
   .btn.small, .con-filters button { min-height: 36px; }
   .gh-act { min-height: 36px; padding-inline: 8px; margin-right: -8px; }  /* the text stays at the edge, the target grows */

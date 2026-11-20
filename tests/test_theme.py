@@ -190,7 +190,8 @@ def test_a_link_drawn_as_a_button_takes_the_buttons_colour_not_the_browsers_link
 
 def test_a_text_fields_focus_is_a_2px_ring_on_every_field_rule():
     """A solid 2px ring replaces the old 1px accent edge with a faint halo."""
-    focus = [".remote-form input:focus", ".remote-form select:focus", "input[type=time]:focus:not(.bad)"]
+    focus = [".remote-form input:focus", ".remote-form select:focus",
+             "input[type=time]:focus:not(.bad)", "input[type=date]:focus:not(.bad)"]
     for selector in focus:
         assert any("outline: 2px solid var(--accent)" in body for body in rules_of(selector)), selector
     general = [body for body in rules_of("textarea):focus:not(.bad)") + rules_of(":is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], select, textarea):focus:not(.bad)")]

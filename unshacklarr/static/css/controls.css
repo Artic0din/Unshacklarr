@@ -105,8 +105,8 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .up-mode .rt-who { max-width: 70ch; margin-bottom: var(--gap-field); }  /* a long explainer: a readable line, and room before the next labels */
 #dx-library[hidden] { display: none; } .ax-bursts { margin-top: 4px; font-size: var(--fs-callout); }
 /* the window's hours look like the other fields; a fallback half set says so in red */
-input[type=time] { background: var(--field-bg); border: 1px solid var(--field-line); border-radius: var(--r-md); padding: 7px 10px; width: 100%; min-height: 40px; color: var(--text); }
-input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
+:is(input[type=time], input[type=date]) { background: var(--field-bg); border: 1px solid var(--field-line); border-radius: var(--r-md); padding: 7px 10px; width: 100%; min-height: 40px; color: var(--text); }
+input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
 #d-fb-say.status-err, #ax-window-say.status-err { color: var(--err); }
 /* What's new: the list, and the "New" badges on the new options */
 #news-dlg { width: min(600px, calc(100vw - 32px)); } #news-dlg .modal-head p { margin: 2px 0 0; font-size: var(--fs-callout); }
@@ -285,10 +285,10 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 :root { --ctl-h: 36px; --ctl-h-sm: 30px; }
 @media (min-width: 701px) and (pointer: fine) {
   .btn, nav a, .pill, .ax-seg button,
-  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: var(--ctl-h); height: auto; }
-  .ax-seg button, input[type=time] { height: var(--ctl-h); }  /* a time field's own inner box is taller than the rest */
+  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], input[type=date], select) { min-height: var(--ctl-h); height: auto; }
+  .ax-seg button, input[type=time], input[type=date] { height: var(--ctl-h); }  /* native date/time fields have taller inner boxes */
   .sx-grid input:not(.switch), .nt-fields input, .ds .sx-grid select, .ql-name, .ql-step select, .ql-h input, .svc-picks select { min-height: var(--ctl-h); }
-  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { padding-block: 0; }
+  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], input[type=date], select) { padding-block: 0; }
   .pill, .btn { padding-block: 0; }  /* the height comes from the line above, never from text plus padding */
   .seg, .seg.small { padding: 3px; }
   .seg button, .seg.small button { min-height: calc(var(--ctl-h) - 8px); padding-block: 0; }
@@ -307,7 +307,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
   .btn, .btn.small, nav a, .pill, .ax-seg button, .inbox-filters button, .con-filters button, .set-nav button,
   .set-back, .hidden-btn, .sched-filter .pill, .cd-tracks-fold > summary, .ds-sub summary, .inbox-clear,
-  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: 44px; }
+  :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], input[type=date], select) { min-height: 44px; }
   nav a { min-inline-size: 44px; }
   .hidden-btn { height: auto; }
   .cal-step .btn.small, .sched-tools .seg.small button { min-width: 44px; min-height: 44px; padding-inline: 8px; }
@@ -321,7 +321,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   #d-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(44px - 1lh) .3em; }  /* wrapped, its links 44 px apart */
   .seg button { min-height: 44px; }  /* wrapped rows touch: no room for a slop (Week and Month, one row, keep theirs) */
   .health { gap: 0; } .health button { min-width: 44px; min-height: 44px; padding: 0 8px; justify-content: center; }
-  .ds .sx-grid :is(select, input[type=time]) { min-height: 44px; }
+  .ds .sx-grid :is(select, input[type=time], input[type=date]) { min-height: 44px; }
   .ladder-pick .ax-edit { display: inline-flex; align-items: center; min-height: 44px; }  /* under the buttons: a slop would cover them */
   .ug-line { min-height: 44px; }
   .ep-sel button { min-width: 44px; min-height: 44px; }  /* its frame clips: no room for a slop */

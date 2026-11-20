@@ -78,7 +78,7 @@
 .card .field > span, .card .field > label:not(.check) { color: var(--text); font-size: var(--fs-callout); }
 .card .field small, .card small.help { font-size: var(--fs-sub); color: var(--muted); }
 .card small.help { display: block; margin-top: 8px; }
-.card input[type=time] { background: var(--bg); border: 1px solid var(--field-line); border-radius: var(--r-sm); padding: 7px 10px; width: 100%; }
+.card :is(input[type=time], input[type=date]) { background: var(--bg); border: 1px solid var(--field-line); border-radius: var(--r-sm); padding: 7px 10px; width: 100%; }
 .card input[type=text], .card input[type=url], .card input[type=number], .card select { background: var(--bg); border-color: var(--field-line); }
 .card input:focus, .card select:focus { border-color: var(--accent); }  /* the ring itself: the text-field rule above, or :focus-visible */
 details.card summary { cursor: pointer; list-style: none; position: relative; padding-right: 24px; }
