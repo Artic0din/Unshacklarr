@@ -155,7 +155,7 @@
  "Could not change unshackle.yaml safely: change it by hand": "Impossibile modificare unshackle.yaml in sicurezza: modificalo a mano",
  "Could not copy: select it instead": "Copia non riuscita: selezionalo",
  "Could not copy: select the command instead": "Copia non riuscita: seleziona il comando",
- "Could not load series: {0}": "Impossibile caricare le serie: {0}",
+ "Could not load app data: {0}": "Impossibile caricare i dati dell’app: {0}",
  "Could not load notifications": "Impossibile caricare le notifiche",
  "Could not load the calendar: {0}": "Impossibile caricare il calendario: {0}",
  "Could not load the downloads: {0}": "Impossibile caricare i download: {0}",

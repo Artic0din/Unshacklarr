@@ -157,7 +157,7 @@
  "Could not change unshackle.yaml safely: change it by hand": "unshackle.yaml を安全に変更できませんでした。手動で変更してください",
  "Could not copy: select it instead": "コピーできませんでした。選択してコピーしてください",
  "Could not copy: select the command instead": "コピーできませんでした。コマンドを選択してコピーしてください",
- "Could not load series: {0}": "シリーズを読み込めませんでした：{0}",
+ "Could not load app data: {0}": "アプリのデータを読み込めませんでした：{0}",
  "Could not load notifications": "通知を読み込めませんでした",
  "Could not load the calendar: {0}": "カレンダーを読み込めませんでした：{0}",
  "Could not load the downloads: {0}": "ダウンロードを読み込めませんでした：{0}",

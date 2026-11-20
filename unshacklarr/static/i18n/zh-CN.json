@@ -157,7 +157,7 @@
  "Could not change unshackle.yaml safely: change it by hand": "无法安全地修改 unshackle.yaml：请手动修改",
  "Could not copy: select it instead": "无法复制：请手动选中",
  "Could not copy: select the command instead": "无法复制：请手动选中命令",
- "Could not load series: {0}": "无法加载剧集：{0}",
+ "Could not load app data: {0}": "无法加载应用数据：{0}",
  "Could not load notifications": "无法加载通知",
  "Could not load the calendar: {0}": "无法加载日历：{0}",
  "Could not load the downloads: {0}": "无法加载下载：{0}",

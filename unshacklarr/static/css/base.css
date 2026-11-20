@@ -43,3 +43,4 @@ h1, h2, h3, .sx-card h4 { line-height: 1.2; letter-spacing: -.01em; text-wrap: b
   background: var(--panel); color: var(--text); font-weight: 600; text-decoration: none; box-shadow: var(--sh-md); }
 .skip:not(:focus) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 main:focus { outline: none; }  /* the skip link's target, not a control */
+#initial-state-error:not([hidden]) ~ section { display: none; }

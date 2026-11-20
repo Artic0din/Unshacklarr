@@ -640,10 +640,10 @@
   "show['service']",
   "e"
  ],
- "Could not load notifications": [],
- "Could not load series: {0}": [
+ "Could not load app data: {0}": [
   "e.message"
  ],
+ "Could not load notifications": [],
  "Could not load the calendar: {0}": [
   "e.message"
  ],

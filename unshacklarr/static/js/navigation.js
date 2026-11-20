@@ -235,7 +235,7 @@ function showTab(name, fromRoute = false, quiet = false) {
   });
   document.querySelectorAll("main > section").forEach((s) => s.hidden = s.id !== "tab-" + name);
   if (!fromRoute) navigate(true);
-  if (quiet) return;
+  if (quiet || $("#initial-state-error")?.hidden === false) return;
   if (name === "log") { refreshLog(); openActivity(); }
   else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
   if (name === "settings" && !fromRoute) loadSettingsSec();
