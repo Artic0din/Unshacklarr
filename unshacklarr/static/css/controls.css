@@ -287,7 +287,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .btn, nav a, .pill, .ax-seg button,
   :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { min-height: var(--ctl-h); height: auto; }
   .ax-seg button, input[type=time] { height: var(--ctl-h); }  /* a time field's own inner box is taller than the rest */
-  .sx-grid input, .nt-fields input, .ds .sx-grid select, .ql-name, .ql-step select, .ql-h input, .svc-picks select { min-height: var(--ctl-h); }
+  .sx-grid input:not(.switch), .nt-fields input, .ds .sx-grid select, .ql-name, .ql-step select, .ql-h input, .svc-picks select { min-height: var(--ctl-h); }
   :is(input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], input[type=time], select) { padding-block: 0; }
   .pill, .btn { padding-block: 0; }  /* the height comes from the line above, never from text plus padding */
   .seg, .seg.small { padding: 3px; }
