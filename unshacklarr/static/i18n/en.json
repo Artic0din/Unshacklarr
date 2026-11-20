@@ -35,6 +35,7 @@
   "list.length - 3"
  ],
  ", all working": [],
+ ", and to this device.": [],
  ", as {0}": [
   "c.serviceEpisode"
  ],
@@ -205,6 +206,7 @@
   "code"
  ],
  "Access key": [],
+ "Account": [],
  "Account & Backups": [],
  "Actions": [],
  "Actions for {0}": [
@@ -242,6 +244,7 @@
  ],
  "Added to Sonarr's season number": [],
  "Added to each series' own options. An option a series already has is replaced.": [],
+ "Added to every": [],
  "Address": [],
  "Advanced": [],
  "After adding or updating a service in its services folder": [],
@@ -324,6 +327,7 @@
  "Apple TV+": [],
  "Apply": [],
  "Apply to this job": [],
+ "Apprise": [],
  "Apprise address": [],
  "Approval": [],
  "Approvals · {0}": [
@@ -423,6 +427,7 @@
  "Backups": [],
  "Backups can be sent to WebDAV or S3 only": [],
  "Backups found in the data folder, newest first. The password above becomes yours.": [],
+ "Before each download, Unshacklarr lists the episode's tracks on the service. It downloads the first step of the ladder that the service has, and nothing outside the ladder.": [],
  "Before {0}'s first episode: nothing to ask for": [
   "svc"
  ],
@@ -439,6 +444,7 @@
  "Bypass proxy for all downloads. Manifest, license, and auth still use proxy.": [],
  "Bypass title cache for this download.": [],
  "CDM": [],
+ "CDM devices": [],
  "CDM version": [],
  "CDM {0} {1}": [
   "d['name']",
@@ -496,6 +502,10 @@
   "svcName(m.service)"
  ],
  "Check this series' Numbering (its episode table), then try again": [],
+ "Check {0} in Settings › Services": [
+  "svcName(conf.service)",
+  "svcName(signIn)"
+ ],
  "Check {0} in Settings › Services & Devices › Services": [
   "svcName(signIn.service)"
  ],
@@ -541,6 +551,9 @@
  "Choose a quality ladder for Sonarr {0} in Settings › Connections › Sonarr first": [
   "sonarr"
  ],
+ "Choose a quality ladder for Sonarr {0} in Settings, Sonarr first": [
+  "sonarr"
+ ],
  "Choose a quality ladder for {0}: a ladder, Off, or Same as each series": [
   "name"
  ],
@@ -578,6 +591,7 @@
  "Clear…": [],
  "Click a day to set 0, 1, 2 or 3 episodes (0: none that day). Orange: different from the usual schedule.": [],
  "Click a service to move it to another device. A change applies to the next download.": [],
+ "Clock": [],
  "Close": [],
  "Code copied": [],
  "Code: {0}": [
@@ -605,6 +619,7 @@
  "Connected to Unshackle ({0})": [
   "COUNT.service(services)"
  ],
+ "Connection": [],
  "Connections": [],
  "Continue with best available quality if requested resolutions are not available.": [],
  "Cookie {0}: a tab or a line break in it would break the cookie file": [
@@ -620,6 +635,7 @@
   "svcName(service)"
  ],
  "Copy": [],
+ "Copy command": [],
  "Copy details": [],
  "Copy it now: it will not be shown again.": [],
  "Copy the command": [],
@@ -688,6 +704,7 @@
  "Counted from the air date in Sonarr. Pick a day before when a streaming platform gets the episodes ahead of the TV channel.": [],
  "Country": [],
  "Country and time zone": [],
+ "Country, time zone": [],
  "Create a bot with @BotFather to get its token. Then send your bot a message, and get your chat ID from @userinfobot.": [],
  "Create a key": [],
  "Create separate output files per audio codec instead of merging all audio.": [],
@@ -726,6 +743,7 @@
   "cdmShort(d) || device"
  ],
  "Default: the one of Settings › Quality & Upgrades › Quality.": [],
+ "Default: the one of Settings, Quality.": [],
  "Delete": [],
  "Delete partial downloads": [],
  "Delete the job": [],
@@ -757,6 +775,9 @@
  "Deleted on their own after {0} days (Settings › Downloading › Automation).": [
   "r.days"
  ],
+ "Deleted on their own after {0} days (Settings, Automation).": [
+  "r.days"
+ ],
  "Deletes Unshackle's cache, sign-ins included: services sign in again next time": [],
  "Deletes finished downloads from the history, with their Unshackle output. Downloads in progress stay. Your files and Sonarr are not touched.": [],
  "Deletes the leftovers of interrupted downloads": [],
@@ -781,6 +802,7 @@
  "Discard": [],
  "Discard changes": [],
  "Discord": [],
+ "Discord, this device and more": [],
  "Dismiss": [],
  "Disney+": [],
  "Do not download audio tracks.": [],
@@ -1003,6 +1025,7 @@
  "Files a service has in better quality": [],
  "Files without your audio languages": [],
  "Files your quality ladder says could be better. Check now asks each service what it has, up to 10 episodes of a series at a time, and keeps each answer for the days set in Settings › Quality & Upgrades › Upgrades. Replace downloads the better ones over your files, even when Sonarr ranks both the same (H.264 and H.265 in 1080p).": [],
+ "Files your quality ladder says could be better. Check now asks each service what it has, up to 10 episodes of a series at a time, and keeps each answer for the days set in Settings, Upgrades. Replace downloads the better ones over your files, even when Sonarr ranks both the same (H.264 and H.265 in 1080p).": [],
  "Filter by Sonarr library": [],
  "Filter by service": [],
  "Find a series": [],
@@ -1098,6 +1121,7 @@
  "Hidden from the schedule: show it again": [],
  "Hidden series": [],
  "Hidden titles are blurred until you click or tap them. Default follows Settings › General › Interface, No spoilers.": [],
+ "Hidden titles are blurred until you click or tap them. Default follows Settings, Interface, No spoilers.": [],
  "Hide": [],
  "Hide on disk": [],
  "Hide these episodes": [],
@@ -1150,6 +1174,7 @@
  "In schedule: {0}": [],
  "In use": [],
  "In use: move its services first": [],
+ "In your browser": [],
  "In {0}: {1}": [
   "net.country",
   "net.providers.map((p) => p.name).join(\", \")"
@@ -1174,8 +1199,10 @@
  "It only opens the /api/v1 routes: never the password, the cookies or the settings.": [],
  "Italian": [],
  "Italiano": [],
+ "Its address, API key, and TMDB": [],
  "Its address: http(s)://…": [],
  "Its downloads will fail: replace them in Settings › Services & Devices › Services.": [],
+ "Its downloads will fail: replace them in Settings › Services.": [],
  "Its last {0} downloads failed{1}": [
   "sick.failing",
   "sick.cause ? `: ${sick.cause}` : \"\""
@@ -1235,6 +1262,7 @@
   "label"
  ],
  "Kept until you delete them (Settings › Downloading › Automation).": [],
+ "Kept until you delete them (Settings, Automation).": [],
  "Kept without {0} audio: {1}": [
   "w['want']",
   "w['label']"
@@ -1248,11 +1276,13 @@
   "n"
  ],
  "Ladders as chips, a bitrate per step": [],
+ "Ladders of resolutions and codecs": [],
  "Language": [],
  "Language wanted for Audio, overrides -l/--lang for audio tracks. Prefix a value with '-' to exclude it, e.g. 'all,-es'.": [],
  "Language wanted for Subtitles. Prefix a value with '-' to exclude it, e.g. 'all,-es'.": [],
  "Language wanted for Video. You would use this if the video language doesn't match the audio. Prefix a value with '-' to exclude it, e.g. 'all,-es'.": [],
  "Language(s) wanted for Video and Audio (comma-separated). Use 'orig' to select the original language, e.g. 'orig,en' for both original and English. Prefix a value with '-' to exclude it, e.g. 'all,-es'.": [],
+ "Language, no spoilers": [],
  "Language: {0}": [],
  "Languages": [],
  "Languages reads each file's tracks from Sonarr 5; this Sonarr is version {0}": [
@@ -1291,6 +1321,10 @@
  "Left": [],
  "Less free space than Settings keeps: nothing is downloaded until there is enough": [],
  "Less than {0} GB free in {1}: nothing is downloaded for its series. Make room, or lower the room kept free in Settings › Connections › Unshackle, Folders.": [
+  "keep",
+  "', '.join(full_roots)"
+ ],
+ "Less than {0} GB free in {1}: nothing is downloaded for its series. Make room, or lower the room kept free in Settings, Unshackle, Folders.": [
   "keep",
   "', '.join(full_roots)"
  ],
@@ -1343,6 +1377,7 @@
   "S.config.settings.timezone.replaceAll(\"_\", \" \")"
  ],
  "Messages are held, then sent as one summary when they end.": [],
+ "Messages to Discord, Telegram, ntfy, Pushover, e-mail and 100 more, through": [],
  "Mid-season finale": [],
  "Missing": [],
  "Missing X-Unshackle header": [],
@@ -1387,7 +1422,9 @@
  "Name of the remote server from remote_services, when several are configured. Only with --remote.": [],
  "Name the Sonarr with a letter, then letters, digits or dashes, like sonarr-1080p": [],
  "Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
+ "Needed to clear one service's cache in Settings › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
  "Needed to manage them in Settings › Services & Devices › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
+ "Needed to manage them in Settings › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
  "Needs Unshackle 6": [],
  "Needs Unshackle after 6.0.0": [],
  "Needs a look": [],
@@ -1405,6 +1442,7 @@
   "new Date(conf.since).toLocaleDateString(LOCALE, { day: \"numeric\", month: \"long\", year: \"numeric\" })"
  ],
  "New episodes are downloaded for each library switched on, with its own quality ladder (Settings › Connections › Sonarr).": [],
+ "New episodes are downloaded for each library switched on, with its own quality ladder (Settings, Sonarr).": [],
  "New keys, from its group key": [],
  "New ladder": [],
  "New password": [],
@@ -1429,8 +1467,14 @@
  "No CDM for {0}: unshackle.yaml sets no device for it and no default device. Pick one in Settings › Services & Devices › Devices (CDM), or No CDM if it has no DRM": [
   "tag"
  ],
+ "No CDM for {0}: unshackle.yaml sets no device for it and no default device. Pick one in Settings, CDM, or No CDM if it has no DRM": [
+  "tag"
+ ],
  "No DRM, nothing to decrypt": [],
  "No Sonarr named {0} in Settings › Connections › Sonarr": [
+  "name"
+ ],
+ "No Sonarr named {0} in Settings, Sonarr": [
   "name"
  ],
  "No address yet": [],
@@ -1496,6 +1540,7 @@
  ],
  "No quality ladder": [],
  "No release group is set. Set a Group Tag in Settings › Downloading › Download options: your downloads then carry it, and this switch can tell them apart.": [],
+ "No release group is set. Set a Group Tag in Settings, Download options: your downloads then carry it, and this switch can tell them apart.": [],
  "No remote CDM called {0}": [
   "name"
  ],
@@ -1663,6 +1708,7 @@
  "Nothing in the history yet": [],
  "Nothing in use": [],
  "Nothing is downloaded for it until you choose one in Settings › Connections › Sonarr: a ladder, Off, or Same as each series.": [],
+ "Nothing is downloaded for it until you choose one in Settings, Sonarr: a ladder, Off, or Same as each series.": [],
  "Nothing is downloaded while the downloads folder, or the library folder Sonarr moves a series into, has less free space than this, and you get a notification. 0: not checked.": [],
  "Nothing is downloading or waiting.": [],
  "Nothing is downloading right now.": [],
@@ -1790,6 +1836,7 @@
  "Optional and free:": [],
  "Options": [],
  "Options applied to the episodes still to come in this job": [],
+ "Options for every series": [],
  "Options of the service": [],
  "Options of this job": [],
  "Options of {0}": [
@@ -1825,12 +1872,16 @@
  "Passphrase of the backup": [],
  "Password": [],
  "Password must be at least 8 characters": [],
+ "Password, sessions, API key": [],
  "Passwords do not match": [],
  "Passwords match": [],
  "Paste the whole webhook URL: it starts with https://discord.com/api/webhooks/": [],
  "Pause": [],
  "Pause the job": [],
  "Paused for {0}: choose a quality ladder in Settings › Connections › Sonarr.": [
+  "paused.join(\", \")"
+ ],
+ "Paused for {0}: choose a quality ladder in Settings, Sonarr.": [
   "paused.join(\", \")"
  ],
  "Paused: the next episode waits": [],
@@ -1916,6 +1967,7 @@
   "ep['series']['title']"
  ],
  "Release to reload": [],
+ "Reload": [],
  "Reload calendar": [],
  "Reload services": [],
  "Reloading…": [],
@@ -1963,6 +2015,7 @@
   "picked.length"
  ],
  "Replace them before they expire, in Settings › Services & Devices › Services.": [],
+ "Replace them before they expire, in Settings › Services.": [],
  "Replace them soon": [],
  "Replace {0}": [
   "file"
@@ -2155,6 +2208,7 @@
  "Server": [],
  "Server, if not ntfy.sh": [],
  "Service": [],
+ "Service access": [],
  "Service approval": [],
  "Service options per Sonarr": [],
  "Services": [],
@@ -2179,10 +2233,12 @@
  "Set it differently for this series only": [],
  "Set the Group Tag to be used, overriding the config tag and any tag rules.": [],
  "Set the address of unshackle serve in Settings › Connections › Unshackle": [],
+ "Set the address of unshackle serve in Settings, Unshackle": [],
  "Set the library folder of {0} both as it sees it and as Unshacklarr sees it, or neither": [
   "who"
  ],
  "Set your country in Settings › General › Region first: the language comes from it": [],
+ "Set your country in Settings, Region first: the language comes from it": [],
  "Settings": [],
  "Settings restored": [],
  "Settings restored: {0} series": [
@@ -2190,6 +2246,9 @@
  ],
  "Settings sections": [],
  "Settings › Downloading › Download options › Per service: {0}": [
+  "svcName(svc)"
+ ],
+ "Settings, Per service: {0}": [
   "svcName(svc)"
  ],
  "Settings: {0} · Unshacklarr": [
@@ -2202,6 +2261,7 @@
  "Show": [],
  "Show all": [],
  "Show changes": [],
+ "Show command": [],
  "Show me": [],
  "Show more": [],
  "Show name in file names": [],
@@ -2224,6 +2284,7 @@
  "Sign out": [],
  "Sign out other devices": [],
  "Sign out other devices? They sign in again": [],
+ "Sign-in and cookies": [],
  "Sign-in cancelled": [],
  "Sign-in failed on {0}: {1}": [
   "asked_from['service']",
@@ -2385,6 +2446,9 @@
  "Sonarr {0} has no quality ladder chosen: nothing is downloaded for it until you choose one in Settings › Connections › Sonarr.": [
   "name"
  ],
+ "Sonarr {0} has no quality ladder chosen: nothing is downloaded for it until you choose one in Settings, Sonarr.": [
+  "name"
+ ],
  "Sonarr {0} is unreachable: {1}": [
   "inst['name']",
   "no_credentials(e)"
@@ -2476,6 +2540,7 @@
  "Switched off": [],
  "Switching language reloads the page: your password and keys are cleared.": [],
  "Sync running…": [],
+ "Syncs, release times, retries": [],
  "System ID": [],
  "S{0}E{1} as {2}": [
   "pad2(e.seasonNumber)",
@@ -2507,6 +2572,7 @@
   "e.message"
  ],
  "TMDB refused the API key: check it in Settings › Connections › Sonarr": [],
+ "TMDB refused the API key: check it in Settings, Sonarr": [],
  "TVDB": [],
  "TVDB {0}": [
   "tvdbId"
@@ -2525,6 +2591,7 @@
  ],
  "Test this series": [],
  "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services & Devices › Services.": [],
+ "Test this series below: a URL the service no longer knows, or a sign-in to renew in Settings › Services.": [],
  "Test {0}": [],
  "Test {0} ({1})": [
   "testable.length === data.devices.length ? \"all\" : \"these\"",
@@ -2553,6 +2620,9 @@
  "The Schedule page uses these dates instead of Sonarr's, from the first day on. Earlier episodes are left out of it, but they are still downloaded when they air on Sonarr's dates.": [],
  "The Series": [],
  "The Sonarr named {0} is no longer in Settings › Connections › Sonarr": [
+  "sonarr"
+ ],
+ "The Sonarr named {0} is no longer in Settings, Sonarr": [
   "sonarr"
  ],
  "The Sonarr settings of {0} must be an object": [
@@ -2639,6 +2709,7 @@
  "The first language in this list that the episode has is downloaded (en also matches en-GB). Not used when empty, or when the series or its service sets --a-lang.": [],
  "The folder does not exist on the WebDAV server: create it first": [],
  "The folder with unshackle.yaml and the WVD and PRD files, for Settings › Services & Devices › Devices (CDM). Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
+ "The folder with unshackle.yaml and the WVD and PRD files, for Settings, CDM. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
  "The gap between episodes of {0} must be a whole number of minutes": [
   "key"
  ],
@@ -2655,6 +2726,7 @@
  "The leftovers of interrupted downloads are deleted and cannot be brought back.": [],
  "The lowest height is above the highest": [],
  "The main one (Settings › Connections › Unshackle)": [],
+ "The main one (Settings, Unshackle)": [],
  "The message did not go through ({0}): turn notifications off and on again": [
   "sonarr_sync.PUSH.last_error or 'this device is no longer subscribed'"
  ],
@@ -2785,6 +2857,9 @@
  "The {0} command was not found. Install Unshackle, or give the full path to its command in Settings › Connections › Unshackle.": [
   "command or 'unshackle'"
  ],
+ "The {0} command was not found. Install Unshackle, or give the full path to its command in Settings, Unshackle.": [
+  "command or 'unshackle'"
+ ],
  "The {0} titles are in Sonarr, and {1} was checked again.": [
   "want",
   "svcName(conf.service)"
@@ -2833,7 +2908,9 @@
  "To": [],
  "To do it by hand, the README shows the lines to add to unshackle.yaml.": [],
  "To manage its devices here too, mount the folder of its unshackle.yaml and set its path in Settings › Connections › Unshackle, Folders.": [],
+ "To manage its devices here too, mount the folder of its unshackle.yaml and set its path in Settings, Unshackle, Folders.": [],
  "To manage them here too, mount its Cookies folder and set its path in Settings › Connections › Unshackle, Folders.": [],
+ "To manage them here too, mount its Cookies folder and set its path in Settings, Unshackle, Folders.": [],
  "Today": [],
  "Tomorrow": [],
  "Too many downloads requested at once: wait for some to finish": [],
@@ -2926,6 +3003,7 @@
  "Unknown time zone {0}": [
   "zone"
  ],
+ "Unless its service (Download options, Per service) or the series itself picks another. Off:": [],
  "Unreachable": [],
  "Unreadable": [],
  "Unreleased": [],
@@ -2943,8 +3021,11 @@
  ],
  "Unshacklarr cannot read this file: check its permissions, or replace it": [],
  "Unshacklarr cannot see Unshackle's Cache folder: mount it and set its path in Settings › Connections › Unshackle (CACHE_DIR with Docker)": [],
+ "Unshacklarr cannot see Unshackle's Cache folder: mount it and set its path in Settings, Unshackle (CACHE_DIR with Docker)": [],
  "Unshacklarr cannot see Unshackle's Cookies folder: mount it and set its path in Settings › Connections › Unshackle (COOKIES_DIR with Docker)": [],
+ "Unshacklarr cannot see Unshackle's Cookies folder: mount it and set its path in Settings, Unshackle (COOKIES_DIR with Docker)": [],
  "Unshacklarr cannot see Unshackle's config: mount its folder (unshackle.yaml, WVDs, PRDs) and set its path in Settings › Connections › Unshackle (UNSHACKLE_CONFIG_DIR with Docker)": [],
+ "Unshacklarr cannot see Unshackle's config: mount its folder (unshackle.yaml, WVDs, PRDs) and set its path in Settings, Unshackle (UNSHACKLE_CONFIG_DIR with Docker)": [],
  "Unshacklarr could not send this notification. Check its log.": [],
  "Unshacklarr did not answer after {0} s. Try again.": [
   "wait"
@@ -2981,6 +3062,7 @@
  "Unshacklarr, schedule": [],
  "Unshackle": [],
  "Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): allow it in Settings › Connections › Unshackle": [],
+ "Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): allow it in Settings, Unshackle": [],
  "Unshackle address": [],
  "Unshackle answers": [],
  "Unshackle can't write these files. Give them back to the container's user, for example with chown.": [],
@@ -3004,6 +3086,7 @@
  "Unshackle or Sonarr is unreachable": [],
  "Unshackle refuses to pick the CDM device named in --cdm: allow it in unshackle.yaml with serve: cdm_overrides: true (or a list of devices), then restart Unshackle": [],
  "Unshackle rejected the internal API key. Check the server API key in Settings › Connections › Unshackle.": [],
+ "Unshackle rejected the internal API key. Check the server API key in Settings, Unshackle.": [],
  "Unshackle runs": [],
  "Unshackle server": [],
  "Unshackle tries at that time, then every 30 s for 10 min. Empty: only the regular syncs (every 2 h).": [],
@@ -3099,6 +3182,7 @@
  "Warnings": [],
  "Watch for it": [],
  "Watch for it: once the series' service has that language, it is added to the file or the episode is downloaded again, as set in Settings › Downloading › Download options.": [],
+ "Watch for it: once the series' service has that language, it is added to the file or the episode is downloaded again, as set in Settings, Download options.": [],
  "Watch for the {0}": [
   "n"
  ],
@@ -3123,6 +3207,7 @@
  "Well below the season's usual {0}": [
   "rate(norm.rate)"
  ],
+ "What Activity keeps": [],
  "What a message looks like": [],
  "What downloads the episodes": [],
  "What is kept": [],
@@ -3145,7 +3230,9 @@
  "Where": [],
  "Where Unshacklarr reaches it.": [],
  "Where episodes land before Sonarr imports them, as Unshacklarr sees it.": [],
+ "Where the downloads run": [],
  "Where to send": [],
+ "Where you watch": [],
  "Where {0} downloads.": [
   "svcName(tag)"
  ],
@@ -3154,8 +3241,10 @@
  "Which device each service uses": [],
  "Which message": [],
  "Which series": [],
+ "Which series, how often": [],
  "Whichever limit is reached first applies. The oldest downloads are removed first.": [],
  "Widevine": [],
+ "Widevine and PlayReady devices": [],
  "Widevine, pywidevine serve": [],
  "With -r HYBRID, make Dolby Vision from the HDR10+ metadata when a title has no Dolby Vision track.": [],
  "Without an accepted audio": [],
@@ -3256,6 +3345,7 @@
   "ago(r.seriesChecked[eps[0].tvdbId])"
  ],
  "childList": [],
+ "command. Each level adds its options to the level before it. When both set the same option, the later level wins.": [],
  "completed": [],
  "constant": [],
  "cookies.txt for Firefox ↗": [],
@@ -3611,9 +3701,14 @@
  "unshackle.yaml": [],
  "unshackle.yaml (tag:)": [],
  "unshackle.yaml changed since you opened it (Settings › Services & Devices › Devices (CDM) writes to it too): open it again": [],
+ "unshackle.yaml changed since you opened it (Settings, CDM writes to it too): open it again": [],
  "unshackle.yaml must hold settings (key: value), not a list or a single value": [],
  "unshackle.yaml sets no device for it and no default device: its downloads are refused. Pick one in Settings › Services & Devices › Devices (CDM), or No CDM if it has no DRM.": [],
+ "unshackle.yaml sets no device for it and no default device: its downloads are refused. Pick one in Settings, CDM, or No CDM if it has no DRM.": [],
  "unshackle.yaml sets no device for it, so the default one{0} is used. A download fails if the service needs the other DRM (Widevine or PlayReady). Set one under cdm: in Settings › Connections › Unshackle › Edit unshackle.yaml.": [
+  "cdm.default ? ` (${cdm.default})` : \"\""
+ ],
+ "unshackle.yaml sets no device for it, so the default one{0} is used. A download fails if the service needs the other DRM (Widevine or PlayReady). Set one under cdm: in Settings, unshackle.yaml.": [
   "cdm.default ? ` (${cdm.default})` : \"\""
  ],
  "unshackle.yaml's directories: {0}: {1} is not a folder next to it": [
@@ -3820,6 +3915,10 @@
   "tag"
  ],
  "{0} downloads with the Unshackle server {1}, which is not in Settings › Connections › Unshackle": [
+  "service",
+  "backend"
+ ],
+ "{0} downloads with the Unshackle server {1}, which is not in Settings, Unshackle": [
   "service",
   "backend"
  ],
@@ -4202,13 +4301,25 @@
   "url",
   "host + to.path if host else 'another address'"
  ],
+ "{0} redirects to {1}, which is not unshackle serve's: check its address in Settings, Unshackle": [
+  "url",
+  "host + to.path if host else 'another address'"
+ ],
  "{0} redirects to {1}{2}: use that address for unshackle serve in Settings › Connections › Unshackle": [
+  "url",
+  "host",
+  "to.path[:-len(path)]"
+ ],
+ "{0} redirects to {1}{2}: use that address for unshackle serve in Settings, Unshackle": [
   "url",
   "host",
   "to.path[:-len(path)]"
  ],
  "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services & Devices › Services.": [
   "asked_from['service']"
+ ],
+ "{0} refused Unshackle: its cookies may have expired. Update them in Settings › Services.": [
+  "show['service']"
  ],
  "{0} refused it: {1}": [
   "s['endpoint'].split('/')[2]",
@@ -4314,6 +4425,10 @@
   "where",
   "name"
  ],
+ "{0} uses the quality ladder {1}, which is not in Settings, Quality": [
+  "where",
+  "name"
+ ],
  "{0} value": [],
  "{0} waiting for the end of the quiet hours": [
   "COUNT.message(data.held)"
@@ -4411,6 +4526,9 @@
  "{0}. Make room, or lower the room kept free in Settings › Connections › Unshackle, Folders.": [
   "full"
  ],
+ "{0}. Make room, or lower the room kept free in Settings, Unshackle, Folders.": [
+  "full"
+ ],
  "{0}. New episodes of this series are not downloaded until you check its numbering in Unshacklarr.": [
   "why"
  ],
@@ -4421,6 +4539,10 @@
   "data.details_error"
  ],
  "{0}. Used by {1}: see Settings › Services & Devices › Devices (CDM).": [
+  "test.get('error') or 'No license'",
+  "', '.join(d['used_by'])"
+ ],
+ "{0}. Used by {1}: see Settings, CDM.": [
   "test.get('error') or 'No license'",
   "', '.join(d['used_by'])"
  ],
