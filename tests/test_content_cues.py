@@ -2,8 +2,10 @@
 import re
 from pathlib import Path
 
+from css_assets import load_css
+
 STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
-CSS = re.sub(r"/\*.*?\*/", "", (STATIC / "app.css").read_text(), flags=re.S)
+CSS = re.sub(r"/\*.*?\*/", "", load_css(), flags=re.S)
 CUT_OFF = re.compile(r"text-overflow\s*:\s*ellipsis|white-space\s*:\s*nowrap")
 
 

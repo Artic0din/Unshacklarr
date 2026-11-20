@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import importlib
 import json
 import re
@@ -7,6 +8,8 @@ from types import SimpleNamespace
 import pytest
 import responses
 from aiohttp import client_exceptions
+
+from css_assets import STATIC, STYLESHEET_LINK
 
 
 def test_unreachable_is_notified_once_after_two_checks_then_back(tmp_path, monkeypatch):
@@ -4839,7 +4842,6 @@ def test_a_reverse_proxy_lets_in_only_from_its_own_address(tmp_path, monkeypatch
 
 
 def test_the_page_style_and_scripts_are_served_like_the_page(tmp_path, monkeypatch):
-    import asyncio
     from aiohttp.test_utils import TestClient, TestServer
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
     import unshacklarr.sync
@@ -4850,20 +4852,31 @@ def test_the_page_style_and_scripts_are_served_like_the_page(tmp_path, monkeypat
 
     async def go():
         async with TestClient(TestServer(web.app)) as client:  # not logged in: the page itself is public too
-            got = {}
+            async with client.get("/api/session") as response:
+                assert await response.json() == {"configured": True, "logged_in": False}
             html = await (await client.get("/")).text()
-            got["page"] = html
-            for path in ("/app.css", "/js/core.js", "/js/setup.js", "/js/nope.js", "/js/../web.py", "/app.css?v=abc"):
+            assert 'id="gate"' in html
+            links = STYLESHEET_LINK.findall(html)
+            assert len(links) > 1
+            expected = STYLESHEET_LINK.findall((STATIC / "index.html").read_text())
+            assert [path for path, _ in links] == [path for path, _ in expected]
+            for path, version in links:
+                async with client.get(f"{path}?v={version}") as response:
+                    assert response.status == 200
+                    assert response.content_type == "text/css"
+                    content = await response.read()
+                    assert version == hashlib.sha256(content).hexdigest()[:10]
+
+            got = {}
+            for path in ("/js/core.js", "/js/setup.js", "/js/nope.js", "/js/../web.py"):
                 r = await client.get(path)
                 got[path] = (r.status, r.headers.get("Cache-Control"), r.headers.get("Content-Type", "").split(";")[0])
+            assert re.search(r'src="/js/core\.js\?v=[0-9a-f]{10}"', html)
             return got
 
     got = asyncio.run(go())
-    assert got["/app.css"] == (200, "no-cache", "text/css") and got["/js/core.js"] == (200, "no-cache", "text/javascript")
+    assert got["/js/core.js"] == (200, "no-cache", "text/javascript")
     assert got["/js/setup.js"][0] == 200 and got["/js/nope.js"][0] in (401, 404) and got["/js/../web.py"][0] in (401, 404)
-    import re
-    assert re.search(r'href="/app\.css\?v=[0-9a-f]{10}"', got["page"]) and re.search(r'src="/js/core\.js\?v=[0-9a-f]{10}"', got["page"])
-    assert got["/app.css?v=abc"][0] == 200  # the version is for the browser's cache only: any serves the file
 
 
 def test_the_settings_are_backed_up_and_restored_but_never_the_password(tmp_path, monkeypatch):
@@ -5726,8 +5739,10 @@ def test_the_page_files_come_compressed_and_kept_for_good(tmp_path, monkeypatch)
 
     async def go():
         async with TestClient(TestServer(web.app)) as client:
-            versioned = await client.get("/app.css?v=1", headers={"Accept-Encoding": "gzip"}, auto_decompress=False)
-            plain = await client.get("/app.css")
+            html = await (await client.get("/")).text()
+            path, version = STYLESHEET_LINK.findall(html)[-1]
+            versioned = await client.get(f"{path}?v={version}", headers={"Accept-Encoding": "gzip"}, auto_decompress=False)
+            plain = await client.get(path)
             return versioned.headers.get("Content-Encoding"), versioned.headers["Cache-Control"], plain.headers["Cache-Control"], len(await plain.text())
 
     encoding, versioned, plain, size = asyncio.run(go())

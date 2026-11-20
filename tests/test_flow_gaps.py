@@ -7,12 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from css_assets import load_css
 from test_error_feedback import WIZARD
 from test_error_feedback import node as wizard_node
 
 STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
 JS = STATIC / "js"
-CSS = re.sub(r"/\*.*?\*/", "", (STATIC / "app.css").read_text(), flags=re.S)
+CSS = re.sub(r"/\*.*?\*/", "", load_css(), flags=re.S)
 
 PRELUDE = r"""
 const fs = require("fs"), vm = require("vm");
@@ -524,7 +525,7 @@ console.log(JSON.stringify({ placeholder: sonarrKey.placeholder ?? "", described
 
 def test_the_setup_gate_leaves_the_confirm_dialog_visible():
     """The gate hides the page behind setup; the language switch asks through #confirm-dialog, a child of the body."""
-    css = (Path(__file__).parents[1] / "unshacklarr" / "static" / "app.css").read_text()
+    css = load_css()
     hiding = re.search(r"body\.gated > ([^{]+)\{ display: none !important; \}", css)
     assert hiding and ":not(#confirm-dialog)" in hiding[1]
     html = (Path(__file__).parents[1] / "unshacklarr" / "static" / "index.html").read_text()

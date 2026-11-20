@@ -25,7 +25,7 @@ def norm(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-CSS_CLASSES: set[str] = set()  # the page's own, read from its <style>
+CSS_CLASSES: set[str] = set()  # the page's own, read from its inlined stylesheets
 
 
 def wanted(text: str) -> bool:
@@ -258,9 +258,10 @@ def server_texts(source: str) -> dict[str, list[str]]:
 
 
 def whole_page() -> str:
-    """The page as one file again: its stylesheet and its scripts (app.css, js/*.js) put back in place."""
+    """Inline the page's own stylesheets and scripts, in document order."""
     page = PAGE.read_text()
-    page = page.replace('<link rel="stylesheet" href="/app.css">', f"<style>{(PAGE.parent / 'app.css').read_text()}</style>")
+    page = re.sub(r'<link rel="stylesheet" href="/(css/[\w-]+\.css)">',
+                  lambda tag: f"<style>{(PAGE.parent / tag[1]).read_text()}</style>", page)
     tags = re.findall(r'<script src="/js/([\w-]+\.js)"></script>\n?', page)
     script = "".join((PAGE.parent / "js" / name).read_text() for name in tags)
     page = re.sub(r'<script src="/js/[\w-]+\.js"></script>\n?', "", page)

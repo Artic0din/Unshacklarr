@@ -8,10 +8,12 @@ from pathlib import Path
 
 import pytest
 
+from css_assets import load_css
+
 STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
 JS = STATIC / "js"
 HTML = (STATIC / "index.html").read_text()
-CSS = (STATIC / "app.css").read_text()
+CSS = load_css()
 
 # A DOM just big enough to be asked what a field says about itself: attributes, classes, a tree to query.
 FAKE_DOM = r"""

@@ -2,8 +2,10 @@
 import re
 from pathlib import Path
 
+from css_assets import load_css
+
 STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
-CSS = (STATIC / "app.css").read_text()
+CSS = load_css()
 
 
 def media(query):

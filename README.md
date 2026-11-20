@@ -564,8 +564,9 @@ uv run --group test pytest
 UNSHACKLARR_DATA=/tmp/unshacklarr uv run unshacklarr
 ```
 
-The page is one file, `unshacklarr/static/index.html`, with no framework and no build step. Three
-things next to it are made by tools:
+The page starts at `unshacklarr/static/index.html`, with no framework and no build step.
+It links to the stylesheets in `unshacklarr/static/css/` in cascade order.
+Three things next to it are made by tools:
 
 - its translations, `static/i18n/*.json`: `python tools/i18n/extract.py` lists the English texts in
   `en.json`, and each language's file translates them;
