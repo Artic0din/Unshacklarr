@@ -1966,6 +1966,8 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
 .sv-label[data-tone="ok"] { color: var(--ok); background: var(--ok-tint); }
 .sv-label[data-tone="bad"] { color: var(--err); background: var(--err-tint); }
 .sv-check[data-tone="bad"] { color: var(--err); }
+.sv-signin { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.sv-signin > .sv-ctl { margin-top: 0; }
 .sv-signin + .sv-check { margin-top: 6px; }
 .sv-ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
 .sv-ctl .btn { text-align: center; }

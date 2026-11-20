@@ -251,8 +251,9 @@ function renderServices() {
     const actions = [];
     const prefer = (rank, button) => { actions[rank] ||= button; return button; };
     const cells = [signInCell(m, prefer), cookieCell(m, prefer), usedCell(m)];
-    const primary = actions.find(Boolean);
-    if (primary) primary.className += " primary";
+    // lime only where something is wrong (the row needs attention, or a cookie file is bad or expiring): healthy rows stay quiet
+    const first = actions.findIndex(Boolean);
+    if (first >= 0 && (m.attention || first === priority.repair || first === priority.renew)) actions[first].className += " primary";
     return el("tr", { role: "row", className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, id: `sv-${m.key}` },
       el("th", { role: "rowheader", scope: "row" },
         el("b", { className: "sv-name", textContent: svcName(m.service) }),

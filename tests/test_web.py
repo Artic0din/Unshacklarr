@@ -1466,12 +1466,13 @@ def test_cancelled_authentication_is_rendered_until_the_next_refresh():
     }
 
 
-def test_service_identity_keeps_sign_in_methods_and_one_primary_action():
+def test_service_identity_keeps_sign_in_methods_and_marks_a_primary_action_only_where_something_is_wrong():
     result = run_authentication_ui("cookies_per_service")
     assert result["headers"] == ["Service", "Sign-in status", "Cookies", "Used by"]
     assert result["localService"] == ["HULU", "Cookies", "Credentials"]
     assert result["remoteService"] == ["HULU", "vpn", "Cookies"]
-    assert result["primary"] == [["Sign in again"], ["Check"], ["Check"], ["Replace"]]
+    # an expired cookie in use, two healthy rows, an expired cookie no series uses
+    assert result["primary"] == [["Sign in again"], [], [], ["Replace"]]
 
 
 def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
