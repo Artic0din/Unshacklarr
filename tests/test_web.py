@@ -2511,15 +2511,17 @@ const code = [
   pick(schedule, /^async function hideSeries\(.*?^\}/ms),
 ].join("\n");
 const nodes = {};
-const focused = [], firstLeft = { focus: () => focused.push("first episode left") };
-const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true }, "#tab-schedule": { hidden: false }, "#tab-schedule .sc-open:not([hidden])": firstLeft };
+const focused = [], opener = (name, shown) => ({ getClientRects: () => (shown ? [{}] : []), focus: () => focused.push(name) });
+const openers = [opener("late episode, its list closed", false), opener("first episode shown", true)];
+const bars = { "#savebar": { hidden: true }, "#d-save": { hidden: true }, "#tab-schedule": { hidden: false } };
 const box = {
   JSON, Object, Math, parseInt, Number, console, structuredClone, current: { tvdbId: 7 },
   $: (sel) => bars[sel] || nodes[sel] || (nodes[sel] = { value: "", hidden: true, replaceChildren() {} }),
   api: () => Promise.resolve(box.hiddenAfter),
   renderCommands() {}, renderInherited() {}, renderPreview() {}, renderHideToggle() {}, renderWall() {}, rerenderSchedule() {},
   renderHiddenButton() {}, toast() {}, S: null,
-  document: { body: {}, get activeElement() { return this.body; } },  // the pressed Hide went with its cards
+  document: { body: {}, get activeElement() { return this.body; },  // the pressed Hide went with its cards
+    querySelectorAll: (sel) => (sel === "#tab-schedule .sc-open" ? openers : []) },
 };
 vm.createContext(box);
 vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), change: (id, props) => $(id).onchange({ target: props }), baseline: () => { savedConfig = configKey(S.config); }, snapshot: () => { drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(S.config.series[7]) }; }, drawerChanged };", box);
@@ -2599,7 +2601,7 @@ def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hid
         "restoredOffsetBarHidden": True,  # the same settings, whatever the order of their keys
         "restoredOffsetDrawerUnchanged": True,  # and closing the series asks nothing
         "hiddenListIsNoPendingChange": True,  # saved at once by itself, never by Save
-        "focusAfterHiding": ["first episode left"],
+        "focusAfterHiding": ["first episode shown"],  # not one inside a closed Late list
     }
 
 

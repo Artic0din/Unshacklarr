@@ -53,7 +53,7 @@ async function hideSeries(d, hidden, quiet = false) {
   if (!$("#tab-schedule").hidden) rerenderSchedule(); else renderHiddenButton();
   // its cards are gone with the button that was pressed: the keyboard goes on to the first episode left, not to the body
   if (hidden && document.activeElement === document.body && !$("#tab-schedule").hidden)
-    ($("#tab-schedule .sc-open:not([hidden])") || $("#cal-today")).focus({ preventScroll: true });
+    ([...document.querySelectorAll("#tab-schedule .sc-open")].find((b) => b.getClientRects().length) || $("#cal-today")).focus({ preventScroll: true });  // shown, not in a closed Late list or the other view
 }
 /* The series page's own switch, saved at once like the Schedule's. */
 const EYE_OPEN = '<path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z"/><circle cx="12" cy="12" r="3"/>', EYE_SHUT = '<path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a17.6 17.6 0 0 1-2.2 3.3M6.6 6.6C3.6 8.6 2 12 2 12s3 8 10 8a10 10 0 0 0 5.4-1.6M14.1 14.1a3 3 0 0 1-4.2-4.2M2 2l20 20"/>';
