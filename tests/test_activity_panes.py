@@ -472,12 +472,17 @@ const doc = { activeElement: null };
 const node = (props = {}) => ({
   children: [], attrs: {}, dataset: {}, classList: { toggle() {}, add() {}, remove() {} },
   setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; },
+  removeAttribute(k) { delete this.attrs[k]; },
   replaceChildren(...children) { this.children = children; }, get childElementCount() { return this.children.length; },
   focus() { doc.activeElement = this; },
   getBoundingClientRect: () => ({ left: 0, right: 100, width: 100 }),
   ...props,
 });
-const elements = { "#con-search": node({ value: "" }) };
+const conClasses = new Set();
+const elements = { "#con-search": node({ value: "" }), "#con": node({ classList: {
+  add: (name) => conClasses.add(name), remove: (name) => conClasses.delete(name),
+} }) };
+const activityNav = node({ dataset: { tab: "log" } });
 const filters = ["all", "downloaded", "failed", "kept", "stopped"].map((f) => {
   const count = node();
   return node({ dataset: { f }, count, querySelector: () => count });
@@ -524,7 +529,7 @@ const ctx = { $, innerWidth: 1000, history: historyStack, location, el: (tag, pr
     querySelector: (s) => s === "dialog:modal" && modalOpen ? node() : null, querySelectorAll: (s) => ({
     ".con-views [data-con-view]": buttons, "#con-running .chip": $("#con-running").children,
     "#con .crow": [...$("#runs-live").children, ...$("#runs-history").children],
-    "#tab-log .con-filters button": filters, "main > section": panes,
+    "#tab-log .con-filters button": filters, "main > section": panes, "nav [data-tab]": [activityNav],
   })[s] || [] }), glideBars() {}, emptyHistory: () => node(),
   scrollTo() {}, focusHeading: (heading) => heading.focus(), getComputedStyle: () => ({ scrollPaddingInlineEnd: "0px" }),
   itemRow: (item) => node({ item, dataset: { hk: `row:${ctx.keyOf(item)}` }, onclick: () => ctx.pickRun(ctx.keyOf(item)) }),
@@ -556,7 +561,8 @@ vm.runInContext("let activityDetail = null", ctx);
 const navigation = require("fs").readFileSync(require("path").join(require("path").dirname(process.argv[1]), "navigation.js"), "utf8");
 vm.runInContext("let routed = true, currentTab = 'log', current = null, termSocket = null;\n" +
   ["routeHash", "navigate", "parseRoute", "applyRoute", "showTab"].map((name) =>
-    navigation.match(new RegExp(`^function ${name}\\b[\\s\\S]*?^}`, "m"))[0]).join("\n"), Object.assign(ctx, {
+    navigation.match(new RegExp(`^function ${name}\\b[\\s\\S]*?^}`, "m"))[0]).join("\n") + "\n" +
+  navigation.match(/^document\.querySelectorAll\("nav \[data-tab\]"\)\.forEach\(\(b\) => b\.onclick = [\s\S]*?^\}\);/m)[0], Object.assign(ctx, {
   HASH_OF: { log: "activity" }, TAB_OF: { activity: "log" }, inSettingsSec: () => false,
   updateTitle() {}, closeDetails() {}, cancelSettingsJump() {}, loadSchedule() {}, refreshLog() {},
 }));
@@ -594,6 +600,23 @@ async function lateAutoOpen(destination) {
   pending["/api/runs"].resolve([active, history]);
   await request;
   console.log(JSON.stringify([detail, entry, historyStack.state?.activity ?? null]));
+}
+async function activityNavClicks() {
+  // Leaving a wide selection behind makes narrow re-entry reconcile the old detail before auto-opening Live.
+  addRuns([history]);
+  $("#runs-history").children[0].onclick();
+  ctx.showTab("schedule");
+  ctx.innerWidth = 390;
+  const click = async () => {
+    activityNav.onclick({ button: 0, preventDefault() {} });
+    pending["/api/runs"].resolve([active, history]);
+    await new Promise(setImmediate);
+    return [conClasses.has("open"), detail, historyStack.state?.activity?.id ?? null];
+  };
+  const fromSchedule = await click();
+  $("#cd-back").onclick();
+  const afterBack = [conClasses.has("open"), detail];
+  console.log(JSON.stringify([fromSchedule, afterBack, await click()]));
 }
 async function failedRuns(selection) {
   const request = ctx.openActivity();
@@ -729,15 +752,26 @@ else if (scenario === "reenter-activity") {
   ctx.innerWidth = Number(process.argv[4]);
   addRuns([history]);
   $("#runs-history").children[0].onclick();
-  const opened = detail;
+  const opened = [detail, conClasses.has("open")];
   ctx.showTab("schedule");
   ctx.showTab("log");
-  const reentered = [detail, historyStack.state];
+  const reentered = [detail, conClasses.has("open"), historyStack.state];
   historyStack.back();
   const back = location.hash;
   historyStack.back();
   console.log(JSON.stringify([opened, reentered, back, location.hash, detail]));
 }
+else if (scenario === "reenter-after-resize") {
+  addRuns([history]);
+  $("#runs-history").children[0].onclick();
+  const wide = [detail, conClasses.has("open"), historyStack.state];
+  ctx.showTab("schedule");
+  ctx.innerWidth = 390;
+  activityNav.focus();
+  ctx.showTab("log");
+  console.log(JSON.stringify([wide, detail, conClasses.has("open"), doc.activeElement === activityNav]));
+}
+else if (scenario === "activity-nav-clicks") activityNavClicks();
 else if (scenario === "late-auto-open") lateAutoOpen(process.argv[4]);
 else if (scenario === "downloads-width") {
   addRuns([active, history]);
@@ -829,11 +863,19 @@ def test_history_menu_reconciles_activity_when_traversing_across_the_full_inbox(
 
 
 def test_reentering_activity_from_schedule_uses_the_destination_detail():
-    assert switcher("reenter-activity", "390") == ["old", [None, None], "#/schedule", "#/activity", "old"]
+    assert switcher("reenter-activity", "390") == [["old", True], [None, False, None], "#/schedule", "#/activity", "old"]
 
 
 def test_reentering_wide_activity_keeps_the_side_by_side_run_selection():
-    assert switcher("reenter-activity", "1440") == ["old", ["old", None], "#/schedule", "#/activity", "old"]
+    assert switcher("reenter-activity", "1440") == [["old", True], ["old", True, None], "#/schedule", "#/activity", "old"]
+
+
+def test_reentering_activity_after_resize_closes_the_wide_selection_without_moving_focus():
+    assert switcher("reenter-after-resize") == [["old", True, None], None, False, True]
+
+
+def test_phone_activity_nav_opens_the_live_download_on_entry_and_reclick():
+    assert switcher("activity-nav-clicks") == [[True, "live", "live"], [False, None], [True, "live", "live"]]
 
 
 @pytest.mark.parametrize("destination", ["series", "inbox", "drawer"])
