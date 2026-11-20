@@ -101,6 +101,7 @@ Every change worth knowing, newest first. The format follows
 
 - Kept Series wall filters on one desktop toolbar and made every filter and action reachable on phones without sideways scrolling. (#352)
 - Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.
+- Corrected which Series controls the Filters and actions button announced as collapsed on desktop.
 - Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
 
 - Kept the header in view while scrolling, moved version details to Settings, and made Inbox filters and episode lists easier to read on small screens. (#351)

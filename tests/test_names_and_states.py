@@ -168,8 +168,10 @@ if (scenario === "hidden") {  // the Schedule's hidden series: the name starts w
 
 if (scenario === "select") {  // Series selection: the count is a status; the toggle keeps one name and says it is pressed
   const toggle = Object.assign(new Node("button"), { textContent: "Select" });
+  const filters = Object.assign(new Node("button"), { focus() { doc.activeElement = this; } });
   Object.assign(ctx, { SEL: { on: false, ids: new Set() }, renderWall() {}, openSel() {} });
   boxes["#sel-toggle"] = toggle; boxes["#sel-edit"] = new Node("button"); boxes["#sel-count"] = new Node("span");
+  boxes["#series-options-toggle"] = filters;
   let bar; boxes["#wall"] = Object.assign(new Node("div"), { after: (b) => { bar = b; } });
   run(bulk.slice(0, bulk.indexOf("let selOptions")));
   toggle.onclick();
@@ -177,6 +179,10 @@ if (scenario === "select") {  // Series selection: the count is a status; the to
   toggle.onclick();
   out.off = [toggle.textContent, toggle.attrs["aria-pressed"]];
   out.countRole = attr(find(bar, (n) => n.id === "sel-count"), "role");
+  toggle.onclick();
+  ctx.pickSeries(42);
+  find(bar, (n) => n.tag === "button" && n.textContent === "Done").onclick();
+  out.done = { on: ctx.SEL.on, ids: [...ctx.SEL.ids], focusedFilters: doc.activeElement === filters };
 }
 
 if (scenario !== "groups") console.log(JSON.stringify(out));
@@ -252,6 +258,7 @@ def test_the_selection_count_is_a_status_and_the_toggle_keeps_one_name():
     shown = run_scenario("select")
     assert shown["on"] == ["Select", "true"] and shown["off"] == ["Select", "false"]
     assert shown["countRole"] == "status"
+    assert shown["done"] == {"on": False, "ids": [], "focusedFilters": True}
 
 
 def test_every_language_translates_the_new_names_with_their_placeholders():

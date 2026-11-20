@@ -252,32 +252,44 @@ const controls = {
   contains: (target) => target === sort || target === library,
   addEventListener: (name, fn, capture) => { listeners[name] = { fn, capture }; },
 };
-const ctx = sandbox({ $: (sel) => sel === "#series-options-toggle" ? toggle : controls });
-vm.runInContext(grab(read(process.argv[1]), /function bindSeriesOptions\(\) \{[\s\S]*?\n\}\n/), ctx);
-ctx.bindSeriesOptions();
+const narrow = { matches: false, addEventListener: (name, fn) => { listeners[name] = { fn }; } };
+const ctx = sandbox({ $: (sel) => sel === "#series-options-toggle" ? toggle : controls, matchMedia: () => narrow });
+const nav = read(process.argv[1]);
+vm.runInContext(nav.slice(nav.indexOf("function bindSeriesOptions("), nav.indexOf("function renderServiceFilter(")), ctx);
+const controlled = [toggle.getAttribute("aria-controls")];
+for (const matches of [true, false]) {
+  narrow.matches = matches;
+  listeners.change?.fn();
+  controlled.push(toggle.getAttribute("aria-controls"));
+}
 const expanded = () => toggle.getAttribute("aria-expanded") === "true";
 const click = (id) => listeners.click.fn({ target: { closest: (selector) => selector.split(", ").includes(id) } });
-const open = () => toggle.onclick();
-open();
+const press = () => toggle.onclick();
+press();
+events.push(expanded());
+press();
+events.push(expanded());
+press();
 click("#f-sort");
 events.push(expanded());
 listeners.keydown.fn({ key: "Escape", target: sort, preventDefault() {} });
 events.push(expanded());
-open();
+press();
 listeners.focusout.fn({ target: toggle, relatedTarget: sort });
 listeners.focusout.fn({ target: sort, relatedTarget: library });
 events.push(`inside: ${expanded() ? "open" : "closed"}`);
 listeners.focusout.fn({ target: library, relatedTarget: search });
 events.push(`outside: ${expanded() ? "open" : "closed"}`);
 for (const action of ["#bulk-open", "#sel-toggle"]) {
-  open();
+  press();
   click(action);
   events.push(`${action}: ${expanded() ? "open" : "closed"}`);
 }
-console.log(JSON.stringify([listeners.click.capture, ...events]));
+console.log(JSON.stringify([controlled, listeners.click.capture, ...events]));
 """, str(JS / "navigation.js"))
     assert seen == [
-        True, True, "focus: filters", False,
+        ["series-actions", "series-options", "series-actions"],
+        True, True, False, True, "focus: filters", False,
         "inside: open", "outside: closed",
         "focus: filters", "#bulk-open: closed", "focus: filters", "#sel-toggle: closed",
     ]

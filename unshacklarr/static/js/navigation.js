@@ -147,6 +147,10 @@ function bindSeriesOptions() {
   const toggle = $("#series-options-toggle");
   const options = $("#series-options");
   const toolbar = $("#tab-series .toolbar");
+  const narrow = matchMedia("(max-width: 700px)");
+  const syncControls = () => toggle.setAttribute("aria-controls", narrow.matches ? "series-options" : "series-actions");
+  syncControls();
+  narrow.addEventListener("change", syncControls);
   const inDisclosure = (target) => target === toggle || options.contains(target);
   const expanded = () => toggle.getAttribute("aria-expanded") === "true";
   const close = (restoreFocus = true) => {
