@@ -120,3 +120,29 @@ def test_activitys_history_filters_and_clear_are_big_enough_to_tap_on_a_phone():
     has(phone, ".btn.small, .con-filters button { min-height: 36px; }")
     has(phone, ".gh-act { min-height: 36px;")
     has(CSS, ".con-gh { display: flex; justify-content: space-between; align-items: center;")  # its label level with Clear…
+
+
+def test_coarse_pointer_devices_keep_44px_touch_targets_above_700px():
+    """Tablets (e.g. iPad portrait at 768-820px) match (pointer: coarse), not phone width (#333)."""
+    assert "@media (min-width: 701px) and (pointer: fine) {" in CSS
+    touch = media("max-width: 700px), (pointer: coarse")
+    for sel in (
+        "nav a",
+        ".btn.small",
+        ".inbox-filters button",
+        ".con-filters button",
+        ".set-nav button",
+        ".set-back",
+        ".hidden-btn",
+        ".sched-filter .pill",
+        ".cd-tracks-fold > summary",
+        ".ds-sub summary",
+        ".dock .d-open",
+        ".dock .d-acts button",
+        ".cd-back",
+        ".jact",
+        ".health button",
+        ".ep-sel button",
+    ):
+        assert sel in touch, f"{sel} missing from coarse-pointer 44px rule"
+    assert "min-height: 44px" in touch

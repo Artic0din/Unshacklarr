@@ -136,6 +136,9 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Touch targets stay at least 44 px on tablets and phones.** Desktop 36 px and 30 px control heights now apply only
+  to fine pointers above 700 px, while coarse-pointer touch screens (including iPads above 700 px) keep 44 px minimum
+  hit targets across navigation, filters, buttons, drawers, dock controls, and collapsible summaries. (#333)
 - **An episode under its own number is no longer hidden for a small difference in its title.** Kath & Kim on Netflix
   lists S01E08 "The Wedding" and S03E01 "Cactus"; Sonarr calls them "Wedding" and "Cactus Hour", so both showed as
   not on the service and were not downloaded. Under the same number, a title that is the other's first or last
