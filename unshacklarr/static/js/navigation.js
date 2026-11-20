@@ -145,18 +145,24 @@ document.querySelectorAll("#tab-series .seg button").forEach((b) => b.onclick = 
 
 function bindSeriesOptions() {
   const toggle = $("#series-options-toggle");
+  const options = $("#series-options");
+  const toolbar = $("#tab-series .toolbar");
+  const inDisclosure = (target) => target === toggle || options.contains(target);
   const expanded = () => toggle.getAttribute("aria-expanded") === "true";
-  const close = () => {
+  const close = (restoreFocus = true) => {
     if (!expanded()) return false;
     toggle.setAttribute("aria-expanded", "false");
-    toggle.focus();
+    if (restoreFocus) toggle.focus();
     return true;
   };
   toggle.onclick = () => toggle.setAttribute("aria-expanded", String(!expanded()));
-  $("#tab-series .toolbar").addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && e.target.closest("#series-options-toggle, #series-options") && close()) e.preventDefault();
+  toolbar.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && inDisclosure(e.target) && close()) e.preventDefault();
   });
-  $("#series-options").addEventListener("click", (e) => {
+  toolbar.addEventListener("focusout", (e) => {
+    if (e.relatedTarget && inDisclosure(e.target) && !inDisclosure(e.relatedTarget)) close(false);
+  });
+  options.addEventListener("click", (e) => {
     if (e.target.closest("#bulk-open, #sel-toggle")) close();
   }, true);  // Suggest's dialog must open after focus moves back to the visible trigger.
 }

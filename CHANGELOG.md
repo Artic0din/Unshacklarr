@@ -100,6 +100,7 @@ Every change worth knowing, newest first. The format follows
 ### Changed
 
 - Kept Series wall filters on one desktop toolbar and made every filter and action reachable on phones without sideways scrolling. (#352)
+- Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.
 
 - Switched to a dark theme with lime highlights and removed the light theme and Appearance setting. (#375)
 
