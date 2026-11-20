@@ -541,6 +541,26 @@ console.log(JSON.stringify([chips(6), chips(12), chips(12, Infinity).length]));
     assert full == 12  # the full Inbox names every episode: touch and keyboard users cannot read a tooltip
 
 
+def test_the_inbox_menu_caps_a_job_at_six_episodes_and_the_full_inbox_names_them_all():
+    menu, full = node(r"""
+let menu = true;
+const list = { classList: { toggle() {} }, replaceChildren(...kids) { this.kids = kids; } };
+const ctx = sandbox({ LOCALE: "en", ago: () => "Now", S: { series: [] }, keepFocus: (_box, draw) => draw(),
+  $: (sel) => sel === "#inbox-dialog" ? { classList: { contains: () => menu } } : sel === "#inbox-list" ? list : any });
+vm.runInContext(read(process.argv[1]).split("/* The bell opens")[0], ctx);  // the renderer, not the page's event wiring
+const at = new Date().toISOString();
+const items = Array.from({ length: 12 }, (_, i) => ({ title: `Failed: Show S01E${String(i + 1).padStart(2, "0")}`, at, level: "error", batch: "job1" }));
+vm.runInContext(`inboxData = { items: ${JSON.stringify(items)}, read_at: "" }`, ctx);
+const chips = () => { ctx.renderInbox(); return list.kids[1].kids[1].kids[0].kids[1].kids.map((chip) => chip.textContent); };
+const inMenu = chips();
+menu = false;
+console.log(JSON.stringify([inMenu, chips()]));
+""", str(JS / "inbox.js"))
+    episodes = [f"S01E{i:02d}" for i in range(1, 13)]
+    assert menu == [*episodes[:6], "+6"]
+    assert full == episodes
+
+
 def test_options_sharing_a_title_have_one_badge_and_keep_each_unread_id():
     states = node(r"""
 const badges = [], classes = new Set(), posts = [];
