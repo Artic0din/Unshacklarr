@@ -272,7 +272,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 .news-list .new .news-kind, .news-list .improved .news-kind { color: var(--text); background: var(--well); }
 .ep-off, .chip.o-unavailable, .ck-pill.absent { color: var(--muted); background: transparent; border-width: 1px; border-style: solid; border-color: var(--line); }
 .ep-on, .ep-on.other, .poster.on:not(:has(.sick)) .svc, .sched-card .svc, .rg-chip, .ck-pill.ok, .sched-st.ok, .chip.disk, .chip.o-downloaded { color: var(--ok); background: var(--ok-tint); }
-.ep-up, .ck-pill.warn, .sched-st.try, .sched-st.wait, .chip.miss, .chip.ask, .chip.o-kept, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
+.ep-up, .ck-pill.warn, .sched-st.try, .sched-st.wait, .chip.miss, .chip.ask, .chip.o-kept, .chip.o-import, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
 .ck-pill.bad, .sched-st.late, .rg-chip.bad, .chip.o-failed, .news-list .security .news-kind { color: var(--err); background: var(--err-tint); }
 
 .nav-busy, #bell .count, .inbox-filters b, .seg button span, .con-filters button span, .toolbar .pill span,

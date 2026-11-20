@@ -112,6 +112,14 @@ def test_managed_month_groups_use_neutral_colours(badge):
     assert "background: var(--well)" in last
 
 
+def test_an_import_needed_chip_has_the_same_attention_colour_as_kept():
+    import_rules = rules_of(".chip.o-import")
+    assert import_rules, "Import needed has no status colour"
+    assert import_rules[-1] == rules_of(".chip.o-kept")[-1]
+    assert "color: var(--warn)" in import_rules[-1]
+    assert "background: var(--warn-tint)" in import_rules[-1]
+
+
 @pytest.mark.parametrize("badge", [".ep-off", ".chip.o-unavailable", ".ck-pill.absent"])
 def test_an_absent_status_badge_is_muted_and_outlined_without_fill(badge):
     last = rules_of(badge)[-1]
