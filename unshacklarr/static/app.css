@@ -239,7 +239,11 @@ body.drawer-open .savebar { display: none; }
 .d-tabs button[aria-pressed="true"] { color: var(--text); background: var(--select); border-bottom-color: var(--field-line-hover); }
 .d-pane[hidden] { display: none; }
 /* Episodes: one season at a time, picked from a strip, so 35 seasons stay usable. */
-.seasons { display: flex; gap: 6px; overflow-x: auto; padding: 16px 0 10px; scrollbar-width: thin; }
+.seasons { display: flex; gap: 6px; overflow-x: auto; padding: 16px 0 10px; scrollbar-width: thin;
+  background: linear-gradient(to right, var(--bg) 30%, transparent) left / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--bg) 30%, transparent) right / 28px 100% no-repeat local,
+    linear-gradient(to right, var(--line-strong), transparent) left / 12px 100% no-repeat scroll,
+    linear-gradient(to left, var(--line-strong), transparent) right / 12px 100% no-repeat scroll; }
 .seasons button { flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 6px 12px;
   cursor: pointer; text-align: left; line-height: 1.25; }
 .seasons button b { display: block; font-size: var(--fs-callout); }
@@ -260,8 +264,10 @@ body.drawer-open .savebar { display: none; }
 @media (hover: hover) { .ep-sel button:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 5%, transparent); } } .ep-sel button:disabled { color: var(--muted); cursor: default; }
 .ep-sel button[hidden] { display: none; }
 .ep-sel .svc { color: var(--text); font-weight: 600; } .ep-sel .odd { color: var(--warn); }
-.ep-view { display: flex; align-items: center; gap: 8px; margin-left: auto; } .ep-view .pill { padding: 6px 12px; font-size: var(--fs-callout); }
+.ep-view { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; } .ep-view .pill { padding: 6px 12px; font-size: var(--fs-callout); }
+.ep-status { color: var(--muted); font-size: var(--fs-callout); text-align: end; }
 .ep-list { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); list-style: none; margin: 0; padding: 4px 0; }
+.ep-list.compact { max-inline-size: 712px; }
 .ep-list li + li { border-top: 1px solid var(--line); }
 .ep-list .none { padding: 18px; color: var(--muted); }
 .ep { display: grid; grid-template-columns: auto 52px 1fr 110px 90px; gap: 12px; align-items: center; padding: 9px 16px; cursor: pointer; }
@@ -296,6 +302,10 @@ body.drawer-open .savebar { display: none; }
   .ep-list.stack .t, .ep-list.stack .ep-head .th { grid-row: 1; grid-column: 3 / -2; }
   .ep-list.stack .col { grid-row: 2; grid-column: var(--c); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ep-list.stack .ep-state { grid-row: 1 / span 2; grid-column: -2; }
+  .ep-list.compact { grid-template-columns: auto 40px minmax(0, 1fr) var(--cols) auto; }
+  .ep-list.compact.stack { grid-template-columns: auto 40px var(--cols-s) auto; }
+  .ep-list.compact.stack .ep-status { grid-row: 1 / span 2; grid-column: -2; }
+  .ep-subs-detail { grid-column: 1 / -1; }
 }
 /* An episode's state as an icon: on disk, missing (can be fetched), not aired yet. */
 .ep-state { width: 22px; height: 22px; justify-self: end; display: grid; place-items: center; }
@@ -324,7 +334,7 @@ body.drawer-open .savebar { display: none; }
 .ep-on.other { color: var(--text); background: var(--well); }
 .ep-catchup small.renum { display: block; color: var(--text); } .ep-off { color: var(--muted); border: 1px solid var(--line); }
 .ep-state.disk { color: var(--ok); } .ep-state.miss { color: var(--warn); } .ep-state.soon { color: var(--muted); }
-.ep-list .ep .t small { display: none; }
+.ep-file-line { display: none; }
 .ep-head { display: grid; gap: 12px; padding: 8px 16px 6px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); letter-spacing: .02em; }
 .ep-tools .cols-btn { display: inline-flex; align-items: center; gap: 6px; }
 .ep-tools .cols-btn svg { width: 15px; height: 15px; }
@@ -338,7 +348,29 @@ body.drawer-open .savebar { display: none; }
 .ep-head .cb { width: 16px; }
 .spec { font-size: var(--fs-sub); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .spec.blank { color: var(--muted); }
-.spec.subs, .ep-list.stack .col.subs { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }  /* a long list of languages is read whole */
+.ep-list .spec.subs { display: inline-flex; justify-self: start; align-items: center; gap: 5px; white-space: nowrap; }
+.ep-list.stack .col.subs { overflow: visible; }
+.ep-subs-chip { flex: none; padding: 2px 7px; min-height: 26px; border: 1px solid var(--field-line); border-radius: var(--r-md);
+  background: var(--select); font: inherit; font-variant-numeric: tabular-nums; color: var(--text); cursor: pointer; }
+.ep-subs-detail:not([hidden]) { padding: 8px 16px; border-top: 1px solid var(--line); background: var(--well);
+  color: var(--muted); font-size: var(--fs-callout); overflow-wrap: anywhere; }
+@media (min-width: 701px) {
+  .ep-list .subs.ep-mobile-subs, .ep-list .ep-subs-detail.ep-mobile-subs:not([hidden]) { display: none; }
+}
+@media (max-width: 900px) {
+  .ep-tools { gap: 8px; }
+  .ep-row { gap: 6px 8px; }
+  .ep-view { margin-inline-start: 0; }
+  .ep-check small { display: none; }
+}
+@media (max-width: 540px) {
+  .ep-check { justify-content: center; min-width: 44px; }
+  .ep-check-label, .ep-sel > span { display: none; }
+  .ep-sel button:nth-child(2) { border-left: 0; }
+}
+@media (max-width: 360px) {
+  .ep .ep-file-line { grid-column: 1 / 4; }
+}
 .ep .res.col { justify-self: start; }
 .spec small { color: var(--muted); font-size: var(--fs-footnote); }
 .odd, .spec .odd, .t small .odd { color: var(--warn); }
@@ -1532,12 +1564,16 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
   .seasons { margin-inline: -12px; padding: 12px 12px 8px; }
   .seasons button { padding: 8px 14px; min-height: 48px; }
   .ep-tools h3 { font-size: var(--fs-body); }
-  .ep-row { display: grid; } .ep-sel { flex-wrap: wrap; } .ep-sel button { padding: 10px 12px; }
+  .ep-sel { flex-wrap: wrap; } .ep-sel button { padding: 10px 12px; }
   .ep-view .pill { min-height: 36px; }
-  .ep-list .ep { grid-template-columns: auto 40px 1fr auto; padding: 12px; min-height: 52px; }
+  .ep-list .ep { grid-template-columns: auto 32px minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 12px; min-height: 52px; }
   .ep-list .ep-head, .ep .col, .ep-tools .cols-btn { display: none; }
-  .ep-list .ep .t small { display: block; white-space: normal; }
-  .ep .t small .res { min-width: 0; margin-right: 4px; }
+  .ep-list .ep .subs { grid-area: 2 / 4; justify-self: end; }
+  .ep-list .ep .ep-state { grid-area: 1 / 4; }
+  .ep-list.compact .ep { grid-template-columns: auto 32px minmax(0, 1fr); }
+  .ep-status { grid-area: 2 / 3; text-align: start; }
+  .ep-file-line { display: block; grid-area: 2 / 2 / auto / 4; color: var(--muted); font-size: var(--fs-footnote); }
+  .ep-file-line .res { min-width: 0; margin-inline-end: 4px; }
   .ep time { display: none; }
   .ep-bar { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
   #ep-go-edit .long { display: none; } #ep-go-edit .short { display: inline; }
@@ -2085,6 +2121,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .ladder-pick .ax-edit { display: inline-flex; align-items: center; min-height: 44px; }  /* under the buttons: a slop would cover them */
   .ug-line { min-height: 44px; }
   .ep-sel button { min-width: 44px; min-height: 44px; }  /* its frame clips: no room for a slop */
+  .ep-subs-chip, .ep-check, .ep-view .pill, .ep-view .cols-btn { min-width: 44px; min-height: 44px; }
   .set-nav button.set-version { min-height: 44px; }
 }
 @media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }  /* its icon-only size up to 1240px is 40px */

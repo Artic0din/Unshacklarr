@@ -57,6 +57,65 @@ console.log(JSON.stringify(vm.runInContext("RELEASE_DAYS", ctx)));
     assert days == list(range(-sync.EARLY_DAYS_MAX, 2))
 
 
+def test_episode_subtitle_summary_prioritizes_required_languages_and_discloses_every_track():
+    summary = node(r"""
+const src = read(process.argv[1]), ctx = sandbox({ el: (tag, props, ...kids) => ({
+  tag, ...props, kids, setAttribute(k, v) { this[k] = v; }, append(k) { kids.push(k); },
+}), flagged: (text) => text });
+vm.runInContext(grab(src, /function subtitleSummary\b[\s\S]*?\n}\n/), ctx);
+const tracks = ["en", "ara", "cat", "cze", "fr", "fre-CA", ...Array(27).fill("es")];
+const { cell, detail } = ctx.subtitleSummary(tracks, "fr-CA", "", 5, "E05", false);
+const chip = cell.kids[1];
+const closed = detail.hidden;
+chip.onclick();
+const opened = !detail.hidden && chip["aria-expanded"] === "true";
+chip.onclick();
+console.log(JSON.stringify({
+  preview: cell.kids[0], chip: chip.textContent, name: chip.ariaLabel, closed, opened,
+  collapsedAgain: detail.hidden && chip["aria-expanded"] === "false",
+  detail: detail.textContent, short: ctx.subtitleSummary(["en"], "", "", 1, "E01", false).cell.kids,
+}));
+""", str(JS / "series.js"))
+    assert summary == {
+        "preview": "fre-CA, fr",
+        "chip": "+31",
+        "name": "+31: Show subtitles for E05",
+        "closed": True,
+        "opened": True,
+        "collapsedAgain": True,
+        "detail": ", ".join(["en", "ara", "cat", "cze", "fr", "fre-CA", *(["es"] * 27)]),
+        "short": ["en"],
+    }
+
+
+def test_episodes_without_file_specs_show_status_instead_of_empty_columns():
+    rows = node(r"""
+const list = { style: { setProperty() {} }, classList: { toggle(_, value) { list.compact = value; } },
+  querySelectorAll: () => [], replaceChildren(...kids) { list.kids = kids; } };
+const ep = { id: 4, seasonNumber: 2, episodeNumber: 5, airDateUtc: "2099-11-21", title: "Future" };
+const ctx = sandbox({
+  $: (sel) => sel === "#ep-list" ? list : sel === "#ep-avail" ? null : any,
+  document: { querySelectorAll: () => [], querySelector: () => null, activeElement: null },
+  epSeasons: { 2: [ep] }, epSeason: 2, epBusy: new Map(), epQualities: {}, current: { tvdbId: 1 },
+  S: { config: { series: {}, settings: {} } },
+  hideOnDisk: false, epAvail: null, tipFor: null, isOutlier: () => false,
+  state: (e) => e.file ? "disk" : "soon", stateIcon: (_, label) => ({ label }),
+  seasonNorm: () => null, fileTooltip: () => "", picked: new Set(), pad2: (x) => String(x).padStart(2, "0"),
+  COLUMNS: [{ id: "res", file: true, label: "Res.", cell: () => any }],
+  colsNow: [{ id: "res", on: true }],
+  el: (tag, props, ...kids) => ({ tag, ...props, kids, querySelector: () => null }),
+});
+vm.runInContext(grab(read(process.argv[1]), /function renderSeason\b[\s\S]*?\n}\n/), ctx);
+ctx.renderSeason();
+const compact = list.compact;
+const row = list.kids[1].kids[0].kids;
+ep.file = {};
+ctx.renderSeason();
+console.log(JSON.stringify({ compact, row: row.map(k => k.textContent || k.label).filter(Boolean), withSpecs: list.compact }));
+""", str(JS / "series.js"))
+    assert rows == {"compact": True, "row": ["E05", "Not aired"], "withSpecs": False}
+
+
 # Safari before 17.4 has no Object.groupBy
 NO_GROUP_BY = "const NoGroupBy = Object.fromEntries(Object.getOwnPropertyNames(Object).filter((k) => k !== 'groupBy').map((k) => [k, Object[k]]));"
 

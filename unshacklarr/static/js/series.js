@@ -452,8 +452,7 @@ const COLUMNS = [
       fileVideo(f), " ", el("small", {}, flagged(bitrate(f) ? `${f.videoBitrate ? "" : "≈"}${rate(bitrate(f))}` : "", odd.rate))) },
   { id: "audio", label: "Audio", file: true, on: true, cell: (f, odd) => el("span", { className: "spec" },
       [f.audio, layout(f.channels)].filter(Boolean).join(" "), " ", el("small", {}, flagged(f.audioLanguages.join(", "), odd.audio))) },
-  { id: "subs", label: "Subtitles", file: true, on: true, cell: (f, odd) => el("span",
-      { className: "spec subs" + (f.subtitles.length ? "" : " blank") }, flagged(f.subtitles.join(", ") || "none", odd.subs)) },
+  { id: "subs", label: "Subtitles", file: true, on: true },
   { id: "size", label: "Size", file: true, on: true, cell: (f) => el("span", { className: "spec", textContent: f.size ? size(f.size) : "" }) },
   { id: "quality", label: "Quality", file: true, on: false, cell: (f) => el("span", { className: "spec", textContent: f.quality }) },
   { id: "group", label: "Group", file: true, on: false, cell: (f) => el("span", { className: "spec", textContent: f.releaseGroup }) },
@@ -495,8 +494,35 @@ function openColumns() {
 function fileLine(f, odd) {  // the same, in one line (phones)
   const parts = [fileVideo(f), bitrate(f) ? flagged(`${f.videoBitrate ? "" : "≈"}${rate(bitrate(f))}`, odd.rate) : "",
     [f.audio, layout(f.channels)].filter(Boolean).join(" "), flagged(f.audioLanguages.join(", "), odd.audio),
-    flagged(f.subtitles.length ? `subs ${f.subtitles.join(", ")}` : "no subs", odd.subs), f.size ? size(f.size) : ""].filter(Boolean);
-  return el("small", {}, resBadge(f, odd.height), ...parts.flatMap((p, i) => i ? [" · ", p] : [p]));
+    f.size ? size(f.size) : ""].filter(Boolean);
+  return el("small", { className: "ep-file-line" }, resBadge(f, odd.height), ...parts.flatMap((p, i) => i ? [" · ", p] : [p]));
+}
+function subtitleSummary(tracks, required, why, id, number, expanded) {
+  const normalize = (code) => {
+    try { return new Intl.Locale(code).baseName.toLowerCase(); }
+    catch { return code.toLowerCase(); }
+  };
+  const accepted = required.split(/[,\s]+/).filter(Boolean).map(normalize);
+  const priority = (code) => {
+    const tag = normalize(code);
+    return accepted.includes(tag) ? 0 : accepted.some((a) => tag.startsWith(`${a}-`) || a.startsWith(`${tag}-`)) ? 1 : 2;
+  };
+  const preview = (accepted.length ? [...tracks].sort((a, b) => priority(a) - priority(b)) : tracks).slice(0, 2);
+  const remaining = tracks.length - preview.length;
+  const cell = el("span", { className: "spec subs" + (tracks.length ? "" : " blank") },
+    flagged(preview.join(", ") || "none", why));
+  if (!remaining) return { cell };
+  const detail = el("div", { id: `ep-subs-${id}`, className: "ep-subs-detail", hidden: !expanded, textContent: tracks.join(", ") });
+  const chip = el("button", { type: "button", className: "ep-subs-chip", textContent: `+${remaining}`,
+    ariaLabel: `+${remaining}: Show subtitles for ${number}`,
+    onclick: () => {
+      detail.hidden = !detail.hidden;
+      chip.setAttribute("aria-expanded", String(!detail.hidden));
+    } });
+  chip.setAttribute("aria-controls", detail.id);
+  chip.setAttribute("aria-expanded", String(expanded));
+  cell.append(chip);
+  return { cell, detail };
 }
 function fileTooltip(e) {
   const f = e.file, title = titleHidden(current.tvdbId, `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`, e.title) ? "" : e.title;
@@ -674,7 +700,9 @@ function checkLabel(text) {
   const check = $(".ep-check");
   if (!check) return;
   check.innerHTML = `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>`;
-  check.append(text, ...(epChecked ? [el("small", { textContent: `checked ${ago(epChecked)}` })] : []));
+  check.setAttribute("aria-label", text);
+  check.append(el("span", { className: "ep-check-label", textContent: text }),
+    ...(epChecked ? [el("small", { textContent: `checked ${ago(epChecked)}` })] : []));
 }
 /* What the service has of the missing episodes: under each season, and in one line for them all with a way to pick them. */
 function renderCatchUp() {
@@ -761,7 +789,11 @@ async function followTitles(s, want) {
 async function askService(s) {
   const conf = S.config.series[s.tvdbId], svc = seriesSvcs(conf), check = $(".ep-check");
   const libs = S.sonarrsOf?.[s.tvdbId] || [], inst = libs.find((o) => o.name === epSonarr) || libs[0];  // in no main Sonarr: the Sonarr being viewed, else the first
-  if (check) { check.setAttribute("aria-disabled", "true"); check.replaceChildren(el("span", { className: "spinner", ariaHidden: "true" }), ` Asking ${svc}…`); }
+  if (check) {
+    check.setAttribute("aria-disabled", "true");
+    check.setAttribute("aria-label", `Asking ${svc}…`);
+    check.replaceChildren(el("span", { className: "spinner", ariaHidden: "true" }), el("span", { className: "ep-check-label", textContent: `Asking ${svc}…` }));
+  }
   let r = null;
   const slow = slowHint(svc);
   try {
@@ -794,22 +826,41 @@ function renderSeason() {
   const norm = seasonNorm(list), shown = list.filter((e) => !hideOnDisk || !e.hasFile);
   const specs = shown.some((e) => e.file);  // file columns only where some episode has a file
   const cols = colsNow.filter((p) => p.on).map((p) => COLUMNS.find((c) => c.id === p.id)).filter((c) => specs || !c.file);
-  $("#ep-list").style.setProperty("--cols", cols.map(() => "auto").join(" ") || "0px");
-  $("#ep-list").style.setProperty("--cols-s", cols.map(() => "minmax(0, auto)").join(" ") || "0px");
+  const table = $("#ep-list"), focusedChip = document.activeElement?.closest(".ep-subs-chip")?.getAttribute("aria-controls");
+  const expanded = new Set([...table.querySelectorAll(".ep-subs-detail:not([hidden])")].map((detail) => detail.id));
+  table.classList.toggle("compact", !specs);
+  table.style.setProperty("--cols", cols.map(() => "auto").join(" ") || "0px");
+  table.style.setProperty("--cols-s", cols.map((c) => c.id === "subs" ? "minmax(max-content, auto)" : "minmax(0, auto)").join(" ") || "0px");
+  const required = S.config.series[current.tvdbId]?.subs_accept || S.config.settings?.subs_accept || "";
+  const showSubsColumn = cols.some((c) => c.id === "subs");
   const rows = shown.map((e) => {
     const odd = e.file ? oddities(e.file, norm) : {};
     const run = epBusy.get(e.id);
-    const box = el("input", { type: "checkbox", checked: picked.has(e.id), disabled: !!run, title: run ? "Downloading now" : "",
+    const number = `E${pad2(e.episodeNumber)}`, status = labels[state(e)];
+    const box = el("input", { type: "checkbox", ariaLabel: number, checked: picked.has(e.id), disabled: !!run, title: run ? "Downloading now" : "",
       onchange: () => { box.checked ? picked.add(e.id) : picked.delete(e.id); updateEpBar(); } });
-    return el("li", {}, el("label", { className: "ep" },
+    const subs = e.file ? subtitleSummary(e.file.subtitles, required, odd.subs, e.id, number, expanded.has(`ep-subs-${e.id}`)) : null;
+    if (subs && !showSubsColumn) {
+      subs.cell.classList.add("ep-mobile-subs");
+      subs.detail?.classList.add("ep-mobile-subs");
+    }
+    return el("li", {}, el("div", { className: "ep",
+      onclick: (event) => { if (!event.target.closest("input, button, a, [role=button]")) box.click(); } },
       box,
-      el("span", { className: "num", textContent: `E${String(e.episodeNumber).padStart(2, "0")}` }),
+      el("span", { className: "num", textContent: number }),
       el("span", { className: "t", title: fileTooltip(e) }, e.title ? episodeTitle(current.tvdbId, `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`, e.title, "tt") : el("span", { className: "tt", textContent: "TBA" }),  // the title gives way, its badge doesn't
         ...(run ? [el("em", { className: "ep-busy", textContent: isQueued(run) ? "Queued" : afterTracks(run) || `Downloading ${Math.round(Number(run.live?.progress) || 0)}%` })] : []),
-        ...(!run && epAvail ? serviceBadge(e) : []),
-        ...(e.file ? [fileLine(e.file, odd)] : [])),
-      ...cols.map((c, i) => { const cell = c.file && !e.file ? el("span", { className: "spec blank" }) : c.cell(e.file, odd, e); cell.classList.add("col"); cell.style.setProperty("--c", i + 3); return cell; }),
-      stateIcon(state(e), labels[state(e)])));
+        ...(!run && epAvail ? serviceBadge(e) : [])),
+      ...(e.file ? [fileLine(e.file, odd)] : []),
+      ...(subs && !showSubsColumn ? [subs.cell] : []),
+      ...cols.map((c, i) => {
+        const cell = c.file && !e.file ? el("span", { className: "spec blank" }) : c.id === "subs" ? subs.cell : c.cell(e.file, odd, e);
+        cell.classList.add("col");
+        cell.style.setProperty("--c", i + 3);
+        return cell;
+      }),
+      specs ? stateIcon(state(e), status) : el("span", { className: "ep-status", textContent: status })),
+      ...(subs?.detail ? [subs.detail] : []));
   });
   const head = el("li", { className: "ep-head", ariaHidden: "true" }, ...["", "", "Title", ...cols.map((c) => c.label), ""]
     .map((t, i) => el("span", { className: i === 0 ? "cb" : i === 2 ? "th" : i > 2 && i < cols.length + 3 ? "col" : "", style: `--c: ${i}`, textContent: t })));
@@ -830,9 +881,10 @@ function renderSeason() {
     ...(q && (q.video || q.audio) ? [el("small", {
       textContent: `${seasonSvc(epSeason)}: up to ${[q.video, q.audio].filter(Boolean).join(", ")}` })] : []),
     ...(flagged ? [el("small", { className: "odd-legend", textContent: "Orange: different from most of this season (hover for details)" })] : []));
-  $("#ep-list").replaceChildren(...(rows.length ? [head, ...rows] : [el("li", { className: "none", textContent: "Every episode of this season is on disk." })]));
-  epFit.observe($("#ep-list"));  // on a resize; now, for new rows or columns
-  fitEpList($("#ep-list"));
+  table.replaceChildren(...(rows.length ? [head, ...rows] : [el("li", { className: "none", textContent: "Every episode of this season is on disk." })]));
+  epFit.observe(table);  // on a resize; now, for new rows or columns
+  fitEpList(table);
+  if (focusedChip) table.querySelector(`[aria-controls="${focusedChip}"]`)?.focus({ preventScroll: true });
   if (tipFor && !tipFor.isConnected) hideTip();  // its badge went with the redraw
 }
 /* unshackle.yaml gives the series' service no CDM: the default one decrypts it, and fails when it holds the other
