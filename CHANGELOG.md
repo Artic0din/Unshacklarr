@@ -99,6 +99,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
 - Made the Series drawer more compact, with expandable subtitle lists, fewer toolbar rows, and clearer episode status when file details are unavailable. (#352)
 
 - Kept the header in view while scrolling, moved version details to Settings, and made Inbox filters and episode lists easier to read on small screens. (#351)
