@@ -633,6 +633,40 @@ console.log(JSON.stringify({ rowTag: row.tag, rowRole: row.role ?? null, rowTab:
 """, str(JS / "cookies-cdm.js"))
     assert seen == {"rowTag": "div", "rowRole": None, "rowTab": None, "summary": ["button", "button", "false"], "menu": ["button", True], "nested": 0, "unfolds": True}
 
+
+def test_local_and_remote_device_rows_show_service_names_and_keep_default():
+    seen = node(r"""
+const src = read(process.argv[1]), series = read(process.argv[2]);
+const used_by = ["RMCBFM", "DEFAULT", "UNKNOWN"];
+const rows = [];
+let localVisible = false;
+const collect = (tag, props, ...kids) => {
+  if (props?.className === "used") rows.push(kids.map((kid) => kid.textContent));
+  if (props?.className === "cdm-sum") localVisible = true;
+  return el(tag, props, ...kids);
+};
+const ctx = sandbox({ el: collect, $: () => any, keepFocus: (_box, draw) => draw(),
+  cdmData: { folder: "/cdm", devices: [{ name: "alpha", kind: "Widevine", used_by }], remote: [{ name: "remote", used_by }], services: [], map: {} },
+  cdmFilter: "all", cdmQuery: "", cdmTesting: false, cdmShowUnused: false, cdmRunning: new Set(), cdmOpen: new Set(), cdmJust: new Set(),
+  S: { config: { series: {}, settings: {} }, serviceNames: { RMCBFM: "RMC BFM Play" } },
+  COUNT: { device: String }, cdmShort: (d) => d.name });
+vm.runInContext(grab(series, /^const svcName = .*$/m)
+  + "\n" + grab(src, /^const cdmUsageName = .*$/m)
+  + "\n" + grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + ["cdmTitle", "cdmStatus", "renderCdm", "remoteRow"].map((name) => grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+ctx.renderCdm();
+const labels = rows.splice(0);
+const visible = (query) => {
+  localVisible = false;
+  ctx.cdmQuery = query;
+  ctx.renderCdm();
+  return localVisible;
+};
+console.log(JSON.stringify({ labels, byName: visible("rmc bfm play"), byCode: visible("rmcbfm") }));
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"))
+    assert seen == {"labels": [["RMC BFM Play", "default", "UNKNOWN"]] * 2, "byName": True, "byCode": True}
+
+
 def test_the_header_says_an_update_or_a_check_in_words_not_by_the_dot_alone():
     shown = node(r"""
 const buttons = Object.fromEntries(["unshackle", "sonarr"].map((n) => [n, { dataset: {}, title: "", dot: { className: "" }, small: { textContent: "" },

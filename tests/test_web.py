@@ -980,6 +980,7 @@ const findAll = (rootNode, predicate, matches = []) => {
   for (const child of rootNode.children || []) findAll(child, predicate, matches);
   return matches;
 };
+const rowName = (row) => ["sv-name", "sv-backend"].map((className) => find(row, (node) => node.className === className)?.textContent).filter(Boolean).join(" · ");
 const setup = { service: "PAIRED", backend: "", state: "waiting", method: "pairing", prompt: "Approval response" };
 const box = {
   S: {
@@ -1096,7 +1097,7 @@ const promptState = (input) => {
     box.S.authenticationSetups = [];
     box.renderServices();
     const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => ({
-      name: find(row, (node) => node.className === "sv-name").textContent,
+      name: rowName(row),
       label: find(row, (node) => node.className === "sv-label").textContent,
       controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
     }));
@@ -1116,7 +1117,7 @@ const promptState = (input) => {
     box.S.authenticationSetups = [];
     box.renderServices();
     const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => [
-      find(row, (node) => node.className === "sv-name").textContent,
+      rowName(row),
       find(row, (node) => node.className === "sv-label").textContent,
       findAll(row, (node) => node.tag === "button").map((button) => button.textContent).filter((t) => /Sign|Reauth/.test(t)),
     ]);
@@ -1131,7 +1132,7 @@ const promptState = (input) => {
     box.renderServices();
     let rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row");
     const waiting = rows[0] ? {
-      name: find(rows[0], (node) => node.className === "sv-name").textContent,
+      name: rowName(rows[0]),
       label: find(rows[0], (node) => node.className === "sv-label").textContent,
       prompt: find(rows[0], (node) => node.tag === "input")?.placeholder,
       controls: findAll(rows[0], (node) => node.tag === "button").map((button) => button.textContent),
@@ -1165,7 +1166,7 @@ const promptState = (input) => {
     box.renderServices();
     let rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row");
     const waiting = rows.map((row) => ({
-      name: find(row, (node) => node.className === "sv-name").textContent,
+      name: rowName(row),
       controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
     }));
     box.S.authenticationMethods = {};
@@ -1173,7 +1174,7 @@ const promptState = (input) => {
     box.renderServices();
     rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row");
     const errored = rows.map((row) => ({
-      name: find(row, (node) => node.className === "sv-name").textContent,
+      name: rowName(row),
       controls: findAll(row, (node) => node.tag === "button").map((button) => button.textContent),
     }));
     console.log(JSON.stringify({ waiting, errored }));
@@ -1231,12 +1232,18 @@ const promptState = (input) => {
     const words = (cell) => findAll(cell, (node) => node.textContent && node.className !== "sv-k" && !(node.children || []).some((c) => c.textContent))
       .map((node) => node.textContent);
     const rows = findAll(nodes["#sv-list"], (node) => node.className === "sv-row").map((row) => {
-      const cells = row.children.slice(1);
       const label = find(row, (node) => node.className === "sv-label");
-      return { name: find(row, (node) => node.className === "sv-name").textContent, label: label.textContent, tone: label.dataset.tone || "",
-        signIn: words(cells[1]), cookies: words(cells[2]), used: words(cells[3]), attention: !!row.dataset.attention };
+      const cell = (heading) => row.children.find((n) => n.tag === "td" && n.children[0]?.textContent === heading);
+      return { name: rowName(row), label: label.textContent, tone: label.dataset.tone || "",
+        signIn: words(cell("Sign-in status")), cookies: words(cell("Cookies")), used: words(cell("Used by")), attention: !!row.dataset.attention };
     });
-    console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className }));
+    const local = find(nodes["#sv-list"], (node) => node.id === "sv-HULU");
+    const remote = find(nodes["#sv-list"], (node) => node.id === "sv-HULU@vpn");
+    const header = find(nodes["#sv-list"], (node) => node.tag === "thead");
+    const primary = (row) => findAll(row, (node) => node.tag === "button" && node.className.split(" ").includes("primary")).map((node) => node.textContent);
+    console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className, headers: words(header),
+      localService: words(local.children[0]), remoteService: words(remote.children[0]),
+      primary: [local, remote, find(nodes["#sv-list"], (node) => node.id === "sv-ATVP"), find(nodes["#sv-list"], (node) => node.id === "sv-ZONE")].map(primary) }));
   }
   if (scenario === "check_now") {
     const asked = [], timers = [];
@@ -1288,7 +1295,7 @@ const promptState = (input) => {
     const row = find(nodes["#sv-list"], (node) => node.className === "sv-row");
     console.log(JSON.stringify({
       attention: !!row.dataset.attention,
-      cookies: findAll(row.children[3], (node) => node.textContent && node.className !== "sv-k" && !(node.children || []).some((c) => c.textContent)).map((node) => node.textContent),
+      cookies: findAll(row.children.find((cell) => cell.children[0]?.textContent === "Cookies"), (node) => node.textContent && node.className !== "sv-k" && !(node.children || []).some((c) => c.textContent)).map((node) => node.textContent),
     }));
   }
   if (scenario === "validated_pairing_without_cookies") {
@@ -1457,6 +1464,14 @@ def test_cancelled_authentication_is_rendered_until_the_next_refresh():
         "cancelled": "Sign-in cancelled",
         "refreshed": "Sign-in needed",
     }
+
+
+def test_service_identity_keeps_sign_in_methods_and_one_primary_action():
+    result = run_authentication_ui("cookies_per_service")
+    assert result["headers"] == ["Service", "Sign-in status", "Cookies", "Used by"]
+    assert result["localService"] == ["HULU", "Cookies", "Credentials"]
+    assert result["remoteService"] == ["HULU", "vpn", "Cookies"]
+    assert result["primary"] == [["Sign in again"], ["Check"], ["Check"], ["Replace"]]
 
 
 def test_each_service_row_joins_its_sign_in_and_its_cookie_files():
