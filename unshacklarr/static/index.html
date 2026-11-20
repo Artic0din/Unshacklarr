@@ -91,36 +91,41 @@
   </section>
 
   <section id="tab-schedule">
-    <div class="sched-head">
-      <p id="next-sync" class="muted"><span class="loading"><span class="spinner" aria-hidden="true"></span>Loading the schedule…</span></p>
-      <button class="btn small" id="sched-refresh">Reload calendar</button>
-    </div>
-    <div id="sched-late" hidden>
-      <div class="late-banner"><b id="late-n"></b><span id="late-sum"></span><button class="btn small" id="late-toggle" aria-expanded="false">Show</button></div>
-      <div id="sched-missing" class="sched-cards" hidden></div>
-    </div>
-    <div class="sched-title">
-      <h2 class="sched-h">Sonarr's calendar</h2>
-      <div class="sched-tools">
+    <h2 class="sr-only">Sonarr's calendar</h2>
+    <div class="sched-tools" inert>
+      <div class="cal-nav">
+        <h3 id="cal-range" aria-live="polite"></h3>
+        <div class="cal-step">
+          <button class="btn small" id="cal-prev" aria-label="Previous week"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+          <button class="btn small" id="cal-next" aria-label="Next week"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+          <button class="btn small" id="cal-today">Today</button>
+        </div>
         <div class="seg small" role="group" aria-label="View">
           <button data-view="week" aria-pressed="true">Week</button>
           <button data-view="month" aria-pressed="false">Month</button>
         </div>
+      </div>
+      <div class="sched-meta">
         <div class="sched-filter" role="group" aria-label="Which series">
           <button class="pill" data-scope="all" aria-pressed="true">All</button>
           <button class="pill" data-scope="mine" aria-pressed="false">Downloading</button>
           <button class="pill" data-scope="other" aria-pressed="false">Not downloading</button>
         </div>
-        <button class="hidden-btn" id="hidden-open" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a17.6 17.6 0 0 1-2.2 3.3M6.6 6.6C3.6 8.6 2 12 2 12s3 8 10 8a10 10 0 0 0 5.4-1.6M14.1 14.1a3 3 0 0 1-4.2-4.2M2 2l20 20"/></svg><span></span></button>
+        <div class="sched-sync">
+          <button class="hidden-btn" id="hidden-open" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a17.6 17.6 0 0 1-2.2 3.3M6.6 6.6C3.6 8.6 2 12 2 12s3 8 10 8a10 10 0 0 0 5.4-1.6M14.1 14.1a3 3 0 0 1-4.2-4.2M2 2l20 20"/></svg><span></span></button>
+          <button class="btn small" id="sched-refresh">Reload</button>
+          <div id="next-sync" class="muted" role="status">Next sync at …</div>
+        </div>
       </div>
     </div>
-    <div class="cal-nav">
-      <button class="btn small" id="cal-prev" aria-label="Previous week"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
-      <h3 id="cal-range" aria-live="polite"></h3>
-      <button class="btn small" id="cal-next" aria-label="Next week"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
-      <button class="btn small" id="cal-today">Today</button>
+    <div id="sched-late" hidden>
+      <details class="late-banner">
+        <summary><b id="late-n"></b></summary>
+        <p id="late-sum" class="muted"></p>
+        <div id="sched-missing" class="sched-cards"></div>
+      </details>
     </div>
-    <div id="sched-week"><div class="board" id="week-board"></div></div>
+    <div id="sched-week"><div class="board" id="week-board"><div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading the schedule…</div></div></div>
     <div id="sched-cal" hidden>
       <div class="cal-grid" id="cal-grid"></div>
       <div id="cal-day"></div>

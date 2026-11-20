@@ -147,10 +147,16 @@ def test_lighting_a_shortcut_scrolls_only_the_bar_sideways_and_counts_only_what_
     has(light, "Math.max(pinned($(\".d-head\")), pinned(nav))")
 
 
-def test_the_late_banner_puts_its_sentence_under_the_count_and_button_on_a_phone():
-    phone = media("max-width: 700px")
-    has(phone, ".late-banner { display: grid; grid-template-columns: 1fr auto;")
-    has(phone, ".late-banner span { grid-row: 2; grid-column: 1 / -1; }")
+def test_late_episodes_keep_their_count_visible_and_their_details_collapsed_initially():
+    html = (STATIC / "index.html").read_text()
+    details = re.search(r'<details class="late-banner">(.*?)</details>', html, re.S)
+    assert details is not None
+    assert re.search(r'<summary>.*id="late-n".*</summary>.*id="late-sum".*id="sched-missing"', details[1], re.S)
+    for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", media("max-width: 700px")):
+        if re.search(r"\.late-banner(?:\s+|\s*>\s*)summary\b", selectors):
+            assert not re.search(r"\b(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse))\b", body), (
+                f"Phone CSS hides the late count: {selectors.strip()} {{{body}}}"
+            )
 
 
 def test_a_posters_service_badge_stays_inside_its_poster_and_names_itself():
