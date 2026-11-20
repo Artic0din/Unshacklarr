@@ -42,34 +42,49 @@ const listeners = {}, location = { hash: "#/settings/cdm" };
 const window = { scrollY: 0, addEventListener: (name, fn) => { listeners[name] = fn; } };
 const select = { classList: { contains: () => false, toggle() {} }, setAttribute() {},
   addEventListener: (name, fn) => { listeners[name] = fn; } };
-let cdmTop = 400, focused, finishServices, accountLoads = 0, keyPrompt = false;
-const heading = { id: "cdm-heading" };
+let cdmTop = 400, focused, finishServices, finishCdm, sectionResized, accountLoads = 0, keyPrompt = false;
+const heading = { id: "cdm-heading", getClientRects: () => [{}], closest: () => null };
+const section = {};
+const connectionsHeading = { id: "connections-heading" };
+const hiddenLabel = { getClientRects: () => [], closest: () => null };
+const visibleLabel = { getClientRects: () => [{}], closest: () => null };
+const audioTarget = {
+  closest: (selector) => selector === ".set-sec" ? section : null,
+  scrollIntoView: () => { window.scrollY = 500; },
+  querySelector: () => hiddenLabel,
+  querySelectorAll: () => process.argv[2] === "visible-label" ? [hiddenLabel, visibleLabel] : [hiddenLabel],
+};
 const anchors = {
-  "services-sec": { compareDocumentPosition: (other) => other === anchors["cdm-sec"] ? 4 : 0 },
   "cdm-sec": {
-    closest: () => null, querySelector: () => heading,
+    closest: (selector) => selector === ".set-sec" ? section : null,
+    querySelector: () => heading, querySelectorAll: () => [heading],
     scrollIntoView: () => { window.scrollY = cdmTop; },
-    getBoundingClientRect: () => ({ top: cdmTop - window.scrollY }),
   },
-  "region-sec": { closest: () => null, querySelector: () => null, scrollIntoView() {},
-    getBoundingClientRect: () => ({ top: 100 - window.scrollY }) },
-  "history-sec": { compareDocumentPosition: () => 0 },
-  "account-sec": { compareDocumentPosition: () => 0 },
+  "region-sec": { closest: () => null, querySelector: () => null, querySelectorAll: () => [], scrollIntoView() {} },
+  "account-sec": { closest: () => null, querySelector: () => heading, querySelectorAll: () => [heading],
+    scrollIntoView: () => { window.scrollY = 1938; } },
 };
 const ctx = sandbox({
   $, window, location, current: null, S: { config: {} }, termSocket: null,
-  phoneLayout: () => true, Node: { DOCUMENT_POSITION_FOLLOWING: 4 },
-  document: { querySelectorAll: () => [], body: select, getElementById: (id) => anchors[id] },
+  phoneLayout: () => true,
+  ResizeObserver: class {
+    constructor(callback) { this.callback = callback; }
+    observe(node) { if (node === section) sectionResized = this.callback; }
+    disconnect() { if (sectionResized === this.callback) sectionResized = null; }
+  },
+  document: { querySelector: (selector) => selector === ".up-mode" ? audioTarget : null,
+    querySelectorAll: () => [], body: select, getElementById: (id) => anchors[id] },
   history: { replaceState: (_, __, hash) => { location.hash = hash; } },
   focusHeading: (node) => { focused = node; },
   loadServices: () => new Promise((resolve) => {
-    finishServices = () => { cdmTop += 6000; resolve(); };
+    finishServices = resolve;
   }),
-  loadCdm: () => new Promise(() => {}),
+  loadCdm: () => new Promise((resolve) => { finishCdm = resolve; }),
   loadAccount: () => { accountLoads++; keyPrompt = false; },
   scrollTo: ({ top }) => { window.scrollY = top; },
 });
 function $(selector) {
+  if (selector === '.set-sec[data-sec="connections"] h2') return connectionsHeading;
   return selector === "#tab-settings" ? select : { ...select, addEventListener() {} };
 }
 const source = read(process.argv[1]);
@@ -80,13 +95,15 @@ const jump = (hash) => listeners.click({ preventDefault() {}, target: { closest:
 """
 
 
-@pytest.mark.parametrize("interruption", ["none", "layout", "before-state", "scroll", "route"])
+@pytest.mark.parametrize("interruption", [
+    "none", "layout", "startup-scroll", "wheel", "touchmove", "keydown", "tab", "pointerdown", "route",
+])
 def test_delayed_services_keep_the_cdm_heading_in_view_only_if_the_jump_is_still_active(interruption):
     seen = node(SETTINGS_NAV + r"""
 (async () => {
   const before = cdmTop - window.scrollY;
   const focusedCdm = focused === heading;
-  if (process.argv[2] === "before-state") {
+  if (process.argv[2] === "startup-scroll") {
     window.scrollY += 120;
     listeners.scroll?.();
   }
@@ -94,7 +111,10 @@ def test_delayed_services_keep_the_cdm_heading_in_view_only_if_the_jump_is_still
   ctx.S.config.settings = {};
   ctx.applyRoute();
   const movedOnState = window.scrollY !== beforeState;
-  if (process.argv[2] === "scroll") {
+  const interruption = process.argv[2];
+  if (["wheel", "touchmove", "keydown", "tab", "pointerdown"].includes(interruption)) {
+    const event = interruption === "tab" ? "keydown" : interruption;
+    listeners[event]?.({ isTrusted: true, key: interruption === "tab" ? "Tab" : "PageDown" });
     window.scrollY += 120;
     listeners.scroll?.();
   }
@@ -105,19 +125,51 @@ def test_delayed_services_keep_the_cdm_heading_in_view_only_if_the_jump_is_still
   }
   if (process.argv[2] === "route") enter("#/schedule");
   const scrollBeforeRender = window.scrollY;
+  cdmTop += 6000; // A health refresh can render the rows before the section's loader finishes.
+  sectionResized?.();
+  const topWhileLoading = cdmTop - window.scrollY;
   finishServices();
+  finishCdm();
   await new Promise(setImmediate);
-  console.log(JSON.stringify({ before, focusedCdm, movedOnState, top: cdmTop - window.scrollY,
-    moved: window.scrollY !== scrollBeforeRender }));
+  const top = cdmTop - window.scrollY, moved = window.scrollY !== scrollBeforeRender;
+  cdmTop += 250;
+  sectionResized?.();
+  console.log(JSON.stringify({ before, focusedCdm, movedOnState, topWhileLoading, top, moved,
+    shiftAfterLoading: cdmTop - window.scrollY - top }));
 })();
 """, str(JS / "navigation.js"), interruption)
     assert seen["before"] == 0
     assert seen["focusedCdm"]
     assert not seen["movedOnState"]
-    if interruption in ("none", "layout"):
+    assert seen["shiftAfterLoading"] == 250
+    if interruption in ("none", "layout", "startup-scroll"):
+        assert seen["topWhileLoading"] == 0
         assert seen["top"] == 0
     else:
         assert not seen["moved"]
+
+
+def test_settings_route_focuses_a_new_section_and_preserves_position_on_restore():
+    seen = node(SETTINGS_NAV + r"""
+enter("#/settings/account");
+const accountScroll = window.scrollY;
+enter("#/settings/connections");
+const opened = { scroll: window.scrollY, focused: focused === connectionsHeading };
+window.scrollY = 300;
+ctx.applyRoute();
+console.log(JSON.stringify({ accountScroll, opened, restored: window.scrollY }));
+""", str(JS / "navigation.js"))
+    assert seen == {"accountScroll": 1938, "opened": {"scroll": 0, "focused": True}, "restored": 300}
+
+
+@pytest.mark.parametrize("candidate", ["hidden-label", "visible-label"])
+def test_settings_show_me_moves_focus_past_hidden_labels(candidate):
+    seen = node(SETTINGS_NAV + r"""
+ctx.openSettings("downloads", ".up-mode");
+console.log(JSON.stringify({ scroll: window.scrollY, focused: focused ===
+  (process.argv[2] === "visible-label" ? visibleLabel : audioTarget) }));
+""", str(JS / "navigation.js"), candidate)
+    assert seen == {"scroll": 500, "focused": True}
 
 
 def test_settings_jump_keeps_the_api_key_prompt_open_but_reentering_loads_account_again():

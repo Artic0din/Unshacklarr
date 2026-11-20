@@ -185,13 +185,14 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
       panels.push(panel); root.append(panel);
       buttons[group] = make("button", { dataset: { sec: group } }); root.append(buttons[group]);
     } else {
-      const h = make("h3"), node = make("div", { id: anchor, closest: () => null, querySelector: () => h, scrollIntoView() { out.scrolledTo = anchor; } });
+      const h = make("h3", { closest: () => null }), node = make("div", { id: anchor, closest: () => null, querySelectorAll: () => [h], scrollIntoView() { out.scrolledTo = anchor; } });
       node.append(h); panel.append(node); anchors[anchor] = node;
     }
   }
   const loads = [], location = { hash: "" }, dlg = { close() {} };
   Object.assign(ctx, { current: null, location, showTab(tab) { run(`currentTab = ${JSON.stringify(tab)}`); },
-    phone: true, window: { scrollY: 0 }, leaveSettingsNews() {}, updateTitle() {}, scrollTo() {}, S: { series: [], config: {} },
+    phone: true, window: { scrollY: 0 }, ResizeObserver: class { observe() {} disconnect() {} },
+    leaveSettingsNews() {}, updateTitle() {}, scrollTo() {}, S: { series: [], config: {} },
     history: { pushState(_, __, hash) { location.hash = hash; }, replaceState(_, __, hash) { location.hash = hash; } },
     $: (sel) => sel === "#news-dlg" || sel === "#inbox-dialog" ? dlg : sel === ".set-layout" ? root : doc.querySelector(sel),
     phoneLayout: () => ctx.phone });

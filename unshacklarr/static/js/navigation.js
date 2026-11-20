@@ -19,57 +19,50 @@ const LEGACY_SETTINGS_MAP = {
 const settingsPages = Object.values(LEGACY_SETTINGS_MAP);
 const legacySettings = (name) => Object.hasOwn(LEGACY_SETTINGS_MAP, name) ? LEGACY_SETTINGS_MAP[name] : null;
 let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false, secFromList = false;
-let loadedSettings = null, settingsAnchor = null;
+let loadedSettings = null, settingsAnchor = null, settingsAnchorObserver = null;
 const inSettingsSec = () => currentTab === "settings" && !settingsList;  // a section on screen, not the phone's list
 const showingSettings = (name) => inSettingsSec() && legacySettings(name)?.sec === settingsSec;
 const settingsHref = (name) => `#/settings/${name}`;
-function rememberSettingsAnchor(anchor) {
-  const top = anchor.getBoundingClientRect().top;
-  settingsAnchor = { anchor, scrollY: window.scrollY, pageTop: top + window.scrollY };
-}
-function checkSettingsScroll() {
-  if (!settingsAnchor || window.scrollY === settingsAnchor.scrollY) return;
-  const { anchor, pageTop } = settingsAnchor;
-  // Browser scroll anchoring can move the viewport when content above it changes.
-  if (Math.abs(anchor.getBoundingClientRect().top + window.scrollY - pageTop) > 1) rememberSettingsAnchor(anchor);
-  else settingsAnchor = null;
+function clearSettingsAnchor() {
+  settingsAnchorObserver?.disconnect();
+  settingsAnchorObserver = settingsAnchor = null;
 }
 function loadSettingsSec() {
   if (!inSettingsSec() || !S.config.settings || loadedSettings?.sec === settingsSec) return;
   const entry = loadedSettings = { sec: settingsSec };
+  const pending = [];
   for (const page of settingsPages) {
     if (page.sec !== entry.sec) continue;
-    const pending = page.load?.();
-    pending?.then?.(() => {
-      if (loadedSettings !== entry || !inSettingsSec()) return;
-      checkSettingsScroll();
-      const jump = settingsAnchor;
-      if (!jump) return;
-      // Only a subsection above the target can push it down when its data renders.
-      const source = document.getElementById(page.anchor);
-      if (!(source.compareDocumentPosition(jump.anchor) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
-      jump.anchor.scrollIntoView({ block: "start" });
-      rememberSettingsAnchor(jump.anchor);
-    }).catch(console.error);
+    const task = page.load?.();
+    if (task?.then) pending.push(task.catch(console.error));
   }
+  Promise.all(pending).then(() => {
+    entry.settled = true;
+    if (loadedSettings !== entry) return;
+    settingsAnchor?.scrollIntoView({ block: "start" });
+    clearSettingsAnchor();
+  });
 }
 function leaveSettingsSec() {
-  loadedSettings = settingsAnchor = null;
+  loadedSettings = null;
+  clearSettingsAnchor();
   leaveSettingsNews(settingsSec);
 }
 function showSettingsList(on) {
   const fromSec = on && phoneLayout() && inSettingsSec();
   if (fromSec) leaveSettingsSec();
+  else if (on) clearSettingsAnchor();
   settingsList = on && phoneLayout();
   $(".set-layout").classList.toggle("at-list", settingsList);
   if (fromSec) document.querySelector(`.set-nav [data-sec="${settingsSec}"]`).focus({ preventScroll: true });  // the item it came from
 }
 function showSettingsSec(name, fromRoute = false, push = false, target = null) {
   const page = legacySettings(name), sec = page?.sec || (settingsPages.some((item) => item.sec === name) ? name : "connections");
-  if (sec !== settingsSec && inSettingsSec()) leaveSettingsSec();
-  settingsAnchor = null;
+  const changedSection = sec !== settingsSec;
+  if (changedSection && inSettingsSec()) leaveSettingsSec();
+  clearSettingsAnchor();
   const fromList = settingsList;
-  if (sec !== settingsSec || fromList) secFromList = fromList && !fromRoute;
+  if (changedSection || fromList) secFromList = fromList && !fromRoute;
   showSettingsList(false);
   settingsSec = sec;
   settingsRoute = page ? name : sec;
@@ -82,9 +75,16 @@ function showSettingsSec(name, fromRoute = false, push = false, target = null) {
     const fold = anchor.closest("details");
     if (fold) fold.open = true;
     anchor.scrollIntoView({ block: "start" });
-    focusHeading(anchor.querySelector("h2, h3, h4, label") || anchor);
-    rememberSettingsAnchor(anchor);
-  } else if (fromList || !fromRoute) {
+    const heading = [...anchor.querySelectorAll("h2, h3, h4, label")].find((node) =>
+      node.getClientRects().length && !node.closest("[hidden], details:not([open])"));
+    focusHeading(heading || anchor);
+    if (!loadedSettings?.settled) {
+      settingsAnchor = anchor;
+      // Startup health renders can resize the section before its own loaders finish.
+      settingsAnchorObserver = new ResizeObserver(() => settingsAnchor?.scrollIntoView({ block: "start" }));
+      settingsAnchorObserver.observe(anchor.closest(".set-sec"));
+    }
+  } else if (changedSection || fromList || !fromRoute) {
     scrollTo({ top: 0 });
     focusHeading($(`.set-sec[data-sec="${sec}"] h2`));
   }
@@ -156,12 +156,12 @@ function applyRoute() {
   updateTitle();
 }
 window.addEventListener("popstate", applyRoute);
-window.addEventListener("scroll", checkSettingsScroll);
-for (const event of ["wheel", "touchmove"]) {
-  window.addEventListener(event, () => { settingsAnchor = null; }, { passive: true });
+// Startup can scroll without user input; only input should interrupt a jump that is still loading.
+for (const event of ["wheel", "touchmove", "pointerdown"]) {
+  window.addEventListener(event, (e) => { if (e.isTrusted) clearSettingsAnchor(); }, { passive: true });
 }
 window.addEventListener("keydown", (e) => {
-  if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(e.key)) settingsAnchor = null;
+  if (e.isTrusted && ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Tab"].includes(e.key)) clearSettingsAnchor();
 });
 
 // The page's scroll padding, so focus stops clear of what is pinned: the header as tall as it is (a status row under it
