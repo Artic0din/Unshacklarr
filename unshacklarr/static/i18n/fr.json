@@ -2510,5 +2510,6 @@
  "Not run: the service has no search": "Non exécuté : le service n'a pas de recherche",
  "A download is running: check again when it ends": "Un téléchargement est en cours : vérifiez à nouveau quand il se termine",
  "Unexpected {0} in the reply": "{0} inattendus dans la réponse",
- "search results": "résultats de recherche"
+ "search results": "résultats de recherche",
+ "Clear {0} cache? It signs out": "Vider le cache de {0} ? Cela déconnecte"
 }

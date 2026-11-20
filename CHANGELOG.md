@@ -140,6 +140,11 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Touch targets stay at least 44 px on tablets and phones.** Desktop 36 px and 30 px control heights now apply only
+  to fine pointers above 700 px, while coarse-pointer touch screens (including iPads above 700 px) keep 44 px minimum
+  hit targets across navigation, filters, buttons, drawers, dock controls, and collapsible summaries. (#333)
+- **Per-service Clear cache now asks for confirmation first.** Clicking Clear cache in Settings › Per service asks to
+  confirm before clearing the service's logins, tokens, and sessions. (#334)
 - **A tool in Activity no longer shows the last job's bar.** Opening Waiting, Catch up, Upgrades, Languages or Stats
   after a download left that download's bar at the bottom of the pane; it is hidden now. (#363)
 - **Web requests no longer stall behind slow TMDB, cache, or Sonarr scans.** Shared worker-pool sizing, deduplicated

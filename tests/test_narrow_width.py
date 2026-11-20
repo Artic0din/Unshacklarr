@@ -120,3 +120,43 @@ def test_activitys_history_filters_and_clear_are_big_enough_to_tap_on_a_phone():
     has(phone, ".btn.small, .con-filters button { min-height: 36px; }")
     has(phone, ".gh-act { min-height: 36px;")
     has(CSS, ".con-gh { display: flex; justify-content: space-between; align-items: center;")  # its label level with Clear…
+
+
+def test_coarse_pointer_devices_keep_44px_touch_targets_above_700px():
+    """Tablets (e.g. iPad portrait at 768-820px) match (pointer: coarse), not phone width (#333)."""
+    assert "@media (min-width: 701px) and (pointer: fine) {" in CSS
+    touch = media("max-width: 700px), (pointer: coarse")
+    # each selector of a rule that sets a 44px size, so a selector merely mentioned elsewhere in the block does not count
+    sized_44 = {sel.strip() for sels, body in re.findall(r"([^{}]+)\{([^{}]*)\}", touch)
+                if re.search(r"(?:min-)?(?:height|width): 44px", body) for sel in sels.split(",")}
+    for sel in (
+        "nav a",
+        ".btn.small",
+        ".inbox-filters button",
+        ".con-filters button",
+        ".set-nav button",
+        ".set-back",
+        ".hidden-btn",
+        ".sched-filter .pill",
+        ".cd-tracks-fold > summary",
+        ".ds-sub summary",
+        ".dock .d-open",
+        ".dock .d-acts button",
+        ".cd-back",
+        ".jact",
+        ".health button",
+        ".ep-sel button",
+        "#bell",
+        ".inbox-x",
+    ):
+        assert sel in sized_44, f"{sel} missing from coarse-pointer 44px rule"
+
+
+def test_a_device_rows_action_column_fits_its_44px_button_on_a_phone():
+    """.jact is 44px to the finger there: a 30px column let it spill past the card's edge (#333)."""
+    has(media("max-width: 700px"), ".cdm-dev { grid-template-columns: 10px minmax(0, 1fr) 44px; }")
+
+
+def test_the_icon_only_sync_button_is_44px_on_a_touch_tablet():
+    """Up to 1240px #sync is an icon-only 40px circle; a touch tablet gets 44px (#333)."""
+    has(CSS, "@media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }")

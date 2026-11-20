@@ -47,6 +47,7 @@ async function renderServiceDefaults() {
         el("small", { textContent: count ? COUNT.option(count) : "Nothing set yet" }),
         el("button", { className: "btn small", textContent: "Clear cache", title: `Deletes the logins, tokens and sessions Unshackle keeps for ${svcName(tag)}: it logs in again next time`,
           onclick: async (e) => {
+            if (!confirmClick(e.target, `Clear ${svcName(tag)} cache? It signs out`)) return;
             e.target.disabled = true;
             try {
               const r = await api(`/api/unshackle/cache/${encodeURIComponent(tag)}/clear`, { method: "POST" });
