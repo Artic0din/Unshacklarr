@@ -104,6 +104,7 @@ Every change worth knowing, newest first. The format follows
 - Balanced Series status buttons on phones, kept search and selects together on wider screens, and closed the filters panel when keyboard focus moved away.
 - Corrected which Series controls the Filters and actions button announced as collapsed on desktop.
 - Moved Activity tools into a compact switcher, added shortcuts to running downloads, and kept the download detail pane full size. (#353)
+- Added service names and individual downloads to Catch up, tightened Waiting and Upgrades, and added Fix sign-in to failed jobs that need it. (#353)
 
 - Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
 - Made the Series drawer more compact, with expandable subtitle lists, fewer toolbar rows, and clearer episode status when file details are unavailable. (#352)
@@ -158,6 +159,9 @@ Every change worth knowing, newest first. The format follows
 - Kept service shortcuts focused on the right row, restored New badges, and fixed Settings Back and Notifications on phones.
 - Kept the Devices heading in view after loading, moved focus to newly opened Settings sections, and fixed the Add audio track shortcut's focus.
 - Kept Settings jump targets in view as data loaded, preserved open forms between jumps, and corrected card heading levels and missing translations.
+- Prevented repeat submissions in Catch up and let users retry if the request failed or a refreshed list still showed the episode as missing. (#353)
+
+- Prevented repeat Catch up downloads after switching views, kept keyboard focus on failed requests, and showed Fix sign-in even while other episodes were still queued.
 - Kept selected library names and sort labels from getting cut off in the Series filters.
 - Kept Sort with the Series filters when a longer label needed more room.
 - Revealed running download shortcuts again when returning from their details, and kept the scroll cue visible in older browsers when more shortcuts were off-screen.

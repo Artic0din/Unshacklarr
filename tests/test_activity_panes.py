@@ -82,6 +82,208 @@ def node(script, *args):
     return json.loads(out.stdout)
 
 
+ACTIVITY_ACTIONS = r"""
+const fs = require("fs"), vm = require("vm");
+const [dir, scenario, ...args] = process.argv.slice(1);
+const src = fs.readFileSync(`${dir}/activity.js`, "utf8");
+const series = fs.readFileSync(`${dir}/series.js`, "utf8");
+const core = fs.readFileSync(`${dir}/core.js`, "utf8");
+const grab = (name, text = src) => text.match(new RegExp(`(?:async )?function ${name}\\b[\\s\\S]*?\\n}\\n`))[0];
+const line = (name, text = src) => text.match(new RegExp(`^const ${name} = .*?;(?:  //.*)?$`, "m"))[0];
+const elements = {};
+const el = (tag, props = {}, ...children) => ({ tag, children, classList: { add() {} },
+  replaceChildren(...kids) { this.children = kids; }, querySelector: () => null,
+  insertBefore(child) { this.children.push(child); }, cloneNode() { return { ...this }; }, ...props });
+const $ = (sel) => elements[sel] ??= el(sel);
+const walk = (n) => n?.tag ? [n, ...n.children.flatMap(walk)] : [];
+const posts = [], toasts = [], opened = [];
+let finishPost;
+const target = args[0] || "";
+const sonarrs = [{ name: "4K", quality_ladder: ["2160"] }, { name: "Unset" }];
+const ctx = { $, el, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
+  S: { config: { settings: { sonarrs }, series: { 72: { service: "NF", season_pages: { 2: { service: "DSNP" } } } } },
+    serviceNames: { NF: "Netflix", DSNP: "Disney+" }, series: [] },
+  savedSonarr: (n) => n === "4K" ? "4K Saved" : n, mainSonarr: () => "Main",
+  markPicked() {}, renderDock() {}, loading() {}, posterSrc() {}, posterFail() {}, ago: () => "yesterday",
+  toast: (...data) => toasts.push(data), episodeTitle: (_, __, title) => title, trWith: (key) => key,
+  AbortSignal, tr: (text) => text,
+  fetch: async (path, options) => {
+    const ok = (body) => ({ ok: true, json: async () => body });
+    if (options.method === "POST") {
+      posts.push({ path, body: JSON.parse(options.body) });
+      if (args[1] === "refused") return { ok: false, status: 500, text: async () => "read-only proxy" };
+      if (args[1] === "gateway") return { ok: false, status: 504, text: async () => "gateway timeout" };
+      if (args[1] === "pending" && posts.length === 1) await new Promise((resolve) => { finishPost = resolve; });
+      if (args[1] === "lost") throw new TypeError("network offline");
+      if (args[1] === "timeout") throw new DOMException("timed out", "TimeoutError");
+      return ok({});
+    }
+    if (path === "/api/runs?live=1") throw new Error("Catch up should not check runs");
+    if (path.startsWith("/api/upgrades")) return ok({ items: [], scan: {} });
+    return ok({ items: [
+      { episodeId: 123, tvdbId: 72, series: "Example", sxxeyy: "S01E05" },
+      { episodeId: 456, tvdbId: 72, series: "Example", sxxeyy: "S02E01" },
+    ] });
+  },
+  FINISHING: new Set(), jobHidden: new Set(), jobCards: new Map(), openCards: new Set(),
+  following: null, isLive: (c) => c.outcome === "running", isQueued: (c) => c.step === "queued",
+  thumb() {}, posterOf() {}, day() {}, time() {}, clearTimeout() {}, runCards: [],
+  outcomeOf: (c) => c.outcome, hovering: () => "", stepStates: () => [], icon() {}, glideBars() {}, jobDone: () => el("div"),
+  openServiceRow: (...data) => opened.push(data),
+};
+vm.createContext(ctx);
+vm.runInContext(`let picked_run;\n` +
+  [src.slice(src.indexOf("let missingDays"), src.indexOf('$("#con-missing").onclick')),
+    src.slice(src.indexOf("let upgrade"), src.indexOf('$("#con-upgrades").onclick')),
+    grab("api", core), grab("responseError", core), line("svcName", series), grab("seasonTag", series), line("fixSignIn"),
+    ...["signInFailed", "signInAction", "cardKind", "jobState", "renderJob"].map((n) => grab(n))
+  ].join("\n"), ctx);
+(async () => {
+  if (scenario === "job") {
+    const card = { tvdbId: 72, series: "Example", outcome: "failed", started: "2026-01-01", service: "NF" };
+    const auth = target !== "unclassified" ? { auth_failures: { DSNP: "expired" }, auth_failure_backends: { DSNP: "secondary" } }
+      : { cause: "Login failed" };
+    const waiting = target === "live" ? { outcome: "running", step: "queued", waiting: true, paused: true } : {};
+    ctx.renderJob({ job: "job1", cards: [{ ...card, id: "a", episodeId: 123, ...waiting }, { ...card, ...auth, id: "b", episodeId: 456 }] });
+    const buttons = $("#cd-foot").children;
+    const fix = buttons.find((b) => b.textContent === "Fix sign-in");
+    fix?.onclick();
+    console.log(JSON.stringify({ primary: buttons.filter((b) => b.className.includes("primary")).map((b) => b.textContent),
+      opened, fk: fix?.dataset?.fk ?? null }));
+    return;
+  }
+  if (scenario === "upgrades") {
+    await ctx.showUpgrades();
+    console.log(JSON.stringify(walk($("#cd-main")).filter((n) => n.tag === "small").map((n) => n.textContent)));
+    return;
+  }
+  await ctx.showMissing();
+  if (target) {
+    walk($("#cd-main")).find((n) => n.tag === "button" && n.textContent === target).onclick();
+    await new Promise(setImmediate);
+  }
+  const click = (b) => b?.onclick({ currentTarget: b, target: b });
+  const lastRow = () => walk($("#cd-main")).filter((n) => n.textContent === "Download").at(-1);
+  const unavailable = (b) => !!b.disabled || b.ariaDisabled === "true";
+  // a pending or accepted row stays focusable: aria-disabled, never the native attribute
+  const held = (b) => { if (b.disabled) throw new Error("natively disabled: focus would drop"); return b.ariaDisabled === "true"; };
+  if (scenario === "redraw") {
+    const posted = click(lastRow());
+    const remainsFocusable = lastRow().ariaDisabled === "true" && !lastRow().disabled;
+    await click(walk($("#cd-main")).find((n) => n.textContent === "90 days"));
+    await new Promise(setImmediate);
+    await click(lastRow());
+    finishPost();
+    await posted;
+    const locked = held(lastRow());
+    await click(walk($("#cd-main")).find((n) => n.textContent === "4K"));
+    await new Promise(setImmediate);
+    const otherInstance = held(lastRow());
+    console.log(JSON.stringify({ posts, remainsFocusable, locked, otherInstance }));
+    return;
+  }
+  if (scenario === "reload") {
+    const button = lastRow();
+    await click(button);
+    await click(button);
+    const beforeReload = held(button), initialPosts = posts.length;
+    await ctx.showMissing();
+    const afterReload = held(lastRow());
+    await click(lastRow());
+    console.log(JSON.stringify({ beforeReload, initialPosts, afterReload, posts, toasts }));
+    return;
+  }
+  const all = walk($("#cd-main"));
+  const rows = all.filter((n) => n.className?.split(" ").includes("left-row"));
+  const buttons = rows.map((r) => walk(r).find((n) => n.tag === "button" && n.textContent === "Download"));
+  const bulk = all.find((n) => n.tag === "button" && n.textContent === "Download the 2");
+  let nativelyDisabledDuring;
+  for (const action of scenario.split("-")) {
+    const b = action === "row" ? buttons[1] : bulk;
+    const request = click(b);
+    nativelyDisabledDuring = !!b.disabled;
+    await request;
+  }
+  console.log(JSON.stringify({ posts, toasts, bulkHidden: bulk.hidden, chips: rows.map((r) =>
+    walk(r).find((n) => n.className === "sv-chip")?.textContent),
+    nativelyDisabledDuring, buttons: buttons.map((b) => b && { primary: b.className.includes("primary"), disabled: unavailable(b), native: !!b.disabled }) }));
+})();
+"""
+
+
+@pytest.mark.parametrize(("target", "sonarr"), [("", {}), ("4K", {"sonarr": "4K Saved"})])
+def test_catch_up_row_download_uses_same_sonarr_as_bulk(target, sonarr):
+    row = node(ACTIVITY_ACTIONS, str(JS), "row", target)
+    bulk = node(ACTIVITY_ACTIONS, str(JS), "bulk", target)
+    assert row["posts"] == [{"path": "/api/download", "body": {"episodeIds": [456], **sonarr}}]
+    assert bulk["posts"] == [{"path": "/api/download", "body": {"episodeIds": [123, 456], **sonarr}}]
+    assert row["chips"] == ["Netflix", "Disney+"]
+    assert row["buttons"] == [{"primary": False, "disabled": False, "native": False}, {"primary": False, "disabled": True, "native": False}]
+
+
+@pytest.mark.parametrize("action", ["row", "bulk"])
+def test_catch_up_never_queues_when_sonarr_quality_is_unset(action):
+    result = node(ACTIVITY_ACTIONS, str(JS), action, "Unset")
+    assert result["posts"] == []
+    assert result["bulkHidden"] is True
+    assert all(b and b["disabled"] for b in result["buttons"])
+
+
+def test_catch_up_download_error_allows_retry():
+    result = node(ACTIVITY_ACTIONS, str(JS), "row-row", "", "refused")
+    assert result["toasts"] == [["read-only proxy", True]] * 2
+    assert len(result["posts"]) == 2
+    assert result["buttons"][1]["disabled"] is False
+    assert result["nativelyDisabledDuring"] is False
+
+
+def test_catch_up_blocks_duplicate_after_redraw_but_not_in_another_sonarr():
+    result = node(ACTIVITY_ACTIONS, str(JS), "redraw", "", "pending")
+    assert [request["body"] for request in result["posts"]] == [{"episodeIds": [456]}]
+    assert result["remainsFocusable"] is True
+    assert result["locked"] is True
+    assert result["otherInstance"] is False
+
+
+@pytest.mark.parametrize("sonarr", ["", "4K"])
+def test_catch_up_can_retry_accepted_download_still_missing_after_reload(sonarr):
+    result = node(ACTIVITY_ACTIONS, str(JS), "reload", sonarr)
+    assert result["beforeReload"] is True
+    assert result["initialPosts"] == 1
+    assert result["afterReload"] is False
+    body = {"episodeIds": [456], **({"sonarr": "4K Saved"} if sonarr else {})}
+    assert [request["body"] for request in result["posts"]] == [body, body]
+
+
+@pytest.mark.parametrize("failure", ["lost", "timeout", "gateway"])
+def test_catch_up_can_retry_when_download_response_fails(failure):
+    result = node(ACTIVITY_ACTIONS, str(JS), "row-row", "", failure)
+    assert len(result["posts"]) == 2
+    assert len(result["toasts"]) == 2 and all(error for _, error in result["toasts"])
+    assert result["buttons"][1]["disabled"] is False
+
+
+@pytest.mark.parametrize(("order", "sent"), [("row-bulk", [[456], [123]]), ("bulk-row", [[123, 456]])])
+def test_catch_up_row_and_bulk_do_not_queue_the_same_episode(order, sent):
+    result = node(ACTIVITY_ACTIONS, str(JS), order)
+    assert [request["body"]["episodeIds"] for request in result["posts"]] == sent
+    assert all(b["disabled"] and not b["native"] for b in result["buttons"])  # held rows keep keyboard focus
+
+
+@pytest.mark.parametrize(("classification", "primary", "opened", "fk"), [
+    ("classified", ["Fix sign-in"], [["DSNP", "secondary"]], "sign-in"),
+    ("live", ["Fix sign-in"], [["DSNP", "secondary"]], "sign-in"),
+    ("unclassified", ["Retry 2 failed"], [], None),
+])
+def test_failed_job_footer_offers_sign_in_only_for_classified_failure(classification, primary, opened, fk):
+    result = node(ACTIVITY_ACTIONS, str(JS), "job", classification)
+    assert result == {"primary": primary, "opened": opened, "fk": fk}
+
+
+def test_upgrades_explains_which_files_the_quality_ladder_selects():
+    assert node(ACTIVITY_ACTIONS, str(JS), "upgrades")[0].split(".")[0] == "Your quality ladder decides which files can be upgraded"
+
+
 SWITCHER = r"""
 const fs = require("fs"), vm = require("vm");
 const src = fs.readFileSync(process.argv[1], "utf8"), html = fs.readFileSync(process.argv[2], "utf8");

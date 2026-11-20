@@ -145,7 +145,7 @@ const boxes = {};
 const ctx = { savedSonarr: (name) => name, $: (sel) => (boxes[sel] ??= { classList: { add() {}, toggle() {} }, textContent: "", hidden: false, replaceChildren: (...kids) => { if (sel === "#cd-main") draws.push(kids); } }),
   document: { hidden: false, querySelectorAll: () => [] }, el: (tag, props = {}, ...kids) => ({ tag, ...props, kids }), loading: (t) => ({ loading: t }), failed: (t) => ({ failed: t }),
   S: { config: { settings: { sonarrs: [{ name: "A", quality_ladder: "x" }, { name: "B", quality_ladder: "x" }] } }, series: [] }, runCards: [], isLive: () => false, isQueued: () => false,
-  renderDock() {}, posterSrc: () => "", posterFail: () => null, ago: () => "", episodeTitle: () => "", thumb: () => ({}), mainSonarr: () => "Main", URLSearchParams, toast() {}, setTimeout: () => 0, clearTimeout() {}, picked_run: null,
+  renderDock() {}, posterSrc: () => "", posterFail: () => null, ago: () => "", episodeTitle: () => "", thumb: () => ({}), mainSonarr: () => "Main", seasonTag: () => "", trWith: (key) => key, URLSearchParams, toast() {}, setTimeout: () => 0, clearTimeout() {}, picked_run: null,
   api: (path, opts = {}) => {
     if (opts.method === "POST") { posts.push(JSON.parse(opts.body)); return wait(0, {}); }
     waits.push(opts.wait);
@@ -155,7 +155,8 @@ const ctx = { savedSonarr: (name) => name, $: (sel) => (boxes[sel] ??= { classLi
     return wait(scenario === "click" ? 0 : slow ? 30 : 0, pane === "missing" ? { items: items(ids) } : { scan: { running: false }, items: items(ids), checked: null });
   } };
 vm.createContext(ctx);
-const lets = [/^let missingDays.*\n/m, /^let upgradeTimer.*\n/m, /^let upgradeLast\b.*\n/m].map((re) => src.match(re)[0]).join("");
+const lets = [/^let missingDays.*\n/m, /^const missingSubmissions.*\n/m, /^let updateMissingButtons.*\n/m,
+  /^let upgradeTimer.*\n/m, /^let upgradeLast\b.*\n/m].map((re) => src.match(re)[0]).join("");
 vm.runInContext(lets + ["markPicked", "sonarrPicker", "unsetNote", "showMissing", "showUpgrades"].map((n) => grab(n)).join(""), ctx);
 vm.runInContext("upgradePick.add(1); upgradePick.add(2); upgradePick.add(3);", ctx);
 const show = (sonarr, days) => { vm.runInContext(pane === "missing" ? `missingSonarr = ${JSON.stringify(sonarr)}; missingDays = ${days};` : `upgradeSonarr = ${JSON.stringify(sonarr)};`, ctx); return pane === "missing" ? ctx.showMissing() : ctx.showUpgrades(); };
@@ -178,7 +179,7 @@ const goText = () => find(draws[draws.length - 1], (n) => n.className === "btn p
     await show("A", 0);
     const go = find(draws[draws.length - 1], (n) => n.className === "btn primary");
     const next = show("B", 0);
-    await go.onclick({ target: {} });
+    await go.onclick({ target: {}, currentTarget: go });
     await next;
     console.log(JSON.stringify({ sent: posts.map((p) => p.sonarr ?? null) }));
   }
