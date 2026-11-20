@@ -610,6 +610,7 @@
   "svcName(service)"
  ],
  "Copy": [],
+ "Copy command": [],
  "Copy details": [],
  "Copy it now: it will not be shown again.": [],
  "Copy the command": [],
@@ -1071,7 +1072,6 @@
  "Hidden from the schedule: show it again": [],
  "Hidden series": [],
  "Hidden titles are blurred until you click or tap them. Default follows Settings, Interface, No spoilers.": [],
- "Hide": [],
  "Hide on disk": [],
  "Hide these episodes": [],
  "Hide this series from the schedule": [],
@@ -1387,7 +1387,6 @@
  "New password:": [],
  "New server": [],
  "Next": [],
- "Next automatic sync at": [],
  "Next episode": [],
  "Next month": [],
  "Next sync at {0}": [
@@ -1883,6 +1882,7 @@
   "ep['series']['title']"
  ],
  "Release to reload": [],
+ "Reload": [],
  "Reload services": [],
  "Reloading…": [],
  "Remote": [],
@@ -2152,6 +2152,7 @@
  "Show": [],
  "Show all": [],
  "Show changes": [],
+ "Show command": [],
  "Show me": [],
  "Show more": [],
  "Show name in file names": [],
@@ -4516,7 +4517,6 @@
   "st.version"
  ],
  "· checking…": [],
- "· in": [],
  "· in use": [],
  "· not listed": [],
  "· {0} could not be asked": [
@@ -4551,7 +4551,6 @@
  ],
  "Kept: Sonarr's own file was not replaced": [],
  "Paused: the next episode waits": [],
- "Reload calendar": [],
  "Save diagnostic": [],
  "Saved. Another tab renamed a Sonarr: reload this page before your next change.": [],
  "The file with the {0} audio could not be renamed: {1}": [
