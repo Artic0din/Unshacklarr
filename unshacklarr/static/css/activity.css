@@ -65,7 +65,7 @@
 .con-filters button { font: inherit; font-size: var(--fs-footnote); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: none;
   color: var(--muted); cursor: pointer; }
 .con-filters button span { font-variant-numeric: tabular-nums; }
-.con-filters button[aria-pressed="true"] { border-color: var(--field-line-hover); color: var(--text); }
+.con-filters button[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); }
 .crow { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 8px; border-radius: var(--r-md);
   border: 0; background: none; color: inherit; font: inherit; text-align: left; width: 100%; cursor: pointer; }
 .crow.is-hover { background: var(--panel); }

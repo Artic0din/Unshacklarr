@@ -95,7 +95,7 @@ nav .short { display: none; }
 .inbox-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .inbox-filters button { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
   background: none; color: var(--muted); font: inherit; font-size: var(--fs-sub); cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
-.inbox-filters button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+.inbox-filters button[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); }
 .inbox-filters i { width: 7px; height: 7px; border-radius: 50%; background: var(--lv, var(--muted)); }
 .inbox-filters b { font-weight: 600; }
 .inbox-sub { position: sticky; top: 0; z-index: 1; background: var(--panel); font-size: var(--fs-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
