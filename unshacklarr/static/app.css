@@ -311,17 +311,18 @@ body.drawer-open .savebar { display: none; }
 /* One grid for the whole list (rows are subgrids): each column as wide as its widest cell, the title the rest.
    If they can't fit, the title goes on a line of its own and the columns under it, shrinking if they must. */
 @media (min-width: 701px) {
-  .ep-list { display: grid; grid-template-columns: auto 40px minmax(180px, 1fr) var(--cols) 28px; column-gap: 18px; }
+  .ep-list { display: grid; grid-template-columns: auto 40px minmax(180px, 1fr) var(--cols) minmax(28px, max-content); column-gap: 18px; }
   .ep-list > li, .ep-list > li > .ep { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; column-gap: 18px; }
   .ep-list .col { min-width: max-content; }
-  .ep-list.stack { grid-template-columns: auto 40px var(--cols-s) 28px; }
+  .ep-list:not(.stack) .ep .col { grid-column: calc(var(--c) + 1); }
+  .ep-list .ep-status { grid-column: -2; }
+  .ep-list.stack { grid-template-columns: auto 40px var(--cols-s) minmax(28px, max-content); }
   .ep-list.stack .ep, .ep-list.stack .ep-head { row-gap: 4px; }
   .ep-list.stack .t, .ep-list.stack .ep-head .th { grid-row: 1; grid-column: 3 / -2; }
   .ep-list.stack .col { grid-row: 2; grid-column: var(--c); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ep-list.stack .ep-state { grid-row: 1 / span 2; grid-column: -2; }
+  .ep-list.stack :is(.ep-state, .ep-status) { grid-row: 1 / span 2; grid-column: -2; }
   .ep-list.compact { grid-template-columns: auto 40px minmax(0, 1fr) var(--cols) auto; }
   .ep-list.compact.stack { grid-template-columns: auto 40px var(--cols-s) auto; }
-  .ep-list.compact.stack .ep-status { grid-row: 1 / span 2; grid-column: -2; }
   .ep-subs-detail { grid-column: 1 / -1; contain: inline-size; }  /* the disclosure does not size the shared columns */
 }
 /* An episode's state as an icon: on disk, missing (can be fetched), not aired yet. */

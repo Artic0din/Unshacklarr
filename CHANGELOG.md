@@ -147,6 +147,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Translated the episode subtitle button's screen-reader label and showed a text status instead of empty file cells for episodes without files.
 - Fixed expanded episode subtitles pushing status icons off-screen, clipping keyboard focus rings, and closing the whole drawer on Escape. (#352)
 - **The background glow no longer repeats in bands down a short page, such as a list that is still loading.**
 - **The unshackle serve log now shows after viewing a download, and empty Activity no longer shows the old download's bar.** (#365)

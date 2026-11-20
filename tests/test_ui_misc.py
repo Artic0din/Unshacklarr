@@ -61,7 +61,9 @@ def test_episode_subtitle_summary_prioritizes_required_languages_and_discloses_e
     summary = node(r"""
 const src = read(process.argv[1]), ctx = sandbox({ el: (tag, props, ...kids) => ({
   tag, ...props, kids, setAttribute(k, v) { this[k] = v; }, append(k) { kids.push(k); },
-}), flagged: (text) => text });
+}), flagged: (text) => text,
+  trWith: (key, count, episode) => key === "+{0}: Show subtitles for {1}" ? `+${count} : Sous-titres pour ${episode}` : key,
+});
 vm.runInContext(grab(src, /function setSubtitleExpanded\b[\s\S]*?function subtitleSummary\b[\s\S]*?\n}\n/), ctx);
 const tracks = ["en", "ara", "cat", "cze", "fr", "fre-CA", ...Array(27).fill("es")];
 const { cell, detail } = ctx.subtitleSummary(tracks, "fr-CA", "", 5, "E05", false);
@@ -79,7 +81,7 @@ console.log(JSON.stringify({
     assert summary == {
         "preview": "fre-CA, fr",
         "chip": "+31",
-        "name": "+31: Show subtitles for E05",
+        "name": "+31 : Sous-titres pour E05",
         "closed": True,
         "opened": True,
         "collapsedAgain": True,
@@ -90,30 +92,64 @@ console.log(JSON.stringify({
 
 def test_episodes_without_file_specs_show_status_instead_of_empty_columns():
     rows = node(r"""
+const src = read(process.argv[1]);
 const list = { style: { setProperty() {} }, classList: { toggle(_, value) { list.compact = value; } },
   querySelectorAll: () => [], replaceChildren(...kids) { list.kids = kids; } };
 const ep = { id: 4, seasonNumber: 2, episodeNumber: 5, airDateUtc: "2099-11-21", title: "Future" };
+const onDisk = { id: 5, seasonNumber: 2, episodeNumber: 6, title: "On disk",
+  hasFile: true, file: { subtitles: ["en", "fr", "es"] } };
 const ctx = sandbox({
   $: (sel) => sel === "#ep-list" ? list : sel === "#ep-avail" ? null : any,
   document: { querySelectorAll: () => [], querySelector: () => null, activeElement: null },
   epSeasons: { 2: [ep] }, epSeason: 2, epBusy: new Map(), epQualities: {}, current: { tvdbId: 1 },
   S: { config: { series: {}, settings: {} } },
   hideOnDisk: false, epAvail: null, tipFor: null, isOutlier: () => false,
-  state: (e) => e.file ? "disk" : "soon", stateIcon: (_, label) => ({ label }),
+  state: (e) => e.file ? "disk" : "soon", stateIcon: () => ({ className: "ep-state" }),
   seasonNorm: () => null, fileTooltip: () => "", picked: new Set(), pad2: (x) => String(x).padStart(2, "0"),
-  COLUMNS: [{ id: "res", file: true, label: "Res.", cell: () => any }],
-  colsNow: [{ id: "res", on: true }],
-  el: (tag, props, ...kids) => ({ tag, ...props, kids, querySelector: () => null }),
+  COLUMNS: [{ id: "subs", file: true, label: "Subtitles" }],
+  colsNow: [{ id: "subs", on: true }],
+  flagged: (text) => text,
+  el: (tag, props, ...kids) => {
+    const node = el(tag, props, ...kids);
+    return Object.assign(node, {
+      querySelector: () => null, append: (kid) => node.kids.push(kid),
+      setAttribute: (key, value) => { node[key] = value; },
+      style: { setProperty() {} },
+      classList: { add: (name) => { node.className += ` ${name}`; } },
+    });
+  },
 });
-vm.runInContext(grab(read(process.argv[1]), /function renderSeason\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(src, /function setSubtitleExpanded\b[\s\S]*?function subtitleSummary\b[\s\S]*?\n}\n/), ctx);
+vm.runInContext(grab(src, /function renderSeason\b[\s\S]*?\n}\n/), ctx);
+const hasClass = (node, name) => typeof node.className === "string" && node.className.split(" ").includes(name);
+const noFileRow = () => {
+  const row = list.kids[1].kids[0].kids;
+  return { compact: list.compact, status: row.find(k => hasClass(k, "ep-status"))?.textContent,
+    blanks: row.filter(k => hasClass(k, "spec") && hasClass(k, "blank")).length };
+};
+const subtitles = () => {
+  const [row, detail] = list.kids[2].kids;
+  const cell = row.kids.find(k => hasClass(k, "subs"));
+  const chip = cell?.kids.find(k => hasClass(k, "ep-subs-chip"));
+  return { preview: cell?.kids[0], chip: chip?.textContent,
+    detail: detail?.textContent, linked: !!detail && chip?.["aria-controls"] === detail.id,
+    mobileCell: !!cell && hasClass(cell, "ep-mobile-subs"),
+    mobileDetail: !!detail && hasClass(detail, "ep-mobile-subs") };
+};
 ctx.renderSeason();
-const compact = list.compact;
-const row = list.kids[1].kids[0].kids;
-ep.file = {};
+const compact = noFileRow();
+ctx.epSeasons[2].push(onDisk);
 ctx.renderSeason();
-console.log(JSON.stringify({ compact, row: row.map(k => k.textContent || k.label).filter(Boolean), withSpecs: list.compact }));
+const mixed = noFileRow(), column = subtitles();
+ctx.colsNow[0].on = false;
+ctx.renderSeason();
+console.log(JSON.stringify({ compact, mixed, column, mobile: subtitles() }));
 """, str(JS / "series.js"))
-    assert rows == {"compact": True, "row": ["E05", "Not aired"], "withSpecs": False}
+    assert rows["compact"] == {"compact": True, "status": "Not aired", "blanks": 0}
+    assert rows["mixed"] == {"compact": False, "status": "Not aired", "blanks": 0}
+    summary = {"preview": "en, fr", "chip": "+1", "detail": "en, fr, es", "linked": True}
+    assert rows["column"] == {**summary, "mobileCell": False, "mobileDetail": False}
+    assert rows["mobile"] == {**summary, "mobileCell": True, "mobileDetail": True}
 
 
 # Safari before 17.4 has no Object.groupBy

@@ -518,7 +518,7 @@ function subtitleSummary(tracks, required, why, id, number, expanded) {
   if (!remaining) return { cell };
   const detail = el("div", { id: `ep-subs-${id}`, className: "ep-subs-detail", hidden: !expanded, textContent: tracks.join(", ") });
   const chip = el("button", { type: "button", className: "ep-subs-chip", textContent: `+${remaining}`,
-    ariaLabel: `+${remaining}: Show subtitles for ${number}`,
+    ariaLabel: trWith("+{0}: Show subtitles for {1}", remaining, number),
     onclick: () => setSubtitleExpanded(chip, detail, detail.hidden) });
   chip.setAttribute("aria-controls", detail.id);
   chip.setAttribute("aria-expanded", String(expanded));
@@ -854,13 +854,14 @@ function renderSeason() {
         ...(!run && epAvail ? serviceBadge(e) : [])),
       ...(e.file ? [fileLine(e.file, odd)] : []),
       ...(subs && !showSubsColumn ? [subs.cell] : []),
-      ...cols.map((c, i) => {
-        const cell = c.file && !e.file ? el("span", { className: "spec blank" }) : c.id === "subs" ? subs.cell : c.cell(e.file, odd, e);
+      ...cols.flatMap((c, i) => {
+        if (c.file && !e.file) return [];
+        const cell = c.id === "subs" ? subs.cell : c.cell(e.file, odd, e);
         cell.classList.add("col");
         cell.style.setProperty("--c", i + 3);
         return cell;
       }),
-      specs ? stateIcon(state(e), status) : el("span", { className: "ep-status", textContent: status })),
+      e.file ? stateIcon(state(e), status) : el("span", { className: "ep-status", textContent: status })),
       ...(subs?.detail ? [subs.detail] : []));
   });
   const head = el("li", { className: "ep-head", ariaHidden: "true" }, ...["", "", "Title", ...cols.map((c) => c.label), ""]
