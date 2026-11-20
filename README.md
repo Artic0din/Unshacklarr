@@ -363,8 +363,9 @@ does. Without it, the step shows how long it has been going.
 (those from before a series got its service, or that the sync gave up on) are listed there, within 7, 30 or 90
 days or all.
 Each row shows the season's service, and you can download one episode or queue the whole list for the selected Sonarr.
-Episodes already queued or running are skipped.
-If an episode is still missing after you reload Catch up, you can try again.
+Catch up prevents repeat submissions while it sends a download request.
+If it queues the episode successfully, you can try again once a fresh Catch up list still shows it as missing.
+A failed request lets you try again immediately.
 
 ### 🎛️ Download options
 

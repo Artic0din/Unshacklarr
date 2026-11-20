@@ -167,6 +167,7 @@ vm.runInContext(`let picked_run;\n` +
   const unavailable = (b) => !!b.disabled || b.ariaDisabled === "true";
   if (scenario === "redraw") {
     const posted = click(lastRow());
+    const remainsFocusable = lastRow().ariaDisabled === "true" && !lastRow().disabled;
     await click(walk($("#cd-main")).find((n) => n.textContent === "90 days"));
     await new Promise(setImmediate);
     await click(lastRow());
@@ -176,7 +177,7 @@ vm.runInContext(`let picked_run;\n` +
     await click(walk($("#cd-main")).find((n) => n.textContent === "4K"));
     await new Promise(setImmediate);
     const otherInstance = unavailable(lastRow());
-    console.log(JSON.stringify({ posts, locked, otherInstance }));
+    console.log(JSON.stringify({ posts, remainsFocusable, locked, otherInstance }));
     return;
   }
   if (scenario === "reload") {
@@ -237,6 +238,7 @@ def test_catch_up_download_error_allows_retry():
 def test_catch_up_blocks_duplicate_after_redraw_but_not_in_another_sonarr():
     result = node(ACTIVITY_ACTIONS, str(JS), "redraw", "", "pending")
     assert [request["body"] for request in result["posts"]] == [{"episodeIds": [456]}]
+    assert result["remainsFocusable"] is True
     assert result["locked"] is True
     assert result["otherInstance"] is False
 

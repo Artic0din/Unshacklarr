@@ -4222,96 +4222,6 @@ def test_a_retry_asks_the_service_what_its_attempt_asked(tmp_path, monkeypatch):
     assert asked == [([70], by_title), ([71], None), ([70], None)]
 
 
-def test_download_skips_queued_and_running_episodes_but_accepts_finished_ones(tmp_path, monkeypatch):
-    import threading
-    from aiohttp.test_utils import TestClient, TestServer
-
-    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
-    import unshacklarr.sync
-    import unshacklarr.web
-    sync = importlib.reload(unshacklarr.sync)
-    web = importlib.reload(unshacklarr.web)
-    config = {**web.read_config(), "series": {442345: {"title": "example", "service": "NF"}},
-              "auth": {"password": web.hash_password("password1"), "secret": "s1"}}
-    web.write_config(config)
-    monkeypatch.setitem(sync.SONARRS, "4K", {"name": "4K", "quality_ladder": "series"})
-    monkeypatch.setattr(sync, "episode_folder", lambda ep: tmp_path / f"{(sync.instance() or {}).get('name', 'main')}-{ep['id']}")
-    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
-    selected, select = threading.Event(), threading.Event()
-    first, finish_first = threading.Event(), threading.Event()
-    second, finish_second = threading.Event(), threading.Event()
-    selected_ids, attempts = [], []
-
-    def chosen(ids):
-        selected_ids.append(((sync.instance() or {}).get("name", ""), ids))
-        if len(selected_ids) == 1:
-            selected.set()
-            assert select.wait(5)
-        if ids == [3] and selected_ids.count(("", [3])) == 1:
-            raise RuntimeError("Sonarr failed before creating a run")
-        return [{"id": i, "seasonNumber": 1, "episodeNumber": i,
-                 "series": {"tvdbId": 442345, "title": "Example"}} for i in ids]
-
-    def attempt():
-        attempts.append(threading.current_thread())
-        if sync.instance():
-            return "Not enough space"
-        if len(attempts) == 1:
-            first.set()
-            assert finish_first.wait(5)
-        elif len(attempts) == 2:
-            second.set()
-            assert finish_second.wait(5)
-        return "Not enough space"
-
-    monkeypatch.setattr(sync, "chosen_episodes", chosen)
-    monkeypatch.setattr(sync, "free_space_problem", attempt)
-
-    async def go():
-        async with TestClient(TestServer(web.app)) as browser:
-            headers = {"X-Unshackle": "1"}
-            await browser.post("/api/login", json={"password": "password1"}, headers=headers)
-
-            async def post(ids, **options):
-                response = await browser.post("/api/download", json={"episodeIds": ids, **options}, headers=headers)
-                assert response.status == 200
-                assert await response.json() == {"running": True}
-
-            try:
-                await post([1, 2])
-                assert await asyncio.to_thread(selected.wait, 5)
-                await post([1, 2])  # no queue or run card exists yet
-                assert len(web.sync_threads) == 1
-                select.set()
-                assert await asyncio.to_thread(first.wait, 5)
-                batch = next(iter(sync.running_jobs))
-                await post([1, 2])
-                await post([1, 2], batch=batch, retry=True)
-                assert (await browser.post("/api/queue/2/remove", headers=headers)).status == 200
-                await post([2], batch=batch, retry=True)
-                finish_first.set()
-                assert await asyncio.to_thread(second.wait, 5)
-                await post([1, 1, 2])  # 1 has finished; 2 is still running
-                assert len(web.sync_threads) == 2
-                await asyncio.to_thread(web.sync_threads[-1].join, 5)
-                assert not web.sync_threads[-1].is_alive()
-                await post([2], sonarr="4K")  # the same ID in another Sonarr is independent
-                await asyncio.to_thread(web.sync_threads[-1].join, 5)
-                await post([3])
-                await asyncio.to_thread(web.sync_threads[-1].join, 5)
-                await post([3])  # a worker that fails before publishing a run releases its claim
-            finally:
-                select.set()
-                finish_first.set()
-                finish_second.set()
-                for thread in web.sync_threads:
-                    await asyncio.to_thread(thread.join, 5)
-
-    asyncio.run(go())
-    assert selected_ids == [("", [1, 2]), ("", [2]), ("", [1]), ("4K", [2]), ("", [3]), ("", [3])]
-    assert len(attempts) == 5
-
-
 def test_a_newer_release_is_told_and_github_out_of_reach_keeps_the_last_answer(tmp_path, monkeypatch):
     import requests
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
@@ -8663,9 +8573,8 @@ def test_a_queued_episode_taken_out_is_never_handed_to_the_job_loop_as_well(tmp_
 
             def loop_turn():  # the job loop's turn for that episode, as it takes it
                 with sync.jobs_lock:
-                    cancelled = ("", key, None)
-                    seen.append(cancelled in sync.unqueued)
-                    sync.unqueued.discard(cancelled)
+                    seen.append(key in sync.unqueued)
+                    sync.unqueued.discard(key)
             turns.append(threading.Thread(target=loop_turn))
             turns[-1].start()
             turns[-1].join(0.3)

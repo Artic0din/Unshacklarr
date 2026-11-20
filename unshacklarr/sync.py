@@ -673,35 +673,17 @@ def chosen_episodes(ids: list[int]):
 current = threading.local()  # the download attempt this thread works on: what trace() writes to
 # Episodes picked together wait for the one before them: episode id -> a card for Activity, meanwhile
 waiting: dict[int, dict] = {}
-unqueued: set[tuple[str, int, threading.Thread | None]] = set()  # keep the cancelled turn, even if a new worker claims the episode
+unqueued: set[int] = set()  # episodes taken out of a job's queue from Activity: skipped when their turn comes
 
 
 # A job's episode list, while it runs: an episode queued again is added to it, until the last is taken
 running_jobs: dict[str, dict] = {}
 jobs_lock = threading.Lock()
-# Covers the handoff before Activity has a card or the worker can take the output-folder lock.
-episode_requests: dict[tuple[str, int], threading.Thread] = {}
 paused_jobs: set[str] = set()  # jobs paused from Activity: the download going on ends, the next waits
 batch_jobs: dict[str, list[dict]] = {}  # every sync running under a batch, oldest first: a retry with another Replace runs beside its job
 
 
 job_options: dict[str, dict] = {}  # job -> {"options", "service_options"} set in Activity for its episodes still to come
-
-
-def unclaimed_episodes(sonarr: str, ids: list[int]) -> list[int]:
-    with jobs_lock:
-        return [i for i in dict.fromkeys(ids) if (sonarr, i) not in episode_requests]
-
-
-def reserve_episodes(sonarr: str, ids: list[int], owner: threading.Thread) -> list[int]:
-    with jobs_lock:
-        return [i for i in dict.fromkeys(ids) if episode_requests.setdefault((sonarr, i), owner) is owner]
-
-
-def release_episode_requests(owner: threading.Thread) -> None:
-    with jobs_lock:
-        for key in [key for key, thread in episode_requests.items() if thread is owner]:
-            del episode_requests[key]
 
 
 def with_job_options(show: dict, batch: str | None) -> dict:
@@ -825,25 +807,16 @@ def add_to_job(batch: str, ep: dict, show: dict, replace: bool = False, first: b
     replaces files and this one doesn't (or the other way round): then it starts on its own."""
     with jobs_lock:
         job = running_jobs.get(batch)
-        sonarr = (instance() or {}).get("name", "")
-        if not job or job["closed"] or bool(job.get("replace")) != replace or job.get("sonarr", "") != sonarr:
+        if not job or job["closed"] or bool(job.get("replace")) != replace:
             return False
-        episode_id = ep["id"]
-        key = (sonarr, episode_id)
-        owner = job.get("owner")
-        if key in episode_requests:
-            return True  # already queued or running: handled without adding a second turn
-        if owner is not None:
-            episode_requests[key] = owner
-        cancelled = (sonarr, episode_id, owner)
-        if cancelled in unqueued:
-            unqueued.remove(cancelled)  # its turn has not come: it keeps its place
+        if ep["id"] in unqueued:
+            unqueued.discard(ep["id"])  # its turn has not come: it keeps its place
         elif first:
             job["episodes"].insert(job.get("at", 0), ep)
         else:
             job["episodes"].append(ep)
-        waiting[episode_id] = job["stubs"][episode_id] = {**queued_card(ep, show, "manual", batch, replace, audio=job.get("audio") or ""),
-                                                         "paused": batch in paused_jobs}
+        waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, "manual", batch, replace, audio=job.get("audio") or ""),
+                                                      "paused": batch in paused_jobs}
         return True
 
 
@@ -853,9 +826,7 @@ def take_out(episode_id: int) -> dict | None:
     with jobs_lock:
         card = waiting.pop(episode_id, None)
         if card is not None:
-            sonarr = card.get("instance", "")
-            owner = episode_requests.pop((sonarr, episode_id), None)
-            unqueued.add((sonarr, episode_id, owner))
+            unqueued.add(episode_id)
     return card
 
 
@@ -4637,37 +4608,32 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
     episodes = list(episodes)
     if kind in ("auto", "burst"):  # switched off for this Sonarr: none of its new episodes
         episodes = [ep for ep in episodes if not off_in(instance(), series.get(ep["series"]["tvdbId"]) or {})]
-    owner, sonarr = threading.current_thread(), (instance() or {}).get("name", "")
-    if kind not in AUTOMATIC:
-        by_id = {ep["id"]: ep for ep in episodes}
-        episodes = [by_id[i] for i in reserve_episodes(sonarr, list(by_id), owner)]
     # Episodes picked together are one job in Activity: their cards, and one output for them all
     # (a job's episode queued again once the job was over goes on in that same job)
     batch = batch or (f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}" if kind != "auto" and len(episodes) > 1 else None)
     job = {"episodes": episodes, "stubs": {}, "closed": False, "replace": replace,  # the rest: to pick it up after a restart
-           "kind": kind, "sonarr": sonarr, "owner": owner, "proxy": proxy, "video": video, "audio": audio, "numbering": numbering}
+           "kind": kind, "sonarr": (instance() or {}).get("name", ""), "proxy": proxy, "video": video, "audio": audio, "numbering": numbering}
+    if kind != "auto":  # picked by hand: the ones after the first show as queued in Activity
+        for ep in episodes:
+            show = series.get(ep["series"]["tvdbId"]) or {}
+            if show.get("service") and ep["id"] not in waiting:
+                with jobs_lock:
+                    waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, kind, batch, replace, proxy, video, audio),
+                                                                  **({"paused": True} if batch in paused_jobs else {})}  # picked up paused
+    if batch:
+        number_job(batch, kind == "retry")  # its place for a download slot: the order it was picked in (#10), a retry first
+        with jobs_lock:
+            running_jobs[batch] = job  # a job's episode started again once it closed takes its place here
+            batch_jobs.setdefault(batch, []).append(job)
+            restoring.pop(restored, None)  # picked up again after a restart: it runs, its queue is its own now
     try:
-        if kind not in AUTOMATIC:  # picked by hand: the ones after the first show as queued in Activity
-            for ep in episodes:
-                show = series.get(ep["series"]["tvdbId"]) or {}
-                if show.get("service"):
-                    with jobs_lock:
-                        if ep["id"] not in waiting:
-                            waiting[ep["id"]] = job["stubs"][ep["id"]] = {**queued_card(ep, show, kind, batch, replace, proxy, video, audio),
-                                                                          **({"paused": True} if batch in paused_jobs else {})}  # picked up paused
-        if batch:
-            number_job(batch, kind == "retry")  # its place for a download slot: the order it was picked in (#10), a retry first
-            with jobs_lock:
-                running_jobs[batch] = job  # a job's episode started again once it closed takes its place here
-                batch_jobs.setdefault(batch, []).append(job)
-                restoring.pop(restored, None)  # picked up again after a restart: it runs, its queue is its own now
         return run_episodes(config, settings, episodes, manual, replace, kind, batch, numbering)
     finally:
         with jobs_lock:
-            for episode_id, card in job["stubs"].items():
-                if waiting.get(episode_id) is card:
-                    waiting.pop(episode_id)
-                unqueued.discard((sonarr, episode_id, owner))
+            for episode_id in job["stubs"]:
+                waiting.pop(episode_id, None)
+                unqueued.discard(episode_id)
+        with jobs_lock:
             others = [j for j in batch_jobs.pop(batch, []) if j is not job] if batch else []
             last = not others
             if others:
@@ -4683,7 +4649,6 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
                 job_options.pop(batch, None)
             if last:  # the job is over: its slot goes to the next pick in line (#10); not while another sync of it runs,
                 release_job(batch)  # and under the lock, so none can start under the batch in between
-        release_episode_requests(owner)
 
 
 def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, replace: bool, kind: str, batch: str | None = None,
@@ -4766,13 +4731,6 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                       batch=batch, details=episode_details(ep, show, run))
 
     for_instance = instance()  # the finishing thread imports into the same Sonarr
-    owner, sonarr = threading.current_thread(), (for_instance or {}).get("name", "")
-
-    def release_episode(episode_id: int) -> None:
-        with jobs_lock:
-            key = (sonarr, episode_id)
-            if episode_requests.get(key) is owner:
-                del episode_requests[key]
 
     def finishing_loop() -> None:
         """One episode at a time, in the order they were downloaded, while the next ones download."""
@@ -4792,7 +4750,6 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                     notify_series(job[2], settings, "error", f"Not imported: {job[4]}", f"{type(e).__name__}: {e}\nThe files are in {seen_by('sonarr_downloads', job[3])}.", batch=batch)
             finally:
                 lock.__exit__(None, None, None)
-                release_episode(job[1]["id"])
 
     finishing: queue.Queue = queue.Queue()
     counted = threading.Lock()  # failures, counted by both
@@ -4802,19 +4759,16 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
     try:
         for ep in job_episodes(episodes, batch):
             with jobs_lock:  # its turn; add_to_job must not slip in between
-                cancelled = (sonarr, ep["id"], owner)
-                if cancelled in unqueued:
-                    unqueued.remove(cancelled)
-                    continue
-                card = waiting.get(ep["id"])
-                if card and card.get("batch") == batch and card.get("instance", "") == sonarr:
-                    waiting.pop(ep["id"])
+                if (waiting.get(ep["id"]) or {}).get("batch") == batch:  # its own stub, never another job's
+                    waiting.pop(ep["id"], None)
+                taken_out = ep["id"] in unqueued
+                unqueued.discard(ep["id"])
+            if taken_out:
+                continue  # taken out of the queue
             show = series.get(ep["series"]["tvdbId"])
             if not show or not show.get("service") or not (show.get("title") or show.get("programmes")):
-                release_episode(ep["id"])
                 continue  # separate programmes need no series URL: each episode finds its own
             if not manual and not wanted_automatically(show, ep, datetime.now(timezone.utc)):
-                release_episode(ep["id"])
                 continue
             # its numbering may now name other episodes: held unless picked by hand (a release burst is automatic)
             if (not manual or kind == "burst") and (why := order_changed(show, ep["series"])):
@@ -4827,7 +4781,6 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                 if first_warning(f"order:{ep['series']['tvdbId']}:{ep['series'].get('seasonType')}"):
                     notify_series(show, settings, "warning", f"Episode order changed: {ep['series']['title']}",
                                   f"{why}. New episodes of this series are not downloaded until you check its numbering in Unshacklarr.")
-                release_episode(ep["id"])
                 continue
             show = season_page(show, ep["seasonNumber"])  # a season on a page of its own downloads from there
             show = with_job_options(show, batch)  # options changed for this job from Activity, over the series' own
@@ -4836,11 +4789,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
             service_sxxeyy = sxxeyy if show.get("programmes") else service_episode(show, ep["seasonNumber"], ep["episodeNumber"])
             label = f"{ep['series']['title']} {sxxeyy}" + (f" ({instance()['name']})" if instance() else "")
             if not service_sxxeyy:
-                release_episode(ep["id"])
                 continue  # the episode offset puts it before the service's first episode
-            # Automatic candidates aren't queued work until they pass the sweep's eligibility checks.
-            if kind in AUTOMATIC and not reserve_episodes(sonarr, [ep["id"]], owner):
-                continue
             out = episode_folder(ep)
             if out.is_symlink():  # a link named like ours (another writer of the shared folder): never downloaded through,
                 out.unlink(missing_ok=True)  # never taken for one that waits; the link alone goes, not its target (#117)
@@ -4853,14 +4802,12 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         run.say(f"{label}: a download already waits in {seen_by('sonarr_downloads', out)}")
                         run.finish("failed", "A download of this episode already waits in the downloads folder",
                                    "Import it or delete it in Activity, Waiting in downloads, then try again")
-                release_episode(ep["id"])
                 continue
 
             lock = episode_lock(out)  # held until the episode is finished, aside or not
             if not lock.__enter__():
                 lock.__exit__(None, None, None)
                 print(f"{label}: already being downloaded by another run")
-                release_episode(ep["id"])
                 continue
             handed, run = False, None
             try:
@@ -5142,7 +5089,6 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
             finally:
                 if not handed:
                     lock.__exit__(None, None, None)
-                    release_episode(ep["id"])
 
     finally:  # what was downloaded is finished, whatever stopped the loop
         finishing.put(None)
