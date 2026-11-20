@@ -155,3 +155,8 @@ def test_coarse_pointer_devices_keep_44px_touch_targets_above_700px():
 def test_a_device_rows_action_column_fits_its_44px_button_on_a_phone():
     """.jact is 44px to the finger there: a 30px column let it spill past the card's edge (#333)."""
     has(media("max-width: 700px"), ".cdm-dev { grid-template-columns: 10px minmax(0, 1fr) 44px; }")
+
+
+def test_the_icon_only_sync_button_is_44px_on_a_touch_tablet():
+    """Up to 1240px #sync is an icon-only 40px circle; a touch tablet gets 44px (#333)."""
+    has(CSS, "@media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }")

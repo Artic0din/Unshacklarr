@@ -2110,6 +2110,7 @@ input[type=time]:focus:not(.bad) { border-color: var(--accent); outline: 2px sol
   .ep-sel button { min-width: 44px; min-height: 44px; }  /* its frame clips: no room for a slop */
   .set-nav button.set-version { min-height: 44px; }
 }
+@media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }  /* its icon-only size up to 1240px is 40px */
 /* Dropdowns drawn as fields, in every browser: Safari otherwise sizes its native ones on its own, ignoring the heights above.
    The arrow is two gradients in the look's muted colour, so it follows light and dark. */
 select:not([multiple]) { appearance: none; -webkit-appearance: none; padding-right: 32px;
