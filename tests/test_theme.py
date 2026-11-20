@@ -90,12 +90,19 @@ def test_ok_text_on_its_own_tint_is_readable():
 
 @pytest.mark.parametrize("badge", [
     ".ck-pill.ok", ".sched-st.ok", ".chip.disk", ".chip.o-downloaded",
-    ".ep-on", ".ep-on.other", ".res.r1080", ".poster .svc", ".sched-card .svc",
+    ".ep-on", ".ep-on.other", ".res.r1080", ".poster.on:not(:has(.sick)) .svc", ".sched-card .svc",
 ])
 def test_a_done_or_healthy_badge_is_green_not_the_accent(badge):
     last = rules_of(badge)[-1]  # the later rule wins
     assert "color: var(--ok)" in last
     assert "background: var(--ok-tint)" in last
+
+
+def test_a_poster_with_a_failure_icon_has_no_green_service_chip_or_frame():
+    assert any("color: var(--muted)" in body for body in rules_of(".poster .svc"))
+    assert not any("var(--ok)" in body for body in rules_of(".poster .svc"))
+    assert not any("var(--ok)" in body for body in rules_of(".poster.on .art"))
+    assert any("var(--ok)" in body for body in rules_of(".poster.on:not(:has(.sick)) .art"))
 
 
 @pytest.mark.parametrize("badge", [".ep-off", ".chip.o-unavailable", ".ck-pill.absent"])

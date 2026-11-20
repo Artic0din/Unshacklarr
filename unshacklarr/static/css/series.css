@@ -48,7 +48,7 @@
 .poster .art img { width: 100%; height: 100%; object-fit: cover; display: block; filter: var(--dim); transition: filter .15s; }
 .poster.on .art img { filter: none; }
 @media (hover: hover) { .poster:hover .art img { filter: none; } }
-.poster.on .art { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.poster.on:not(:has(.sick)) .art { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 45%, var(--line)); }
 .poster .svc { position: absolute; left: 6px; bottom: 6px; background: var(--well); color: var(--text);
   font-size: var(--fs-footnote); font-weight: 700; padding: 2px 7px; border-radius: var(--r-sm); }
 .poster .name { display: block; margin-top: 7px; font-weight: 600; font-size: var(--fs-callout); line-height: 1.3; }
