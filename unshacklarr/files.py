@@ -38,9 +38,9 @@ def no_credentials(text) -> str:
 
 
 def read_json(path: Path, empty, strict: bool = False):
-    """A JSON file's content, or `empty` when it is missing or unreadable (never half-written: see write_atomic).
-    strict, for a read that is written back: only a missing file is `empty`; another read error (a NAS share gone
-    for a moment) raises, so the write is skipped instead of replacing the file it could not read."""
+    """A JSON file's content, or `empty` when it is missing, unreadable or malformed.
+    In strict mode only a missing file is `empty`; other read and decode failures raise OSError
+    so callers do not use or overwrite state they could not read."""
     try:
         return json.loads(Path(path).read_text())
     except FileNotFoundError:
@@ -49,7 +49,9 @@ def read_json(path: Path, empty, strict: bool = False):
         if strict:
             raise
         return empty
-    except ValueError:
+    except ValueError as error:
+        if strict:
+            raise OSError(f"Invalid JSON in {path}") from error
         return empty
 
 

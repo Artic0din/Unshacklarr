@@ -742,6 +742,16 @@ def test_json_cache_stat_error_uses_default(tmp_path, monkeypatch):
     assert web.read_json_cached(path, default) is default
 
 
+def test_json_cache_rejects_malformed_json_in_strict_mode(tmp_path, monkeypatch):
+    web = _reload_web(tmp_path, monkeypatch)
+    path = tmp_path / "state.json"
+    path.write_text("{")
+    default = {}
+    assert web.read_json_cached(path, default) is default
+    with pytest.raises(OSError, match="Invalid JSON"):
+        web.read_json_cached(path, default, strict=True)
+
+
 @pytest.mark.parametrize("operation", ["stat", "read_text"])
 def test_unreadable_revocation_file_fails_closed(tmp_path, monkeypatch, operation):
     web = _reload_web(tmp_path, monkeypatch)
