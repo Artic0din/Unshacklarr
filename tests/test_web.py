@@ -1243,7 +1243,14 @@ const promptState = (input) => {
     const primary = (row) => findAll(row, (node) => node.tag === "button" && node.className.split(" ").includes("primary")).map((node) => node.textContent);
     console.log(JSON.stringify({ rows, state: nodes["#sv-state"].className, headers: words(header),
       localService: words(local.children[0]), remoteService: words(remote.children[0]),
-      primary: [local, remote, find(nodes["#sv-list"], (node) => node.id === "sv-ATVP"), find(nodes["#sv-list"], (node) => node.id === "sv-ZONE")].map(primary) }));
+      primary: [local, remote, find(nodes["#sv-list"], (node) => node.id === "sv-ATVP"), find(nodes["#sv-list"], (node) => node.id === "sv-ZONE")].map(primary),
+      spare: (() => {  // a cookie-only service no series uses, with no cookie file: nothing to fix, so no lime Add
+        box.S.authentication.SPARE = { service: "SPARE", backend: "", state: "validated", validated_at: "2026-11-15T00:00:00Z" };
+        box.S.authenticationMethods.SPARE = ["cookies"];
+        box.renderServices();
+        const row = find(nodes["#sv-list"], (node) => node.id === "sv-SPARE");
+        return [primary(row), findAll(row, (node) => node.tag === "button").map((node) => node.textContent)];
+      })() }));
   }
   if (scenario === "check_now") {
     const asked = [], timers = [];
@@ -1473,6 +1480,7 @@ def test_service_identity_keeps_sign_in_methods_and_marks_a_primary_action_only_
     assert result["remoteService"] == ["HULU", "vpn", "Cookies"]
     # an expired cookie in use, two healthy rows, an expired cookie no series uses
     assert result["primary"] == [["Sign in again"], [], [], ["Replace"]]
+    assert result["spare"] == [[], ["Add"]]
 
 
 def test_each_service_row_joins_its_sign_in_and_its_cookie_files():

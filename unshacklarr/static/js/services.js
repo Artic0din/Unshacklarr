@@ -213,7 +213,7 @@ function renderServices() {
       return [el("div", { className: "sv-file" },
         el("div", { className: "sv-file-top" }, m.missing ? hoverTip(pill, () => [both ? "Downloads will fail unless you add a cookie file, or set its username and password in unshackle.yaml."
           : "Downloads will fail unless you add a cookie file."]) : pill),
-        el("div", { className: "sv-ctl" }, prefer(m.missing || m.cookiesOnly ? priority.repair : priority.maintenance, el("button", { className: "btn small", textContent: "Add", ariaLabel: `Add cookies for ${svcName(m.service)}`,
+        el("div", { className: "sv-ctl" }, prefer(m.missing ? priority.repair : priority.maintenance, el("button", { className: "btn small", textContent: "Add", ariaLabel: `Add cookies for ${svcName(m.service)}`,
           onclick: () => openCookieDialog(m.service, "default", true) }))))];
     }
     // the check signs in with the profile its series use, not a file picked here: beside the only file, else under them all
