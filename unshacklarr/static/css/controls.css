@@ -338,6 +338,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
   #nt-quiet-on { border: solid transparent; border-width: 11px 3px; background-clip: padding-box; }
   .sx .opt { grid-template-columns: minmax(130px, 210px) minmax(0, 1fr) 44px; }
   @media (max-width: 700px) { .sx .opt { grid-template-columns: minmax(0, 1fr) 44px; } }
+  .bc-cal { min-width: 0; }
   .bc-cal-grid { grid-template-columns: repeat(7, minmax(44px, 1fr)); column-gap: 0; overflow-x: auto; }
   #tab-settings :is(.set-nav button, .set-jumps a, .sx-actions .btn, .sx-grid input:not(.switch), .sx-grid select,
     .sx-switch-target, .ax-bursts, .rt-custom, .ql-icon, .nt-quiet-row > label) { min-height: 44px; min-width: 44px; }
