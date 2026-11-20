@@ -144,6 +144,24 @@ const services = () => {
 """
 
 
+def test_same_page_inbox_history_preserves_settings_scroll_unless_the_target_changes():
+    result = node(SETTINGS_NAV + r"""
+const jumpTo = (target) => { history.pushState({ settings: { target } }, "", location.hash); ctx.applyRoute({}); flushFrames(); };
+jumpTo("#cdm-sec");
+jumpTo("#services-sec");
+history.pushState({ ...history.state, inbox: true }, "", location.hash);
+ctx.syncInboxRoute = () => true;  // the Inbox handled the overlay without changing the URL
+window.scrollY = 890;
+history.back();
+const afterClose = window.scrollY;
+history.forward();
+const afterReopen = window.scrollY;
+traverse(-2);
+console.log(JSON.stringify([afterClose, afterReopen, window.scrollY]));
+""", str(JS / "navigation.js"))
+    assert result == [890, 890, 400]
+
+
 @pytest.mark.parametrize("interruption", [
     "none", "layout", "startup-scroll", "wheel", "touchmove", "keydown", "tab", "pointerdown", "route",
 ])

@@ -18,7 +18,7 @@ const LEGACY_SETTINGS_MAP = {
 };
 const settingsPages = Object.values(LEGACY_SETTINGS_MAP);
 const legacySettings = (name) => Object.hasOwn(LEGACY_SETTINGS_MAP, name) ? LEGACY_SETTINGS_MAP[name] : null;
-let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false;
+let settingsSec = "connections", settingsRoute = settingsSec, settingsList = false, settingsTarget = null;
 let loadedSettings = null, settingsJump = null;
 const inSettingsSec = () => currentTab === "settings" && !settingsList;  // a section on screen, not the phone's list
 const showingSettings = (name) => inSettingsSec() && legacySettings(name)?.sec === settingsSec;
@@ -46,7 +46,10 @@ function applySettingsJump(jump) {
   }
   if (target?.service && !target.id) {
     const entry = history.state?.settings;
-    if (entry?.target?.service) history.replaceState({ settings: { ...entry, target: { ...target, id: anchor.id } } }, "");
+    if (entry?.target?.service) {
+      settingsTarget = { ...target, id: anchor.id };
+      history.replaceState({ settings: { ...entry, target: settingsTarget } }, "");
+    }
   }
   if (!target || target.service || loadedSettings?.settled) cancelSettingsJump();
   else if (!jump.observer) {
@@ -115,6 +118,7 @@ function showSettingsSec(name, fromRoute = false, push = false, target = null, r
     navigate(push || fromList, { target, fromList: Boolean(fromListEntry) });
     updateTitle();
   }
+  settingsTarget = target;
   target ??= page && page.sec !== name ? `#${page.anchor}` : null;
   if (target || changedSection || fromList || !fromRoute || !routed) startSettingsJump(target, restoring);
 }
@@ -171,8 +175,8 @@ function updateTitle() {
 }
 let routed = false;
 function applyRoute(event) {
-  if (event && syncInboxRoute()) return;
-  if (event) cancelSettingsJump();
+  const sameInboxPage = event && syncInboxRoute();
+  if (event && !sameInboxPage) cancelSettingsJump();
   if (location.hash.startsWith("#/inbox")) {  // a push notification touched: the bell's list over the current page
     history.replaceState(null, "", `#/${HASH_OF[currentTab] || currentTab}`);
     openInbox();
@@ -182,11 +186,14 @@ function applyRoute(event) {
   const sameTab = routed && route.tab === currentTab;
   if (!routed || route.tab !== currentTab) showTab(route.tab, true);  // closing a series keeps its tab as it was
   if (route.sec) {
-    if (alreadyOpen && (!event || route.id || current)) loadSettingsSec();
+    // Toggling the Inbox on the same entry must not steal focus or restart a Settings jump.
+    const sameTarget = sameInboxPage && JSON.stringify(history.state?.settings?.target ?? null) === JSON.stringify(settingsTarget);
+    if (alreadyOpen && (!event || route.id || current || sameTarget)) loadSettingsSec();
     else showSettingsSec(route.sec, true, false, null, Boolean(event));
-  } else if (route.tab === "settings") { showSettingsList(true); loadSettingsSec(); }
+  } else if (route.tab === "settings" && !sameInboxPage) { showSettingsList(true); loadSettingsSec(); }
   routed = true;
   if (currentTab === "log" && !route.id) syncActivityRoute(sameTab);
+  if (sameInboxPage) return;  // drawer and title are tied to the hash, not the history entry
   const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
   if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
   else if (series && route.view) showDrawerTab(route.view, true);

@@ -558,8 +558,16 @@ vm.runInContext("let routed = true, currentTab = 'log', current = null, termSock
   ["routeHash", "navigate", "parseRoute", "applyRoute", "showTab"].map((name) =>
     navigation.match(new RegExp(`^function ${name}\\b[\\s\\S]*?^}`, "m"))[0]).join("\n"), Object.assign(ctx, {
   HASH_OF: { log: "activity" }, TAB_OF: { activity: "log" }, inSettingsSec: () => false,
-  updateTitle() {}, closeDetails() {}, cancelSettingsJump() {}, loadSchedule() {}, refreshLog() {}, syncInboxRoute: () => false,
+  updateTitle() {}, closeDetails() {}, cancelSettingsJump() {}, loadSchedule() {}, refreshLog() {},
 }));
+const inbox = fs.readFileSync(require("path").join(require("path").dirname(process.argv[1]), "inbox.js"), "utf8");
+elements["#inbox-dialog"] = node({
+  classList: { contains: () => false, toggle() {} },
+  style: {}, showModal() { modalOpen = true; }, close() { modalOpen = false; },
+});
+Object.defineProperty(elements["#inbox-dialog"], "open", { get: () => modalOpen });
+Object.assign(ctx, { phoneLayout: () => ctx.innerWidth <= 700, refreshInbox: async () => true, renderInbox() {}, inboxData: null });
+vm.runInContext("let inboxOpening = 0;\n" + inbox.slice(inbox.indexOf("async function openInbox("), inbox.indexOf('$("#bell").onclick')), ctx);
 const active = { id: "live", series: "Show", sxxeyy: "S01E01", outcome: "running", step: "downloading", batch: "batch" };
 const queued = { ...active, id: "queued", sxxeyy: "S01E02", waiting: true, step: "queued" };
 const history = { id: "old", series: "Older", outcome: "downloaded" };
@@ -704,6 +712,19 @@ else if (scenario === "reload-stats") {
   historyStack.back();
   console.log(JSON.stringify([reloaded, pressed(), doc.activeElement === $("#con-stats")]));
 }
+else if (scenario === "inbox-jump-to-downloads") {
+  ctx.innerWidth = 390;
+  $("#con-stats").onclick();
+  ctx.openInbox();
+  const state = () => [pressed(), modalOpen];
+  const covered = state();
+  traverse(-2);
+  const backToList = state();
+  traverse(2);
+  const forwardToInbox = state();
+  historyStack.back();
+  console.log(JSON.stringify([covered, backToList, forwardToInbox, state()]));
+}
 else if (scenario === "reenter-activity") {
   ctx.innerWidth = Number(process.argv[4]);
   addRuns([history]);
@@ -799,6 +820,12 @@ def test_phone_activity_browser_and_in_app_back_restore_the_list_and_opener():
 
 def test_phone_activity_reload_restores_stats_before_browser_back():
     assert switcher("reload-stats") == [["stats"], ["downloads"], True]
+
+
+def test_history_menu_reconciles_activity_when_traversing_across_the_full_inbox():
+    assert switcher("inbox-jump-to-downloads") == [
+        [["stats"], True], [["downloads"], False], [["stats"], True], [["stats"], False],
+    ]
 
 
 def test_reentering_activity_from_schedule_uses_the_destination_detail():
