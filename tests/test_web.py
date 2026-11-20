@@ -2348,6 +2348,14 @@ const fresh = () => {
   saving = page.save(); release({ settings: { sonarrs: [{ name: "4K", url: "http://a", api_key_set: true }] } }); await saving;
   out.listEntryKept = box.S.config.settings.sonarrs[0] === entry && entry.api_key_set === true && !("api_key" in entry)
     && !page.state().unsaved;
+  // a series just saved is saved: the next Save, for something else, does not send it as changed again (#335)
+  box.S = { config: { settings: { theme: "dark" }, series: { 7: { service: "iV", title: "https://example.com/show" } } } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box);
+  box.S.config.series[7].file_name = "Alias"; page.dirty();
+  saving = page.save(); release({ series: { 7: { service: "iV", title: "https://example.com/show", file_name: "Alias" } } }); await saving;
+  box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); release({}); await saving;
+  out.savedSeriesNotResent = !JSON.parse(box.sentBody).changed.includes("series:7");
   tabB(); held = box.S.config.settings; held.debug = true; page.dirty();
   saving = page.save(); held.language = "de"; page.dirty();  // changed here while the save ran
   release({ settings: { theme: "dark", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
@@ -2468,6 +2476,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "learntDayShown": True,  # a day kept alone shows too, and the next-episode line follows
         "mergedTaken": True,  # another tab's change the server kept is taken, in the object the editors hold (#184)
         "listEntryKept": True,  # an open Sonarr editor's entry is updated in place, not replaced
+        "savedSeriesNotResent": True,  # #335: a saved series is not sent as changed by the next Save
         "nextSaveSendsMerged": True,  # so a later Save no longer sends the older copy back
         "editMeanwhileWins": True,  # an edit made while the Save ran is not overwritten by its answer
         "editMeanwhileSent": True,
@@ -2537,6 +2546,9 @@ const fresh = () => {
   const epNameShown = !bars["#savebar"].hidden;
   page.change("#d-epname", { value: "joined" });
   out.episodeName = epNameShown && bars["#savebar"].hidden && bars["#d-save"].hidden && !page.drawerChanged();
+  fresh(); Object.assign(box.S.config.series[7], { season_offset: 2 }); page.baseline(); page.snapshot();
+  page.input("#d-sfrom", "1");  // Math.max(1, 1): a season offset from season 1 is the default, as the server keeps it
+  out.seasonFromOne = bars["#savebar"].hidden && !page.drawerChanged();
   fresh(); Object.assign(box.S.config.series[7], { episode_offset: 5, season_offset: 2 }); page.baseline();
   page.input("#d-offset", ""); page.input("#d-offset", "5");  // cleared and typed again: it comes back after season_offset
   out.restoredOffsetBarHidden = bars["#savebar"].hidden;
@@ -2577,6 +2589,7 @@ def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hid
     assert json.loads(run.stdout) == {
         "episodeOffset": True, "seasonOffset": True, "seasonFrom": True, "episodeTable": True,  # typed, then cleared: nothing to save
         "fileName": True, "seasonMap": True, "joinParts": True, "episodeName": True,  # #335: cleared or back to default
+        "seasonFromOne": True,  # from season 1 is the default
         "hidingLeavesBarHidden": True,  # saved at once, so it is not a pending change
         "changeThenUndoAfterHiding": True,
         "showingLeavesBarHidden": True,

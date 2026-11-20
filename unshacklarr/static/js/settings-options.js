@@ -777,7 +777,8 @@ async function save() {
     if (take(mine, ...merged[u]) && !id) redraw = true;
     if (clash) { if (unitBase[u]) S.config.versions[u] = unitBase[u]; else delete S.config.versions?.[u]; }  // the version it started from: refused there, a reload
     if (id) base.series[id] = theirs; else base[u] = theirs;
-    savedUnits[u] = JSON.stringify(alike(mine, theirs) ? mine : theirs);
+    const kept = alike(mine, theirs) ? mine : theirs;
+    savedUnits[u] = id ? stableJSON(cleanSeries(kept)) : JSON.stringify(kept);  // in configUnits' own form, or it never matches again
   }
   // the names the server now knows: each entry the page holds now, found by its address (each Sonarr has its own),
   // the entries of a list taken whole too
