@@ -319,7 +319,7 @@ const nodes = {};
 const $ = (sel) => (nodes[sel] ??= { value: "", checked: false, hidden: false, disabled: false, className: "", textContent: "", replaceChildren(...k) { this.kids = k; },
   querySelector: () => ({ textContent: "" }), querySelectorAll: () => [], setAttribute() {} });
 const ctx = sandbox({ S: { config, dlOptions: [], series: [] }, savedConfig: JSON.stringify(saved), savedSonarrsOf: "{}", $, dirty() {}, toast() {},
-  optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, themeChoice: () => "", LANGS: {}, LANG: "en" });
+  optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, LANGS: {}, LANG: "en" });
 const quality = read(process.argv[2]), options = read(process.argv[1]);
 vm.runInContext("let ugGroups = { groups: [], none: [] };", ctx);
 for (const re of [/function upgradeSeries\b[\s\S]*?\n}\n/, /function renderUpgradeSeries\b[\s\S]*?\n}\n/, /function upgradeSay\b[\s\S]*?\n}\n/, /async function renderUpgradeGroups\b[\s\S]*?\n}\n/])

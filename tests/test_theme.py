@@ -1,15 +1,13 @@
-"""The light and dark looks: every text and edge colour readable on what it sits on, in both."""
+"""The dark palette: every text and edge colour readable on what it sits on."""
+import json
 import math
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
 
 STATIC = Path(__file__).parents[1] / "unshacklarr" / "static"
 CSS = (STATIC / "app.css").read_text()
-FIXED = {"term-bg"}  # the download output stays dark in either look
 
 
 def block(selector):
@@ -22,7 +20,8 @@ def colours(text):
 
 
 DARK = colours(block(":root {"))
-LIGHT = {**DARK, **colours(block(':root[data-theme="light"] {'))}
+for name, target in re.findall(r"--([\w-]+):\s*var\(--([\w-]+)\)", block(":root {")):
+    DARK[name] = DARK[target]
 
 
 def luminance(hex_colour):
@@ -40,15 +39,14 @@ TEXT = [("text", "bg"), ("text", "panel"), ("text", "well"), ("text", "field-bg"
         ("muted", "bg"), ("muted", "panel"), ("muted", "well"), ("accent", "bg"), ("accent", "panel"), ("accent", "accent-tint"),
         ("accent-ink", "accent"), ("ok", "panel"), ("ok", "bg"), ("ok", "well"), ("ok", "ok-tint"), ("accent-ink", "ok"), ("warn", "bg"), ("warn", "panel"), ("warn-ink", "warn"), ("warn", "warn-tint"),
         ("err", "err-tint"), ("muted", "well"),
-        ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg")]
+        ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg"),
+        ("text", "select"), ("muted", "select"), ("text", "term-bg")]
 EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
 
 
-@pytest.mark.parametrize("theme", ["dark", "light"])
-def test_every_text_and_field_edge_meets_its_contrast(theme):
-    tokens = DARK if theme == "dark" else LIGHT
-    low = [f"{a} on {b}: {contrast(tokens[a], tokens[b]):.2f}" for pairs, need in ((TEXT, 4.5), (EDGES, 3))
-           for a, b in pairs if contrast(tokens[a], tokens[b]) < need]
+def test_every_text_and_field_edge_meets_its_contrast():
+    low = [f"{a} on {b}: {contrast(DARK[a], DARK[b]):.2f}" for pairs, need in ((TEXT, 4.5), (EDGES, 3))
+           for a, b in pairs if contrast(DARK[a], DARK[b]) < need]
     assert not low
 
 
@@ -66,19 +64,15 @@ def hue(hex_colour):
                                    1.9779984951 * l - 2.4285922050 * m + .4505937099 * s)) % 360
 
 
-@pytest.mark.parametrize("theme", ["dark", "light"])
-def test_success_is_a_green_apart_from_the_teal_accent(theme):
-    tokens = DARK if theme == "dark" else LIGHT
-    gap = abs(hue(tokens["ok"]) - hue(tokens["accent"]))
-    assert min(gap, 360 - gap) >= 15  # one hue cannot mean both "selected" and "healthy"
+def test_success_is_a_green_apart_from_the_lime_accent():
+    gap = abs(hue(DARK["ok"]) - hue(DARK["accent"]))
+    assert min(gap, 360 - gap) >= 15  # one hue cannot mean both "running" and "healthy"
 
 
-@pytest.mark.parametrize("theme", ["dark", "light"])
-def test_ok_text_on_its_own_tint_is_readable(theme):
-    tokens = DARK if theme == "dark" else LIGHT
+def test_ok_text_on_its_own_tint_is_readable():
     # the pills, notes and rows tint their ground with up to 14% of --ok
-    low = [f"{ground}: {contrast(tokens['ok'], blend(tokens['ok'], tokens[ground], .14)):.2f}" for ground in ("bg", "panel", "well")
-           if contrast(tokens["ok"], blend(tokens["ok"], tokens[ground], .14)) < 4.5]
+    low = [f"{ground}: {contrast(DARK['ok'], blend(DARK['ok'], DARK[ground], .14)):.2f}" for ground in ("bg", "panel", "well")
+           if contrast(DARK["ok"], blend(DARK["ok"], DARK[ground], .14)) < 4.5]
     assert not low
 
 
@@ -89,55 +83,22 @@ def test_a_done_or_healthy_badge_is_green_not_the_accent(badge):
     assert "var(--ok-tint)" in last and "var(--accent" not in last
 
 
-def test_the_light_look_sets_every_colour_and_follows_the_system_too():
-    light = block(':root[data-theme="light"] {')
-    assert set(DARK) - FIXED - {"net-chip"} <= set(colours(light)) | {"net-chip"}
-    assert block('@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {').strip() == light.strip()
+def test_browser_chrome_and_installed_app_match_the_dark_background():
+    html = (STATIC / "index.html").read_text()
+    manifest = json.loads((STATIC / "manifest.webmanifest").read_text())
+    assert f'<meta name="theme-color" content="{DARK["bg"]}">' in html
+    assert manifest["theme_color"] == manifest["background_color"] == DARK["bg"]
 
 
-def test_a_chosen_look_is_applied_before_the_first_paint():
-    head = (STATIC / "index.html").read_text().split("</head>")[0]
-    assert 'localStorage.getItem("theme")' in head and "dataset.theme" in head
-
-
-def test_the_look_follows_the_choice_and_the_system():
-    if not shutil.which("node"):
-        pytest.skip("node is not installed")
-    script = r"""
-const fs = require("fs"), vm = require("vm");
-const src = fs.readFileSync(process.argv[1], "utf8");
-const store = {}, meta = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }, root = { dataset: {} };
-const ctx = { localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } },
-  document: { documentElement: root, querySelector: () => meta },
-  getComputedStyle: () => ({ getPropertyValue: () => (root.dataset.theme === "light" ? " #f6f3ee" : " #171614") }) };
-vm.createContext(ctx);
-vm.runInContext(src.match(/^const THEMES = .*?^}\nfunction setTheme\(.*?^}/ms)[0], ctx);
-const out = [];
-for (const choice of ["light", "dark", "system"]) { ctx.setTheme(choice); out.push([ctx.themeChoice(), root.dataset.theme ?? null, meta.attrs.content, store.theme ?? null]); }
-vm.runInContext("themePicked = null", ctx);
-store.theme = "sepia";
-out.push(ctx.themeChoice());
-ctx.localStorage = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); }, removeItem() { throw new Error("blocked"); } };
-vm.runInContext("localStorage = this.localStorage", ctx);
-ctx.setTheme("light"); out.push([ctx.themeChoice(), root.dataset.theme]);  // storage blocked: the pick still holds this visit
-console.log(JSON.stringify(out));
-"""
-    out = subprocess.run(["node", "-e", script, "--", str(STATIC / "js" / "core.js")], capture_output=True, text=True)
-    assert out.returncode == 0, out.stderr
-    assert out.stdout.strip() == ('[["light","light","#f6f3ee","light"],["dark","dark","#171614","dark"],'
-                                  '["system",null,"#171614",null],"system",["light","light"]]')
-
-
-@pytest.mark.parametrize("theme", ["dark", "light"])
-def test_a_tick_on_the_accent_fill_stands_out_in_both_looks(theme):
-    text = block(":root {") if theme == "dark" else block(':root[data-theme="light"] {')
-    stroke = "#" + re.search(r"--tick: url\(.*?stroke='%23([0-9a-fA-F]{6})'", text).group(1)
-    accent = (DARK if theme == "dark" else LIGHT)["accent"]
-    assert contrast(stroke, accent) >= 3  # a meaningful graphic: WCAG 1.4.11
+def test_a_tick_stands_out_on_its_fill():
+    stroke = "#" + re.search(r"--tick: url\(.*?stroke='%23([0-9a-fA-F]{6})'", block(":root {")).group(1)
+    assert stroke == DARK["accent-ink"]
+    for fill in ("accent", "text"):
+        assert contrast(stroke, DARK[fill]) >= 3  # a meaningful graphic: WCAG 1.4.11
 
 
 def test_icons_drawn_in_a_colour_take_it_from_a_token():
-    # a data-URI icon can't read a variable: one with a fixed colour is a mask (black) or a per-look token
+    # A data-URI icon can't read a variable; inline icons with a fixed colour should be masks.
     rules = re.sub(r"--[\w-]+: url\(\"data:image/svg\+xml[^)]*\)\)?;", "", CSS)
     assert set(re.findall(r"stroke='%23([0-9a-fA-F]{3,6})'", rules)) <= {"000"}
 
@@ -166,8 +127,8 @@ def test_a_toggle_pill_has_an_edge_you_can_see_and_a_tick_when_on():
     assert "clip-path" in on and rule("#sel-toggle[aria-pressed=\"true\"]::before").count("clip-path") == 1  # the Select toggle's tick
 
 
-def test_the_active_country_option_has_an_accent_bar_not_only_a_tint():
-    assert "inset 3px 0 0 var(--accent)" in rule(".cp-list li.on")
+def test_the_active_country_option_has_a_bar_not_only_a_tint():
+    assert "inset 3px 0 0 var(--field-line-hover)" in rule(".cp-list li.on")
 
 
 def test_a_failed_or_stopped_step_has_a_mark_and_the_word_is_there_for_everyone():
@@ -216,7 +177,7 @@ def test_a_link_drawn_as_a_button_takes_the_buttons_colour_not_the_browsers_link
 
 
 def test_a_text_fields_focus_is_a_2px_ring_on_every_field_rule():
-    """The old 1px accent edge plus a 16% halo was 2.4:1 (dark) and 1.6:1 (light) against the resting edge."""
+    """A solid 2px ring replaces the old 1px accent edge with a faint halo."""
     focus = [".remote-form input:focus", ".remote-form select:focus", "input[type=time]:focus:not(.bad)"]
     for selector in focus:
         assert any("outline: 2px solid var(--accent)" in body for body in rules_of(selector)), selector
@@ -247,19 +208,12 @@ def test_the_segmented_controls_ring_is_drawn_inside_its_scroller():
     assert any(re.search(r"outline-offset:\s*-2px", body) for body in rules_of(".seg button:focus-visible"))
 
 
-def test_the_selected_filters_ring_contrasts_with_its_accent_fill():
-    assert any("outline-color: var(--accent-ink)" in body for body in rules_of('.seg button[aria-pressed="true"]:focus-visible'))
-    pairs = re.findall(r"--accent: (#[0-9a-f]{6}); --accent-ink: (#[0-9a-f]{6});", CSS)
-    assert len(pairs) >= 2 and len(set(pairs)) >= 2  # a dark and a light look
-
-    def luminance(hex_colour):
-        channels = [int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
-        r, g, b = [c / 12.92 if c <= .03928 else ((c + .055) / 1.055) ** 2.4 for c in channels]
-        return .2126 * r + .7152 * g + .0722 * b
-
-    for fill, ring in set(pairs):
-        light, dark = sorted((luminance(fill), luminance(ring)), reverse=True)
-        assert (light + .05) / (dark + .05) >= 3, (fill, ring)
+def test_the_lime_focus_ring_stands_out_on_dark_surfaces_and_selection():
+    assert "outline: 2px solid var(--accent)" in rule(":focus-visible")
+    assert "background: var(--select)" in rule('.seg button[aria-pressed="true"]')
+    # Segments draw the ring inside their own fill, other controls above the surrounding surface.
+    for fill in ("bg", "panel", "well", "select", "accent-tint", "warn-tint", "term-bg"):
+        assert contrast(DARK["accent"], DARK[fill]) >= 3, fill
 
 
 def test_a_choice_chips_edge_is_a_field_edge():

@@ -2244,34 +2244,34 @@ vm.createContext(box);
 vm.runInContext(code + "\nthis.api_ = { save, send: $('#bo-send').onclick, dirty, state: () => ({ unsaved, savedConfig }), baseline: (c) => { savedConfig = configKey(c); }, savedSonarr, keepSonarrNames, sonarrNames };", box);
 const page = box.api_;
 const fresh = () => {
-  box.S = { config: { settings: { theme: "dark", backup_remote: "", backup_remote_url: "" }, series: {} } };
+  box.S = { config: { settings: { timezone: "Australia/Melbourne", backup_remote: "", backup_remote_url: "" }, series: {} } };
   page.baseline(box.S.config);
   bars["#savebar"].hidden = bars["#d-save"].hidden = true;
 };
 (async () => {
   const out = {};
-  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  fresh(); box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
   let saving = page.save(); release(); await saving;
   out.plainSaveHides = bars["#savebar"].hidden && bars["#d-save"].hidden;
-  fresh(); box.S.config.settings.theme = "sepia"; page.dirty();  // a change the save before did not send
+  fresh(); box.S.config.settings.timezone = "Europe/Berlin"; page.dirty();  // a change the save before did not send
   saving = page.save(); release({ versions: { settings: "v2" } }); await saving;  // the server's new fingerprints
   out.newVersionsStaySaved = bars["#savebar"].hidden && !page.state().unsaved;
-  fresh(); box.S.config.hidden_series = [7]; box.S.config.settings.theme = "teal"; page.dirty();  // hidden at once by /api/hidden
+  fresh(); box.S.config.hidden_series = [7]; box.S.config.settings.timezone = "America/Toronto"; page.dirty();  // hidden at once by /api/hidden
   saving = page.save(); release(); await saving;
   out.hiddenListNotSentAsChanged = !JSON.parse(box.sentBody).changed.includes("hidden_series");
 
-  fresh(); box.S.config.settings.theme = "light"; page.dirty();
-  saving = page.save(); box.S.config.settings.theme = "blue"; page.dirty(); release(); await saving;
+  fresh(); box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
+  saving = page.save(); box.S.config.settings.timezone = "Asia/Tokyo"; page.dirty(); release(); await saving;
   out.editDuringSaveKeepsBar = !bars["#savebar"].hidden && !bars["#d-save"].hidden && page.state().unsaved;
-  box.S.config.settings.theme = "light"; page.dirty();  // put back as it was sent
+  box.S.config.settings.timezone = "Europe/Paris"; page.dirty();  // put back as it was sent
   out.revertToSentHides = bars["#savebar"].hidden;
 
-  fresh(); box.S.config.settings.theme = "light"; page.dirty();
+  fresh(); box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
   offsiteReply = { settings: { backup_remote: "webdav", backup_remote_url: "https://x", backup_remote_secret_set: true, backup_passphrase_set: true }, sent: {} };
   await page.send({ target: {} });
   page.dirty();
   out.offsiteKeepsOtherEdit = page.state().unsaved && !bars["#savebar"].hidden;
-  box.S.config.settings.theme = "dark"; page.dirty();
+  box.S.config.settings.timezone = "Australia/Melbourne"; page.dirty();
   out.offsiteFieldsAreSaved = !page.state().unsaved;
 
   fresh(); box.S.config.series = { 7: { service: "iV", title: "https://example.com/show" } }; page.dirty();  // a series just added
@@ -2300,20 +2300,20 @@ const fresh = () => {
   const show = { service: "iV", title: "https://example.com/show", since: "2026-11-01T00:00:00+00:00" };
   fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config);
   box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };
-  box.S.config.settings.theme = "light"; page.dirty();
+  box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
   saving = page.save(); release({ series: { 7: { ...show, release_time: "21:00", release_day: 1 } } }); await saving;
   const seven = box.S.config.series[7];
   out.learntTimeShown = seven.release_time === "21:00" && seven.release_day === 1 && bars["#d-release"].value === "21:00"
     && bars["#d-release-day"].value === "1" && !page.state().unsaved && JSON.parse(box.drawerSnapshot.conf).release_time === "21:00";
-  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.theme = "light"; page.dirty();
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
   saving = page.save(); box.S.config.series[7].release_time = "";  // cleared while the Save ran: stays cleared, and unsaved
   release({ series: { 7: { ...show, release_time: "21:00" } } }); await saving;
   out.clearedMeanwhileStays = box.S.config.series[7].release_time === "" && page.state().unsaved;
-  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.theme = "light"; page.dirty();
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
   saving = page.save(); Object.assign(box.S.config.series[7], { service: "7P", title: "https://7plus.example/show" });  // moved meanwhile
   release({ series: { 7: { ...show, release_time: "21:00", release_day: 1 } } }); await saving;
   out.otherSourceTakesNothing = !("release_time" in box.S.config.series[7]) && !("release_day" in box.S.config.series[7]);
-  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.theme = "light"; page.dirty();
+  fresh(); box.S.config.series = { 7: { ...show } }; page.baseline(box.S.config); box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
   box.current = null; box.drawerSnapshot = null;  // its panel closed when the Save starts
   saving = page.save(); Object.assign(box.S.config.series[7], { service: "7P", title: "https://7plus.example/show" });
   box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };  // opened meanwhile
@@ -2323,22 +2323,22 @@ const fresh = () => {
   fresh(); box.S.config.series = { 7: { ...show, release_time: "20:00" } }; page.baseline(box.S.config);
   box.current = { tvdbId: 7 }; box.drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(box.S.config.series[7]) };
   bars["#d-release-day"] = { value: "0", hidden: false }; box.previews = 0;
-  box.S.config.settings.theme = "light"; page.dirty();
+  box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
   saving = page.save(); release({ series: { 7: { ...show, release_time: "20:00", release_day: 1 } } }); await saving;  // only the day learnt
   out.learntDayShown = bars["#d-release-day"].value === "1" && box.previews === 1;
   box.current = null; box.drawerSnapshot = null;
 
   // another tab saved the language meanwhile; the server kept both: this page takes it, in the same object (#184)
   const tabB = () => {
-    box.S = { config: { settings: { theme: "dark", language: "en", debug: false }, series: {} } };
+    box.S = { config: { settings: { timezone: "Australia/Melbourne", language: "en", debug: false }, series: {} } };
     page.baseline(box.S.config);
     vm.runInContext("savedUnits = configUnits(S.config)", box);
   };
   tabB(); box.redrawn = 0; let held = box.S.config.settings; held.debug = true; page.dirty();
-  saving = page.save(); release({ settings: { theme: "dark", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
+  saving = page.save(); release({ settings: { timezone: "Australia/Melbourne", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
   out.mergedTaken = box.S.config.settings === held && held.language === "fr" && !page.state().unsaved && bars["#savebar"].hidden
     && box.redrawn === 1;
-  held.theme = "light"; page.dirty();
+  held.timezone = "Europe/Paris"; page.dirty();
   saving = page.save(); release({}); await saving;
   out.nextSaveSendsMerged = JSON.parse(box.sentBody).settings.language === "fr";
   // a Sonarr's editor holds its entry: the key the server keeps (masked as api_key_set) changes that entry, not another
@@ -2349,16 +2349,16 @@ const fresh = () => {
   out.listEntryKept = box.S.config.settings.sonarrs[0] === entry && entry.api_key_set === true && !("api_key" in entry)
     && !page.state().unsaved;
   // a series just saved is saved: the next Save, for something else, does not send it as changed again (#335)
-  box.S = { config: { settings: { theme: "dark" }, series: { 7: { service: "iV", title: "https://example.com/show" } } } };
+  box.S = { config: { settings: { timezone: "Australia/Melbourne" }, series: { 7: { service: "iV", title: "https://example.com/show" } } } };
   page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box);
   box.S.config.series[7].file_name = "Alias"; page.dirty();
   saving = page.save(); release({ series: { 7: { service: "iV", title: "https://example.com/show", file_name: "Alias" } } }); await saving;
-  box.S.config.settings.theme = "light"; page.dirty();
+  box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
   saving = page.save(); release({}); await saving;
   out.savedSeriesNotResent = !JSON.parse(box.sentBody).changed.includes("series:7");
   tabB(); held = box.S.config.settings; held.debug = true; page.dirty();
   saving = page.save(); held.language = "de"; page.dirty();  // changed here while the save ran
-  release({ settings: { theme: "dark", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
+  release({ settings: { timezone: "Australia/Melbourne", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
   out.editMeanwhileWins = held.language === "de" && page.state().unsaved;
   saving = page.save(); release({}); await saving;
   out.editMeanwhileSent = JSON.parse(box.sentBody).changed.includes("settings") && JSON.parse(box.sentBody).settings.language === "de";
@@ -2523,7 +2523,7 @@ vm.createContext(box);
 vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), change: (id, props) => $(id).onchange({ target: props }), baseline: () => { savedConfig = configKey(S.config); }, snapshot: () => { drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(S.config.series[7]) }; }, drawerChanged };", box);
 const page = box.page;
 const fresh = () => {
-  box.S = { config: { settings: { theme: "dark" }, hidden_series: [], series: { 7: { service: "iV", title: "https://example.com/show" } } } };
+  box.S = { config: { settings: { timezone: "Australia/Melbourne" }, hidden_series: [], series: { 7: { service: "iV", title: "https://example.com/show" } } } };
   page.baseline();
   bars["#savebar"].hidden = bars["#d-save"].hidden = true;
 };
@@ -2561,9 +2561,9 @@ const fresh = () => {
   fresh(); box.hiddenAfter = [7];
   await page.hideSeries({ tvdbId: 7, series: "Show" }, true);
   out.hidingLeavesBarHidden = bars["#savebar"].hidden;
-  box.S.config.settings.theme = "light"; page.dirty();
+  box.S.config.settings.timezone = "Europe/Paris"; page.dirty();
   const shown = !bars["#savebar"].hidden;
-  box.S.config.settings.theme = "dark"; page.dirty();
+  box.S.config.settings.timezone = "Australia/Melbourne"; page.dirty();
   out.changeThenUndoAfterHiding = shown && bars["#savebar"].hidden;
   box.hiddenAfter = [];
   await page.hideSeries({ tvdbId: 7, series: "Show" }, false);
