@@ -72,6 +72,33 @@ console.log(JSON.stringify([...dates, ctx.ago("1993-11-01")]));
     assert shown == ["Okt. 2026", "1 d ago", "Nov. 1993", "Nov. 1993"]
 
 
+def test_escape_dismisses_the_visible_hover_tip_and_its_accessible_description():
+    shown = node(r"""
+const src = read(process.argv[1]), listeners = {}, attributes = {};
+let tip = null;
+const rect = () => ({ left: 0, width: 10, top: 30, bottom: 40, height: 10 });
+const target = { addEventListener: (type, fn) => { listeners[type] = fn; },
+  setAttribute: (key, value) => { attributes[key] = value; }, removeAttribute: (key) => { delete attributes[key]; },
+  getBoundingClientRect: rect,
+};
+const ctx = sandbox({
+  document: { addEventListener: (type, fn) => { listeners[type] = fn; }, body: { append: (node) => { tip = node; } } },
+  el: (tag, props) => ({ ...props, style: {}, getBoundingClientRect: rect, remove: () => { tip = null; } }),
+  innerWidth: 390, requestAnimationFrame() {}, onTop() {},
+});
+vm.runInContext(grab(src, /let tipEl[^\n]+\nconst hideTip[^\n]+\n/) +
+  src.slice(src.indexOf("function showTip("), src.indexOf("function askedHeight(")), ctx);
+ctx.hoverTip(target, () => ["Available"]);
+listeners.mouseenter();
+const opened = [tip?.id, attributes["aria-describedby"]];
+listeners.keydown?.({ key: "Enter" });
+const stillOpen = tip?.id;
+listeners.keydown?.({ key: "Escape" });
+console.log(JSON.stringify([opened, stillOpen, tip, attributes]));
+""", str(JS / "series.js"))
+    assert shown == [["tip", "tip"], "tip", None, {}]
+
+
 def test_episode_subtitle_summary_prioritizes_required_languages_and_discloses_every_track():
     summary = node(r"""
 const src = read(process.argv[1]), ctx = sandbox({ el: (tag, props, ...kids) => ({

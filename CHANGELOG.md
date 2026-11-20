@@ -117,6 +117,7 @@ Every change worth knowing, newest first. The format follows
 - Made sideways scrolling visible in Series settings and kept metadata separators with their labels.
 - Fixed clipped keyboard focus rings in the Inbox and season strip.
 - Enlarged small touch controls across Series, Activity, Settings and dialogs.
+- Made Escape dismiss tooltips.
 - Added service names and individual downloads to Catch up, tightened Waiting and Upgrades, and added Fix sign-in to failed jobs that need it. (#353)
 
 - Made the Schedule toolbar fit smaller screens, showed more episodes with artwork in Week view, and moved episode actions ahead of the command. (#352)
