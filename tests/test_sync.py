@@ -729,6 +729,34 @@ def test_the_next_download_starts_while_the_one_before_is_imported(tmp_path, mon
     assert sorted(c["outcome"] for c in cards) == ["downloaded", "downloaded"] and len({c["batch"] for c in cards}) == 1
 
 
+def test_an_automatic_sweep_does_not_reserve_episodes_it_has_not_checked(tmp_path, monkeypatch):
+    import threading
+
+    sync = load(tmp_path, monkeypatch)
+    config = sync.read_file()
+    first, next_episode = episode(111, 2, 5), episode(111, 2, 6)
+    checking, proceed = threading.Event(), threading.Event()
+
+    def wanted(show, ep, now):
+        if ep is first:
+            checking.set()
+            assert proceed.wait(5)
+        return False
+
+    monkeypatch.setattr(sync, "wanted_automatically", wanted)
+    monkeypatch.setattr(sync, "free_space_problem", lambda: "Not enough space")
+    sweep = threading.Thread(target=sync.sync, args=(config, {}, [first, next_episode]), daemon=True)
+    sweep.start()
+    try:
+        assert checking.wait(5)
+        sync.sync(config, {}, [next_episode], manual=True, kind="manual")
+        cards = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+        assert [(card["episodeId"], card["kind"]) for card in cards] == [(206, "manual")]
+    finally:
+        proceed.set()
+        sweep.join(5)
+
+
 def test_a_job_can_lose_a_queued_episode_or_stop(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     started = []
@@ -736,13 +764,11 @@ def test_a_job_can_lose_a_queued_episode_or_stop(tmp_path, monkeypatch):
     def download(payload, run=None):
         started.append(payload["wanted"][0])
         if payload["wanted"][0] == "S02E05":
-            sync.waiting.pop(206, None)
-            sync.unqueued.add(206)  # S02E06 taken out of the queue from Activity
+            assert sync.take_out(206)  # S02E06 taken out of the queue from Activity
         if payload["wanted"][0] == "S02E07":  # then the whole job stopped: its queued ones cancelled
             for i, card in list(sync.waiting.items()):
                 if card.get("batch") == run.card["batch"]:
-                    sync.waiting.pop(i)
-                    sync.unqueued.add(i)
+                    assert sync.take_out(i)
         raise sync.UnshackleError("no such title")
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
@@ -765,8 +791,7 @@ def test_a_cancelled_episode_queued_again_keeps_its_place_or_goes_last(tmp_path,
         started.append(sx)
         if sx == "S02E05":  # S02E06 and S02E07 cancelled, then S02E06 queued again before its turn
             for i in (206, 207):
-                sync.waiting.pop(i)
-                sync.unqueued.add(i)
+                assert sync.take_out(i)
             assert sync.add_to_job(batch, episode(111, 2, 6), {"service": "RTLP"})
         if sx == "S02E08":  # S02E07, skipped by now, queued again: it goes last
             assert sync.add_to_job(batch, episode(111, 2, 7), {"service": "RTLP"}) and 207 in sync.waiting

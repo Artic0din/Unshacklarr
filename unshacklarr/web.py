@@ -2473,7 +2473,8 @@ async def watch_releases():
                     if (run is None or not run.is_alive()) and not await asyncio.to_thread(burst_failed, episode_id, name):  # the previous try is over
                         if sonarr_sync.SETTINGS.get("download_window_bursts") and not sonarr_sync.in_download_window():
                             continue  # chosen in Automation: the release-time tries keep to the window too
-                        burst_runs[(name, episode_id)] = run_sync([episode_id], kind="burst", sonarr=name)
+                        if thread := run_sync([episode_id], kind="burst", sonarr=name):
+                            burst_runs[(name, episode_id)] = thread
         except Exception as e:  # Sonarr down for a moment: try again next round
             print(f"Release watch: {e}", flush=True)
         await asyncio.sleep(float(sonarr_sync.SETTINGS["burst_every_seconds"]))
@@ -4060,9 +4061,8 @@ def room_for_one_more() -> None:
 
 def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: str = "manual", numbering: dict | None = None,
              batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None, audio: str = "",
-             restored: tuple[str, int] | None = None) -> threading.Thread:
-    """A sync in the background: every missing episode, or the ones given. Each episode has
-    its own lock, so these runs never download the same one twice."""
+             restored: tuple[str, int] | None = None) -> threading.Thread | None:
+    """Start a background sync unless all requested episodes are already queued or running."""
     def work():
         global last_sync
         try:
@@ -4071,11 +4071,20 @@ def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: 
         except Exception as e:  # notified already; the page shows the history
             print(f"Sync stopped: {type(e).__name__}: {e}", flush=True)
         finally:
+            sonarr_sync.release_episode_requests(thread)
             last_sync = datetime.now(timezone.utc)
             clear_sonarr_series_cache()
 
     thread = threading.Thread(target=work, daemon=True)
-    thread.start()
+    if episode_ids is not None and kind not in sonarr_sync.AUTOMATIC:
+        episode_ids = sonarr_sync.reserve_episodes(sonarr, episode_ids, thread)
+    if episode_ids == []:
+        return None
+    try:
+        thread.start()
+    except RuntimeError:
+        sonarr_sync.release_episode_requests(thread)
+        raise
     sync_threads.append(thread)
     if episode_ids is None:
         whole_syncs.append(thread)
@@ -5379,14 +5388,18 @@ async def download(request):
     if batch and not BATCH_ID.fullmatch(batch):
         raise web.HTTPBadRequest(text="Unknown job")
     inst = sonarr_named(str(body.get("sonarr") or ""))  # episodes picked in another Sonarr: its ids, its ladder
+    sonarr = inst["name"] if inst else ""
+    ids = sonarr_sync.unclaimed_episodes(sonarr, ids)
+    if not ids:
+        return web.json_response({"running": True})
     if why := await asyncio.to_thread(on_sonarr, inst, cdm_refusal, ids):
         raise web.HTTPBadRequest(text=why)
     if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries
         if numbering is None:
-            numbering = await asyncio.to_thread(retried_numbering, ids, batch, inst["name"] if inst else "")
-        replace = replace or await asyncio.to_thread(retried_replace, ids, batch, inst["name"] if inst else "")
-    audio = await asyncio.to_thread(retried_audio, ids, batch, inst["name"] if inst else "") if body.get("retry") is True else ""
-    if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
+            numbering = await asyncio.to_thread(retried_numbering, ids, batch, sonarr)
+        replace = replace or await asyncio.to_thread(retried_replace, ids, batch, sonarr)
+    audio = await asyncio.to_thread(retried_audio, ids, batch, sonarr) if body.get("retry") is True else ""
+    if why := await asyncio.to_thread(still_on_serve, ids, sonarr):
         raise web.HTTPConflict(text=why)
     if batch and not inst:  # the job still runs: in its queue (retries next, in order), one download at a time
         first = body.get("retry") is True  # each put next: the last one first, so they run in the order picked
@@ -5394,9 +5407,10 @@ async def download(request):
         if not left:
             return web.json_response({"running": True})
         ids = left[::-1] if first else left
-    room_for_one_more()
-    run_sync(ids, replace=replace, kind="retry" if body.get("retry") is True else "manual", numbering=numbering, batch=batch or None,
-             sonarr=inst["name"] if inst else "", **({"audio": audio} if audio else {}))
+    if ids := sonarr_sync.unclaimed_episodes(sonarr, ids):
+        room_for_one_more()
+        run_sync(ids, replace=replace, kind="retry" if body.get("retry") is True else "manual", numbering=numbering, batch=batch or None,
+                 sonarr=sonarr, **({"audio": audio} if audio else {}))
     return web.json_response({"running": True})
 
 
@@ -7324,7 +7338,9 @@ def resume_queue() -> int:
                           numbering=numbering, batch=batch, sonarr=job.get("sonarr") or "", proxy=job.get("proxy") or "",
                           video=job.get("video"), audio=job.get("audio") or "", restored=key)
         with sonarr_sync.jobs_lock:
-            if key in sonarr_sync.restoring:  # not running yet: its thread, so save_queue can tell it never started
+            if thread is None:
+                sonarr_sync.restoring.pop(key, None)  # another worker already owns these episodes
+            elif key in sonarr_sync.restoring:  # not running yet: its thread, so save_queue can tell it never started
                 sonarr_sync.restoring[key] = (thread, job)
         n += len(ids)
     return n

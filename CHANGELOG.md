@@ -154,6 +154,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Fixed duplicate queued episode downloads and let Catch up retry episodes that still appeared missing after a refresh. (#353)
+
 - Prevented repeat Catch up downloads after switching views, kept keyboard focus on failed requests, and showed Fix sign-in even while other episodes were still queued.
 - Kept selected library names and sort labels from getting cut off in the Series filters.
 - Kept Sort with the Series filters when a longer label needed more room.

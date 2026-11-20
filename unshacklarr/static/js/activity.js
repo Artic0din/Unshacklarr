@@ -617,23 +617,13 @@ async function showMissing() {
   const sonarr = missingSonarr, instance = savedSonarr(sonarr);
   if (!missingSubmissions.has(instance)) missingSubmissions.set(instance, new Map());
   const submissions = missingSubmissions.get(instance);
-  // An accepted download may not have a run card yet; retry its failures in Activity.
-  const uncertain = new Set([...submissions].filter(([, state]) => state === "uncertain").map(([id]) => id));
+  const accepted = new Set([...submissions].filter(([, state]) => state === "accepted").map(([id]) => id));
   const stillShowing = () => picked_run === "missing" && seq === missingSeq;
   const q = new URLSearchParams({ ...(missingDays ? { days: missingDays } : {}), ...(instance ? { sonarr: instance } : {}) });
   // wait: as long as the server waits for a busy Sonarr (120 s)
   try { r = await api(`/api/missing${q.size ? `?${q}` : ""}`, { wait: 130 }); } catch (e) { return stillShowing() ? $("#cd-main").replaceChildren(failed(e.message, showMissing)) : undefined; }
   if (!stillShowing()) return;
-  const recheck = r.items.map((it) => it.episodeId).filter((id) => uncertain.has(id));
-  if (recheck.length) {
-    // An ambiguous submission can only be retried after both server reads succeed.
-    const live = await api("/api/runs?live=1").catch(() => null);
-    if (!stillShowing()) return;
-    if (live) {
-      const liveIds = new Set(live.filter((c) => (c.instance || "") === instance).map((c) => c.episodeId));
-      for (const id of recheck) if (!liveIds.has(id)) submissions.delete(id);
-    }
-  }
+  for (const { episodeId } of r.items) if (accepted.has(episodeId)) submissions.delete(episodeId);
   const ages = el("div", { className: "ax-seg", role: "group", ariaLabel: "Aired within" }, ...[[7, "7 days"], [30, "30 days"], [90, "90 days"], [0, "All"]].map(([d, label]) =>
     el("button", { type: "button", textContent: label, ariaPressed: String(missingDays === d), onclick: () => { missingDays = d; showMissing(); } })));
   const unset = unsetNote(sonarr);
@@ -657,10 +647,7 @@ async function showMissing() {
       episodeIds.forEach((id) => submissions.set(id, "accepted"));
       toast(episodeIds.length === 1 ? "1 episode queued" : `${episodeIds.length} episodes queued, one after the other`);
     } catch (err) {
-      for (const id of episodeIds) {
-        if (err.status >= 400 && err.status < 600) submissions.delete(id);
-        else submissions.set(id, "uncertain");
-      }
+      episodeIds.forEach((id) => submissions.delete(id));
       if (picked_run === "missing") updateMissingButtons?.();
       toast(err.message, true);
     }

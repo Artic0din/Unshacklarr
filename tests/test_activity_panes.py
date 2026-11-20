@@ -97,7 +97,7 @@ const el = (tag, props = {}, ...children) => ({ tag, children, classList: { add(
 const $ = (sel) => elements[sel] ??= el(sel);
 const walk = (n) => n?.tag ? [n, ...n.children.flatMap(walk)] : [];
 const posts = [], toasts = [], opened = [];
-let finishPost, live = false;
+let finishPost;
 const target = args[0] || "";
 const sonarrs = [{ name: "4K", quality_ladder: ["2160"] }, { name: "Unset" }];
 const ctx = { $, el, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
@@ -112,12 +112,13 @@ const ctx = { $, el, URLSearchParams, LOCALE: "en", KIND: {}, DOCK: {},
     if (options.method === "POST") {
       posts.push({ path, body: JSON.parse(options.body) });
       if (args[1] === "refused") return { ok: false, status: 500, text: async () => "read-only proxy" };
+      if (args[1] === "gateway") return { ok: false, status: 504, text: async () => "gateway timeout" };
       if (args[1] === "pending" && posts.length === 1) await new Promise((resolve) => { finishPost = resolve; });
       if (args[1] === "lost") throw new TypeError("network offline");
       if (args[1] === "timeout") throw new DOMException("timed out", "TimeoutError");
       return ok({});
     }
-    if (path === "/api/runs?live=1") return ok(live ? [{ episodeId: 456, outcome: "running", instance: ctx.savedSonarr(target) }] : []);
+    if (path === "/api/runs?live=1") throw new Error("Catch up should not check runs");
     if (path.startsWith("/api/upgrades")) return ok({ items: [], scan: {} });
     return ok({ items: [
       { episodeId: 123, tvdbId: 72, series: "Example", sxxeyy: "S01E05" },
@@ -164,13 +165,13 @@ vm.runInContext(`let picked_run;\n` +
   const click = (b) => b?.onclick({ currentTarget: b, target: b });
   const lastRow = () => walk($("#cd-main")).filter((n) => n.textContent === "Download").at(-1);
   const unavailable = (b) => !!b.disabled || b.ariaDisabled === "true";
-  if (scenario === "redraw" || scenario === "pending") {
+  if (scenario === "redraw") {
     const posted = click(lastRow());
-    if (scenario === "redraw") await posted;
     await click(walk($("#cd-main")).find((n) => n.textContent === "90 days"));
     await new Promise(setImmediate);
     await click(lastRow());
-    if (scenario === "pending") { finishPost(); await posted; }
+    finishPost();
+    await posted;
     const locked = unavailable(lastRow());
     await click(walk($("#cd-main")).find((n) => n.textContent === "4K"));
     await new Promise(setImmediate);
@@ -178,17 +179,15 @@ vm.runInContext(`let picked_run;\n` +
     console.log(JSON.stringify({ posts, locked, otherInstance }));
     return;
   }
-  if (scenario === "uncertain") {
+  if (scenario === "reload") {
     const button = lastRow();
     await click(button);
     await click(button);
     const beforeReload = unavailable(button), initialPosts = posts.length;
-    live = true;
     await ctx.showMissing();
-    const whileLive = unavailable(lastRow());
-    live = false;
-    await ctx.showMissing();
-    console.log(JSON.stringify({ beforeReload, initialPosts, whileLive, afterReload: unavailable(lastRow()), toasts }));
+    const afterReload = unavailable(lastRow());
+    await click(lastRow());
+    console.log(JSON.stringify({ beforeReload, initialPosts, afterReload, posts, toasts }));
     return;
   }
   const all = walk($("#cd-main"));
@@ -235,23 +234,29 @@ def test_catch_up_download_error_allows_retry():
     assert result["nativelyDisabledDuring"] is False
 
 
-@pytest.mark.parametrize("phase", ["redraw", "pending"])
-def test_catch_up_blocks_duplicate_after_redraw_but_not_in_another_sonarr(phase):
-    result = node(ACTIVITY_ACTIONS, str(JS), phase, "", phase)
+def test_catch_up_blocks_duplicate_after_redraw_but_not_in_another_sonarr():
+    result = node(ACTIVITY_ACTIONS, str(JS), "redraw", "", "pending")
     assert [request["body"] for request in result["posts"]] == [{"episodeIds": [456]}]
     assert result["locked"] is True
     assert result["otherInstance"] is False
 
 
-@pytest.mark.parametrize("failure", ["lost", "timeout"])
 @pytest.mark.parametrize("sonarr", ["", "4K"])
-def test_catch_up_uncertain_download_needs_a_missing_reload_and_no_live_run(failure, sonarr):
-    result = node(ACTIVITY_ACTIONS, str(JS), "uncertain", sonarr, failure)
+def test_catch_up_can_retry_accepted_download_still_missing_after_reload(sonarr):
+    result = node(ACTIVITY_ACTIONS, str(JS), "reload", sonarr)
     assert result["beforeReload"] is True
     assert result["initialPosts"] == 1
-    assert result["whileLive"] is True
     assert result["afterReload"] is False
-    assert len(result["toasts"]) == 1 and result["toasts"][0][1] is True
+    body = {"episodeIds": [456], **({"sonarr": "4K Saved"} if sonarr else {})}
+    assert [request["body"] for request in result["posts"]] == [body, body]
+
+
+@pytest.mark.parametrize("failure", ["lost", "timeout", "gateway"])
+def test_catch_up_can_retry_when_download_response_fails(failure):
+    result = node(ACTIVITY_ACTIONS, str(JS), "row-row", "", failure)
+    assert len(result["posts"]) == 2
+    assert len(result["toasts"]) == 2 and all(error for _, error in result["toasts"])
+    assert result["buttons"][1]["disabled"] is False
 
 
 @pytest.mark.parametrize(("order", "sent"), [("row-bulk", [[456], [123]]), ("bulk-row", [[123, 456]])])
