@@ -2,6 +2,7 @@
 import json
 import shutil
 import subprocess
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -23,10 +24,10 @@ const grab = (src, re) => { const m = src.match(re); if (!m) throw Error(`not in
 """
 
 
-def node(body, *args):
+def node(body, *args, input_text=None):
     if not shutil.which("node"):
         pytest.skip("node is not installed")
-    out = subprocess.run(["node", "-e", PRELUDE + body, "--", *args], capture_output=True, text=True)
+    out = subprocess.run(["node", "-e", PRELUDE + body, "--", *args], input=input_text, capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout)
 
@@ -783,6 +784,82 @@ console.log(JSON.stringify([inMenu, chips()]));
     assert full == episodes
 
 
+def test_every_news_target_gets_a_new_badge():
+    class Markup(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.stack = [{"tag": "html", "kids": []}]
+
+        def handle_starttag(self, tag, attrs):
+            item = {"tag": tag, **dict(attrs), "kids": []}
+            self.stack[-1]["kids"].append(item)
+            if tag not in "area base br col embed hr img input link meta param source track wbr".split():
+                self.stack.append(item)
+
+        def handle_endtag(self, tag):
+            for i in range(len(self.stack) - 1, 0, -1):
+                if self.stack[i]["tag"] == tag:
+                    del self.stack[i:]
+                    break
+
+    markup = Markup()
+    markup.feed((STATIC / "index.html").read_text())
+    missing = node(r"""
+const root = JSON.parse(fs.readFileSync(0, "utf8"));
+const matches = (n, selector) => {
+  const attr = /^(\w+)\[(\w+)(?:="([^"]+)")?\]$/.exec(selector);
+  if (attr) return n.tag === attr[1] && (attr[3] === undefined ? attr[2] in n : n[attr[2]] === attr[3]);
+  if (selector.startsWith("#")) return n.id === selector.slice(1);
+  if (selector.startsWith(".")) return (n.class || n.className || "").split(" ").includes(selector.slice(1));
+  return n.tag === selector;
+};
+function *walk(n) {
+  yield n;
+  for (const k of n.kids.filter((kid) => kid && typeof kid === "object")) yield* walk(k);
+}
+function setup(n, parent) {
+  n.parent = parent;
+  n.matches = (sel) => sel.split(", ").some((part) => matches(n, part));
+  n.querySelector = (selectors) => [...walk(n)].slice(1).find((child) => selectors.split(", ").some((sel) => {
+    const [outer, inner] = sel.split(" ");
+    if (!inner) return matches(child, outer);
+    if (!matches(child, inner)) return false;
+    for (let p = child.parent; p && p !== n; p = p.parent) if (matches(p, outer)) return true;
+    return false;
+  }));
+  n.append = (child) => {
+    child.parentElement = n;
+    child.remove = () => n.kids.splice(n.kids.indexOf(child), 1);
+    n.kids.push(child);
+  };
+  n.addEventListener = () => {};
+  n.removeEventListener = () => {};
+  n.classList = { add() {}, remove() {} };
+  n.replaceChildren = (...kids) => { n.kids = kids; for (const kid of kids) setup(kid, n); };
+  for (const k of n.kids.filter((kid) => kid && typeof kid === "object")) setup(k, n);
+}
+setup(root);
+const ctx = sandbox({ S: { config: { settings: {} }, news: { seen: [] } }, document: {
+  querySelector: (sel) => root.querySelector(sel), querySelectorAll: (sel) => [...walk(root)].filter((n) => matches(n, sel)),
+}, IntersectionObserver: class { observe() {} unobserve() {} },
+  $: (sel) => root.querySelector(sel), keepFocus: (_, draw) => draw(),
+  ladders: () => [{ name: "Example", steps: [] }], ladderUse: () => [], qlId: () => 1,
+});
+const quality = read(process.argv[2]);
+vm.runInContext(read(process.argv[1]).split("/* The What's new window")[0] + "\nglobalThis.options = NEWS;", ctx);
+vm.runInContext("let fieldIds = 0;\n" + ["renderQuality", "ladderCard"].map((name) =>
+  grab(quality, new RegExp(`^function ${name}\\b[\\s\\S]*?\\n}\\n`, "m"))).join("\n"), ctx);
+ctx.renderQuality();
+ctx.renderNews();
+ctx.renderQuality();
+console.log(JSON.stringify(ctx.options.filter(({ target }) => {
+  const box = root.querySelector(target);
+  return !box || [...walk(box)].filter((n) => matches(n, ".new-badge")).length !== 1;
+}).map(({ id }) => id)));
+""", str(JS / "news.js"), str(JS / "quality.js"), input_text=json.dumps(markup.stack[0]))
+    assert missing == []
+
+
 def test_options_sharing_a_title_have_one_badge_and_keep_each_unread_id():
     states = node(r"""
 const badges = [], classes = new Set(), posts = [];
@@ -807,7 +884,7 @@ const S = { news: { installed: "1.5.0", seen: [] } };
 const ctx = sandbox({
   S, innerHeight: 800,
   document: {
-    querySelector: (selector) => selector === "#svc-defaults" ? box : null,
+    querySelector: (selector) => selector === "#dx-services-card" ? box : null,
     querySelectorAll: (selector) => selector === ".new-badge" ? [...badges] : classes.has("is-new") ? [box] : [],
   },
   IntersectionObserver: class { constructor(fn) { intersect = fn; } observe() {} unobserve() { unobserved += 1; } },

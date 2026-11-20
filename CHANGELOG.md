@@ -154,6 +154,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Kept service shortcuts focused on the right row, restored New badges, and fixed Settings Back and Notifications on phones.
 - Kept the Devices heading in view after loading, moved focus to newly opened Settings sections, and fixed the Add audio track shortcut's focus.
 - Kept Settings jump targets in view as data loaded, preserved open forms between jumps, and corrected card heading levels and missing translations.
 - Kept selected library names and sort labels from getting cut off in the Series filters.

@@ -209,6 +209,7 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   out.routes = {};
   for (const route of routes) {
     location.hash = `#/settings/${route}`;
+    delete out.scrolledTo;
     run('routed = false; currentTab = "schedule";');
     delete ctx.S.config.settings;
     loads.length = 0;
@@ -243,6 +244,37 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   ctx.inboxRow({ items: [{ service: "EXAMPLE", at: "2025-01-01" }], eps: [], level: "error" }, 0, 4).onclick();
   out.inbox = [location.hash, panels.find((n) => !n.hidden).dataset.sec, doc.activeElement === row];
   delete out.scrolledTo;
+}
+
+if (scenario === "service-redraw") {
+  const src = read("services.js"), box = page();
+  const state = make("div", { querySelector: () => make("span") });
+  const nodes = { "#sv-list": box, "#sv-state": state, "#sv-folder": make("div"), "#sv-note": make("div") };
+  const services = ["HULU", "NETFLIX"].map((key) => ({ key, service: key, cookieFiles: [] }));
+  let position = 0;
+  Object.assign(ctx, { $: (sel) => nodes[sel], S: { config: { settings: {} } }, serviceModels: () => services,
+    svcName: (name) => name, signInCounts: () => ({}), signInSummary: () => "", paintServicesBadge() {},
+    revealService() {}, innerHeight: 844,
+    scrollBy: ({ top }) => { position += top; } });
+  const el = ctx.el;
+  ctx.el = (...args) => {
+    const n = el(...args);
+    if (n.tag === "tr" && n.id) {
+      n.matches = (sel) => sel === ".sv-row";
+      n.getBoundingClientRect = () => ({ top: 250 + n.parent.children.indexOf(n) * 800 - position,
+        bottom: 450 + n.parent.children.indexOf(n) * 800 - position });
+    }
+    return n;
+  };
+  run(['let servicesCookies = null, servicesDrawn = "", servicesAsked = "";', line(src, "SERVICE_COLUMNS"), fn(src, "renderServices")].join("\n"));
+  const target = () => find(box, (n) => n.id === "sv-HULU");
+  ctx.renderServices();
+  const old = target();
+  old.focus();
+  services.reverse();
+  ctx.renderServices();
+  out.restored = doc.activeElement === target() && doc.activeElement !== old;
+  out.top = target().getBoundingClientRect().top;
 }
 
 if (scenario === "activity" || scenario === "chip-back") {
@@ -461,6 +493,7 @@ if (scenario === "quality") {
     ladderUse: () => [],
     dirty: () => {},
     renderServiceDefaults: () => {},
+    renderNews: () => {},
     markInvalid: () => {},
     confirmClick: () => true,
     renameRefs: () => {},
@@ -594,6 +627,10 @@ def test_a_phone_section_opens_on_its_heading_and_back_returns_to_its_item():
     assert result["inbox"] == ["#/settings/services", "services-devices", True] and result["serviceScrolled"]
 
 
+def test_a_service_table_redraw_keeps_the_focused_row_in_view_when_it_reorders():
+    assert run_scenario("service-redraw") == {"restored": True, "top": 250}
+
+
 def test_every_legacy_settings_route_reveals_its_anchor_and_loads_after_state():
     routes = run_scenario("settings")["routes"]
     groups = {
@@ -608,7 +645,7 @@ def test_every_legacy_settings_route_reveals_its_anchor_and_loads_after_state():
     for section, (old_ids, data) in groups.items():
         for old_id in old_ids:
             anchor = "services" if old_id == "cookies" else old_id
-            assert routes[old_id] == [section, f"{anchor}-sec", [], data], old_id
+            assert routes[old_id] == [section, None if old_id == section else f"{anchor}-sec", [], data], old_id
 
 
 def test_a_phone_download_opens_on_its_heading_and_back_returns_to_its_row():

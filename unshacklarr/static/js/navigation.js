@@ -61,8 +61,8 @@ function showSettingsSec(name, fromRoute = false, push = false, target = null) {
   const changedSection = sec !== settingsSec;
   if (changedSection && inSettingsSec()) leaveSettingsSec();
   clearSettingsAnchor();
-  const fromList = settingsList;
-  if (changedSection || fromList) secFromList = fromList && !fromRoute;
+  const fromList = currentTab === "settings" && settingsList && phoneLayout();
+  if (changedSection || settingsList) secFromList = fromList && !fromRoute;
   showSettingsList(false);
   settingsSec = sec;
   settingsRoute = page ? name : sec;
@@ -70,7 +70,7 @@ function showSettingsSec(name, fromRoute = false, push = false, target = null) {
   document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.setAttribute("aria-current", x.dataset.sec === sec));
   loadSettingsSec();
   if (!fromRoute && inSettingsSec()) { navigate(push || fromList); updateTitle(); }
-  const anchor = (target && document.querySelector(target)) || (page && document.getElementById(page.anchor));
+  const anchor = (target && document.querySelector(target)) || (page && page.sec !== name && document.getElementById(page.anchor));
   if (anchor) {
     const fold = anchor.closest("details");
     if (fold) fold.open = true;
@@ -185,7 +185,11 @@ function showTab(name, fromRoute = false, quiet = false) {
     if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }
     uyReset();
   }
-  if (name !== currentTab && inSettingsSec()) leaveSettingsSec();
+  if (name !== currentTab && currentTab === "settings") {
+    if (inSettingsSec()) leaveSettingsSec();
+    showSettingsList(false);
+    secFromList = false;
+  }
   if (name === "settings" && !fromRoute) showSettingsList(true);  // a phone: the Settings tab opens on its list
   currentTab = name;
   closeDetails(false);  // the Schedule's popover belongs to its card

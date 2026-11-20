@@ -121,6 +121,7 @@ function renderQuality() {
     onclick: () => { set.quality_ladder = l ? l.name : ""; dirty(); renderQuality(); } }))));
   keepFocus($("#ql-list"), () => $("#ql-list").replaceChildren(...(list.length ? list.map(ladderCard)
     : [el("section", { className: "sx-card" }, el("p", { className: "dx-empty", textContent: "No ladder yet. Create one with New ladder, or bring back the built-in ones." }))])));
+  renderNews();  // the news target inside the ladder card was replaced
 }
 
 function ladderCard(lad) {

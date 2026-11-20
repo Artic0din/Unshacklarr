@@ -254,7 +254,8 @@ function renderServices() {
     // lime only where something is wrong (the row needs attention, or a cookie file is bad or expiring): healthy rows stay quiet
     const first = actions.findIndex(Boolean);
     if (first >= 0 && (m.attention || first === priority.repair || first === priority.renew)) actions[first].className += " primary";
-    return el("tr", { role: "row", className: "sv-row", tabIndex: -1, dataset: m.attention ? { attention: "true" } : {}, id: `sv-${m.key}` },
+    return el("tr", { role: "row", className: "sv-row", tabIndex: -1,
+      dataset: { fk: `sv-${m.key}`, ...(m.attention ? { attention: "true" } : {}) }, id: `sv-${m.key}` },
       el("th", { role: "rowheader", scope: "row" },
         el("b", { className: "sv-name", textContent: svcName(m.service) }),
         ...(m.backend ? [el("small", { className: "sv-backend", textContent: m.backend })] : []),
@@ -270,7 +271,11 @@ function renderServices() {
   const locked = cookies?.unwritable?.length ? [el("div", { className: "sv-locked" },
     el("p", { className: "status-err", textContent: "Unshackle can't write these files. Give them back to the container's user, for example with chown." }),
     el("ul", { className: "ck-locked" }, ...cookies.unwritable.map((path) => el("li", {}, el("code", { textContent: path })))))] : [];
-  box.replaceChildren(...locked, ...(models.length ? [table] : [el("p", { className: "muted", textContent: "No service is known yet. Unshackle lists them once it answers." })]));
+  const active = document.activeElement;
+  const focusedRow = active?.matches?.(".sv-row") && box.contains(active) ? active : null;
+  const rowPosition = focusedRow?.getBoundingClientRect();
+  const draw = () => box.replaceChildren(...locked, ...(models.length ? [table] : [el("p", { className: "muted", textContent: "No service is known yet. Unshackle lists them once it answers." })]));
+  if (focusedRow) keepFocus(box, draw); else draw();
   if (activePromptReused) activePrompt.focus();
 
   // The top of the page: the cookies folder, and what the statuses add up to
@@ -284,6 +289,10 @@ function renderServices() {
   $("#sv-note").textContent = !cookies ? "" : cookies.folder ? ""
     : S.config.settings.unshackle_mode === "remote" ? "To manage them here too, mount its Cookies folder and set its path in Settings › Connections › Unshackle, Folders."
     : cookies.error || "";
+  // A refresh can reorder the focused row without changing the user's place in it.
+  if (rowPosition && rowPosition.bottom > 0 && rowPosition.top < innerHeight && document.activeElement.id === focusedRow.id) {
+    scrollBy({ top: document.activeElement.getBoundingClientRect().top - rowPosition.top });
+  }
   revealService();
 }
 let servicesCookiesAsked = null;  // the cookie files read once for the badge, before Services is opened
@@ -307,7 +316,9 @@ function revealService() {
     || document.querySelector(`[id^="sv-${CSS.escape(service)}@"]`));  // only on another server
   if (!row) return;
   servicesReveal = "";
-  row.scrollIntoView({ block: "center", behavior: SCROLL });
+  if (!showingSettings("services")) return;  // the user left while the row was loading
+  clearSettingsAnchor();
+  row.scrollIntoView({ block: "center" });
   row.focus({ preventScroll: true });
 }
 async function loadServices() {
