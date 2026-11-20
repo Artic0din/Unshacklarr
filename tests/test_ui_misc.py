@@ -524,20 +524,21 @@ def test_the_page_draws_no_emoji():
 
 
 def test_an_inbox_job_shows_six_episode_chips_and_counts_the_rest():
-    short, long = node(r"""
+    short, long, full = node(r"""
 const ctx = sandbox({ LOCALE: "en", ago: () => "Now" });
 vm.runInContext(read(process.argv[1]).split("const clearable")[0], ctx);
 const at = new Date().toISOString();
-const chips = (count) => {
+const chips = (count, cap) => {
   const eps = Array.from({ length: count }, (_, i) => `S01E${String(count - i).padStart(2, "0")}`);
-  const row = ctx.inboxRow({ name: "Show", level: "error", eps, items: [{ at }] }, 0);
+  const row = ctx.inboxRow({ name: "Show", level: "error", eps, items: [{ at }] }, 0, cap);
   return row.kids[1].kids[0].kids[1].kids.map((chip) => chip.textContent);
 };
-console.log(JSON.stringify([chips(6), chips(12)]));
+console.log(JSON.stringify([chips(6), chips(12), chips(12, Infinity).length]));
 """, str(JS / "inbox.js"))
     first_six = [f"S01E0{i}" for i in range(1, 7)]
     assert short == first_six
     assert long == [*first_six, "+6"]
+    assert full == 12  # the full Inbox names every episode: touch and keyboard users cannot read a tooltip
 
 
 def test_options_sharing_a_title_have_one_badge_and_keep_each_unread_id():

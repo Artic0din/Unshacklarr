@@ -64,7 +64,7 @@ def test_inbox_filters_wrap_whole_pills_instead_of_clipping_the_last_one():
     rule = re.search(r"\.inbox-filters \{([^}]*)\}", CSS)[1]
     assert "flex-wrap: wrap" in rule and "overflow-x" not in rule
     has(CSS, ".inbox-filters button { display: inline-flex; flex: none;")
-    has(CSS, "white-space: nowrap; transition: background .15s, color .15s, border-color .15s;")
+    assert "white-space: nowrap" in re.search(r"\.inbox-filters button \{([^}]*)\}", CSS)[1]
 
 
 def test_main_nav_pills_keep_the_current_page_distinct_and_touch_targets_at_44px():

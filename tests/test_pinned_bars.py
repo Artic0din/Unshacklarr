@@ -44,7 +44,7 @@ def test_phone_page_keeps_focus_clear_of_the_measured_header_and_bars():
 def test_header_blurs_a_single_background_layer_without_trapping_the_phone_nav():
     layers = re.findall(r"(?m)^\s*header::before \{([^}]*)\}", CSS)
     assert sum("blur(" in layer for layer in layers) == 1
-    assert sum("radial-gradient(" in layer for layer in layers) == 1
+    assert not any("gradient(" in layer for layer in layers)  # no glow of its own: it would stay pinned while the page's scrolls away
     assert all("backdrop-filter" not in rule for rule in re.findall(r"(?m)^\s*header \{([^}]*)\}", CSS))
     assert "z-index: -1" in layers[0] and "pointer-events: none" in layers[0]
     assert re.search(r"@media \(prefers-reduced-transparency: reduce\), \(prefers-contrast: more\) \{"

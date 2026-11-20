@@ -47,12 +47,12 @@ main:focus { outline: none; }  /* the skip link's target, not a control */
 header { position: sticky; top: var(--header-top, 0px); z-index: 8; display: flex; align-items: center;
   gap: var(--sp-6); padding: var(--sp-3) var(--sp-6); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 /* Blurring the header itself would trap the phone's fixed nav inside it. */
-header::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-color: var(--bg);
-  background-image: radial-gradient(ellipse 58rem 19rem at 15% 0, rgb(132 145 47 / .14), transparent); }  /* the page glow, so the header and the page under it read as one */
+header::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-color: var(--bg); }
+/* no glow of its own: a copy pinned here would not scroll away with the page's; the blur below shows the page's through it */
 @media (min-width: 701px) {
   html { scroll-padding-block-start: calc(var(--header-bottom) + var(--sp-2)); }
   @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
-    header::before { background-color: color-mix(in srgb, var(--bg) 88%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+    header::before { background-color: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
   }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
@@ -114,8 +114,8 @@ nav .short { display: none; }
 #inbox-dialog.menu { position: fixed; inset: calc(var(--header-bottom) + var(--sp-2)) 16px auto auto; margin: 0; width: min(420px, calc(100vw - 32px)); padding: 16px 16px 8px;
   box-shadow: var(--sh-lg); z-index: 50; animation: inbox-drop .16s ease-out; }
 #inbox-dialog.menu #inbox-list { max-height: min(62vh, 560px); }
-#inbox-dialog.menu[open] { display: flex; flex-direction: column; max-height: calc(100dvh - var(--header-bottom) - var(--sp-2) - 8px); }
-#inbox-dialog.menu #inbox-list { flex: 1 1 auto; min-height: 0; }  /* wrapped filters take their room from the list, never past the window */
+#inbox-dialog.menu[open] { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; max-height: calc(100dvh - var(--header-bottom) - var(--sp-2) - 8px); }
+#inbox-dialog.menu #inbox-list { flex: 1 1 auto; min-height: min(9rem, 30dvh); }  /* wrapped filters take their room from the list, which keeps a row or two in sight */
 #inbox-dialog.menu .inbox-head h2 { font-size: var(--fs-headline); }
 #inbox-dialog:not(.menu) #inbox-full { display: none; }
 @keyframes inbox-drop { from { opacity: 0; transform: translateY(-6px); } }
@@ -1620,7 +1620,7 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
 
   .modal { margin: auto auto 0; width: 100%; max-width: none; border-radius: var(--r-lg) var(--r-lg) 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
   #inbox-dialog.menu { inset-inline: 8px; width: auto; border-radius: var(--r-lg); padding-bottom: 8px; }
-  #inbox-dialog.menu[open] { max-height: calc(100dvh - var(--header-bottom) - 72px - env(safe-area-inset-bottom)); }  /* above the tab bar */
+  #inbox-dialog.menu[open] { max-height: calc(100dvh - var(--header-bottom) - var(--sp-2) - var(--bars-h, 72px)); }  /* above the tab bar, as tall as it is measured */
   .modal-actions { flex-direction: column-reverse; }
   .modal-actions .btn { width: 100%; }
   .savebar { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); justify-content: space-between; flex-wrap: wrap; }

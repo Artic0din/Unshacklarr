@@ -44,7 +44,7 @@ function inboxDay(iso) {
   const days = Math.round((new Date(today.toDateString()) - new Date(d.toDateString())) / 86400000);
   return days === 0 ? "Today" : days === 1 ? "Yesterday" : d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" });
 }
-function inboxRow(g, n) {
+function inboxRow(g, n, cap = INBOX_EP_LIMIT) {  // the menu caps a job's episodes; the full list names them all
   const i = g.items[0], mark = el("span", { className: "lv", ariaHidden: "true" });
   mark.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${INBOX_ICONS[g.level] || INBOX_ICONS.info}</svg>`;
   const art = el("span", { className: "inbox-art" }, ...(g.series?.poster ? [el("img", { src: g.series.poster, alt: "", loading: "lazy", onerror: (e) => e.target.remove() })] : []), mark);
@@ -53,8 +53,8 @@ function inboxRow(g, n) {
   const kind = g.kind ? [el("span", { className: "inbox-kind", textContent: g.batch && g.items.length > 1 ? `${g.kind} · job` : g.kind })] : [];
   const message = i.message ? linkified(g.items.length > 1 ? i.message.replace(/^Aired \S+, /, "") : i.message) : [];
   const episodes = g.eps.slice().sort();
-  const chips = episodes.slice(0, INBOX_EP_LIMIT).map((e) => el("span", { textContent: e }));
-  const extra = episodes.slice(INBOX_EP_LIMIT);
+  const chips = episodes.slice(0, cap).map((e) => el("span", { textContent: e }));
+  const extra = episodes.slice(cap);
   if (extra.length) chips.push(el("span", { textContent: `+${extra.length}`, title: extra.join(", ") }));
   const body = el("span", { className: "inbox-main" },
     el("span", { className: "inbox-l1" }, el("b", { textContent: g.name }),
@@ -87,7 +87,7 @@ function renderInbox(animate = false) {
     .filter(([, , n]) => n).map(([lv, label, n]) => el("button", { type: "button", dataset: { fk: `inbox-filter:${lv}` }, ariaPressed: String(inboxFilter === lv), style: `--lv: var(--${{ success: "ok", warning: "warn", error: "err" }[lv] || "muted"})`,
       onclick: () => { inboxFilter = lv; renderInbox(true); } }, ...(lv === "all" ? [] : [el("i")]), label, el("b", { textContent: String(n) })))));
   const shown = rest.filter((i) => inboxFilter === "all" || i.level === inboxFilter);
-  const days = [];
+  const days = [], cap = $("#inbox-dialog").classList.contains("menu") ? INBOX_EP_LIMIT : Infinity;
   for (const g of inboxGroups(shown)) {
     const label = inboxDay(g.items[0].at);
     if (days.at(-1)?.label !== label) days.push({ label, groups: [] });
@@ -99,7 +99,7 @@ function renderInbox(animate = false) {
   keepFocus($("#inbox-list"), () => $("#inbox-list").replaceChildren(
     ...(waiting.length ? [el("div", { className: "inbox-sub", textContent: "Waiting for you" }),
       ...waiting.map((i) => (i.action.kind === "input" ? promptBox(i.action) : audioBox(i.action)))] : []),
-    ...days.flatMap((d) => [el("div", { className: "inbox-sub", textContent: d.label }), ...d.groups.map((g) => inboxRow(g, n++))]),
+    ...days.flatMap((d) => [el("div", { className: "inbox-sub", textContent: d.label }), ...d.groups.map((g) => inboxRow(g, n++, cap))]),
     ...(!items.length ? [empty] : [])));
   $("#inbox-list").classList.toggle("enter", animate);
   $("#inbox-clear").hidden = !rest.length;
