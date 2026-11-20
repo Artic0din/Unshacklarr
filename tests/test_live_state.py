@@ -27,15 +27,17 @@ const grab = (src, name) => { const at = src.indexOf(`function ${name}(`); let i
 def test_a_job_bar_runs_only_while_an_episode_downloads():
     shown = node(GRAB + r"""
 const src = fs.readFileSync(process.argv[1], "utf8");
-const ctx = vm.createContext({ FINISHING: new Set(["muxing"]), isLive: (c) => c.live !== undefined });
-vm.runInContext(grab(src, "cardKind") + grab(src, "jobState"), ctx);
-const queued = { cards: [{ live: {}, step: "queued" }, { live: {}, step: "queued" }] };
-const downloading = { cards: [{ live: { progress: 40 }, step: "video" }, { live: {}, step: "queued" }] };
-const finishing = { cards: [{ live: {}, step: "muxing" }] };
+const ctx = vm.createContext({});
+const line = (re) => src.match(re)[0];  // the page's own isLive and FINISHING, not stand-ins
+vm.runInContext(line(/^const isLive = .*$/m) + "\n" + line(/^const FINISHING = .*$/m) + "\n" + grab(src, "cardKind") + grab(src, "jobState"), ctx);
+const run = (step, progress) => ({ outcome: "running", step, live: { progress } });
+const queued = { cards: [run("queued"), run("queued")] };
+const downloading = { cards: [run("video", 40), run("queued")] };
+const finishing = { cards: [run("renaming"), run("importing")] };
 const done = { cards: [{ outcome: "downloaded" }] };
-console.log(JSON.stringify([queued, downloading, finishing, done].map((j) => ctx.jobState(j)).map((s) => [s.live, s.running])));
+console.log(JSON.stringify([queued, downloading, finishing, done].map((j) => ctx.jobState(j)).map((s) => [s.live, s.running, s.n.finishing])));
 """, str(JS / "activity.js"))
-    assert shown == [[True, False], [True, True], [True, True], [False, False]]
+    assert shown == [[True, False, 0], [True, True, 0], [True, True, 2], [False, False, 0]]
 
 
 def test_the_dock_bar_is_lime_while_running_green_when_done_and_quiet_otherwise():
