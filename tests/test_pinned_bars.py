@@ -55,11 +55,15 @@ def test_a_pane_without_a_job_clears_the_previous_job_dock(pane: str) -> None:
     out = subprocess.run(["node", "-e", r"""
 const vm = require("vm"), [code, pane] = process.argv.slice(1);
 const detailClasses = new Set(["docked", "docked-acts"]);
-const dock = { hidden: false, classList: { contains: () => false } };
-const raw = { hidden: false, open: false };
+// the previous job's output was open in the bar, and its actions were in the foot
+const dockClasses = new Set(["open"]);
+const dock = { hidden: false, classList: { contains: (c) => dockClasses.has(c), remove: (c) => dockClasses.delete(c) },
+  querySelector: () => ({ setAttribute() {} }) };
+const raw = { hidden: false, open: true, parent: "#dock" };
+const foot = { children: ["Delete the job"], replaceChildren(...kids) { this.children = kids; }, before(n) { n.parent = "#cd-foot"; } };
 let output = "";
 const nodes = {
-  "#dock": dock, "#cd-raw": raw, "#con": { classList: new Set() },
+  "#dock": dock, "#cd-raw": raw, "#cd-foot": foot, "#con": { classList: new Set() },
   "#cd-main": { replaceChildren() {} },
   "#con-detail": { classList: { toggle: (name, on) => on ? detailClasses.add(name) : detailClasses.delete(name) } },
 };
@@ -70,7 +74,8 @@ const ctx = vm.createContext({
 });
 (async () => {
   await vm.runInContext(code + (pane === "serve log" ? "\nshowServeLog()" : "\nnothingPicked()"), ctx);
-  console.log(JSON.stringify({ dockHidden: dock.hidden, detailClasses: [...detailClasses], rawHidden: raw.hidden, rawOpen: raw.open, output }));
+  console.log(JSON.stringify({ dockHidden: dock.hidden, dockOpen: dockClasses.has("open"), detailClasses: [...detailClasses],
+    rawHidden: raw.hidden, rawOpen: raw.open, rawIn: raw.parent, foot: foot.children, output }));
 })().catch((error) => { console.error(error); process.exitCode = 1; });
 """, code, pane], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
@@ -80,6 +85,8 @@ const ctx = vm.createContext({
     assert state["rawHidden"] == (pane == "empty Activity")
     assert state["rawOpen"] == (pane == "serve log")
     assert state["output"] == ("serve ready" if pane == "serve log" else "")
+    assert not state["dockOpen"] and state["rawIn"] == "#cd-foot"  # the output left the hidden bar for its own place
+    assert state["foot"] == [], "the previous job's actions stay, still acting on it"
 
 
 def measured(bars):
