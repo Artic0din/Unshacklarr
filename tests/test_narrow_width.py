@@ -65,6 +65,11 @@ def test_phone_series_wall_columns_are_equal_even_with_long_labels():
     has(media("max-width: 700px"), ".wall { grid-template-columns: repeat(3, minmax(0, 1fr));")
 
 
+def test_phone_episode_titles_can_wrap_past_two_lines_without_clipping():
+    title = re.search(r"\.ep \.t \.tt \{([^}]*)\}", media("max-width: 700px"))[1]
+    assert "white-space: normal" in title and "line-clamp" not in title
+
+
 def test_the_setup_error_wraps_inside_the_card_when_it_sits_under_its_field():
     has(media("max-width: 1180px"), "transform: none; margin-top: 8px; width: auto; max-width: 100%; }")
 
