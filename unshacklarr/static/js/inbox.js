@@ -78,9 +78,9 @@ function renderInbox(animate = false) {
   $("#inbox-summary").textContent = !items.length ? "" : [fresh && `${fresh} new`, `${rest.length} in all`].filter(Boolean).join(" · ");
   if (inboxFilter !== "all" && !count(inboxFilter)) inboxFilter = "all";
   $("#inbox-filters").hidden = rest.length < 4;
-  $("#inbox-filters").replaceChildren(...[["all", "All", rest.length], ...Object.entries(INBOX_LEVELS).map(([lv, label]) => [lv, label, count(lv)])]
-    .filter(([, , n]) => n).map(([lv, label, n]) => el("button", { type: "button", ariaPressed: String(inboxFilter === lv), style: `--lv: var(--${{ success: "ok", warning: "warn", error: "err" }[lv] || "muted"})`,
-      onclick: () => { inboxFilter = lv; renderInbox(true); } }, ...(lv === "all" ? [] : [el("i")]), label, el("b", { textContent: String(n) }))));
+  keepFocus($("#inbox-filters"), () => $("#inbox-filters").replaceChildren(...[["all", "All", rest.length], ...Object.entries(INBOX_LEVELS).map(([lv, label]) => [lv, label, count(lv)])]
+    .filter(([, , n]) => n).map(([lv, label, n]) => el("button", { type: "button", dataset: { fk: `inbox-filter:${lv}` }, ariaPressed: String(inboxFilter === lv), style: `--lv: var(--${{ success: "ok", warning: "warn", error: "err" }[lv] || "muted"})`,
+      onclick: () => { inboxFilter = lv; renderInbox(true); } }, ...(lv === "all" ? [] : [el("i")]), label, el("b", { textContent: String(n) })))));
   const shown = rest.filter((i) => inboxFilter === "all" || i.level === inboxFilter);
   const days = [];
   for (const g of inboxGroups(shown)) {

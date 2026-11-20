@@ -258,6 +258,83 @@ if (scenario === "open-series") {  // "Open the series" in the popover: the card
   button.onclick();
   out.openedFrom = opened;
 }
+
+if (scenario === "quality") {
+  const qlState = page(), qlDef = page(), qlList = page();
+  const stB = make("b"), stSmall = make("small");
+  qlState.append(stB, stSmall);
+  qlState.querySelector = (s) => s === "b" ? stB : stSmall;
+  const lad = {
+    name: "Best",
+    steps: [
+      { codec: "HEVC", range: "HDR", min: 2160, max: 2160 },
+      { codec: "AVC", range: "SDR", min: 1080, max: 1080 },
+      { codec: "AVC", range: "SDR", min: 720, max: 720 },
+    ],
+  };
+  let fieldIds = 0;
+  Object.assign(ctx, {
+    S: { config: { settings: { quality_ladder: "" }, service_defaults: {}, series: {}, quality_ladders: [lad] } },
+    CODECS: [["", "Any"], ["AVC", "H.264"], ["HEVC", "H.265"]],
+    RANGES: [["", "Any"], ["SDR", "SDR"], ["HDR", "HDR"]],
+    fieldIds,
+    ladders: () => ctx.S.config.quality_ladders,
+    ladderUse: () => [],
+    dirty: () => {},
+    renderServiceDefaults: () => {},
+    markInvalid: () => {},
+    confirmClick: () => true,
+    renameRefs: () => {},
+    $: (sel) => sel === "#ql-state" ? qlState : sel === "#ql-default" ? qlDef : sel === "#ql-list" ? qlList : null,
+  });
+  run(["qlFocus", "renderQuality", "ladderCard", "stepRow"].map((n) => fn(quality, n)).join("\n"));
+  if (quality.includes("const qlIds =")) {
+    run(line(quality, "qlIds") + "\n" + line(quality, "qlSeq") + "\n" + line(quality, "qlId"));
+  }
+  ctx.renderQuality();
+
+  // 1. Default ladder chip keeps focus on click
+  const bestChip = find(qlDef, (n) => n.tag === "button" && n.textContent === "Best");
+  bestChip.focus();
+  bestChip.onclick();
+  out.defChip = [doc.activeElement?.textContent === "Best", doc.activeElement !== root];
+
+  // 2. Changing step 2's codec select keeps focus on that select
+  const steps = () => [...qlList.walk()].filter((n) => n.className === "ql-step");
+  const s2Codec = find(steps()[1], (n) => n.tag === "select" && n.ariaLabel === "Codec");
+  s2Codec.focus();
+  s2Codec.onchange({ target: { value: "HEVC" } });
+  out.codec = [doc.activeElement?.tag === "select", doc.activeElement?.ariaLabel === "Codec", doc.activeElement !== root];
+
+  // 3. Moving step 3 (index 2) up to index 1 follows the moved step's Move up button
+  const s3Up = find(steps()[2], (n) => n.tag === "button" && n.ariaLabel === "Move up");
+  s3Up.focus();
+  s3Up.onclick();
+  out.moveMid = [doc.activeElement?.ariaLabel === "Move up", steps()[1].contains(doc.activeElement)];
+
+  // 4. Moving that step (now index 1) up to index 0 disables Move up -> focus lands on Move down inside index 0
+  const sTopUp = doc.activeElement;
+  sTopUp.onclick();
+  out.moveTop = [doc.activeElement !== root, steps()[0].contains(doc.activeElement), doc.activeElement?.disabled === false];
+
+  // 5. Removing step 0 keeps focus inside the ladder instead of dropping to body
+  const s0Del = find(steps()[0], (n) => n.tag === "button" && n.ariaLabel === "Remove this step");
+  s0Del.focus();
+  s0Del.onclick();
+  out.remove = [doc.activeElement !== root, qlList.contains(doc.activeElement), doc.activeElement?.disabled !== true];
+}
+
+if (scenario === "notify") {
+  const seg = page();
+  Object.assign(ctx, { $: (sel) => sel === "#d-notify-seg" ? seg : null, dirty: () => {} });
+  run(fn(quality, "notifyChips"));
+  const conf = {};
+  ctx.notifyChips(conf);
+  const failBtn = find(seg, (n) => n.tag === "button" && n.textContent === "Failures only");
+  failBtn.focus();
+  failBtn.onclick();
+  out.notify = [doc.activeElement?.textContent === "Failures only", doc.activeElement?.ariaPressed === "true"];
+}
 console.log(JSON.stringify(out));
 """
 
@@ -324,3 +401,22 @@ def test_a_picked_month_day_keeps_the_focus_and_says_it_is_pressed():
 
 def test_the_series_opened_from_a_popover_returns_to_its_card():
     assert run_scenario("open-series") == {"openedFrom": ["card"]}
+
+
+def test_quality_editor_and_notify_chips_keep_focus_on_redraw():
+    assert run_scenario("quality") == {
+        "defChip": [True, True],
+        "codec": [True, True, True],
+        "moveMid": [True, True],
+        "moveTop": [True, True, True],
+        "remove": [True, True, True],
+    }
+    assert run_scenario("notify") == {"notify": [True, True]}
+
+
+def test_inbox_filters_and_cdm_chip_focus_ring():
+    inbox_js = (JS / "inbox.js").read_text()
+    assert 'keepFocus($("#inbox-filters")' in inbox_js
+    css = (JS.parent / "app.css").read_text()
+    cdm_rule = next(line for line in css.splitlines() if line.startswith(".cdm-chip:focus-visible"))
+    assert "outline: none" not in cdm_rule

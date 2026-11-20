@@ -136,6 +136,9 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Keyboard focus stays in place across the Quality editor, series notification chips, and Inbox filters, and CDM
+  device chips show the standard focus ring.** Editing a step, moving a step or ladder, removing a step, or picking a
+  default ladder chip no longer drops focus to the page. (#332)
 - **An episode under its own number is no longer hidden for a small difference in its title.** Kath & Kim on Netflix
   lists S01E08 "The Wedding" and S03E01 "Cactus"; Sonarr calls them "Wedding" and "Cactus Hour", so both showed as
   not on the service and were not downloaded. Under the same number, a title that is the other's first or last

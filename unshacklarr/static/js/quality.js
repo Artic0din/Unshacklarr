@@ -94,6 +94,18 @@ function defaultChips(box, choices, own, inherited, pick) {
     el("span", { textContent: label }), ...(v === inherited ? [el("small", { className: "chip-default", textContent: "default" })] : [])))));
 }
 
+const qlIds = new WeakMap();
+let qlSeq = 0;
+const qlId = (o) => (qlIds.has(o) ? qlIds.get(o) : (qlIds.set(o, ++qlSeq), qlSeq));
+function qlFocus(...keys) {
+  if (document.activeElement && document.activeElement !== document.body) return;
+  const controls = [...$("#ql-list").querySelectorAll(CONTROLS)];
+  for (const k of keys) {
+    const hit = controls.find((n) => n.dataset.fk === k && !n.disabled);
+    if (hit) { hit.focus({ preventScroll: true }); return; }
+  }
+}
+
 function renderQuality() {
   if (!S.config?.settings) return;
   const set = S.config.settings, list = ladders(), def = set.quality_ladder || "";
@@ -103,17 +115,17 @@ function renderQuality() {
   const picked = Object.values(S.config.service_defaults || {}).filter((l) => l.ladder).length + Object.values(S.config.series || {}).filter((c) => c.service && c.ladder).length;
   box.querySelector("small").textContent = [list.length === 1 ? "1 ladder" : `${list.length} ladders`,
     picked === 1 ? "1 service or series picks its own" : picked ? `${picked} services or series pick their own` : ""].filter(Boolean).join(" · ");
-  $("#ql-default").replaceChildren(...[["", "Off"], ...list.map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
-    type: "button", textContent: label, ariaPressed: String((def === "off" ? "" : def) === v),
-    onclick: () => { set.quality_ladder = v; dirty(); renderQuality(); } })));
-  $("#ql-list").replaceChildren(...(list.length ? list.map(ladderCard)
-    : [el("section", { className: "sx-card" }, el("p", { className: "dx-empty", textContent: "No ladder yet. Create one with New ladder, or bring back the built-in ones." }))]));
+  keepFocus($("#ql-default"), () => $("#ql-default").replaceChildren(...[["", "Off"], ...list.map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
+    type: "button", textContent: label, dataset: { fk: `ql-def:${v}` }, ariaPressed: String((def === "off" ? "" : def) === v),
+    onclick: () => { set.quality_ladder = v; dirty(); renderQuality(); } }))));
+  keepFocus($("#ql-list"), () => $("#ql-list").replaceChildren(...(list.length ? list.map(ladderCard)
+    : [el("section", { className: "sx-card" }, el("p", { className: "dx-empty", textContent: "No ladder yet. Create one with New ladder, or bring back the built-in ones." }))])));
 }
 
 function ladderCard(lad) {
-  const list = ladders(), use = ladderUse(lad.name);
+  const list = ladders(), use = ladderUse(lad.name), lid = qlId(lad);
   const say = el("small", { className: "ql-say", textContent: use.length ? `Used by ${use.join(", ")}` : "Not used yet: pick it above, for a service or a series" });
-  const name = el("input", { type: "text", className: "ql-name", value: lad.name, ariaLabel: "Ladder name", spellcheck: false, maxLength: 40,
+  const name = el("input", { type: "text", className: "ql-name", value: lad.name, ariaLabel: "Ladder name", spellcheck: false, maxLength: 40, dataset: { fk: `ql-lad:${lid}:name` },
     oninput: (e) => {
       const v = e.target.value.trim(), why = !v ? "Give it a name" : v === "off" ? "Off is reserved: it means no ladder"
         : list.some((o) => o !== lad && o.name === v) ? "Another ladder has this name" : "";
@@ -126,26 +138,31 @@ function ladderCard(lad) {
       dirty();
       $("#ql-default").querySelectorAll("button").forEach((b, i) => { if (i && list[i - 1] === lad) b.textContent = v; });
     } });
-  const del = el("button", { type: "button", className: "btn small danger", textContent: "Delete", onclick: (e) => {
+  const del = el("button", { type: "button", className: "btn small danger", textContent: "Delete", dataset: { fk: `ql-lad:${lid}:del` }, onclick: (e) => {
     if (!confirmClick(e.target, use.length ? `Delete ${lad.name}? It is in use` : `Delete ${lad.name}?`)) return;
-    list.splice(list.indexOf(lad), 1);
+    const idx = list.indexOf(lad);
+    list.splice(idx, 1);
     renameRefs("ladder", lad.name, "");
     dirty(); renderQuality(); renderServiceDefaults();
+    const stay = list[Math.min(idx, list.length - 1)];
+    if (stay) qlFocus(`ql-lad:${qlId(stay)}:del`, `ql-lad:${qlId(stay)}:name`);
   } });
-  const copy = el("button", { type: "button", className: "btn small", textContent: "Duplicate", onclick: () => {
+  const copy = el("button", { type: "button", className: "btn small", textContent: "Duplicate", dataset: { fk: `ql-lad:${lid}:dup` }, onclick: () => {
     let n = 2;
     while (list.some((o) => o.name === `${lad.name} (${n})`)) n++;
     list.splice(list.indexOf(lad) + 1, 0, { name: `${lad.name} (${n})`, steps: structuredClone(lad.steps) });
     dirty(); renderQuality();
   } });
   const at = list.indexOf(lad);
-  const shift = (to, label, path) => el("button", { type: "button", className: "ql-icon", ariaLabel: label, disabled: to < 0 || to >= list.length,
+  const shift = (to, label, path, dir) => el("button", { type: "button", className: "ql-icon", ariaLabel: label, disabled: to < 0 || to >= list.length,
+    dataset: { fk: `ql-lad:${lid}:${dir}` },
     innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`, onclick: () => {
       list.splice(to, 0, ...list.splice(at, 1)); dirty(); renderQuality(); renderServiceDefaults();
+      qlFocus(`ql-lad:${lid}:${dir === "up" ? "down" : "up"}`, `ql-lad:${lid}:name`);
     } });
   // its language order: which of the episode's tracks to take, unless a series or its service asks for languages
   const langs = (kind, label, help) => {
-    const input = el("input", { type: "text", spellcheck: false, value: (lad[kind] || []).join(", "), placeholder: "Example: en-AU, en", oninput: (e) => {
+    const input = el("input", { type: "text", spellcheck: false, value: (lad[kind] || []).join(", "), placeholder: "Example: en-AU, en", dataset: { fk: `ql-lad:${lid}:${kind}` }, oninput: (e) => {
       const codes = e.target.value.split(/[\s,]+/).filter(Boolean);
       const bad = codes.find((c) => !/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i.test(c) || ["orig", "all", "best"].includes(c.toLowerCase()));
       markInvalid(e.target, e.target.nextElementSibling, !!bad);
@@ -162,10 +179,10 @@ function ladderCard(lad) {
   return el("section", { className: "sx-card ql-card" },
     el("div", { className: "ql-head" }, el("span", { className: "sx-ico", ariaHidden: "true", innerHTML: '<svg viewBox="0 0 24 24"><path d="M4 20v-5M10 20V10M16 20V6M22 20V3"/></svg>' }),
       el("div", { className: "ql-title" }, name, say),
-      el("div", { className: "ql-acts" }, shift(at - 1, "Move this ladder up", "m6 15 6-6 6 6"), shift(at + 1, "Move this ladder down", "m6 9 6 6 6-6"), copy, del)),
+      el("div", { className: "ql-acts" }, shift(at - 1, "Move this ladder up", "m6 15 6-6 6 6", "up"), shift(at + 1, "Move this ladder down", "m6 9 6 6 6-6", "down"), copy, del)),
     steps,
     el("div", { className: "ql-foot" },
-      el("button", { type: "button", className: "btn small", textContent: "Add a step", onclick: () => {
+      el("button", { type: "button", className: "btn small", textContent: "Add a step", dataset: { fk: `ql-lad:${lid}:add` }, onclick: () => {
         lad.steps.push({ codec: "", range: "SDR", min: 720, max: 720 }); dirty(); renderQuality();
       } }),
       el("small", { className: "muted", textContent: "Tried from the top: Unshacklarr downloads the first step the episode has a track for, and the best track within it." })),
@@ -173,7 +190,7 @@ function ladderCard(lad) {
       langs("audio", "Audio, in this order", "The first language in this list that the episode has is downloaded (en also matches en-GB). Not used when empty, or when the series or its service sets --a-lang."),
       langs("subtitles", "Subtitles, in this order", "The first language in this list that the episode has full subtitles in is downloaded. Not used when empty, or when --s-lang is set."),
       el("div", { className: "field ql-blind" },
-        el("label", { className: "check" }, el("input", { type: "checkbox", checked: !!lad.blind, onchange: (e) => {
+        el("label", { className: "check" }, el("input", { type: "checkbox", checked: !!lad.blind, dataset: { fk: `ql-lad:${lid}:blind` }, onchange: (e) => {
           if (e.target.checked) lad.blind = true; else delete lad.blind;
           dirty();
         } }), "Try unlisted codecs"),
@@ -181,15 +198,16 @@ function ladderCard(lad) {
 }
 
 function stepRow(lad, st, i) {
-  const n = lad.steps.length;
+  const n = lad.steps.length, sid = qlId(st);
   const sel = (choices, key) => {
-    const s = el("select", { ariaLabel: key === "codec" ? "Codec" : "Range", onchange: (e) => { st[key] = e.target.value; dirty(); renderQuality(); } },
+    const s = el("select", { ariaLabel: key === "codec" ? "Codec" : "Range", dataset: { fk: `ql-step:${sid}:${key}` }, onchange: (e) => { st[key] = e.target.value; dirty(); renderQuality(); } },
       ...choices.map(([v, label]) => el("option", { value: v, textContent: label })));
     s.value = st[key] || "";
     return s;
   };
   const why = el("small", { className: "ql-why" });
   const height = (key, label) => el("input", { type: "number", min: 0, max: 10000, step: 1, inputMode: "numeric", ariaLabel: label,
+    dataset: { fk: `ql-step:${sid}:${key}` },
     placeholder: key === "max" ? "any" : "0", value: st[key] || "", oninput: (e) => {
       st[key] = Math.max(0, parseInt(e.target.value, 10) || 0);
       const bad = st.max && st.min > st.max;
@@ -197,20 +215,28 @@ function stepRow(lad, st, i) {
       why.textContent = bad ? "The lowest height is above the highest" : "";
       dirty();
     } });
-  const move = (to, label, path) => el("button", { type: "button", className: "ql-icon", ariaLabel: label, disabled: to < 0 || to >= n,
+  const move = (to, label, path, dir) => el("button", { type: "button", className: "ql-icon", ariaLabel: label, disabled: to < 0 || to >= n,
+    dataset: { fk: `ql-step:${sid}:${dir}` },
     innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`, onclick: () => {
       lad.steps.splice(to, 0, ...lad.steps.splice(i, 1)); dirty(); renderQuality();
+      qlFocus(`ql-step:${sid}:${dir === "up" ? "down" : "up"}`, `ql-step:${sid}:codec`);
     } });
   const row = el("li", { className: "ql-step" },
     el("span", { className: "ql-n", textContent: String(i + 1) }),
     sel(CODECS, "codec"), sel(RANGES, "range"),
     el("span", { className: "ql-h" }, height("min", "Lowest height"), el("span", { textContent: "to" }), height("max", "Highest height"), el("span", { textContent: "p" }),
       el("input", { type: "number", min: 0, max: 1000000, step: 100, inputMode: "numeric", ariaLabel: "Highest bitrate, kbps", placeholder: "any",
+        dataset: { fk: `ql-step:${sid}:kbps` },
         value: st.max_kbps || "", oninput: (e) => { const v = Math.max(0, parseInt(e.target.value, 10) || 0); if (v) st.max_kbps = v; else delete st.max_kbps; dirty(); } }),
       el("span", { textContent: "kbps" }),
-      el("span", { className: "ql-btns" }, move(i - 1, "Move up", "m6 15 6-6 6 6"), move(i + 1, "Move down", "m6 9 6 6 6-6"),
+      el("span", { className: "ql-btns" }, move(i - 1, "Move up", "m6 15 6-6 6 6", "up"), move(i + 1, "Move down", "m6 9 6 6 6-6", "down"),
       el("button", { type: "button", className: "ql-icon danger", ariaLabel: "Remove this step", disabled: n === 1,
-        innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>', onclick: () => { lad.steps.splice(i, 1); dirty(); renderQuality(); } }))),
+        dataset: { fk: `ql-step:${sid}:del` },
+        innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>', onclick: () => {
+          lad.steps.splice(i, 1); dirty(); renderQuality();
+          const stay = lad.steps[Math.min(i, lad.steps.length - 1)];
+          if (stay) qlFocus(`ql-step:${qlId(stay)}:del`, `ql-step:${qlId(stay)}:codec`);
+        } }))),
     why);
   return row;
 }
@@ -513,12 +539,12 @@ $("#ug-other").onchange = (e) => { S.config.settings.upgrade_other_groups = e.ta
 /* What is sent for this series: every notification, its failures only, or nothing (the bell keeps all). */
 function notifyChips(conf) {
   const opts = [["", "All"], ["failures", "Failures only"], ["none", "None"]];
-  $("#d-notify-seg").replaceChildren(...opts.map(([v, label]) => el("button", { type: "button", textContent: label,
-    ariaPressed: String((conf.notify || "") === v), onclick: () => {
+  keepFocus($("#d-notify-seg"), () => $("#d-notify-seg").replaceChildren(...opts.map(([v, label]) => el("button", { type: "button", textContent: label,
+    dataset: { fk: `notify:${v}` }, ariaPressed: String((conf.notify || "") === v), onclick: () => {
       if (v) conf.notify = v; else delete conf.notify;
       notifyChips(conf);
       dirty();
-    } })));
+    } }))));
 }
 /* Episode titles: hidden or shown for this series, the settings' No spoilers marked default. */
 function spoilerChips(conf) {
