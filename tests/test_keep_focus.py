@@ -322,6 +322,29 @@ if (scenario === "quality") {
   s0Del.focus();
   s0Del.onclick();
   out.remove = [doc.activeElement !== root, qlList.contains(doc.activeElement), doc.activeElement?.disabled !== true];
+
+  // 6. Moving the last ladder up to the top disables its Move up: the focus stays inside the ladders
+  ctx.S.config.quality_ladders.push({ name: "Fast", steps: [{ codec: "AVC", range: "SDR", min: 720, max: 720 }] });
+  ctx.renderQuality();
+  const cards = () => [...qlList.walk()].filter((n) => n.tag === "section");
+  const fastUp = find(cards()[1], (n) => n.tag === "button" && n.ariaLabel === "Move this ladder up");
+  fastUp.focus();
+  fastUp.onclick();
+  out.ladderMove = [doc.activeElement !== root, cards()[0].contains(doc.activeElement), doc.activeElement?.disabled === false];
+
+  // 7. Deleting the last ladder keeps the focus inside the ladders
+  const lastDel = find(cards()[1], (n) => n.tag === "button" && n.textContent === "Delete");
+  lastDel.focus();
+  lastDel.onclick({ target: lastDel });
+  out.ladderDelete = [doc.activeElement !== root, qlList.contains(doc.activeElement)];
+
+  // 8. A renamed ladder's chip picks it by its new name and keeps the focus
+  const nameInput = find(cards()[0], (n) => n.tag === "input" && n.ariaLabel === "Ladder name");
+  nameInput.oninput({ target: { value: "Top" } });
+  const topChip = find(qlDef, (n) => n.tag === "button" && n.textContent === "Top");
+  topChip.focus();
+  topChip.onclick();
+  out.rename = [ctx.S.config.settings.quality_ladder, doc.activeElement?.textContent === "Top"];
 }
 
 if (scenario === "notify") {
@@ -410,6 +433,9 @@ def test_quality_editor_and_notify_chips_keep_focus_on_redraw():
         "moveMid": [True, True],
         "moveTop": [True, True, True],
         "remove": [True, True, True],
+        "ladderMove": [True, True, True],
+        "ladderDelete": [True, True],
+        "rename": ["Top", True],
     }
     assert run_scenario("notify") == {"notify": [True, True]}
 

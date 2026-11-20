@@ -115,9 +115,10 @@ function renderQuality() {
   const picked = Object.values(S.config.service_defaults || {}).filter((l) => l.ladder).length + Object.values(S.config.series || {}).filter((c) => c.service && c.ladder).length;
   box.querySelector("small").textContent = [list.length === 1 ? "1 ladder" : `${list.length} ladders`,
     picked === 1 ? "1 service or series picks its own" : picked ? `${picked} services or series pick their own` : ""].filter(Boolean).join(" · ");
-  keepFocus($("#ql-default"), () => $("#ql-default").replaceChildren(...[["", "Off"], ...list.map((l) => [l.name, l.name])].map(([v, label]) => el("button", {
-    type: "button", textContent: label, dataset: { fk: `ql-def:${v}` }, ariaPressed: String((def === "off" ? "" : def) === v),
-    onclick: () => { set.quality_ladder = v; dirty(); renderQuality(); } }))));
+  // keyed by the ladder, not its name: a rename in place keeps the chip's focus key and what it picks
+  keepFocus($("#ql-default"), () => $("#ql-default").replaceChildren(...[["", "Off"], ...list.map((l) => [l.name, l.name, l])].map(([v, label, l]) => el("button", {
+    type: "button", textContent: label, dataset: { fk: `ql-def:${l ? qlId(l) : "off"}` }, ariaPressed: String((def === "off" ? "" : def) === v),
+    onclick: () => { set.quality_ladder = l ? l.name : ""; dirty(); renderQuality(); } }))));
   keepFocus($("#ql-list"), () => $("#ql-list").replaceChildren(...(list.length ? list.map(ladderCard)
     : [el("section", { className: "sx-card" }, el("p", { className: "dx-empty", textContent: "No ladder yet. Create one with New ladder, or bring back the built-in ones." }))])));
 }
