@@ -73,7 +73,7 @@ const ctx = sandbox({
 vm.runInContext(grab(src, /function setSubtitleExpanded\b[\s\S]*?\n}\n/), ctx);
 vm.runInContext(grab(src, /^.*#backdrop.*onclick = \(\) => closeDrawer\(\);[\s\S]*?(?=\/\* Settings' shortcuts)/m), ctx);
 const snapshot = () => ({ hidden: detail.hidden, expanded: chip.expanded, focus, closed });
-const pressEscape = () => listeners.keydown({ key: "Escape", preventDefault() {} });
+const pressEscape = (repeat = false) => listeners.keydown({ key: "Escape", repeat, preventDefault() {} });
 const click = (target) => listeners.click?.({ target });
 click(inside);
 click(chipText);
@@ -81,12 +81,15 @@ const insideClicks = snapshot();
 if (dismiss === "Escape") pressEscape();
 else click(outside);
 const dismissed = snapshot();
+pressEscape(true);  // the key still held: its repeats leave the drawer open
+const heldOpen = closed === 0;
 pressEscape();
-console.log(JSON.stringify({ insideClicks, dismissed, drawerClosesNext: closed === 1 }));
+console.log(JSON.stringify({ insideClicks, dismissed, heldOpen, drawerClosesNext: closed === 1 }));
 """, str(JS / "series.js"), dismiss)
     assert shown == {
         "insideClicks": {"hidden": False, "expanded": "true", "focus": "elsewhere", "closed": 0},
         "dismissed": {"hidden": True, "expanded": "false", "focus": "chip" if dismiss == "Escape" else "elsewhere", "closed": 0},
+        "heldOpen": True,
         "drawerClosesNext": True,
     }
 

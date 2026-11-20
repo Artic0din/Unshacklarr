@@ -1104,6 +1104,7 @@ function dismissEpisodeSubtitles(target) {
 $("#drawer").addEventListener("click", (e) => dismissEpisodeSubtitles(e.target), true);
 document.addEventListener("keydown", (e) => {  // a dialog's Escape closes it alone
   if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
+  if (e.repeat) return;  // a held Escape: the press that closed the subtitles must not close the drawer too
   if ($("#drawer").classList.contains("open")) {
     e.preventDefault();  // "unsaved changes" opens in this keydown: left alone, the same Escape would cancel it
     const chip = dismissEpisodeSubtitles();
