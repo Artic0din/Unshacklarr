@@ -2542,5 +2542,6 @@
  "Not run: the service has no search": "Не выполнялось: у сервиса нет поиска",
  "A download is running: check again when it ends": "Идёт загрузка: повторите проверку, когда она закончится",
  "Unexpected {0} in the reply": "Неожиданные {0} в ответе",
- "search results": "результаты поиска"
+ "search results": "результаты поиска",
+ "Clear {0} cache? It signs out": "Очистить кэш {0}? Потребуется новый вход"
 }
