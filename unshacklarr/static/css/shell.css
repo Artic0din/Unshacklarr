@@ -146,7 +146,8 @@ nav .short { display: none; }
 .seg button { background: none; border: 0; border-radius: var(--r-sm); padding: 7px 14px; cursor: pointer; color: var(--muted); white-space: nowrap; font-weight: 500; }
 .seg button[aria-pressed="true"] { background: var(--select); color: var(--text); font-weight: 600; }
 .seg button span { margin-left: 4px; font-variant-numeric: tabular-nums; }
-.seg button:focus-visible { outline-offset: -2px; }  /* inside the button: the scroller would clip a ring drawn outside */
+.seg button:focus-visible, .seasons button:focus-visible,
+.inbox-item.link:focus-visible { outline-offset: -2px; }  /* scrollers clip rings drawn outside */
 nav { overflow-x: auto; max-width: 100%; padding: 4px; margin: -4px; }  /* room inside the scroller for the focus ring */
 nav a { white-space: nowrap; }
 input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], select, textarea {
