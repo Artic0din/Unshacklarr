@@ -165,6 +165,8 @@ vm.runInContext(`let picked_run;\n` +
   const click = (b) => b?.onclick({ currentTarget: b, target: b });
   const lastRow = () => walk($("#cd-main")).filter((n) => n.textContent === "Download").at(-1);
   const unavailable = (b) => !!b.disabled || b.ariaDisabled === "true";
+  // a pending or accepted row stays focusable: aria-disabled, never the native attribute
+  const held = (b) => { if (b.disabled) throw new Error("natively disabled: focus would drop"); return b.ariaDisabled === "true"; };
   if (scenario === "redraw") {
     const posted = click(lastRow());
     const remainsFocusable = lastRow().ariaDisabled === "true" && !lastRow().disabled;
@@ -173,10 +175,10 @@ vm.runInContext(`let picked_run;\n` +
     await click(lastRow());
     finishPost();
     await posted;
-    const locked = unavailable(lastRow());
+    const locked = held(lastRow());
     await click(walk($("#cd-main")).find((n) => n.textContent === "4K"));
     await new Promise(setImmediate);
-    const otherInstance = unavailable(lastRow());
+    const otherInstance = held(lastRow());
     console.log(JSON.stringify({ posts, remainsFocusable, locked, otherInstance }));
     return;
   }
@@ -184,9 +186,9 @@ vm.runInContext(`let picked_run;\n` +
     const button = lastRow();
     await click(button);
     await click(button);
-    const beforeReload = unavailable(button), initialPosts = posts.length;
+    const beforeReload = held(button), initialPosts = posts.length;
     await ctx.showMissing();
-    const afterReload = unavailable(lastRow());
+    const afterReload = held(lastRow());
     await click(lastRow());
     console.log(JSON.stringify({ beforeReload, initialPosts, afterReload, posts, toasts }));
     return;
