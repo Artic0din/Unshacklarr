@@ -261,6 +261,7 @@ function renderMonth() {
   const today = isoDay(new Date());
   renderRange();
   const heads = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => el("div", { className: "cal-head", textContent: d }));
+  const downloading = tr("Downloading"), notDownloading = tr("Not downloading");
   const cells = [];
   for (let i = 0; i < 42; i++) {
     const date = addDays(gridStart, i), key = isoDay(date);
@@ -270,14 +271,14 @@ function renderMonth() {
     const shown = [...list].sort((a, b) => b.managed - a.managed).slice(0, 3).sort(byWhen);
     const cell = el("button", {
       className: "cal-cell" + (date.getMonth() !== first.getMonth() ? " out" : "") + (key === today ? " today" : "") + (key === cal.pick ? " picked" : ""),
-      ariaLabel: `${date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })}: ${COUNT.episode(list.length)}`,
+      ariaLabel: `${date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })}: ${COUNT.episode(list.length)}${mine ? `, ${downloading}: ${mine}` : ""}`,
       ariaPressed: String(key === cal.pick),
       onclick: () => { pickDay(key); renderMonth(); $("#cal-day").scrollIntoView({ behavior: SCROLL, block: "nearest" }); },
     },
       el("span", { className: "cal-date", textContent: date.getDate() }),
-      el("span", { className: "cal-count" }, ...(mine ? [el("i", { className: "mine", textContent: mine })] : []),
-        ...(list.length - mine ? [el("i", { textContent: list.length - mine })] : [])),
-      el("span", { className: "cal-eps" }, ...shown.map((d) => el("span", { className: "cal-ep" + (d.managed ? " mine" : "") },
+      el("span", { className: "cal-count" }, ...(mine ? [el("i", { className: "mine", title: downloading, textContent: mine })] : []),
+        ...(list.length - mine ? [el("i", { title: notDownloading, textContent: list.length - mine })] : [])),
+      el("span", { className: "cal-eps" }, ...shown.map((d) => el("span", { className: "cal-ep" + (d.managed ? " mine" : ""), title: d.managed ? downloading : notDownloading },
         el("b", { textContent: monthTime(d, key) }), ` ${d.series}`)),
         ...(list.length > 3 ? [el("span", { className: "cal-ep more", textContent: `+${list.length - 3} more` })] : [])));
     cells.push(cell);

@@ -105,6 +105,13 @@ def test_a_poster_with_a_failure_icon_has_no_green_service_chip_or_frame():
     assert any("var(--ok)" in body for body in rules_of(".poster.on:not(:has(.sick)) .art"))
 
 
+@pytest.mark.parametrize("badge", [".cal-ep.mine", ".cal-count i.mine"])
+def test_managed_month_groups_use_neutral_colours(badge):
+    last = rules_of(badge)[-1]
+    assert "color: var(--text)" in last
+    assert "background: var(--well)" in last
+
+
 @pytest.mark.parametrize("badge", [".ep-off", ".chip.o-unavailable", ".ck-pill.absent"])
 def test_an_absent_status_badge_is_muted_and_outlined_without_fill(badge):
     last = rules_of(badge)[-1]

@@ -132,6 +132,38 @@ console.log(JSON.stringify([possible, confirmed, result()]));
     ]
 
 
+def test_month_labels_managed_episodes_without_calling_them_downloaded():
+    shown = node(r"""
+const late = { managed: true, series: "A", fromLate: true, service: "SBS" };
+const waiting = { managed: true, series: "B", waitingImport: true };
+const downloaded = { managed: true, series: "C", hasFile: true };
+const future = { managed: true, series: "D", airDateUtc: "2999-01-01T00:00:00Z" };
+const first = new Date(2026, 10, 1);
+const grid = { replaceChildren(...children) { this.children = children; } };
+const ctx = sandbox({
+  cal: { month: first, byDay: new Map([[1, [late, waiting, downloaded]], [2, [future]]]) },
+  weekStartOf: (d) => d, addDays: (d, offset) => new Date(d.getFullYear(), d.getMonth(), 1 + offset),
+  isoDay: (d) => d.getDate(), LOCALE: "en", COUNT: { episode: (n) => `${n} episodes` }, tr: (text) => text,
+  renderRange() {}, inScope: () => true, byWhen: () => 0, monthTime: () => "20:00", svcName: (tag) => tag,
+  $: (sel) => sel === "#cal-grid" ? grid : null, keepFocus: (_, fn) => fn(), keepCardFocus() {}, syncDetails() {},
+});
+const src = read(process.argv[1]);
+vm.runInContext(grab(src, /^function renderMonth\(.*?^\}/ms), ctx);
+ctx.renderMonth();
+const [firstDay, secondDay] = grid.children.slice(7, 9);
+console.log(JSON.stringify({
+  episodes: [firstDay, secondDay].flatMap((d) => d.kids[2].kids.map((e) => [e.className, e.title || ""])),
+  count: firstDay.kids[1].kids.map((e) => [e.title || "", e.textContent]),
+  dayLabel: firstDay.ariaLabel,
+}));
+""", str(JS / "schedule.js"))
+    assert shown == {
+        "episodes": [["cal-ep mine", "Downloading"]] * 4,
+        "count": [["Downloading", 3]],
+        "dayLabel": "Sunday, November 1: 3 episodes, Downloading: 3",
+    }
+
+
 def test_a_failed_attempt_never_shows_its_last_steps_done():
     shown = node(r"""
 const ctx = sandbox({ afterTracks: () => false });
