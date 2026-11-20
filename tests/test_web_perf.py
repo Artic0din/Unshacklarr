@@ -893,12 +893,17 @@ def test_the_owner_signs_in_again_when_the_revoked_sessions_list_is_corrupt(tmp_
             web.LOGGED_OUT_FILE.write_text("{")  # the list that revoked it is now corrupt
             stolen.session.cookie_jar.update_cookies({web.SESSION_COOKIE: copied})
             revoked = (await stolen.get("/api/state", headers=page)).status
-            logout = (await stolen.post("/api/logout", headers=page)).status  # no 500: the cookie is still dropped
+            out = await stolen.post("/api/logout", headers=page)  # no 500: the cookie is still dropped
+            dropped = out.cookies[web.SESSION_COOKIE]
+            logout = out.status, dropped.value == "" and (dropped["max-age"] == "0" or bool(dropped["expires"]))
+            # a wrong password changes nothing: no "log everyone out" for whoever can spoil the list
+            wrong = (await owner.post("/api/login", json={"password": "nope"}, headers=page)).status
+            assert web.read_config()["auth"]["secret"] == "s1" and web.LOGGED_OUT_FILE.read_text() == "{"
             login = (await owner.post("/api/login", json={"password": "password1"}, headers=page)).status
             back = (await owner.get("/api/session", headers=page)).json()
             stolen.session.cookie_jar.update_cookies({web.SESSION_COOKIE: copied})
             still_revoked = (await stolen.get("/api/state", headers=page)).status
-            return revoked, logout, login, (await back)["logged_in"], still_revoked
+            return revoked, logout, wrong, login, (await back)["logged_in"], still_revoked
 
-    assert asyncio.run(go()) == (401, 200, 200, True, 401)
+    assert asyncio.run(go()) == (401, (200, True), 401, 200, True, 401)
     assert web.read_config()["auth"]["secret"] != "s1"  # a new secret: every session from before is gone
