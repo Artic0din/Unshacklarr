@@ -389,7 +389,7 @@ const core = read(process.argv[2]);
 const loaded = { settings: {}, series: { 1: { title: "A", service: "BINGE" } } };  // as the server sends it: not in key order
 const ctx = sandbox({ S: { config: JSON.parse(JSON.stringify(loaded)), dlOptions: [] }, savedSonarrsOf: "{}", $: (sel) => sel,
   optionsEditor() {}, renderSettings() {}, renderServiceFilter() {}, renderWall() {}, dirty() {}, toast() {}, renderUpgradeSeries() {}, renderInterface() {} });
-for (const re of [/const stableJSON = .*\n/, /const configKey = .*\n/, /let savedUnits = \{\};\nconst configUnits = [\s\S]*?\]\)\]\);\n/, /const sonarrSavedName = new WeakMap\(\);[\s\S]*?const savedSonarr = .*\n/])
+for (const re of [/const stableJSON = .*\n/, /const NUMBERED = .*\n/, /function cleanSeries\([\s\S]*?\n\}\n/, /const configKey = .*\n/, /let savedUnits = \{\};\nconst configUnits = [\s\S]*?\]\)\]\);\n/, /const sonarrSavedName = new WeakMap\(\);[\s\S]*?const savedSonarr = .*\n/])
   vm.runInContext(grab(core, re), ctx);
 vm.runInContext("var savedConfig = configKey(S.config); savedUnits = configUnits(S.config);", ctx);  // as the page loads it
 vm.runInContext(grab(read(process.argv[1]), /function discardChanges\b[\s\S]*?\n}\n/), ctx);

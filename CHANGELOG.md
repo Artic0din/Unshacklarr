@@ -140,6 +140,9 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Clearing series file name, season map, join parts, or episode name now clears the unsaved save bar.** Normalizing
+  empty and default series fields (including `sonarr_order` when no numbering overrides remain) during comparison means
+  undoing an edit no longer leaves the save bar stuck open. (#335)
 - **Keyboard focus stays in place across the Quality editor, series notification chips, and Inbox filters, and CDM
   device chips show the standard focus ring.** Editing a step, moving a step or ladder, removing a step, or picking a
   default ladder chip no longer drops focus to the page. (#332)

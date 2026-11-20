@@ -320,14 +320,30 @@ let savedSonarrsOf = "";  // the libraries each series is in, as last loaded or 
 // what a save sends: a series opened without a service is not part of it
 // keys in order: a field cleared and typed again comes back last, and is still the same settings
 const stableJSON = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, x[y]])) : x));
+const NUMBERED = ["season_map", "season_offset", "season_offset_from", "episode_offset", "episode_map"];
+function cleanSeries(x) {  // drop empty/default fields matching web.py's checked_config() so undoing an edit hides the save bar
+  if (!x || typeof x !== "object") return x;
+  const out = { ...x };
+  if (!String(out.file_name || "").trim()) delete out.file_name;
+  if (!out.season_map || !Object.keys(out.season_map).length) delete out.season_map;
+  if (!out.episode_map || !Object.keys(out.episode_map).length) delete out.episode_map;
+  if (!out.episode_offset) delete out.episode_offset;
+  if (!out.season_offset) delete out.season_offset;
+  if (!out.season_offset_from || out.season_offset_from <= 1) delete out.season_offset_from;
+  if (out.join_parts !== false) delete out.join_parts;
+  if (!out.parts) delete out.parts;
+  if (!out.episode_name || out.episode_name === "joined") delete out.episode_name;
+  if (!NUMBERED.some((k) => out[k])) delete out.sonarr_order;
+  return out;
+}
 // hidden_series is left out: hiding saves at once, never through Save; versions too: a save's answer, not an edit
-const configKey = (c) => stableJSON({ ...c, hidden_series: undefined, versions: undefined, series: Object.fromEntries(Object.entries(c.series || {}).filter(([, x]) => x.service)) });
+const configKey = (c) => stableJSON({ ...c, hidden_series: undefined, versions: undefined, series: Object.fromEntries(Object.entries(c.series || {}).filter(([, x]) => x.service).map(([k, x]) => [k, cleanSeries(x)])) });
 // Each part of the config (a section, a series) as last loaded or saved: a save sends which ones changed since, so
 // the server keeps what another tab changed meanwhile (web.merge_page_changes)
 let savedUnits = {};
 const configUnits = (c) => Object.fromEntries([
   ...Object.entries(c).filter(([k]) => !["series", "versions", "hidden_series"].includes(k)).map(([k, v]) => [k, JSON.stringify(v)]),
-  ...Object.entries(c.series || {}).filter(([, x]) => x.service).map(([k, v]) => [`series:${k}`, JSON.stringify(v)])]);
+  ...Object.entries(c.series || {}).filter(([, x]) => x.service).map(([k, v]) => [`series:${k}`, stableJSON(cleanSeries(v))])]);
 // Each other Sonarr's name as the server knows it: a rename reaches the server only at Save, so the requests that
 // name a Sonarr send this one until then. By entry: the Sonarr editors change their entry in place.
 const sonarrSavedName = new WeakMap();
@@ -756,7 +772,7 @@ function drawerFocusGuard(e) {
 }
 document.addEventListener("focusin", drawerFocusGuard);/* A series' settings changed since its panel opened, and not saved: closing it asks first. */
 let drawerSnapshot = null;
-const drawerChanged = () => !!current && drawerSnapshot?.id === current.tvdbId && stableJSON(S.config.series[current.tvdbId]) !== stableJSON(JSON.parse(drawerSnapshot.conf));
+const drawerChanged = () => !!current && drawerSnapshot?.id === current.tvdbId && stableJSON(cleanSeries(S.config.series[current.tvdbId])) !== stableJSON(cleanSeries(JSON.parse(drawerSnapshot.conf)));
 function discardDrawer() {  // the series as it was when its panel opened; the bar goes if nothing else waits
   const { id, existed, conf } = drawerSnapshot;
   if (existed) S.config.series[id] = JSON.parse(conf); else delete S.config.series[id];
@@ -1082,7 +1098,6 @@ function renderMeta(s) {
 }
 /* Sonarr 5 numbers a series in an episode order (aired, DVD, Netflix…): a numbering set here is for one order; Sonarr
    numbering it in another since, its new episodes wait (sync.order_changed) until the numbering is checked. */
-const NUMBERED = ["season_map", "season_offset", "season_offset_from", "episode_offset", "episode_map"];
 function renderOrder() {
   const conf = S.config.series[current.tvdbId] || {}, box = $("#d-order"), now = current.order || "official";
   const name = (t) => current.orders?.[t] || (t === "official" ? "the aired order" : `the ${t} order`);

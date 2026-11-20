@@ -2224,7 +2224,7 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), options = js("settings-options.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const NUMBERED = .*$/m), pick(core, /^function cleanSeries\(.*?^\}/ms), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(core, /^\/\/ Each other Sonarr's name as the server knows it.*?^const savedSonarr = [^\n]*$/ms),
   pick(options, /^async function save\(\) \{.*?^\}/ms),
@@ -2348,6 +2348,14 @@ const fresh = () => {
   saving = page.save(); release({ settings: { sonarrs: [{ name: "4K", url: "http://a", api_key_set: true }] } }); await saving;
   out.listEntryKept = box.S.config.settings.sonarrs[0] === entry && entry.api_key_set === true && !("api_key" in entry)
     && !page.state().unsaved;
+  // a series just saved is saved: the next Save, for something else, does not send it as changed again (#335)
+  box.S = { config: { settings: { theme: "dark" }, series: { 7: { service: "iV", title: "https://example.com/show" } } } };
+  page.baseline(box.S.config); vm.runInContext("savedUnits = configUnits(S.config)", box);
+  box.S.config.series[7].file_name = "Alias"; page.dirty();
+  saving = page.save(); release({ series: { 7: { service: "iV", title: "https://example.com/show", file_name: "Alias" } } }); await saving;
+  box.S.config.settings.theme = "light"; page.dirty();
+  saving = page.save(); release({}); await saving;
+  out.savedSeriesNotResent = !JSON.parse(box.sentBody).changed.includes("series:7");
   tabB(); held = box.S.config.settings; held.debug = true; page.dirty();
   saving = page.save(); held.language = "de"; page.dirty();  // changed here while the save ran
   release({ settings: { theme: "dark", language: "fr", debug: true }, versions: { settings: "v2" } }); await saving;
@@ -2468,6 +2476,7 @@ def test_an_edit_made_while_a_save_is_in_flight_is_not_marked_saved(tmp_path):
         "learntDayShown": True,  # a day kept alone shows too, and the next-episode line follows
         "mergedTaken": True,  # another tab's change the server kept is taken, in the object the editors hold (#184)
         "listEntryKept": True,  # an open Sonarr editor's entry is updated in place, not replaced
+        "savedSeriesNotResent": True,  # #335: a saved series is not sent as changed by the next Save
         "nextSaveSendsMerged": True,  # so a later Save no longer sends the older copy back
         "editMeanwhileWins": True,  # an edit made while the Save ran is not overwritten by its answer
         "editMeanwhileSent": True,
@@ -2491,10 +2500,14 @@ const js = (name) => fs.readFileSync(process.argv[2] + "/js/" + name, "utf8");
 const pick = (src, re) => { const m = src.match(re); if (!m) throw new Error("not found: " + re); return m[0]; };
 const core = js("core.js"), series = js("series.js"), schedule = js("schedule.js");
 const code = [
-  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
+  pick(core, /^let unsaved = false;$/m), pick(core, /^let savedConfig = "";/m), pick(core, /^const stableJSON = .*$/m), pick(core, /^const NUMBERED = .*$/m), pick(core, /^function cleanSeries\(.*?^\}/ms), pick(core, /^const configKey = .*$/m), pick(core, /^let savedUnits = \{\};$/m), pick(core, /^const configUnits = .*?\]\);$/ms),
   pick(core, /^function dirty\(\) \{.*?^\}/ms),
   pick(core, /^let drawerSnapshot = null;$/m), pick(core, /^const drawerChanged = .*$/m),
   pick(series, /^let oneOff = null;.*?(?=^\$\("#d-join"\))/ms),
+  pick(series, /^\$\("#d-join"\)\.onchange = .*$/m),
+  pick(series, /^\$\("#d-epname"\)\.onchange = .*$/m),
+  pick(series, /^\$\("#d-filename"\)\.oninput = .*$/m),
+  pick(series, /^\$\("#d-seasons"\)\.oninput = .*?^\};$/ms),
   pick(schedule, /^async function hideSeries\(.*?^\}/ms),
 ].join("\n");
 const nodes = {};
@@ -2507,7 +2520,7 @@ const box = {
   renderHiddenButton() {}, toast() {}, S: null,
 };
 vm.createContext(box);
-vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), baseline: () => { savedConfig = configKey(S.config); }, snapshot: () => { drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(S.config.series[7]) }; }, drawerChanged };", box);
+vm.runInContext(code + "\nthis.page = { dirty, hideSeries, input: (id, value) => $(id).oninput({ target: { value } }), change: (id, props) => $(id).onchange({ target: props }), baseline: () => { savedConfig = configKey(S.config); }, snapshot: () => { drawerSnapshot = { id: 7, existed: true, conf: JSON.stringify(S.config.series[7]) }; }, drawerChanged };", box);
 const page = box.page;
 const fresh = () => {
   box.S = { config: { settings: { theme: "dark" }, hidden_series: [], series: { 7: { service: "iV", title: "https://example.com/show" } } } };
@@ -2517,12 +2530,25 @@ const fresh = () => {
 (async () => {
   const out = {};
   for (const [name, id, typed] of [["episodeOffset", "#d-offset", "5"], ["seasonOffset", "#d-soffset", "2"],
-      ["seasonFrom", "#d-sfrom", "3"], ["episodeTable", "#d-epmap", "S01E01=S01E02"]]) {
-    fresh(); page.input(id, typed);
+      ["seasonFrom", "#d-sfrom", "3"], ["episodeTable", "#d-epmap", "S01E01=S01E02"],
+      ["fileName", "#d-filename", "Alias"], ["seasonMap", "#d-seasons", "1=2"]]) {
+    fresh(); page.snapshot(); page.input(id, typed);
+    if (id === "#d-seasons") box.S.config.series[7].sonarr_order = "official";  // #d-adv listener stamps sonarr_order
     const shown = !bars["#savebar"].hidden;
     page.input(id, "");
-    out[name] = shown && bars["#savebar"].hidden && bars["#d-save"].hidden;
+    out[name] = shown && bars["#savebar"].hidden && bars["#d-save"].hidden && !page.drawerChanged();
   }
+  fresh(); page.snapshot(); page.change("#d-join", { checked: false });
+  const joinShown = !bars["#savebar"].hidden;
+  page.change("#d-join", { checked: true });
+  out.joinParts = joinShown && bars["#savebar"].hidden && bars["#d-save"].hidden && !page.drawerChanged();
+  fresh(); page.snapshot(); page.change("#d-epname", { value: "keep" });
+  const epNameShown = !bars["#savebar"].hidden;
+  page.change("#d-epname", { value: "joined" });
+  out.episodeName = epNameShown && bars["#savebar"].hidden && bars["#d-save"].hidden && !page.drawerChanged();
+  fresh(); Object.assign(box.S.config.series[7], { season_offset: 2 }); page.baseline(); page.snapshot();
+  page.input("#d-sfrom", "1");  // Math.max(1, 1): a season offset from season 1 is the default, as the server keeps it
+  out.seasonFromOne = bars["#savebar"].hidden && !page.drawerChanged();
   fresh(); Object.assign(box.S.config.series[7], { episode_offset: 5, season_offset: 2 }); page.baseline();
   page.input("#d-offset", ""); page.input("#d-offset", "5");  // cleared and typed again: it comes back after season_offset
   out.restoredOffsetBarHidden = bars["#savebar"].hidden;
@@ -2562,6 +2588,8 @@ def test_the_save_bar_hides_when_a_numbering_field_is_cleared_or_a_series_is_hid
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == {
         "episodeOffset": True, "seasonOffset": True, "seasonFrom": True, "episodeTable": True,  # typed, then cleared: nothing to save
+        "fileName": True, "seasonMap": True, "joinParts": True, "episodeName": True,  # #335: cleared or back to default
+        "seasonFromOne": True,  # from season 1 is the default
         "hidingLeavesBarHidden": True,  # saved at once, so it is not a pending change
         "changeThenUndoAfterHiding": True,
         "showingLeavesBarHidden": True,
