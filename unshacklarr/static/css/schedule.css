@@ -49,6 +49,7 @@ button.pill[aria-pressed="true"] { background: var(--accent-tint); border-color:
 .late-banner { margin-bottom: 12px; border: 1px solid var(--warn);
   background: var(--warn-tint); border-radius: var(--radius-card); font-size: var(--fs-callout); }
 .late-banner summary { padding: var(--sp-3) var(--sp-4); color: var(--warn); font-weight: 600; cursor: pointer; }
+.late-banner summary b { font-weight: inherit; }  /* the count at the summary's weight, not a step bolder */
 .late-banner > p, #sched-missing { margin: 0 var(--sp-4) var(--sp-3); }
 .sched-st { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-footnote); font-weight: 600; white-space: nowrap; padding: 3px 9px; border-radius: var(--radius-pill); }
 .sched-st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
