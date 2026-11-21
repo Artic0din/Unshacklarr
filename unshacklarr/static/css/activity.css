@@ -9,8 +9,10 @@
   padding-block: var(--sp-1) 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .con-running .chip { display: inline-flex; flex: none; align-items: center; gap: 6px; max-width: min(18rem, 100%);
   min-height: var(--con-target); padding-inline: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 700; cursor: pointer; }  /* a LiveBadge: running now */
-.con-running .chip::before { content: ""; flex: 0 0 6px; height: 6px; border-radius: 50%; background: var(--live); animation: live-dot 1.6s ease-in-out infinite; }
-@keyframes live-dot { 50% { opacity: .35; } }
+/* the live dot: red with a dark keyline, so it holds on the lime; only its outer ring pulses */
+.con-running .chip::before { content: ""; flex: 0 0 6px; height: 6px; border-radius: 50%; background: var(--live);
+  box-shadow: 0 0 0 1.5px var(--accent-ink); animation: live-dot 1.6s ease-in-out infinite; }
+@keyframes live-dot { 50% { box-shadow: 0 0 0 1.5px var(--accent-ink), 0 0 0 4px color-mix(in srgb, var(--live) 45%, transparent); } }
 .con-running .chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .con-running .chip[aria-current="true"] { box-shadow: inset 0 -2px currentColor; }
 .con-running .chip:focus-visible { outline-offset: -2px; outline-color: var(--accent-ink); }  /* drawn inside the lime fill */
@@ -71,7 +73,9 @@
 .crow.is-hover { background: var(--panel); }
 @media (hover: hover) { .crow:hover { background: var(--panel); } }
 .crow.sel { background: var(--panel); box-shadow: inset 0 0 0 1px var(--field-line-hover); }
-.crow:has(.pulse) { box-shadow: inset 0 0 0 1px var(--accent); }  /* a DownloadRow running now: the accent outline, picked or not */
+/* a DownloadRow moving now (not paused or only queued): the accent outline; picked, a heavier one */
+.crow:has(.pulse):has(.bar:not(.idle)) { box-shadow: inset 0 0 0 1px var(--accent); }
+.crow.sel:has(.pulse):has(.bar:not(.idle)) { box-shadow: inset 0 0 0 2px var(--accent); }
 .crow img { width: 30px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--radius-inline); background: var(--panel); }
 .crow b { display: flex; gap: 6px; align-items: baseline; font-size: var(--fs-callout); white-space: nowrap; }
 .crow b span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }  /* the series gives way, never its episode */
@@ -245,7 +249,8 @@
 .job-counts .ok b { color: var(--ok); } .job-counts .now b { color: var(--accent); } .job-counts .err b { color: var(--err); }
 .job-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .jcard { border: 1px solid var(--line); border-radius: var(--radius-tile); background: var(--bg); overflow: hidden; }  /* no transition: redrawn twice a second, it would replay */
-.jcard.is-hover:not(.queued):not(.cancelled) { border-color: var(--muted); } .jcard.now { border-color: var(--accent); }
+.jcard.is-hover:not(.queued):not(.cancelled):not(.now) { border-color: var(--muted); } .jcard.now { border-color: var(--accent); }
+.jcard.now.is-hover { box-shadow: inset 0 0 0 1px var(--accent); }  /* running: its accent edge stays, a hover thickens it */
 .jhead { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 14px; align-items: center; width: 100%; padding: 12px 14px;
   border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .jcard.queued .jhead { cursor: default; grid-template-columns: 70px minmax(0, 1fr) auto 26px; } .jcard.queued .ep, .jcard.queued .mid { opacity: .7; }
