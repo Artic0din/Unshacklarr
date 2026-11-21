@@ -333,11 +333,11 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 @media (pointer: coarse) {
   .cdm-opt, button.cdm-chip, .job-counts button { min-height: 44px; align-content: center; }
   button.cdm-chip, .job-counts button { min-width: 44px; box-sizing: border-box; }
-  #news-dlg .news-go, .tools-box summary, #nt-quiet-on, .nt-pick, .ds label.check,
+  #news-dlg .news-go, .tools-box summary, .nt-pick, .ds label.check,
   .jx, .chip-btn, .opt .rm, .toast.act button, #bulk-rows label, #cols-dialog .col-rows :is(label, .mv),
   .bc-cal-head button, .bc-cal-grid button, #d-bc-days button, .cp-list li { min-height: 44px; min-width: 44px; }
   .tools-box summary, .ds label.check { align-content: center; }
-  #nt-quiet-on { border: solid transparent; border-width: 11px 3px; background-clip: padding-box; }
+  #nt-quiet-on::before { content: ""; position: absolute; inset: -9px -3px; }  /* 44px to the finger; the track keeps its painted edge */
   .sx .opt { grid-template-columns: minmax(130px, 210px) minmax(0, 1fr) 44px; }
   @media (max-width: 700px) { .sx .opt { grid-template-columns: minmax(0, 1fr) 44px; } }
   .bc-cal { min-width: 0; }
