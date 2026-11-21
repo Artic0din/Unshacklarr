@@ -267,6 +267,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
   color: var(--muted); background: var(--well); }
 .sched-card .svc { white-space: normal; overflow-wrap: anywhere; }  /* a long name in a narrow day column */
 .poster .svc { display: block; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; }  /* a long name stays inside its poster; its panel has the whole name */
+.poster .svc { background: var(--bg); }  /* on the art it sits on the page ground, as the PosterCard has it; a managed one stays green */
 .svc-block-head b, .sv-chip { color: var(--text); }  /* a service: just its name */
 .new-badge, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest,
 .news-list .new .news-kind, .news-list .improved .news-kind { color: var(--text); background: var(--well); }
@@ -302,9 +303,9 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
    invisible slop centred on it makes up the rest without moving anything: a percentage inset is of the control's size. */
 @media (max-width: 700px), (pointer: coarse) {
   :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
-    #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico) { position: relative; }
+    #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico, input[type=checkbox]:not(.switch)) { position: relative; }
   :where(.brand a, #update, .btn.small, .seg.small button, .pill, .icon-hide, .sc-open, .con-filters button, .gh-act,
-    #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico)::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
+    #d-meta a, .ds-nav a, .ax-seg button, .inbox-filters button, .dock .d-ico, input[type=checkbox]:not(.switch))::after { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2); }
   details.sx-card > summary.sx-head::before { content: ""; position: absolute; inset: min(0px, (100% - 44px) / 2) 0; }  /* its ::after is the chevron */
   .btn, .btn.small, nav a, .pill, .ax-seg button, .inbox-filters button, .con-filters button, .set-nav button,
   .set-back, .hidden-btn, .sched-filter .pill, .cd-tracks-fold > summary, .ds-sub summary, .inbox-clear,
@@ -341,13 +342,13 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
   @media (max-width: 700px) { .sx .opt { grid-template-columns: minmax(0, 1fr) 44px; } }
   .bc-cal { min-width: 0; }
   .bc-cal-grid { grid-template-columns: repeat(7, minmax(44px, 1fr)); column-gap: 0; overflow-x: auto; }
-  #tab-settings :is(.set-nav button, .set-jumps a, .sx-actions .btn, .sx-grid input:not(.switch), .sx-grid select,
+  #tab-settings :is(.set-nav button, .set-jumps a, .sx-actions .btn, .sx-grid input:not(.switch, [type=checkbox]), .sx-grid label:has(> input[type=checkbox]), .sx-grid select,
     .sx-switch-target, .ax-bursts, .rt-custom, .ql-icon, .nt-quiet-row > label) { min-height: 44px; min-width: 44px; }
 }
 @media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }  /* its icon-only size up to 1240px is 40px */
 /* Dropdowns drawn as fields, in every browser: Safari otherwise sizes its native ones on its own, ignoring the heights above.
-   The arrow is two gradients in the look's muted colour, so it follows light and dark. */
+   The arrow is two gradients in the text colour, so it follows the theme. */
 select:not([multiple]) { appearance: none; -webkit-appearance: none; padding-right: 32px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%);
   background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
 .oneoff-preview .pick select { padding-right: 28px; }

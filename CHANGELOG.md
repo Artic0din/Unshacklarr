@@ -99,6 +99,9 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Restyled the Series page in the DownStream design: the chosen view and the series drawer's tab are lime, filters that
+  are on take a lime tint, search fields are rounded with a search icon, checkboxes are lime when ticked, and posters
+  sit in an outlined frame on a slightly wider grid. (#398)
 - Restyled the app's frame in the DownStream design: the header is a floating bar with the current page as a lime
   pill and "Run sync now" as its main button, the phone tab bar floats above the bottom edge, and status dots, buttons,
   notifications, toasts, banners and dialogs follow the design system. (#397)

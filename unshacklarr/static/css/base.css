@@ -25,13 +25,20 @@
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
   --header-bottom: calc(var(--header-top, 0px) + var(--head-h, 65px));
   --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a0b05' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");  /* a tick on a light fill, in --accent-ink */
+  --ic-search-field: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aca9a6' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E");  /* in --muted */
   --sh-xs: 0 1px 2px 0 #0000004d;
   --sh-sm: 0 1px 2px 0 #00000066, 0 1px 3px 0 #00000066;
   --sh-md: 0 1px 2px 0 #00000066, 0 4px 12px 0 #00000080;
   --sh-lg: 0 2px 4px 0 #00000066, 0 8px 24px 0 #00000099;
 }
 * { box-sizing: border-box; }
-input[type=checkbox] { accent-color: var(--text); }
+/* Checkbox: a field-edged box, lime with the dark tick when on (the switch is drawn on its own) */
+input[type=checkbox]:not(.switch) { appearance: none; -webkit-appearance: none; display: inline-grid; flex: none; width: 22px; height: 22px; margin: 0;
+  vertical-align: middle; border: 1.5px solid var(--field-line); border-radius: var(--radius-inline); background: var(--field-bg); cursor: pointer; }
+input[type=checkbox]:not(.switch):checked { border-color: var(--accent); background: var(--accent) center / 16px no-repeat var(--tick); }
+input[type=checkbox]:not(.switch):indeterminate { border-color: var(--accent); background: linear-gradient(var(--accent-ink), var(--accent-ink)) center / 10px 2.5px no-repeat, var(--accent); }
+input[type=checkbox]:not(.switch):disabled { opacity: .45; cursor: default; }
+@media (forced-colors: active) { input[type=checkbox]:not(.switch) { appearance: auto; -webkit-appearance: auto; background: none; } }  /* the system's own box, in its colours */
 ::placeholder { color: var(--muted); opacity: 1; }  /* an example, not a value: dimmer than any text typed */
 html { -webkit-tap-highlight-color: transparent;
   background: radial-gradient(ellipse 58rem 19rem at 15% 0, rgb(132 145 47 / .14), transparent) 0 0 / 100% 24rem no-repeat, var(--bg); }

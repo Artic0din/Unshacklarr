@@ -131,7 +131,8 @@ def test_every_small_control_on_a_phone_is_44px_to_the_finger():
     phone = media("max-width: 700px")
     slop = phone[phone.index(":where(.brand a, #update, .btn.small"):]
     has(slop, "::after { content: \"\"; position: absolute; inset: min(0px, (100% - 44px) / 2); }")
-    for target in ("#update", ".btn.small", ".seg.small button", ".pill", ".icon-hide", ".sc-open", "#d-meta a", ".ds-nav a", ".ax-seg button"):
+    for target in ("#update", ".btn.small", ".seg.small button", ".pill", ".icon-hide", ".sc-open", "#d-meta a", ".ds-nav a", ".ax-seg button",
+                   "input[type=checkbox]:not(.switch)"):  # a 22px box, 44px to the finger
         assert target in slop[:slop.index("{")], target
     has(phone, ".health button { min-width: 44px; min-height: 44px; padding: 0 8px;")
     has(phone, ".seg button { min-height: 44px; }")
