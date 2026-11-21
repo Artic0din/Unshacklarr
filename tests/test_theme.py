@@ -54,7 +54,7 @@ TEXT = [("text", "bg"), ("text", "panel"), ("text", "well"), ("text", "field-bg"
         ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg"),
         ("text", "select"), ("muted", "select"), ("text", "term-bg"), ("text", "bar"), ("muted", "bar"), ("muted", "well"), ("err", "err-tint")]
 EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg"),
-         ("field-line", "bar"), ("accent", "bar"), ("err", "err-tint"), ("warn", "warn-tint")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
+         ("field-line", "bar"), ("accent", "bar"), ("err", "err-tint"), ("warn", "warn-tint"), ("accent", "accent-tint"), ("field-line", "well")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
 
 
 def test_every_text_and_field_edge_meets_its_contrast():
@@ -308,9 +308,12 @@ def test_expanded_subtitles_span_the_episode_row_without_contributing_to_column_
 
 def test_the_lime_focus_ring_stands_out_on_dark_surfaces_and_selection():
     assert "outline: 2px solid var(--accent)" in rule(":focus-visible")
-    assert "background: var(--select)" in rule('.seg button[aria-pressed="true"]')
-    # Segments draw the ring inside their own fill, other controls above the surrounding surface.
-    for fill in ("bg", "panel", "well", "select", "accent-tint", "warn-tint", "term-bg"):
+    assert "background: var(--accent)" in rule('.seg button[aria-pressed="true"]')
+    # Segments draw the ring inside their own fill: on the lime one it is drawn in the ink
+    assert "outline-color: var(--accent-ink)" in rule('.seg button[aria-pressed="true"]:focus-visible')
+    assert contrast(DARK["accent-ink"], DARK["accent"]) >= 3
+    # other controls draw it above the surrounding surface
+    for fill in ("bg", "panel", "well", "bar", "select", "accent-tint", "warn-tint", "term-bg"):
         assert contrast(DARK["accent"], DARK[fill]) >= 3, fill
 
 

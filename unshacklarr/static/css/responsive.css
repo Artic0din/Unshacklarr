@@ -178,7 +178,9 @@
 .tools span.optional-missing { color: var(--muted); border-color: var(--line); background: none; }
 .tools-box summary.ok { color: var(--ok); } .tools-box summary.bad { color: var(--err); font-weight: 600; }
 
-.skeleton { aspect-ratio: 2 / 3; border-radius: var(--radius-tile); background: var(--well); }  /* --panel on the page ground was 1.08:1 in light: the boxes were near-invisible */
+.skeleton { aspect-ratio: 2 / 3; border-radius: var(--radius-tile); background: var(--well); animation: skel 1.6s ease-in-out infinite; }
+@keyframes skel { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }  /* --panel on the page ground was 1.08:1 in light: the boxes were near-invisible */
 .empty { grid-column: 1 / -1; padding: 40px 0; color: var(--muted); max-width: 60ch; }
 .empty b { color: var(--text); display: block; margin-bottom: 4px; }
 .empty .btn { margin-top: 12px; }
@@ -245,7 +247,7 @@
   .btn { min-height: 44px; }
   .btn.small, .con-filters button { min-height: 36px; }
   .gh-act { min-height: 36px; padding-inline: 8px; margin-right: -8px; }  /* the text stays at the edge, the target grows */
-  input[type=checkbox] { width: 20px; height: 20px; }
+  input[type=checkbox]:not(.switch) { width: 22px; height: 22px; }
 
   .seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); width: 100%; margin-bottom: 10px; }  /* more choices than fit: a second row */
   .seg button { padding: 9px 6px; font-size: var(--fs-sub); white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
@@ -404,7 +406,8 @@
   clip-path: polygon(14% 52%, 0 66%, 38% 100%, 100% 22%, 86% 8%, 38% 72%); border-radius: 0; }
 .wall.selecting .poster .art::after { content: ""; position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
   border: 2px solid #fff; background: rgb(13 18 25 / .55); box-shadow: var(--sh-sm); }
-.wall.selecting .poster.picked .art::after { border-color: var(--text); background: var(--text) center / 14px no-repeat var(--tick); }
+.wall.selecting .poster.picked .art { box-shadow: 0 0 0 2px var(--accent); }  /* picked: the lime ring and box */
+.wall.selecting .poster.picked .art::after { border-color: var(--accent); background: var(--accent) center / 14px no-repeat var(--tick); }
 .wall.selecting .poster .off { display: none; }
 .wall.selecting .poster:not(.picked) .art { box-shadow: none; } .wall.selecting .poster:not(.picked) .art img { filter: var(--dim); }
 .wall.selecting .poster:not(.picked) .name { color: var(--muted); }
@@ -455,7 +458,7 @@ body:has(#savebar:not([hidden])) main { padding-bottom: 96px; }  /* the last row
 #dt-settings .sx-card { margin: 0; border-radius: var(--radius-card); }
 .ds .sx-head { margin-bottom: 0; } .ds .sx-grid { margin-top: var(--gap-field); }
 .ds .sx-grid select { width: 100%; min-height: 40px; border-radius: var(--radius-field); }
-.sx-grid input[type=checkbox]:not(.switch) { width: auto; min-height: 0; } .sx-grid .field > label.check { display: inline-flex; font-weight: 400; }
+.sx-grid input[type=checkbox]:not(.switch) { width: 22px; min-height: 0; } .sx-grid .field > label.check { display: inline-flex; font-weight: 400; }
 .ds .sx-grid .ax-seg { margin-bottom: 0; } .ds .ds-tmdb { margin-top: var(--gap-field); }
 .ds .card-foot { margin-top: 18px; }
 .ds-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; } .ds-tools .muted { font-size: var(--fs-sub); }

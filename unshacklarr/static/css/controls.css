@@ -346,8 +346,8 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 }
 @media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }  /* its icon-only size up to 1240px is 40px */
 /* Dropdowns drawn as fields, in every browser: Safari otherwise sizes its native ones on its own, ignoring the heights above.
-   The arrow is two gradients in the look's muted colour, so it follows light and dark. */
+   The arrow is two gradients in the text colour, so it follows the theme. */
 select:not([multiple]) { appearance: none; -webkit-appearance: none; padding-right: 32px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%);
   background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
 .oneoff-preview .pick select { padding-right: 28px; }
