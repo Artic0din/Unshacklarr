@@ -2212,7 +2212,7 @@
   "COUNT.moreDevice(folded)"
  ],
  "Shown": [],
- "Shown in DownStream's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set.": [],
+ "Shown in DownStream's log when it starts (docker logs downstream), or the SETUP_TOKEN you set.": [],
  "Shown on its series, and used at the start of its download folder names. Example: sonarr-2.": [],
  "Sign in": [],
  "Sign in again": [],
@@ -3162,7 +3162,7 @@
  "Wrong passphrase, or the file is damaged": [],
  "Wrong password": [],
  "Wrong serve: dashboard: key:": [],
- "Wrong setup code: DownStream prints it when it starts (docker logs unshacklarr)": [],
+ "Wrong setup code: DownStream prints it when it starts (docker logs downstream)": [],
  "Wrong setup code: it is in DownStream's log": [],
  "Yesterday": [],
  "Your address": [],

@@ -306,7 +306,7 @@ function showSetup(found) {
   }
   const steps = [
     { name: "Welcome", icon: "key", title: "Welcome to DownStream", sub: "Setup code and password",
-      body: [field("Setup code", f.setup_code, "Shown in DownStream's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set."),
+      body: [field("Setup code", f.setup_code, "Shown in DownStream's log when it starts (docker logs downstream), or the SETUP_TOKEN you set."),
         field("Password", f.password, "At least 8 characters.", strength), field("Confirm password", f.confirm, "", match), restoreBox],
       check: async () => {
         if (!f.setup_code.value.trim()) return wrong("Enter the setup code", f.setup_code);

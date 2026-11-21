@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DATA = Path(tempfile.mkdtemp(prefix="unshacklarr-demo-"))
-os.environ["UNSHACKLARR_DATA"] = str(DATA)
+os.environ["DOWNSTREAM_DATA"] = str(DATA)  # the name that wins over UNSHACKLARR_DATA
 for name in [k for k in os.environ if k in ("SONARR_URL", "SONARR_API_KEY", "UNSHACKLE_URL", "UNSHACKLE_API_KEY", "TZ")]:
     del os.environ[name]
 

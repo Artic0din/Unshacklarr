@@ -210,14 +210,14 @@ Unshackle you already have.
 
    ```bash
    docker compose up -d
-   docker logs unshacklarr
+   docker logs downstream
    ```
 
 The setup asks for a password, Sonarr's URL and API key (in Sonarr › Settings › General) and
 [the downloads folder as Sonarr sees it](#downloads-folder). Then, in **Series**, pick a service for
 each series you want.
 
-**Updating:** `docker compose pull unshacklarr && docker compose up -d --no-deps unshacklarr` brings a
+**Updating:** `docker compose pull downstream && docker compose up -d --no-deps downstream` brings a
 new DownStream and leaves Unshackle running: without `--no-deps`, Compose may recreate Unshackle too
 (DownStream depends on it), which cuts the downloads going on and leaves DownStream saying Unshackle
 is unreachable until it has started again. For a new Unshackle, when nothing is downloading,
@@ -409,13 +409,24 @@ serve:
 
 | | Settings, history and caches |
 |---|---|
-| 🐧 Linux | `~/.config/unshacklarr` |
-| 🍎 macOS | `~/Library/Application Support/Unshacklarr` |
-| 🪟 Windows | `%APPDATA%\Unshacklarr` |
+| 🐧 Linux | `~/.config/downstream` |
+| 🍎 macOS | `~/Library/Application Support/DownStream` |
+| 🪟 Windows | `%APPDATA%\DownStream` |
 | 🐳 Docker | `/data`, that is `./data` next to `docker-compose.yml` |
 
-`UNSHACKLARR_DATA` moves them. The page listens on port `8788` on every address; `PORT` and `HOST`
-change that.
+`DOWNSTREAM_DATA` moves them.
+The page listens on port `8788` on every address; `PORT` and `HOST` change that.
+
+**Installed before the rename to DownStream?** Nothing has to change.
+An `unshacklarr` folder is still used while there is no `downstream` one,
+`UNSHACKLARR_DATA` and `UNSHACKLARR_BUILD` still work (the `DOWNSTREAM_` names win when both are set),
+the `unshacklarr` command still starts it,
+and the image is still published under its old name, `unshacklarr`, beside `downstream`.
+To switch to the new names, stop the old containers first, or the new ones clash with them:
+
+1. `docker compose down`
+2. In `docker-compose.yml`, rename the service and its `container_name` to `downstream`. Keep `name: unshacklarr`: named volumes belong to the project, and a new project name starts with empty ones.
+3. `docker compose up -d`
 
 <a name="api"></a>
 
@@ -532,8 +543,9 @@ made up at each start.
 **Lost the password?** Set a new one where DownStream runs; settings and series stay:
 
 ```bash
-unshacklarr reset-password
-docker exec -it unshacklarr unshacklarr reset-password   # with Docker
+downstream reset-password
+docker exec -it downstream downstream reset-password     # with Docker
+docker exec -it unshacklarr unshacklarr reset-password   # with Docker, a container from before the rename
 ```
 
 <a name="versions"></a>
@@ -561,7 +573,7 @@ running.
 ```bash
 uv sync --group test
 uv run --group test pytest
-UNSHACKLARR_DATA=/tmp/unshacklarr uv run unshacklarr
+DOWNSTREAM_DATA=/tmp/downstream uv run downstream
 ```
 
 The page starts at `unshacklarr/static/index.html`, with no framework and no build step.
@@ -594,12 +606,12 @@ registry as `:latest` and as the first 12 characters of the commit. A version ta
 `:1.1.0` to that same image, not built again (`tools/ci/retag.sh`; built only if `main` has none
 for the commit), and on GitHub makes the release, its notes taken from the changelog:
 
-- GitHub: `ghcr.io/ownzzzz/unshacklarr`, with no secret to add;
-- Forgejo: `<forge>/<owner>/unshacklarr`, given a `REGISTRY_TOKEN` secret (a token allowed to
+- GitHub: `ghcr.io/<owner>/downstream` and `ghcr.io/<owner>/unshacklarr`, with no secret to add;
+- Forgejo: `<forge>/<owner>/downstream` and `<forge>/<owner>/unshacklarr`, given a `REGISTRY_TOKEN` secret (a token allowed to
   write packages).
 
-The example compose file uses that image: a server only pulls it,
-`docker compose pull unshacklarr && docker compose up -d --no-deps unshacklarr`.
+The example compose file pulls it as `unshacklarr`: a server only pulls it,
+`docker compose pull downstream && docker compose up -d --no-deps downstream`.
 
 </details>
 

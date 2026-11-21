@@ -932,3 +932,62 @@ def test_a_failed_start_cleared_by_another_thread_mid_check_still_says_why(tmp_p
     local.failed = Clearing(("unshackle", time.monotonic(), UnshackleError("did not start")))
     with pytest.raises(UnshackleError, match="did not start"):
         local.recent_failure("unshackle")
+
+
+def test_the_new_names_keep_installs_from_before_the_rename_working(tmp_path, monkeypatch):
+    from pathlib import Path
+    pyproject = (Path(__file__).parents[1] / "pyproject.toml").read_text()
+    assert 'downstream = "unshacklarr.web:main"' in pyproject
+    assert 'unshacklarr = "unshacklarr.web:main"' in pyproject  # the old command still runs
+    import unshacklarr.sync as sync
+    monkeypatch.delenv("DOWNSTREAM_DATA", raising=False)
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path / "old"))
+    assert sync.env("DATA") == str(tmp_path / "old")  # an install that set the old name keeps its folder
+    monkeypatch.setenv("DOWNSTREAM_DATA", str(tmp_path / "new"))
+    assert sync.env("DATA") == str(tmp_path / "new")  # both set: the new name wins
+    # outside Docker: the old folder, while there is no new one
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(sync.sys, "platform", "linux")
+    monkeypatch.setattr(sync.os, "name", "posix")
+    assert sync.default_data_dir() == tmp_path / "downstream"
+    (tmp_path / "unshacklarr").mkdir()
+    assert sync.default_data_dir() == tmp_path / "unshacklarr"
+    (tmp_path / "downstream").mkdir()
+    assert sync.default_data_dir() == tmp_path / "downstream"
+
+
+def test_an_upgraded_container_keeps_the_data_folder_it_set_under_the_old_name(monkeypatch):
+    import re
+    import unshacklarr.sync as sync
+    dockerfile = (Path(__file__).parents[1] / "Dockerfile").read_text()
+    image_env = dict(re.findall(r"(\w+)=(\S+)", next(l for l in dockerfile.splitlines() if l.startswith("ENV ") and "DATA=" in l)))
+    monkeypatch.delenv("DOWNSTREAM_DATA", raising=False)
+    monkeypatch.delenv("UNSHACKLARR_DATA", raising=False)
+    for name, value in image_env.items():
+        monkeypatch.setenv(name, value)
+    assert sync.env("DATA") == "/data"  # the image's own default
+    monkeypatch.setenv("UNSHACKLARR_DATA", "/existing-config")  # set on the container before the rename
+    assert sync.env("DATA") == "/existing-config"
+
+
+def test_the_revealed_titles_move_to_the_new_browser_key_once():
+    import shutil, subprocess
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    src = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "core.js").read_text()
+    code = src[src.index("let revealed;"):src.index("const spoilerFree")]
+    results = {}
+    for storage in ("room", "full"):
+        out = subprocess.run(["node", "-e", r"""
+const vm = require("vm"), [code, full] = process.argv.slice(1), store = new Map([["unshacklarr.revealed", '["1-S01E01"]']]);
+const localStorage = { getItem: (k) => store.has(k) ? store.get(k) : null, removeItem: (k) => store.delete(k),
+  setItem: (k, v) => { if (full === "full") throw new Error("QuotaExceededError"); store.set(k, v); } };
+const ctx = vm.createContext({ localStorage, JSON, Set });
+vm.runInContext(code + "\nglobalThis.out = [...revealed];", ctx);
+console.log(JSON.stringify({ revealed: ctx.out, keys: Object.fromEntries(store) }));
+""", code, storage], capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        results[storage] = json.loads(out.stdout)
+    assert results["room"] == {"revealed": ["1-S01E01"], "keys": {"downstream.revealed": '["1-S01E01"]'}}
+    # storage full: still shown, and kept under the old key until it can move
+    assert results["full"] == {"revealed": ["1-S01E01"], "keys": {"unshacklarr.revealed": '["1-S01E01"]'}}

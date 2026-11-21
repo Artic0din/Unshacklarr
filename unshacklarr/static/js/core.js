@@ -344,7 +344,14 @@ function dirty() {  // a change put back as it was hides the bar again
 /* Spoiler-free: an episode's title blurred until clicked, for a series that asks (else the settings). What was shown
    is remembered in this browser. */
 let revealed;
-try { revealed = new Set(JSON.parse(localStorage.getItem("unshacklarr.revealed") || "[]")); } catch { revealed = new Set(); }
+try { revealed = new Set(JSON.parse(localStorage.getItem("downstream.revealed") ?? localStorage.getItem("unshacklarr.revealed") ?? "[]")); } catch { revealed = new Set(); }
+try {  // the key from before the rename, moved once: dropped only after the new one is stored
+  const old = localStorage.getItem("unshacklarr.revealed");
+  if (old !== null) {
+    if (localStorage.getItem("downstream.revealed") === null) localStorage.setItem("downstream.revealed", old);
+    localStorage.removeItem("unshacklarr.revealed");
+  }
+} catch { /* kept under the old key, read again next time */ }
 const spoilerFree = (tvdbId) => S.config?.series?.[tvdbId]?.spoiler_free ?? S.config?.settings?.spoiler_free === true;
 const titleHidden = (tvdbId, sxxeyy, title) => !!title && !/^(TBA|Episode \d+)$/i.test(title) && spoilerFree(tvdbId) && !revealed.has(`${tvdbId}-${sxxeyy}`);
 function episodeTitle(tvdbId, sxxeyy, title, className = "") {
@@ -352,7 +359,7 @@ function episodeTitle(tvdbId, sxxeyy, title, className = "") {
   const show = (ev) => {
     ev.preventDefault(); ev.stopPropagation();
     revealed.add(`${tvdbId}-${sxxeyy}`);
-    try { localStorage.setItem("unshacklarr.revealed", JSON.stringify([...revealed].slice(-2000))); } catch { /* shown for now */ }
+    try { localStorage.setItem("downstream.revealed", JSON.stringify([...revealed].slice(-2000))); localStorage.removeItem("unshacklarr.revealed"); } catch { /* shown for now */ }
     ev.currentTarget.replaceWith(el("span", { className, textContent: title }));
   };
   return el("span", { className: `${className} spoiler`.trim(), textContent: title, role: "button", tabIndex: 0,

@@ -17,7 +17,8 @@ dependencies = [
 ]
 
 [project.scripts]
-unshacklarr = "unshacklarr.web:main"
+downstream = "unshacklarr.web:main"
+unshacklarr = "unshacklarr.web:main"  # the old name, kept for scripts and installs that call it
 
 [dependency-groups]
 test = ["pytest>=8", "responses>=0.25"]
