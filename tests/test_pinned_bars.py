@@ -117,7 +117,8 @@ const ctx = vm.createContext({
 
 
 def measured(bars):
-    """--head-h and --bars-h as navigation.js sets them, for bars given as (offsetHeight, computed bottom)."""
+    """--head-h and --bars-h as navigation.js sets them, for bars given as (offsetHeight, computed bottom).
+    A bottom of "tabbar" stands on the tab bar: it reads --tabbar-top as set so far (86px before it is measured)."""
     if not shutil.which("node"):
         pytest.skip("node is not installed")
     src = (STATIC / "js" / "navigation.js").read_text()
@@ -126,7 +127,7 @@ def measured(bars):
 const vm = require("vm"), [code, bars] = process.argv.slice(1), set = {};
 const nodes = { header: { offsetHeight: 65, style: {} }, "#con-detail": { bottom: "auto", pad: "20px" } };
 for (const [sel, [h, bottom]] of Object.entries(JSON.parse(bars))) nodes[sel] = { offsetHeight: h, bottom };
-const ctx = vm.createContext({ $: (sel) => nodes[sel], getComputedStyle: (n) => ({ bottom: n.bottom, paddingBottom: n.pad || "0px" }), Math, parseFloat,
+const ctx = vm.createContext({ $: (sel) => nodes[sel], getComputedStyle: (n) => ({ bottom: n.bottom === "tabbar" ? set["--tabbar-top"] || "86px" : n.bottom, paddingBottom: n.pad || "0px" }), Math, parseFloat,
   document: { documentElement: { style: { setProperty: (k, v) => { set[k] = v; } } } } });
 vm.runInContext(code + "\nmeasureBars();", ctx);
 console.log(JSON.stringify(set));
@@ -144,6 +145,13 @@ def test_phone_bars_reach_as_far_up_as_the_highest_one():
     # the save bar over the tab bar, and the selection bar wrapped to two rows over both: the highest one counts
     shown = {**NONE, **tab, "#savebar": [56, "76px"], "#sel-bar": [104, "140px"]}
     assert measured(shown)["--bars-h"] == "252px"
+
+
+def test_a_grown_tab_bar_raises_the_bars_on_it_in_the_same_measure():
+    # larger text makes the tab bar taller: the save bar standing on it moves up, and --bars-h must follow at once
+    grown = {**NONE, 'nav[aria-label="Main"]': [110, "12px"], "#savebar": [56, "tabbar"]}
+    assert measured(grown)["--tabbar-top"] == "134px"
+    assert measured(grown)["--bars-h"] == "198px"  # 56 over 134, not over the 86px it stood on before
 
 
 def test_phone_expanded_dock_and_series_download_bar_are_measured_as_they_are():
