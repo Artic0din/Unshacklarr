@@ -2,7 +2,8 @@
 :root {
   color-scheme: only dark;
   --bg: #080804; --panel: #10140c; --line: #2c301c; --text: #ffffff; --muted: #aca9a6;
-  --well: #2c301c; --bar: #1c2008;  /* the header and tab bar */ --select: #3c3e38;  /* the lighter neutral fill marks selection, not a primary action */
+  --well: #2c301c;  /* a small well: icon buttons, neutral badges, hover; never selection, never a large panel */
+  --bar: #1c2008;  /* the header and tab bar */ --text-selection: #44501d;  /* selected text and the editor's selection */
   --accent: #cbe24d; --accent-ink: #0a0b05; --accent-tint: #30381a; --warn-tint: #3d2f0e; --err-tint: #45201a;
   --ok: #65d8a0; --ok-tint: #17392a; --warn: #e8b651; --warn-ink: #241a03; --err: #ff8a75; --err-ink: #2a0c06;
   --line-strong: #52564a;  /* a divider or thumb that must show on --panel; never text */
@@ -46,7 +47,7 @@ html.i18n-wait body { visibility: hidden; }  /* until the translation is in */
 body { margin: 0;
   color: var(--text); font: var(--fs-body)/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 a { color: var(--text); text-underline-offset: .16em; }
-::selection { color: var(--text); background: var(--select); }
+::selection { color: var(--text); background: var(--text-selection); }
 button, input, select { font: inherit; color: inherit; }
 h1, h2, h3, .sx-card h4 { line-height: 1.2; letter-spacing: -.01em; text-wrap: balance; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -279,7 +279,7 @@ function renderMonth() {
       el("span", { className: "cal-date", textContent: date.getDate() }),
       el("span", { className: "cal-count" }, ...(mine ? [el("i", { className: "mine", title: managed, textContent: mine })] : []),
         ...(other ? [el("i", { title: notManaged, textContent: other })] : [])),
-      el("span", { className: "cal-eps" }, ...shown.map((d) => el("span", { className: "cal-ep" + (d.managed ? " mine" : ""), title: d.managed ? managed : notManaged },
+      el("span", { className: "cal-eps" }, ...shown.map((d) => el("span", { className: `cal-ep${d.managed ? " mine" : ""} st-${schedStatus(d)?.[0] || "none"}`, title: [d.managed ? managed : notManaged, schedStatus(d)?.[1]].filter(Boolean).join(" · ") },
         el("b", { textContent: monthTime(d, key) }), ` ${d.series}`)),
         ...(list.length > 3 ? [el("span", { className: "cal-ep more", textContent: `+${list.length - 3} more` })] : [])));
     cells.push(cell);

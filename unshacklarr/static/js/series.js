@@ -1127,7 +1127,7 @@ document.addEventListener("keydown", (e) => {  // a dialog's Escape closes it al
 });
 
 /* Settings' shortcuts: straight to a card, opened if folded, the page's address left as it is. */
-$(".ds-nav").onclick = (e) => {
+$(".ds-nav:not(.set-jumps)").onclick = (e) => {
   const a = e.target.closest("a[data-to]");
   if (!a) return;
   e.preventDefault();
@@ -1141,7 +1141,7 @@ $(".ds-nav").onclick = (e) => {
 let dsPicked = null;  // the shortcut clicked: lit until the person scrolls on their own
 function dsLight() {  // the card in view: the last one whose top went under what is pinned
   if ($("#dt-settings").hidden) return;  // the episodes scrolling, or the drawer closed: nothing to light
-  const nav = $(".ds-nav"), links = [...nav.querySelectorAll("a[data-to]")];
+  const nav = $(".ds-nav:not(.set-jumps)"), links = [...nav.querySelectorAll("a[data-to]")];
   const pinned = (box) => (getComputedStyle(box).position === "sticky" ? box.getBoundingClientRect().bottom : 0);  // a bar that scrolled away covers nothing
   const bar = Math.max(pinned($(".d-head")), pinned(nav)) + 24;
   let on = dsPicked || links[0]?.dataset.to;

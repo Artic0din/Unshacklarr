@@ -66,7 +66,7 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .ep-sonarr button { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 14px; border: 0; border-radius: var(--radius-pill);
   background: none; color: var(--text); font: inherit; font-size: var(--fs-callout); cursor: pointer; }
 @media (hover: hover) { .ep-sonarr button:hover { background: var(--well); } }
-.ep-sonarr button[aria-pressed=true] { background: var(--select); color: var(--text); font-weight: 600; }
+.ep-sonarr button[aria-pressed=true] { background: var(--accent-tint); color: var(--text); font-weight: 600; }
 .ep-sonarr button small { color: var(--muted); font-size: var(--fs-footnote); font-weight: 400; }
 .ep-sonarr button em { font-style: normal; font-size: var(--fs-footnote); color: var(--warn); font-weight: 500; }
 
@@ -82,8 +82,8 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .ug-groups { display: grid; gap: 6px; } .ug-group small { color: var(--muted); } .ug-group > small { display: block; } .ug-group.warn b { color: var(--warn); }
 /* A series' libraries: one chip each, lit when it gets new episodes; what it misses one click from Episodes */
 .d-libs { display: flex; flex-wrap: wrap; gap: 8px; }
-.d-lib { display: inline-flex; align-items: stretch; border: 1.5px solid var(--line); border-radius: var(--radius-field); background: var(--field-bg); overflow: hidden; }
-.d-lib.on { border-color: var(--field-line-hover); background: var(--select); }
+.d-lib { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--field-bg); overflow: hidden; }
+.d-lib.on { border-color: var(--accent); background: var(--accent-tint); }
 .d-lib-sw { display: grid; gap: 2px; text-align: left; padding: 8px 14px 8px 36px; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; position: relative; }
 .d-lib-sw::before { content: ""; position: absolute; left: 12px; top: 50%; width: 14px; height: 14px; margin-top: -8px; border: 1.5px solid var(--muted); border-radius: var(--radius-inline); }
 .d-lib.on .d-lib-sw::before { border-color: var(--accent); background: var(--accent) center / 11px no-repeat var(--tick); }
@@ -137,15 +137,15 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 .new-badge { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: var(--radius-pill); background: var(--well); color: var(--text);
   font-size: var(--fs-caption); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; vertical-align: middle;
 }
-.is-new { border-color: var(--field-line-hover) !important; } .is-new.new-blink { animation: new-pulse 1.2s ease-in-out 2; }
+.is-new { border-color: var(--accent-tint) !important; }  /* new since the last visit: an accent-tint frame */ .is-new.new-blink { animation: new-pulse 1.2s ease-in-out 2; }
 /* a part of a card (its line on top, no frame of its own): a frame of its own and a tint while new */
 .up-mode, .ds-sub { transition: background-color .8s, box-shadow .8s; border-radius: var(--radius-field); }
 .up-mode.is-new, .ds-sub.is-new { border-top-color: var(--line) !important; margin-left: -14px; margin-right: -14px; padding: 14px 14px 12px;
-  background: var(--well); box-shadow: inset 0 0 0 1px var(--field-line-hover); }
+  background: var(--bg); box-shadow: inset 0 0 0 1px var(--accent-tint); }
 .up-mode.is-new.new-blink, .ds-sub.is-new.new-blink { animation: new-tint 1.2s ease-in-out 2; }
 .sx-card { transition: border-color .8s; }  /* the frame fades once seen */
-@keyframes new-pulse { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 18%, transparent); } }
-@keyframes new-tint { 50% { background: var(--select); } }
+@keyframes new-pulse { 50% { box-shadow: 0 0 0 3px var(--accent-tint); } }
+@keyframes new-tint { 50% { background: var(--accent-tint); } }
 @media (prefers-reduced-motion: reduce) { .is-new.new-blink { animation: none !important; } }
 @media (max-width: 700px) { .news-list { padding-left: 22px; } .news-list li { flex-direction: column; align-items: flex-start; gap: 6px; }
   .news-rel > summary { flex-wrap: wrap; row-gap: 4px; } }
@@ -204,10 +204,9 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 .sv-table thead th { border-top: 0; padding-top: 4px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; }
 .sv-table thead th:first-child { width: 25%; }
 .sv-table thead th:last-child { width: 15%; }
-.sv-table tbody th { font-size: var(--fs-callout); border-inline-start: 1px solid var(--sv-edge, transparent); }
+.sv-table tbody th { font-size: var(--fs-callout); }
 .sv-name { overflow-wrap: normal; }
 .sv-backend { display: block; color: var(--muted); font-size: var(--fs-sub); font-weight: 400; }
-.sv-row[data-attention] { --sv-edge: var(--err); }
 .sv-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sv-k { display: none; }
 .sv-table td small { display: block; color: var(--muted); font-size: var(--fs-sub); }
@@ -242,7 +241,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
   .sv-table, .sv-table tbody, .sv-table th, .sv-table td { display: block; }
   .sv-table thead { display: none; }
   .sv-table tbody tr { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-    gap: 10px 16px; padding: 12px 8px; border-block-start: 1px solid var(--line); border-inline-start: 1px solid var(--sv-edge, transparent); }
+    gap: 10px 16px; padding: 12px 8px; border-block-start: 1px solid var(--line); }
   .sv-table tbody tr:first-child { border-block-start: 0; }
   .sv-table tbody th, .sv-table tbody td { border: 0; padding: 0; }
   .sv-k { display: block; margin-bottom: 2px; color: var(--muted); font-size: var(--fs-footnote); font-weight: 600; }
@@ -353,3 +352,51 @@ select:not([multiple]) { appearance: none; -webkit-appearance: none; padding-rig
   background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%);
   background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
 .oneoff-preview .pick select { padding-right: 28px; }
+
+/* ---- Selection: one look for everything you pick one of (and filters that are on) ----
+   accent-tint fill, a 1px accent outline, text colour, weight 600. Solid accent is only the header's current page, the
+   phone tab bar and primary buttons; grey is never selection. Last in the cascade, so no older rule wins. */
+:is(.seg button[aria-pressed="true"], .d-tabs button[aria-pressed="true"], .ep-sonarr button[aria-pressed=true], .bc-cal-grid button.on,
+  .cdm-opt.on, .lang-menu button.on, .wz-steps li.on button, .set-nav button[aria-current="true"],
+  .ax-seg button[aria-pressed=true], .rt-custom.on, .con-filters button[aria-pressed="true"], .inbox-filters button[aria-pressed="true"],
+  button.pill[aria-pressed="true"], .pill:has(input:checked), .bulk-rows label:has(input:checked), .bc-days button[aria-pressed="true"],
+  #sel-toggle[aria-pressed="true"], .ds-nav a[aria-current="true"], .seasons button[aria-pressed="true"], .nt-app[aria-pressed=true],
+  .wz-tile[aria-checked=true], .d-lib.on) {
+  background: var(--accent-tint); border-color: var(--accent); border-style: solid; color: var(--text); font-weight: 600; }
+/* the borderless ones draw the outline inside */
+:is(.seg button[aria-pressed="true"], .d-tabs button[aria-pressed="true"], .ep-sonarr button[aria-pressed=true], .bc-cal-grid button.on,
+  .cdm-opt.on, .lang-menu button.on, .wz-steps li.on button, .set-nav button[aria-current="true"]) { box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* ---- Joined segmented controls: a track with the segments inside ---- */
+.sched-filter, .seasons, .ds-nav:not(.set-jumps) { display: flex; flex-wrap: nowrap; gap: var(--sp-1); padding: var(--sp-1); overflow-x: auto;
+  border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--panel); scrollbar-width: none; }
+.sched-filter { display: inline-flex; max-width: 100%; }
+:is(.sched-filter .pill, .ds-nav:not(.set-jumps) a) { flex: none; border-color: transparent; background: none; }
+.seasons { width: fit-content; max-width: 100%; margin-block: var(--sp-4) var(--sp-3); }  /* tall: the count on a second line */
+.seasons button { min-height: 52px; border-color: transparent; background: none; }
+.ep-sel { padding: var(--sp-1); gap: var(--sp-1); border-radius: var(--radius-card); max-width: 100%; overflow-x: auto; }
+.ep-sel button { border: 1px solid transparent; border-radius: var(--radius-pill); }
+.ds-nav:not(.set-jumps) { position: sticky; margin-block-end: var(--sp-3); box-shadow: 0 var(--sp-3) 0 0 var(--bg); }  /* stuck: a 12px band of the drawer's ground under it, so the card below never meets its edge */
+
+/* ---- Accent outline: selected, and nothing else ---- */
+.sched-card:has(.sc-open[aria-expanded="true"]) { border-color: var(--accent); }  /* the card whose details are open */
+.sc-open[aria-expanded="true"] { background: none; }
+.day.today .day-h .rel { background: var(--accent-tint); color: var(--accent); }  /* the Today marker on its column head */
+
+/* ---- Month view: an episode is one plain line, a 7px state dot, the time muted, the title ---- */
+.cal-ep, .cal-ep.mine { display: flex; align-items: baseline; gap: 5px; padding: 0; background: none; color: var(--text); border-radius: 0; }
+.cal-ep::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transform: translateY(-1px); }
+.cal-ep.st-ok::before { background: var(--ok); } .cal-ep:is(.st-wait, .st-late, .st-try)::before { background: var(--warn); }
+.cal-ep b { color: var(--muted); font-weight: 600; }
+.cal-ep.more { color: var(--muted); } .cal-ep.more::before { content: none; }
+
+/* ---- Surfaces inside a card: darker than the card, outlined ---- */
+:is(.nt-target, .nt-app, .nt-level, .nt-msg, .ac-cmd, .svc-block, .sx .svc-block, .cdm-svcs-box, .cdm-devs, .sx .cdm-svcs-box, .sx .cdm-devs,
+  .ds-sub, .wz-restore) {
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-tile); }
+.wz-side { background: var(--bg); }
+.cdm-grp.cdm-default { background: none; }  /* a row of a list inside the card: no fill of its own */
+
+/* ---- Needs attention: a full outline, never a bar along one edge ---- */
+.sv-row[data-attention] { outline: 1px solid var(--err); outline-offset: -1px; }
+
