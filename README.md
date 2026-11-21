@@ -162,8 +162,8 @@ Unshackle you already have.
 
    ```bash
    mkdir unshacklarr && cd unshacklarr
-   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/Artic0din/DownStream/main/docker-compose.example.yml
-   curl -fsSLo .env https://raw.githubusercontent.com/Artic0din/DownStream/main/.env.example
+   curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/Artic0din/Unshacklarr/main/docker-compose.example.yml
+   curl -fsSLo .env https://raw.githubusercontent.com/Artic0din/Unshacklarr/main/.env.example
    ```
 
 2. **Fill in `.env`:**
