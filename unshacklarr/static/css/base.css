@@ -2,7 +2,7 @@
 :root {
   color-scheme: only dark;
   --bg: #080804; --panel: #10140c; --line: #2c301c; --text: #ffffff; --muted: #aca9a6;
-  --well: #2c301c; --select: #3d3f39;  /* the lighter neutral fill marks selection, not a primary action */
+  --well: #2c301c; --select: #3c3e38;  /* the lighter neutral fill marks selection, not a primary action */
   --accent: #cbe24d; --accent-ink: #0a0b05; --accent-tint: #30381a; --warn-tint: #3d2f0e; --err-tint: #45201a;
   --ok: #65d8a0; --ok-tint: #17392a; --warn: #e8b651; --warn-ink: #241a03; --err: #ff8a75; --err-ink: #2a0c06;
   --line-strong: #52564a;  /* a divider or thumb that must show on --panel; never text */
