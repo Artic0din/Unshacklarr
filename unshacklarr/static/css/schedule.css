@@ -40,7 +40,7 @@
 .cal-ep.more { background: none; }
 #cal-day { margin-top: 14px; }
 button.pill { font: inherit; } .toolbar .pill span { font-variant-numeric: tabular-nums; margin-left: -2px; }
-button.pill[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); }
+button.pill[aria-pressed="true"] { background: var(--accent-tint); border-color: var(--accent); color: var(--text); }  /* a filter that is on */
 .btn.add { color: var(--muted); background: transparent; border: 1px dashed var(--field-line); font-weight: 600; border-radius: var(--radius-pill); }
 .btn.add:focus-visible { color: var(--text); border-color: var(--text); border-style: solid; }
 @media (hover: hover) { .btn.add:hover { color: var(--text); border-color: var(--field-line-hover); border-style: solid; } }
@@ -48,8 +48,8 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
 /* Schedule, refined: late episodes in one banner, a status on each episode of yours */
 .late-banner { margin-bottom: 12px; border: 1px solid var(--warn);
   background: var(--warn-tint); border-radius: var(--radius-card); font-size: var(--fs-callout); }
-.late-banner summary { padding: 6px 10px; color: var(--warn); cursor: pointer; }
-.late-banner > p, #sched-missing { margin: 4px 10px 10px; }
+.late-banner summary { padding: var(--sp-3) var(--sp-4); color: var(--warn); font-weight: 600; cursor: pointer; }
+.late-banner > p, #sched-missing { margin: 0 var(--sp-4) var(--sp-3); }
 .sched-st { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-footnote); font-weight: 600; white-space: nowrap; padding: 3px 9px; border-radius: var(--radius-pill); }
 .sched-st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 /* Week board: seven day columns from 1100px, as many as fit under that, one on a phone. Cards are episodes. */
@@ -62,7 +62,8 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
 .day-h .num { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 .day-h .rel { margin-left: auto; padding: 0 8px; border-radius: var(--radius-pill); font-size: var(--fs-footnote); font-weight: 600; color: var(--text);
   background: var(--well); }
-.day.today .day-h b { color: var(--text); }
+.day-h b { font-size: var(--fs-sub); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }  /* the weekday: small capitals, today's in the accent */
+.day.today .day-h b { color: var(--accent); }
 .day .n { margin-top: -4px; padding: 0 2px; color: var(--muted); font-size: var(--fs-footnote); }
 .day-empty { margin: 0; padding: 0 2px 6px; color: var(--muted); font-size: var(--fs-footnote); }
 .sched-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
