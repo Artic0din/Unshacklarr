@@ -132,9 +132,9 @@ input[type=checkbox].switch:checked { background: var(--muted); } input[type=che
 .cp, .wiz-step .field:has(.cp-list) { position: relative; }
 /* half of an 11th row shows: a list that ends on a whole row looks complete */
 .cp-list { position: absolute; left: 0; right: 0; z-index: 30; max-height: calc(10.5 * 38px + 8px); overflow-y: auto; margin: 0;
-  padding: 4px; list-style: none; border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--panel); box-shadow: var(--sh-lg); }
+  padding: 4px; list-style: none; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--panel); box-shadow: var(--sh-lg); }
 .cp-list[hidden] { display: none; }
-.cp-list li { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: var(--radius-inline); cursor: pointer; font-size: var(--fs-callout); }
+.cp-list li { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: var(--radius-tile); cursor: pointer; font-size: var(--fs-callout); }
 .cp-list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-list li small { color: var(--muted); font-size: var(--fs-footnote); } .cp-list li.on { background: color-mix(in srgb, var(--text) 7%, transparent); box-shadow: inset 3px 0 0 var(--field-line-hover); }
 @media (hover: hover) { .cp-list li:hover { background: color-mix(in srgb, var(--text) 7%, transparent); } }
@@ -397,9 +397,9 @@ body.gated > :not(.gate):not(.toasts):not(#confirm-dialog) { display: none !impo
 .opt .rm { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: var(--fs-title3); padding: 0 6px; }
 .picker { position: relative; }
 .picker-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 6; margin: 0; padding: 4px; list-style: none;
-  max-height: 300px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-field);
+  max-height: 300px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-card);
   box-shadow: var(--sh-md); }
-.picker-list li { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 10px; padding: 6px 8px; border-radius: var(--radius-inline); cursor: pointer; align-items: baseline; }
+.picker-list li { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 10px; padding: 6px 8px; border-radius: var(--radius-tile); cursor: pointer; align-items: baseline; }
 .picker-list li.on { background: var(--bg); outline: 1px solid var(--field-line-hover); }
 .picker-list li span { color: var(--muted); font-size: var(--fs-sub); overflow-wrap: anywhere; }
 .picker-list li.none { display: block; color: var(--muted); cursor: default; }

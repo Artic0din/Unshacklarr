@@ -169,7 +169,7 @@
 .st-cmds { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .st-cmd { display: flex; gap: 8px; align-items: center; }
 .st-cmd code { flex: 1; font: var(--fs-sub) ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); border: 1px solid var(--line);
-  border-radius: var(--radius-inline); padding: 6px 10px; overflow-x: auto; white-space: nowrap; }
+  border-radius: var(--radius-field); padding: 6px 10px; overflow-x: auto; white-space: nowrap; }
 .tools-box summary { cursor: pointer; font-size: var(--fs-callout); color: var(--muted); }
 @media (hover: hover) { .tools-box summary:hover { color: var(--text); } }
 .tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }

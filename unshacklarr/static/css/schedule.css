@@ -105,6 +105,6 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
 .sd .facts b { color: var(--text); font-weight: 600; }
 .sd .cmd summary { color: var(--muted); cursor: pointer; }
 .sd code { display: block; margin-top: 4px; font: var(--fs-footnote)/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--field-bg); border: 1px solid var(--line);
-  border-radius: var(--radius-inline); padding: 9px 11px; color: var(--text); overflow-wrap: anywhere; }
+  border-radius: var(--radius-field); padding: 9px 11px; color: var(--text); overflow-wrap: anywhere; }
 .sd .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .last-sync { color: var(--muted); font-size: var(--fs-sub); }
