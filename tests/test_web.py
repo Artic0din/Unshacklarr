@@ -2882,6 +2882,30 @@ def test_a_broken_unshackle_yaml_still_opens_and_saves_in_its_editor_and_the_ale
     assert [f.read_text() for f in (tmp_path / "history").glob("*.yaml")] == [broken]  # the broken file kept in the history
 
 
+def test_every_icon_the_page_and_manifest_name_is_served_before_login(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.reset_password("a-password")  # set up: anything not open now needs a session
+    html = (STATIC / "index.html").read_text()
+    manifest = json.loads((STATIC / "manifest.webmanifest").read_text())
+    icons = set(re.findall(r'<link rel="(?:icon|apple-touch-icon)"[^>]*href="(/[^"]+)"', html)) | {i["src"] for i in manifest["icons"]}
+    assert {"/icon-16.png", "/icon-32.png", "/apple-touch-icon.png", "/icon-maskable-512.png"} <= icons
+    assert {i["purpose"] for i in manifest["icons"]} == {"any", "maskable"}
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            assert (await client.get("/api/status")).status == 401  # no session: a closed path is refused
+            return {path: (r.status, r.content_type, await r.read()) for path in sorted(icons) for r in [await client.get(path)]}
+
+    served = asyncio.run(go())
+    assert {path: (status, kind) for path, (status, kind, _) in served.items()} == {path: (200, "image/png") for path in icons}
+    assert all(body == (STATIC / path.lstrip("/")).read_bytes() for path, (_, _, body) in served.items())
+
+
 def test_the_yaml_editor_files_are_served_and_know_unshackle_keys():
     import json
     from pathlib import Path

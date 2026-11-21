@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>try { if (!/^en\b/.test(localStorage.getItem("lang") || navigator.language || "en")) document.documentElement.classList.add("i18n-wait"); } catch {}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d0e0b">
+<meta name="theme-color" content="#080804">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,7 +12,8 @@
 <title>Unshacklarr</title>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2064%2064%22%3E%3Ccircle%20cx=%2232%22%20cy=%2232%22%20r=%2231%22%20fill=%22%23e1f23a%22/%3E%3Ccircle%20cx=%2232%22%20cy=%2232%22%20r=%2227.6%22%20fill=%22none%22%20stroke=%22%2314170b%22%20stroke-opacity=%22.18%22%20stroke-width=%221.4%22/%3E%3Cpath%20d=%22M25%2025.5v-5a7%207%200%200%201%2014%200%22%20fill=%22none%22%20stroke=%22%2314170b%22%20stroke-width=%224.4%22%20stroke-linecap=%22round%22/%3E%3Crect%20x=%2213%22%20y=%2225%22%20width=%2238%22%20height=%2224%22%20rx=%225%22%20fill=%22%2314170b%22/%3E%3Cpath%20d=%22M32%2029.5v10M27.3%2035%2032%2039.7l4.7-4.7%22%20fill=%22none%22%20stroke=%22%23e1f23a%22%20stroke-width=%223.6%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22/%3E%3Cpath%20d=%22M25%2053.5h14%22%20stroke=%22%2314170b%22%20stroke-width=%223.6%22%20stroke-linecap=%22round%22/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png">
 <link rel="stylesheet" href="/xterm.css?v=5.5.0">
 <script src="/xterm.js?v=5.5.0" defer></script>
 <script src="/xterm-fit.js?v=0.10.0" defer></script>
@@ -29,18 +30,14 @@
 <a class="skip" href="#main">Skip to content</a>
 <div class="gate" id="gate" hidden>
   <div class="gate-card">
-    <svg class="logo" width="72" height="72" viewBox="0 0 64 64" aria-hidden="true">
-  <circle cx="32" cy="32" r="31" fill="#e1f23a"/><circle cx="32" cy="32" r="27.6" fill="none" stroke="#14170b" stroke-opacity=".18" stroke-width="1.4"/><path d="M25 25.5v-5a7 7 0 0 1 14 0" fill="none" stroke="#14170b" stroke-width="4.4" stroke-linecap="round"/><rect x="13" y="25" width="38" height="24" rx="5" fill="#14170b"/><path d="M32 29.5v10M27.3 35 32 39.7l4.7-4.7" fill="none" stroke="#e1f23a" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M25 53.5h14" stroke="#14170b" stroke-width="3.6" stroke-linecap="round"/>
-</svg>
+    <svg class="logo" width="72" height="72" viewBox="0 0 256 256" aria-hidden="true"><path d="M68 67.71C68 55.4 81.33 47.7 92 53.86L109 63.67V192.33L92 202.14C81.33 208.3 68 200.6 68 188.29ZM121 185.4V70.6L160 93.12V162.88L121 185.4ZM172 100.04 196.42 114.14C207.09 120.3 207.09 135.7 196.42 141.86L172 155.96V100.04Z" fill="#cbe24d"/></svg>
     <h1>Unshacklarr</h1>
     <p class="muted" id="gate-sub"></p>
     <form id="gate-form" autocomplete="on"></form>
   </div>
 </div>
 <header>
-  <h1 class="brand"><a href="#/schedule" id="home" aria-label="Unshacklarr, schedule"><svg class="logo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
-  <circle cx="32" cy="32" r="31" fill="#e1f23a"/><circle cx="32" cy="32" r="27.6" fill="none" stroke="#14170b" stroke-opacity=".18" stroke-width="1.4"/><path d="M25 25.5v-5a7 7 0 0 1 14 0" fill="none" stroke="#14170b" stroke-width="4.4" stroke-linecap="round"/><rect x="13" y="25" width="38" height="24" rx="5" fill="#14170b"/><path d="M32 29.5v10M27.3 35 32 39.7l4.7-4.7" fill="none" stroke="#e1f23a" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M25 53.5h14" stroke="#14170b" stroke-width="3.6" stroke-linecap="round"/>
-</svg><span>Unshacklarr</span></a></h1>
+  <h1 class="brand"><a href="#/schedule" id="home" aria-label="Unshacklarr, schedule"><svg class="logo" width="30" height="30" viewBox="0 0 256 256" aria-hidden="true"><path d="M68 67.71C68 55.4 81.33 47.7 92 53.86L109 63.67V192.33L92 202.14C81.33 208.3 68 200.6 68 188.29ZM121 185.4V70.6L160 93.12V162.88L121 185.4ZM172 100.04 196.42 114.14C207.09 120.3 207.09 135.7 196.42 141.86L172 155.96V100.04Z" fill="#cbe24d"/></svg><span>Unshacklarr</span></a></h1>
   <nav aria-label="Main">
     <a href="#/schedule" data-tab="schedule" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Schedule</span></a>
     <a href="#/series" data-tab="series"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h10"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span>Series</span></a>

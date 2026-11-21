@@ -1,12 +1,13 @@
 /* Lime marks primary actions, live activity, the current page, and keyboard focus. */
 :root {
   color-scheme: only dark;
-  --bg: #0d0e0b; --panel: #191b16; --line: #35382e; --text: #f1f2eb; --muted: #b8bbae;
-  --well: #24271f; --select: #444640;  /* the lighter neutral fill marks selection, not a primary action */
-  --accent: #e1f23a; --accent-ink: #14170b; --accent-tint: #30381a; --warn-tint: #3d2f0e; --err-tint: #45201a;
+  --bg: #080804; --panel: #10140c; --line: #2c301c; --text: #ffffff; --muted: #aca9a6;
+  --well: #2c301c; --select: #3c3e38;  /* the lighter neutral fill marks selection, not a primary action */
+  --accent: #cbe24d; --accent-ink: #0a0b05; --accent-tint: #30381a; --warn-tint: #3d2f0e; --err-tint: #45201a;
   --ok: #65d8a0; --ok-tint: #17392a; --warn: #e8b651; --warn-ink: #241a03; --err: #ff8a75; --err-ink: #2a0c06;
   --line-strong: #52564a;  /* a divider or thumb that must show on --panel; never text */
-  --scrim: rgb(8 9 6 / .6);
+  --scrim: rgb(8 8 4 / .64);
+  --live: #f2552c;  /* the pulsing dot of something running now; never a fill or a button */
   --term-bg: #10110e; --tk-video: #8fb3ff; --tk-audio: #cfa0ff; --code-string: #a8d68f; --net-chip: #e9ebe3;
   --dim: grayscale(.85) brightness(.6);
   /* One rhythm for every form: a field's name to its input, its input to its help, one field to the next */
@@ -20,7 +21,7 @@
   --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 20px;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
   --header-bottom: calc(var(--header-top, 0px) + var(--head-h, 65px));
-  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2314170b' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");  /* a tick on a light fill, in --accent-ink */
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a0b05' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");  /* a tick on a light fill, in --accent-ink */
   --sh-xs: 0 1px 2px 0 #0000004d;
   --sh-sm: 0 1px 2px 0 #00000066, 0 1px 3px 0 #00000066;
   --sh-md: 0 1px 2px 0 #00000066, 0 4px 12px 0 #00000080;
