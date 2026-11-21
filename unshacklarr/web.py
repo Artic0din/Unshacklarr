@@ -7513,7 +7513,7 @@ def reset_password(password: str) -> None:
 
 
 def main() -> None:
-    if sys.argv[1:] == ["reset-password"]:  # unshacklarr reset-password (docker exec -it unshacklarr …)
+    if sys.argv[1:] == ["reset-password"]:  # downstream reset-password (docker exec -it downstream …)
         import getpass
         new = getpass.getpass("New password: ")
         if new != getpass.getpass("Again: "):

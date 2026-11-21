@@ -543,8 +543,9 @@ made up at each start.
 **Lost the password?** Set a new one where DownStream runs; settings and series stay:
 
 ```bash
-unshacklarr reset-password
-docker exec -it unshacklarr unshacklarr reset-password   # with Docker
+downstream reset-password
+docker exec -it downstream downstream reset-password     # with Docker
+docker exec -it unshacklarr unshacklarr reset-password   # with Docker, a container from before the rename
 ```
 
 <a name="versions"></a>
