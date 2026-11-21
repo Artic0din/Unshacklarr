@@ -976,12 +976,18 @@ def test_the_revealed_titles_move_to_the_new_browser_key_once():
         pytest.skip("node is not installed")
     src = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "core.js").read_text()
     code = src[src.index("let revealed;"):src.index("const spoilerFree")]
-    out = subprocess.run(["node", "-e", r"""
-const vm = require("vm"), store = new Map([["unshacklarr.revealed", '["1-S01E01"]']]);
-const localStorage = { getItem: (k) => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+    results = {}
+    for storage in ("room", "full"):
+        out = subprocess.run(["node", "-e", r"""
+const vm = require("vm"), [code, full] = process.argv.slice(1), store = new Map([["unshacklarr.revealed", '["1-S01E01"]']]);
+const localStorage = { getItem: (k) => store.has(k) ? store.get(k) : null, removeItem: (k) => store.delete(k),
+  setItem: (k, v) => { if (full === "full") throw new Error("QuotaExceededError"); store.set(k, v); } };
 const ctx = vm.createContext({ localStorage, JSON, Set });
-vm.runInContext(process.argv[1] + "\nglobalThis.out = [...revealed];", ctx);
+vm.runInContext(code + "\nglobalThis.out = [...revealed];", ctx);
 console.log(JSON.stringify({ revealed: ctx.out, keys: Object.fromEntries(store) }));
-""", code], capture_output=True, text=True)
-    assert out.returncode == 0, out.stderr
-    assert json.loads(out.stdout) == {"revealed": ["1-S01E01"], "keys": {"downstream.revealed": '["1-S01E01"]'}}
+""", code, storage], capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        results[storage] = json.loads(out.stdout)
+    assert results["room"] == {"revealed": ["1-S01E01"], "keys": {"downstream.revealed": '["1-S01E01"]'}}
+    # storage full: still shown, and kept under the old key until it can move
+    assert results["full"] == {"revealed": ["1-S01E01"], "keys": {"unshacklarr.revealed": '["1-S01E01"]'}}

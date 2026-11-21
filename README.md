@@ -425,7 +425,7 @@ and the image is still published under its old name, `unshacklarr`, beside `down
 To switch to the new names, stop the old containers first, or the new ones clash with them:
 
 1. `docker compose down`
-2. In `docker-compose.yml`, rename the `name`, the service and its `container_name` to `downstream`, keeping its volumes.
+2. In `docker-compose.yml`, rename the service and its `container_name` to `downstream`. Keep `name: unshacklarr`: named volumes belong to the project, and a new project name starts with empty ones.
 3. `docker compose up -d`
 
 <a name="api"></a>
