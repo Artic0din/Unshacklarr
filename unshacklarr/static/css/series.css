@@ -92,7 +92,7 @@ details.card[open] summary::after { transform: rotate(90deg); }
 .opts .opt + .opt { border-top: 1px dashed var(--line); }
 body.drawer-open .savebar { display: none; }
 .d-tabs { flex-basis: 100%; display: flex; gap: 4px; margin-top: 2px; }
-.d-tabs button { background: none; border: 0; border-radius: var(--radius-pill); padding: 10px 14px; cursor: pointer; color: var(--muted); font-weight: 600; }
+.d-tabs button { background: none; border: 0; border-radius: var(--radius-pill); min-height: 44px; padding: 10px 14px; cursor: pointer; color: var(--muted); font-weight: 600; }
 .d-tabs button[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); }  /* a segmented control: the one pane shown */
 .d-pane[hidden] { display: none; }
 /* Episodes: one season at a time, picked from a strip, so 35 seasons stay usable. */

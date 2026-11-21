@@ -406,13 +406,12 @@
   clip-path: polygon(14% 52%, 0 66%, 38% 100%, 100% 22%, 86% 8%, 38% 72%); border-radius: 0; }
 .wall.selecting .poster .art::after { content: ""; position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
   border: 2px solid #fff; background: rgb(13 18 25 / .55); box-shadow: var(--sh-sm); }
-.wall.selecting .poster.picked .art { box-shadow: 0 0 0 2px var(--accent); }  /* picked: the lime ring and box */
 .wall.selecting .poster.picked .art::after { border-color: var(--accent); background: var(--accent) center / 14px no-repeat var(--tick); }
 .wall.selecting .poster .off { display: none; }
 .wall.selecting .poster:not(.picked) .art { box-shadow: none; } .wall.selecting .poster:not(.picked) .art img { filter: var(--dim); }
 .wall.selecting .poster:not(.picked) .name { color: var(--muted); }
 @media (hover: hover) { .wall.selecting .poster:not(.picked):hover .art img { filter: none; } .wall.selecting .poster:not(.picked):hover .name { color: var(--text); } }
-.wall.selecting .poster.picked .art { box-shadow: 0 0 0 3px var(--field-line-hover); }
+.wall.selecting .poster.picked .art { box-shadow: 0 0 0 3px var(--accent); }  /* picked: the lime ring, and its box above */
 .wall.selecting .poster.picked .art img { filter: none; }
 .sel-bar { position: fixed; left: 24px; bottom: 20px; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px;
   border: 1px solid var(--field-line-hover); border-radius: var(--radius-card); background: var(--panel); box-shadow: var(--sh-md); max-width: calc(100vw - 48px); }
