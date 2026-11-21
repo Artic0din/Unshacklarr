@@ -105,7 +105,7 @@ Every change worth knowing, newest first. The format follows
   the `unshacklarr` command, the `unshacklarr` image, the `UNSHACKLARR_` settings and an existing `unshacklarr`
   folder are all still used. To switch, run `docker compose down` first, then rename the service and
   `container_name` in `docker-compose.yml`, keeping `name: unshacklarr` (named volumes belong to the project), and
-  `docker compose up -d`.
+  `docker compose up -d`. (#404)
 
 - Made selection look the same everywhere: anything you pick one of (tabs, view filters, option rows, the Settings menu,
   season and section pickers) shows a lime tint with a lime outline, and the old grey highlight is gone. A lime
