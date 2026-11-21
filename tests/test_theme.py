@@ -446,3 +446,25 @@ def test_the_setup_wizard_tracks_show_on_its_sidebar(track):
     rules = [body for body in rules_of(track) if "background:" in body]
     ground = re.search(r"background: var\(--([\w-]+)\)", rules[-1]).group(1)
     assert DARK[ground] != DARK["well"] and contrast(DARK[ground], DARK["well"]) >= 1.5
+
+
+def test_every_corner_comes_from_a_radius_token():
+    # a corner says what a thing is (field, tile, card, pill); a stray pixel value drifts from the design system
+    values = re.findall(r"border-radius:\s*([^;}]+)", CSS) + re.findall(r'borderRadius: "([^"]+)"', "".join(f.read_text() for f in JS.glob("*.js")))
+    stray = sorted({v.strip() for v in values if re.search(r"\d+px|--r-", v)})
+    assert not stray
+    assert set(re.findall(r"var\((--radius-[\w-]+)\)", CSS)) <= set(re.findall(r"(--radius-[\w-]+):", block(":root {")))
+
+
+def test_corner_tokens_keep_their_sizes_and_roles():
+    root = block(":root {")
+    sizes = dict(re.findall(r"--radius-([\w-]+):\s*([^;]+);", root))
+    assert sizes == {"field": "10px", "tile": "16px", "card": "28px", "pill": "999px", "inline": "6px"}
+    # a container that can wrap, or text that can, takes the card corner: a pill on one line, never a blob on three
+    roles = {".seg {": "card", ".ep-sonarr {": "card", ".toast {": "card", ".poster .art {": "tile", ".sched-card {": "tile",
+             ".modal {": "card", ".sx-card {": "card", ".btn {": "pill", "nav a {": "pill", ".sd code {": "field"}
+    # every rule that sets the corner, desktop and phone alike, not only the one that wins at some width
+    corners = {sel: [b for b in rules_of(sel.rstrip(" {")) if "border-radius:" in b] for sel in roles}
+    wrong = {sel: role for sel, role in roles.items()
+             if not corners[sel] or any(f"border-radius: var(--radius-{role})" not in b for b in corners[sel])}
+    assert not wrong

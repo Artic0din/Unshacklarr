@@ -99,6 +99,9 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Rounded the app's corners by what each thing is, following the DownStream design system: fields and rows 10px,
+  posters and schedule, episode and download cards 16px, cards, modals and menus 28px, and buttons, nav, segmented
+  controls, filters, badges, switches and toasts as full pills. (#396)
 - Changed the app's colours to the DownStream palette and replaced the padlock logo with the DownStream mark in the
   header, sign-in, setup, favicon, home-screen icons and README. (#395)
 - Split the web interface stylesheet into smaller files without changing how the app looks. (#355)
