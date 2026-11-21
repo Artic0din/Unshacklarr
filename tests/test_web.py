@@ -172,9 +172,10 @@ def test_an_episode_file_is_summed_up_from_sonarr_media_info(tmp_path, monkeypat
     importlib.reload(unshacklarr.sync)
     web = importlib.reload(unshacklarr.web)
     f = {"size": 4093382561, "releaseGroup": "YGG", "quality": {"quality": {"name": "HDTV-1080p"}},
-         "mediaInfo": {"audioBitrate": 0, "audioChannels": 2, "audioCodec": "AAC", "audioLanguages": "fre/eng/und",
+         "mediaInfo": {"audioStreams": [{"language": "fre", "codec": "AAC", "channels": 2, "bitrate": 0},
+                                        {"language": "eng", "codec": "EAC3", "channels": 5.1}, {"language": "und"}],
                        "videoBitrate": 0, "videoCodec": "h264", "videoDynamicRangeType": "", "resolution": "1440x1080",
-                       "runTime": "2:03:22", "subtitles": "fre"}}
+                       "runTime": "2:03:22", "subtitleStreams": [{"language": "fre", "forced": False}]}}
     s = web.file_summary(f)
     assert (s["height"], s["video"], s["audio"], s["channels"]) == (1080, "H.264", "AAC", 2)
     assert s["audioLanguages"] == ["fr", "en"] and s["subtitles"] == ["fr"]
@@ -7769,8 +7770,7 @@ def test_languages_lists_files_without_an_accepted_or_the_preferred_audio(tmp_pa
              {"id": 102, "relativePath": "S1/b.mkv", "mediaInfo": track("eng")},  # English only: not the preferred French
              {"id": 103, "relativePath": "S1/c.mkv", "mediaInfo": track("ger")},  # none accepted
              {"id": 104, "relativePath": "S1/d.mkv", "mediaInfo": track("und")}]  # untagged: says nothing
-    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: eps)
-    monkeypatch.setattr(sync, "sonarr_v5_get", lambda path, **p: files)
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: files if path == "episodefile" else eps)
     web.scan_languages()
     found = {i["episodeId"]: i for i in web.read_json(web.LANGUAGES_FILE, {})["items"]}
     assert set(found) == {12, 13}
@@ -7803,8 +7803,7 @@ def test_languages_judges_a_season_on_another_service_by_that_services_audio(tmp
              {"id": 102, "relativePath": "S1/b.mkv", "mediaInfo": track("eng")},  # season 1, X: lacks its French
              {"id": 201, "relativePath": "S2/a.mkv", "mediaInfo": track("eng")},  # season 2, Y: English, right
              {"id": 202, "relativePath": "S2/b.mkv", "mediaInfo": track("ger")}]  # season 2, Y: lacks its English
-    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: eps)
-    monkeypatch.setattr(sync, "sonarr_v5_get", lambda path, **p: files)
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **p: files if path == "episodefile" else eps)
     web.scan_languages()
     found = {i["episodeId"]: i for i in web.read_json(web.LANGUAGES_FILE, {})["items"]}
     assert set(found) == {12, 22}
@@ -7829,7 +7828,7 @@ def test_a_series_titles_are_asked_of_sonarr_in_your_language(monkeypatch):
         def raise_for_status(self): pass
     monkeypatch.setattr(web.requests, "put", lambda url, json=None, **k: put.append((url, json)) or Answer())
     web.set_series_language(447183, "French")
-    assert put[0][0].endswith("/api/v3/series/974") and put[0][1]["language"] == {"id": 2, "name": "French"}
+    assert put[0][0].endswith("/api/v5/series/974") and put[0][1]["language"] == {"id": 2, "name": "French"}
     assert serie["language"]["name"] == "French"  # the library kept here says so too
 
 
@@ -7892,8 +7891,8 @@ def test_the_api_takes_the_services_own_numbering_and_decides_the_audio_upgrade(
         "84659": {"service": "S04E05", "name": "TE DÉFENDRE", "match": "title", "same": True},
         "84700": {"service": "S04E06", "name": "X", "match": "title"}}}}))  # a close title only: not taken
     eps = {45063: {"id": 45063, "seasonNumber": 4, "episodeNumber": 5, "hasFile": False},
-           84659: {"id": 84659, "seasonNumber": 17, "episodeNumber": 45, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "jpn"}}},
-           84660: {"id": 84660, "seasonNumber": 17, "episodeNumber": 46, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "jpn/fre"}}},
+           84659: {"id": 84659, "seasonNumber": 17, "episodeNumber": 45, "hasFile": True, "episodeFile": {"mediaInfo": {"audioStreams": [{"language": "jpn"}]}}},
+           84660: {"id": 84660, "seasonNumber": 17, "episodeNumber": 46, "hasFile": True, "episodeFile": {"mediaInfo": {"audioStreams": [{"language": "jpn"}, {"language": "fre"}]}}},
            84661: {"id": 84661, "seasonNumber": 17, "episodeNumber": 47, "hasFile": False}}
     show["episode_map"] = {"S17E46": "S04E06", "S17E47": "S04E07"}
     web.write_config({**web.read_config(), "series": {74796: show}})
@@ -7904,8 +7903,9 @@ def test_the_api_takes_the_services_own_numbering_and_decides_the_audio_upgrade(
     def sonarr_get(path, **p):
         if path == "series":
             return [{"id": 9}]
-        if "episodeIds" in p:
-            return [eps[i] for i in p["episodeIds"]]
+        if "episodeIds" in p:  # Sonarr 5 attaches the file only when asked by its v5 name
+            filed = p.get("includeSubresources") == "episodeFile"
+            return [eps[i] if filed else {k: v for k, v in eps[i].items() if k != "episodeFile"} for i in p["episodeIds"]]
         return list(eps.values())
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", sonarr_get)
     started, added = [], []
@@ -8390,7 +8390,7 @@ def test_an_audio_request_for_many_episodes_starts_one_download_not_one_each(tmp
     importlib.reload(unshacklarr.sync)
     web = importlib.reload(unshacklarr.web)
     web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
-    eps = [{"id": i, "seasonNumber": 1, "episodeNumber": i, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "jpn"}}}
+    eps = [{"id": i, "seasonNumber": 1, "episodeNumber": i, "hasFile": True, "episodeFile": {"mediaInfo": {"audioStreams": [{"language": "jpn"}]}}}
            for i in range(1, 31)]
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **p: [e for e in eps if e["id"] in p.get("episodeIds", [])])
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
@@ -8426,8 +8426,8 @@ def test_an_audio_request_asks_every_download_it_starts_in_that_language(tmp_pat
     web = importlib.reload(unshacklarr.web)
     web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
     eps = [{"id": 1, "seasonNumber": 1, "episodeNumber": 1, "hasFile": False},
-           {"id": 2, "seasonNumber": 1, "episodeNumber": 2, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "fre"}}},
-           {"id": 3, "seasonNumber": 1, "episodeNumber": 3, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "eng"}}}]
+           {"id": 2, "seasonNumber": 1, "episodeNumber": 2, "hasFile": True, "episodeFile": {"mediaInfo": {"audioStreams": [{"language": "fre"}]}}},
+           {"id": 3, "seasonNumber": 1, "episodeNumber": 3, "hasFile": True, "episodeFile": {"mediaInfo": {"audioStreams": [{"language": "eng"}]}}}]
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **p: [e for e in eps if e["id"] in p.get("episodeIds", [])])
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
     monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
@@ -9224,7 +9224,7 @@ def test_an_api_retry_repeats_the_audio_language_of_the_attempt_it_retries(tmp_p
     monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("audio"), kw.get("replace", False))))
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path, **kw: [
-        {"id": 70, "hasFile": True, "episodeFile": {"mediaInfo": {"audioLanguages": "eng"}}}])
+        {"id": 70, "hasFile": True, "episodeFile": {"mediaInfo": {"audioStreams": [{"language": "eng"}]}}}])
 
     async def go():
         async with TestClient(TestServer(web.app)) as script:
@@ -9268,3 +9268,43 @@ def test_the_sign_in_column_says_where_it_stands_once_and_offers_the_fitting_act
     assert rows["LIVE"] == ("Signed in with pairing", ["Sign in again"])  # signed in: no plain "Sign in" to puzzle over
     assert rows["CONFIRMED"] == ("Confirmed now", ["Sign in again"])
     assert rows["NEEDED"] == ("Sign-in needed", ["Sign in again"])  # signed in before: again, not "Reauthenticate"
+
+
+@responses.activate
+def test_the_sonarr_check_reads_api_v5_and_names_a_sonarr_too_old_for_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    responses.get("http://five:8989/api/v5/system/status", json={"version": "5.0.0.2997"})
+    assert web.sonarr_status("http://five:8989/", "k") == "5.0.0.2997"
+    responses.get("http://four:8989/api/v5/system/status", status=404)  # Sonarr 4 has no /api/v5
+    with pytest.raises(ValueError, match="no /api/v5 at this address"):
+        web.sonarr_status("http://four:8989", "k")
+
+
+@responses.activate
+def test_a_languages_check_against_a_sonarr_without_api_v5_says_so_at_once(tmp_path, monkeypatch):
+    # the scan runs out of sight: a Sonarr address with no /api/v5 must fail the click, not leave "Not checked yet"
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    monkeypatch.setenv("SONARR_URL", "http://four:8989")
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    responses.get("http://four:8989/api/v5/system/status", status=404)
+    monkeypatch.setattr(web, "scan_languages", lambda: (_ for _ in ()).throw(AssertionError("no scan")))
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            r = await client.post("/api/languages/check", headers=page)
+            return r.status, await r.text()
+
+    status, text = asyncio.run(go())
+    assert status == 502 and "/api/v5/system/status" in text and not web.language_scan["running"]

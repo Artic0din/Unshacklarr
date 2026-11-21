@@ -619,13 +619,13 @@ def test_sonarr_series_inflight_fetch_cannot_repopulate_caches(tmp_path, monkeyp
 
     def fake_get(url, *, headers, **kwargs):
         if not started.is_set():
-            assert (url, headers["X-Api-Key"]) == (f"{old_url}/api/v3/series", "old-key")
+            assert (url, headers["X-Api-Key"]) == (f"{old_url}/api/v5/series", "old-key")
             started.set()
             assert release.wait(5), "old fetch was never released"
             title = "Old Library"
         else:
             expected_url, expected_key = (new_url, "new-key") if save_settings else (old_url, "old-key")
-            assert (url, headers["X-Api-Key"]) == (f"{expected_url}/api/v3/series", expected_key)
+            assert (url, headers["X-Api-Key"]) == (f"{expected_url}/api/v5/series", expected_key)
             title = "Fresh Library"
         return SimpleNamespace(raise_for_status=lambda: None, json=lambda: [{"id": 1, "tvdbId": 100, "title": title}])
 
@@ -670,12 +670,12 @@ def test_sync_sonarr_series_inflight_fetch_cannot_restore_old_library(tmp_path, 
 
     def fake_get(url, *, headers, **kwargs):
         connection = (url, headers["X-Api-Key"])
-        if connection == (f"{old_url}/api/v3/series", "old-key"):
+        if connection == (f"{old_url}/api/v5/series", "old-key"):
             started.set()
             assert release.wait(5), "old fetch was never released"
             series_id = 1
         else:
-            assert connection == (f"{new_url}/api/v3/series", "new-key")
+            assert connection == (f"{new_url}/api/v5/series", "new-key")
             series_id = 2
         return SimpleNamespace(
             status_code=200, content=b"", raise_for_status=lambda: None,

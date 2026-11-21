@@ -178,8 +178,9 @@ def sonarr_get(path, **params):
     if path == "episodefile":
         return [{"id": e["id"], "size": 1_450_000_000 + e["id"] * 997, "releaseGroup": "UNSHACKLE",
                  "quality": {"quality": {"name": "WEBDL-1080p"}},
-                 "mediaInfo": {"resolution": "1920x1080", "videoCodec": "h264", "audioCodec": "EAC3", "audioChannels": 5.1,
-                               "audioLanguages": "eng", "subtitles": "eng/fre/spa", "runTime": "44:12"}}
+                 "mediaInfo": {"resolution": "1920x1080", "videoCodec": "h264", "runTime": "44:12",
+                               "audioStreams": [{"language": "eng", "codec": "EAC3", "channels": 5.1}],
+                               "subtitleStreams": [{"language": l} for l in ("eng", "fre", "spa")]}}
                 for e in EPISODES[int(params["seriesId"])] if e["hasFile"]]
     if path == "calendar":
         start, end = sync.parse_time(params["start"]), sync.parse_time(params["end"])
@@ -398,7 +399,7 @@ def sonarr_series():
 
 
 web.sonarr_series = sonarr_series
-web.sonarr_get_version = lambda: "4.0.15.2941"
+web.sonarr_get_version = lambda: "5.0.0.2997"
 web.tvdb_titles = lambda tvdb_id: {}
 sync.UNSHACKLE.call = serve
 if live:

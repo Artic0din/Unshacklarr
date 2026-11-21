@@ -556,10 +556,11 @@ Every change, version by version: **[CHANGELOG.md](CHANGELOG.md)**. Settings sho
 running.
 
 > [!TIP]
-> **Sonarr 5:** what DownStream does with Sonarr 5 is part of this version:
+> **Sonarr 5:** DownStream needs Sonarr 5. It talks to Sonarr through its v5 API only, and Settings says so when the
+> address has no `/api/v5`. What DownStream does with Sonarr 5:
 >
 > - **Languages** (Activity): your files without your audio languages, read from Sonarr 5's own tracks. Watch them
->   for the preferred audio, or download them again. It needs Sonarr 5.
+>   for the preferred audio, or download them again.
 > - **Titles in your language:** a series whose titles Sonarr gives in English offers, on its page, to have them in
 >   yours, so that its episodes match the service's better.
 > - **Episode order:** a series Sonarr numbers in another order (DVD, Netflix…) says so in its Numbering. When that

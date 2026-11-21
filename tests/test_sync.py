@@ -102,7 +102,7 @@ def sonarr_sees_folder(quality=3):
         ]
         return 200, {}, json.dumps(files)
 
-    responses.add_callback(responses.GET, f"{SONARR}/api/v3/manualimport", callback=callback)
+    responses.add_callback(responses.GET, f"{SONARR}/api/v5/manualimport", callback=callback)
 
 
 def as_text(body) -> str:
@@ -120,25 +120,25 @@ def discord_messages():
 def sonarr_imports(status="completed", has_file=True, before=None):
     """Sonarr takes the ManualImport as command 1, runs it, and the episode then has file 900; before it,
     the episode is as `before` says (no file by default)."""
-    responses.post(f"{SONARR}/api/v3/command", json={"id": 1})
-    responses.get(f"{SONARR}/api/v3/command/1", json={"id": 1, "status": status, "message": "Import failed: disk full" if status != "completed" else "Completed"})
+    responses.post(f"{SONARR}/api/v5/command", json={"id": 1})
+    responses.get(f"{SONARR}/api/v5/command/1", json={"id": 1, "status": status, "message": "Import failed: disk full" if status != "completed" else "Completed"})
 
     def episode_now(request):
-        imported = any(c.request.method == "POST" and c.request.url == f"{SONARR}/api/v3/command" for c in responses.calls)
+        imported = any(c.request.method == "POST" and c.request.url == f"{SONARR}/api/v5/command" for c in responses.calls)
         state = {"hasFile": has_file, "episodeFileId": 900 if has_file else 0} if imported else (before or {"hasFile": False, "episodeFileId": 0})
         return 200, {}, json.dumps(state)
-    responses.add_callback(responses.GET, re.compile(re.escape(SONARR) + r"/api/v3/episode/\d+$"), callback=episode_now)
+    responses.add_callback(responses.GET, re.compile(re.escape(SONARR) + r"/api/v5/episode/\d+$"), callback=episode_now)
 
 
 def commands():
-    return [json.loads(c.request.body) for c in responses.calls if c.request.url == f"{SONARR}/api/v3/command"]
+    return [json.loads(c.request.body) for c in responses.calls if c.request.url == f"{SONARR}/api/v5/command"]
 
 
 @responses.activate
 def test_downloads_mapped_episodes_and_imports_them_by_id(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     records = [episode(111, 2, 5), episode(111, 2, 6), episode(999, 1, 1)]  # 999 is not mapped
-    responses.get(f"{SONARR}/api/v3/calendar", json=records)
+    responses.get(f"{SONARR}/api/v5/calendar", json=records)
     sonarr_imports()
     responses.post(re.compile(re.escape(WEBHOOK)))
     sonarr_sees_folder()
@@ -184,7 +184,7 @@ def test_downloads_mapped_episodes_and_imports_them_by_id(tmp_path, monkeypatch)
 def test_maps_the_season_joins_parts_and_renames_after_sonarr(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     (tmp_path / "config.yaml").write_text(f"series:\n  222: {{service: MLT, title: https://mlt/koh, since: '{SINCE}', season_map: {{34: 29}}}}\n")
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(222, 34, 5, title="Koh-Lanta")])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(222, 34, 5, title="Koh-Lanta")])
     sonarr_imports()
     sonarr_sees_folder()
 
@@ -269,8 +269,8 @@ def test_automatic_sync_takes_new_episodes_only(tmp_path, monkeypatch):
         episode(111, 2, 1, aired=days_ago(20)),  # after it, but given up on
         episode(111, 2, 9),  # new: the only one to try
     ]
-    responses.get(f"{SONARR}/api/v3/calendar", json=records)
-    responses.get(f"{SONARR}/api/v3/episode", json=[records[0]])
+    responses.get(f"{SONARR}/api/v5/calendar", json=records)
+    responses.get(f"{SONARR}/api/v5/episode", json=[records[0]])
     calls = []
     use_tools(monkeypatch, sync, fake_tools(calls, lambda out, wanted: out.mkdir(), {}))
 
@@ -339,10 +339,10 @@ def test_one_download_per_episode_at_a_time(tmp_path, monkeypatch):
 def test_a_library_file_is_only_replaced_by_a_better_one(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     ep = {**episode(111, 2, 5), "hasFile": True, "episodeFileId": 77}
-    responses.get(f"{SONARR}/api/v3/episode", json=[ep])
-    responses.get(f"{SONARR}/api/v3/episodefile/77", json={"quality": {"quality": {"id": 3, "name": "WEBDL-1080p"}}})
+    responses.get(f"{SONARR}/api/v5/episode", json=[ep])
+    responses.get(f"{SONARR}/api/v5/episodefile/77", json={"quality": {"quality": {"id": 3, "name": "WEBDL-1080p"}}})
     # Profile, lowest first: HDTV-720p, then a WEB 1080p group, then WEBDL-2160p
-    responses.get(f"{SONARR}/api/v3/qualityprofile/1", json={"items": [
+    responses.get(f"{SONARR}/api/v5/qualityprofile/1", json={"items": [
         {"quality": {"id": 4}}, {"items": [{"quality": {"id": 3}}, {"quality": {"id": 15}}]}, {"quality": {"id": 18}},
     ]})
     sonarr_imports(before={"hasFile": True, "episodeFileId": 77})
@@ -421,7 +421,7 @@ def test_a_job_is_followed_to_its_end(tmp_path, monkeypatch):
 def test_history_has_the_download_and_the_episode_not_out_yet(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     records = [episode(111, 2, 5), episode(111, 2, 6)]
-    responses.get(f"{SONARR}/api/v3/calendar", json=records)
+    responses.get(f"{SONARR}/api/v5/calendar", json=records)
     sonarr_imports()
     responses.post(re.compile(re.escape(WEBHOOK)))
     sonarr_sees_folder()
@@ -479,7 +479,7 @@ def test_a_failure_is_notified_by_its_cause_and_paths_as_sonarr_sees_them(tmp_pa
     records = [episode(111, 2, 5)]
     responses_add = responses.RequestsMock()
     with responses_add as r:
-        r.get(f"{SONARR}/api/v3/calendar", json=records)
+        r.get(f"{SONARR}/api/v5/calendar", json=records)
         r.post(re.compile(re.escape(WEBHOOK)))
 
         def fail(payload, run_=None):
@@ -917,7 +917,7 @@ def test_finalize_reports_joining_then_renaming(tmp_path, monkeypatch):
 def test_an_import_sonarr_did_not_do_is_an_import_left_to_do(tmp_path, monkeypatch):
     # Downloaded whole, only Sonarr's import failed: not a failed download, an import to do (by mj23au, #10)
     sync = load(tmp_path, monkeypatch)
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
     responses.post(re.compile(re.escape(WEBHOOK)))
     sonarr_sees_folder()
     sonarr_imports(status="failed")
@@ -938,7 +938,7 @@ def test_an_import_sonarr_did_not_do_is_an_import_left_to_do(tmp_path, monkeypat
 @responses.activate
 def test_an_imported_episode_leaves_no_folder(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
     responses.post(re.compile(re.escape(WEBHOOK)))
     sonarr_sees_folder()
     sonarr_imports()
@@ -985,7 +985,7 @@ def test_a_network_hiccup_is_tried_again_a_real_failure_is_not(tmp_path, monkeyp
 @responses.activate
 def test_a_login_failure_points_to_the_cookies(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
     responses.post(re.compile(re.escape(WEBHOOK)))
 
     def refused(payload, run=None):
@@ -1002,7 +1002,7 @@ def test_a_login_failure_points_to_the_cookies(tmp_path, monkeypatch):
 @responses.activate
 def test_a_classified_login_failure_is_kept_as_authentication_evidence(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
     responses.post(re.compile(re.escape(WEBHOOK)))
 
     def refused(payload, run=None):
@@ -3268,7 +3268,7 @@ def test_an_episode_in_two_parts_waits_for_both(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     (tmp_path / "config.yaml").write_text(
         f"series:\n  222: {{service: MLT, title: https://mlt/koh, since: '{SINCE}', season_map: {{34: 29}}, parts: 2}}\n")
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(222, 34, 5, title="Koh-Lanta", aired=days_ago(0.01))])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(222, 34, 5, title="Koh-Lanta", aired=days_ago(0.01))])
     out_parts = [["Koh-Lanta.S29E05.mkv"]]  # at the release time, Molotov has only the first part, unnamed
 
     def dl(out, wanted):
@@ -3522,7 +3522,7 @@ def test_shown_commands_hide_a_proxy_password_and_hand_written_dates_count_as_ut
 @responses.activate
 def test_a_job_that_fails_after_its_first_part_imports_nothing(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
     responses.post(re.compile(re.escape(WEBHOOK)))
 
     def dl(out, wanted):
@@ -3570,9 +3570,9 @@ def test_a_link_planted_in_the_downloads_folder_is_never_written_through(tmp_pat
 @responses.activate
 def test_a_better_file_sonarr_got_during_the_download_is_kept(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
-    responses.get(f"{SONARR}/api/v3/episodefile/77", json={"quality": {"quality": {"id": 18, "name": "WEBDL-2160p"}}})
-    responses.get(f"{SONARR}/api/v3/qualityprofile/1", json={"items": [{"quality": {"id": 3}}, {"quality": {"id": 18}}]})
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
+    responses.get(f"{SONARR}/api/v5/episodefile/77", json={"quality": {"quality": {"id": 18, "name": "WEBDL-2160p"}}})
+    responses.get(f"{SONARR}/api/v5/qualityprofile/1", json={"items": [{"quality": {"id": 3}}, {"quality": {"id": 18}}]})
     sonarr_imports(before={"hasFile": True, "episodeFileId": 77})  # missing when listed, a 2160p file by the import
     responses.post(re.compile(re.escape(WEBHOOK)))
     sonarr_sees_folder([3])  # ours: WEBDL-1080p
@@ -3807,6 +3807,7 @@ def test_picked_episodes_are_fetched_in_groups_and_come_back_sorted(tmp_path, mo
     asked = []
 
     def sonarr_get(path, **params):
+        assert params.get("includeSubresources") == "series"  # Sonarr 5's name: without it, no series comes back
         asked.append(params["episodeIds"])
         return [{"id": i, "seriesId": 7, "seasonNumber": 1 + i // 100, "episodeNumber": i % 100} for i in params["episodeIds"]]
 
@@ -3828,11 +3829,11 @@ def test_the_missing_episodes_come_from_the_calendar_and_the_library_is_asked_on
     have = {**episode(111, 2, 4), "hasFile": True}
     off = {**episode(111, 2, 6), "monitored": False}
     shelved = {**episode(111, 2, 7), "series": {**episode(111, 2, 7)["series"], "monitored": False}}
-    responses.get(f"{SONARR}/api/v3/calendar", json=[have, episode(111, 2, 5), off, shelved])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[have, episode(111, 2, 5), off, shelved])
     assert [e["id"] for e in sync.missing_episodes()] == [205]  # a file, an unmonitored episode or series: not wanted
     asked = responses.calls[-1].request.params
-    assert asked["unmonitored"] == "false" and asked["end"] > asked["start"]
-    library = responses.get(f"{SONARR}/api/v3/series", json=[{"id": 7, "tvdbId": 111}])
+    assert asked["includeUnmonitored"] == "false" and asked["includeSubresources"] == "series" and asked["end"] > asked["start"]
+    library = responses.get(f"{SONARR}/api/v5/series", json=[{"id": 7, "tvdbId": 111}])
     assert sync.sonarr_series({111})[111]["id"] == 7 and sync.sonarr_series({111})[111]["id"] == 7
     assert library.call_count == 1  # kept: the whole library is one big answer
     clock = [sync.time.monotonic()]
@@ -4221,7 +4222,7 @@ def test_a_download_asked_in_one_audio_language_replaces_a_file_only_with_proof_
 def test_a_download_only_series_is_downloaded_never_imported_nor_cleaned(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     (tmp_path / "config.yaml").write_text((tmp_path / "config.yaml").read_text().replace("options: {--noatmos: false}", "download_only: true, options: {--noatmos: false}"))
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
     responses.post(re.compile(re.escape(WEBHOOK)))
 
     def dl(out, wanted):
@@ -4247,7 +4248,7 @@ def test_a_download_only_episode_in_a_subfolder_is_posted_with_its_subfolder(tmp
     # finalize renames a file where it is: the after-download script gets the path it has, subfolders kept
     sync = load(tmp_path, monkeypatch)
     (tmp_path / "config.yaml").write_text((tmp_path / "config.yaml").read_text().replace("options: {--noatmos: false}", "download_only: true, options: {--noatmos: false}"))
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
     responses.post(re.compile(re.escape(WEBHOOK)))
 
     def dl(out, wanted):
@@ -4408,8 +4409,8 @@ def test_another_sonarr_gets_its_own_copy_with_its_own_ladder(tmp_path, monkeypa
     sync = load(tmp_path, monkeypatch)
     sync.apply_settings({**sync.SETTINGS, "sonarrs": [{"name": "sonarr-4k", "url": "http://sonarr-4k:8989", "api_key": "k4",
                                                         "downloads": "/4k-sees", "quality_ladder": "4K, then 1080p"}]})
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
-    responses.get("http://sonarr-4k:8989/api/v3/calendar", json=[{**episode(111, 2, 5), "id": 9905}, episode(999, 1, 1)])  # 999: not set up here
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
+    responses.get("http://sonarr-4k:8989/api/v5/calendar", json=[{**episode(111, 2, 5), "id": 9905}, episode(999, 1, 1)])  # 999: not set up here
     responses.post(re.compile(re.escape(WEBHOOK)))
     asked, imported = [], []
 
@@ -6375,7 +6376,7 @@ def test_the_output_has_debug_only_in_debug_mode(tmp_path, monkeypatch):
 @responses.activate
 def test_video_files_refused_are_not_called_expired_cookies(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    responses.get(f"{SONARR}/api/v3/calendar", json=[episode(111, 2, 5)])
+    responses.get(f"{SONARR}/api/v5/calendar", json=[episode(111, 2, 5)])
     responses.post(re.compile(re.escape(WEBHOOK)))
 
     def refused(payload, run=None):

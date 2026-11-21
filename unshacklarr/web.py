@@ -998,7 +998,7 @@ def sonarr_series() -> list[dict]:
         c_key, fetched, entries = _sonarr_series_cache
         if c_key == key and fetched and now - fetched < SONARR_SERIES_TTL:
             return list(entries)
-    r = requests.get(f"{url}/api/v3/series", headers=headers, timeout=sonarr_sync.SONARR_READ_TIMEOUT)
+    r = requests.get(f"{url}/{sonarr_sync.SONARR_API}/series", headers=headers, timeout=sonarr_sync.SONARR_READ_TIMEOUT)
     r.raise_for_status()
     raw = r.json()
     entries = sorted((series_entry(s) for s in raw), key=lambda s: s["title"].lower())
@@ -2208,8 +2208,8 @@ def calendar_episodes(config: dict, start: datetime, end: datetime,
     further as a series publishes before airing."""
     ahead = max([-sonarr_sync.release_day(s) for s in config["series"].values()] + [0])  # a release days before airing
     end = end + timedelta(days=ahead)
-    r = requests.get(f"{sonarr_sync.sonarr_url()}/api/v3/calendar", headers=sonarr_sync.sonarr_headers(),  # the Sonarr on now
-                     params={"start": start.isoformat(), "end": end.isoformat(), "includeSeries": "true"},
+    r = requests.get(f"{sonarr_sync.sonarr_url()}/{sonarr_sync.SONARR_API}/calendar", headers=sonarr_sync.sonarr_headers(),  # the Sonarr on now
+                     params={"start": start.isoformat(), "end": end.isoformat(), "includeSubresources": "series"},
                      timeout=timeout)
     r.raise_for_status()
     plans = sonarr_sync.broadcast_plans(config)
@@ -3828,7 +3828,7 @@ async def calendar(request):
         own = {serie["tvdbId"] for serie, _, _ in plans}
         episodes = [ep for ep in await asyncio.to_thread(
             sonarr_sync.sonarr_get, "calendar",
-            start=start.isoformat(), end=(start + timedelta(days=days)).isoformat(), includeSeries="true",
+            start=start.isoformat(), end=(start + timedelta(days=days)).isoformat(), includeSubresources="series",
         ) if (ep.get("series") or {}).get("tvdbId") not in own]
         episodes += await asyncio.to_thread(sonarr_sync.broadcast_episodes, config, start, start + timedelta(days=days), plans)
     except requests.RequestException as e:
@@ -4114,7 +4114,9 @@ def file_summary(f: dict) -> dict:
     """What the page shows under an episode on disk: from Sonarr's media info. Its bitrates are
     often 0 (a tag the MKV lacks), so the file's average bitrate stands in for the video's."""
     mi = f.get("mediaInfo") or {}
-    langs = lambda text: [sonarr_sync.LANGS.get(x.strip().lower(), x.strip().lower()) for x in (text or "").split("/") if x.strip() and x.strip().lower() != "und"]
+    langs = lambda streams: [sonarr_sync.LANGS.get(x.strip().lower(), x.strip().lower()) for x in
+                             (str(t.get("language") or "") for t in streams or []) if x.strip() and x.strip().lower() != "und"]
+    first = (mi.get("audioStreams") or [{}])[0]  # the primary track, as Sonarr's own codec and channels column reads it
     width, _, height = str(mi.get("resolution") or "").partition("x")
     length = seconds(mi.get("runTime"))
     return {
@@ -4123,10 +4125,10 @@ def file_summary(f: dict) -> dict:
         "video": CODECS.get(str(mi.get("videoCodec") or "").lower(), mi.get("videoCodec") or ""),
         "videoBitrate": mi.get("videoBitrate") or None,
         "averageBitrate": round(f["size"] * 8 / length) if f.get("size") and length else None,
-        "audio": CODECS.get(str(mi.get("audioCodec") or "").lower(), mi.get("audioCodec") or ""),
-        "channels": mi.get("audioChannels") or None,
-        "audioLanguages": list(dict.fromkeys(langs(mi.get("audioLanguages")))),
-        "subtitles": list(dict.fromkeys(langs(mi.get("subtitles")))),
+        "audio": CODECS.get(str(first.get("codec") or "").lower(), first.get("codec") or ""),
+        "channels": first.get("channels") or None,
+        "audioLanguages": list(dict.fromkeys(langs(mi.get("audioStreams")))),
+        "subtitles": list(dict.fromkeys(langs(mi.get("subtitleStreams")))),
         "size": f.get("size"),
         "runTime": mi.get("runTime") or "",
         "quality": ((f.get("quality") or {}).get("quality") or {}).get("name", ""),
@@ -4228,8 +4230,8 @@ def on_sonarr(inst: dict | None, fn, *args, **kwargs):
 async def episodes(request):
     series_id = request.match_info["series_id"]  # that Sonarr's own series id (?sonarr=)
     inst = sonarr_named(request.query.get("sonarr", ""))
-    try:  # each episode with its file in one answer (Sonarr 4 and 5), not the files asked apart
-        eps = await asyncio.to_thread(on_sonarr, inst, sonarr_sync.sonarr_get, "episode", seriesId=series_id, includeEpisodeFile="true")
+    try:  # each episode with its file in one answer, not the files asked apart
+        eps = await asyncio.to_thread(on_sonarr, inst, sonarr_sync.sonarr_get, "episode", seriesId=series_id, includeSubresources="episodeFile")
     except requests.RequestException as e:
         raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
     return web.json_response([
@@ -4289,7 +4291,7 @@ def set_series_language(tvdb: int, name: str) -> None:
         raise web.HTTPNotFound(text=f"Sonarr has no {'language ' + name if serie else 'such series'}")
     full = sonarr_sync.sonarr_get(f"series/{serie['id']}")
     full["language"] = {"id": lang["id"], "name": lang["name"]}
-    requests.put(f"{sonarr_sync.sonarr_url()}/api/v3/series/{serie['id']}", json=full, headers=sonarr_sync.sonarr_headers(),
+    requests.put(f"{sonarr_sync.sonarr_url()}/{sonarr_sync.SONARR_API}/series/{serie['id']}", json=full, headers=sonarr_sync.sonarr_headers(),
                  timeout=60).raise_for_status()
     serie["language"] = full["language"]  # the library kept here says so too
     clear_sonarr_series_cache()
@@ -5484,7 +5486,7 @@ def upgrade_candidates(config: dict, only: set | None = None) -> list[tuple]:
         pages = {n: sonarr_sync.season_page(show, int(n)) for n in show.get("season_pages") or {}}
         if not any(sonarr_sync.ladder_of(p, config) for p in [show, *pages.values()]):
             continue  # no ladder for any of its services: Sonarr not asked
-        every = sonarr_sync.sonarr_get("episode", seriesId=serie["id"], includeEpisodeFile="true")  # one call, not two
+        every = sonarr_sync.sonarr_get("episode", seriesId=serie["id"], includeSubresources="episodeFile")  # one call, not two
         files = {e["episodeFile"]["id"]: e["episodeFile"] for e in every if e.get("episodeFile")}
         for e in every:
             if not e.get("hasFile") or e.get("seasonNumber", 0) < 1 or e.get("episodeFileId") not in files:
@@ -5730,7 +5732,7 @@ def scan_languages() -> None:
                     for e in sonarr_sync.sonarr_get("episode", seriesId=serie["id"]):
                         if e.get("hasFile"):
                             episodes.setdefault(e["episodeFileId"], []).append(e)
-                    for f in sonarr_sync.sonarr_v5_get("episodefile", seriesId=serie["id"]):
+                    for f in sonarr_sync.sonarr_get("episodefile", seriesId=serie["id"]):
                         audio, forced = file_languages(f)
                         if not audio:
                             continue  # untagged tracks say nothing either way
@@ -5770,16 +5772,14 @@ async def languages(request):
 
 
 async def languages_action(request):
-    """Start a check (Sonarr 5 only: its tracks), or stop the one going on."""
+    """Start a check of the files' tracks, or stop the one going on."""
     if request.match_info["action"] == "stop":
         language_scan["stop"] = True
     elif not language_scan["running"]:
-        try:
-            major = await asyncio.to_thread(sonarr_sync.sonarr_major)
+        try:  # its answer at once, not a scan that fails out of sight
+            await asyncio.to_thread(sonarr_sync.sonarr_get, "system/status")
         except requests.RequestException as e:
             raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}") from None
-        if major < 5:
-            raise web.HTTPBadRequest(text=f"Languages reads each file's tracks from Sonarr 5; this Sonarr is version {major or 'unknown'}")
         language_scan["running"] = True  # at once: a second click before the thread starts is not a second check
         threading.Thread(target=scan_languages, daemon=True).start()
     return web.json_response({"running": language_scan["running"]})
@@ -6787,7 +6787,8 @@ def file_speaks(ep: dict, lang: str) -> bool | None:
     """Whether the episode's file has audio in this language, from Sonarr's media info; None: no file."""
     if not ep.get("hasFile"):
         return None
-    tags = [x.strip() for x in str(((ep.get("episodeFile") or {}).get("mediaInfo") or {}).get("audioLanguages") or "").split("/") if x.strip()]
+    streams = ((ep.get("episodeFile") or {}).get("mediaInfo") or {}).get("audioStreams") or []
+    tags = [str(t["language"]).strip() for t in streams if str(t.get("language") or "").strip()]
     return sonarr_sync.speaks(tags, [lang])
 
 
@@ -6868,7 +6869,7 @@ async def v1_start_download(request):
         run_sync(ids, **common, **({"replace": True} if replace else {}))
         return web.json_response({"queued": len(ids)})
     # that language just came on the service: DownStream decides per episode from the file Sonarr has
-    eps = await asyncio.to_thread(on_sonarr, inst, lambda: sonarr_sync.sonarr_get("episode", episodeIds=ids, includeEpisodeFile="true"))
+    eps = await asyncio.to_thread(on_sonarr, inst, lambda: sonarr_sync.sonarr_get("episode", episodeIds=ids, includeSubresources="episodeFile"))
     kinds = {e["id"]: file_speaks(e, audio) for e in eps}
     fresh, again, lacking = ([i for i in ids if kinds.get(i) is k] for k in (None, True, False))
     common["audio"] = audio  # each download asks it first, the series' own after it, and accepts it
@@ -7090,9 +7091,11 @@ async def logout(request):
 
 
 def sonarr_status(url: str, key: str) -> str:
-    r = requests.get(f"{url.rstrip('/')}/api/v3/system/status", headers={"X-Api-Key": key}, timeout=10)
+    r = requests.get(f"{url.rstrip('/')}/{sonarr_sync.SONARR_API}/system/status", headers={"X-Api-Key": key}, timeout=10)
     if r.status_code == 401:
         raise ValueError("Sonarr refused the API key")
+    if r.status_code == 404:
+        raise ValueError("Sonarr has no /api/v5 at this address: check its URL base, or update it to Sonarr 5")
     r.raise_for_status()
     return r.json().get("version", "?")
 

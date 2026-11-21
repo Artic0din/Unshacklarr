@@ -663,7 +663,7 @@ def missing_episodes(now: datetime | None = None) -> list[dict]:
     calendar for those days, not its whole wanted list, which runs to the library's every gap."""
     now = now or datetime.now(timezone.utc)
     episodes = sonarr_get("calendar", start=(now - timedelta(days=AUTO_DAYS + 1)).isoformat(), end=now.isoformat(),
-                          includeSeries="true", unmonitored="false")
+                          includeSubresources="series", includeUnmonitored="false")
     return [ep for ep in episodes if not ep.get("hasFile") and ep.get("monitored", True) and ep["series"].get("monitored", True)]
 
 
@@ -674,7 +674,7 @@ def chosen_episodes(ids: list[int]):
     """Episodes picked by hand in the web page, shaped like /wanted/missing records."""
     ids = list(dict.fromkeys(ids))  # one id twice, in two groups, would come back twice
     episodes = [ep for start in range(0, len(ids), SONARR_IDS_PER_REQUEST)
-                for ep in sonarr_get("episode", episodeIds=ids[start:start + SONARR_IDS_PER_REQUEST], includeSeries="true")]
+                for ep in sonarr_get("episode", episodeIds=ids[start:start + SONARR_IDS_PER_REQUEST], includeSubresources="series")]
     return sorted(episodes, key=lambda e: (e["seriesId"], e["seasonNumber"], e["episodeNumber"]))
 
 
@@ -3032,7 +3032,7 @@ def early_episodes(config: dict, now: datetime) -> list[dict]:
     if ahead <= 0:
         return []
     episodes = sonarr_get("calendar", start=(now - timedelta(days=1)).isoformat(),
-                          end=(now + timedelta(days=ahead + 1)).isoformat(), includeSeries="true")
+                          end=(now + timedelta(days=ahead + 1)).isoformat(), includeSubresources="series")
     early = []
     for ep in episodes:
         show = (config.get("series") or {}).get(ep["series"]["tvdbId"]) or {}
@@ -4133,26 +4133,15 @@ class Kept(Exception):
 SONARR_READ_TIMEOUT = 120
 
 
+SONARR_API = "api/v5"  # every call: DownStream needs Sonarr 5
+
+
 def sonarr_get(path: str, *, connection: tuple[str, dict[str, str]] | None = None, **params):
     url, headers = connection if connection is not None else (sonarr_url(), sonarr_headers())
-    r = requests.get(f"{url}/api/v3/{path}", headers=headers, params=params, timeout=SONARR_READ_TIMEOUT)
+    r = requests.get(f"{url}/{SONARR_API}/{path}", headers=headers, params=params, timeout=SONARR_READ_TIMEOUT)
     trace(f"Sonarr GET {path} {params or ''} → {r.status_code}, {len(r.content)} bytes", debug=True)
     r.raise_for_status()
     return r.json()
-
-
-def sonarr_v5_get(path: str, **params):
-    """Sonarr 5's own API (/api/v5): what v3 does not give, such as each file's audio and subtitle tracks."""
-    r = requests.get(f"{sonarr_url()}/api/v5/{path}", headers=sonarr_headers(), params=params, timeout=120)
-    trace(f"Sonarr v5 GET {path} {params or ''} → {r.status_code}, {len(r.content)} bytes", debug=True)
-    r.raise_for_status()
-    return r.json()
-
-
-def sonarr_major() -> int:
-    """Sonarr's major version (5 for 5.0.0.2569); 0 when it does not say."""
-    version = str(sonarr_get("system/status").get("version") or "")
-    return int(version.split(".")[0]) if version.split(".")[0].isdigit() else 0
 
 
 def quality_ranks(profile: dict) -> dict[int, int]:
@@ -4192,7 +4181,7 @@ def import_episode(ep: dict, out: Path, replace: bool = False) -> None:
     if len(candidates) > 1:  # one episode is one file: the quality check could not vouch for the others
         raise RuntimeError(f"Sonarr sees {len(candidates)} video files in {folder}, for one episode: nothing imported")
     for c in candidates:
-        rejected = "; ".join(r.get("reason", "") for r in c.get("rejections") or [])
+        rejected = "; ".join(r.get("message") or "" for r in c.get("rejections") or [])
         trace(f"Sonarr sees {Path(c['path']).name}: {c['quality']['quality']['name']}" + (f" (rejections: {rejected})" if rejected else ""))
     # As Sonarr has it now, not as when the list was made: it may have got a file during the download
     now = sonarr_get(f"episode/{ep['id']}")
@@ -4221,7 +4210,7 @@ def import_episode(ep: dict, out: Path, replace: bool = False) -> None:
             for attempt in range(1, IMPORT_ASKS + 1):
                 try:
                     r = requests.post(
-                        f"{sonarr_url()}/api/v3/command",
+                        f"{sonarr_url()}/{SONARR_API}/command",
                         headers=sonarr_headers(),
                         json={"name": "ManualImport", "files": files, "importMode": "move"},
                         timeout=SONARR_READ_TIMEOUT,  # as long as its reads
