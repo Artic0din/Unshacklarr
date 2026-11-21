@@ -2882,6 +2882,17 @@ def test_a_broken_unshackle_yaml_still_opens_and_saves_in_its_editor_and_the_ale
     assert [f.read_text() for f in (tmp_path / "history").glob("*.yaml")] == [broken]  # the broken file kept in the history
 
 
+def test_every_icon_the_page_and_manifest_name_is_served_before_login():
+    from unshacklarr import web
+    html = (STATIC / "index.html").read_text()
+    manifest = json.loads((STATIC / "manifest.webmanifest").read_text())
+    icons = set(re.findall(r'<link rel="(?:icon|apple-touch-icon)"[^>]*href="(/[^"]+)"', html)) | {i["src"] for i in manifest["icons"]}
+    assert {"/icon-16.png", "/icon-32.png", "/apple-touch-icon.png", "/icon-maskable-512.png"} <= icons
+    assert {i["purpose"] for i in manifest["icons"]} == {"any", "maskable"}
+    missing = [path for path in icons if path not in web.STATIC or path not in web.OPEN_PATHS or not (STATIC / path.lstrip("/")).is_file()]
+    assert not missing
+
+
 def test_the_yaml_editor_files_are_served_and_know_unshackle_keys():
     import json
     from pathlib import Path

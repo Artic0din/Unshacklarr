@@ -99,6 +99,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Changed the app's colours to the DownStream palette and replaced the padlock logo with the DownStream mark in the
+  header, sign-in, setup, favicon, home-screen icons and README.
 - Split the web interface stylesheet into smaller files without changing how the app looks. (#355)
 
 - Grouped repeated Activity failures by provider, HTTP status, and full reason while keeping labels short, listed affected episodes for mixed failures, and kept Retry prominent when a failure could be temporary. (#358)

@@ -6517,6 +6517,8 @@ async def sync_log(_):
 SESSION_COOKIE = "unshackle_session"
 SESSION_DAYS = 30
 STATIC = {"/apple-touch-icon.png": "image/png", "/icon-192.png": "image/png", "/icon-512.png": "image/png",
+          "/icon-maskable-192.png": "image/png", "/icon-maskable-512.png": "image/png",
+          "/icon-32.png": "image/png", "/icon-16.png": "image/png",  # the browser tab's favicon, pixel-fitted cuts
           "/manifest.webmanifest": "application/manifest+json", "/sw.js": "text/javascript",  # what a phone fetches to install the app, logged in or not
           "/codemirror.js": "text/javascript", "/unshackle-keys.json": "application/json",  # the unshackle.yaml editor: public code and docs
           "/xterm.js": "text/javascript", "/xterm-fit.js": "text/javascript", "/xterm.css": "text/css"}  # Activity's terminal, served here: no CDN
