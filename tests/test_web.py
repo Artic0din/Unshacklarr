@@ -4431,7 +4431,7 @@ def test_a_streaming_site_maps_to_the_code_this_unshackle_has_for_it(tmp_path, m
         raise web.UnshackleError("unreachable")
     monkeypatch.setattr(web, "service_domains", down)
     assert web.installed_links(kept) == kept  # Unshackle out of reach: as kept
-    assert web.TMDB_HEADERS["User-Agent"].startswith("Unshacklarr/")  # TMDB's site refuses a fake browser (PR #2)
+    assert web.TMDB_HEADERS["User-Agent"].startswith("DownStream/")  # TMDB's site refuses a fake browser (PR #2)
 
 
 def test_prime_video_and_apple_tv_are_ordinary_services_and_purchases_never_show(tmp_path, monkeypatch):

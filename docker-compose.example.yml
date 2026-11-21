@@ -8,15 +8,15 @@
 #      directories: {cookies: /config/unshackle/Cookies, wvds: /config/unshackle/WVDs,
 #                    prds: /config/unshackle/PRDs, cache: /data/cache, temp: /data/temp}
 #   3. docker compose up -d (the first time, it builds unshackle serve), then open
-#      http://<this host>:8788. The setup code is in docker logs unshacklarr.
+#      http://<this host>:8788. The setup code is in docker logs downstream.
 #
-# Updating DownStream: docker compose pull unshacklarr && docker compose up -d --no-deps unshacklarr
+# Updating DownStream: docker compose pull downstream && docker compose up -d --no-deps downstream
 # (--no-deps leaves Unshackle and its downloads running). Unshackle, when nothing downloads:
 # docker compose build --pull unshackle && docker compose up -d.
 #
 # The downloads folder is mounted in both containers at the same path, /downloads.
 # SONARR_DOWNLOADS is that same folder as Sonarr sees it.
-name: unshacklarr
+name: downstream
 
 services:
   unshackle:
@@ -40,9 +40,9 @@ services:
       - ${DOWNLOADS_DIR}:/downloads
     # no ports: only DownStream talks to it, on the Docker network
 
-  unshacklarr:
-    image: ghcr.io/artic0din/unshacklarr:latest  # built by the project's CI: nothing to build here
-    container_name: unshacklarr
+  downstream:
+    image: ghcr.io/artic0din/downstream:latest  # built by the project's CI (also published as .../unshacklarr): nothing to build here
+    container_name: downstream
     restart: unless-stopped
     user: "${PUID:-1000}:${PGID:-1000}"
     depends_on: [unshackle]

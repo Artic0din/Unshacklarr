@@ -99,6 +99,12 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Renamed what you type and install to DownStream: the `downstream` command, the `downstream` image, and the
+  example compose file's service and container. The `DOWNSTREAM_DATA` and `DOWNSTREAM_BUILD` settings, a
+  `DownStream` data folder and `DownStream/` in requests to other sites follow. Installs from before keep working:
+  the `unshacklarr` command, the `unshacklarr` image, the `UNSHACKLARR_` settings and an existing `unshacklarr`
+  folder are all still used. To switch, rename the service, `container_name` and image in `docker-compose.yml`.
+
 - Made selection look the same everywhere: anything you pick one of (tabs, view filters, option rows, the Settings menu,
   season and section pickers) shows a lime tint with a lime outline, and the old grey highlight is gone. A lime
   outline now only means selected: series being downloaded, running downloads and today no longer borrow it. (#403)

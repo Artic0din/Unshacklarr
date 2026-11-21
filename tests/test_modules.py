@@ -932,3 +932,25 @@ def test_a_failed_start_cleared_by_another_thread_mid_check_still_says_why(tmp_p
     local.failed = Clearing(("unshackle", time.monotonic(), UnshackleError("did not start")))
     with pytest.raises(UnshackleError, match="did not start"):
         local.recent_failure("unshackle")
+
+
+def test_the_new_names_keep_installs_from_before_the_rename_working(tmp_path, monkeypatch):
+    from pathlib import Path
+    pyproject = (Path(__file__).parents[1] / "pyproject.toml").read_text()
+    assert 'downstream = "unshacklarr.web:main"' in pyproject
+    assert 'unshacklarr = "unshacklarr.web:main"' in pyproject  # the old command still runs
+    import unshacklarr.sync as sync
+    monkeypatch.delenv("DOWNSTREAM_DATA", raising=False)
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path / "old"))
+    assert sync.env("DATA") == str(tmp_path / "old")  # an install that set the old name keeps its folder
+    monkeypatch.setenv("DOWNSTREAM_DATA", str(tmp_path / "new"))
+    assert sync.env("DATA") == str(tmp_path / "new")  # both set: the new name wins
+    # outside Docker: the old folder, while there is no new one
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(sync.sys, "platform", "linux")
+    monkeypatch.setattr(sync.os, "name", "posix")
+    assert sync.default_data_dir() == tmp_path / "downstream"
+    (tmp_path / "unshacklarr").mkdir()
+    assert sync.default_data_dir() == tmp_path / "unshacklarr"
+    (tmp_path / "downstream").mkdir()
+    assert sync.default_data_dir() == tmp_path / "downstream"

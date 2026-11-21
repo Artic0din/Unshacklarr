@@ -1,5 +1,6 @@
 # Tests on every push; on main, the image too, pushed to this Forgejo's container registry as
-# <server>/<owner>/unshacklarr:latest and :<commit>. A version tag (v0.2.0) puts :0.2.0 on the image
+# <server>/<owner>/downstream:latest and :<commit> (and the same under <owner>/unshacklarr, the name
+# before the rename). A version tag (v0.2.0) puts :0.2.0 on the image
 # main built for that commit (tools/ci/retag.sh), built only if there is none.
 # The push needs a REGISTRY_TOKEN secret: a Forgejo token with the write:package scope.
 name: CI
@@ -36,6 +37,8 @@ jobs:
           owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
           case "$GITHUB_REF" in  # a release: the image main built for its commit, if there is one
             refs/tags/v*) REGISTRY_USER="$GITHUB_ACTOR" REGISTRY_PASSWORD="$REGISTRY_TOKEN" \
+                            sh tools/ci/retag.sh "$host" "$owner/downstream" "${GITHUB_SHA::12}" "${GITHUB_REF#refs/tags/v}" \
+                            && REGISTRY_USER="$GITHUB_ACTOR" REGISTRY_PASSWORD="$REGISTRY_TOKEN" \
                             sh tools/ci/retag.sh "$host" "$owner/unshacklarr" "${GITHUB_SHA::12}" "${GITHUB_REF#refs/tags/v}" && exit 0 ;;
           esac
           # the docker client, checked against the sum it had when pinned: it runs with the registry token
@@ -43,11 +46,11 @@ jobs:
           echo "4f798b3ee1e0140eab5bf30b0edc4e84f4cdb53255a429dc3bbae9524845d640  /tmp/docker.tgz" | sha256sum -c -
           tar xzf /tmp/docker.tgz -C /tmp
           docker=/tmp/docker/docker
-          image="$host/$owner/unshacklarr"
+          images="$host/$owner/downstream $host/$owner/unshacklarr"  # one image under both names: the old one for installs from before the rename
           echo "$REGISTRY_TOKEN" | $docker login "$host" -u "$GITHUB_ACTOR" --password-stdin
           case "$GITHUB_REF" in
             refs/tags/v*) tags="${GITHUB_REF#refs/tags/v}" ;;  # a release: its version only
             *) tags="latest ${GITHUB_SHA::12}" ;;
           esac
-          $docker build --pull --build-arg SOURCE_REVISION="$GITHUB_SHA" $(for t in $tags; do printf -- '-t %s:%s ' "$image" "$t"; done) .  # --pull: the base image's fixes too
-          for t in $tags; do $docker push "$image:$t"; done
+          $docker build --pull --build-arg SOURCE_REVISION="$GITHUB_SHA" $(for i in $images; do for t in $tags; do printf -- '-t %s:%s ' "$i" "$t"; done; done) .  # --pull: the base image's fixes too
+          for i in $images; do for t in $tags; do $docker push "$i:$t"; done; done

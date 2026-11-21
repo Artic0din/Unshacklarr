@@ -5,7 +5,7 @@
   "use strict";
   const DAY = 86400000;
   try { if (!localStorage.getItem("lang")) localStorage.setItem("lang", "en"); } catch {}  // English, unless picked
-  const KEY = "unshacklarr-demo";
+  const KEY = "downstream-demo";
   const load = () => { try { return JSON.parse(sessionStorage.getItem(KEY)) || {}; } catch { return {}; } };
   const mem = { configured: false, logged: false, ...load() };
   const keep = () => { try { sessionStorage.setItem(KEY, JSON.stringify(mem)); } catch {} };

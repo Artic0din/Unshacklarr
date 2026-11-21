@@ -427,8 +427,8 @@ TMDB_PAGES = threading.Lock()  # TMDB's site answers 429 to a burst: its pages a
 TMDB_GAP = 0.4  # seconds between two of them
 # Its own name: TMDB's site answers 403 to a client calling itself a browser ("Mozilla/5.0") that does not
 # talk like one, and lets an honest one through
-BUILD = os.environ.get("UNSHACKLARR_BUILD", "").strip()  # a test build of a branch ("features-aed807a"); a release: empty
-TMDB_HEADERS = {"User-Agent": f"Unshacklarr/{__version__} (+https://github.com/OwnzZzZ/Unshacklarr)"}
+BUILD = sonarr_sync.env("BUILD").strip()  # a test build of a branch ("features-aed807a"); a release: empty
+TMDB_HEADERS = {"User-Agent": f"DownStream/{__version__} (+https://github.com/OwnzZzZ/Unshacklarr)"}
 tmdb_last = 0.0
 
 
@@ -2603,7 +2603,7 @@ UPDATE_FILE = sonarr_sync.DATA / "update.json"  # the last answer: {"checked", "
 # one small request to github.com an hour: a release shows within the hour (GitHub may still give the one
 # before it for a few minutes after a release, which the next check puts right)
 UPDATE_EVERY, UPDATE_RETRY = 3600, 15 * 60
-UPDATE_HEADERS = {"User-Agent": f"Unshacklarr/{__version__}"}
+UPDATE_HEADERS = {"User-Agent": f"DownStream/{__version__}"}
 
 
 def version_key(version: str) -> tuple[int, ...]:
@@ -4416,7 +4416,7 @@ def tvdb_titles(tvdb_id: int) -> dict[str, str]:
         return hit["titles"]
 
     def read(lang: str) -> dict[str, str]:
-        r = requests.get(f"{SKYHOOK}/{lang}/{int(tvdb_id)}/official", timeout=20, headers={"User-Agent": f"Unshacklarr/{__version__}"})
+        r = requests.get(f"{SKYHOOK}/{lang}/{int(tvdb_id)}/official", timeout=20, headers={"User-Agent": f"DownStream/{__version__}"})
         r.raise_for_status()
         return {f"S{e['seasonNumber']:02}E{e['episodeNumber']:02}": re.sub(r"\s+", " ", str(e["title"])).strip()
                 for e in r.json().get("episodes") or [] if e.get("title") and e.get("seasonNumber") is not None}
@@ -7035,7 +7035,7 @@ async def setup_restore(request):
         raise web.HTTPForbidden(text="Already set up")
     body = await json_object(request)
     if not setup_code_ok(body):
-        raise web.HTTPForbidden(text="Wrong setup code: DownStream prints it when it starts (docker logs unshacklarr)")
+        raise web.HTTPForbidden(text="Wrong setup code: DownStream prints it when it starts (docker logs downstream)")
     password = str(body.get("password") or "")
     if len(password) < 8:
         raise web.HTTPBadRequest(text="Password must be at least 8 characters")
@@ -7187,7 +7187,7 @@ async def setup(request):
         raise web.HTTPForbidden(text="Already set up")
     body = await json_object(request)
     if not setup_code_ok(body):
-        raise web.HTTPForbidden(text="Wrong setup code: DownStream prints it when it starts (docker logs unshacklarr)")
+        raise web.HTTPForbidden(text="Wrong setup code: DownStream prints it when it starts (docker logs downstream)")
     password = str(body.get("password") or "")
     if len(password) < 8:
         raise web.HTTPBadRequest(text="Password must be at least 8 characters")

@@ -102,15 +102,23 @@ from unshacklarr.push import Push
 
 
 def default_data_dir() -> Path:
+    """DownStream's folder for this system, or the one an install from before the rename already has."""
     if os.name == "nt":
-        return Path(os.environ.get("APPDATA", Path.home())) / "Unshacklarr"
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "Unshacklarr"
-    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "unshacklarr"
+        base, new, old = Path(os.environ.get("APPDATA", Path.home())), "DownStream", "Unshacklarr"
+    elif sys.platform == "darwin":
+        base, new, old = Path.home() / "Library" / "Application Support", "DownStream", "Unshacklarr"
+    else:
+        base, new, old = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"), "downstream", "unshacklarr"
+    return base / old if (base / old).is_dir() and not (base / new).exists() else base / new
+
+
+def env(name: str, default: str = "") -> str:
+    """DOWNSTREAM_<name>, or UNSHACKLARR_<name> as it was called before: an install that set the old one keeps it."""
+    return os.environ.get(f"DOWNSTREAM_{name}") or os.environ.get(f"UNSHACKLARR_{name}") or default
 
 
 # Everything DownStream keeps: config.yaml, the download history, caches.
-DATA = Path(os.environ.get("UNSHACKLARR_DATA") or default_data_dir())
+DATA = Path(env("DATA") or default_data_dir())
 CONFIG_FILE = DATA / "config.yaml"
 WARNED_FILE = DATA / "warned.json"
 SEEN_FILE = DATA / "availability.json"  # per episode: last try it was not out yet, first try it was
