@@ -52,8 +52,9 @@ TEXT = [("text", "bg"), ("text", "panel"), ("text", "well"), ("text", "field-bg"
         ("err", "err-tint"), ("muted", "well"), ("ok", "select"),
         ("text", "ok-tint"), ("muted", "ok-tint"), ("warn", "ok-tint"),
         ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg"),
-        ("text", "select"), ("muted", "select"), ("text", "term-bg")]
-EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
+        ("text", "select"), ("muted", "select"), ("text", "term-bg"), ("text", "bar"), ("muted", "bar"), ("muted", "well"), ("err", "err-tint")]
+EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg"),
+         ("field-line", "bar"), ("accent", "bar"), ("err", "err-tint"), ("warn", "warn-tint")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
 
 
 def test_every_text_and_field_edge_meets_its_contrast():

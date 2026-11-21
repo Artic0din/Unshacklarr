@@ -50,7 +50,7 @@ def test_header_blurs_a_single_background_layer_without_trapping_the_phone_nav()
     assert all("backdrop-filter" not in rule for rule in re.findall(r"(?m)^\s*header \{([^}]*)\}", CSS))
     assert "z-index: -1" in layers[0] and "pointer-events: none" in layers[0]
     assert re.search(r"@media \(prefers-reduced-transparency: reduce\), \(prefers-contrast: more\) \{"
-                     r"\s*header::before \{[^}]*background: var\(--bg\);[^}]*backdrop-filter: none;", CSS)
+                     r"\s*header::before \{[^}]*background: var\(--bar\);[^}]*backdrop-filter: none;", CSS)
 
 
 def test_desktop_header_inbox_settings_and_scroll_padding_share_the_measured_offset():

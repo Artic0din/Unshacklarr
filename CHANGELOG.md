@@ -99,6 +99,9 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Restyled the app's frame in the DownStream design: the header is a floating bar with the current page as a lime
+  pill and "Run sync now" as its main button, the phone tab bar floats above the bottom edge, and status dots, buttons,
+  notifications, toasts, banners and dialogs follow the design system.
 - Rounded the app's corners by what each thing is, following the DownStream design system: fields and rows 10px,
   posters and schedule, episode and download cards 16px, cards, modals and menus 28px, and buttons, nav, segmented
   controls, filters, badges, switches and toasts as full pills. (#396)
