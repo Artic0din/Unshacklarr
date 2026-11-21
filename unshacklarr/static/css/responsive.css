@@ -10,12 +10,12 @@
   color: var(--muted); font: inherit; font-size: var(--fs-sub); cursor: pointer; text-align: left; line-height: 1.25; }
 .health .hn { display: flex; flex-direction: column; }
 .health .hn small { font-size: var(--fs-footnote); } .health .hn small:empty { display: none; }
-.health button:focus-visible { background: var(--panel); color: var(--text); }
-@media (hover: hover) { .health button:hover { background: var(--panel); color: var(--text); } }
+.health button:focus-visible { background: var(--well); color: var(--text); }
+@media (hover: hover) { .health button:hover { background: var(--well); color: var(--text); } }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
-.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 15%, transparent); }
-.dot.down { background: var(--err); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent); }
-.dot.warn { background: var(--warn); }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-tint); }
+.dot.down { background: var(--err); box-shadow: 0 0 0 3px var(--err-tint); }
+.dot.warn { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-tint); }
 .health .dot:not(.ok, .down, .warn) { background: none; box-shadow: inset 0 0 0 2px var(--muted); }  /* checking: a ring, not a filled dot */
 .status-err { margin: 0; color: var(--err); font-size: var(--fs-callout); overflow-wrap: anywhere; }
 .modal.wide { width: min(760px, calc(100vw - 32px)); max-width: none; }
@@ -201,8 +201,8 @@
   #sync .sync-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .update-pill span { display: none; } .update-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
 }
-@media (max-width: 1240px) and (prefers-reduced-motion: reduce) { #sync.spin { box-shadow: inset 0 0 0 2px var(--accent); } }  /* running, without the spin */
-@media (min-width: 701px) and (max-width: 1100px) { header { gap: var(--sp-3); padding-inline: var(--sp-4); } }  /* with the update pill too, the row needs about 995 px */
+@media (max-width: 1240px) and (prefers-reduced-motion: reduce) { #sync.spin { box-shadow: inset 0 0 0 2px var(--accent-ink); } }  /* running, without the spin: a ring in the ink, on its fill */
+@media (min-width: 701px) and (max-width: 1100px) { header { gap: var(--sp-3); padding-inline: var(--sp-4); } header::before { inset-inline: var(--sp-2); } }  /* the bar nearer the edges: the row keeps the room it had */  /* with the update pill too, the row needs about 995 px */
 @media (min-width: 701px) and (max-width: 1240px) {
   /* a status with words in it takes a row of its own, as on a phone, rather than push the buttons off the first */
   header:has(.health :is([data-state=warn], [data-state=down])) .health { order: 10; flex-basis: 100%; margin-left: 0; }
@@ -214,9 +214,12 @@
 /* Phones: a native-app shell. Tabs move to a bottom bar, the series page goes full screen,
    touch targets are 44 px and fields 16 px (iOS zooms into anything smaller). */
 @media (max-width: 700px) {
-  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  :root { --tabbar-top: calc(86px + env(safe-area-inset-bottom)); }  /* how far up the floating tab bar reaches (measured once the page runs): the bars above stand there */
+  body { padding-bottom: var(--tabbar-top); }
   :root { --header-bottom: calc(var(--header-top, 0px) + var(--head-h, 72px + env(safe-area-inset-top))); }
-  header { padding: calc(10px + env(safe-area-inset-top)) 16px 10px; gap: 8px; flex-wrap: nowrap; }
+  /* the bar sits closer to the edges than on a desktop, so the name keeps its room beside four buttons */
+  header { padding: calc(var(--sp-2) + 10px + env(safe-area-inset-top)) var(--sp-4) 10px; gap: 8px; flex-wrap: nowrap; background: var(--bg); }  /* solid under the status bar */
+  header::before { inset: calc(var(--sp-2) + env(safe-area-inset-top)) var(--sp-2) 0; }
   header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; container-type: inline-size; } .brand a { min-width: 0; }
   /* ...on a row of its own under the title, so the header's buttons stay on screen */
   header:has(.health :is([data-state=warn], [data-state=down])) { flex-wrap: wrap; }
@@ -225,10 +228,11 @@
   .health button { padding: 12px 8px; }
   #sync { width: 44px; height: 44px; }
   #bell { width: 44px; height: 44px; }
-  nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 0; margin: 0; max-width: none; background: color-mix(in srgb, var(--panel) 96%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--line);
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
-  nav a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; min-height: 52px;
+  nav { position: fixed; left: var(--sp-3); right: var(--sp-3); bottom: calc(var(--sp-3) + env(safe-area-inset-bottom)); z-index: 8; display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-1); margin: 0; max-width: none; background: var(--bar); border: 1px solid var(--line); border-radius: var(--radius-bar);
+    padding: var(--sp-1); }
+  nav a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; min-height: 52px; border-radius: var(--radius-card);
+    min-width: 0; white-space: normal; text-align: center; overflow-wrap: anywhere; line-height: 1.15;  /* a long or enlarged label wraps in its tab */
     font-size: var(--fs-caption); font-weight: 600; }
   nav a .ico { width: 22px; height: 22px; }
   nav .long { display: none; }
@@ -353,7 +357,7 @@
   .cd-stats div:nth-child(4) { display: none; }
   .cd-foot { display: flex; flex-wrap: wrap; gap: 10px; }
   .cd-foot .btn { flex: 1; min-height: 44px; }
-  .dock { bottom: calc(76px + env(safe-area-inset-bottom)); padding: 8px 8px 8px 10px; gap: 8px; flex-wrap: wrap; row-gap: 8px; }
+  .dock { bottom: var(--tabbar-top); padding: 8px 8px 8px 10px; gap: 8px; flex-wrap: wrap; row-gap: 8px; }
   .dock .d-mid, .dock .d-l1 { min-width: max-content; }  /* the episode and its percent whole (the line is hidden here) */
   .dock:has(.d-acts > :nth-child(4)) .d-mid { flex-basis: 100%; }  /* four buttons or more: on a row of their own, under it */
   .dock .d-ico, .dock .d-l1 span { display: none; }
@@ -361,7 +365,8 @@
   .con-detail.docked-acts .cd-foot { display: none; }  /* Keep actions that have no dock button in the footer. */
   .con-detail.docked-acts .cd-foot:has(:is([data-fk="delete"], [data-fk="sign-in"])) { display: flex; }
   .con-detail.docked-acts .cd-foot .btn:not([data-fk="delete"], [data-fk="sign-in"]) { display: none; }
-  .dock.open > .cd-raw .term { height: calc(100dvh - 330px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  /* one budget, both measured: a status row, a taller tab bar or the save bar under the dock takes its room, down to a few lines */
+  .dock.open > .cd-raw .term { height: max(80px, calc(100dvh - var(--header-bottom) - var(--tabbar-top) - var(--dock-raise, 0px) - 194px)); min-height: 0; }
   .cd-tracks .t { grid-template-columns: 1fr auto; } .cd-tracks .t .bar { grid-column: 1 / -1; grid-row: 2; }
   .cd-raw .term { height: 60dvh; min-height: 280px; }
   .icon-hide { opacity: .8; width: 36px; height: 36px; }
@@ -371,10 +376,10 @@
   #inbox-dialog.menu[open] { max-height: calc(100dvh - var(--header-bottom) - var(--sp-2) - var(--bars-h, 72px)); }  /* above the tab bar, as tall as it is measured */
   .modal-actions { flex-direction: column-reverse; }
   .modal-actions .btn { width: 100%; }
-  .savebar { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); justify-content: space-between; flex-wrap: wrap; }
+  .savebar { left: 12px; right: 12px; bottom: var(--tabbar-top); justify-content: space-between; flex-wrap: wrap; }
   body.drawer-open .savebar { display: none; }
   /* Notices drop in under the head, as on iOS, instead of floating over the page's bottom. */
-  .toasts { left: 12px; right: 12px; top: calc(72px + env(safe-area-inset-top)); bottom: auto; align-items: center; }
+  .toasts { left: 12px; right: 12px; top: calc(max(var(--header-bottom), env(safe-area-inset-top)) + var(--sp-2));  /* signed out, no header: clear of the notch */ bottom: auto; align-items: center; }
   body.drawer-open .toasts { top: calc(128px + env(safe-area-inset-top)); }
   .toast { border-radius: var(--radius-card); padding: 10px 14px; font-size: var(--fs-callout); animation: toast-in .22s ease-out; }
 
@@ -411,11 +416,10 @@
 .sel-bar[hidden] { display: none; }
 body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 96px; }
 @media (max-width: 700px) {
-  .sel-bar { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
+  .sel-bar { left: 12px; right: 12px; bottom: var(--tabbar-top); max-width: none; }
   /* the save bar over the tab bar, and these on it, as tall as it is (two rows on a narrow phone) */
-  body:has(#savebar:not([hidden])) :is(.sel-bar, .dock) { bottom: calc(76px + env(safe-area-inset-bottom) + var(--save-h, 56px) + 8px); }
-  body:has(#savebar:not([hidden])) .dock.open > .cd-raw .term {  /* raised by the save bar: its output is that much shorter */
-    height: max(120px, calc(100dvh - var(--head-h, 65px) - 265px - env(safe-area-inset-bottom) - var(--save-h, 56px) - 8px)); min-height: 0; }  /* --head-h: its safe area and a status row included */
+  body:has(#savebar:not([hidden])) :is(.sel-bar, .dock) { bottom: calc(var(--tabbar-top) + var(--save-h, 56px) + 8px); }
+  body:has(#savebar:not([hidden])) .dock.open { --dock-raise: calc(var(--save-h, 56px) + 8px); }  /* raised by the save bar: its output is that much shorter */
   body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 150px; }
 }
 .sel-bar #sel-count { margin-right: auto; font-weight: 600; color: var(--text); }
@@ -508,3 +512,4 @@ details.sx-card > summary.sx-head { padding-right: 28px; } details.sx-card > sum
 .ptr.loading .ptr-arc { stroke-dasharray: 24 70; stroke-dashoffset: 0; }
 @keyframes ptr-spin { to { transform: rotate(270deg); } }
 @media (prefers-reduced-motion: reduce) { .ptr, .ptr-badge, .ptr-arrow { transition: opacity .2s !important; } .ptr.loading .ptr-badge > svg:first-child { animation: none; } }
+@media (max-width: 360px) { nav { left: var(--sp-2); right: var(--sp-2); gap: 0; } }  /* the narrowest phones: the tabs keep their width for their labels */

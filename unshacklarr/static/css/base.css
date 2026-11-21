@@ -2,7 +2,7 @@
 :root {
   color-scheme: only dark;
   --bg: #080804; --panel: #10140c; --line: #2c301c; --text: #ffffff; --muted: #aca9a6;
-  --well: #2c301c; --select: #3c3e38;  /* the lighter neutral fill marks selection, not a primary action */
+  --well: #2c301c; --bar: #1c2008;  /* the header and tab bar */ --select: #3c3e38;  /* the lighter neutral fill marks selection, not a primary action */
   --accent: #cbe24d; --accent-ink: #0a0b05; --accent-tint: #30381a; --warn-tint: #3d2f0e; --err-tint: #45201a;
   --ok: #65d8a0; --ok-tint: #17392a; --warn: #e8b651; --warn-ink: #241a03; --err: #ff8a75; --err-ink: #2a0c06;
   --line-strong: #52564a;  /* a divider or thumb that must show on --panel; never text */
@@ -20,7 +20,7 @@
   --font-figure: -apple-system, "SF Pro Display", system-ui, sans-serif;
   /* Corners by what a thing is: fields and rows inside a card; tiles (posters, schedule, episode and download cards);
      cards, modals and menus; pills (buttons, nav, segments, filters, badges, switches, toasts) */
-  --radius-field: 10px; --radius-tile: 16px; --radius-card: 28px; --radius-pill: 999px;
+  --radius-field: 10px; --radius-tile: 16px; --radius-card: 28px; --radius-bar: 36px; --radius-pill: 999px;
   --radius-inline: 6px;  /* thumbnails, code, swatches: small things the design system gives no corner */
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
   --header-bottom: calc(var(--header-top, 0px) + var(--head-h, 65px));

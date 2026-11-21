@@ -52,8 +52,9 @@ TEXT = [("text", "bg"), ("text", "panel"), ("text", "well"), ("text", "field-bg"
         ("err", "err-tint"), ("muted", "well"), ("ok", "select"),
         ("text", "ok-tint"), ("muted", "ok-tint"), ("warn", "ok-tint"),
         ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg"),
-        ("text", "select"), ("muted", "select"), ("text", "term-bg")]
-EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
+        ("text", "select"), ("muted", "select"), ("text", "term-bg"), ("text", "bar"), ("muted", "bar"), ("muted", "well"), ("err", "err-tint")]
+EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg"),
+         ("field-line", "bar"), ("accent", "bar"), ("err", "err-tint"), ("warn", "warn-tint")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
 
 
 def test_every_text_and_field_edge_meets_its_contrast():
@@ -459,12 +460,14 @@ def test_every_corner_comes_from_a_radius_token():
 def test_corner_tokens_keep_their_sizes_and_roles():
     root = block(":root {")
     sizes = dict(re.findall(r"--radius-([\w-]+):\s*([^;]+);", root))
-    assert sizes == {"field": "10px", "tile": "16px", "card": "28px", "pill": "999px", "inline": "6px"}
+    assert sizes == {"field": "10px", "tile": "16px", "card": "28px", "bar": "36px", "pill": "999px", "inline": "6px"}
     # a container that can wrap, or text that can, takes the card corner: a pill on one line, never a blob on three
     roles = {".seg {": "card", ".ep-sonarr {": "card", ".toast {": "card", ".poster .art {": "tile", ".sched-card {": "tile",
-             ".modal {": "card", ".sx-card {": "card", ".btn {": "pill", "nav a {": "pill", ".sd code {": "field"}
+             ".modal {": "card", ".sx-card {": "card", ".btn {": "pill", ".sd code {": "field"}
     # every rule that sets the corner, desktop and phone alike, not only the one that wins at some width
     corners = {sel: [b for b in rules_of(sel.rstrip(" {")) if "border-radius:" in b] for sel in roles}
     wrong = {sel: role for sel, role in roles.items()
              if not corners[sel] or any(f"border-radius: var(--radius-{role})" not in b for b in corners[sel])}
     assert not wrong
+    nav = [b for b in rules_of("nav a") if "border-radius:" in b]
+    assert "var(--radius-pill)" in nav[0] and "var(--radius-card)" in nav[-1]  # header nav pills; a phone's tabs, blocks as in the TabBar card

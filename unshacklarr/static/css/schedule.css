@@ -46,7 +46,7 @@ button.pill[aria-pressed="true"] { background: var(--select); border-color: var(
 @media (hover: hover) { .btn.add:hover { color: var(--text); border-color: var(--field-line-hover); border-style: solid; } }
 .sched-day { font-size: var(--fs-callout); color: var(--muted); margin: 16px 0 6px; font-weight: 600; }
 /* Schedule, refined: late episodes in one banner, a status on each episode of yours */
-.late-banner { margin-bottom: 12px; border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+.late-banner { margin-bottom: 12px; border: 1px solid var(--warn);
   background: var(--warn-tint); border-radius: var(--radius-card); font-size: var(--fs-callout); }
 .late-banner summary { padding: 6px 10px; color: var(--warn); cursor: pointer; }
 .late-banner > p, #sched-missing { margin: 4px 10px 10px; }

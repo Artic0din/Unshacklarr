@@ -91,9 +91,9 @@ def test_inbox_filters_wrap_whole_pills_instead_of_clipping_the_last_one():
 
 
 def test_main_nav_pills_keep_the_current_page_distinct_and_touch_targets_at_44px():
-    has(CSS, "nav a { background: none; border: 0; padding: 6px 12px; border-radius: var(--radius-pill);")
-    has(CSS, 'nav a[aria-current="page"] { background: var(--accent-tint); color: var(--accent); }')
-    has(media("max-width: 700px"), "nav { position: fixed; left: 0; right: 0; bottom: 0;")
+    has(CSS, "nav a { background: none; border: 0; min-height: 40px; padding: 0 var(--sp-4); border-radius: var(--radius-pill);")
+    has(CSS, 'nav a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }')
+    has(media("max-width: 700px"), "nav { position: fixed; left: var(--sp-3); right: var(--sp-3); bottom: calc(var(--sp-3) + env(safe-area-inset-bottom));")
     has(media("max-width: 700px"), "nav a { min-inline-size: 44px; }")
 
 
@@ -287,3 +287,13 @@ def test_a_device_rows_action_column_fits_its_44px_button_on_a_phone():
 def test_the_icon_only_sync_button_is_44px_on_a_touch_tablet():
     """Up to 1240px #sync is an icon-only 40px circle; a touch tablet gets 44px (#333)."""
     has(CSS, "@media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }")
+
+
+def test_phone_tab_labels_wrap_in_their_tabs_and_the_bars_stand_on_the_measured_tab_bar():
+    phone = media("max-width: 700px")
+    tab = re.search(r"(?m)^\s*nav a \{([^}]*)\}", phone)[1]
+    for decl in ("min-width: 0", "white-space: normal", "overflow-wrap: anywhere"):
+        assert decl in tab  # a long translation or large text wraps, never clips
+    for bar in (".dock", ".savebar", ".sel-bar"):
+        assert re.search(rf"(?m)^\s*{re.escape(bar)} \{{[^}}]*bottom: var\(--tabbar-top\)", phone), bar
+    assert "--tabbar-top" in (STATIC / "js" / "navigation.js").read_text()  # measured, not only the CSS fallback

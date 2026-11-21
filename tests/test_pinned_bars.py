@@ -50,7 +50,7 @@ def test_header_blurs_a_single_background_layer_without_trapping_the_phone_nav()
     assert all("backdrop-filter" not in rule for rule in re.findall(r"(?m)^\s*header \{([^}]*)\}", CSS))
     assert "z-index: -1" in layers[0] and "pointer-events: none" in layers[0]
     assert re.search(r"@media \(prefers-reduced-transparency: reduce\), \(prefers-contrast: more\) \{"
-                     r"\s*header::before \{[^}]*background: var\(--bg\);[^}]*backdrop-filter: none;", CSS)
+                     r"\s*header::before \{[^}]*background: var\(--bar\);[^}]*backdrop-filter: none;", CSS)
 
 
 def test_desktop_header_inbox_settings_and_scroll_padding_share_the_measured_offset():
@@ -117,7 +117,8 @@ const ctx = vm.createContext({
 
 
 def measured(bars):
-    """--head-h and --bars-h as navigation.js sets them, for bars given as (offsetHeight, computed bottom)."""
+    """--head-h and --bars-h as navigation.js sets them, for bars given as (offsetHeight, computed bottom).
+    A bottom of "tabbar" stands on the tab bar: it reads --tabbar-top as set so far (86px before it is measured)."""
     if not shutil.which("node"):
         pytest.skip("node is not installed")
     src = (STATIC / "js" / "navigation.js").read_text()
@@ -126,7 +127,7 @@ def measured(bars):
 const vm = require("vm"), [code, bars] = process.argv.slice(1), set = {};
 const nodes = { header: { offsetHeight: 65, style: {} }, "#con-detail": { bottom: "auto", pad: "20px" } };
 for (const [sel, [h, bottom]] of Object.entries(JSON.parse(bars))) nodes[sel] = { offsetHeight: h, bottom };
-const ctx = vm.createContext({ $: (sel) => nodes[sel], getComputedStyle: (n) => ({ bottom: n.bottom, paddingBottom: n.pad || "0px" }), Math, parseFloat,
+const ctx = vm.createContext({ $: (sel) => nodes[sel], getComputedStyle: (n) => ({ bottom: n.bottom === "tabbar" ? set["--tabbar-top"] || "86px" : n.bottom, paddingBottom: n.pad || "0px" }), Math, parseFloat,
   document: { documentElement: { style: { setProperty: (k, v) => { set[k] = v; } } } } });
 vm.runInContext(code + "\nmeasureBars();", ctx);
 console.log(JSON.stringify(set));
@@ -140,10 +141,17 @@ NONE = {"#savebar": [0, "auto"], "#sel-bar": [0, "auto"], "#dock": [0, "auto"], 
 
 def test_phone_bars_reach_as_far_up_as_the_highest_one():
     tab = {'nav[aria-label="Main"]': [72, "0px"]}
-    assert measured({**NONE, **tab}) == {"--head-h": "65px", "--save-h": "0px", "--bars-h": "80px", "--dock-h": "28px"}
+    assert measured({**NONE, **tab}) == {"--head-h": "65px", "--save-h": "0px", "--bars-h": "80px", "--dock-h": "28px", "--tabbar-top": "84px"}  # the tab bar 72px tall: the bars stand 12px over it
     # the save bar over the tab bar, and the selection bar wrapped to two rows over both: the highest one counts
     shown = {**NONE, **tab, "#savebar": [56, "76px"], "#sel-bar": [104, "140px"]}
     assert measured(shown)["--bars-h"] == "252px"
+
+
+def test_a_grown_tab_bar_raises_the_bars_on_it_in_the_same_measure():
+    # larger text makes the tab bar taller: the save bar standing on it moves up, and --bars-h must follow at once
+    grown = {**NONE, 'nav[aria-label="Main"]': [110, "12px"], "#savebar": [56, "tabbar"]}
+    assert measured(grown)["--tabbar-top"] == "134px"
+    assert measured(grown)["--bars-h"] == "198px"  # 56 over 134, not over the 86px it stood on before
 
 
 def test_phone_expanded_dock_and_series_download_bar_are_measured_as_they_are():
@@ -223,9 +231,11 @@ def test_phone_page_end_clears_the_dock_raised_by_the_save_bar():
 
 def test_an_open_dock_on_the_save_bar_gives_its_output_the_save_bars_height():
     """Raised onto the save bar, the dock's open output would reach behind the header: it loses the save bar's height."""
-    rule = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\) \.dock\.open > \.cd-raw \.term \{([^}]*)\}", phone_blocks())
-    assert rule and "var(--save-h" in rule[1] and "min-height: 0" in rule[1]  # the 320px floor of .term would undo it
-    assert "var(--head-h" in rule[1]  # a header with a status row under it is taller
+    raise_ = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\) \.dock\.open \{([^}]*)\}", phone_blocks())
+    assert raise_ and "--dock-raise:" in raise_[1] and "var(--save-h" in raise_[1]
+    term = re.search(r"\.dock\.open > \.cd-raw \.term \{([^}]*)\}", phone_blocks())
+    assert term and "var(--dock-raise" in term[1] and "min-height: 0" in term[1]  # the floor of .term would undo it
+    assert "var(--header-bottom)" in term[1] and "var(--tabbar-top)" in term[1]  # a status row or a taller tab bar is measured
 
 
 def test_a_hidden_dock_is_not_drawn():
