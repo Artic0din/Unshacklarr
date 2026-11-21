@@ -123,7 +123,7 @@ def test_the_tab_title_names_the_page_a_series_or_a_settings_section_in_the_page
     shown = node(r"""
 const src = read(process.argv[1]);
 const seen = [];
-const doc = { title: "Unshacklarr", body: { classList: { contains: () => doc.gated } } };
+const doc = { title: "DownStream", body: { classList: { contains: () => doc.gated } } };
 const ctx = sandbox({
   document: doc, tr: (text) => { seen.push(text); return text; },
   currentTab: "schedule", current: null, settingsList: false, settingsSec: "sonarr",
@@ -142,10 +142,10 @@ out.asked = seen.slice(-3);
 console.log(JSON.stringify(out));
 """, str(JS / "navigation.js"))
     assert shown == {
-        "schedule": "Schedule · Unshacklarr", "series": "Series · Unshacklarr", "log": "Activity · Unshacklarr",
-        "yaml": "unshackle.yaml · Unshacklarr", "settingsList": "Settings · Unshacklarr",
-        "section": "Settings: Sonarr · Unshacklarr", "aSeries": "Abbott Elementary · Unshacklarr",
-        "gated": "Welcome", "asked": ["Settings · Unshacklarr", "Settings: Sonarr · Unshacklarr", "Abbott Elementary · Unshacklarr"],
+        "schedule": "Schedule · DownStream", "series": "Series · DownStream", "log": "Activity · DownStream",
+        "yaml": "unshackle.yaml · DownStream", "settingsList": "Settings · DownStream",
+        "section": "Settings: Sonarr · DownStream", "aSeries": "Abbott Elementary · DownStream",
+        "gated": "Welcome", "asked": ["Settings · DownStream", "Settings: Sonarr · DownStream", "Abbott Elementary · DownStream"],
     }
 
 
@@ -193,7 +193,7 @@ def test_the_yaml_editor_says_how_to_leave_it():
 def test_the_title_follows_the_phone_settings_list_and_a_series_without_a_title():
     shown = node(r"""
 const src = read(process.argv[1]);
-const doc = { title: "Settings: Sonarr · Unshacklarr", body: { classList: { contains: () => false } }, querySelector: () => null, querySelectorAll: () => [] };
+const doc = { title: "Settings: Sonarr · DownStream", body: { classList: { contains: () => false } }, querySelector: () => null, querySelectorAll: () => [] };
 const ctx = sandbox({
   document: doc, tr: (text) => text, currentTab: "settings", current: null, settingsList: false, settingsSec: "sonarr",
   phoneLayout: () => true, inSettingsSec: () => false, leaveNews() {}, closeDetails() {}, navigate() {},
@@ -206,4 +206,4 @@ const out = { list: doc.title };
 for (const title of [undefined, "", "  "]) { ctx.current = { title }; ctx.currentTab = "series"; ctx.updateTitle(); out[JSON.stringify(title ?? null)] = doc.title; }
 console.log(JSON.stringify(out));
 """, str(JS / "navigation.js"))
-    assert shown == {"list": "Settings · Unshacklarr", "null": "Series · Unshacklarr", '""': "Series · Unshacklarr", '"  "': "Series · Unshacklarr"}
+    assert shown == {"list": "Settings · DownStream", "null": "Series · DownStream", '""': "Series · DownStream", '"  "': "Series · DownStream"}

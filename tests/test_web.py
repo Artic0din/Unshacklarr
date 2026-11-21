@@ -1810,7 +1810,7 @@ Promise.all([responseError(response("Wrong password: try again")), responseError
     run = subprocess.run(["node", "-e", script], capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     result = json.loads(run.stdout)
-    context = "Unshacklarr answered HTTP 503: Service Unavailable. Try again."
+    context = "DownStream answered HTTP 503: Service Unavailable. Try again."
     # the server's own words alone: "answered HTTP 503" ahead of them pushes the cause out of a narrow field
     assert result["plain"] == {"message": "translated: Wrong password: try again", "detail": "Wrong password: try again"}
     assert result["html"] == {"message": f"translated: {context}", "detail": ""}
@@ -7877,7 +7877,7 @@ def test_orig_is_taken_in_the_accepted_audio_only():
 
 def test_the_api_takes_the_services_own_numbering_and_decides_the_audio_upgrade(tmp_path, monkeypatch):
     # Disney-Watch sends Disney+'s S04E05 ("Te défendre"), Bleach's S17E45 in Sonarr; Sonarr's own S04E05 is another
-    # episode. "numbering": "service" finds S17E45 by the series' last listing; "audio": "fr" lets Unshacklarr decide:
+    # episode. "numbering": "service" finds S17E45 by the series' last listing; "audio": "fr" lets DownStream decide:
     # no file, a download; a file with French, the service's again; a file without, the audio upgrade setting
     import asyncio
     from aiohttp.test_utils import TestClient, TestServer

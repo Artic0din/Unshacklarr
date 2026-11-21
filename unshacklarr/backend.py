@@ -1,7 +1,7 @@
 """unshackle, through its REST API (`unshackle serve`).
 
 Remote: a serve that already runs (another container, another machine), reached with
-its URL and API key. Local: Unshacklarr starts one itself from the Unshackle installed
+its URL and API key. Local: DownStream starts one itself from the Unshackle installed
 on this computer, bound to 127.0.0.1 on a free port, with a key made up for the run
 and set in memory, so the user's unshackle.yaml is never touched.
 """
@@ -25,7 +25,7 @@ from unshacklarr.files import no_credentials
 
 # Runs with Unshackle's own Python: its config, cookies and CDMs, plus a key for this run.
 # Port and key come through the environment, never the command line (which every user of the machine
-# can read). Where it can, Unshacklarr binds the socket itself and hands it over: no moment when the port
+# can read). Where it can, DownStream binds the socket itself and hands it over: no moment when the port
 # is free for another program to take and pass for serve.
 LAUNCHER = """
 import os
@@ -149,7 +149,7 @@ class UnshackleError(Exception):
 # Unshackle 6 serves its proxies (a country code, a provider) only to a key allowed to (server_proxy)
 PASSING = ("NETWORK_ERROR", "SERVICE_UNAVAILABLE", "SERVER_DRAINING")  # serve's error codes worth another try
 PROXY_REFUSED = re.compile(r"does not resolve country codes into proxies|in a different region from yours", re.IGNORECASE)
-PROXY_HINT = ("Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): "
+PROXY_HINT = ("Unshackle 6 doesn't let DownStream use its proxies (a country code such as au, or a provider): "
               "allow it in Settings › Connections › Unshackle")
 
 

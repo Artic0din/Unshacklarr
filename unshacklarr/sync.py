@@ -109,7 +109,7 @@ def default_data_dir() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "unshacklarr"
 
 
-# Everything Unshacklarr keeps: config.yaml, the download history, caches.
+# Everything DownStream keeps: config.yaml, the download history, caches.
 DATA = Path(os.environ.get("UNSHACKLARR_DATA") or default_data_dir())
 CONFIG_FILE = DATA / "config.yaml"
 WARNED_FILE = DATA / "warned.json"
@@ -149,11 +149,11 @@ SETTINGS_DEFAULTS = {
     "unshackle_command": "",     # local: the Unshackle command, when it is not on the PATH
     "unshackle_url": "",
     "unshackle_api_key": "",
-    "downloads": "",             # the downloads folder, as Unshacklarr sees it
+    "downloads": "",             # the downloads folder, as DownStream sees it
     "unshackle_downloads": "",   # the same folder, as unshackle serve sees it (empty: the same path)
-    "cookies_dir": "",           # Unshackle's Cookies folder, as Unshacklarr sees it (local: asked to unshackle)
-    "cache_dir": "",             # Unshackle's Cache folder, as Unshacklarr sees it (local: asked to unshackle)
-    "unshackle_config_dir": "",  # the folder of unshackle.yaml, WVDs and PRDs, as Unshacklarr sees it (local: asked)
+    "cookies_dir": "",           # Unshackle's Cookies folder, as DownStream sees it (local: asked to unshackle)
+    "cache_dir": "",             # Unshackle's Cache folder, as DownStream sees it (local: asked to unshackle)
+    "unshackle_config_dir": "",  # the folder of unshackle.yaml, WVDs and PRDs, as DownStream sees it (local: asked)
     "unshackle_temp_dir": "",    # Unshackle's work folder (directories: temp), read only: how far a mux is (local: asked)
     "sonarr_name": "",           # the main Sonarr's name where libraries are named (empty: Sonarr)
     "sonarr_url": "",
@@ -196,7 +196,7 @@ SETTINGS_DEFAULTS = {
     "upgrade_other_groups": False,  # Upgrades: a file from another release group than ours is replaced by the same step too
     "upgrade_mode": "redownload",  # once the preferred audio comes: download the episode again, or add_track (its audio only, added)
     "library_sonarr_root": "",   # add_track reads the library's file: its folder as Sonarr sees it (/tv)…
-    "library_local_root": "",    # …and as Unshacklarr sees it (/mnt/tv); both empty: the same path
+    "library_local_root": "",    # …and as DownStream sees it (/mnt/tv); both empty: the same path
     "add_track_other_source": "ask",  # a file not named as from the series' service: ask in the bell, or "add" anyway
     "release_learn": False,      # set a series' release time from when its episodes come out, once it is clear
     "download_from": "",         # the automatic sync downloads only from…
@@ -265,7 +265,7 @@ def apply_settings(settings: dict) -> None:
     for b in settings.get("backends") or []:
         other = Unshackle(DATA)
         other.name = b["name"]
-        # its downloads folder empty: as the main serve sees it (both mount it alike), not as Unshacklarr does
+        # its downloads folder empty: as the main serve sees it (both mount it alike), not as DownStream does
         other.configure({"unshackle_mode": "remote", "unshackle_url": b.get("url"), "unshackle_api_key": b.get("api_key"),
                          "unshackle_downloads": b.get("downloads") or settings.get("unshackle_downloads")})
         backends[b["name"]] = other
@@ -370,8 +370,8 @@ def discord_payload(level: str, title: str, message: str, details: dict | None =
     """A notification as a Discord embed: what happened above, the series and episode as its title, the
     message, then the service, size and time side by side, the series' poster by it."""
     kind, sep, what = re.split(r"(: |：)", title, maxsplit=1) if re.search(r": |：", title) else (title, "", "")  # "：" in Chinese and Japanese
-    embed = {"author": {"name": kind if sep else "Unshacklarr"}, "title": (what if sep else title)[:256],
-             "description": message[:4000], "color": COLOURS[level], "footer": {"text": "Unshacklarr"},
+    embed = {"author": {"name": kind if sep else "DownStream"}, "title": (what if sep else title)[:256],
+             "description": message[:4000], "color": COLOURS[level], "footer": {"text": "DownStream"},
              "timestamp": datetime.now(timezone.utc).isoformat()}
     details = details or {}
     fields = [(name, details.get(key)) for name, key in (("Service", "service"), ("Size", "size"), ("Took", "took"))]
@@ -379,7 +379,7 @@ def discord_payload(level: str, title: str, message: str, details: dict | None =
         embed["fields"] = [{"name": i18n.tr(name, SETTINGS.get("language", "en")), "value": str(v), "inline": True} for name, v in fields if v]
     if details.get("poster"):
         embed["thumbnail"] = {"url": details["poster"]}
-    return {"username": "Unshacklarr", "embeds": [embed]}
+    return {"username": "DownStream", "embeds": [embed]}
 
 
 def human_time(seconds: float) -> str:
@@ -510,7 +510,7 @@ def send_to(url: str, level: str, title: str, message: str, details: dict | None
         return re.sub(r"/api/webhooks/\S+", "/api/webhooks/…", re.sub(r"https?://\S+", "the webhook", str(e)))[:200]
     except Exception as e:  # never let a notification stop a download
         print(f"Notification delivery failed: {type(e).__name__}: {no_credentials(e)}", file=sys.stderr)
-        return "Unshacklarr could not send this notification. Check its log."
+        return "DownStream could not send this notification. Check its log."
 
 
 def note_sent(level: str, title: str, to: list[dict]) -> None:
@@ -592,7 +592,7 @@ def after_download(ep: dict, show: dict, run, files: list[str], imported: bool) 
 def notify(settings: dict, level: str, title: str, message: str, action: dict | None = None, batch: str | None = None,
            details: dict | None = None, key: str | None = None, service: str | None = None) -> bool:
     if action and action.get("url"):
-        message = "Open the action in Unshacklarr to continue."
+        message = "Open the action in DownStream to continue."
     title, message = no_credentials(title), no_credentials(message)
     try:
         inbox_add(level, title, message, action, batch, key, service)  # the page's bell keeps them all, whatever goes out
@@ -2276,7 +2276,7 @@ def ask_for_input(run: EpisodeRun, prompt: str | None) -> None:
         run.card["prompt"] = {"id": uuid.uuid4().hex[:12], "text": prompt, "service": service, "run": run.id}
         run.say(f"\r\n\x1b[33m{service} asks: {prompt}\x1b[0m")
         notify((read_file().get("notifications") or {}), "warning", f"{service} asks you something",
-               f"{prompt}\nAnswer in Unshacklarr, for {run.card['series']} {run.card['sxxeyy']}.",
+               f"{prompt}\nAnswer in DownStream, for {run.card['series']} {run.card['sxxeyy']}.",
                action={"kind": "input", **run.card["prompt"]})
     elif not prompt and had:
         del run.card["prompt"]
@@ -2433,7 +2433,7 @@ def unconfirmed_still_on(run: EpisodeRun | None) -> str | None:
 
 
 def work_root() -> Path | None:
-    """Unshackle's work folder (unshackle.yaml's directories: temp) as Unshacklarr sees it, where serve muxes the
+    """Unshackle's work folder (unshackle.yaml's directories: temp) as DownStream sees it, where serve muxes the
     file: UNSHACKLE_TEMP_DIR (with Docker, that folder mounted read only), else the local Unshackle's own. None when
     unknown: the mux is then shown without how far it is."""
     if SETTINGS.get("unshackle_temp_dir"):
@@ -3607,7 +3607,7 @@ upgrades_lock = threading.Lock()
 
 
 def library_file(sonarr_path: str, roots: tuple[str, str] | None = None) -> Path:
-    """A library file, as Sonarr names it, where Unshacklarr reads it (the two roots of Settings, or those given)."""
+    """A library file, as Sonarr names it, where DownStream reads it (the two roots of Settings, or those given)."""
     inst = instance() or {}
     own = inst.get("library_sonarr_root") and inst.get("library_local_root")  # another Sonarr's library, when set
     root, local = roots or ((inst if own else SETTINGS).get("library_sonarr_root"), (inst if own else SETTINGS).get("library_local_root"))
@@ -4358,7 +4358,7 @@ FOLDER = re.compile(r"unshackle-(?:([A-Za-z][\w-]*)-)?(\d+)-S(\d+)E(\d+)")  # an
 
 
 def leftovers() -> list[dict]:
-    """What waits in the downloads folder: Unshacklarr's own episode folders still holding a video."""
+    """What waits in the downloads folder: DownStream's own episode folders still holding a video."""
     found = []
     for d in sorted(DOWNLOADS.glob("unshackle-*")) if DOWNLOADS.is_dir() else []:
         m = FOLDER.fullmatch(d.name)
@@ -4402,7 +4402,7 @@ def remove_partial_merges() -> int:
 
 def leftover_path(folder: str) -> Path:
     if not FOLDER.fullmatch(folder or "") or (DOWNLOADS / folder).is_symlink():
-        raise RuntimeError("Not one of Unshacklarr's folders")
+        raise RuntimeError("Not one of DownStream's folders")
     return DOWNLOADS / folder
 
 
@@ -4514,7 +4514,7 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
             except Exception as e:
                 why = no_credentials(f"{type(e).__name__}: {e}")
                 if instance_failed.get("") != why:  # the same cause at the next sync: told already
-                    notify(settings, "error", "Unshacklarr sync stopped", why)
+                    notify(settings, "error", "DownStream sync stopped", why)
                 instance_failed[""] = why
                 print(f"Sync stopped: {why}", flush=True)
                 failed = 1
@@ -4524,7 +4524,7 @@ def main(episode_ids: list[int] | None = None, replace: bool = False, kind: str 
         finally:
             sweep_lock.release()
     except Exception as e:
-        notify(settings, "error", "Unshacklarr sync stopped", no_credentials(f"{type(e).__name__}: {e}"))
+        notify(settings, "error", "DownStream sync stopped", no_credentials(f"{type(e).__name__}: {e}"))
         raise
 
 
@@ -4780,7 +4780,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         held_bursts[((instance() or {}).get("name", ""), ep["id"])] = now_s
                 if first_warning(f"order:{ep['series']['tvdbId']}:{ep['series'].get('seasonType')}"):
                     notify_series(show, settings, "warning", f"Episode order changed: {ep['series']['title']}",
-                                  f"{why}. New episodes of this series are not downloaded until you check its numbering in Unshacklarr.")
+                                  f"{why}. New episodes of this series are not downloaded until you check its numbering in DownStream.")
                 continue
             show = season_page(show, ep["seasonNumber"])  # a season on a page of its own downloads from there
             show = with_job_options(show, batch)  # options changed for this job from Activity, over the series' own
@@ -5115,7 +5115,7 @@ def order_changed(show: dict, serie: dict) -> str:
         return ""
     name = lambda t: next((x.get("name") for x in serie.get("seasonTypes") or [] if x.get("type") == t), None) or \
         ("the aired order" if t == "official" else f"the {t} order")
-    return f"Sonarr now numbers {serie.get('title')} in {name(now)}, but its numbering in Unshacklarr was set for {name(was)}"
+    return f"Sonarr now numbers {serie.get('title')} in {name(now)}, but its numbering in DownStream was set for {name(was)}"
 
 
 def first_warning(key: str) -> bool:

@@ -49,8 +49,8 @@ Sites with the same verdict and reason share a row only when every function is n
 
 | Site | Verdict | Reason |
 | --- | --- | --- |
-| `core.js:responseError` | Restructured | The shared formatter masks credentials and HTTP metadata in plain-text detail, suppresses HTML, and otherwise names Unshacklarr with HTTP status and retry action. |
-| `core.js:api` | Restructured | Timeout and connection failures identify Unshacklarr and give the next action; every non-success response uses `responseError`. |
+| `core.js:responseError` | Restructured | The shared formatter masks credentials and HTTP metadata in plain-text detail, suppresses HTML, and otherwise names DownStream with HTTP status and retry action. |
+| `core.js:api` | Restructured | Timeout and connection failures identify DownStream and give the next action; every non-success response uses `responseError`. |
 | `setup.js` startup state request | Restructured | The early request uses `responseError` before its result is displayed after translations load. |
 | `activity.js:downloadDiagnostic` | Restructured | Diagnostic-download failures use `responseError` instead of exposing an empty or HTML body. |
 | `attempts.js` request and action catches | Kept | Server failures use `api`; local messages name the affected attempt and action. |

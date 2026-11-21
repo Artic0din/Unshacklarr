@@ -1,4 +1,4 @@
-# Unshacklarr next to Sonarr, with unshackle serve in its own container.
+# DownStream next to Sonarr, with unshackle serve in its own container.
 #   1. Save this file as docker-compose.yml and .env.example as .env next to it, then fill in .env
 #      (nothing else of the repository is needed: see the README's Quick start).
 #   2. Put your Unshackle config in ./unshackle (unshackle.yaml, Cookies/, WVDs/, PRDs/), your
@@ -10,7 +10,7 @@
 #   3. docker compose up -d (the first time, it builds unshackle serve), then open
 #      http://<this host>:8788. The setup code is in docker logs unshacklarr.
 #
-# Updating Unshacklarr: docker compose pull unshacklarr && docker compose up -d --no-deps unshacklarr
+# Updating DownStream: docker compose pull unshacklarr && docker compose up -d --no-deps unshacklarr
 # (--no-deps leaves Unshackle and its downloads running). Unshackle, when nothing downloads:
 # docker compose build --pull unshackle && docker compose up -d.
 #
@@ -38,7 +38,7 @@ services:
       - ./services:/app/unshackle/services     # Unshackle itself ships only an EXAMPLE service
       - ./unshackle-data:/data                 # its cache and key vault
       - ${DOWNLOADS_DIR}:/downloads
-    # no ports: only Unshacklarr talks to it, on the Docker network
+    # no ports: only DownStream talks to it, on the Docker network
 
   unshacklarr:
     image: ghcr.io/artic0din/unshacklarr:latest  # built by the project's CI: nothing to build here

@@ -150,9 +150,9 @@ function renderUnshackleStatus(st) {
   // Unshackle 6 serves its proxies (a country code, a provider) only to a key allowed to: said, and allowed in one click
   const restartCmd = /^https?:\/\/unshackle(:\d+)?\/?$/.test(S.config.settings.unshackle_url || "") ? "docker compose restart unshackle" : "";
   const proxies = st.proxy_refused ? [el("div", { className: "st-sect warn" },
-    el("b", { textContent: "Unshackle doesn't let Unshacklarr use its proxies" }),
+    el("b", { textContent: "Unshackle doesn't let DownStream use its proxies" }),
     el("small", { textContent: "Since Unshackle 6, an API key may use the proxies set in unshackle.yaml (a country code such as au, or a provider) only once it is allowed. Downloads that ask for one fail until then." }),
-    el("div", { className: "st-maint" }, el("button", { className: "btn small primary", textContent: "Allow Unshacklarr's key", onclick: async (e) => {
+    el("div", { className: "st-maint" }, el("button", { className: "btn small primary", textContent: "Allow DownStream's key", onclick: async (e) => {
       e.target.disabled = true;
       try {
         await api("/api/unshackle/allow-proxies", { method: "POST" });
@@ -349,7 +349,7 @@ function b64key(s) {
 async function renderPush() {
   const line = $("#push-line"), said = $("#push-state");
   const state = (text, cls = "") => { said.textContent = text; said.className = cls; line.replaceChildren(); };
-  if (iOS() && !standalone()) return state("On an iPhone: add Unshacklarr to the home screen first (Share, Add to Home Screen), then open it from there.");
+  if (iOS() && !standalone()) return state("On an iPhone: add DownStream to the home screen first (Share, Add to Home Screen), then open it from there.");
   if (!pushable()) return state("This browser cannot receive them.");
   if (Notification.permission === "denied") return state("Blocked in this browser's settings for this site.", "bad");
   const reg = await navigator.serviceWorker.ready;

@@ -1,7 +1,7 @@
 /* First-run setup and login: a full-screen card over the app until the password is known. */
 function gate(subtitle, ...content) {
   document.body.classList.add("gated");
-  document.title = "Unshacklarr";
+  document.title = "DownStream";
   $("#gate").hidden = false;
   if (!$("#gate .lang-corner")) $("#gate").prepend(langCorner());
   $("#gate-sub").textContent = subtitle;
@@ -162,7 +162,7 @@ function showSetup(found) {
     unshackle_command: input({ value: found.unshackle_command, placeholder: "unshackle", spellcheck: false }),
     unshackle_url: input({ type: "url", value: found.unshackle_url, placeholder: "http://unshackle:8786", required: true }),
     unshackle_api_key: apiKey(),
-    downloads: input({ value: found.downloads, placeholder: "In Unshacklarr's settings folder", spellcheck: false }),
+    downloads: input({ value: found.downloads, placeholder: "In DownStream's settings folder", spellcheck: false }),
     unshackle_downloads: input({ value: found.unshackle_downloads, placeholder: "Same path", spellcheck: false }),
     country: input({ value: found.country }),
     timezone: el("select", {}, ...(Intl.supportedValuesOf?.("timeZone") || ["UTC"]).map((z) => el("option", { value: z, textContent: z.replaceAll("_", " ") }))),
@@ -170,8 +170,8 @@ function showSetup(found) {
   };
   // A key the environment already has: said in the field's help, where a placeholder would be cut off
   const keyFound = (text, known) => el("span", { className: "env-found", hidden: !known, textContent: text });
-  const sonarrKeyFound = keyFound("Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.", found.sonarr_api_key_set);
-  const unshackleKeyFound = keyFound("Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.", found.unshackle_api_key_set);
+  const sonarrKeyFound = keyFound("DownStream already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.", found.sonarr_api_key_set);
+  const unshackleKeyFound = keyFound("DownStream already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.", found.unshackle_api_key_set);
   const SECRET = ["password", "confirm", "sonarr_api_key", "unshackle_api_key", "tmdb_api_key"];
   f.unshackle_mode.value = found.unshackle_mode || "local";
   f.timezone.value = found.timezone !== "UTC" ? found.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -217,7 +217,7 @@ function showSetup(found) {
     onclick: () => { f.unshackle_mode.value = value; f.unshackle_mode.dispatchEvent(new Event("change")); keep(); } },
     ico(value, "wz-tile-ico"), el("b", { textContent: name }), el("small", { textContent: sub }));
   const tiles = el("div", { className: "wz-tiles", role: "radiogroup", ariaLabel: "Unshackle runs" },
-    tile("local", "Local", "Unshacklarr starts it on this machine"), tile("remote", "Remote", "On another machine"));
+    tile("local", "Local", "DownStream starts it on this machine"), tile("remote", "Remote", "On another machine"));
   const country = countryPicker(f.country);
   country.input.required = true;
   const countryPicked = countryFollowsZone(f.country, f.timezone, found.zone_countries, country.sync, Boolean(draft.countryPicked));
@@ -229,7 +229,7 @@ function showSetup(found) {
     el("div", { className: "only-local" }, field(optional("Unshackle command"), f.unshackle_command, "Empty: unshackle from the PATH. Otherwise its full path, e.g. the .venv/bin/unshackle of a git clone.")),
     el("div", { className: "only-remote" }, field("Unshackle address", f.unshackle_url),
       field("API key", f.unshackle_api_key, ["Copy ", el("code", { textContent: "serve.api_secret" }), " from unshackle.yaml.", unshackleKeyFound])),
-    field(optional("Downloads folder"), f.downloads, "Where episodes land before Sonarr imports them, as Unshacklarr sees it."),
+    field(optional("Downloads folder"), f.downloads, "Where episodes land before Sonarr imports them, as DownStream sees it."),
     el("div", { className: "only-remote" }, field(optional("Downloads folder, as Unshackle sees it"), f.unshackle_downloads, "Its path on the machine where Unshackle runs. Empty: the same path as above.")));
   const showMode = () => {
     uPanel.dataset.mode = f.unshackle_mode.value;
@@ -300,13 +300,13 @@ function showSetup(found) {
     back.hidden = true;
     next.type = "button";
     next.disabled = false;
-    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", ariaHidden: "true" }, icon("arrow")));
+    next.replaceChildren("Open DownStream", el("span", { className: "arr", ariaHidden: "true" }, icon("arrow")));
     next.onclick = () => location.reload();
     next.focus();
   }
   const steps = [
-    { name: "Welcome", icon: "key", title: "Welcome to Unshacklarr", sub: "Setup code and password",
-      body: [field("Setup code", f.setup_code, "Shown in Unshacklarr's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set."),
+    { name: "Welcome", icon: "key", title: "Welcome to DownStream", sub: "Setup code and password",
+      body: [field("Setup code", f.setup_code, "Shown in DownStream's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set."),
         field("Password", f.password, "At least 8 characters.", strength), field("Confirm password", f.confirm, "", match), restoreBox],
       check: async () => {
         if (!f.setup_code.value.trim()) return wrong("Enter the setup code", f.setup_code);
@@ -372,7 +372,7 @@ function showSetup(found) {
     at = Math.max(0, Math.min(to, steps.length - 1));
     reached = Math.max(reached, at);
     const s = steps[at], moved = !!panel.firstChild;  // not the first draw: a step the person moved to
-    document.title = tr(s.title.includes("Unshacklarr") ? s.title : `${s.title} · Unshacklarr`);  // "Welcome to Unshacklarr" already names it
+    document.title = tr(s.title.includes("DownStream") ? s.title : `${s.title} · DownStream`);  // "Welcome to DownStream" already names it
     drawRail(at);
     progress.firstChild.textContent = `Step ${at + 1} of ${steps.length}`;
     progress.querySelector("b").style.width = `${(at + 1) / steps.length * 100}%`;
@@ -393,15 +393,15 @@ function showSetup(found) {
   /* The end: what was checked, and the way in */
   function allSet() {
     reached = steps.length;
-    document.title = tr("Unshacklarr is set up");
+    document.title = tr("DownStream is set up");
     drawRail(null);
     progress.firstChild.textContent = "Done";
     progress.querySelector("b").style.width = "100%";
     const code = f.country.value.toUpperCase();
     const country = /^[A-Z]{2}$/.test(code) ? new Intl.DisplayNames([LOCALE, "en"], { type: "region" }).of(code) : null;
     panel.replaceChildren(el("div", { className: "wiz-step wz-done fwd" }, ico("check", "wz-done-ico"),
-      el("h2", { textContent: "Unshacklarr is set up" }),
-      el("p", { className: "lead", textContent: "Pick a service for your series in Series: Unshacklarr takes it from there." }),
+      el("h2", { textContent: "DownStream is set up" }),
+      el("p", { className: "lead", textContent: "Pick a service for your series in Series: DownStream takes it from there." }),
       el("ul", { className: "wz-sum" }, ...[oks[1], oks[2], `${country || f.country.value} · ${f.timezone.value.replaceAll("_", " ")}`]
         .filter(Boolean).map((t) => el("li", {}, ico("check", ""), el("span", { textContent: t })))),
       signInCheck()));
@@ -409,7 +409,7 @@ function showSetup(found) {
     back.hidden = true;
     next.type = "button";
     next.disabled = false;
-    next.replaceChildren("Open Unshacklarr", el("span", { className: "arr", ariaHidden: "true" }, icon("arrow")));
+    next.replaceChildren("Open DownStream", el("span", { className: "arr", ariaHidden: "true" }, icon("arrow")));
     next.onclick = () => location.reload();
     next.focus();
   }
@@ -447,7 +447,7 @@ function showSetup(found) {
   $("#gate").classList.add("wizard");
   gate("", el("div", { className: "wz" },
     el("aside", { className: "wz-side" },
-      el("div", { className: "wz-brand" }, logo, el("div", {}, el("b", { textContent: "Unshacklarr" }))),
+      el("div", { className: "wz-brand" }, logo, el("div", {}, el("b", { textContent: "DownStream" }))),
       rail, progress),
     el("section", { className: "wz-main" }, panel, note, el("div", { className: "wiz-nav" }, back, next))));
   $("#gate-form").noValidate = true;  // each step says what is wrong itself, in words, not in a browser bubble
@@ -516,7 +516,7 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
   };
   let session;
   try { session = await sessionAsked; }
-  catch (e) { return $("#wall").replaceChildren(failed(`Unshacklarr can't be reached: ${e.message}`, () => location.reload())); }
+  catch (e) { return $("#wall").replaceChildren(failed(`DownStream can't be reached: ${e.message}`, () => location.reload())); }
   if (!session.configured) return showSetup(session.setup);
   if (!session.logged_in) return showLogin();
   // the server's last background check, answered at once: the lights do not wait for Sonarr's series or a live Unshackle check
@@ -534,14 +534,14 @@ for (const [real, picker] of [[$("[data-set=country]"), settingsCountry], [$("#t
     keepSonarrNames(sonarrNames());
     // a test build of a branch shows its branch and commit, not the release it started from
     const [, branch, commit] = (data.build || "").match(/^(.*?)(?:-([0-9a-f]{7,}))?$/);
-    $("#version").textContent = data.version ? `Unshacklarr ${data.build ? [branch, commit].filter(Boolean).join(" · ") : data.version}` : "";
+    $("#version").textContent = data.version ? `DownStream ${data.build ? [branch, commit].filter(Boolean).join(" · ") : data.version}` : "";
     $("#version").classList.toggle("beta", !!data.build);
     $("#set-version").hidden = !data.version;
     const update = $("#update");  // a newer release: in sight on every page, its notes one click away
     update.hidden = !data.update;
     if (data.update) {
       update.href = data.update.url;
-      update.setAttribute("aria-label", `Unshacklarr ${data.update.version} is out: see what's new`);
+      update.setAttribute("aria-label", `DownStream ${data.update.version} is out: see what's new`);
       update.querySelector("span").textContent = `Update ${data.update.version}`;
     }
     if (data.unshackle_error) toast(`Unshackle: ${data.unshackle_error}`, true);

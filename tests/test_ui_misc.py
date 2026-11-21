@@ -756,7 +756,7 @@ def test_the_logo_goes_to_the_schedule_and_is_named_from_its_text():
     page = (STATIC / "index.html").read_text()
     link = re.search(r'<a href="([^"]+)" id="home" aria-label="([^"]+)"', page)
     assert link and link.group(1) == "#/schedule"  # the app opens on the schedule
-    assert link.group(2).startswith("Unshacklarr")  # the visible name starts the accessible one (and the narrowest phones hide the text)
+    assert link.group(2).startswith("DownStream")  # the visible name starts the accessible one (and the narrowest phones hide the text)
 
 
 def test_a_failing_series_says_so_once_with_its_fix():
@@ -1415,4 +1415,4 @@ const run = (data) => {
 };
 console.log(JSON.stringify([run({ version: "1.5.0", build: "" }), run({ version: "1.5.0", build: "feat-shell-abc1234" }), run({ version: "", build: "" })]));
 """, str(JS / "setup.js"))
-    assert shown == [["Unshacklarr 1.5.0", False, False], ["Unshacklarr feat-shell · abc1234", True, False], ["", False, True]]
+    assert shown == [["DownStream 1.5.0", False, False], ["DownStream feat-shell · abc1234", True, False], ["", False, True]]

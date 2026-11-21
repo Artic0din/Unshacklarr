@@ -328,7 +328,7 @@ function afterTracks(c) {
   if (lv.total_tracks && Number(lv.completed_tracks) >= Number(lv.total_tracks)) return "Processing the tracks";
   return "";
 }
-/* How far serve's mux is, from the file it writes in its work folder (Unshacklarr reads that folder when it is
+/* How far serve's mux is, from the file it writes in its work folder (DownStream reads that folder when it is
    mounted, UNSHACKLE_TEMP_DIR): a percentage, and the time left at the pace it goes; null when unknown. */
 const muxPct = (c) => c.mux?.total ? Math.min(99, Math.floor((c.mux.done / c.mux.total) * 100)) : null;
 const muxLog = {};  // run id -> [[time, bytes written]]
@@ -666,7 +666,7 @@ async function showLeftovers() {
 }
 $("#con-left").onclick = openActivityTool(showLeftovers);
 
-/* Catch up: the aired episodes Unshacklarr's series still miss (those before a series got its service, or the
+/* Catch up: the aired episodes DownStream's series still miss (those before a series got its service, or the
    automatic sync gave up on). Within so many days, or all. */
 let missingDays = 30, missingSonarr = "", missingSeq = 0;  // missingSeq: the newest ask, an older answer is dropped
 const missingSubmissions = new Map();  // Sonarr name -> episode ID -> submission state
@@ -1243,7 +1243,7 @@ function runBody(c) {
     }
   } else {
     const note = { downloaded: ["ok", "Downloaded"], failed: ["err", "Failed"], kept: ["warn", "Kept: Sonarr's own file was not replaced"], import: ["warn", "Downloaded, import needed"],
-      stopped: ["mut", "Stopped"], interrupted: ["mut", "Interrupted: Unshacklarr stopped during it"],
+      stopped: ["mut", "Stopped"], interrupted: ["mut", "Interrupted: DownStream stopped during it"],
       unavailable: ["mut", c.notOn ? `${outcomeOf(c)}: nothing to download` : "Not out yet: nothing to download"] }[c.outcome] || ["mut", c.outcome];
     if (c.outcome === "downloaded") {  // all went well: one quiet line, not a block
       parts.push(el("div", { className: "cd-note ok inline" }, el("b", {}, icon("check", "inl"), "Imported"),  // imported says downloaded too

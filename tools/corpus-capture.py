@@ -1,5 +1,5 @@
 """Capture series for tests/corpus, read-only: what probe_series gets for each one (the service's listing, Sonarr's
-episodes, TMDB's and TheTVDB's titles) and what it answers now. Run it inside a running Unshacklarr, with the TVDB ids:
+episodes, TMDB's and TheTVDB's titles) and what it answers now. Run it inside a running DownStream, with the TVDB ids:
     docker exec -i unshacklarr python - 73871 447183 < tools/corpus-capture.py > capture.json
 then check each answer by hand before turning it into a case (tests/test_corpus.py)."""
 import json, sys

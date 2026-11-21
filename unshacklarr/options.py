@@ -10,7 +10,7 @@ import shlex
 
 from .files import CREDENTIALS
 
-# (name, kind, help, choices). Left out: what Unshacklarr sets itself (wanted, output_dir)
+# (name, kind, help, choices). Left out: what DownStream sets itself (wanted, output_dir)
 # or what makes no sense unattended (skip_dl, export, latest_episode).
 DL_OPTIONS = [
     ('remote', 'flag', "Use a remote unshackle server from remote_services in unshackle.yaml for the service's own calls and its licences; the files still download here. Set it for one service in Per service.", []),

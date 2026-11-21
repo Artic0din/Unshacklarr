@@ -1,4 +1,4 @@
-/* Unshacklarr's demo: the page as it is, with this file standing in for the server.
+/* DownStream's demo: the page as it is, with this file standing in for the server.
    Everything comes from data.json (recorded by record.py against a made-up Sonarr and Unshackle), its dates moved
    to today; what you change lives in this tab only. Nothing reaches Sonarr, Unshackle or any service. */
 (() => {
@@ -276,7 +276,7 @@
     }
     await new Promise((r) => setTimeout(r, 120 + Math.random() * 200));  // a server's pace
     if (/\/api\/runs\/[^/]+\/diagnostic$/.test(path)) {  // a made-up file, as the server would give it
-      return new Response("# Unshacklarr diagnostic (demo)\n\nIn the real app: versions, the series' settings and the settings (secrets masked),\n"
+      return new Response("# DownStream diagnostic (demo)\n\nIn the real app: versions, the series' settings and the settings (secrets masked),\n"
         + "then the attempt's card and the end of its log, with tokens, keys and e-mail addresses removed.\n", { headers: { "Content-Type": "text/markdown" } });
     }
     try {
@@ -350,7 +350,7 @@
 
   /* ---- The guided tour: the project in seven steps, each on its page (skippable, again from the strip) ---- */
   const TOUR = [
-    { hero: true, title: "Unshacklarr in one minute", lead: "The episodes Sonarr is missing, downloaded by Unshackle." },
+    { hero: true, title: "DownStream in one minute", lead: "The episodes Sonarr is missing, downloaded by Unshackle." },
     { route: "#/schedule", target: "#tab-schedule", icon: "nav [data-tab=schedule] svg", title: "Schedule", lead: "When each episode will be tried.",
       points: ["A release time per series, or the next sync after airing", "Late episodes on top, Download now in one tap",
         "Sonarr's other series shown too: add one in a click"] },
@@ -390,12 +390,12 @@
     else { left = innerWidth - w - 24; top = innerHeight - h - 24; }
     Object.assign(card.style, { left: `${Math.max(12, Math.min(left, innerWidth - w - 12))}px`, top: `${Math.max(50, top)}px` });
   }
-  function flow() {  // Sonarr → Unshacklarr → Unshackle, and back: what the project is, in one look
+  function flow() {  // Sonarr → DownStream → Unshackle, and back: what the project is, in one look
     const node = (icon, name, what, main) => make("div", { className: `tf-node${main ? " core" : ""}` }, icon, make("b", { textContent: name }), make("small", { textContent: what }));
     const logo = document.querySelector("#home .logo")?.cloneNode(true) || svg(ICON.down);
     const arrow = (text) => make("div", { className: "tf-arrow" }, make("small", { textContent: text }), make("i"));
     return make("div", { className: "tf" }, node(svg(ICON.sonarr), "Sonarr", "knows what is missing"), arrow("missing"),
-      node(logo, "Unshacklarr", "picks, names, hands over", true), arrow("download"), node(svg(ICON.down), "Unshackle", "gets it from the service"));
+      node(logo, "DownStream", "picks, names, hands over", true), arrow("download"), node(svg(ICON.down), "Unshackle", "gets it from the service"));
   }
   function tourShow(i) {
     tourAt = i;

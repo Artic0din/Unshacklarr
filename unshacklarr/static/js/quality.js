@@ -187,7 +187,7 @@ function ladderCard(lad) {
       el("button", { type: "button", className: "btn small", textContent: "Add a step", dataset: { fk: `ql-lad:${lid}:add` }, onclick: () => {
         lad.steps.push({ codec: "", range: "SDR", min: 720, max: 720 }); dirty(); renderQuality();
       } }),
-      el("small", { className: "muted", textContent: "Tried from the top: Unshacklarr downloads the first step the episode has a track for, and the best track within it." })),
+      el("small", { className: "muted", textContent: "Tried from the top: DownStream downloads the first step the episode has a track for, and the best track within it." })),
     el("div", { className: "sx-grid ql-langs" },
       langs("audio", "Audio, in this order", "The first language in this list that the episode has is downloaded (en also matches en-GB). Not used when empty, or when the series or its service sets --a-lang."),
       langs("subtitles", "Subtitles, in this order", "The first language in this list that the episode has full subtitles in is downloaded. Not used when empty, or when --s-lang is set."),
@@ -286,7 +286,7 @@ function backendBlock(b) {
   };
   const name = text("name", {}, "The name Per service shows, e.g. vpn, home.", (v) => !v ? "Give it a name"
     : list.some((o) => o !== b && o.name === v) ? "Another server has this name" : !/^\w[\w .-]{0,39}$/.test(v) ? "Letters, digits, spaces, dots and dashes" : "");
-  const url = text("url", { type: "url", placeholder: "http://unshackle-vpn:8786" }, "Where Unshacklarr reaches it.",
+  const url = text("url", { type: "url", placeholder: "http://unshackle-vpn:8786" }, "Where DownStream reaches it.",
     (v) => URL_OK.test(v) ? "" : "An address starting with http:// or https://, without a user name");
   const key = el("input", { type: "password", autocomplete: "off",
     placeholder: b.api_key_set ? "Type a new key to replace it" : "", oninput: (e) => { b.api_key = e.target.value.trim() || undefined; dirty(); } });
@@ -361,7 +361,7 @@ function sonarrBlock(i) {
   } });
   const name = text("name", {}, "Shown on its series, and used at the start of its download folder names. Example: sonarr-2.", (v) => !v ? "Give it a name"
     : list.some((o) => o !== i && o.name === v) || v === S.config.settings.sonarr_name ? "Another Sonarr has this name" : !/^[A-Za-z][A-Za-z0-9-]{0,23}$/.test(v) ? "A letter, then letters, digits or dashes" : "");
-  const url = text("url", { type: "url", placeholder: "http://sonarr-2:8989" }, "Where Unshacklarr reaches it.",
+  const url = text("url", { type: "url", placeholder: "http://sonarr-2:8989" }, "Where DownStream reaches it.",
     (v) => !URL_OK.test(v) ? "An address starting with http:// or https://, without a user name"
       : v.replace(/\/+$/, "") === (S.config.settings.sonarr_url || "").replace(/\/+$/, "") ? "That is the Sonarr above" : "");
   const key = el("input", { type: "password", autocomplete: "off", placeholder: i.api_key_set ? "Type a new key to replace it" : "",
@@ -576,10 +576,10 @@ function renderUpgradeMode() {
   const other = set.add_track_other_source || "ask";
   $("#dx-lib-other").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.other === other)));
   $("#dx-upmode-say").textContent = mode === "add_track"
-    ? "Only the new audio track is downloaded and added to the existing file, as its default audio: subtitles in that language then show only their forced lines. Unshacklarr needs access to your library: set its folder below. The file is written again whole: your media server rescans it, and a hard link to it (a torrent still seeding) is broken. The whole episode is downloaded instead when the file can't be found, and for an episode in parts or a series of separate programmes."
+    ? "Only the new audio track is downloaded and added to the existing file, as its default audio: subtitles in that language then show only their forced lines. DownStream needs access to your library: set its folder below. The file is written again whole: your media server rescans it, and a hard link to it (a torrent still seeding) is broken. The whole episode is downloaded instead when the file can't be found, and for an episode in parts or a series of separate programmes."
     : "The whole episode is downloaded again and replaces the existing file.";
 }
-/* Add audio track: each Sonarr's library, as it sees it and as Unshacklarr does; its root folders offered, both sides
+/* Add audio track: each Sonarr's library, as it sees it and as DownStream does; its root folders offered, both sides
    browsable, and a real episode file of that Sonarr's looked for with the two folders, so a wrong pair shows at once. */
 let libWho = "", libRoots = [], libCommon = "", libTimer = null, libSeq = 0;  // "": the main Sonarr; else another one's name; libSeq: the newest check, an older answer is dropped
 const libOf = () => (libWho && (S.config.settings.sonarrs || []).find((i) => i.name === libWho)) || S.config.settings;
@@ -628,22 +628,22 @@ function checkLibrary() {
     }
     if (seq !== libSeq || (savedSonarr(libWho) || "") !== (q.get("sonarr") || "")) return;  // a newer check, or another Sonarr picked meanwhile
     libRoots = r.roots || []; libCommon = r.common || ""; renderLibraryPicks();
-    if (r.ok === true) { say.className = "lib-check ok"; say.replaceChildren(icon("check", "inl"), `Unshacklarr reads ${who}'s library: ${r.local_path}`); }
+    if (r.ok === true) { say.className = "lib-check ok"; say.replaceChildren(icon("check", "inl"), `DownStream reads ${who}'s library: ${r.local_path}`); }
     else if (r.ok === false && r.guess) {  // found elsewhere in the container: both folders, one click
       say.className = "lib-check";
-      say.replaceChildren(el("span", { textContent: `Your library was found in another folder: ${r.guess.sonarr_root} in Sonarr is ${r.guess.local_root} in Unshacklarr.` }), " ",
+      say.replaceChildren(el("span", { textContent: `Your library was found in another folder: ${r.guess.sonarr_root} in Sonarr is ${r.guess.local_root} in DownStream.` }), " ",
         el("button", { type: "button", className: "chip-btn", textContent: "Use these folders",
           onclick: () => { setLibrary("sonarr", r.guess.sonarr_root); setLibrary("local", r.guess.local_root); } }));
     }
-    else if (r.ok === false) { say.className = "lib-check err"; say.textContent = `Not found here: ${r.local_path}. Is the library mounted in Unshacklarr's container, in this folder?`; }
+    else if (r.ok === false) { say.className = "lib-check err"; say.textContent = `Not found here: ${r.local_path}. Is the library mounted in DownStream's container, in this folder?`; }
     else say.textContent = r.why || "";
   }, 400);
 }
-/* A folder picked by browsing: as Sonarr sees them (its own folder browser), or Unshacklarr's (its container's) */
+/* A folder picked by browsing: as Sonarr sees them (its own folder browser), or DownStream's (its container's) */
 function openFolders(side, start, use) {
   const dlg = $("#folder-dialog");
   let here = "";
-  $("#folder-title").textContent = side === "sonarr" ? `A folder as ${libWho || mainSonarr()} sees it` : "A folder as Unshacklarr sees it";
+  $("#folder-title").textContent = side === "sonarr" ? `A folder as ${libWho || mainSonarr()} sees it` : "A folder as DownStream sees it";
   const load = async (path) => {
     $("#folder-err").textContent = "";
     let r;

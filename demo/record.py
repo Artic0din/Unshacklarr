@@ -226,7 +226,7 @@ waiting.mkdir(parents=True)
 (waiting / "Wheeler.Dealers.S01E03.1080p.WEB-DL.mkv").write_bytes(bytes(4096))
 
 
-# ---- Unshacklarr's own config and history ----
+# ---- DownStream's own config and history ----
 
 def ago(**kw) -> str:
     return (NOW - timedelta(**kw)).isoformat()

@@ -807,7 +807,7 @@ def test_serves_passing_errors_say_their_code_and_a_restart_waits_for_its_downlo
     assert backend.dashboard("") is None and backend.dashboard("dash-key") == {"errors": {"NF": {"SERVICE_ERROR": 2}}}
     assert responses.calls[-1].request.headers["X-Secret-Key"] == "dash-key"  # the dashboard's own key, not the API's
 
-    monkeypatch.setattr(Unshackle, "mode", property(lambda self: "local"))  # serve run by Unshacklarr: restarted by it
+    monkeypatch.setattr(Unshackle, "mode", property(lambda self: "local"))  # serve run by DownStream: restarted by it
     monkeypatch.setattr(backend, "endpoint", lambda: ("http://backend:8786", "test-api-secret"))
     responses.post("http://backend:8786/api/dashboard/drain", json={"jobs": {"downloading": 1}, "sessions": 0, "draining": True})
     responses.delete("http://backend:8786/api/dashboard/drain", json={"draining": False})

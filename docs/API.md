@@ -1,6 +1,6 @@
-# Unshacklarr API
+# DownStream API
 
-Other programs (a script, Home Assistant, iOS Shortcuts) can drive Unshacklarr through the routes
+Other programs (a script, Home Assistant, iOS Shortcuts) can drive DownStream through the routes
 under `/api/v1`. Their answers keep the shape described here: new fields may appear, none is
 renamed or removed without a new version (`/api/v2`).
 
@@ -8,7 +8,7 @@ The page itself uses other `/api/...` routes. Those change with the page: don't 
 
 ## The key
 
-Create it in **Settings › General › Account & Backups › API key**. It is shown once: copy it then. Unshacklarr keeps
+Create it in **Settings › General › Account & Backups › API key**. It is shown once: copy it then. DownStream keeps
 only its hash, so a lost key is replaced, never read back. Replacing it stops the old one at once;
 changing the password doesn't.
 
@@ -29,7 +29,7 @@ An error has an HTTP status and a plain-text message saying why:
 |---|---|
 | `400` | The request is wrong (the message says what to send), or can't be done as set up: no CDM device for the service, no Sonarr of that name |
 | `401` | No key, or a wrong one |
-| `404` | Sonarr has no such series or episode, or the series isn't set up in Unshacklarr |
+| `404` | Sonarr has no such series or episode, or the series isn't set up in DownStream |
 | `409` | Not possible now (a sync already runs, the download is over) |
 | `429` | Too many at once: downloads asked, or wrong passwords |
 | `502` | Sonarr or Unshackle didn't answer |
@@ -56,7 +56,7 @@ not seen yet.
 
 ### `POST /api/v1/sync`
 
-Starts a sync: every missing episode of the series set up in Unshacklarr. Answers
+Starts a sync: every missing episode of the series set up in DownStream. Answers
 `{"running": true}`, or `409` when one already runs.
 
 ### `POST /api/v1/downloads`
@@ -112,7 +112,7 @@ backwards. A code no Sonarr episode answers to, or more than one, gives `404` na
 {"tvdbId": 74796, "episodes": ["S04E05"], "numbering": "service", "audio": "fr"}
 ```
 
-`"audio"` (one language, `"fr"`) says that language has just come on the service, and Unshacklarr decides per episode
+`"audio"` (one language, `"fr"`) says that language has just come on the service, and DownStream decides per episode
 from the file Sonarr has: no file, the episode is downloaded; a file that has it, the service's is downloaded again in
 its place; a file without it gets it as Settings › Downloading › Download options, *Audio upgrade* says: the track added to the file
 (asked about in the bell first when the file is not from the series' service), or the whole episode again. Each
@@ -148,7 +148,7 @@ when each started; a queued download cancelled before it started, by when it was
 
 | Field | |
 |---|---|
-| `state` | `queued`, `running`, `downloaded`, `failed`, `kept` (the file Sonarr has is not worse), `import` (downloaded, Sonarr did not import it: to import by hand), `unavailable` (not on the service yet), `stopped`, `cancelled`, `interrupted` (Unshacklarr restarted during it) |
+| `state` | `queued`, `running`, `downloaded`, `failed`, `kept` (the file Sonarr has is not worse), `import` (downloaded, Sonarr did not import it: to import by hand), `unavailable` (not on the service yet), `stopped`, `cancelled`, `interrupted` (DownStream restarted during it) |
 | `step` | While running: `queued`, `downloading`, `joining` (parts), `renaming`, `importing`, `done` |
 | `question` | While running: what the service asks (a code sent by e-mail, a PIN), to answer below |
 | `error` | Why it failed, was kept, needs an import or is unavailable |

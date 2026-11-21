@@ -157,7 +157,7 @@
  "A file to attach to a GitHub issue: versions, settings and this attempt's log, without passwords, keys or tokens": [],
  "A first start of Unshackle takes a few seconds": [],
  "A flag the service on a remote server knows, such as -B, can be written as is.": [],
- "A folder as Unshacklarr sees it": [],
+ "A folder as DownStream sees it": [],
  "A folder as {0} sees it": [
   "libWho || mainSonarr()"
  ],
@@ -252,7 +252,7 @@
  "After download: Sonarr's file not read ({0})": [
   "type(e).__name__"
  ],
- "After that, Unshacklarr stops trying: download the episode by hand from its series.": [],
+ "After that, DownStream stops trying: download the episode by hand from its series.": [],
  "After the download": [],
  "After the download, the service is checked once a day for this many days. Nothing is downloaded until that language is there. After that, the episode keeps the audio it has.": [],
  "After this delay, you get one": [],
@@ -277,7 +277,7 @@
   "S.series.length"
  ],
  "All shown": [],
- "Allow Unshacklarr's key": [],
+ "Allow DownStream's key": [],
  "Allowed in unshackle.yaml": [],
  "Allowed in unshackle.yaml. Restart Unshackle when nothing is downloading, so that it reads it.": [],
  "Already downloaded: waiting for Sonarr's import": [],
@@ -301,10 +301,10 @@
  "Another Sonarr has this name": [],
  "Another ladder has this name": [],
  "Another server has this name": [],
- "Answer in Unshacklarr, for the remote server {0}.": [
+ "Answer in DownStream, for the remote server {0}.": [
   "lg.get('remote')"
  ],
- "Answer in Unshacklarr, for {0} {1}.": [
+ "Answer in DownStream, for {0} {1}.": [
   "run.card['series']",
   "run.card['sxxeyy']"
  ],
@@ -587,7 +587,7 @@
  ],
  "Codec": [],
  "Columns": [],
- "Comma-separated countries. Unshacklarr looks in their TMDB pages for a series' links on supported services.": [],
+ "Comma-separated countries. DownStream looks in their TMDB pages for a series' links on supported services.": [],
  "Command copied": [],
  "Computer": [],
  "Configure a {0} series before signing in": [
@@ -971,7 +971,7 @@
  "Every series: {0}": [
   "def"
  ],
- "Every setting now in Unshacklarr is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.": [],
+ "Every setting now in DownStream is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.": [],
  "Example: +3 from season 8 means Sonarr's S08 is the service's S11, S09 is S12, and so on, new seasons included. \"Seasons on the service\" takes priority over this.": [],
  "Example: /mnt/tv": [],
  "Example: /tv": [],
@@ -1036,7 +1036,7 @@
  "For every series.": [],
  "For example fr. The episode must have full subtitles in at least one of them. Forced subtitles do not count.": [],
  "For the episodes still to come in this job. It starts from the options they have now; what you change is for this job only, the series itself does not change.": [],
- "For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.": [],
+ "For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and DownStream opens without asking for its own password.": [],
  "For when every episode comes in that many parts. Until all parts are out, nothing is imported and the episode is tried again. An episode is never imported half-done.": [],
  "For {0} series: {1}.": [
   "g.series.length",
@@ -1141,7 +1141,7 @@
   "svc",
   "found[0].name"
  ],
- "In Unshacklarr's settings folder": [],
+ "In DownStream's settings folder": [],
  "In schedule": [],
  "In schedule: {0}": [],
  "In use": [],
@@ -1155,7 +1155,7 @@
  "Installed": [],
  "Interface": [],
  "Interrupted": [],
- "Interrupted: Unshacklarr stopped during it": [],
+ "Interrupted: DownStream stopped during it": [],
  "Invalid option {0} in {1}": [
   "flag",
   "where"
@@ -1183,14 +1183,14 @@
  "Its log needs serve: dashboard: key: in unshackle.yaml (Unshackle after 6.0.0)": [],
  "Its log, last lines": [],
  "Its path on Sonarr's side, e.g. inside Sonarr's container.": [],
- "Its path on Sonarr's side, e.g. inside Sonarr's container. Empty: the same path as for Unshacklarr.": [],
+ "Its path on Sonarr's side, e.g. inside Sonarr's container. Empty: the same path as for DownStream.": [],
  "Its path on the machine where Unshackle runs. Empty: the same path as above.": [],
  "Its secret (API key)": [],
- "Its series entry {0} is not in the format Unshacklarr writes": [
+ "Its series entry {0} is not in the format DownStream writes": [
   "key"
  ],
  "Its service": [],
- "Its {0} section is not in the format Unshacklarr writes": [
+ "Its {0} section is not in the format DownStream writes": [
   "key"
  ],
  "Its {0} setting must be a number": [
@@ -1293,7 +1293,7 @@
  "Libraries": [],
  "Library": [],
  "Library folder, as Sonarr sees it": [],
- "Library folder, as Unshacklarr sees it": [],
+ "Library folder, as DownStream sees it": [],
  "License each track with both Widevine and PlayReady. Needs a CDM for each DRM system.": [],
  "Line {0}, column {1}{2}": [
   "line.number",
@@ -1382,8 +1382,8 @@
  "Name each other Sonarr with a letter, then letters, digits or dashes, like sonarr-2": [],
  "Name of the remote server from remote_services, when several are configured. Only with --remote.": [],
  "Name the Sonarr with a letter, then letters, digits or dashes, like sonarr-1080p": [],
- "Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
- "Needed to manage them in Settings › Services & Devices › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
+ "Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: DownStream asks Unshackle, which works when both run on this computer.": [],
+ "Needed to manage them in Settings › Services & Devices › Services. Empty: DownStream asks Unshackle, which works when both run on this computer.": [],
  "Needs Unshackle 6": [],
  "Needs Unshackle after 6.0.0": [],
  "Needs a look": [],
@@ -1594,8 +1594,8 @@
  ],
  "Not aired": [],
  "Not aired yet": [],
- "Not an Unshacklarr backup: none of its sections (series, settings…) is in it": [],
- "Not an Unshacklarr backup: the file is not valid YAML": [],
+ "Not a DownStream backup: none of its sections (series, settings…) is in it": [],
+ "Not a DownStream backup: the file is not valid YAML": [],
  "Not an address Apprise knows": [],
  "Not better: {0}": [
   "e"
@@ -1607,7 +1607,7 @@
  "Not checked yet.": [],
  "Not delivered": [],
  "Not downloading": [],
- "Not found here: {0}. Is the library mounted in Unshacklarr's container, in this folder?": [
+ "Not found here: {0}. Is the library mounted in DownStream's container, in this folder?": [
   "r.local_path"
  ],
  "Not found on the service": [],
@@ -1624,7 +1624,7 @@
   "show['service']",
   "missing"
  ],
- "Not one of Unshacklarr's folders": [],
+ "Not one of DownStream's folders": [],
  "Not out yet": [],
  "Not out yet at the {0} {1}. Each check is in the output below.": [
   "COUNT.earlierCheck(before)",
@@ -1709,7 +1709,7 @@
  "Older episodes are not checked. 0: all of them.": [],
  "Older ones are deleted. To restore one, download it, then use Restore from a file.": [],
  "On": [],
- "On an iPhone: add Unshacklarr to the home screen first (Share, Add to Home Screen), then open it from there.": [],
+ "On an iPhone: add DownStream to the home screen first (Share, Add to Home Screen), then open it from there.": [],
  "On another machine": [],
  "On disk": [],
  "On disk in a lower resolution than asked of {0}, and available on {1}": [
@@ -1752,7 +1752,7 @@
  "Only episodes from the last": [],
  "Only for the episodes picked now. The series keeps its own settings.": [],
  "Only the fields you fill in change. Everything else stays as it is for each series. Save afterwards, as for one series.": [],
- "Only the new audio track is downloaded and added to the existing file, as its default audio: subtitles in that language then show only their forced lines. Unshacklarr needs access to your library: set its folder below. The file is written again whole: your media server rescans it, and a hard link to it (a torrent still seeding) is broken. The whole episode is downloaded instead when the file can't be found, and for an episode in parts or a series of separate programmes.": [],
+ "Only the new audio track is downloaded and added to the existing file, as its default audio: subtitles in that language then show only their forced lines. DownStream needs access to your library: set its folder below. The file is written again whole: your media server rescans it, and a hard link to it (a torrent still seeding) is broken. The whole episode is downloaded instead when the file can't be found, and for an episode in parts or a series of separate programmes.": [],
  "Only use CDM, or only use Key Vaults for retrieval of Decryption Keys.": [],
  "Only {0} GB free in Sonarr's library folder {1}, less than the {2} GB to keep free: nothing is downloaded for its series until there is room": [
   "free",
@@ -1766,11 +1766,11 @@
  "Open": [],
  "Open Activity": [],
  "Open Sonarr ↗": [],
- "Open Unshacklarr": [],
+ "Open DownStream": [],
  "Open a series under All, pick a service or one of the links found on TMDB, then save.": [],
  "Open its last download: its steps and output": [],
  "Open series": [],
- "Open the action in Unshacklarr to continue.": [],
+ "Open the action in DownStream to continue.": [],
  "Open the episodes missing in {0}": [
   "name"
  ],
@@ -1842,7 +1842,7 @@
  "Pick a service and its URL first.": [],
  "Pick a service and the series URL first, then save.": [],
  "Pick a service and type a name first": [],
- "Pick a service for your series in Series: Unshacklarr takes it from there.": [],
+ "Pick a service for your series in Series: DownStream takes it from there.": [],
  "Pick at least one episode": [],
  "PlayReady": [],
  "PlayReady, remote": [],
@@ -1904,7 +1904,7 @@
  "Regular sync": [],
  "Relative to Sonarr's air date.": [],
  "Release group": [],
- "Release notes for Unshacklarr {0}.": [
+ "Release notes for DownStream {0}.": [
   "installed"
  ],
  "Release time": [],
@@ -2177,7 +2177,7 @@
  "Set it differently for this series only": [],
  "Set the Group Tag to be used, overriding the config tag and any tag rules.": [],
  "Set the address of unshackle serve in Settings › Connections › Unshackle": [],
- "Set the library folder of {0} both as it sees it and as Unshacklarr sees it, or neither": [
+ "Set the library folder of {0} both as it sees it and as DownStream sees it, or neither": [
   "who"
  ],
  "Set your country in Settings › General › Region first: the language comes from it": [],
@@ -2190,7 +2190,7 @@
  "Settings › Downloading › Download options › Per service: {0}": [
   "svcName(svc)"
  ],
- "Settings: {0} · Unshacklarr": [
+ "Settings: {0} · DownStream": [
   "section"
  ],
  "Setup code": [],
@@ -2212,7 +2212,7 @@
   "COUNT.moreDevice(folded)"
  ],
  "Shown": [],
- "Shown in Unshacklarr's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set.": [],
+ "Shown in DownStream's log when it starts (docker logs unshacklarr), or the SETUP_TOKEN you set.": [],
  "Shown on its series, and used at the start of its download folder names. Example: sonarr-2.": [],
  "Sign in": [],
  "Sign in again": [],
@@ -2319,7 +2319,7 @@
   "name(now)",
   "name(conf.sonarr_order)"
  ],
- "Sonarr now numbers {0} in {1}, but its numbering in Unshacklarr was set for {2}": [
+ "Sonarr now numbers {0} in {1}, but its numbering in DownStream was set for {2}": [
   "serie.get('title')",
   "name(now)",
   "name(was)"
@@ -2354,12 +2354,12 @@
   "Path(c['path']).name",
   "c['quality']['quality']['name']"
  ],
- "Sonarr shows this series' episode titles in {0}, but streaming services in your country show them in {1}. With {2} titles in Sonarr, Unshacklarr can match each episode by its title.": [
+ "Sonarr shows this series' episode titles in {0}, but streaming services in your country show them in {1}. With {2} titles in Sonarr, DownStream can match each episode by its title.": [
   "current.language",
   "want",
   "want"
  ],
- "Sonarr shows this series' episode titles in {0}, but {1} shows them in {2}. With {3} titles in Sonarr, Unshacklarr can match each episode with {4} by its title.": [
+ "Sonarr shows this series' episode titles in {0}, but {1} shows them in {2}. With {3} titles in Sonarr, DownStream can match each episode with {4} by its title.": [
   "current.language",
   "svcName(conf.service)",
   "want",
@@ -2563,7 +2563,7 @@
  "The WebDAV server answered HTTP {0}, not a stored file": [
   "r.status_code"
  ],
- "The WebDAV server redirected the backup to {0}: nothing was stored. Use the address it leads to, or let Unshacklarr past the login proxy": [
+ "The WebDAV server redirected the backup to {0}: nothing was stored. Use the address it leads to, or let DownStream past the login proxy": [
   "host"
  ],
  "The WebDAV server refused the user name or password": [],
@@ -2573,7 +2573,7 @@
  "The address of {0} must start with http:// or https://, without a user name": [
   "name"
  ],
- "The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.": [],
+ "The addresses the proxy connects from, as DownStream sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.": [],
  "The app password": [],
  "The app token": [],
  "The audio upgrade language of {0} must be one language, like fr": [
@@ -2637,7 +2637,7 @@
  "The first language in this list that the episode has full subtitles in is downloaded. Not used when empty, or when --s-lang is set.": [],
  "The first language in this list that the episode has is downloaded (en also matches en-GB). Not used when empty, or when the series or its service sets --a-lang.": [],
  "The folder does not exist on the WebDAV server: create it first": [],
- "The folder with unshackle.yaml and the WVD and PRD files, for Settings › Services & Devices › Devices (CDM). Empty: Unshacklarr asks Unshackle, which works when both run on this computer.": [],
+ "The folder with unshackle.yaml and the WVD and PRD files, for Settings › Services & Devices › Devices (CDM). Empty: DownStream asks Unshackle, which works when both run on this computer.": [],
  "The gap between episodes of {0} must be a whole number of minutes": [
   "key"
  ],
@@ -2672,7 +2672,7 @@
   "key"
  ],
  "The order options apply in": [],
- "The output could not connect. Behind a reverse proxy, WebSockets must be allowed for Unshacklarr.r": [],
+ "The output could not connect. Behind a reverse proxy, WebSockets must be allowed for DownStream.r": [],
  "The parts per episode of {0} must be 2, 3 or 4": [
   "key"
  ],
@@ -2731,7 +2731,7 @@
  "The release time: the first try": [],
  "The remote server's options are not known with this Unshackle: write them as they are.": [],
  "The reverse proxy's header is a name like Remote-User": [],
- "The same folder as Unshacklarr sees it. Leave both empty if the paths are the same.": [],
+ "The same folder as DownStream sees it. Leave both empty if the paths are the same.": [],
  "The series itself, on its page": [],
  "The series' name on the service": [],
  "The server's address, with https://": [],
@@ -2814,7 +2814,7 @@
  "This episode is": [],
  "This episode is downloading now: try again once it is done": [],
  "This episode is not cancelled any more": [],
- "This file holds every secret Unshackle has (sign-ins, API keys). Enter your Unshacklarr password to open it.": [],
+ "This file holds every secret Unshackle has (sign-ins, API keys). Enter your DownStream password to open it.": [],
  "This is not a valid address": [],
  "This job is over": [],
  "This job is still going on: stop it first": [],
@@ -2853,7 +2853,7 @@
  "Tracks in it": [],
  "Treat the title as daily/date-based content and fill missing air dates from TVDB during --enrich.": [],
  "Tried": [],
- "Tried from the top: Unshacklarr downloads the first step the episode has a track for, and the best track within it.": [],
+ "Tried from the top: DownStream downloads the first step the episode has a track for, and the best track within it.": [],
  "Tries": [],
  "Tries at the next sync": [],
  "Tries in {0}": [
@@ -2928,57 +2928,57 @@
  "Unreadable": [],
  "Unreleased": [],
  "Unsaved changes": [],
- "Unshacklarr": [],
- "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": [],
- "Unshacklarr already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": [],
- "Unshacklarr answered HTTP {0}{1}. Try again.": [
+ "DownStream": [],
+ "DownStream already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it.": [],
+ "DownStream already has a key for the address filled in above, saved or from UNSHACKLE_API_KEY. Leave this empty to use it.": [],
+ "DownStream answered HTTP {0}{1}. Try again.": [
   "response.status",
   "reason"
  ],
- "Unshacklarr can't be reached. Check that it is running, then try again.": [],
- "Unshacklarr can't be reached: {0}": [
+ "DownStream can't be reached. Check that it is running, then try again.": [],
+ "DownStream can't be reached: {0}": [
   "e.message"
  ],
- "Unshacklarr cannot read this file: check its permissions, or replace it": [],
- "Unshacklarr cannot see Unshackle's Cache folder: mount it and set its path in Settings › Connections › Unshackle (CACHE_DIR with Docker)": [],
- "Unshacklarr cannot see Unshackle's Cookies folder: mount it and set its path in Settings › Connections › Unshackle (COOKIES_DIR with Docker)": [],
- "Unshacklarr cannot see Unshackle's config: mount its folder (unshackle.yaml, WVDs, PRDs) and set its path in Settings › Connections › Unshackle (UNSHACKLE_CONFIG_DIR with Docker)": [],
- "Unshacklarr could not send this notification. Check its log.": [],
- "Unshacklarr did not answer after {0} s. Try again.": [
+ "DownStream cannot read this file: check its permissions, or replace it": [],
+ "DownStream cannot see Unshackle's Cache folder: mount it and set its path in Settings › Connections › Unshackle (CACHE_DIR with Docker)": [],
+ "DownStream cannot see Unshackle's Cookies folder: mount it and set its path in Settings › Connections › Unshackle (COOKIES_DIR with Docker)": [],
+ "DownStream cannot see Unshackle's config: mount its folder (unshackle.yaml, WVDs, PRDs) and set its path in Settings › Connections › Unshackle (UNSHACKLE_CONFIG_DIR with Docker)": [],
+ "DownStream could not send this notification. Check its log.": [],
+ "DownStream did not answer after {0} s. Try again.": [
   "wait"
  ],
- "Unshacklarr downloads no series with TVDB id {0}: set it up on its page first": [
+ "DownStream downloads no series with TVDB id {0}: set it up on its page first": [
   "tvdb"
  ],
- "Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off:": [],
- "Unshacklarr gives its own Unshackle that right when it starts it": [],
- "Unshacklarr is set up": [],
- "Unshacklarr is set up already": [],
- "Unshacklarr reads {0}'s library: {1}": [
+ "DownStream downloads the first matching step. A service or series can choose a different ladder. Off:": [],
+ "DownStream gives its own Unshackle that right when it starts it": [],
+ "DownStream is set up": [],
+ "DownStream is set up already": [],
+ "DownStream reads {0}'s library: {1}": [
   "who",
   "r.local_path"
  ],
- "Unshacklarr starts it on this machine": [],
- "Unshacklarr sync stopped": [],
- "Unshacklarr test": [],
- "Unshacklarr {0}": [
+ "DownStream starts it on this machine": [],
+ "DownStream sync stopped": [],
+ "DownStream test": [],
+ "DownStream {0}": [
   "data.build ? [branch, commit].filter(Boolean).join(\" · \") : data.version"
  ],
- "Unshacklarr {0} is out: see what's new": [
+ "DownStream {0} is out: see what's new": [
   "data.update.version"
  ],
- "Unshacklarr {0}{1} · Unshackle {2} · Python {3}": [
+ "DownStream {0}{1} · Unshackle {2} · Python {3}": [
   "__version__",
   "f' ({BUILD})' if BUILD else ''",
   "health['unshackle'].get('version') or '?'",
   "sys.version.split()[0]"
  ],
- "Unshacklarr · Today at {0}": [
+ "DownStream · Today at {0}": [
   "now"
  ],
- "Unshacklarr, schedule": [],
+ "DownStream, schedule": [],
  "Unshackle": [],
- "Unshackle 6 doesn't let Unshacklarr use its proxies (a country code such as au, or a provider): allow it in Settings › Connections › Unshackle": [],
+ "Unshackle 6 doesn't let DownStream use its proxies (a country code such as au, or a provider): allow it in Settings › Connections › Unshackle": [],
  "Unshackle address": [],
  "Unshackle answers": [],
  "Unshackle can't write these files. Give them back to the container's user, for example with chown.": [],
@@ -2991,7 +2991,7 @@
  "Unshackle doesn't answer yet: the last try of {0} may still be downloading there": [
   "c['sxxeyy']"
  ],
- "Unshackle doesn't let Unshacklarr use its proxies": [],
+ "Unshackle doesn't let DownStream use its proxies": [],
  "Unshackle downloads them again, then replaces a file only if the new one ranks higher in the series' quality profile in Sonarr. Otherwise the download waits in the downloads folder and you get a warning.": [],
  "Unshackle is still downloading: restart it once it is done": [],
  "Unshackle made {0} file{1}:": [
@@ -3118,7 +3118,7 @@
   "w.failed"
  ],
  "Weekly": [],
- "Welcome to Unshacklarr": [],
+ "Welcome to DownStream": [],
  "Well below the season's usual {0}": [
   "rate(norm.rate)"
  ],
@@ -3141,8 +3141,8 @@
  "When Sonarr's file doesn't say it comes from the series' service, its source may differ and the added audio may be a few seconds out of step. Another team's release of the same stream is fine. Ask me: the bell asks each time, nothing is downloaded until you answer.": [],
  "When no step matches, the first step whose codec the service does not list is downloaded anyway.": [],
  "Where": [],
- "Where Unshacklarr reaches it.": [],
- "Where episodes land before Sonarr imports them, as Unshacklarr sees it.": [],
+ "Where DownStream reaches it.": [],
+ "Where episodes land before Sonarr imports them, as DownStream sees it.": [],
  "Where to send": [],
  "Where {0} downloads.": [
   "svcName(tag)"
@@ -3162,14 +3162,14 @@
  "Wrong passphrase, or the file is damaged": [],
  "Wrong password": [],
  "Wrong serve: dashboard: key:": [],
- "Wrong setup code: Unshacklarr prints it when it starts (docker logs unshacklarr)": [],
- "Wrong setup code: it is in Unshacklarr's log": [],
+ "Wrong setup code: DownStream prints it when it starts (docker logs unshacklarr)": [],
+ "Wrong setup code: it is in DownStream's log": [],
  "Yesterday": [],
  "Your address": [],
  "Your answer": [],
  "Your files without your audio languages, read from Sonarr 5's own tracks: no file is opened, and nothing is downloaded until you choose. Only the series set up here are checked, against their accepted and preferred audio languages.": [],
  "Your library": [],
- "Your library was found in another folder: {0} in Sonarr is {1} in Unshacklarr.": [
+ "Your library was found in another folder: {0} in Sonarr is {1} in DownStream.": [
   "r.guess.sonarr_root",
   "r.guess.local_root"
  ],
@@ -3656,7 +3656,7 @@
   "r",
   "libRoots.length"
  ],
- "{0} (for Unshacklarr)": [
+ "{0} (for DownStream)": [
   "name"
  ],
  "{0} GB": [
@@ -3759,7 +3759,7 @@
   "svcName(body.service)",
   "saved.count"
  ],
- "{0} could not be reached. Check the Unshacklarr log.": [
+ "{0} could not be reached. Check the DownStream log.": [
   "host"
  ],
  "{0} d ago": [
@@ -4337,7 +4337,7 @@
   "c.series",
   "c.sxxeyy"
  ],
- "{0} · Unshacklarr": [
+ "{0} · DownStream": [
   "s.title"
  ],
  "{0} · attempt {1}": [
@@ -4406,7 +4406,7 @@
  "{0}. Make room, or lower the room kept free in Settings › Connections › Unshackle, Folders.": [
   "full"
  ],
- "{0}. New episodes of this series are not downloaded until you check its numbering in Unshacklarr.": [
+ "{0}. New episodes of this series are not downloaded until you check its numbering in DownStream.": [
   "why"
  ],
  "{0}. The episode is tried again at each sync, and downloaded when one is there.": [

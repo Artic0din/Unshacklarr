@@ -1,4 +1,4 @@
-# unshackle serve, from Unshackle's own repository: the downloads Unshacklarr asks for.
+# unshackle serve, from Unshackle's own repository: the downloads DownStream asks for.
 # Its config, cookies and CDMs are not baked in: mount them at /config/unshackle
 # (unshackle.yaml with a serve: api_secret, Cookies/, WVDs/, PRDs/).
 FROM python:3.12-slim-trixie

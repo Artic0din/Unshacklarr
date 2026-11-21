@@ -1,7 +1,7 @@
 """Web Push: the installed web app's own notifications, on phones and computers.
 
 Each device that allows them gives a subscription (its push service's endpoint and keys);
-Unshacklarr signs its messages with a VAPID key made on first use and kept in its data folder.
+DownStream signs its messages with a VAPID key made on first use and kept in its data folder.
 """
 
 import base64
@@ -91,7 +91,7 @@ class Push:
                 print(f"Push: {self.last_error}", flush=True)
             except Exception as e:  # a push service down must not stop the rest
                 host = s["endpoint"].split("/")[2]
-                self.last_error = f"{host} could not be reached. Check the Unshacklarr log."
+                self.last_error = f"{host} could not be reached. Check the DownStream log."
                 print(f"Push: {host}: {no_credentials(e)}", flush=True)
         for endpoint in gone:
             self.unsubscribe(endpoint)
