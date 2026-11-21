@@ -460,12 +460,14 @@ def test_every_corner_comes_from_a_radius_token():
 def test_corner_tokens_keep_their_sizes_and_roles():
     root = block(":root {")
     sizes = dict(re.findall(r"--radius-([\w-]+):\s*([^;]+);", root))
-    assert sizes == {"field": "10px", "tile": "16px", "card": "28px", "pill": "999px", "inline": "6px"}
+    assert sizes == {"field": "10px", "tile": "16px", "card": "28px", "bar": "36px", "pill": "999px", "inline": "6px"}
     # a container that can wrap, or text that can, takes the card corner: a pill on one line, never a blob on three
     roles = {".seg {": "card", ".ep-sonarr {": "card", ".toast {": "card", ".poster .art {": "tile", ".sched-card {": "tile",
-             ".modal {": "card", ".sx-card {": "card", ".btn {": "pill", "nav a {": "pill", ".sd code {": "field"}
+             ".modal {": "card", ".sx-card {": "card", ".btn {": "pill", ".sd code {": "field"}
     # every rule that sets the corner, desktop and phone alike, not only the one that wins at some width
     corners = {sel: [b for b in rules_of(sel.rstrip(" {")) if "border-radius:" in b] for sel in roles}
     wrong = {sel: role for sel, role in roles.items()
              if not corners[sel] or any(f"border-radius: var(--radius-{role})" not in b for b in corners[sel])}
     assert not wrong
+    nav = [b for b in rules_of("nav a") if "border-radius:" in b]
+    assert "var(--radius-pill)" in nav[0] and "var(--radius-card)" in nav[-1]  # header nav pills; a phone's tabs, blocks as in the TabBar card
