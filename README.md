@@ -422,7 +422,11 @@ An `unshacklarr` folder is still used while there is no `downstream` one,
 `UNSHACKLARR_DATA` and `UNSHACKLARR_BUILD` still work (the `DOWNSTREAM_` names win when both are set),
 the `unshacklarr` command still starts it,
 and the image is still published under its old name, `unshacklarr`, beside `downstream`.
-To switch, rename the service, `container_name` and image in `docker-compose.yml` to `downstream`.
+To switch to the new names, stop the old containers first, or the new ones clash with them:
+
+1. `docker compose down`
+2. In `docker-compose.yml`, rename the `name`, the service and its `container_name` to `downstream`, keeping its volumes.
+3. `docker compose up -d`
 
 <a name="api"></a>
 
@@ -601,11 +605,11 @@ registry as `:latest` and as the first 12 characters of the commit. A version ta
 `:1.1.0` to that same image, not built again (`tools/ci/retag.sh`; built only if `main` has none
 for the commit), and on GitHub makes the release, its notes taken from the changelog:
 
-- GitHub: `ghcr.io/ownzzzz/downstream`, with no secret to add;
-- Forgejo: `<forge>/<owner>/downstream`, given a `REGISTRY_TOKEN` secret (a token allowed to
+- GitHub: `ghcr.io/<owner>/downstream` and `ghcr.io/<owner>/unshacklarr`, with no secret to add;
+- Forgejo: `<forge>/<owner>/downstream` and `<forge>/<owner>/unshacklarr`, given a `REGISTRY_TOKEN` secret (a token allowed to
   write packages).
 
-The example compose file uses that image: a server only pulls it,
+The example compose file pulls it as `unshacklarr`: a server only pulls it,
 `docker compose pull downstream && docker compose up -d --no-deps downstream`.
 
 </details>

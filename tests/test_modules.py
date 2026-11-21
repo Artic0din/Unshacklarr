@@ -954,3 +954,34 @@ def test_the_new_names_keep_installs_from_before_the_rename_working(tmp_path, mo
     assert sync.default_data_dir() == tmp_path / "unshacklarr"
     (tmp_path / "downstream").mkdir()
     assert sync.default_data_dir() == tmp_path / "downstream"
+
+
+def test_an_upgraded_container_keeps_the_data_folder_it_set_under_the_old_name(monkeypatch):
+    import re
+    import unshacklarr.sync as sync
+    dockerfile = (Path(__file__).parents[1] / "Dockerfile").read_text()
+    image_env = dict(re.findall(r"(\w+)=(\S+)", next(l for l in dockerfile.splitlines() if l.startswith("ENV ") and "DATA=" in l)))
+    monkeypatch.delenv("DOWNSTREAM_DATA", raising=False)
+    monkeypatch.delenv("UNSHACKLARR_DATA", raising=False)
+    for name, value in image_env.items():
+        monkeypatch.setenv(name, value)
+    assert sync.env("DATA") == "/data"  # the image's own default
+    monkeypatch.setenv("UNSHACKLARR_DATA", "/existing-config")  # set on the container before the rename
+    assert sync.env("DATA") == "/existing-config"
+
+
+def test_the_revealed_titles_move_to_the_new_browser_key_once():
+    import shutil, subprocess
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    src = (Path(__file__).parents[1] / "unshacklarr" / "static" / "js" / "core.js").read_text()
+    code = src[src.index("let revealed;"):src.index("const spoilerFree")]
+    out = subprocess.run(["node", "-e", r"""
+const vm = require("vm"), store = new Map([["unshacklarr.revealed", '["1-S01E01"]']]);
+const localStorage = { getItem: (k) => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+const ctx = vm.createContext({ localStorage, JSON, Set });
+vm.runInContext(process.argv[1] + "\nglobalThis.out = [...revealed];", ctx);
+console.log(JSON.stringify({ revealed: ctx.out, keys: Object.fromEntries(store) }));
+""", code], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout) == {"revealed": ["1-S01E01"], "keys": {"downstream.revealed": '["1-S01E01"]'}}

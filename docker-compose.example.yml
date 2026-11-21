@@ -41,7 +41,7 @@ services:
     # no ports: only DownStream talks to it, on the Docker network
 
   downstream:
-    image: ghcr.io/artic0din/downstream:latest  # built by the project's CI (also published as .../unshacklarr): nothing to build here
+    image: ghcr.io/artic0din/unshacklarr:latest  # built by the project's CI (also published as .../downstream): nothing to build here
     container_name: downstream
     restart: unless-stopped
     user: "${PUID:-1000}:${PGID:-1000}"

@@ -93,7 +93,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          image="ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/downstream"
+          image="ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/unshacklarr"  # the name anyone can pull: the downstream package is private until made public
           sh tools/ci/release-notes.sh "$version" "$image" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/CHANGELOG.md" > notes.md
           # a tag moved to another commit: its release is kept and its notes updated
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then

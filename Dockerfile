@@ -23,7 +23,8 @@ RUN uv sync --locked --no-dev --no-editable
 
 # A test build of a branch says so in the page (docker build --build-arg BUILD=features-aed807a); a release has none
 ARG BUILD=""
-ENV DOWNSTREAM_DATA=/data DOWNLOADS=/downloads HOST=0.0.0.0 PORT=8788 PYTHONUNBUFFERED=1 DOWNSTREAM_BUILD=$BUILD
+# the data folder under its old name: an UNSHACKLARR_DATA set on a container from before the rename still overrides it
+ENV UNSHACKLARR_DATA=/data DOWNLOADS=/downloads HOST=0.0.0.0 PORT=8788 PYTHONUNBUFFERED=1 DOWNSTREAM_BUILD=$BUILD
 EXPOSE 8788
 VOLUME ["/data"]
 # DownStream itself answering (Sonarr or Unshackle down is not its fault: /health?strict=1 says that too)
