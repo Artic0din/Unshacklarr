@@ -217,11 +217,12 @@ const BOTTOM_BARS = ['nav[aria-label="Main"]', "#savebar", "#sel-bar", "#dock", 
 function measureBars() {
   // first: the bars standing on the save bar take their place from it, and their reach is read below
   document.documentElement.style.setProperty("--save-h", `${$("#savebar").offsetHeight}px`);
-  const reach = BOTTOM_BARS.map((bar) => bar.offsetHeight && bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0));
+  const reachOf = (bar) => bar.offsetHeight && bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0);
+  // the floating tab bar's reach, as tall as its labels make it, before the bars standing 12px over it are read
+  document.documentElement.style.setProperty("--tabbar-top", `${reachOf(BOTTOM_BARS[0]) + 12}px`);
+  const reach = BOTTOM_BARS.map(reachOf);
   document.documentElement.style.setProperty("--head-h", `${$("header").offsetHeight}px`);
   document.documentElement.style.setProperty("--bars-h", `${Math.max(...reach) + 8}px`);
-  // the floating tab bar's reach, as tall as its labels make it: the bars above stand 12px over it
-  document.documentElement.style.setProperty("--tabbar-top", `${reach[0] + 12}px`);
   // a wide Activity pane scrolls itself, and its dock sticks above the pane's own bottom padding
   const pane = parseFloat(getComputedStyle($("#con-detail")).paddingBottom) || 0;
   document.documentElement.style.setProperty("--dock-h", `${reach[BOTTOM_BARS.indexOf($("#dock"))] + pane + 8}px`);

@@ -365,7 +365,8 @@
   .con-detail.docked-acts .cd-foot { display: none; }  /* Keep actions that have no dock button in the footer. */
   .con-detail.docked-acts .cd-foot:has(:is([data-fk="delete"], [data-fk="sign-in"])) { display: flex; }
   .con-detail.docked-acts .cd-foot .btn:not([data-fk="delete"], [data-fk="sign-in"]) { display: none; }
-  .dock.open > .cd-raw .term { height: calc(100dvh - var(--header-bottom) - var(--tabbar-top) - 194px); }  /* both measured: a status row or a taller tab bar takes its room */
+  /* one budget, both measured: a status row, a taller tab bar or the save bar under the dock takes its room, down to a few lines */
+  .dock.open > .cd-raw .term { height: max(80px, calc(100dvh - var(--header-bottom) - var(--tabbar-top) - var(--dock-raise, 0px) - 194px)); min-height: 0; }
   .cd-tracks .t { grid-template-columns: 1fr auto; } .cd-tracks .t .bar { grid-column: 1 / -1; grid-row: 2; }
   .cd-raw .term { height: 60dvh; min-height: 280px; }
   .icon-hide { opacity: .8; width: 36px; height: 36px; }
@@ -418,8 +419,7 @@ body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 96px; }
   .sel-bar { left: 12px; right: 12px; bottom: var(--tabbar-top); max-width: none; }
   /* the save bar over the tab bar, and these on it, as tall as it is (two rows on a narrow phone) */
   body:has(#savebar:not([hidden])) :is(.sel-bar, .dock) { bottom: calc(var(--tabbar-top) + var(--save-h, 56px) + 8px); }
-  body:has(#savebar:not([hidden])) .dock.open > .cd-raw .term {  /* raised by the save bar: its output is that much shorter */
-    height: max(120px, calc(100dvh - var(--head-h, 65px) - 265px - env(safe-area-inset-bottom) - var(--save-h, 56px) - 8px)); min-height: 0; }  /* --head-h: its safe area and a status row included */
+  body:has(#savebar:not([hidden])) .dock.open { --dock-raise: calc(var(--save-h, 56px) + 8px); }  /* raised by the save bar: its output is that much shorter */
   body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 150px; }
 }
 .sel-bar #sel-count { margin-right: auto; font-weight: 600; color: var(--text); }

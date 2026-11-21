@@ -223,9 +223,11 @@ def test_phone_page_end_clears_the_dock_raised_by_the_save_bar():
 
 def test_an_open_dock_on_the_save_bar_gives_its_output_the_save_bars_height():
     """Raised onto the save bar, the dock's open output would reach behind the header: it loses the save bar's height."""
-    rule = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\) \.dock\.open > \.cd-raw \.term \{([^}]*)\}", phone_blocks())
-    assert rule and "var(--save-h" in rule[1] and "min-height: 0" in rule[1]  # the 320px floor of .term would undo it
-    assert "var(--head-h" in rule[1]  # a header with a status row under it is taller
+    raise_ = re.search(r"body:has\(#savebar:not\(\[hidden\]\)\) \.dock\.open \{([^}]*)\}", phone_blocks())
+    assert raise_ and "--dock-raise:" in raise_[1] and "var(--save-h" in raise_[1]
+    term = re.search(r"\.dock\.open > \.cd-raw \.term \{([^}]*)\}", phone_blocks())
+    assert term and "var(--dock-raise" in term[1] and "min-height: 0" in term[1]  # the floor of .term would undo it
+    assert "var(--header-bottom)" in term[1] and "var(--tabbar-top)" in term[1]  # a status row or a taller tab bar is measured
 
 
 def test_a_hidden_dock_is_not_drawn():
