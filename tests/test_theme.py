@@ -474,3 +474,10 @@ def test_corner_tokens_keep_their_sizes_and_roles():
     assert not wrong
     nav = [b for b in rules_of("nav a") if "border-radius:" in b]
     assert "var(--radius-pill)" in nav[0] and "var(--radius-card)" in nav[-1]  # header nav pills; a phone's tabs, blocks as in the TabBar card
+
+
+def test_forced_colors_show_the_systems_checkbox_and_the_chosen_segment():
+    forced = re.search(r"@media \(forced-colors: active\) \{\s*input\[type=checkbox\]:not\(\.switch\) \{([^}]*)\}", CSS)
+    assert forced and "appearance: auto" in forced[1] and "background: none" in forced[1]  # the system draws tick and dash itself
+    chosen = re.search(r"@media \(forced-colors: active\) \{\s*:is\(\.d-tabs, \.seg\) button\[aria-pressed=\"true\"\] \{([^}]*)\}", CSS)
+    assert chosen and "text-decoration: underline" in chosen[1]  # the fill is gone in system colours
