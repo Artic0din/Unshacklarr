@@ -38,7 +38,7 @@ def test_the_services_table_stacks_before_a_column_would_hide_past_an_edge():
 
 
 def test_a_service_needing_attention_gets_a_full_outline_not_an_edge_bar():
-    assert "outline: 1px solid var(--err)" in rule(".sv-row[data-attention]")
+    assert "box-shadow: inset 0 0 0 1px var(--err)" in rule(".sv-row[data-attention]")  # an inset ring: the focus outline still shows over it
     assert "--sv-edge" not in CSS and "border-inline-start: 1px solid var(--sv-edge" not in CSS
 
 

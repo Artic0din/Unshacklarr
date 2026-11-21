@@ -52,7 +52,7 @@ TEXT = [("text", "bg"), ("text", "panel"), ("text", "well"), ("text", "field-bg"
         ("err", "err-tint"), ("muted", "well"), ("ok", "accent-tint"), ("muted", "bg"),
         ("text", "ok-tint"), ("muted", "ok-tint"), ("warn", "ok-tint"),
         ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg"),
-        ("text", "text-selection"), ("muted", "term-bg"), ("err", "term-bg"), ("text", "term-bg"), ("text", "bar"), ("muted", "bar"), ("muted", "well"), ("err", "err-tint")]
+        ("text", "text-selection"), ("muted", "text-selection"), ("tk-video", "text-selection"), ("muted", "term-bg"), ("err", "term-bg"), ("text", "term-bg"), ("text", "bar"), ("muted", "bar"), ("muted", "well"), ("err", "err-tint")]
 EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg"),
          ("field-line", "bar"), ("accent", "bar"), ("err", "err-tint"), ("warn", "warn-tint"), ("accent", "accent-tint"), ("field-line", "well")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
 

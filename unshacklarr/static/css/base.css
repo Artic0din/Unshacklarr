@@ -3,7 +3,7 @@
   color-scheme: only dark;
   --bg: #080804; --panel: #10140c; --line: #2c301c; --text: #ffffff; --muted: #aca9a6;
   --well: #2c301c;  /* a small well: icon buttons, neutral badges, hover; never selection, never a large panel */
-  --bar: #1c2008;  /* the header and tab bar */ --text-selection: #44501d;  /* selected text and the editor's selection */
+  --bar: #1c2008;  /* the header and tab bar */ --text-selection: #2f3816;  /* selected text and the editor's selection: comments and keys stay 4.5:1 or more on it */
   --accent: #cbe24d; --accent-ink: #0a0b05; --accent-tint: #30381a; --warn-tint: #3d2f0e; --err-tint: #45201a;
   --ok: #65d8a0; --ok-tint: #17392a; --warn: #e8b651; --warn-ink: #241a03; --err: #ff8a75; --err-ink: #2a0c06;
   --line-strong: #52564a;  /* a divider or thumb that must show on --panel; never text */

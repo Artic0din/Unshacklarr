@@ -8,14 +8,13 @@
 .con-running:not([hidden]) { display: flex; flex: 1; align-items: start; gap: var(--sp-1); min-width: 0; height: var(--chip-slot);
   padding-block: var(--sp-1) 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .con-running .chip { display: inline-flex; flex: none; align-items: center; gap: 6px; max-width: min(18rem, 100%);
-  min-height: var(--con-target); padding-inline: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 700; cursor: pointer; }  /* a LiveBadge: running now */
+  min-height: var(--con-target); padding-inline: 10px; background: var(--panel); border: 1px solid var(--line); color: var(--text); font-weight: 600; cursor: pointer; }  /* a running download to pick: its live dot says it runs */
 /* the live dot: red with a dark keyline, so it holds on the lime; only its outer ring pulses */
 .con-running .chip::before { content: ""; flex: 0 0 6px; height: 6px; border-radius: 50%; background: var(--live);
   box-shadow: 0 0 0 1.5px var(--accent-ink); animation: live-dot 1.6s ease-in-out infinite; }
 @keyframes live-dot { 50% { box-shadow: 0 0 0 1.5px var(--accent-ink), 0 0 0 4px color-mix(in srgb, var(--live) 45%, transparent); } }
 .con-running .chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.con-running .chip[aria-current="true"] { box-shadow: inset 0 -2px currentColor; }
-.con-running .chip:focus-visible { outline-offset: -2px; outline-color: var(--accent-ink); }  /* drawn inside the lime fill */
+.con-running .chip:focus-visible { outline-offset: -2px; }
 .con-running { --chip-fade: 14px; scroll-padding-inline-end: var(--chip-fade); }
 @property --chip-edge { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @supports (animation-timeline: scroll()) {

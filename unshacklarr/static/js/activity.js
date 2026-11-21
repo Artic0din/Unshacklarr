@@ -1097,6 +1097,7 @@ function openSheet() {
   const raw = $("#cd-raw"), dock = $("#dock");
   dock.prepend(raw);
   dock.classList.add("open");
+  dock.scrollIntoView?.({ behavior: SCROLL, block: "nearest" });  // in the page's flow now: bring its output into view
   dock.querySelector(".d-open").setAttribute("aria-expanded", String(true));
   raw.open = true;  // its toggle streams the output
 }

@@ -307,7 +307,7 @@
   .seasons { margin-inline: -12px; padding: 12px 12px 8px; }
   .seasons button { padding: 8px 14px; min-height: 48px; }
   .ep-tools h3 { font-size: var(--fs-body); }
-  .ep-sel { flex-wrap: wrap; } .ep-sel button { padding: 10px 12px; }
+  .ep-sel button { padding: 10px 12px; }
   .ep-view .pill { min-height: 36px; }
   .ep-list .ep { grid-template-columns: auto 32px minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 12px; min-height: 52px; }
   .ep-list .ep-head, .ep .col, .ep-tools .cols-btn { display: none; }
