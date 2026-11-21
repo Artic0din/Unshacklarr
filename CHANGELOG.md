@@ -99,6 +99,9 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Restyled Settings and the first-run setup in the DownStream design: switches turn lime when on, the chosen option
+  in a group is lime, settings cards are flat with more room, and the setup's headings use the bold uppercase display
+  style (Settings never does). (#401)
 - Restyled the Activity page in the DownStream design: what is running now is a lime badge with a pulsing red dot, its
   row and card take a lime outline, progress bars run on a lime tint, and the download's figures are larger. (#400)
 - Restyled the Schedule page in the DownStream design: weekdays are small capitals with today's in lime, the status
