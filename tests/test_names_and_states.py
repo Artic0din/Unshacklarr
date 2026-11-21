@@ -102,8 +102,11 @@ if (scenario === "activity") {  // Activity: the running dot, the picked row, th
   let isOpen = false;
   dock.classList = { add: () => { isOpen = true; }, remove: () => { isOpen = false; }, contains: () => isOpen };
   boxes["#dock"] = dock; boxes["#cd-raw"] = raw; boxes["#cd-foot"] = Object.assign(new Node("div"), { before() {} });
+  const steps = [];
+  ctx.measureBars = () => steps.push("measured"); ctx.SCROLL = "auto";
+  dock.scrollIntoView = () => steps.push(raw.open ? "scrolled open" : "scrolled shut");
   run(grab(activity, "openSheet") + grab(activity, "closeSheet"));
-  ctx.openSheet(); out.opened = open.attrs["aria-expanded"];
+  ctx.openSheet(); out.opened = open.attrs["aria-expanded"]; out.steps = steps;
   ctx.closeSheet(); out.closed = open.attrs["aria-expanded"];
 }
 
@@ -204,6 +207,7 @@ def test_activity_names_the_running_dot_the_picked_row_and_the_output_state():
     assert shown["pulse"] == ["img", "Running"]
     assert shown["rows"] == ["true", "false"]
     assert shown["opened"] == "true" and shown["closed"] == "false"
+    assert shown["steps"] == ["measured", "scrolled open"]  # scrolled to the open output, not the folded bar
 
 
 def test_repeated_buttons_name_their_item_and_the_badge_letters_are_hidden():

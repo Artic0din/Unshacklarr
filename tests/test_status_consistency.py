@@ -255,7 +255,7 @@ const ctx = sandbox({
   $: (sel) => sel === "#cal-grid" ? grid : null, keepFocus: (_, fn) => fn(), keepCardFocus() {}, syncDetails() {},
 });
 const src = read(process.argv[1]);
-vm.runInContext(grab(src, /^function renderMonth\(.*?^\}/ms), ctx);
+vm.runInContext(grab(src, /^function schedStatus\(.*?^\}/ms) + "\n" + grab(src, /^function renderMonth\(.*?^\}/ms), ctx);
 ctx.renderMonth();
 const [firstDay, secondDay] = grid.children.slice(7, 9);
 console.log(JSON.stringify({
@@ -265,7 +265,9 @@ console.log(JSON.stringify({
 }));
 """, str(JS / "schedule.js"))
     assert shown == {
-        "episodes": [["cal-ep mine", "Managed"]] * 4 + [["cal-ep", "Not managed"]],
+        # each line carries its state for the dot, and says it in its title
+        "episodes": [["cal-ep mine st-late", "Managed · Late · not on SBS yet"], ["cal-ep mine st-wait", "Managed · Waiting for Sonarr"],
+                     ["cal-ep mine st-ok", "Managed · Downloaded"], ["cal-ep mine st-none", "Managed"], ["cal-ep st-none", "Not managed"]],
         "count": [["Managed", 1], ["Not managed", 1]],
         "dayLabels": [
             "Sunday, November 1: 3 episodes, Managed: 3",

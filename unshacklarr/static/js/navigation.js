@@ -219,7 +219,10 @@ function measureBars() {
   document.documentElement.style.setProperty("--head-h", `${$("header").offsetHeight}px`);
   // then the save bar: the bars standing on it take their place from it, and their reach is read below
   document.documentElement.style.setProperty("--save-h", `${$("#savebar").offsetHeight}px`);
-  const reachOf = (bar) => bar.offsetHeight && bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0);
+  const reachOf = (bar) => {  // a bar in the page's flow (an open dock) is not pinned: it covers nothing
+    const style = getComputedStyle(bar);
+    return style.position && !/sticky|fixed/.test(style.position) ? 0 : bar.offsetHeight && bar.offsetHeight + (parseFloat(style.bottom) || 0);
+  };
   // the floating tab bar's reach, as tall as its labels make it, before the bars standing 12px over it are read
   document.documentElement.style.setProperty("--tabbar-top", `${reachOf(BOTTOM_BARS[0]) + 12}px`);
   const reach = BOTTOM_BARS.map(reachOf);

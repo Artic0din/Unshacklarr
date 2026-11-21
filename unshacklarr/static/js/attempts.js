@@ -91,7 +91,8 @@ function openTerm() {
     term = new Terminal({
       convertEol: true, disableStdin: true, scrollback: 20000, fontSize: 13, cursorBlink: false,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-      theme: { background, foreground: colour("--text"), cursor: background, selectionBackground: colour("--select") },
+      theme: { background, foreground: colour("--text"), cursor: background, selectionBackground: colour("--text-selection"),
+        black: colour("--muted"), brightBlack: colour("--muted"), red: colour("--err"), brightRed: colour("--err") },  // dim lines 4.5:1 or more on --term-bg
     });
     termFit = new FitAddon.FitAddon();
     term.loadAddon(termFit);

@@ -49,10 +49,10 @@ def contrast(a, b):
 TEXT = [("text", "bg"), ("text", "panel"), ("text", "well"), ("text", "field-bg"), ("text", "accent-tint"),
         ("muted", "bg"), ("muted", "panel"), ("muted", "well"), ("accent", "bg"), ("accent", "panel"), ("accent", "accent-tint"),
         ("accent-ink", "accent"), ("ok", "panel"), ("ok", "bg"), ("ok", "well"), ("ok", "ok-tint"), ("accent-ink", "ok"), ("warn", "bg"), ("warn", "panel"), ("warn-ink", "warn"), ("warn", "warn-tint"),
-        ("err", "err-tint"), ("muted", "well"), ("ok", "select"),
+        ("err", "err-tint"), ("muted", "well"), ("ok", "accent-tint"), ("muted", "bg"),
         ("text", "ok-tint"), ("muted", "ok-tint"), ("warn", "ok-tint"),
         ("err", "bg"), ("err", "panel"), ("err-ink", "err"), ("tk-video", "panel"), ("tk-audio", "panel"), ("code-string", "bg"),
-        ("text", "select"), ("muted", "select"), ("text", "term-bg"), ("text", "bar"), ("muted", "bar"), ("muted", "well"), ("err", "err-tint")]
+        ("text", "text-selection"), ("muted", "text-selection"), ("tk-video", "text-selection"), ("muted", "term-bg"), ("err", "term-bg"), ("text", "term-bg"), ("text", "bar"), ("muted", "bar"), ("muted", "well"), ("err", "err-tint")]
 EDGES = [("field-line", "field-bg"), ("field-line", "panel"), ("field-line", "bg"), ("accent", "panel"), ("ok", "panel"), ("ok", "bg"),
          ("field-line", "bar"), ("accent", "bar"), ("err", "err-tint"), ("warn", "warn-tint"), ("accent", "accent-tint"), ("field-line", "well")]  # a control's edge, the marks of a chosen one, and a success dot (WCAG 1.4.11)
 
@@ -139,11 +139,11 @@ def test_late_schedule_status_is_amber_like_waiting_for_import():
 def test_a_poster_with_a_failure_icon_has_no_green_service_chip_or_frame():
     assert any("color: var(--muted)" in body for body in rules_of(".poster .svc"))
     assert not any("var(--ok)" in body for body in rules_of(".poster .svc"))
-    assert not any("var(--ok)" in body for body in rules_of(".poster.on .art"))
-    assert any("var(--ok)" in body for body in rules_of(".poster.on:not(:has(.sick)) .art"))
+    # a series being downloaded is the normal state: its art gets no ring at all (the accent means selected)
+    assert not any("var(--ok)" in body for body in rules_of(".poster.on .art") + rules_of(".poster.on:not(:has(.sick)) .art"))
 
 
-@pytest.mark.parametrize("badge", [".cal-ep.mine", ".cal-count i.mine"])
+@pytest.mark.parametrize("badge", [".cal-count i.mine"])
 def test_managed_month_groups_use_neutral_colours(badge):
     last = rules_of(badge)[-1]
     assert "color: var(--text)" in last
@@ -212,8 +212,9 @@ def test_a_toggle_pill_has_an_edge_you_can_see_and_a_tick_when_on():
     assert "clip-path" in on and rule("#sel-toggle[aria-pressed=\"true\"]::before").count("clip-path") == 1  # the Select toggle's tick
 
 
-def test_the_active_country_option_has_a_bar_not_only_a_tint():
-    assert "inset 3px 0 0 var(--field-line-hover)" in rule(".cp-list li.on")
+def test_the_active_country_option_is_outlined_all_round_not_barred_on_one_edge():
+    on = rule(".cp-list li.on")
+    assert "background: var(--accent-tint)" in on and "box-shadow: inset 0 0 0 1px var(--accent)" in on
 
 
 def test_a_failed_or_stopped_step_has_a_mark_and_the_word_is_there_for_everyone():
@@ -308,17 +309,33 @@ def test_expanded_subtitles_span_the_episode_row_without_contributing_to_column_
 
 def test_the_lime_focus_ring_stands_out_on_dark_surfaces_and_selection():
     assert "outline: 2px solid var(--accent)" in rule(":focus-visible")
-    assert "background: var(--accent)" in rule('.seg button[aria-pressed="true"]')
-    # Segments draw the ring inside their own fill: on the lime one it is drawn in the ink
-    assert "outline-color: var(--accent-ink)" in rule('.seg button[aria-pressed="true"]:focus-visible')
-    assert contrast(DARK["accent-ink"], DARK["accent"]) >= 3
-    # other controls draw it above the surrounding surface
-    for fill in ("bg", "panel", "well", "bar", "select", "accent-tint", "warn-tint", "term-bg"):
+    # a selected segment draws its ring inside its accent outline: there the ring is in the text colour
+    assert "outline-color: var(--text)" in rule('.seg button[aria-pressed="true"]:focus-visible')
+    for fill in ("bg", "panel", "well", "bar", "accent-tint", "warn-tint", "term-bg"):
         assert contrast(DARK["accent"], DARK[fill]) >= 3, fill
+    assert contrast(DARK["text"], DARK["accent-tint"]) >= 3
 
 
-def test_a_choice_chips_edge_is_a_field_edge():
-    assert any("border: 1.5px solid var(--field-line)" in body for body in rules_of(".ax-seg button"))
+SELECTED = ['.seg button[aria-pressed="true"]', '.d-tabs button[aria-pressed="true"]', '.set-nav button[aria-current="true"]',
+            '.ax-seg button[aria-pressed=true]', '.rt-custom.on', '.con-filters button[aria-pressed="true"]', 'button.pill[aria-pressed="true"]',
+            '.pill:has(input:checked)', '.ds-nav a[aria-current="true"]', '.seasons button[aria-pressed="true"]', '.wz-tile[aria-checked=true]',
+            '.wz-steps li.on button', '.bc-days button[aria-pressed="true"]', '#sel-toggle[aria-pressed="true"]', '.inbox-filters button[aria-pressed="true"]']
+
+
+def test_every_pick_one_control_has_the_one_selected_look_and_grey_is_gone():
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    shared = [body for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css) if "accent-tint" in body and ":is(" in sel
+              and all(s in " ".join(sel.split()) for s in SELECTED)]
+    assert shared, "one rule names every selected control"
+    for decl in ("background: var(--accent-tint)", "border-color: var(--accent)", "color: var(--text)", "font-weight: 600"):
+        assert decl in shared[-1], decl
+    assert "--select" not in CSS and "#3c3e38" not in CSS  # the grey selection fill is retired
+
+
+def test_an_option_row_is_one_segmented_track_that_scrolls_rather_than_wraps():
+    track = rules_of(".ax-seg")[0]
+    assert "flex-wrap: nowrap" in track and "overflow-x: auto" in track and "border: 1px solid var(--line)" in track
+    assert any("border: 1px solid transparent" in body for body in rules_of(".ax-seg button"))  # the track draws the edge; selected adds the accent
 
 
 def test_a_pressed_control_scales_to_96_percent():

@@ -106,7 +106,7 @@ nav .short { display: none; }
 .inbox-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .inbox-filters button { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: var(--radius-pill);
   background: none; color: var(--muted); font: inherit; font-size: var(--fs-sub); cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
-.inbox-filters button[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); }
+.inbox-filters button[aria-pressed="true"] { background: var(--accent-tint); border-color: var(--accent); color: var(--text); }
 .inbox-filters i { width: 7px; height: 7px; border-radius: 50%; background: var(--lv, var(--muted)); }
 .inbox-filters b { font-weight: 600; }
 .inbox-sub { position: sticky; top: 0; z-index: 1; background: var(--panel); font-size: var(--fs-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
@@ -154,7 +154,7 @@ nav .short { display: none; }
 .seg button span { margin-left: 4px; font-variant-numeric: tabular-nums; }
 .seg button:focus-visible, .seasons button:focus-visible,
 .inbox-item.link:focus-visible { outline-offset: -2px; }  /* scrollers clip rings drawn outside */
-.seg button[aria-pressed="true"]:focus-visible { outline-color: var(--accent-ink); }  /* drawn inside the lime fill: the ring in the ink */
+.seg button[aria-pressed="true"]:focus-visible { outline-color: var(--text); }  /* drawn inside the accent outline: the ring in the text colour */
 nav { overflow-x: auto; max-width: 100%; padding: 4px; margin: -4px; }  /* room inside the scroller for the focus ring */
 nav a { white-space: nowrap; }
 input[type=text], input[type=url], input[type=search], input[type=number], input[type=password], select, textarea {

@@ -27,9 +27,9 @@
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-tile); padding: 6px; cursor: pointer; overflow: hidden; }
 @media (hover: hover) { .cal-cell:hover { border-color: var(--field-line); } }
 .cal-cell.out { background: none; } .cal-cell.out .cal-date { color: var(--muted); }
-.cal-cell.today { border-color: var(--field-line-hover); }
-.cal-cell.today .cal-date { color: var(--text); font-weight: 700; }
-.cal-cell.picked { box-shadow: inset 0 0 0 2px var(--field-line-hover); }
+.cal-cell.today { border-color: var(--accent); }  /* today: the accent outline and date */
+.cal-cell.today .cal-date { color: var(--accent); font-weight: 700; }
+.cal-cell.picked { border-color: var(--accent); }  /* the day whose episodes are listed: selected */
 .cal-date { font-weight: 700; font-size: var(--fs-sub); }
 .cal-count { display: none; }
 .cal-eps { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -84,7 +84,7 @@ button.pill[aria-pressed="true"] { background: var(--accent-tint); border-color:
 .sc-open { padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; text-align: start; overflow-wrap: break-word; cursor: pointer; }
 .board .sc-open { max-width: 100%; font-size: var(--fs-callout); line-height: 1.25; }
 @media (hover: hover) { .sc-open:hover { text-decoration: underline; } }
-.sc-open[aria-expanded="true"] { background: var(--select); color: var(--text); }
+.sc-open[aria-expanded="true"] { background: var(--accent-tint); color: var(--text); }
 .sc-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }  /* a 44px Hide on touch: the badges centred on it, no gap above them */
 .sc-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; min-width: 0; }
 .sc-foot .icon-hide { width: 28px; height: 28px; }

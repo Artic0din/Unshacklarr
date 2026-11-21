@@ -37,11 +37,9 @@ def test_the_services_table_stacks_before_a_column_would_hide_past_an_edge():
     assert "minmax(min(100%, 13rem), 1fr)" in stacks.group(2)  # one track at phone widths, with no forced minimum
 
 
-def test_service_attention_colours_only_the_leading_edge():
-    assert "--sv-edge: var(--err)" in rule(".sv-row[data-attention]")
-    assert "border-inline-start: 1px solid var(--sv-edge" in rule(".sv-table tbody th")
-    assert "border-inline-start: 1px solid var(--sv-edge" in rule(".sv-table tbody tr")
-    assert not re.search(r"\.sv-row\[data-attention\][^{]*\{[^}]*box-shadow", CSS)
+def test_a_service_needing_attention_gets_a_full_outline_not_an_edge_bar():
+    assert "box-shadow: inset 0 0 0 1px var(--err)" in rule(".sv-row[data-attention]")  # an inset ring: the focus outline still shows over it
+    assert "--sv-edge" not in CSS and "border-inline-start: 1px solid var(--sv-edge" not in CSS
 
 
 def test_a_ladder_step_stacks_before_its_selects_collapse():

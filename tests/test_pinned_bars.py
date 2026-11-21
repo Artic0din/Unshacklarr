@@ -126,8 +126,8 @@ def measured(bars):
     out = subprocess.run(["node", "-e", r"""
 const vm = require("vm"), [code, bars] = process.argv.slice(1), set = {};
 const nodes = { header: { offsetHeight: 65, style: {} }, "#con-detail": { bottom: "auto", pad: "20px" } };
-for (const [sel, [h, bottom]] of Object.entries(JSON.parse(bars))) nodes[sel] = { offsetHeight: h, bottom };
-const ctx = vm.createContext({ $: (sel) => nodes[sel], getComputedStyle: (n) => ({ bottom: n.bottom === "tabbar" ? set["--tabbar-top"] || "86px" : n.bottom, paddingBottom: n.pad || "0px" }), Math, parseFloat,
+for (const [sel, [h, bottom, position = "fixed"]] of Object.entries(JSON.parse(bars))) nodes[sel] = { offsetHeight: h, bottom, position };
+const ctx = vm.createContext({ $: (sel) => nodes[sel], getComputedStyle: (n) => ({ bottom: n.bottom === "tabbar" ? set["--tabbar-top"] || "86px" : n.bottom, paddingBottom: n.pad || "0px", position: n.position }), Math, parseFloat,
   document: { documentElement: { style: { setProperty: (k, v) => { set[k] = v; } } } } });
 vm.runInContext(code + "\nmeasureBars();", ctx);
 console.log(JSON.stringify(set));
@@ -156,7 +156,8 @@ def test_a_grown_tab_bar_raises_the_bars_on_it_in_the_same_measure():
 
 def test_phone_expanded_dock_and_series_download_bar_are_measured_as_they_are():
     tab = {'nav[aria-label="Main"]': [72, "0px"]}
-    assert measured({**NONE, **tab, "#dock": [320, "84px"]})["--bars-h"] == "412px"  # expanded, with its output
+    assert measured({**NONE, **tab, "#dock": [320, "84px", "sticky"]})["--bars-h"] == "412px"  # pinned, with its output
+    assert measured({**NONE, **tab, "#dock": [320, "auto", "relative"]})["--bars-h"] == "80px"  # open in the page's flow: covers nothing
     # the series page: no tab bar (its header is hidden), the download bar at the bottom
     assert measured({**NONE, 'nav[aria-label="Main"]': [0, "0px"], "#ep-bar": [60, "0px"]})["--bars-h"] == "68px"
 

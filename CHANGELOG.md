@@ -99,6 +99,14 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Made selection look the same everywhere: anything you pick one of (tabs, view filters, option rows, the Settings menu,
+  season and section pickers) shows a lime tint with a lime outline, and the old grey highlight is gone. A lime
+  outline now only means selected: series being downloaded, running downloads and today no longer borrow it. (#403)
+- Grouped related choices into one rounded track (Schedule's status filter, seasons, the episode selection, the
+  series settings bar, every option row) that scrolls sideways on a phone instead of wrapping. The month view lists
+  episodes as plain lines with a state dot, panels inside cards are darker than the card, services needing attention
+  are outlined in red all round, Activity's output no longer covers the download's title and buttons, and the
+  output's dim and error lines are readable. (#403)
 - Renamed the app to DownStream wherever its name is shown: the page, its title and the installed app, notifications,
   error messages, the README and docs, in all nine languages. Install paths, the Docker image and settings are unchanged. (#402)
 - Restyled Settings and the first-run setup in the DownStream design: switches turn lime when on, the chosen option

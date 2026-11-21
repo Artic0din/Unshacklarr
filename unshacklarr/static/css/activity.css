@@ -1,21 +1,20 @@
 /* Activity: list on the left (what runs, then the history), the picked download on the right. */
 .con-toolbar { --con-target: 36px; --chip-slot: calc(var(--con-target) + 8px);
   display: flex; gap: var(--sp-2); align-items: center; min-height: var(--chip-slot); margin-bottom: var(--sp-2); }
-#tab-log .con-views { flex: none; flex-wrap: wrap; gap: 2px; margin: 0; }
+#tab-log .con-views { flex: 0 1 auto; flex-wrap: nowrap; gap: 2px; margin: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 #tab-log .con-views button { min-height: var(--con-target); padding: 4px 10px; }
 .con-views #con-left-n { display: inline; margin: 0; }
 .con-views #con-left-n:empty { display: none; }
 .con-running:not([hidden]) { display: flex; flex: 1; align-items: start; gap: var(--sp-1); min-width: 0; height: var(--chip-slot);
   padding-block: var(--sp-1) 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .con-running .chip { display: inline-flex; flex: none; align-items: center; gap: 6px; max-width: min(18rem, 100%);
-  min-height: var(--con-target); padding-inline: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 700; cursor: pointer; }  /* a LiveBadge: running now */
+  min-height: var(--con-target); padding-inline: 10px; background: var(--panel); border: 1px solid var(--line); color: var(--text); font-weight: 600; cursor: pointer; }  /* a running download to pick: its live dot says it runs */
 /* the live dot: red with a dark keyline, so it holds on the lime; only its outer ring pulses */
 .con-running .chip::before { content: ""; flex: 0 0 6px; height: 6px; border-radius: 50%; background: var(--live);
   box-shadow: 0 0 0 1.5px var(--accent-ink); animation: live-dot 1.6s ease-in-out infinite; }
 @keyframes live-dot { 50% { box-shadow: 0 0 0 1.5px var(--accent-ink), 0 0 0 4px color-mix(in srgb, var(--live) 45%, transparent); } }
 .con-running .chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.con-running .chip[aria-current="true"] { box-shadow: inset 0 -2px currentColor; }
-.con-running .chip:focus-visible { outline-offset: -2px; outline-color: var(--accent-ink); }  /* drawn inside the lime fill */
+.con-running .chip:focus-visible { outline-offset: -2px; }
 .con-running { --chip-fade: 14px; scroll-padding-inline-end: var(--chip-fade); }
 @property --chip-edge { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @supports (animation-timeline: scroll()) {
@@ -36,8 +35,7 @@
   .con-toolbar:has(#con-downloads[aria-pressed="true"]):has(.con-running:not([hidden])) { grid-template-rows: auto var(--chip-slot); }  /* the chips' row only while something runs: no empty band */
 }
 @media (max-width: 520px) {
-  #tab-log .con-views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .con-views button { white-space: normal; overflow-wrap: anywhere; }
+  .con-views button { flex: none; white-space: nowrap; }  /* one row: the track scrolls sideways */
 }
 /* The toolbar can grow at larger text sizes without making the whole page scroll. */
 @media (min-width: 701px) {
@@ -67,15 +65,12 @@
 .con-filters button { font: inherit; font-size: var(--fs-footnote); padding: 3px 10px; border-radius: var(--radius-pill); border: 1px solid var(--line); background: none;
   color: var(--muted); cursor: pointer; }
 .con-filters button span { font-variant-numeric: tabular-nums; }
-.con-filters button[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); }
+.con-filters button[aria-pressed="true"] { background: var(--accent-tint); border-color: var(--accent); color: var(--text); }
 .crow { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 8px; border-radius: var(--radius-tile);
   border: 0; background: none; color: inherit; font: inherit; text-align: left; width: 100%; cursor: pointer; }
 .crow.is-hover { background: var(--panel); }
 @media (hover: hover) { .crow:hover { background: var(--panel); } }
-.crow.sel { background: var(--panel); box-shadow: inset 0 0 0 1px var(--field-line-hover); }
-/* a DownloadRow moving now (not paused or only queued): the accent outline; picked, a heavier one */
-.crow:has(.pulse):has(.bar:not(.idle)) { box-shadow: inset 0 0 0 1px var(--accent); }
-.crow.sel:has(.pulse):has(.bar:not(.idle)) { box-shadow: inset 0 0 0 2px var(--accent); }
+.crow.sel { background: var(--panel); box-shadow: inset 0 0 0 1px var(--accent); }  /* selected: the accent outline, and only that */
 .crow img { width: 30px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--radius-inline); background: var(--panel); }
 .crow b { display: flex; gap: 6px; align-items: baseline; font-size: var(--fs-callout); white-space: nowrap; }
 .crow b span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }  /* the series gives way, never its episode */
@@ -231,7 +226,7 @@
 .con-detail:has(.cd-foot [data-fk="retry"].primary) .dock .d-acts .retry { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .dock .d-open svg { stroke-width: 2.4; }
 .con-detail.docked > .cd-raw { display: none; }  /* the output opens in the bar */
-.dock.open { flex-wrap: wrap; row-gap: 10px; }
+.dock.open { flex-wrap: wrap; row-gap: 10px; position: relative; bottom: auto; }  /* open: in its place below the job, never over its title, controls or first rows */
 .dock.open > .cd-raw { flex: 1 0 100%; order: -1; }  /* the bar grows upwards: the output above its line */
 .dock.open > .cd-raw .term { height: min(58vh, 640px); }
 .dock.open .d-open svg { transform: rotate(180deg); }
@@ -249,8 +244,7 @@
 .job-counts .ok b { color: var(--ok); } .job-counts .now b { color: var(--accent); } .job-counts .err b { color: var(--err); }
 .job-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .jcard { border: 1px solid var(--line); border-radius: var(--radius-tile); background: var(--bg); overflow: hidden; }  /* no transition: redrawn twice a second, it would replay */
-.jcard.is-hover:not(.queued):not(.cancelled):not(.now) { border-color: var(--muted); } .jcard.now { border-color: var(--accent); }
-.jcard.now.is-hover { box-shadow: inset 0 0 0 1px var(--accent); }  /* running: its accent edge stays, a hover thickens it */
+.jcard.is-hover:not(.queued):not(.cancelled) { border-color: var(--muted); }
 .jhead { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 14px; align-items: center; width: 100%; padding: 12px 14px;
   border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .jcard.queued .jhead { cursor: default; grid-template-columns: 70px minmax(0, 1fr) auto 26px; } .jcard.queued .ep, .jcard.queued .mid { opacity: .7; }

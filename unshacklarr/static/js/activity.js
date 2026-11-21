@@ -1099,6 +1099,9 @@ function openSheet() {
   dock.classList.add("open");
   dock.querySelector(".d-open").setAttribute("aria-expanded", String(true));
   raw.open = true;  // its toggle streams the output
+  // in the page's flow now: scrolled into view at its open size, with the pinned bars it no longer counts among
+  measureBars();
+  dock.scrollIntoView?.({ behavior: SCROLL, block: "nearest" });
 }
 function closeSheet() {
   const raw = $("#cd-raw"), dock = $("#dock");

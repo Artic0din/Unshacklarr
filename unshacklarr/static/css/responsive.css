@@ -26,7 +26,7 @@
 .bulk-rows b { display: block; font-size: var(--fs-callout); } .bulk-rows .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .bulk-rows label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sub); padding: 4px 10px; border: 1px solid var(--line);
   border-radius: var(--radius-pill); cursor: pointer; max-width: 100%; }
-.bulk-rows label:has(input:checked) { border-color: var(--field-line-hover); background: var(--select); }
+.bulk-rows label:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
 .bulk-rows label small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
 .bulk-rows .none { color: var(--muted); font-size: var(--fs-sub); }
 .modal-actions .muted { margin-right: auto; align-self: center; font-size: var(--fs-sub); }
@@ -42,7 +42,7 @@
 .bc-grid .field { margin: 0; }
 .bc-days { display: flex; gap: 6px; flex-wrap: wrap; } .bc-days[hidden] { display: none; }
 .bc-days button { min-width: 42px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: none; color: var(--muted); font: inherit; font-size: var(--fs-sub); cursor: pointer; }
-.bc-days button[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); font-weight: 600; }
+.bc-days button[aria-pressed="true"] { background: var(--accent-tint); border-color: var(--accent); color: var(--text); font-weight: 600; }
 .bc-cal { border: 1px solid var(--line); border-radius: var(--radius-field); padding: 10px; }
 .bc-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-weight: 600; font-size: var(--fs-callout); }
 .bc-cal-head button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; background: none; color: var(--text); cursor: pointer; }
@@ -50,7 +50,7 @@
 .bc-cal-grid small { color: var(--muted); font-size: var(--fs-caption); }
 .bc-cal-grid button { position: relative; height: 32px; border: 1px solid transparent; border-radius: var(--radius-pill); background: none; color: var(--muted); font: inherit; font-size: var(--fs-sub); cursor: pointer; }
 .bc-cal-grid button:disabled { opacity: .3; cursor: default; }
-.bc-cal-grid button.on { background: var(--select); color: var(--text); }
+.bc-cal-grid button.on { background: var(--accent-tint); color: var(--text); }
 .bc-cal-grid button.changed { border-color: var(--warn); }
 .bc-cal-grid button.today { font-weight: 700; text-decoration: underline; }
 .bc-cal-grid button b { position: absolute; top: 2px; right: 4px; font-size: var(--fs-caption); color: var(--text); }
@@ -133,7 +133,7 @@
 .cdm-pop-h { padding: 6px 6px 2px; font-size: var(--fs-caption); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .cdm-opt { display: grid; gap: 1px; text-align: left; padding: 5px 8px; border: 0; border-radius: var(--radius-tile); background: none; color: var(--text); font: inherit; cursor: pointer; }
 @media (hover: hover) { .cdm-opt:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); } } .cdm-opt:disabled { opacity: .45; cursor: default; }
-.cdm-opt.on { background: var(--select); } .cdm-opt b { font-size: var(--fs-sub); font-weight: 600; } .cdm-opt small { color: var(--muted); font-size: var(--fs-footnote); }
+.cdm-opt.on { background: var(--accent-tint); } .cdm-opt b { font-size: var(--fs-sub); font-weight: 600; } .cdm-opt small { color: var(--muted); font-size: var(--fs-footnote); }
 .cdm-opt.danger b { color: var(--err); }
 .cdm-pop.menu { width: min(230px, calc(100vw - 16px)); padding: 6px; gap: 4px; } .cdm-pop.menu .cdm-pop-t { font-size: var(--fs-footnote); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cdm-pop.menu .cdm-opt small { white-space: normal; }
@@ -249,7 +249,8 @@
   .gh-act { min-height: 36px; padding-inline: 8px; margin-right: -8px; }  /* the text stays at the edge, the target grows */
   input[type=checkbox]:not(.switch) { width: 22px; height: 22px; }
 
-  .seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); width: 100%; margin-bottom: 10px; }  /* more choices than fit: a second row */
+  .seg { display: flex; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; margin-bottom: 10px; }  /* more choices than fit: it scrolls sideways in its track, never a second row */
+  .seg button { flex: none; }
   .seg button { padding: 9px 6px; font-size: var(--fs-sub); white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
   .seg button span { display: block; margin: 2px 0 0; }
   .wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 10px; }
@@ -306,7 +307,7 @@
   .seasons { margin-inline: -12px; padding: 12px 12px 8px; }
   .seasons button { padding: 8px 14px; min-height: 48px; }
   .ep-tools h3 { font-size: var(--fs-body); }
-  .ep-sel { flex-wrap: wrap; } .ep-sel button { padding: 10px 12px; }
+  .ep-sel button { padding: 10px 12px; }
   .ep-view .pill { min-height: 36px; }
   .ep-list .ep { grid-template-columns: auto 32px minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 12px; min-height: 52px; }
   .ep-list .ep-head, .ep .col, .ep-tools .cols-btn { display: none; }
@@ -401,7 +402,7 @@
 /* Selecting: a check on every poster, the unpicked ones dimmed, the picked ones lit and ringed. */
 #sel-toggle { display: inline-flex; align-items: center; gap: 6px; }
 #sel-toggle::before { content: ""; width: 12px; height: 12px; border: 1.5px solid currentColor; border-radius: var(--radius-inline); }
-#sel-toggle[aria-pressed="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); font-weight: 600; }
+#sel-toggle[aria-pressed="true"] { background: var(--accent-tint); border-color: var(--accent); color: var(--text); font-weight: 600; }
 #sel-toggle[aria-pressed="true"]::before { border-color: var(--text); background: var(--text);
   clip-path: polygon(14% 52%, 0 66%, 38% 100%, 100% 22%, 86% 8%, 38% 72%); border-radius: 0; }
 .wall.selecting .poster .art::after { content: ""; position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
@@ -437,7 +438,7 @@ body:has(.sel-bar:not([hidden])) #wall { padding-bottom: 96px; }
   border-radius: var(--radius-pill); border: 1px solid transparent; color: var(--text); text-decoration: none; transition: background .15s, border-color .15s, color .15s; }
 .ds-nav a:focus-visible { background: var(--well); border-color: var(--line-strong); }
 @media (hover: hover) { .ds-nav a:hover { background: var(--well); border-color: var(--field-line-hover); } }
-.ds-nav a[aria-current="true"] { background: var(--select); border-color: var(--field-line-hover); color: var(--text); }
+.ds-nav a[aria-current="true"] { background: var(--accent-tint); border-color: var(--accent); color: var(--text); }
 .ds-nav.set-jumps { position: static; flex-wrap: wrap; overflow: visible; padding: 0; margin: 0; border: 0; background: none; box-shadow: none; }
 .set-jumps a { border-color: var(--line); background: var(--panel); }
 /* A bar that stays in view hides what scrolls under it: focus and anchors stop short of it, by the bar's height and a gap.

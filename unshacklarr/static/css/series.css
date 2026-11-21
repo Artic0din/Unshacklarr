@@ -1,9 +1,8 @@
 
 /* The poster wall: the one bold element. Unmapped series recede, mapped ones carry their service. */
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-4); font-size: var(--fs-sub); }
-.toolbar .seg { display: flex; flex-wrap: wrap; margin: 0; width: fit-content; overflow: visible; }
-.toolbar .seg button { padding: 0 var(--sp-1); min-inline-size: 44px; max-inline-size: 100%; white-space: normal; overflow-wrap: normal; }
-.toolbar .seg button[aria-pressed="true"] { text-decoration: underline; text-underline-offset: .24em; }
+.toolbar .seg { display: flex; flex-wrap: nowrap; margin: 0; width: fit-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.toolbar .seg button { flex: none; padding: 0 var(--sp-3); min-inline-size: 44px; white-space: nowrap; }
 .toolbar .seg button span { display: inline; margin: 0; white-space: nowrap; }
 .toolbar input[type=search] { flex: 1 1 0; min-inline-size: 5rem; }
 #series-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); max-inline-size: 100%; overflow-x: auto; }
@@ -26,12 +25,6 @@
   #series-options-toggle { max-inline-size: 7rem; }
 }
 @media (max-width: 700px) {
-  .toolbar .seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .toolbar .seg:has(> :first-child:nth-last-child(4 of :not([hidden]))) {
-    grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .toolbar .seg:has(> :nth-child(5 of :not([hidden]))) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .toolbar .seg:has(> :nth-child(5 of :not([hidden]))) > button { grid-column: span 2; }
-  .toolbar .seg:has(> :nth-child(5 of :not([hidden]))) > button:nth-child(n+4) { grid-column: span 3; }
   #series-options { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
     padding: var(--sp-2); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-card); }
   #series-options-toggle[aria-expanded="false"] + #series-options { display: none; }
@@ -49,7 +42,6 @@
 .poster .art img { width: 100%; height: 100%; object-fit: cover; display: block; filter: var(--dim); transition: filter .15s; }
 .poster.on .art img { filter: none; }
 @media (hover: hover) { .poster:hover .art img { filter: none; } }
-.poster.on:not(:has(.sick)) .art { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 45%, var(--line)); }
 .poster .svc { position: absolute; left: 6px; bottom: 6px; background: var(--bg); color: var(--text);
   font-size: var(--fs-footnote); font-weight: 700; padding: 2px 7px; border-radius: var(--radius-pill); }
 .poster .name { display: block; margin-top: 7px; font-weight: 600; font-size: var(--fs-callout); line-height: 1.3; }
@@ -109,7 +101,7 @@ body.drawer-open .savebar { display: none; }
 .seasons button small { color: var(--muted); font-size: var(--fs-footnote); font-variant-numeric: tabular-nums; }
 .seasons button small.gap { color: var(--warn); }
 .seasons button small.complete { color: var(--ok); }
-.seasons button[aria-pressed="true"] { border-color: var(--field-line-hover); background: var(--select); }
+.seasons button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); }
 .ep-tools { display: grid; gap: 12px; margin: 10px 0 12px; }
 .ep-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ep-tools h3 { margin: 0; font-size: var(--fs-headline); flex: 1; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
@@ -120,7 +112,7 @@ body.drawer-open .savebar { display: none; }
 .ep-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ep-sel { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: var(--radius-field); overflow: hidden; background: var(--panel); }
 .ep-sel > span { display: grid; place-items: center; padding: 0 12px; font-size: var(--fs-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.ep-sel button { border: 0; border-left: 1px solid var(--line); background: none; color: var(--text); padding: 8px 14px; font: inherit; font-size: var(--fs-callout); cursor: pointer; white-space: nowrap; }
+.ep-sel button { border: 0; background: none; color: var(--text); padding: 8px 14px; font: inherit; font-size: var(--fs-callout); cursor: pointer; white-space: nowrap; }
 @media (hover: hover) { .ep-sel button:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 5%, transparent); } } .ep-sel button:disabled { color: var(--muted); cursor: default; }
 .ep-sel button[hidden] { display: none; }
 .ep-sel .svc { color: var(--ok); font-weight: 600; } .ep-sel .odd { color: var(--warn); }
@@ -213,7 +205,7 @@ body.drawer-open .savebar { display: none; }
 .ep-subs-label { display: none; }
 .ep-list.stack .col.subs { overflow: visible; }
 .ep-subs-chip { flex: none; padding: 2px 7px; min-height: 26px; border: 1px solid var(--field-line); border-radius: var(--radius-pill);
-  background: var(--select); font: inherit; font-variant-numeric: tabular-nums; color: var(--text); cursor: pointer; }
+  background: var(--well); font: inherit; font-variant-numeric: tabular-nums; color: var(--text); cursor: pointer; }
 .ep-subs-chip:focus-visible { outline-offset: -2px; }
 .ep-subs-detail:not([hidden]) { padding: 8px 16px; border-top: 1px solid var(--line); background: var(--well);
   color: var(--muted); font-size: var(--fs-callout); overflow-wrap: anywhere; }
@@ -229,7 +221,6 @@ body.drawer-open .savebar { display: none; }
 @media (max-width: 540px) {
   .ep-check { justify-content: center; min-width: 44px; }
   .ep-check-label, .ep-sel > span { display: none; }
-  .ep-sel button:nth-child(2) { border-left: 0; }
 }
 @media (max-width: 360px) {
   .ep .ep-file-line { grid-column: 1 / 4; }

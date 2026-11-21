@@ -65,13 +65,14 @@ def test_the_terminal_takes_the_theme_colours():
 const src = fs.readFileSync(process.argv[1], "utf8");
 let options;
 class FakeTerminal { constructor(o) { options = o; } loadAddon() {} open() {} reset() {} }
-const tokens = { "--term-bg": "#0a0b08", "--text": "#f3f4ee", "--select": "#444640" };
+const tokens = { "--term-bg": "#0a0b08", "--text": "#f3f4ee", "--text-selection": "#2f3816", "--muted": "#aca9a6", "--err": "#ff8a75" };
 const ctx = vm.createContext({ window: { Terminal: FakeTerminal }, Terminal: FakeTerminal, FitAddon: { FitAddon: class {} }, ResizeObserver: class { observe() {} },
   getComputedStyle: () => ({ getPropertyValue: (name) => ` ${tokens[name] || ""} ` }), document: { documentElement: {} },
   $: () => ({ textContent: "" }), term: null, termFit: null, fitTerminal() {} });
 vm.runInContext("var term = null, termFit = null, termSocket = null;" + grab(src, "openTerm"), ctx);
 ctx.openTerm();
 const t = options.theme;
-console.log(JSON.stringify([t.background, t.foreground, t.cursor, t.selectionBackground]));
+console.log(JSON.stringify([t.background, t.foreground, t.cursor, t.selectionBackground, t.brightBlack, t.red, t.brightRed]));
 """, str(JS / "attempts.js"))
-    assert shown == ["#0a0b08", "#f3f4ee", "#0a0b08", "#444640"]
+    # dim lines in --muted (xterm's own #555753 was 2.59:1), failures in --err rather than pure red
+    assert shown == ["#0a0b08", "#f3f4ee", "#0a0b08", "#2f3816", "#aca9a6", "#ff8a75", "#ff8a75"]
