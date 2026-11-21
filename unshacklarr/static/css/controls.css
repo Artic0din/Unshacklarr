@@ -338,6 +338,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
   .bc-cal-head button, .bc-cal-grid button, #d-bc-days button, .cp-list li { min-height: 44px; min-width: 44px; }
   .tools-box summary, .ds label.check { align-content: center; }
   #nt-quiet-on::before { content: ""; position: absolute; inset: -9px -3px; }  /* 44px to the finger; the track keeps its painted edge */
+  @media (forced-colors: active) { #nt-quiet-on { min-width: 44px; min-height: 44px; } }  /* there it is the system's small box: the box itself grows */
   .sx .opt { grid-template-columns: minmax(130px, 210px) minmax(0, 1fr) 44px; }
   @media (max-width: 700px) { .sx .opt { grid-template-columns: minmax(0, 1fr) 44px; } }
   .bc-cal { min-width: 0; }
