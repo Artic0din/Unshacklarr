@@ -99,6 +99,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Restyled the Schedule page in the DownStream design: weekdays are small capitals with today's in lime, the status
+  filter that is on takes a lime tint, the late-episodes banner has more room, and "New" tags are lime. (#399)
 - Restyled the Series page in the DownStream design: the chosen view and the series drawer's tab are lime, filters that
   are on take a lime tint, search fields are rounded with a search icon, checkboxes are lime when ticked, and posters
   sit in an outlined frame on a slightly wider grid. (#398)

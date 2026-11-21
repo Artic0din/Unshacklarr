@@ -269,8 +269,8 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 .poster .svc { display: block; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; }  /* a long name stays inside its poster; its panel has the whole name */
 .poster .svc { background: var(--bg); }  /* on the art it sits on the page ground, as the PosterCard has it; a managed one stays green */
 .svc-block-head b, .sv-chip { color: var(--text); }  /* a service: just its name */
-.new-badge, .chip-default, .ax-seg button .chip-default, .finale-tag, .news-tag.latest,
-.news-list .new .news-kind, .news-list .improved .news-kind { color: var(--text); background: var(--well); }
+.chip-default, .ax-seg button .chip-default, .finale-tag, .news-list .improved .news-kind { color: var(--text); background: var(--well); }
+.new-badge, .news-tag.latest, .news-list .new .news-kind { color: var(--accent); background: var(--accent-tint); }  /* new: the accent on its tint */
 .ep-off, .chip.o-unavailable, .ck-pill.absent { color: var(--muted); background: transparent; border-width: 1px; border-style: solid; border-color: var(--line); }
 .ep-on, .ep-on.other, .poster.on:not(:has(.sick)) .svc, .rg-chip.ok, .ck-pill.ok, .sched-st.ok, .chip.disk, .chip.o-downloaded { color: var(--ok); background: var(--ok-tint); }
 .ep-up, .ck-pill.warn, .sched-st.try, .sched-st.wait, .sched-st.late, .chip.miss, .chip.ask, .chip.o-kept, .chip.o-import, .chip.nofr, .news-list .fix .news-kind { color: var(--warn); background: var(--warn-tint); }
