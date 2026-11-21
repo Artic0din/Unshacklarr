@@ -100,7 +100,7 @@ Every change worth knowing, newest first. The format follows
 ### Changed
 
 - Renamed the app to DownStream wherever its name is shown: the page, its title and the installed app, notifications,
-  error messages, the README and docs, in all nine languages. Install paths, the Docker image and settings are unchanged.
+  error messages, the README and docs, in all nine languages. Install paths, the Docker image and settings are unchanged. (#402)
 - Restyled Settings and the first-run setup in the DownStream design: switches turn lime when on, the chosen option
   in a group is lime, settings cards are flat with more room, and the setup's headings use the bold uppercase display
   style (Settings never does). (#401)
