@@ -463,6 +463,8 @@ def test_corner_tokens_keep_their_sizes_and_roles():
     # a container that can wrap, or text that can, takes the card corner: a pill on one line, never a blob on three
     roles = {".seg {": "card", ".ep-sonarr {": "card", ".toast {": "card", ".poster .art {": "tile", ".sched-card {": "tile",
              ".modal {": "card", ".sx-card {": "card", ".btn {": "pill", "nav a {": "pill", ".sd code {": "field"}
-    last = {sel: [b for b in rules_of(sel.rstrip(" {")) if "border-radius:" in b][-1] for sel in roles}  # the rule that wins
-    wrong = {sel: role for sel, role in roles.items() if f"border-radius: var(--radius-{role})" not in last[sel]}
+    # every rule that sets the corner, desktop and phone alike, not only the one that wins at some width
+    corners = {sel: [b for b in rules_of(sel.rstrip(" {")) if "border-radius:" in b] for sel in roles}
+    wrong = {sel: role for sel, role in roles.items()
+             if not corners[sel] or any(f"border-radius: var(--radius-{role})" not in b for b in corners[sel])}
     assert not wrong
