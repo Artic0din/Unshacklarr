@@ -118,9 +118,11 @@
 .nt-level i { width: 9px; height: 9px; flex: none; border-radius: 50%; } .nt-level.ok i { background: var(--ok); } .nt-level.warn i { background: var(--warn); } .nt-level.bad i { background: var(--err); }
 .nt-level > span:not(.nt-quiet) { display: grid; flex: 1; min-width: 0; } .nt-level b { font-size: var(--fs-callout); } .nt-level small { color: var(--muted); font-size: var(--fs-sub); }
 .nt-level:has(> .switch:not(:checked)) > :not(.switch) { opacity: .6; } .nt-late { margin-top: 18px; } #nt-late-say { margin-top: 10px; }
-input[type=checkbox].switch { appearance: none; -webkit-appearance: none; position: relative; width: 38px; height: 22px; flex: none; margin: 0; border-radius: var(--radius-pill); background: var(--field-line); cursor: pointer; transition: background .15s; }
-input[type=checkbox].switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
-input[type=checkbox].switch:checked { background: var(--muted); } input[type=checkbox].switch:checked::after { transform: translateX(16px); background: var(--bg); } input[type=checkbox].switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Switch: the track in --well with a field edge when off, the accent when on; the knob muted, then ink */
+input[type=checkbox].switch { appearance: none; -webkit-appearance: none; position: relative; width: 48px; height: 28px; flex: none; margin: 0; border-radius: var(--radius-pill);
+  background: var(--well); border: 1px solid var(--field-line); cursor: pointer; transition: background .15s, border-color .15s; }
+input[type=checkbox].switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .15s; }
+input[type=checkbox].switch:checked { background: var(--accent); border-color: var(--accent); } input[type=checkbox].switch:checked::after { transform: translateX(20px); background: var(--accent-ink); } input[type=checkbox].switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sx-card > .sx-head:last-child { margin-bottom: 0; }
 .sx-head h3 label { cursor: inherit; }
 .set-sec :is(h2, h3, h4, label)[tabindex="-1"]:focus { outline: none; }
@@ -160,7 +162,8 @@ input[type=checkbox].switch:checked { background: var(--muted); } input[type=che
 .sx-toggle { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 44px; cursor: pointer; }
 .sx-interface { align-items: end; }
 .sx-grid > .sx-wide { grid-column: 1 / -1; }
-.sx-card { padding: var(--sp-4); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--panel); box-shadow: var(--sh-sm); }
+.sx-card { padding: var(--sp-6); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--panel); }  /* outlined, flat: a shadow is for what floats */
+@media (max-width: 700px) { .sx-card { padding: var(--sp-4); } }  /* a phone: the card's padding as the SettingsCard has it there */
 .sx-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
 .sx-ico { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: var(--radius-field); color: var(--text); background: var(--well); }
 .sx-ico svg { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -177,7 +180,7 @@ input[type=checkbox].switch:checked { background: var(--muted); } input[type=che
 .ax-seg button { padding: 8px 14px; border: 1.5px solid var(--field-line); border-radius: var(--radius-pill); background: var(--field-bg); color: var(--text); font: inherit; font-size: var(--fs-callout); cursor: pointer;
   transition: border-color .15s, background .15s; }
 @media (hover: hover) { .ax-seg button:hover { border-color: var(--field-line-hover); } }
-.ax-seg button[aria-pressed=true] { border-color: var(--field-line-hover); background: var(--select); color: var(--text); font-weight: 600; }
+.ax-seg button[aria-pressed=true] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 600; }  /* the one choice made */
 .ax-grid .field:only-child { max-width: 320px; } .ax-grid .unit input { width: 110px; } .ax-grid .unit { display: flex; align-items: center; gap: 10px; }
 .ax-grid .unit span { color: var(--muted); font-size: var(--fs-callout); }
 .rt-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 12px; }
@@ -287,7 +290,8 @@ input[type=checkbox].switch:checked { background: var(--muted); } input[type=che
 .wz-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 4px; }
 .wz-badge { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: var(--radius-field); color: var(--text);
   background: var(--well); border: 1px solid var(--line-strong); } .wz-badge svg { width: 21px; height: 21px; }
-.wz .wz-head h2 { margin: 1px 0 4px; font-size: var(--fs-title2); letter-spacing: -.01em; }
+/* First run: the display style (uppercase, heaviest weight), here and nowhere in Settings */
+.wz .wz-head h2 { margin: 1px 0 4px; font-size: var(--fs-title1); font-weight: 900; line-height: .95; letter-spacing: -.02em; text-transform: uppercase; }
 .wz-main .pw-meter, .wz-main .pw-match { max-width: 420px; }
 .wz-main .wiz-step .field > input, .wz-main .wiz-step .field > select, .wz-main .cp-input, .wz-main .cp-list { max-width: 420px; }  /* the list as wide as its input */
 .wz-main input:not([type=radio]), .wz-main select { min-height: 42px; border-radius: var(--radius-field); }
@@ -304,7 +308,7 @@ input[type=checkbox].switch:checked { background: var(--muted); } input[type=che
 .wz-done { justify-items: center; text-align: center; padding: 18px 0 6px; }
 .wz-done-ico { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; color: var(--accent-ink);
   background: var(--ok); box-shadow: 0 0 0 10px color-mix(in srgb, var(--ok) 14%, transparent); animation: pop .5s ease-out; }
-.wz-done-ico svg { width: 34px; height: 34px; stroke-width: 2.6; } .wz-done h2 { margin: 8px 0 0; font-size: var(--fs-title2); } .wz-done .lead { margin: 0; color: var(--muted); }
+.wz-done-ico svg { width: 34px; height: 34px; stroke-width: 2.6; } .wz-done h2 { margin: 8px 0 0; font-size: var(--fs-title1); font-weight: 900; line-height: .95; letter-spacing: -.02em; text-transform: uppercase; } .wz-done .lead { margin: 0; color: var(--muted); }
 .wz-sum { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; text-align: left; }
 .wz-sum li { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: var(--radius-field); background: var(--bg); font-size: var(--fs-callout); } .wz-sum li > span:first-child { color: var(--ok); display: grid; }
 @keyframes pop { from { transform: scale(.4); opacity: 0; } }
