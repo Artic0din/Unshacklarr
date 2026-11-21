@@ -49,7 +49,7 @@ def webdav_put(url: str, user: str, password: str, name: str, body: bytes) -> No
     if 300 <= r.status_code < 400:
         host = urlsplit(urljoin(target, r.headers.get("Location", ""))).hostname or "another address"
         raise requests.HTTPError(f"The WebDAV server redirected the backup to {host}: nothing was stored. "
-                                 "Use the address it leads to, or let Unshacklarr past the login proxy", response=r)
+                                 "Use the address it leads to, or let DownStream past the login proxy", response=r)
     if r.status_code in (404, 409):
         raise requests.HTTPError("The folder does not exist on the WebDAV server: create it first", response=r)
     if r.status_code in (401, 403):

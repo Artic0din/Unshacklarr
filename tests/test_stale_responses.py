@@ -302,7 +302,7 @@ const say = { className: "", textContent: "", replaceChildren(...kids) { this.te
 const lib = {}, ctx = { savedSonarr: (name) => name, libWho: "", libRoots: [], libCommon: "", libTimer: null, URLSearchParams, S: { config: { settings: {} } }, mainSonarr: () => "Sonarr", icon: () => "", el: () => ({}),
   libOf: () => lib, renderLibraryPicks() {}, $: () => say, clearTimeout() {}, setTimeout: (fn) => { timers.push(fn); return 1; },  // the 400 ms debounce, fired by hand
   api: async (path) => {
-    if (path.includes("sonarr_root=%2Fmnt%2Ft&")) { await wait(30); if (slowAnswer === "error") throw new Error("Unshacklarr did not answer"); return { ok: false, local_path: "/mnt/t", roots: ["/mnt/old"] }; }
+    if (path.includes("sonarr_root=%2Fmnt%2Ft&")) { await wait(30); if (slowAnswer === "error") throw new Error("DownStream did not answer"); return { ok: false, local_path: "/mnt/t", roots: ["/mnt/old"] }; }
     return { ok: true, local_path: "/mnt/tv", roots: ["/mnt/tv"] };
   } };
 vm.createContext(ctx);
@@ -317,7 +317,7 @@ vm.runInContext("let libSeq = 0;" + grab("checkLibrary"), ctx);
   console.log(JSON.stringify({ meanwhile, text: say.textContent, className: say.className, roots: ctx.libRoots }));
 })();
 """, str(JS / "quality.js"), slow_answer)
-    assert shown == {"meanwhile": "Looking for one of your episode files…", "text": "Unshacklarr reads Sonarr's library: /mnt/tv", "className": "lib-check ok", "roots": ["/mnt/tv"]}
+    assert shown == {"meanwhile": "Looking for one of your episode files…", "text": "DownStream reads Sonarr's library: /mnt/tv", "className": "lib-check ok", "roots": ["/mnt/tv"]}
 
 
 @pytest.mark.parametrize("view, key", [("week", "2026-11-09+7"), ("month", "2026-10-26+42")])

@@ -91,7 +91,7 @@ jobs:
           sh tools/ci/release-notes.sh "$version" "$image" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/main/CHANGELOG.md" > notes.md
           # a tag moved to another commit: its release is kept and its notes updated
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --title "Unshacklarr $version" --notes-file notes.md
+            gh release edit "$GITHUB_REF_NAME" --title "DownStream $version" --notes-file notes.md
           else
-            gh release create "$GITHUB_REF_NAME" --verify-tag --title "Unshacklarr $version" --notes-file notes.md
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "DownStream $version" --notes-file notes.md
           fi

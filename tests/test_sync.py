@@ -460,7 +460,7 @@ def test_unshackle_yaml_dl_section_comes_first_as_on_the_command_line(tmp_path, 
     assert payload["best_available"] is True and payload["sub_format"] == "srt"
     assert payload["s_lang"] == ["fr", "en"]
     assert payload["workers"] == 4  # the service's own dl: values win over the general ones
-    assert payload["quality"] == [1080]  # and Unshacklarr's options over both
+    assert payload["quality"] == [1080]  # and DownStream's options over both
     assert "best" not in payload and "lang" not in payload and "bitrate" not in payload
 
 
@@ -897,7 +897,7 @@ def test_a_discord_card_has_colour_fields_and_poster():
     assert (card["author"]["name"], card["title"], card["color"]) == ("Downloaded", "Show S02E05", 0x3FB97A)
     assert [(f["name"], f["value"]) for f in card["fields"]] == [("Service", "RMCP"), ("Size", "1.4 GB"), ("Took", "38 s")]
     assert card["thumbnail"]["url"] == "https://img/p.jpg"
-    assert "fields" not in sync.discord_payload("error", "Unshacklarr sync stopped", "boom")["embeds"][0]
+    assert "fields" not in sync.discord_payload("error", "DownStream sync stopped", "boom")["embeds"][0]
     assert sync.DISCORD_WEBHOOK.match("discord://1234/abc-DEF") and not sync.DISCORD_WEBHOOK.match("tgram://bot/chat")
 
 
@@ -3230,8 +3230,8 @@ def test_action_notifications_keep_the_private_link_in_unshacklarr(tmp_path, mon
                 action={"code": "1234", "url": url})
     item = sync.read_inbox()["items"][0]
     assert item["action"]["url"] == url
-    assert item["message"] == "Open the action in Unshacklarr to continue."
-    assert sent == ["Open the action in Unshacklarr to continue."]
+    assert item["message"] == "Open the action in DownStream to continue."
+    assert sent == ["Open the action in DownStream to continue."]
 
 
 def test_a_question_is_asked_once_kept_in_the_bell_and_done_once_answered(tmp_path, monkeypatch):
@@ -5553,7 +5553,7 @@ class BusyClock:
 
 def test_a_serve_busy_for_two_hours_gives_the_download_up_and_frees_its_slot(tmp_path, monkeypatch):
     # #227: an hourly limit (Retry-After 3600) waited through, but a serve that never stops answering 429 no longer
-    # holds the job's slot until Unshacklarr restarts
+    # holds the job's slot until DownStream restarts
     sync = load(tmp_path, monkeypatch)
     clock = BusyClock()
     monkeypatch.setattr(sync, "time", clock)
@@ -6188,7 +6188,7 @@ def test_the_main_sonarr_down_still_syncs_the_others_and_is_told_once(tmp_path, 
     monkeypatch.setitem(sync.SONARRS, "4k", {"name": "4k", "url": "http://x", "api_key": "", "quality_ladder": "L"})
     monkeypatch.setattr(sync, "sync_instance", lambda inst, config, settings: other.append(inst["name"]) or 0)
     assert [sync.main() for _ in range(3)] == [1, 1, 1]
-    assert sent == ["Unshacklarr sync stopped"] and other == ["4k", "4k", "4k"]
+    assert sent == ["DownStream sync stopped"] and other == ["4k", "4k", "4k"]
 
 
 def test_a_mux_is_measured_in_serves_work_folder(tmp_path, monkeypatch):
@@ -6392,7 +6392,7 @@ def test_a_numbering_set_for_another_episode_order_is_said(tmp_path, monkeypatch
     sync = load(tmp_path, monkeypatch)
     serie = {"title": "Show", "seasonType": "netflix", "seasonTypes": [{"type": "official", "name": "Aired Order"}, {"type": "netflix", "name": "Netflix Order"}]}
     show = {"service": "NF", "season_map": {"2": 3}, "sonarr_order": "official"}
-    assert sync.order_changed(show, serie) == "Sonarr now numbers Show in Netflix Order, but its numbering in Unshacklarr was set for Aired Order"
+    assert sync.order_changed(show, serie) == "Sonarr now numbers Show in Netflix Order, but its numbering in DownStream was set for Aired Order"
     assert sync.order_changed({**show, "sonarr_order": "netflix"}, serie) == ""  # set for that order
     assert sync.order_changed({"service": "NF", "sonarr_order": "official"}, serie) == ""  # no numbering of its own
     assert sync.order_changed(show, {"title": "Show"}) == ""  # Sonarr 4: no order, the aired one

@@ -115,7 +115,7 @@ function trTemplate(key, depth, joined) {
     if (p.joined !== joined || !key.includes(p.anchor)) continue;
     const m = p.re.exec(key);
     // a template with little text of its own ("{0} ago", "{0} of {1}") takes short fillers only, not a whole sentence
-    // ... and only numbers, or texts it has a translation for: "5 min ago", not "Set up Unshacklarr in a few steps"
+    // ... and only numbers, or texts it has a translation for: "5 min ago", not "Set up DownStream in a few steps"
     if (m && p.weak && m.slice(1).some((x) => x.length > 24 || !(/\d/.test(x) || T[x.trim()] !== undefined || !x.trim()))) continue;
     if (m) return plural(p.to, +m[1]).replace(/\{(\d+)\}/g, (_, i) => tr(m[+i + 1] ?? "", depth + 1));
   }
@@ -181,7 +181,7 @@ async function responseError(response) {
     .replace(/\b(Authorization:\s*(?:Bearer|Basic)\s+|(?:X-Api-Key|X-Secret-Key|Api-Key):\s*)\S+|\b((?:Set-)?Cookie:)\s*[^\r\n]+/gi,
       (_, authorization, cookie) => `${(authorization || cookie).trimEnd()} ***`) : "";
   // the cause alone when the server gives one: leading with "answered HTTP 403" pushes it out of a narrow field
-  const error = new Error(safeDetail ? tr(safeDetail) : tr(`Unshacklarr answered HTTP ${response.status}${reason}. Try again.`));
+  const error = new Error(safeDetail ? tr(safeDetail) : tr(`DownStream answered HTTP ${response.status}${reason}. Try again.`));
   error.detail = safeDetail;
   error.status = response.status;
   return error;
@@ -194,8 +194,8 @@ async function api(path, { wait = 30, ...opts } = {}) {
     r = await fetch(path, { headers: { "Content-Type": "application/json", "X-Unshackle": "1" }, signal: AbortSignal.timeout(wait * 1000), ...opts });
   } catch (e) {
     throw new Error(e.name === "TimeoutError"
-      ? `Unshacklarr did not answer after ${wait} s. Try again.`
-      : "Unshacklarr can't be reached. Check that it is running, then try again.");
+      ? `DownStream did not answer after ${wait} s. Try again.`
+      : "DownStream can't be reached. Check that it is running, then try again.");
   }
   if (r.status === 401 && !path.startsWith("/api/login")) { showLogin(); throw Object.assign(new Error("Sign in first"), { status: r.status }); }
   if (!r.ok) throw await responseError(r);
@@ -1044,12 +1044,12 @@ $("#d-url").oninput = async (e) => {
     renderWall();
   }
 };
-/* Sonarr as a browser opens it: its public address, else the one Unshacklarr uses unless it's a Docker name (http://sonarr:8989). */
+/* Sonarr as a browser opens it: its public address, else the one DownStream uses unless it's a Docker name (http://sonarr:8989). */
 function sonarrWeb(url = S.config.settings?.sonarr_url, publicUrl = S.config.settings?.sonarr_public_url) {
   if (publicUrl) return publicUrl.replace(/\/+$/, "");
   try {
     const u = new URL(url);
-    // A Docker name or a LAN address only works at home. Sonarr runs beside Unshacklarr (as in the compose file): the
+    // A Docker name or a LAN address only works at home. Sonarr runs beside DownStream (as in the compose file): the
     // name this page was opened with reaches the same machine (Tailscale, a VPN, another LAN name). A LAN address
     // stays as it is through a reverse proxy (no port in the page's address): Sonarr's port is rarely open there,
     // and the LAN link still works at home. A Docker name always takes the page's: it has no link otherwise.
@@ -1114,8 +1114,8 @@ function renderSeriesLanguage() {
     box.replaceChildren(
       el("div", {}, el("b", { textContent: `Episode titles in ${current.language}` }),
         el("p", { textContent: conf.service
-          ? `Sonarr shows this series' episode titles in ${current.language}, but ${svcName(conf.service)} shows them in ${want}. With ${want} titles in Sonarr, Unshacklarr can match each episode with ${svcName(conf.service)} by its title.`
-          : `Sonarr shows this series' episode titles in ${current.language}, but streaming services in your country show them in ${want}. With ${want} titles in Sonarr, Unshacklarr can match each episode by its title.` })),
+          ? `Sonarr shows this series' episode titles in ${current.language}, but ${svcName(conf.service)} shows them in ${want}. With ${want} titles in Sonarr, DownStream can match each episode with ${svcName(conf.service)} by its title.`
+          : `Sonarr shows this series' episode titles in ${current.language}, but streaming services in your country show them in ${want}. With ${want} titles in Sonarr, DownStream can match each episode by its title.` })),
       el("button", { type: "button", className: "btn small primary", textContent: `Use ${want} titles`, onclick: async (e) => {
         e.target.disabled = true;
         try {

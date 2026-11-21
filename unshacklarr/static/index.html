@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Unshacklarr">
-<title>Unshacklarr</title>
+<meta name="apple-mobile-web-app-title" content="DownStream">
+<title>DownStream</title>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
@@ -31,13 +31,13 @@
 <div class="gate" id="gate" hidden>
   <div class="gate-card">
     <svg class="logo" width="72" height="72" viewBox="0 0 256 256" aria-hidden="true"><path d="M68 67.71C68 55.4 81.33 47.7 92 53.86L109 63.67V192.33L92 202.14C81.33 208.3 68 200.6 68 188.29ZM121 185.4V70.6L160 93.12V162.88L121 185.4ZM172 100.04 196.42 114.14C207.09 120.3 207.09 135.7 196.42 141.86L172 155.96V100.04Z" fill="#cbe24d"/></svg>
-    <h1>Unshacklarr</h1>
+    <h1>DownStream</h1>
     <p class="muted" id="gate-sub"></p>
     <form id="gate-form" autocomplete="on"></form>
   </div>
 </div>
 <header>
-  <h1 class="brand"><a href="#/schedule" id="home" aria-label="Unshacklarr, schedule"><svg class="logo" width="30" height="30" viewBox="0 0 256 256" aria-hidden="true"><path d="M68 67.71C68 55.4 81.33 47.7 92 53.86L109 63.67V192.33L92 202.14C81.33 208.3 68 200.6 68 188.29ZM121 185.4V70.6L160 93.12V162.88L121 185.4ZM172 100.04 196.42 114.14C207.09 120.3 207.09 135.7 196.42 141.86L172 155.96V100.04Z" fill="#cbe24d"/></svg><span>Unshacklarr</span></a></h1>
+  <h1 class="brand"><a href="#/schedule" id="home" aria-label="DownStream, schedule"><svg class="logo" width="30" height="30" viewBox="0 0 256 256" aria-hidden="true"><path d="M68 67.71C68 55.4 81.33 47.7 92 53.86L109 63.67V192.33L92 202.14C81.33 208.3 68 200.6 68 188.29ZM121 185.4V70.6L160 93.12V162.88L121 185.4ZM172 100.04 196.42 114.14C207.09 120.3 207.09 135.7 196.42 141.86L172 155.96V100.04Z" fill="#cbe24d"/></svg><span>DownStream</span></a></h1>
   <nav aria-label="Main">
     <a href="#/schedule" data-tab="schedule" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Schedule</span></a>
     <a href="#/series" data-tab="series"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h10"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span>Series</span></a>
@@ -171,7 +171,7 @@
             <div class="field"><label for="sx-key">API key <span class="sx-saved" id="sx-key-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="sx-key" type="password" data-set="sonarr_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small>In Sonarr: Settings, General. Leave empty to keep the saved key. A new URL needs its key too.</small></div>
             <div class="field"><label for="sx-tmdb">TMDB API key <span class="sx-saved" id="sx-tmdb-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="sx-tmdb" type="password" data-set="tmdb_api_key" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"><small><span id="tmdb-hint"></span></small></div>
             <div class="field" id="sx-name-field"><label for="sx-name">Name</label><input id="sx-name" type="text" data-set="sonarr_name" placeholder="Sonarr" spellcheck="false"><small id="sx-name-help">The name shown on each series to tell the libraries apart when you have more than one Sonarr. Leave empty to use “Sonarr”.</small></div>
-            <div class="field"><label for="sx-dl">Downloads folder, as Sonarr sees it</label><input id="sx-dl" type="text" data-set="sonarr_downloads" placeholder="Same path" spellcheck="false"><small>Its path on Sonarr's side, e.g. inside Sonarr's container. Empty: the same path as for Unshacklarr.</small></div>
+            <div class="field"><label for="sx-dl">Downloads folder, as Sonarr sees it</label><input id="sx-dl" type="text" data-set="sonarr_downloads" placeholder="Same path" spellcheck="false"><small>Its path on Sonarr's side, e.g. inside Sonarr's container. Empty: the same path as for DownStream.</small></div>
         </div>
         <section class="sx-card" id="sn-card">
           <div class="sx-head"><div><h4>Other Sonarr instances</h4></div>
@@ -189,7 +189,7 @@
         <section class="sx-card">
           <div class="sx-head"><div><h4>How it runs</h4></div></div>
           <div class="wz-tiles ux-tiles" role="radiogroup" aria-label="Unshackle runs">
-            <button type="button" class="wz-tile" role="radio" data-value="local"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>Local</b><small>Unshacklarr starts it on this machine</small></button>
+            <button type="button" class="wz-tile" role="radio" data-value="local"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>Local</b><small>DownStream starts it on this machine</small></button>
             <button type="button" class="wz-tile" role="radio" data-value="remote"><span class="wz-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></span><b>Remote</b><small>On another machine</small></button>
             <select data-set="unshackle_mode" id="mode-select" hidden><option value="local">Local</option><option value="remote">Remote</option></select>
           </div>
@@ -206,9 +206,9 @@
             <div class="field"><label for="downloads-input">Downloads folder</label><input type="text" data-set="downloads" id="downloads-input" spellcheck="false"></div>
             <div class="field"><label for="ux-free">Room kept free</label><div class="unit-input"><input id="ux-free" type="number" data-set="min_free_gb" data-num min="0" max="100000" step="1" inputmode="numeric"><span>GB</span></div><small>Nothing is downloaded while the downloads folder, or the library folder Sonarr moves a series into, has less free space than this, and you get a notification. 0: not checked.</small></div>
             <div class="field only-remote"><label for="ux-udl">Downloads folder, as Unshackle sees it</label><input id="ux-udl" type="text" data-set="unshackle_downloads" placeholder="Same path" spellcheck="false"><small>Its path on the machine where Unshackle runs. Empty: the same path as above.</small></div>
-            <div class="field"><label for="ux-cookies">Cookies folder</label><input id="ux-cookies" type="text" data-set="cookies_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to manage them in Settings › Services &amp; Devices › Services. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
-            <div class="field"><label for="ux-cache">Cache folder</label><input id="ux-cache" type="text" data-set="cache_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
-            <div class="field"><label for="ux-cfg">Unshackle config folder</label><input id="ux-cfg" type="text" data-set="unshackle_config_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>The folder with unshackle.yaml and the WVD and PRD files, for Settings › Services &amp; Devices › Devices (CDM). Empty: Unshacklarr asks Unshackle, which works when both run on this computer.</small></div>
+            <div class="field"><label for="ux-cookies">Cookies folder</label><input id="ux-cookies" type="text" data-set="cookies_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to manage them in Settings › Services &amp; Devices › Services. Empty: DownStream asks Unshackle, which works when both run on this computer.</small></div>
+            <div class="field"><label for="ux-cache">Cache folder</label><input id="ux-cache" type="text" data-set="cache_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>Needed to clear one service's cache in Settings › Downloading › Download options › Per service. Empty: DownStream asks Unshackle, which works when both run on this computer.</small></div>
+            <div class="field"><label for="ux-cfg">Unshackle config folder</label><input id="ux-cfg" type="text" data-set="unshackle_config_dir" placeholder="Asked to Unshackle" spellcheck="false"><small>The folder with unshackle.yaml and the WVD and PRD files, for Settings › Services &amp; Devices › Devices (CDM). Empty: DownStream asks Unshackle, which works when both run on this computer.</small></div>
           </div>
         </section>
         <section class="sx-card">
@@ -255,7 +255,7 @@
               <div id="dx-lib-who"></div>
               <div class="sx-grid">
                 <div class="field"><label for="dx-lib-sonarr">Library folder, as Sonarr sees it</label><input id="dx-lib-sonarr" type="text" placeholder="Example: /tv" spellcheck="false"><div class="fb-known" id="dx-lib-sonarr-pick"></div><small>The path Sonarr uses for your library.</small></div>
-                <div class="field"><label for="dx-lib-local">Library folder, as Unshacklarr sees it</label><input id="dx-lib-local" type="text" placeholder="Example: /mnt/tv" spellcheck="false"><div class="fb-known" id="dx-lib-local-pick"></div><small>The same folder as Unshacklarr sees it. Leave both empty if the paths are the same.</small></div>
+                <div class="field"><label for="dx-lib-local">Library folder, as DownStream sees it</label><input id="dx-lib-local" type="text" placeholder="Example: /mnt/tv" spellcheck="false"><div class="fb-known" id="dx-lib-local-pick"></div><small>The same folder as DownStream sees it. Leave both empty if the paths are the same.</small></div>
               </div>
               <p class="lib-check" id="dx-lib-check" aria-live="polite"></p>
               <div class="field"><span>A file from another source</span>
@@ -282,7 +282,7 @@
                 <label class="rt-custom" title="Any other, in days"><em>Other</em><input id="ax-days" type="number" data-set="auto_days" data-num min="1" max="90" aria-label="Give up after, in days"><span>days</span></label></div></div>
           </div>
           <select data-set="sync_every_hours" data-num hidden><option value="1">Every hour</option><option value="2">Every 2 hours</option><option value="3">Every 3 hours</option><option value="4">Every 4 hours</option><option value="6">Every 6 hours</option><option value="8">Every 8 hours</option><option value="12">Every 12 hours</option><option value="24">Once a day</option></select>
-          <p class="rt-who">After that, Unshacklarr stops trying: download the episode by hand from its series.</p>
+          <p class="rt-who">After that, DownStream stops trying: download the episode by hand from its series.</p>
         </section>
         <section class="sx-card">
           <div class="sx-head"><div><h4>At a release time</h4></div></div>
@@ -338,7 +338,7 @@
           <div class="sx-actions"><button class="btn small" id="ql-add" type="button">New ladder</button><button class="btn small" id="ql-reset" type="button">Reset ladders</button></div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h4>Every series downloads by</h4><p>Unshacklarr downloads the first matching step. A service or series can choose a different ladder. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
+          <div class="sx-head"><div><h4>Every series downloads by</h4><p>DownStream downloads the first matching step. A service or series can choose a different ladder. Off: <code>--quality</code> and the other options decide, as without a ladder.</p></div></div>
           <div class="ax-seg" id="ql-default" role="group" aria-label="Every series downloads by"></div>
         </section>
         <div id="ql-list" class="ql-list"></div>
@@ -486,7 +486,7 @@
         <div class="sx-card sx-grid">
             <div class="field cp"><label>Country</label><input type="text" data-set="country"></div>
             <div class="field cp"><label>Time zone</label><input type="text" data-set="timezone" id="tz-select"><small id="tz-hint"></small></div>
-            <div class="field sx-wide"><label for="countries">Series links from</label><input type="text" id="countries" placeholder="FR, BE, CA, CH" spellcheck="false"><small>Comma-separated countries. Unshacklarr looks in their TMDB pages for a series' links on supported services.</small><div class="rg-chips" id="rg-countries"></div></div>
+            <div class="field sx-wide"><label for="countries">Series links from</label><input type="text" id="countries" placeholder="FR, BE, CA, CH" spellcheck="false"><small>Comma-separated countries. DownStream looks in their TMDB pages for a series' links on supported services.</small><div class="rg-chips" id="rg-countries"></div></div>
         </div>
         </div>
         <div class="sx sx-subsection" id="history-sec">
@@ -568,10 +568,10 @@
           </div>
         </section>
         <section class="sx-card">
-          <div class="sx-head"><div><h4>Sign in through a reverse proxy</h4><p>For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and Unshacklarr opens without asking for its own password.<br>Your password is still asked before the most sensitive changes.</p></div></div>
+          <div class="sx-head"><div><h4>Sign in through a reverse proxy</h4><p>For when Authelia, Authentik or another proxy already logs you in. The proxy passes your name in a header, and DownStream opens without asking for its own password.<br>Your password is still asked before the most sensitive changes.</p></div></div>
           <div class="sx-grid">
             <div class="field"><label for="ac-proxy-header">User header</label><input id="ac-proxy-header" type="text" data-set="proxy_auth_header" placeholder="Remote-User" spellcheck="false" autocomplete="off"><small>The header your proxy sets: Remote-User for Authelia, X-authentik-username for Authentik. Empty: off.</small></div>
-            <div class="field"><label for="ac-proxy-from">The proxy's addresses</label><input id="ac-proxy-from" type="text" data-set="proxy_auth_from" placeholder="172.18.0.0/16" spellcheck="false" autocomplete="off"><small>The addresses the proxy connects from, as Unshacklarr sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.</small></div>
+            <div class="field"><label for="ac-proxy-from">The proxy's addresses</label><input id="ac-proxy-from" type="text" data-set="proxy_auth_from" placeholder="172.18.0.0/16" spellcheck="false" autocomplete="off"><small>The addresses the proxy connects from, as DownStream sees them (its container's network). The header and X-Real-IP are trusted only from there, since anyone else could send them.</small></div>
           </div>
         </section>
         </div>
@@ -631,7 +631,7 @@
       </div>
     </div>
     <form id="uy-auth" class="uy-auth card">
-      <p>This file holds every secret Unshackle has (sign-ins, API keys). Enter your Unshacklarr password to open it.</p>
+      <p>This file holds every secret Unshackle has (sign-ins, API keys). Enter your DownStream password to open it.</p>
       <input type="password" id="uy-password" autocomplete="current-password" placeholder="Password" aria-label="Password" required>
       <button class="btn primary" type="submit">Open</button>
     </form>

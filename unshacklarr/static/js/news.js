@@ -140,7 +140,7 @@ async function openNews() {
   try { releaseNotes ||= await api("/api/changelog"); } catch (e) { return list.replaceChildren(failed(e.message, openNews)); }
   const { installed, releases } = releaseNotes, newer = S.update?.version;
   const latest = newer || installed;
-  $("#news-version").textContent = `Release notes for Unshacklarr ${installed}.`;
+  $("#news-version").textContent = `Release notes for DownStream ${installed}.`;
   const rows = [];
   if (newer) rows.push(el("a", { className: "news-rel news-out", href: S.update.url, target: "_blank", rel: "noopener" },
     el("b", { textContent: `v${newer}` }), el("span", { className: "news-tag latest", textContent: "Latest" }), el("small", { textContent: "See on GitHub ↗" })));

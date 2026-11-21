@@ -126,7 +126,7 @@ function renderSettings() {
   renderLearnWindow();
   $("#sx-tmdb-saved").hidden = !set.tmdb_api_key_set;
   renderSonarrState();
-  $("#downloads-input").placeholder = "In Unshacklarr's settings folder";
+  $("#downloads-input").placeholder = "In DownStream's settings folder";
   showMode();
   $("#tmdb-hint").replaceChildren(...tmdbHint());
   $("#countries").value = S.config.tmdb_countries.join(", ");
@@ -466,7 +466,7 @@ $("#bk-file").onchange = async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  if (!await askToConfirm(`Restore the settings from ${file.name}?`, "Every setting now in Unshacklarr is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.", "Replace the settings")) return;
+  if (!await askToConfirm(`Restore the settings from ${file.name}?`, "Every setting now in DownStream is replaced by the ones in this file: series, addresses, passwords and keys. They cannot be brought back. The page reloads.", "Replace the settings")) return;
   try {
     const text = await file.text();
     bkFile = text;
@@ -622,10 +622,10 @@ function renderNotifPreview() {
     el("div", { className: `nt-discord ${lv}` },
       el("div", { className: "nt-dc-body" }, el("small", { textContent: kind }), el("b", { textContent: label }), el("p", { textContent: text }),
         el("div", { className: "nt-dc-fields" }, ...fields.map(([k, v]) => el("span", {}, el("b", { textContent: k }), v))),
-        el("small", { className: "nt-dc-foot", textContent: `Unshacklarr · Today at ${now}` })),
+        el("small", { className: "nt-dc-foot", textContent: `DownStream · Today at ${now}` })),
       ...(show.poster ? [el("img", { src: show.poster, alt: "", loading: "lazy", onerror: (e) => e.target.remove() })] : [])),
     el("div", { className: "nt-phone" }, el("img", { src: "/icon-192.png", alt: "" }),
-      el("span", {}, el("span", { className: "nt-ph-top" }, el("b", { textContent: "Unshacklarr" }), el("small", { textContent: "now" })),
+      el("span", {}, el("span", { className: "nt-ph-top" }, el("b", { textContent: "DownStream" }), el("small", { textContent: "now" })),
         el("b", { textContent: `${kind}: ${label}` }), el("small", { textContent: text.split("\n")[0] }))));
 }
 document.querySelectorAll("#nt-pv-pick button").forEach((b) => b.onclick = () => {

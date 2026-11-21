@@ -53,7 +53,7 @@ def read(yaml_file: Path) -> dict:
 
 def regular(path: Path) -> Path:
     """The file itself, never a link: a link put in a shared folder would make the page read, then write
-    back in that folder, what it points to (Unshacklarr's own config.yaml, say)."""
+    back in that folder, what it points to (DownStream's own config.yaml, say)."""
     if path.is_symlink():
         raise CdmError(f"{path.name} is a symbolic link: replace it with the file itself")
     return path
@@ -326,7 +326,7 @@ def delete(yaml_file: Path, wvds: Path, prds: Path, name: str, kind: str) -> Non
 
 
 def allow_proxies(text: str, key: str, wvds: list[str], prds: list[str]) -> str:
-    """unshackle.yaml with Unshacklarr's key allowed the server's proxies (Unshackle 6: serve.users.<key>.server_proxy),
+    """unshackle.yaml with DownStream's key allowed the server's proxies (Unshackle 6: serve.users.<key>.server_proxy),
     its serve: block written anew and every other line as it was; checked by reading it back. Unshackle 5 reads no
     server_proxy and serves as before."""
     config = yaml.safe_load(text) or {}

@@ -1,4 +1,4 @@
-"""Unshacklarr's web page: which Sonarr series Unshackle downloads, and with which options.
+"""DownStream's web page: which Sonarr series Unshackle downloads, and with which options.
 
 It edits config.yaml, runs the syncs in the background and follows the downloads that
 unshackle serve makes. A password protects it: set with the first-run setup, then asked
@@ -699,7 +699,7 @@ def _load_config_cached() -> dict:
     before = config_read[0]  # read once: two requests may read the file at the same time
     if not stamp or stamp != before:
         parsed = yaml.load(SERIES_FILE.read_text(encoding="utf8"), Loader=YAML_LOADER) if stamp else None
-        edited = bool(before)  # changed outside Unshacklarr (by hand): not at startup, not after its own write
+        edited = bool(before)  # changed outside DownStream (by hand): not at startup, not after its own write
         config_read = (stamp, parsed or {})
         if edited:  # its settings too (another Sonarr removed…), not only its series: no restart needed
             _apply_config_settings(parsed or {})
@@ -933,7 +933,7 @@ def merge_page_changes(body: dict, current: dict) -> None:
     for unit, value in taken.items():
         if unit.startswith("series:"):
             if value is None:
-                series.pop(unit.split(":", 1)[1], None)  # taken out of Unshacklarr on this page
+                series.pop(unit.split(":", 1)[1], None)  # taken out of DownStream on this page
             else:
                 series[unit.split(":", 1)[1]] = value
     body["series"] = series
@@ -1610,13 +1610,13 @@ def check_sonarrs(given, saved, main_url: str) -> list[dict]:
 
 
 def check_library(given: dict, who: str) -> dict:
-    """A Sonarr's library for Add audio track: its folder as that Sonarr sees it and as Unshacklarr does, both or neither."""
+    """A Sonarr's library for Add audio track: its folder as that Sonarr sees it and as DownStream does, both or neither."""
     out = {}
     for name in ("library_sonarr_root", "library_local_root"):
         out[name] = folder = str(given.get(name) or "").strip().rstrip("/\\")
         check_full_path(folder)
     if bool(out["library_sonarr_root"]) != bool(out["library_local_root"]):
-        raise web.HTTPBadRequest(text=f"Set the library folder of {who} both as it sees it and as Unshacklarr sees it, or neither")
+        raise web.HTTPBadRequest(text=f"Set the library folder of {who} both as it sees it and as DownStream sees it, or neither")
     return out
 
 
@@ -2499,7 +2499,7 @@ def unshackle_health(full: bool = False, jobs: bool = False) -> dict:
                      services=service_count(UNSHACKLE.services()))
         if local and UNSHACKLE.local.started:
             state["since"] = UNSHACKLE.local.started.isoformat()
-        if UNSHACKLE.proxy_refused:  # Unshackle 6 refused its proxies to Unshacklarr's key: Settings offers to allow it
+        if UNSHACKLE.proxy_refused:  # Unshackle 6 refused its proxies to DownStream's key: Settings offers to allow it
             state["proxy_refused"] = UNSHACKLE.proxy_refused
         if full or jobs:
             current_jobs = UNSHACKLE.jobs()
@@ -2515,7 +2515,7 @@ def unshackle_health(full: bool = False, jobs: bool = False) -> dict:
                                  for x in ((UNSHACKLE.dashboard(key, "sessions") or {}).get("sessions") or [])] if status else []
             state["caps"] = unshackle_caps(h, bool(status), bool(key))
             state["tools"] = UNSHACKLE.tools() + [
-                {"name": f"{name} (for Unshacklarr)", "installed": bool(shutil.which(name)), "required": True}
+                {"name": f"{name} (for DownStream)", "installed": bool(shutil.which(name)), "required": True}
                 for name in ("mkvmerge", "mkvpropedit")]
     except UnshackleError as e:
         state["error"] = no_credentials(e)
@@ -2575,8 +2575,8 @@ def check_health() -> None:
 
 
 async def health_check(request):
-    """For Docker's HEALTHCHECK, Uptime Kuma and the like, no login: Unshacklarr answers, and whether Sonarr and
-    Unshackle did at the last check (every few minutes, not asked again here). 200 while Unshacklarr runs; with
+    """For Docker's HEALTHCHECK, Uptime Kuma and the like, no login: DownStream answers, and whether Sonarr and
+    Unshackle did at the last check (every few minutes, not asked again here). 200 while DownStream runs; with
     ?strict=1, 503 when Sonarr or Unshackle is down. Only yes or no: no address, no error text."""
     parts = {name: health[name].get("ok") for name in ("sonarr", "unshackle")}
     down = any(ok is False for ok in parts.values())
@@ -2594,7 +2594,7 @@ async def watch_health():
         await asyncio.sleep(HEALTH_EVERY)
 
 
-# ---- Updates: a newer release of Unshacklarr, said in the page's header ----
+# ---- Updates: a newer release of DownStream, said in the page's header ----
 
 # The site's own page, not GitHub's API: the API allows 60 anonymous calls an hour per address, which a
 # home connection shares with every other program; this page redirects to the latest release's tag.
@@ -2788,7 +2788,7 @@ async def cancel_authentication_setup(request):
 
 
 def unshackle_caps(health: dict, dashboard: bool, keyed: bool) -> list[dict]:
-    """What this Unshackle lets Unshacklarr do, asked to it: each with what is missing when it cannot."""
+    """What this Unshackle lets DownStream do, asked to it: each with what is missing when it cannot."""
     after = "Needs Unshackle after 6.0.0"
     try:
         remote = isinstance(UNSHACKLE.config().get("remote_services"), list)
@@ -2820,7 +2820,7 @@ def remote_unsupported(config: dict) -> list[str]:
 
 
 def dashboard_key() -> str:
-    """serve.dashboard.key of the unshackle.yaml Unshacklarr sees: its errors and its drain before a restart; "" without."""
+    """serve.dashboard.key of the unshackle.yaml DownStream sees: its errors and its drain before a restart; "" without."""
     try:
         dashboard = (cdm.read(cdm_paths()[0]).get("serve") or {}).get("dashboard")
     except (UnshackleError, cdm.CdmError, OSError, yaml.YAMLError, AttributeError):
@@ -2846,7 +2846,7 @@ def cookies_folder() -> Path:
         return cdm.directory(Path(sonarr_sync.SETTINGS["unshackle_config_dir"]) / "unshackle.yaml", "cookies", "Cookies")
     if UNSHACKLE.mode == "local":
         return UNSHACKLE.local.cookies_dir(str(sonarr_sync.SETTINGS.get("unshackle_command") or ""))
-    raise UnshackleError("Unshacklarr cannot see Unshackle's Cookies folder: mount it and set its path "
+    raise UnshackleError("DownStream cannot see Unshackle's Cookies folder: mount it and set its path "
                          "in Settings › Connections › Unshackle (COOKIES_DIR with Docker)")
 
 
@@ -2897,7 +2897,7 @@ def cached_unwritable_files(cookies_dir: Path, most: int = 20) -> list[str]:
 def unwritable_files(cookies_dir: Path, most: int = 20) -> list[str]:
     """Files and folders of Unshackle's (cookies, cache and its device tokens, its config folder) that this user cannot
     write: left owned by root after a docker exec, they make a service fail on a cache or token it can't save. Only
-    the folders Unshacklarr sees; the first `most` found."""
+    the folders DownStream sees; the first `most` found."""
     folders = [cookies_dir]
     for where in (cache_folder, lambda: Path(sonarr_sync.SETTINGS.get("unshackle_config_dir") or "")):
         try:
@@ -2951,7 +2951,7 @@ async def delete_cookies(request):
 
 def dl_options() -> list[dict]:
     """The dl options the page offers; --cdm's choices are the CDM devices Unshackle has (its .wvd and .prd files and
-    the remote CDMs of unshackle.yaml), when Unshacklarr can see them."""
+    the remote CDMs of unshackle.yaml), when DownStream can see them."""
     try:
         path, wvds, prds = cdm_paths()
         names = [p.stem for p in sorted(wvds.glob("*.wvd"))] + [p.stem for p in sorted(prds.glob("*.prd"))]
@@ -2962,7 +2962,7 @@ def dl_options() -> list[dict]:
 
 
 def cdm_paths() -> tuple[Path, Path, Path]:
-    """unshackle.yaml, and the WVDs and PRDs folders, as Unshacklarr sees them."""
+    """unshackle.yaml, and the WVDs and PRDs folders, as DownStream sees them."""
     if sonarr_sync.SETTINGS.get("unshackle_config_dir"):
         conf = Path(sonarr_sync.SETTINGS["unshackle_config_dir"]) / "unshackle.yaml"
         return (conf, *cdm.folders(conf))
@@ -2971,7 +2971,7 @@ def cdm_paths() -> tuple[Path, Path, Path]:
         if str(found["config"]) not in ("", "."):
             return found["config"], found["wvds"], found["prds"]
         raise UnshackleError("This Unshackle has no unshackle.yaml yet")
-    raise UnshackleError("Unshacklarr cannot see Unshackle's config: mount its folder (unshackle.yaml, WVDs, PRDs) "
+    raise UnshackleError("DownStream cannot see Unshackle's config: mount its folder (unshackle.yaml, WVDs, PRDs) "
                          "and set its path in Settings › Connections › Unshackle (UNSHACKLE_CONFIG_DIR with Docker)")
 
 
@@ -3081,24 +3081,24 @@ async def cdm_action(request):
     return web.json_response(await asyncio.to_thread(cdm_state))
 
 
-# ---- Unshacklarr's own settings, backed up and restored from the page: the password again ----
+# ---- DownStream's own settings, backed up and restored from the page: the password again ----
 
 BACKUP_KEYS = ("settings", "defaults", "service_defaults", "series", "notifications", "tmdb_countries", "hidden_series", "quality_ladders")
 BEFORE_RESTORE = sonarr_sync.DATA / "config-before-restore.yaml"  # the settings a restore replaced, its owner only
 
 
 def backup_problem(data) -> str | None:
-    """Why this is no Unshacklarr backup, or None: its sections of the right kinds, each series a service and a URL."""
+    """Why this is no DownStream backup, or None: its sections of the right kinds, each series a service and a URL."""
     if not isinstance(data, dict) or not set(data) & set(BACKUP_KEYS):
-        return "Not an Unshacklarr backup: none of its sections (series, settings…) is in it"
+        return "Not a DownStream backup: none of its sections (series, settings…) is in it"
     kinds = {"settings": dict, "defaults": dict, "service_defaults": dict, "series": dict, "notifications": dict,
              "tmdb_countries": list, "hidden_series": list, "quality_ladders": list}
     for key, kind in kinds.items():
         if data.get(key) is not None and not isinstance(data[key], kind):
-            return f"Its {key} section is not in the format Unshacklarr writes"
+            return f"Its {key} section is not in the format DownStream writes"
     for key, show in (data.get("series") or {}).items():
         if not str(key).isdigit() or not isinstance(show, dict):
-            return f"Its series entry {key!r} is not in the format Unshacklarr writes"
+            return f"Its series entry {key!r} is not in the format DownStream writes"
     settings = data.get("settings") or {}
     for key, (low, high) in NUMBER_SETTINGS.items():  # a value a Save refuses would stop the app starting, or divide by zero
         value = settings.get(key)
@@ -3142,7 +3142,7 @@ def backup_data(text: str, passphrase: str = "") -> dict:
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError:
-        raise web.HTTPBadRequest(text="Not an Unshacklarr backup: the file is not valid YAML") from None
+        raise web.HTTPBadRequest(text="Not a DownStream backup: the file is not valid YAML") from None
     if problem := backup_problem(data):
         raise web.HTTPBadRequest(text=problem)
     # what a Save refuses (a server or a Sonarr without a name, a series' bad value) would stop the app starting:
@@ -3351,11 +3351,11 @@ async def unshackle_yaml(request):
 
 
 async def allow_proxies(_):
-    """Settings › Connections › Unshackle: Unshacklarr's key allowed Unshackle 6's own proxies (serve.users.<key>.server_proxy), in
+    """Settings › Connections › Unshackle: DownStream's key allowed Unshackle 6's own proxies (serve.users.<key>.server_proxy), in
     unshackle.yaml, the file before kept in the editor's history. serve reads it at its next start."""
     key = str(sonarr_sync.SETTINGS.get("unshackle_api_key") or "")
     if UNSHACKLE.mode == "local" or not key:
-        raise web.HTTPBadRequest(text="Unshacklarr gives its own Unshackle that right when it starts it")
+        raise web.HTTPBadRequest(text="DownStream gives its own Unshackle that right when it starts it")
     try:
         path, wvds, prds = await asyncio.to_thread(cdm_paths)
         cdm.regular(path)
@@ -3396,7 +3396,7 @@ def cache_folder() -> Path:
         return Path(sonarr_sync.SETTINGS["cache_dir"])
     if UNSHACKLE.mode == "local":
         return UNSHACKLE.local.paths(str(sonarr_sync.SETTINGS.get("unshackle_command") or ""))["cache"]
-    raise UnshackleError("Unshacklarr cannot see Unshackle's Cache folder: mount it and set its path "
+    raise UnshackleError("DownStream cannot see Unshackle's Cache folder: mount it and set its path "
                          "in Settings › Connections › Unshackle (CACHE_DIR with Docker)")
 
 
@@ -3680,7 +3680,7 @@ def check_remote_logins() -> None:
             told_logins[lid] = lg["prompt"]
             service = lg.get("service") or "The service"
             sonarr_sync.notify(read_config()["notifications"], "warning", f"{service} asks you something",
-                               f"{lg['prompt']}\nAnswer in Unshacklarr, for the remote server {lg.get('remote')}.",
+                               f"{lg['prompt']}\nAnswer in DownStream, for the remote server {lg.get('remote')}.",
                                action={"kind": "input", "id": f"rl-{lid}", "text": lg["prompt"], "service": service, "login": lid})
     for lid in [k for k in told_logins if k not in asking]:
         told_logins.pop(lid)
@@ -5302,7 +5302,7 @@ async def inbox_action(request):
 
 async def push_test(request):
     endpoint = str((await json_object(request)).get("endpoint") or "")
-    sent = await asyncio.to_thread(sonarr_sync.PUSH.send, "Unshacklarr test", "Notifications will show up here.", endpoint or None)
+    sent = await asyncio.to_thread(sonarr_sync.PUSH.send, "DownStream test", "Notifications will show up here.", endpoint or None)
     if not sent:
         raise web.HTTPBadGateway(text=f"The message did not go through ({sonarr_sync.PUSH.last_error or 'this device is no longer subscribed'}): turn notifications off and on again")
     return web.json_response({"sent": sent})
@@ -5424,7 +5424,7 @@ def _has_no_missing_episodes(series: dict) -> bool:
 
 
 def missing_of_managed(days: int | None, now: datetime | None = None) -> list[dict]:
-    """The episodes Unshacklarr could catch up on: monitored, aired, without a file, of the series it downloads (not
+    """The episodes DownStream could catch up on: monitored, aired, without a file, of the series it downloads (not
     Sonarr's whole wanted list: other series there are for other download clients), none already waiting in the
     downloads folder; aired within `days` when given. Oldest first."""
     config, now = sonarr_sync.read_file(), now or datetime.now(timezone.utc)
@@ -5806,7 +5806,7 @@ LIBRARY_DIRS = 500  # folders listed at most in one place
 
 
 def local_dirs(path: str) -> dict:
-    """The folders in a folder of Unshacklarr's own (its container's): names only, never a file."""
+    """The folders in a folder of DownStream's own (its container's): names only, never a file."""
     path = path or "/"
     if not posixpath.isabs(path) or ".." in path.split("/"):
         raise web.HTTPBadRequest(text=f"{path} must be a full path, from /, without ..")
@@ -5828,7 +5828,7 @@ def sonarr_dirs(path: str) -> dict:
 
 
 async def library_browse(request):
-    """Settings › Downloading › Download options › Audio upgrade: the folders to pick the library from, as Sonarr (side=sonarr) or Unshacklarr sees them."""
+    """Settings › Downloading › Download options › Audio upgrade: the folders to pick the library from, as Sonarr (side=sonarr) or DownStream sees them."""
     side, path = request.query.get("side"), request.query.get("path", "").strip()[:1024]
     inst = sonarr_named(request.query.get("sonarr", ""))  # another Sonarr's folders, as it sees them
     if side == "local":
@@ -5846,7 +5846,7 @@ LIBRARY_GUESSES = ["/library", "/media", "/tv", "/mnt"]  # where a library is us
 
 def library_guess(sonarr_path: str) -> dict | None:
     """Both folders, found: the mounted folder holding the end of a real file's path as Sonarr names it (/Syno/Dessins
-    Animés/… is /library/Dessins Animés/…: /Syno as Sonarr sees it, /library as Unshacklarr does). None when none does."""
+    Animés/… is /library/Dessins Animés/…: /Syno as Sonarr sees it, /library as DownStream does). None when none does."""
     skip = ("/proc", "/sys", "/dev", "/run", "/etc", "/boot", "/data", "/tmp", "/unshackle-config")  # the system's, ours
     try:  # the container's own mounts: a library bound in at any name
         mounts = [line.split()[1].replace("\\040", " ") for line in Path("/proc/self/mounts").read_text().splitlines()]
@@ -5868,7 +5868,7 @@ def library_guess(sonarr_path: str) -> dict | None:
 
 
 def library_check(root: str, local: str) -> dict:
-    """Sonarr's root folders, and whether Unshacklarr finds a real episode file of Sonarr's with these two folders."""
+    """Sonarr's root folders, and whether DownStream finds a real episode file of Sonarr's with these two folders."""
     out = {"roots": [], "ok": None, "sonarr_path": "", "local_path": "", "why": ""}
     try:
         out["roots"] = [str(r["path"]).rstrip("/\\") or r["path"] for r in sonarr_sync.sonarr_get("rootfolder") if r.get("path")]
@@ -6115,8 +6115,8 @@ def diagnostic(run_id: str) -> str:
     if via and via != "this computer" and not via.startswith("remote server"):  # another serve's host: its name only
         card = {**card, "setup": {**card["setup"], "via": via.split(" (")[0] if " (" in via else "another computer"}}
     parts = [
-        f"# Unshacklarr diagnostic: {card.get('series')} {card.get('sxxeyy')}",
-        f"Unshacklarr {__version__}{f' ({BUILD})' if BUILD else ''} · Unshackle {health['unshackle'].get('version') or '?'} · Python {sys.version.split()[0]}",
+        f"# DownStream diagnostic: {card.get('series')} {card.get('sxxeyy')}",
+        f"DownStream {__version__}{f' ({BUILD})' if BUILD else ''} · Unshackle {health['unshackle'].get('version') or '?'} · Python {sys.version.split()[0]}",
         f"Sonarr up: {health['sonarr'].get('ok')} · Unshackle up: {health['unshackle'].get('ok')}",
         "## The series' settings", "```json", json.dumps(show, indent=1, ensure_ascii=False), "```",
         "## Settings", "```json", json.dumps(settings, indent=1, ensure_ascii=False), "```",
@@ -6835,7 +6835,7 @@ async def v1_start_download(request):
     names = [str(x).upper() for x in body.get("episodes") or []] if isinstance(body.get("episodes"), list) else []
     if type(tvdb) is int and names and all(re.fullmatch(r"S\d+E\d+", x) for x in names):
         if not (read_config()["series"].get(tvdb) or {}).get("service"):
-            raise web.HTTPNotFound(text=f"Unshacklarr downloads no series with TVDB id {tvdb}: set it up on its page first")
+            raise web.HTTPNotFound(text=f"DownStream downloads no series with TVDB id {tvdb}: set it up on its page first")
         names = [f"S{int(m[1]):02}E{int(m[2]):02}" for m in (re.fullmatch(r"S(\d+)E(\d+)", x) for x in names)]
         try:
             if by_service:  # the service's codes, as the main Sonarr numbers them (its listing holds the main one's ids)
@@ -6867,7 +6867,7 @@ async def v1_start_download(request):
     if not audio:
         run_sync(ids, **common, **({"replace": True} if replace else {}))
         return web.json_response({"queued": len(ids)})
-    # that language just came on the service: Unshacklarr decides per episode from the file Sonarr has
+    # that language just came on the service: DownStream decides per episode from the file Sonarr has
     eps = await asyncio.to_thread(on_sonarr, inst, lambda: sonarr_sync.sonarr_get("episode", episodeIds=ids, includeEpisodeFile="true"))
     kinds = {e["id"]: file_speaks(e, audio) for e in eps}
     fresh, again, lacking = ([i for i in ids if kinds.get(i) is k] for k in (None, True, False))
@@ -6951,9 +6951,9 @@ async def setup_found(request):
     given: before, anyone who reaches a fresh install would learn its addresses and folders."""
     body = await json_object(request)
     if read_config()["auth"].get("password"):
-        raise web.HTTPForbidden(text="Unshacklarr is set up already")
+        raise web.HTTPForbidden(text="DownStream is set up already")
     if not trusted(request, body):
-        raise web.HTTPForbidden(text="Wrong setup code: it is in Unshacklarr's log")
+        raise web.HTTPForbidden(text="Wrong setup code: it is in DownStream's log")
     settings = sonarr_sync.load_settings(read_config())
     return web.json_response({
         **{k: settings[k] for k in ("sonarr_url", "sonarr_downloads", "unshackle_url", "unshackle_command", "downloads", "unshackle_downloads")},
@@ -7020,9 +7020,9 @@ async def setup_backups(request):
     """The setup of a new install: the backups found in its data folder, once the setup code is given."""
     body = await json_object(request)
     if read_config()["auth"].get("password"):
-        raise web.HTTPForbidden(text="Unshacklarr is set up already")
+        raise web.HTTPForbidden(text="DownStream is set up already")
     if not trusted(request, body):
-        raise web.HTTPForbidden(text="Wrong setup code: it is in Unshacklarr's log")
+        raise web.HTTPForbidden(text="Wrong setup code: it is in DownStream's log")
     return web.json_response({"saved": backups_info()["saved"]})
 
 
@@ -7035,7 +7035,7 @@ async def setup_restore(request):
         raise web.HTTPForbidden(text="Already set up")
     body = await json_object(request)
     if not setup_code_ok(body):
-        raise web.HTTPForbidden(text="Wrong setup code: Unshacklarr prints it when it starts (docker logs unshacklarr)")
+        raise web.HTTPForbidden(text="Wrong setup code: DownStream prints it when it starts (docker logs unshacklarr)")
     password = str(body.get("password") or "")
     if len(password) < 8:
         raise web.HTTPBadRequest(text="Password must be at least 8 characters")
@@ -7177,7 +7177,7 @@ SETUP_CODE = os.environ.get("SETUP_TOKEN") or secrets.token_urlsafe(9)
 
 def announce_setup_code() -> None:
     if not read_config()["auth"].get("password") and not os.environ.get("SETUP_TOKEN"):
-        print(f"Unshacklarr is not set up yet. Setup code: {SETUP_CODE}", flush=True)
+        print(f"DownStream is not set up yet. Setup code: {SETUP_CODE}", flush=True)
 
 
 async def setup(request):
@@ -7187,7 +7187,7 @@ async def setup(request):
         raise web.HTTPForbidden(text="Already set up")
     body = await json_object(request)
     if not setup_code_ok(body):
-        raise web.HTTPForbidden(text="Wrong setup code: Unshacklarr prints it when it starts (docker logs unshacklarr)")
+        raise web.HTTPForbidden(text="Wrong setup code: DownStream prints it when it starts (docker logs unshacklarr)")
     password = str(body.get("password") or "")
     if len(password) < 8:
         raise web.HTTPBadRequest(text="Password must be at least 8 characters")
@@ -7531,7 +7531,7 @@ def main() -> None:
     if partial := sonarr_sync.remove_partial_merges():
         print(f"Removed {partial} audio merge(s) cut short by the last stop", flush=True)
     announce_setup_code()
-    print(f"Unshacklarr keeps its settings in {sonarr_sync.DATA}", flush=True)
+    print(f"DownStream keeps its settings in {sonarr_sync.DATA}", flush=True)
     web.run_app(app, host=os.environ.get("HOST", "0.0.0.0"), port=int(os.environ.get("PORT", "8788")), print=None)
 
 

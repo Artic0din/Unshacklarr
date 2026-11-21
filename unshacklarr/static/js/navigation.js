@@ -170,8 +170,8 @@ const PAGE_NAME = { schedule: "Schedule", series: "Series", log: "Activity", set
 function updateTitle() {
   if (document.body.classList.contains("gated")) return;  // the sign-in and the setup name themselves
   const section = currentTab === "settings" && !settingsList && $(`.set-nav [data-sec="${settingsSec}"] span`)?.textContent;
-  document.title = current?.title?.trim() ? tr(`${current.title} · Unshacklarr`)
-    : section ? tr(`Settings: ${section} · Unshacklarr`) : tr(`${PAGE_NAME[currentTab]} · Unshacklarr`);
+  document.title = current?.title?.trim() ? tr(`${current.title} · DownStream`)
+    : section ? tr(`Settings: ${section} · DownStream`) : tr(`${PAGE_NAME[currentTab]} · DownStream`);
 }
 let routed = false;
 function applyRoute(event) {

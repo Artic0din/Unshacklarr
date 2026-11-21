@@ -306,7 +306,7 @@ def test_a_failed_lookup_is_an_error_with_a_way_to_try_again():
 const failedBox = (text, retry) => ({ failed: text, retry });
 const src = read(process.argv[2]);
 let tries = 0;
-const ctx = sandbox({ api: async () => { throw new Error("Unshacklarr can't be reached"); }, failed: failedBox, S: { config: { settings: {} }, series: [] }, ugGroups: null });
+const ctx = sandbox({ api: async () => { throw new Error("DownStream can't be reached"); }, failed: failedBox, S: { config: { settings: {} }, series: [] }, ugGroups: null });
 vm.runInContext(grab(src, /^async function renderUpgradeGroups[\s\S]*?^}\n/m), ctx);
 const box = $("#ug-groups");
 ctx.renderUpgradeGroups().then(() => {
@@ -314,7 +314,7 @@ ctx.renderUpgradeGroups().then(() => {
   const out = { text: shown.failed, retry: typeof shown.retry };
   // library check: the same, in the line that already announces itself
   const say = $("#dx-lib-check");
-  const lib = sandbox({ api: async () => { throw new Error("Unshacklarr can't be reached"); }, libSeq: 0, libTimer: 0, libOf: () => ({}), mainSonarr: () => "Sonarr", savedSonarr: () => "",
+  const lib = sandbox({ api: async () => { throw new Error("DownStream can't be reached"); }, libSeq: 0, libTimer: 0, libOf: () => ({}), mainSonarr: () => "Sonarr", savedSonarr: () => "",
     S: { config: { settings: {} } }, setTimeout: (fn) => fn() });
   vm.runInContext(grab(src, /^function checkLibrary\(\)[\s\S]*?^}\n/m), lib);
   lib.checkLibrary();
@@ -324,8 +324,8 @@ ctx.renderUpgradeGroups().then(() => {
   }, 20);
 });
 """, str(JS / "quality.js"))
-    assert seen["text"] == "Could not look it up: Unshacklarr can't be reached" and seen["retry"] == "function"
-    assert seen["lib"] == ["lib-check err", "Unshacklarr can't be reached", "Try again", True]
+    assert seen["text"] == "Could not look it up: DownStream can't be reached" and seen["retry"] == "function"
+    assert seen["lib"] == ["lib-check err", "DownStream can't be reached", "Try again", True]
 
 
 def test_a_cookie_dialog_with_nothing_to_save_flags_the_text_it_is_about():

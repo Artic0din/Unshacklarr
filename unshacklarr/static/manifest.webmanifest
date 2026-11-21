@@ -1,6 +1,6 @@
 {
-  "name": "Unshacklarr",
-  "short_name": "Unshacklarr",
+  "name": "DownStream",
+  "short_name": "DownStream",
   "description": "Downloads the episodes Sonarr is missing with Unshackle.",
   "start_url": "/",
   "scope": "/",

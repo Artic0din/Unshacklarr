@@ -114,7 +114,7 @@ def test_a_phone_shows_the_apps_name_whole_or_its_labelled_logo_never_a_cut_name
     has(phone, "header h1 { font-size: var(--fs-headline); flex: 1; min-width: 0; container-type: inline-size; }")
     has(CSS, "@container (width < 9.25rem) { .brand span { display: none; } }")
     assert "text-overflow: ellipsis" not in squash(phone[phone.index("header h1 {"):][:400])
-    assert 'id="home" aria-label="Unshacklarr, schedule"' in (STATIC / "index.html").read_text()
+    assert 'id="home" aria-label="DownStream, schedule"' in (STATIC / "index.html").read_text()
 
 
 def test_version_is_one_whats_new_control_in_settings_not_in_the_header():

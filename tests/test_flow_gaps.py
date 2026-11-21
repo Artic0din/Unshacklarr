@@ -559,7 +559,7 @@ console.log(JSON.stringify({ placeholder: sonarrKey.placeholder ?? "", described
     assert seen["placeholder"] == ""
     assert seen["described"] is True
     assert seen["hidden"] is False
-    assert seen["text"] == "Unshacklarr already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it."
+    assert seen["text"] == "DownStream already has a key for the URL filled in above, saved or from SONARR_API_KEY. Leave this empty to use it."
     assert seen["unshackle"] == [False, True]  # Sonarr's found, the remote Unshackle's not
 
 

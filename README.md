@@ -2,7 +2,7 @@
   <img src="docs/logo.svg" width="112" height="112" alt="">
 </p>
 
-<h1 align="center">Unshacklarr</h1>
+<h1 align="center">DownStream</h1>
 
 <p align="center">
   <b>The episodes Sonarr is missing, downloaded by <a href="https://github.com/unshackle-dl/unshackle">Unshackle</a> and imported by Sonarr.</b><br>
@@ -48,7 +48,7 @@
 
 ```mermaid
 flowchart LR
-    sonarr[("📡 Sonarr<br>missing episodes")] -- watched --> app["🔓 Unshacklarr"]
+    sonarr[("📡 Sonarr<br>missing episodes")] -- watched --> app["🔓 DownStream"]
     app -- "at release time" --> serve["⬇️ unshackle serve"]
     serve -- "from the service" --> files["🧹 parts joined,<br>files named"]
     files -- "imported, then checked" --> sonarr
@@ -133,7 +133,7 @@ You need:
 > Unshackle that cannot run it is told in the bell.
 >
 > **Unshackle 6** lets an API key use the proxies of `unshackle.yaml` (a country code such as `au`, or a
-> provider) only once it is allowed. Run by Unshacklarr on the same computer, its key always is; with
+> provider) only once it is allowed. Run by DownStream on the same computer, its key always is; with
 > Docker or another server, Settings › Connections › Unshackle offers to allow it the first time a download is refused.
 > By hand: a key listed under `serve: users:` loses the rights the unlisted admin key has, so list it
 > with all of them, then restart Unshackle (5.4 reads `server_cdm` and the devices, and ignores the rest):
@@ -152,8 +152,8 @@ You need:
 >       server_proxy: true
 > ```
 
-**Docker** pulls Unshacklarr's image and runs Unshackle in a container of its own too, built once from
-its source (on an x86-64 host). **On the computer where Unshackle runs**, Unshacklarr uses the
+**Docker** pulls DownStream's image and runs Unshackle in a container of its own too, built once from
+its source (on an x86-64 host). **On the computer where Unshackle runs**, DownStream uses the
 Unshackle you already have.
 
 ### 🐳 With Docker
@@ -218,8 +218,8 @@ The setup asks for a password, Sonarr's URL and API key (in Sonarr › Settings 
 each series you want.
 
 **Updating:** `docker compose pull unshacklarr && docker compose up -d --no-deps unshacklarr` brings a
-new Unshacklarr and leaves Unshackle running: without `--no-deps`, Compose may recreate Unshackle too
-(Unshacklarr depends on it), which cuts the downloads going on and leaves Unshacklarr saying Unshackle
+new DownStream and leaves Unshackle running: without `--no-deps`, Compose may recreate Unshackle too
+(DownStream depends on it), which cuts the downloads going on and leaves DownStream saying Unshackle
 is unreachable until it has started again. For a new Unshackle, when nothing is downloading,
 `docker compose build --pull unshackle && docker compose up -d`.
 
@@ -252,7 +252,7 @@ unshacklarr
 ```
 
 Open **http://localhost:8788**, enter the **setup code** printed at start, and pick **Local**:
-Unshacklarr starts `unshackle serve` itself, with your usual `unshackle.yaml`, and stops it when it
+DownStream starts `unshackle serve` itself, with your usual `unshackle.yaml`, and stops it when it
 quits. The setup then asks for the same as with Docker.
 
 > [!TIP]
@@ -266,7 +266,7 @@ Stuck somewhere? Ask on the **[Discord](https://discord.gg/5HmNgaGASy)**.
 ## 🛡️ Reverse proxy
 
 > [!WARNING]
-> **Do not open port 8788 to the internet.** Unshacklarr holds the keys to your Sonarr, to your
+> **Do not open port 8788 to the internet.** DownStream holds the keys to your Sonarr, to your
 > Unshackle and its devices: keep it on your network, and reach it from outside only through a
 > reverse proxy, a VPN or a firewall that chooses who gets in.
 
@@ -279,12 +279,12 @@ Stuck somewhere? Ask on the **[Discord](https://discord.gg/5HmNgaGASy)**.
 Behind a reverse proxy:
 
 - **Publish the port to the proxy only**: `127.0.0.1:8788:8788` in `docker-compose.yml` when the
-  proxy runs on the same host, or no `ports:` at all when it shares a Docker network with Unshacklarr.
+  proxy runs on the same host, or no `ports:` at all when it shares a Docker network with DownStream.
 - **Pass on the client's address and the scheme**: `X-Real-IP`, as the login limit counts tries per
   address, and `X-Forwarded-Proto`, so that the session cookie is marked `Secure` over HTTPS.
   Nginx Proxy Manager sends both.
 - **List the proxy's addresses**: Settings › General › Account & Backups, *Sign in through a reverse proxy*,
-  *The proxy's addresses*: the proxy's own address as Unshacklarr sees it (its container's IP,
+  *The proxy's addresses*: the proxy's own address as DownStream sees it (its container's IP,
   such as `172.18.0.5`), even when you do not sign in through it. `X-Real-IP` is believed from
   those addresses only, so that no one else can claim another address to get more tries.
   Every address in a range you list can do so: list a whole network (`172.18.0.0/16`) only if
@@ -295,7 +295,7 @@ Behind a reverse proxy:
 - **Let WebSockets and streams through**: Activity's output is a WebSocket and its live view a
   stream (in Nginx Proxy Manager, turn on *Websockets Support*).
 - **Pass on the original Host**: Activity's live output is refused ("Cross-origin terminal refused")
-  when the Host Unshacklarr sees is not the address in the browser. Nginx Proxy Manager, Caddy and
+  when the Host DownStream sees is not the address in the browser. Nginx Proxy Manager, Caddy and
   Traefik keep it; plain Nginx needs `proxy_set_header Host $http_host;` (`$host` drops a port such
   as `:8443`).
 - **Sign in once, at the proxy** (optional): when Authelia or Authentik already asks who you are,
@@ -314,12 +314,12 @@ Everything is set in the page; these are the parts worth knowing before you star
 ### 📂 The downloads folder
 
 An episode downloads into its own folder, `unshackle-<tvdb id>-S01E02`, inside a downloads folder
-that three programs reach: Unshacklarr (to join parts and rename), Unshackle (to write the files)
+that three programs reach: DownStream (to join parts and rename), Unshackle (to write the files)
 and Sonarr (to import them). Each may see it at another path:
 
 | Setting | The downloads folder… | Empty means |
 |---|---|---|
-| **Downloads folder** (Settings › Connections › Unshackle) | as Unshacklarr sees it | a `downloads` folder in Unshacklarr's settings folder |
+| **Downloads folder** (Settings › Connections › Unshackle) | as DownStream sees it | a `downloads` folder in DownStream's settings folder |
 | **Downloads folder, as Unshackle sees it** (Remote only) | as `unshackle serve` sees it | the same path |
 | **Downloads folder, as Sonarr sees it** (Settings › Connections › Sonarr) | as Sonarr sees it | the same path |
 
@@ -345,7 +345,7 @@ are told when it goes down and when it is back.
 
 **Other Sonarr instances** (Settings › Connections › Sonarr): a second Sonarr with its own library, each with a name, its address,
 API key, the downloads folder as it sees it, and its own quality ladder and After the download. The series set up in
-Unshacklarr are downloaded for each instance that has them (by TVDB id), into folders named after it
+DownStream are downloaded for each instance that has them (by TVDB id), into folders named after it
 (`unshackle-sonarr-2-<tvdb>-SxxEyy`), and imported into it. Episodes, Catch up and Upgrades work with each one;
 new episodes come at their release time and with the automatic sync, as for the main Sonarr. The main Sonarr can be named
 too (Settings › Connections › Sonarr › Name); a badge on each series names the libraries it is in.
@@ -355,7 +355,7 @@ service now has better. They are checked automatically every 7 days, each episod
 only when you tick them (Settings › Quality & Upgrades › Upgrades).
 
 **Muxing progress** (Activity): once every track is in, Unshackle decrypts them and muxes the file. Activity shows how
-far the mux is when Unshacklarr can read Unshackle's work folder (its `directories: temp`): on the same computer it
+far the mux is when DownStream can read Unshackle's work folder (its `directories: temp`): on the same computer it
 always can; with Docker, mount that folder read only and set `UNSHACKLE_TEMP_DIR`, as `docker-compose.example.yml`
 does. Without it, the step shows how long it has been going.
 
@@ -390,7 +390,7 @@ then en), used unless the series or its service sets `--a-lang` or `--s-lang`.
 Settings › Services & Devices › Services (its cookie files, on each service's row beside its sign-in) and Settings › Services & Devices › Devices (CDM) manage Unshackle's own files: its cookie files, its Widevine
 (`.wvd`) and PlayReady (`.prd`) devices, and which device each service uses (the `cdm:` section of
 `unshackle.yaml`, where only that service's line changes). Unshackle reads them anew for every
-download. Unshacklarr must see those files:
+download. DownStream must see those files:
 
 - **on the same computer**, it asks Unshackle where they are;
 - **with Docker**, mount Unshackle's config folder in both containers and set
@@ -425,8 +425,8 @@ These are off until you turn them on:
 
 - **Add audio track** (Settings › Downloading › Download options › Languages). When your preferred audio
   language becomes available, only that audio track is downloaded and added to the file in your library. Sonarr then
-  imports the updated file. Unshacklarr needs access to your library: set its folder as Sonarr sees it and as
-  Unshacklarr sees it. If the file can't be found, the whole episode is downloaded instead.
+  imports the updated file. DownStream needs access to your library: set its folder as Sonarr sees it and as
+  DownStream sees it. If the file can't be found, the whole episode is downloaded instead.
 - **Fallback service** (on a series page, in Source). A second service and the series URL on it, used when the main
   service doesn't have the episode yet, or not in an accepted language. If that service numbers episodes
   differently, set its `season_map` or `episode_offset` under `fallback:` in `config.yaml`.
@@ -444,11 +444,11 @@ Settings › General › Account & Backups › *Backups* downloads every setting
 the ladders, the notifications, the API keys: keep the file private), and *Restore from a file* puts one back.
 Set *Back up automatically every N days*, and a backup is also saved in the data folder's `backups` folder, the
 newest few kept. To rebuild an install, put a backup in that folder (or keep the file at hand), start
-Unshacklarr, and choose *Restore from a backup* in the setup: the setup code and a new password are enough.
+DownStream, and choose *Restore from a backup* in the setup: the setup code and a new password are enough.
 
 ## 🔌 API
 
-Other programs (a script, Home Assistant, iOS Shortcuts) can check on Unshacklarr, start a sync or
+Other programs (a script, Home Assistant, iOS Shortcuts) can check on DownStream, start a sync or
 a download, stop one, answer a service's question and read the notifications, with a key created in
 Settings › General › Account & Backups:
 
@@ -464,26 +464,26 @@ Every route and its answer: **[docs/API.md](docs/API.md)**.
 
 | For | Where |
 |---|---|
-| 💬 Questions, help with Unshacklarr, ideas | **[Unshacklarr's Discord](https://discord.gg/5HmNgaGASy)** |
-| 🐛 A bug in Unshacklarr | an [issue](https://github.com/OwnzZzZ/Unshacklarr/issues), with what Activity shows |
+| 💬 Questions, help with DownStream, ideas | **[DownStream's Discord](https://discord.gg/5HmNgaGASy)** |
+| 🐛 A bug in DownStream | an [issue](https://github.com/OwnzZzZ/Unshacklarr/issues), with what Activity shows |
 | 🧩 Unshackle itself: a service, a login, a CDM, a download it fails | **[Unshackle's GitHub](https://github.com/unshackle-dl/unshackle/issues)** or **[Unshackle's Discord](https://discord.gg/mHYyPaCbFK)** |
 | 🔒 A security flaw | a [private security advisory](https://github.com/OwnzZzZ/Unshacklarr/security/advisories/new), never a public issue |
 
 > [!IMPORTANT]
-> **Unshacklarr only drives `unshackle serve`, through its API.** It doesn't download, log in or decrypt anything
+> **DownStream only drives `unshackle serve`, through its API.** It doesn't download, log in or decrypt anything
 > itself: when a service, its cookies or a CDM fail, Unshackle says so in Activity's output, and it is for
-> Unshackle's own GitHub or Discord, not Unshacklarr's.
+> Unshackle's own GitHub or Discord, not DownStream's.
 
 <a name="security"></a>
 
 ## 🔒 Security
 
 > [!NOTE]
-> Unshacklarr was written with an AI coding assistant. That is a reason to check it, not to take
-> it on trust. Nobody can *prove* a program secure; what follows is what protects Unshacklarr,
+> DownStream was written with an AI coding assistant. That is a reason to check it, not to take
+> it on trust. Nobody can *prove* a program secure; what follows is what protects DownStream,
 > how it was checked, and where its limits are, so that you can judge for yourself.
 
-Unshacklarr is a self-hosted app for **one person**. It holds the keys to your Sonarr and to
+DownStream is a self-hosted app for **one person**. It holds the keys to your Sonarr and to
 Unshackle, it can read and change Unshackle's cookie files and CDM devices (private keys), and it
 decides which `unshackle` command runs: whoever has the password controls all of that, so the page
 itself is what is locked down. In local mode, `unshackle serve` listens on 127.0.0.1 only, with a key
@@ -495,7 +495,7 @@ made up at each start.
 | 🍪 **A stolen or forged session** | The session cookie is signed (HMAC-SHA256), expires after 30 days, and is `HttpOnly`, `SameSite=Strict`, and `Secure` over HTTPS. Logging out ends it on the server too. Changing the password, or logging out other devices, ends every other session and turns off every device's push notifications. |
 | 🔌 **The API key** | It opens `/api/v1` only, never the password, cookies, devices or settings. It replaces a file of the library only when asked to (`"replace": true`), as the page's Replace anyway does. Only its hash is kept; it is shown once, when created, after the password is asked again. |
 | 🌐 **Another site acting as you (CSRF)** | Every request that changes something needs a custom header that another site's page cannot send without a CORS preflight, which the server never grants. |
-| 💉 **Injected script (XSS), framing** | The page builds everything as DOM nodes with `textContent`; `innerHTML` is used only for fixed icons written in the code, never for data. Every script it runs is served by Unshacklarr itself, no CDN, and it refuses to be framed by another site. |
+| 💉 **Injected script (XSS), framing** | The page builds everything as DOM nodes with `textContent`; `innerHTML` is used only for fixed icons written in the code, never for data. Every script it runs is served by DownStream itself, no CDN, and it refuses to be framed by another site. |
 | 🔑 **Keys in the browser** | The keys of Sonarr, Unshackle and TMDB never reach it: the page only learns whether one is set, and a saved key is never sent to a new address unless you type it again, nor a remote CDM's secret to a new server. Notification addresses and a proxy's password reach it masked. `unshackle.yaml` shows as it is only in its editor, after the password is asked again. |
 | 💾 **Secrets on disk** | `config.yaml` and the Web Push key are readable by their owner only; cookie and device files too, or by their group as well when their folder is shared by group (setgid and group-writable), never by other users. A device's private key is never sent back. |
 | 📁 **Paths outside their folder** | Cookie and device names are checked against a strict pattern, anything that looks like a path is refused, and a symbolic link planted in a shared folder (`unshackle.yaml`, the downloads) is never followed. |
@@ -529,7 +529,7 @@ made up at each start.
 > user accounts or roles. Keep it [behind a reverse proxy, a VPN or a firewall](#reverse-proxy), never
 > straight on the internet.
 
-**Lost the password?** Set a new one where Unshacklarr runs; settings and series stay:
+**Lost the password?** Set a new one where DownStream runs; settings and series stay:
 
 ```bash
 unshacklarr reset-password
@@ -544,7 +544,7 @@ Every change, version by version: **[CHANGELOG.md](CHANGELOG.md)**. Settings sho
 running.
 
 > [!TIP]
-> **Sonarr 5:** what Unshacklarr does with Sonarr 5 is part of this version:
+> **Sonarr 5:** what DownStream does with Sonarr 5 is part of this version:
 >
 > - **Languages** (Activity): your files without your audio languages, read from Sonarr 5's own tracks. Watch them
 >   for the preferred audio, or download them again. It needs Sonarr 5.
@@ -583,7 +583,7 @@ Three things next to it are made by tools:
 3. Commit, then push `main` and a tag:
 
    ```bash
-   git tag -a v1.1.0 -m "Unshacklarr 1.1.0" && git push origin main v1.1.0
+   git tag -a v1.1.0 -m "DownStream 1.1.0" && git push origin main v1.1.0
    ```
 
 #### Continuous integration
@@ -605,6 +605,6 @@ The example compose file uses that image: a server only pulls it,
 
 ## 📜 License
 
-Unshacklarr is free software under the [GNU General Public License v3.0](LICENSE), like Unshackle
+DownStream is free software under the [GNU General Public License v3.0](LICENSE), like Unshackle
 and Sonarr: you may use, study, share and change it; whoever distributes it, changed or not, passes
 on the same freedoms with its source.
