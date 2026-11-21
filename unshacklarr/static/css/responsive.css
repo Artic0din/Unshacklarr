@@ -202,7 +202,7 @@
   .update-pill span { display: none; } .update-pill { width: 40px; height: 40px; padding: 0; justify-content: center; }
 }
 @media (max-width: 1240px) and (prefers-reduced-motion: reduce) { #sync.spin { box-shadow: inset 0 0 0 2px var(--accent-ink); } }  /* running, without the spin: a ring in the ink, on its fill */
-@media (min-width: 701px) and (max-width: 1100px) { header { gap: var(--sp-3); padding-inline: calc(var(--sp-3) + var(--sp-3)); } }  /* with the update pill too, the row needs about 995 px */
+@media (min-width: 701px) and (max-width: 1100px) { header { gap: var(--sp-3); padding-inline: var(--sp-4); } header::before { inset-inline: var(--sp-2); } }  /* the bar nearer the edges: the row keeps the room it had */  /* with the update pill too, the row needs about 995 px */
 @media (min-width: 701px) and (max-width: 1240px) {
   /* a status with words in it takes a row of its own, as on a phone, rather than push the buttons off the first */
   header:has(.health :is([data-state=warn], [data-state=down])) .health { order: 10; flex-basis: 100%; margin-left: 0; }
@@ -210,11 +210,11 @@
 }
 @media (min-width: 701px) and (max-width: 1040px) { .brand span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 @media (min-width: 701px) and (max-width: 940px) { nav .ico { display: none; } }
-@media (min-width: 701px) and (max-width: 840px) { nav a { padding-inline: var(--sp-3); } }
+@media (min-width: 701px) and (max-width: 840px) { nav a { padding-inline: 8px; } }
 /* Phones: a native-app shell. Tabs move to a bottom bar, the series page goes full screen,
    touch targets are 44 px and fields 16 px (iOS zooms into anything smaller). */
 @media (max-width: 700px) {
-  :root { --tabbar-top: calc(86px + env(safe-area-inset-bottom)); }  /* how far up the floating tab bar reaches: the bars above stand there */
+  :root { --tabbar-top: calc(86px + env(safe-area-inset-bottom)); }  /* how far up the floating tab bar reaches (measured once the page runs): the bars above stand there */
   body { padding-bottom: var(--tabbar-top); }
   :root { --header-bottom: calc(var(--header-top, 0px) + var(--head-h, 72px + env(safe-area-inset-top))); }
   /* the bar sits closer to the edges than on a desktop, so the name keeps its room beside four buttons */
@@ -232,6 +232,7 @@
     gap: var(--sp-1); margin: 0; max-width: none; background: var(--bar); border: 1px solid var(--line); border-radius: var(--radius-bar);
     padding: var(--sp-1); }
   nav a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; min-height: 52px; border-radius: var(--radius-card);
+    min-width: 0; white-space: normal; text-align: center; overflow-wrap: anywhere; line-height: 1.15;  /* a long or enlarged label wraps in its tab */
     font-size: var(--fs-caption); font-weight: 600; }
   nav a .ico { width: 22px; height: 22px; }
   nav .long { display: none; }
@@ -364,7 +365,7 @@
   .con-detail.docked-acts .cd-foot { display: none; }  /* Keep actions that have no dock button in the footer. */
   .con-detail.docked-acts .cd-foot:has(:is([data-fk="delete"], [data-fk="sign-in"])) { display: flex; }
   .con-detail.docked-acts .cd-foot .btn:not([data-fk="delete"], [data-fk="sign-in"]) { display: none; }
-  .dock.open > .cd-raw .term { height: calc(100dvh - 330px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .dock.open > .cd-raw .term { height: calc(100dvh - var(--header-bottom) - var(--tabbar-top) - 194px); }  /* both measured: a status row or a taller tab bar takes its room */
   .cd-tracks .t { grid-template-columns: 1fr auto; } .cd-tracks .t .bar { grid-column: 1 / -1; grid-row: 2; }
   .cd-raw .term { height: 60dvh; min-height: 280px; }
   .icon-hide { opacity: .8; width: 36px; height: 36px; }
@@ -511,3 +512,4 @@ details.sx-card > summary.sx-head { padding-right: 28px; } details.sx-card > sum
 .ptr.loading .ptr-arc { stroke-dasharray: 24 70; stroke-dashoffset: 0; }
 @keyframes ptr-spin { to { transform: rotate(270deg); } }
 @media (prefers-reduced-motion: reduce) { .ptr, .ptr-badge, .ptr-arrow { transition: opacity .2s !important; } .ptr.loading .ptr-badge > svg:first-child { animation: none; } }
+@media (max-width: 360px) { nav { left: var(--sp-2); right: var(--sp-2); gap: 0; } }  /* the narrowest phones: the tabs keep their width for their labels */

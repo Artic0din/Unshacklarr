@@ -20,7 +20,9 @@ nav { display: flex; gap: 4px; }
 nav a { background: none; border: 0; min-height: 40px; padding: 0 var(--sp-4); border-radius: var(--radius-pill); color: var(--muted); font-weight: 500; cursor: pointer; text-decoration: none; line-height: normal; }
 @media (hover: hover) { nav a:not([aria-current="page"]):hover { background: var(--well); color: var(--text); } }
 nav a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-nav a[aria-current="page"] .nav-busy { background: var(--accent-ink); color: var(--accent); }  /* the count stays apart from its own pill */
+/* on its own lime pill the running count turns dark, its pulse too; the queued count keeps its neutral look */
+nav a[aria-current="page"] .nav-busy:not(.queued) { background: var(--accent-ink); color: var(--accent); animation-name: nav-busy-on; }
+@keyframes nav-busy-on { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-ink) 45%, transparent); } }
 .btn { background: var(--panel); color: inherit; border: 1px solid var(--field-line); border-radius: var(--radius-pill); padding: 7px 14px; font-weight: 600; cursor: pointer; }  /* a field's edge: it shows on any surface */
 a.btn { text-decoration: none; }  /* a link drawn as a button: the button's colour, no underline */
 a.btn:not([hidden]) { display: inline-flex; align-items: center; }  /* its text centred as a <button> does on its own; a display here would undo [hidden] */
@@ -48,6 +50,7 @@ nav .short { display: none; }
 @keyframes nav-busy { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); } }
 @media (max-width: 700px) { .nav-busy { display: none; } }
 #sync { display: inline-flex; align-items: center; gap: 8px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }  /* the header's one primary action */
+@media (hover: hover) { #sync:hover:not(:disabled) { filter: brightness(1.08); } }  /* as a primary button: its id outranks the shared border hover */
 .sync-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; max-width: 7em; text-align: left; }  /* a long "Last sync …" wraps under the label, it does not push the button to a row of its own */
 .sync-text .last-sync { font-size: var(--fs-footnote); font-weight: 400; } .sync-text .last-sync:empty { display: none; }
 #bell { position: relative; width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border-radius: 50%; background: var(--well); }

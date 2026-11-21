@@ -220,6 +220,8 @@ function measureBars() {
   const reach = BOTTOM_BARS.map((bar) => bar.offsetHeight && bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0));
   document.documentElement.style.setProperty("--head-h", `${$("header").offsetHeight}px`);
   document.documentElement.style.setProperty("--bars-h", `${Math.max(...reach) + 8}px`);
+  // the floating tab bar's reach, as tall as its labels make it: the bars above stand 12px over it
+  document.documentElement.style.setProperty("--tabbar-top", `${reach[0] + 12}px`);
   // a wide Activity pane scrolls itself, and its dock sticks above the pane's own bottom padding
   const pane = parseFloat(getComputedStyle($("#con-detail")).paddingBottom) || 0;
   document.documentElement.style.setProperty("--dock-h", `${reach[BOTTOM_BARS.indexOf($("#dock"))] + pane + 8}px`);

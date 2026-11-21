@@ -140,7 +140,7 @@ NONE = {"#savebar": [0, "auto"], "#sel-bar": [0, "auto"], "#dock": [0, "auto"], 
 
 def test_phone_bars_reach_as_far_up_as_the_highest_one():
     tab = {'nav[aria-label="Main"]': [72, "0px"]}
-    assert measured({**NONE, **tab}) == {"--head-h": "65px", "--save-h": "0px", "--bars-h": "80px", "--dock-h": "28px"}
+    assert measured({**NONE, **tab}) == {"--head-h": "65px", "--save-h": "0px", "--bars-h": "80px", "--dock-h": "28px", "--tabbar-top": "84px"}  # the tab bar 72px tall: the bars stand 12px over it
     # the save bar over the tab bar, and the selection bar wrapped to two rows over both: the highest one counts
     shown = {**NONE, **tab, "#savebar": [56, "76px"], "#sel-bar": [104, "140px"]}
     assert measured(shown)["--bars-h"] == "252px"
