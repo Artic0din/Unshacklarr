@@ -446,3 +446,11 @@ def test_the_setup_wizard_tracks_show_on_its_sidebar(track):
     rules = [body for body in rules_of(track) if "background:" in body]
     ground = re.search(r"background: var\(--([\w-]+)\)", rules[-1]).group(1)
     assert DARK[ground] != DARK["well"] and contrast(DARK[ground], DARK["well"]) >= 1.5
+
+
+def test_every_corner_comes_from_a_radius_token():
+    # a corner says what a thing is (field, tile, card, pill); a stray pixel value drifts from the design system
+    values = re.findall(r"border-radius:\s*([^;}]+)", CSS) + re.findall(r'borderRadius: "([^"]+)"', "".join(f.read_text() for f in JS.glob("*.js")))
+    stray = sorted({v.strip() for v in values if re.search(r"\d+px|--r-", v)})
+    assert not stray
+    assert set(re.findall(r"var\((--radius-[\w-]+)\)", CSS)) <= set(re.findall(r"(--radius-[\w-]+):", block(":root {")))

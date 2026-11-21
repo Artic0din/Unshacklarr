@@ -2,26 +2,26 @@
 .ql-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .ql-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
 .ql-title { flex: 1; min-width: 0; display: grid; gap: var(--gap-help); }
-.ql-name { font-weight: 600; font-size: var(--fs-body); min-height: 40px; border-radius: var(--r-md); max-width: 340px; }
+.ql-name { font-weight: 600; font-size: var(--fs-body); min-height: 40px; border-radius: var(--radius-field); max-width: 340px; }
 .ql-say { color: var(--muted); font-size: var(--fs-sub); } .ql-say.bad, .ql-why { color: var(--err); }
 input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 16%, transparent); }
 .ql-acts { display: flex; gap: 8px; flex: none; }
 .ql-steps { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
 .ql-step { display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px 10px; align-items: center;
-  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); }
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--bg); }
 .ql-step.bad { border-color: color-mix(in srgb, var(--err) 55%, var(--line)); }
-.ql-step select { min-height: 38px; border-radius: var(--r-md); }
+.ql-step select { min-height: 38px; border-radius: var(--radius-field); }
 .ql-n { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: var(--fs-sub); font-weight: 700; color: var(--text); background: var(--well); }
 .ql-h { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-sub); }
-.ql-h input { width: 76px; min-height: 38px; border-radius: var(--r-md); }
+.ql-h input { width: 76px; min-height: 38px; border-radius: var(--radius-field); }
 .ql-btns { display: flex; gap: 2px; margin-left: 4px; }
-.ql-icon { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--r-md); background: none; color: var(--muted); cursor: pointer; }
+.ql-icon { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-field); background: none; color: var(--muted); cursor: pointer; }
 @media (hover: hover) { .ql-icon:hover:not(:disabled) { color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); } } @media (hover: hover) { .ql-icon.danger:hover:not(:disabled) { color: var(--err); } }
 .ql-icon:disabled { opacity: .3; cursor: default; }
 .ql-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ql-why { grid-column: 2 / -1; font-size: var(--fs-sub); } .ql-why:empty { display: none; }
 .ql-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; } .ql-foot small { font-size: var(--fs-sub); }
-.svc-picks { margin: 6px 0 4px; } .svc-picks select { min-height: 40px; border-radius: var(--r-md); }
+.svc-picks { margin: 6px 0 4px; } .svc-picks select { min-height: 40px; border-radius: var(--radius-field); }
 .ub-block .field small.bad { color: var(--err); }
 .ub-acts { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .ub-state { font-size: var(--fs-sub); color: var(--muted); overflow-wrap: anywhere; } .ub-state.ok { color: var(--ok); } .ub-state.bad { color: var(--err); }
@@ -33,11 +33,11 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
   .ql-step { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr); }
   .ql-h { grid-column: 2 / -1; flex-wrap: wrap; } .ql-h .ql-btns { margin-left: auto; }
 }
-.probe-warn { margin: 8px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); border-radius: var(--r-md); background: color-mix(in srgb, var(--warn) 8%, transparent); font-size: var(--fs-sub); } .probe-warn b { color: var(--warn); }
+.probe-warn { margin: 8px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); border-radius: var(--radius-field); background: color-mix(in srgb, var(--warn) 8%, transparent); font-size: var(--fs-sub); } .probe-warn b { color: var(--warn); }
 .ql-langs { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); } .ql-langs .field small.bad { color: var(--err); }
 .miss-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; } .miss-bar .ax-seg { margin: 0; }
 #oneoff-slot .ds-programmes, #oneoff-slot #d-progmap-field, #oneoff-slot #d-pages-field { display: none; }  /* a download's own numbering: not the series' setting */
-#d-progmap { font: var(--fs-sub)/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; min-height: 64px; border-radius: var(--r-md); padding: 9px 12px; }  /* one "S2026E14 URL" per line */
+#d-progmap { font: var(--fs-sub)/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; min-height: 64px; border-radius: var(--radius-field); padding: 9px 12px; }  /* one "S2026E14 URL" per line */
 .ds-programmes { margin-bottom: var(--gap-field); }
 .up-card > summary { list-style: none; } .up-card > summary::-webkit-details-marker { display: none; } .up-card > summary::after { content: ""; width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--ic-chevron) center / contain no-repeat; mask: var(--ic-chevron) center / contain no-repeat; color: var(--muted); transition: transform .15s; }
 .up-card[open] > summary::after { transform: rotate(90deg); } .up-card > summary.up-row { grid-template-columns: 18px 30px minmax(0, 1fr) auto auto; align-items: center; }
@@ -47,23 +47,23 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .up-row { cursor: pointer; grid-template-columns: 18px 30px minmax(0, 1fr); } .up-row input { flex: none; width: 18px; height: 18px; } .up-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 /* Account, the automatic backups: the saved ones under the buttons */
 .bk-pass-row { margin-top: var(--gap-field); }
-.bk-saved { display: grid; gap: 6px; margin-top: var(--gap-field); max-width: calc(50% - 12px); padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.bk-saved { display: grid; gap: 6px; margin-top: var(--gap-field); max-width: calc(50% - 12px); padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-field); }
 .bk-saved[hidden] { display: none; } .bk-saved > b { font-size: var(--fs-sub); } .bk-saved > b small { color: var(--muted); font-weight: 400; overflow-wrap: anywhere; }
 .bk-row { display: flex; align-items: center; gap: 10px; } .bk-row span { flex: 1; font-size: var(--fs-sub); } .bk-row small { color: var(--muted); font-size: var(--fs-footnote); }
 @media (max-width: 900px) { .bk-saved { max-width: none; } }
 /* The setup: a rebuild from a backup, under the password */
-.wz-restore { display: grid; gap: 8px; margin-top: var(--gap-field); padding: 12px 14px; border: 1px dashed var(--line); border-radius: var(--r-md); font-size: var(--fs-sub); }
+.wz-restore { display: grid; gap: 8px; margin-top: var(--gap-field); padding: 12px 14px; border: 1px dashed var(--line); border-radius: var(--radius-field); font-size: var(--fs-sub); }
 .wz-restore > .btn, .wz-restore-say > .btn { justify-self: start; } .wz-restore-say { display: grid; gap: 6px; } .wz-restore-say:empty { display: none; }
-.wz-restore-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--field-bg); color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.wz-restore-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--field-bg); color: var(--text); font: inherit; cursor: pointer; text-align: left; }
 @media (hover: hover) { .wz-restore-row:hover { border-color: var(--field-line-hover); } } .wz-restore-row b { flex: 1; font-weight: 600; } .wz-restore-row small { color: var(--muted); } .wz-restore-row span { color: var(--text); font-weight: 600; }
 .wz-sum li.wz-bad { color: var(--err); }
 /* A card head with a button: its text shrinks beside it ("Add a Sonarr" stays in the card). From #10, by mj23au */
 .sx-head:has(> .btn) > div { flex: 1; min-width: 0; }
 /* Which library's episodes, under the series' tabs: each Sonarr, its ladder, what it misses. From #10, by mj23au */
 .ep-sonarr { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 4px 0 12px; padding: 3px;
-  border: 1.5px solid var(--line); border-radius: 999px; background: var(--field-bg); max-width: 100%; }
+  border: 1.5px solid var(--line); border-radius: var(--radius-pill); background: var(--field-bg); max-width: 100%; }
 .ep-sonarr-label { padding: 0 10px 0 12px; color: var(--muted); font-size: var(--fs-sub); }
-.ep-sonarr button { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 14px; border: 0; border-radius: 999px;
+.ep-sonarr button { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 14px; border: 0; border-radius: var(--radius-pill);
   background: none; color: var(--text); font: inherit; font-size: var(--fs-callout); cursor: pointer; }
 @media (hover: hover) { .ep-sonarr button:hover { background: var(--well); } }
 .ep-sonarr button[aria-pressed=true] { background: var(--select); color: var(--text); font-weight: 600; }
@@ -74,7 +74,7 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .ug-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .ug-tools input { flex: 1 1 200px; min-width: 0; }
 .ug-list { max-height: 320px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 12px;
-  padding: 8px; border: 1px solid var(--line); border-radius: var(--r-md); }
+  padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-field); }
 .ug-line { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; min-width: 0; }
 .ug-line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ug-switch { display: flex; align-items: flex-start; gap: 12px; padding: 4px 0 10px; cursor: pointer; }
@@ -82,10 +82,10 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .ug-groups { display: grid; gap: 6px; } .ug-group small { color: var(--muted); } .ug-group > small { display: block; } .ug-group.warn b { color: var(--warn); }
 /* A series' libraries: one chip each, lit when it gets new episodes; what it misses one click from Episodes */
 .d-libs { display: flex; flex-wrap: wrap; gap: 8px; }
-.d-lib { display: inline-flex; align-items: stretch; border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--field-bg); overflow: hidden; }
+.d-lib { display: inline-flex; align-items: stretch; border: 1.5px solid var(--line); border-radius: var(--radius-field); background: var(--field-bg); overflow: hidden; }
 .d-lib.on { border-color: var(--field-line-hover); background: var(--select); }
 .d-lib-sw { display: grid; gap: 2px; text-align: left; padding: 8px 14px 8px 36px; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; position: relative; }
-.d-lib-sw::before { content: ""; position: absolute; left: 12px; top: 50%; width: 14px; height: 14px; margin-top: -8px; border: 1.5px solid var(--muted); border-radius: var(--r-sm); }
+.d-lib-sw::before { content: ""; position: absolute; left: 12px; top: 50%; width: 14px; height: 14px; margin-top: -8px; border: 1.5px solid var(--muted); border-radius: var(--radius-inline); }
 .d-lib.on .d-lib-sw::before { border-color: var(--accent); background: var(--accent) center / 11px no-repeat var(--tick); }
 .d-lib-sw b { font-size: var(--fs-callout); } .d-lib-sw small { color: var(--muted); font-size: var(--fs-footnote); }
 .d-lib:not(.on) .d-lib-sw b { color: var(--muted); }
@@ -96,7 +96,7 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 #d-libs-field[hidden] { display: none; }
 @media (max-width: 700px) { .d-lib { flex: 1 1 100%; } .d-lib-sw { flex: 1; } }
 .poster .lib { position: absolute; left: 6px; bottom: 6px; background: rgb(0 0 0 / .72); color: #fff; font-size: var(--fs-caption); font-weight: 600;
-  padding: 2px 6px; border-radius: var(--r-sm); max-width: calc(100% - 12px); line-height: 1.35; }
+  padding: 2px 6px; border-radius: var(--radius-pill); max-width: calc(100% - 12px); line-height: 1.35; }
 .poster .lib span { white-space: nowrap; } .poster .lib .lib-off { text-decoration: line-through; }  /* every name whole, on two lines if need be */
 .poster .svc ~ .lib { bottom: 30px; }  /* above the service's badge */
 /* Languages, how the audio is upgraded; Automation, the window's checkbox */
@@ -105,7 +105,7 @@ input.bad, select.bad { border-color: var(--err) !important; box-shadow: 0 0 0 3
 .up-mode .rt-who { max-width: 70ch; margin-bottom: var(--gap-field); }  /* a long explainer: a readable line, and room before the next labels */
 #dx-library[hidden] { display: none; } .ax-bursts { margin-top: 4px; font-size: var(--fs-callout); }
 /* the window's hours look like the other fields; a fallback half set says so in red */
-:is(input[type=time], input[type=date]) { background: var(--field-bg); border: 1px solid var(--field-line); border-radius: var(--r-md); padding: 7px 10px; width: 100%; min-height: 40px; color: var(--text); }
+:is(input[type=time], input[type=date]) { background: var(--field-bg); border: 1px solid var(--field-line); border-radius: var(--radius-field); padding: 7px 10px; width: 100%; min-height: 40px; color: var(--text); }
 input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
 #d-fb-say.status-err, #ax-window-say.status-err { color: var(--err); }
 /* What's new: the list, and the "New" badges on the new options */
@@ -122,24 +122,24 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 .news-rel > summary b, .news-out b { font-size: var(--fs-headline); } .news-rel small, .news-out small { color: var(--muted); font-size: var(--fs-sub); }
 .news-rel time { margin-left: auto; color: var(--muted); font-size: var(--fs-sub); white-space: nowrap; }
 .news-out small { margin-left: auto; color: var(--text); }
-.news-tag { padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--text) 10%, transparent); font-size: var(--fs-footnote); font-weight: 600; }
+.news-tag { padding: 2px 9px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 10%, transparent); font-size: var(--fs-footnote); font-weight: 600; }
 .news-tag.latest { background: var(--well); color: var(--text); }
 .news-earlier { margin: 0 !important; padding: 16px 22px 4px; color: var(--muted); font-size: var(--fs-footnote) !important; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .news-list { margin: 0; padding: 0 22px 8px 48px; list-style: none; }
 .news-list li { display: flex; align-items: baseline; gap: 12px; padding: 12px 0; } .news-list li + li { border-top: 1px solid var(--line); }
-.news-kind { --k: var(--muted); flex: none; min-width: 74px; padding: 2px 8px; border-radius: 999px; text-align: center; font-size: var(--fs-footnote); font-weight: 600;
+.news-kind { --k: var(--muted); flex: none; min-width: 74px; padding: 2px 8px; border-radius: var(--radius-pill); text-align: center; font-size: var(--fs-footnote); font-weight: 600;
   color: var(--k); background: color-mix(in srgb, var(--k) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k) 35%, transparent); }
 .news-list .fix .news-kind { --k: var(--warn); } .news-list .security .news-kind { --k: var(--err); }
 .news-list p { flex: 1; min-width: 0; margin: 0 !important; color: var(--muted); font-size: var(--fs-callout); line-height: 1.5; } .news-list p b { color: var(--text); font-weight: 600; } .news-list code { font-size: var(--fs-sub); color: var(--text); }
 .news-go { padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; text-decoration: underline; }
 .news-go::after { content: ""; display: inline-block; width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; background: currentColor; -webkit-mask: var(--ic-arrow) center / contain no-repeat; mask: var(--ic-arrow) center / contain no-repeat; }
 .news-foot { align-items: center; justify-content: space-between; } .news-foot a { font-size: var(--fs-callout); }
-.new-badge { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: var(--well); color: var(--text);
+.new-badge { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: var(--radius-pill); background: var(--well); color: var(--text);
   font-size: var(--fs-caption); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; vertical-align: middle;
 }
 .is-new { border-color: var(--field-line-hover) !important; } .is-new.new-blink { animation: new-pulse 1.2s ease-in-out 2; }
 /* a part of a card (its line on top, no frame of its own): a frame of its own and a tint while new */
-.up-mode, .ds-sub { transition: background-color .8s, box-shadow .8s; border-radius: var(--r-md); }
+.up-mode, .ds-sub { transition: background-color .8s, box-shadow .8s; border-radius: var(--radius-field); }
 .up-mode.is-new, .ds-sub.is-new { border-top-color: var(--line) !important; margin-left: -14px; margin-right: -14px; padding: 14px 14px 12px;
   background: var(--well); box-shadow: inset 0 0 0 1px var(--field-line-hover); }
 .up-mode.is-new.new-blink, .ds-sub.is-new.new-blink { animation: new-tint 1.2s ease-in-out 2; }
@@ -149,7 +149,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 @media (prefers-reduced-motion: reduce) { .is-new.new-blink { animation: none !important; } }
 @media (max-width: 700px) { .news-list { padding-left: 22px; } .news-list li { flex-direction: column; align-items: flex-start; gap: 6px; }
   .news-rel > summary { flex-wrap: wrap; row-gap: 4px; } }
-.spoiler { filter: blur(5px); cursor: pointer; user-select: none; transition: filter .15s; border-radius: var(--r-sm); }
+.spoiler { filter: blur(5px); cursor: pointer; user-select: none; transition: filter .15s; border-radius: var(--radius-inline); }
 .spoiler:focus-visible { filter: blur(3.5px); }
 @media (hover: hover) { .spoiler:hover { filter: blur(3.5px); } }
 #bo-fields[hidden], #bo-card .field[hidden], #bk-phrase-row[hidden] { display: none; }
@@ -167,18 +167,18 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 #bo-say { margin-bottom: 14px; }
 /* every choice the same height, its "default" tag inside it on one line */
 .ax-seg button { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding-block: 0; line-height: 1.2; }
-.chip-default { padding: 3px 7px; border-radius: 999px; background: var(--well); color: var(--text);
+.chip-default { padding: 3px 7px; border-radius: var(--radius-pill); background: var(--well); color: var(--text);
   font-size: var(--fs-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; line-height: 1; }
 .ax-seg .chip-default { display: inline-block; margin: 0; }  /* not the help line of a field (.field small) */
 /* A series' numbering, Sonarr's episode order: said; a changed one asks to check the numbering */
 .order-note { display: grid; gap: 8px; justify-items: start; margin: 0 0 var(--gap-field); font-size: 13px; color: var(--muted); }
-.order-note p { margin: 0; } .order-note.warn { padding: 12px 14px; border: 1px solid var(--warn); border-radius: 10px; background: rgb(230 185 74 / .08); color: var(--text); }
+.order-note p { margin: 0; } .order-note.warn { padding: 12px 14px; border: 1px solid var(--warn); border-radius: var(--radius-field); background: rgb(230 185 74 / .08); color: var(--text); }
 /* Schedule: the end of a season or of the series, beside its episode */
-.finale-tag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-caption); font-weight: 600;
+.finale-tag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: var(--radius-pill); font-size: var(--fs-caption); font-weight: 600;
   vertical-align: 1px; color: var(--text); border: 1px solid var(--line-strong); }
 /* A series' titles in your language: a suggestion that stands out, in its Settings and atop its Episodes */
 .lang-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: var(--gap-field) 0;
-  padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px;
+  padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-field);
   background: var(--well); }
 .lang-note[hidden] { display: none; } .lang-note > div { flex: 1 1 260px; min-width: 0; }
 .lang-note b { color: var(--text); } .lang-note p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
@@ -211,7 +211,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 .sv-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sv-k { display: none; }
 .sv-table td small { display: block; color: var(--muted); font-size: var(--fs-sub); }
-.sv-table .sv-label { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.sv-table .sv-label { display: inline-block; padding: 2px 9px; border-radius: var(--radius-pill); font-size: var(--fs-footnote); font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--text) 6%, transparent); }
 .sv-label[data-tone="ok"] { color: var(--ok); background: var(--ok-tint); }
 .sv-label[data-tone="bad"] { color: var(--err); background: var(--err-tint); }
 .sv-check[data-tone="bad"] { color: var(--err); }
@@ -226,8 +226,8 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 .sv-file-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .sv-file-top b { font: 600 var(--fs-sub) ui-monospace, SFMono-Regular, Menlo, monospace; }
 .sv-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.sv-chip { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: var(--fs-footnote); font-weight: 400; color: var(--muted); }
-.sv-confirm, .st-confirm { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--err) 45%, transparent); border-radius: var(--r-md); font-size: var(--fs-sub); }
+.sv-chip { padding: 1px 8px; border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: var(--fs-footnote); font-weight: 400; color: var(--muted); }
+.sv-confirm, .st-confirm { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--err) 45%, transparent); border-radius: var(--radius-field); font-size: var(--fs-sub); }
 .sv-confirm .sv-ctl { margin-top: 0; }
 #sv-note:not(:empty) { margin: 12px 10px 0; }
 .ds-fix { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; color: var(--muted); font-size: var(--fs-sub); overflow-wrap: anywhere; }
@@ -251,7 +251,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 /* A ladder picker: Edit ladders after its chips; the options it takes over, and the video it picks under a command */
 .ladder-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: var(--gap-field); }
 .ladder-pick .ax-seg { margin: 0; } .ladder-pick .ax-edit { font-size: var(--fs-sub); color: var(--text); }
-.ladder-clash { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; padding: 8px 12px; border-radius: var(--r-md); font-size: var(--fs-sub);
+.ladder-clash { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; padding: 8px 12px; border-radius: var(--radius-field); font-size: var(--fs-sub);
   color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); }
 .ladder-clash[hidden] { display: none; }
 .dx-cmd .dx-ladder { font-size: var(--fs-sub); color: var(--text); overflow-wrap: anywhere; }
@@ -262,7 +262,7 @@ input[type=time]:focus:not(.bad), input[type=date]:focus:not(.bad) { border-colo
 
 /* Tags: every badge and chip has one shape (Molt's Badge); its colour says what it means. */
 .poster .svc, .sched-card .svc, .svc-block-head b, .sv-chip, .ep-on, .ep-off, .ep-up, .chip, .ck-pill, .sched-st, .rg-chip, .news-tag, .news-kind, .new-badge, .chip-default, .ax-seg button .chip-default, .finale-tag {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); padding: 2px var(--sp-2); border: 0; border-radius: 999px; box-shadow: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); padding: 2px var(--sp-2); border: 0; border-radius: var(--radius-pill); box-shadow: none;
   font-size: var(--fs-footnote); font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 1.4; white-space: nowrap;
   color: var(--muted); background: var(--well); }
 .sched-card .svc { white-space: normal; overflow-wrap: anywhere; }  /* a long name in a narrow day column */

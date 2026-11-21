@@ -82,7 +82,7 @@ async function uyEditor(text) {
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": { backgroundColor: "var(--select)" },
     ".cm-selectionMatch": { backgroundColor: "var(--well)" }, ".cm-matchingBracket": { backgroundColor: "var(--select)", outline: "none" },
     ".cm-foldPlaceholder": { backgroundColor: "var(--panel)", border: "1px solid var(--line)", color: "var(--muted)" },
-    ".cm-tooltip": { backgroundColor: "var(--panel)", border: "1px solid var(--line)", borderRadius: "8px", color: "var(--text)" },
+    ".cm-tooltip": { backgroundColor: "var(--panel)", border: "1px solid var(--line)", borderRadius: "var(--radius-field)", color: "var(--text)" },
     ".cm-tooltip-autocomplete > ul": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", maxHeight: "16em" },
     ".cm-tooltip-autocomplete > ul > li": { padding: "3px 8px" },
     ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--select)", color: "var(--text)" },

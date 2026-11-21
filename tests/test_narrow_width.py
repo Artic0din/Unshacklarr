@@ -91,7 +91,7 @@ def test_inbox_filters_wrap_whole_pills_instead_of_clipping_the_last_one():
 
 
 def test_main_nav_pills_keep_the_current_page_distinct_and_touch_targets_at_44px():
-    has(CSS, "nav a { background: none; border: 0; padding: 6px 12px; border-radius: 999px;")
+    has(CSS, "nav a { background: none; border: 0; padding: 6px 12px; border-radius: var(--radius-pill);")
     has(CSS, 'nav a[aria-current="page"] { background: var(--accent-tint); color: var(--accent); }')
     has(media("max-width: 700px"), "nav { position: fixed; left: 0; right: 0; bottom: 0;")
     has(media("max-width: 700px"), "nav a { min-inline-size: 44px; }")
