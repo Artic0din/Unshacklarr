@@ -355,7 +355,7 @@
   .steps .l { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); }
   .step-caption { display: block; margin-top: 7px; font-size: var(--fs-footnote); font-weight: 600; }
   .step-caption.fail { color: var(--err); } .step-caption.warn { color: var(--warn); } .step-caption.halt { color: var(--muted); }
-  .cd-stats { gap: 12px 22px; } .cd-stats b { font-size: var(--fs-headline); white-space: nowrap; }
+  .cd-stats { gap: 12px 22px; } .cd-stats b { font-size: var(--fs-title3); white-space: nowrap; }  /* figures, a step down from the desktop's; the row wraps */
   .cd-stats div:nth-child(4) { display: none; }
   .cd-foot { display: flex; flex-wrap: wrap; gap: 10px; }
   .cd-foot .btn { flex: 1; min-height: 44px; }

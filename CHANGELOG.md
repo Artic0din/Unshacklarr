@@ -99,6 +99,8 @@ Every change worth knowing, newest first. The format follows
 
 ### Changed
 
+- Restyled the Activity page in the DownStream design: what is running now is a lime badge with a pulsing red dot, its
+  row and card take a lime outline, progress bars run on a lime tint, and the download's figures are larger. (#400)
 - Restyled the Schedule page in the DownStream design: weekdays are small capitals with today's in lime, the status
   filter that is on takes a lime tint, the late-episodes banner has more room, and "New" tags are lime. (#399)
 - Restyled the Series page in the DownStream design: the chosen view and the series drawer's tab are lime, filters that
