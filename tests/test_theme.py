@@ -438,3 +438,11 @@ def test_glow_paints_once_on_the_root_never_tiled_by_a_short_body():
     glow_height = float(re.search(r"ellipse [\d.]+rem ([\d.]+)rem", root)[1])
     tile_height = float(re.search(r"/\s*100%\s+([\d.]+)rem", root)[1])
     assert tile_height > glow_height, "the tile must reach past the glow's fade, or its bottom edge shows as a line"
+
+
+@pytest.mark.parametrize("track", [".wz-steps li + li::before", ".wz-progress i"])
+def test_the_setup_wizard_tracks_show_on_its_sidebar(track):
+    # the sidebar is --well; --line is the same colour there, so an empty track or connector would vanish
+    rules = [body for body in rules_of(track) if "background:" in body]
+    ground = re.search(r"background: var\(--([\w-]+)\)", rules[-1]).group(1)
+    assert DARK[ground] != DARK["well"] and contrast(DARK[ground], DARK["well"]) >= 1.5

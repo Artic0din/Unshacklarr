@@ -266,7 +266,7 @@ input[type=checkbox].switch:checked { background: var(--muted); } input[type=che
 .wz-brand b { display: block; font-size: var(--fs-title3); letter-spacing: -.01em; }
 .wz-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .wz-steps li { position: relative; }
-.wz-steps li + li::before { content: ""; position: absolute; left: 22px; top: -14px; height: 22px; width: 2px; background: var(--line); transition: background .3s; }
+.wz-steps li + li::before { content: ""; position: absolute; left: 22px; top: -14px; height: 22px; width: 2px; background: var(--line-strong); transition: background .3s; }
 .wz-steps li.on::before { background: var(--field-line-hover); }
 .wz-steps li.done::before { background: var(--ok); }
 .wz-steps button { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px; border: 0; border-radius: var(--r-md);
@@ -281,7 +281,7 @@ input[type=checkbox].switch:checked { background: var(--muted); } input[type=che
 .wz-steps li.done .wz-dot { border-color: var(--ok); background: var(--ok); color: var(--accent-ink); }
 .wz-txt b { display: block; font-size: var(--fs-callout); font-weight: 600; } .wz-txt small { display: block; font-size: var(--fs-footnote); color: var(--muted); }
 .wz-progress { margin-top: auto; display: grid; gap: 8px; font-size: var(--fs-footnote); color: var(--muted); }
-.wz-progress i { display: block; height: 4px; border-radius: var(--r-sm); background: var(--line); overflow: hidden; }
+.wz-progress i { display: block; height: 4px; border-radius: var(--r-sm); background: var(--line-strong); overflow: hidden; }
 .wz-progress b { display: block; height: 100%; border-radius: var(--r-sm); background: var(--ok); transition: width .4s ease; }
 .wz-main { display: grid; gap: 16px; align-content: start; padding: 34px 40px 30px; min-width: 0; }
 .wz-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 4px; }
