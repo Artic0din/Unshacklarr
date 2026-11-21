@@ -136,7 +136,7 @@
         downloads: "/downloads", unshackle_downloads: "", sonarr_api_key_set: true, unshackle_api_key_set: true };
     }
     if (p === "/api/unshackle/test") return { services: R["/api/status?full=1"].unshackle.services };  // as many as Settings says
-    if (p === "/api/sonarr/test") return { version: "4.0.15.2941" };
+    if (p === "/api/sonarr/test") return { version: "5.0.0.2997" };
     if (p === "/api/setup") {
       mem.configured = mem.logged = true;
       mem.config = copy(R["/api/state"].config);

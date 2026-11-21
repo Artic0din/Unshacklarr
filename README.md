@@ -556,8 +556,8 @@ Every change, version by version: **[CHANGELOG.md](CHANGELOG.md)**. Settings sho
 running.
 
 > [!TIP]
-> **Sonarr 5:** DownStream needs Sonarr 5. It talks to Sonarr through its v5 API only, and Settings says so when a
-> Sonarr is too old. What DownStream does with Sonarr 5:
+> **Sonarr 5:** DownStream needs Sonarr 5. It talks to Sonarr through its v5 API only, and Settings says so when the
+> address has no `/api/v5`. What DownStream does with Sonarr 5:
 >
 > - **Languages** (Activity): your files without your audio languages, read from Sonarr 5's own tracks. Watch them
 >   for the preferred audio, or download them again.

@@ -399,7 +399,7 @@ def sonarr_series():
 
 
 web.sonarr_series = sonarr_series
-web.sonarr_get_version = lambda: "4.0.15.2941"
+web.sonarr_get_version = lambda: "5.0.0.2997"
 web.tvdb_titles = lambda tvdb_id: {}
 sync.UNSHACKLE.call = serve
 if live:

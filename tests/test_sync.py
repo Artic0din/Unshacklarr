@@ -3807,6 +3807,7 @@ def test_picked_episodes_are_fetched_in_groups_and_come_back_sorted(tmp_path, mo
     asked = []
 
     def sonarr_get(path, **params):
+        assert params.get("includeSubresources") == "series"  # Sonarr 5's name: without it, no series comes back
         asked.append(params["episodeIds"])
         return [{"id": i, "seriesId": 7, "seasonNumber": 1 + i // 100, "episodeNumber": i % 100} for i in params["episodeIds"]]
 

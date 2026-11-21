@@ -5772,16 +5772,14 @@ async def languages(request):
 
 
 async def languages_action(request):
-    """Start a check (Sonarr 5 only: its tracks), or stop the one going on."""
+    """Start a check of the files' tracks, or stop the one going on."""
     if request.match_info["action"] == "stop":
         language_scan["stop"] = True
     elif not language_scan["running"]:
-        try:
-            major = await asyncio.to_thread(sonarr_sync.sonarr_major)
+        try:  # its answer at once, not a scan that fails out of sight
+            await asyncio.to_thread(sonarr_sync.sonarr_get, "system/status")
         except requests.RequestException as e:
             raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}") from None
-        if major < 5:
-            raise web.HTTPBadRequest(text=f"Languages reads each file's tracks from Sonarr 5; this Sonarr is version {major or 'unknown'}")
         language_scan["running"] = True  # at once: a second click before the thread starts is not a second check
         threading.Thread(target=scan_languages, daemon=True).start()
     return web.json_response({"running": language_scan["running"]})
@@ -7097,7 +7095,7 @@ def sonarr_status(url: str, key: str) -> str:
     if r.status_code == 401:
         raise ValueError("Sonarr refused the API key")
     if r.status_code == 404:
-        raise ValueError("DownStream needs Sonarr 5 or later")
+        raise ValueError("Sonarr has no /api/v5 at this address: check its URL base, or update it to Sonarr 5")
     r.raise_for_status()
     return r.json().get("version", "?")
 

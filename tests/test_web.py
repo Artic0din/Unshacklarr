@@ -7903,8 +7903,9 @@ def test_the_api_takes_the_services_own_numbering_and_decides_the_audio_upgrade(
     def sonarr_get(path, **p):
         if path == "series":
             return [{"id": 9}]
-        if "episodeIds" in p:
-            return [eps[i] for i in p["episodeIds"]]
+        if "episodeIds" in p:  # Sonarr 5 attaches the file only when asked by its v5 name
+            filed = p.get("includeSubresources") == "episodeFile"
+            return [eps[i] if filed else {k: v for k, v in eps[i].items() if k != "episodeFile"} for i in p["episodeIds"]]
         return list(eps.values())
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", sonarr_get)
     started, added = [], []
@@ -9279,5 +9280,31 @@ def test_the_sonarr_check_reads_api_v5_and_names_a_sonarr_too_old_for_it(tmp_pat
     responses.get("http://five:8989/api/v5/system/status", json={"version": "5.0.0.2997"})
     assert web.sonarr_status("http://five:8989/", "k") == "5.0.0.2997"
     responses.get("http://four:8989/api/v5/system/status", status=404)  # Sonarr 4 has no /api/v5
-    with pytest.raises(ValueError, match="needs Sonarr 5"):
+    with pytest.raises(ValueError, match="no /api/v5 at this address"):
         web.sonarr_status("http://four:8989", "k")
+
+
+@responses.activate
+def test_a_languages_check_against_a_sonarr_without_api_v5_says_so_at_once(tmp_path, monkeypatch):
+    # the scan runs out of sight: a Sonarr address with no /api/v5 must fail the click, not leave "Not checked yet"
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    monkeypatch.setenv("SONARR_URL", "http://four:8989")
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    responses.get("http://four:8989/api/v5/system/status", status=404)
+    monkeypatch.setattr(web, "scan_languages", lambda: (_ for _ in ()).throw(AssertionError("no scan")))
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            r = await client.post("/api/languages/check", headers=page)
+            return r.status, await r.text()
+
+    status, text = asyncio.run(go())
+    assert status == 502 and "/api/v5/system/status" in text and not web.language_scan["running"]

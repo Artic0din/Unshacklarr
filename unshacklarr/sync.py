@@ -4144,12 +4144,6 @@ def sonarr_get(path: str, *, connection: tuple[str, dict[str, str]] | None = Non
     return r.json()
 
 
-def sonarr_major() -> int:
-    """Sonarr's major version (5 for 5.0.0.2569); 0 when it does not say."""
-    version = str(sonarr_get("system/status").get("version") or "")
-    return int(version.split(".")[0]) if version.split(".")[0].isdigit() else 0
-
-
 def quality_ranks(profile: dict) -> dict[int, int]:
     """Quality id -> rank in the series' profile, lowest first; a group shares one rank."""
     ranks = {}
