@@ -379,7 +379,7 @@
   .savebar { left: 12px; right: 12px; bottom: var(--tabbar-top); justify-content: space-between; flex-wrap: wrap; }
   body.drawer-open .savebar { display: none; }
   /* Notices drop in under the head, as on iOS, instead of floating over the page's bottom. */
-  .toasts { left: 12px; right: 12px; top: calc(var(--header-bottom) + var(--sp-2)); bottom: auto; align-items: center; }
+  .toasts { left: 12px; right: 12px; top: calc(max(var(--header-bottom), env(safe-area-inset-top)) + var(--sp-2));  /* signed out, no header: clear of the notch */ bottom: auto; align-items: center; }
   body.drawer-open .toasts { top: calc(128px + env(safe-area-inset-top)); }
   .toast { border-radius: var(--radius-card); padding: 10px 14px; font-size: var(--fs-callout); animation: toast-in .22s ease-out; }
 

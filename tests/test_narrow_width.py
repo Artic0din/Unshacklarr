@@ -287,3 +287,13 @@ def test_a_device_rows_action_column_fits_its_44px_button_on_a_phone():
 def test_the_icon_only_sync_button_is_44px_on_a_touch_tablet():
     """Up to 1240px #sync is an icon-only 40px circle; a touch tablet gets 44px (#333)."""
     has(CSS, "@media (max-width: 1240px) and (pointer: coarse) { #sync { width: 44px; height: 44px; } }")
+
+
+def test_phone_tab_labels_wrap_in_their_tabs_and_the_bars_stand_on_the_measured_tab_bar():
+    phone = media("max-width: 700px")
+    tab = re.search(r"(?m)^\s*nav a \{([^}]*)\}", phone)[1]
+    for decl in ("min-width: 0", "white-space: normal", "overflow-wrap: anywhere"):
+        assert decl in tab  # a long translation or large text wraps, never clips
+    for bar in (".dock", ".savebar", ".sel-bar"):
+        assert re.search(rf"(?m)^\s*{re.escape(bar)} \{{[^}}]*bottom: var\(--tabbar-top\)", phone), bar
+    assert "--tabbar-top" in (STATIC / "js" / "navigation.js").read_text()  # measured, not only the CSS fallback
