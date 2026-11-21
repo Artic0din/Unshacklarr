@@ -376,7 +376,7 @@
   /* Notices drop in under the head, as on iOS, instead of floating over the page's bottom. */
   .toasts { left: 12px; right: 12px; top: calc(72px + env(safe-area-inset-top)); bottom: auto; align-items: center; }
   body.drawer-open .toasts { top: calc(128px + env(safe-area-inset-top)); }
-  .toast { border-radius: var(--radius-pill); padding: 10px 14px; font-size: var(--fs-callout); animation: toast-in .22s ease-out; }
+  .toast { border-radius: var(--radius-card); padding: 10px 14px; font-size: var(--fs-callout); animation: toast-in .22s ease-out; }
 
 }
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: opacity .15s !important; animation: none !important; } }  /* a short cross-fade stays: it moves nothing; * alone skips ::before/::after */
