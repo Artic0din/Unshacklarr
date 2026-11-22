@@ -43,9 +43,10 @@ $("#hist-clear").onclick = () => {
   const done = runCards.filter((c) => !isLive(c));
   const failedN = done.filter((c) => c.outcome === "failed").length;
   if (!done.length) return toast("The history is already empty");
-  $("#clear-failed").textContent = `Clear failed (${failedN})`;
+  $("#clear-text").textContent = `This permanently deletes ${COUNT.download(done.length)} from the history, with their Unshackle output. They cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.`;
+  $("#clear-failed").textContent = `Clear ${failedN} failed`;
   $("#clear-failed").disabled = !failedN;
-  $("#clear-all").textContent = `Clear all (${done.length})`;
+  $("#clear-all").textContent = `Clear ${COUNT.download(done.length)}`;
   const dialog = $("#clear-dialog");
   dialog.returnValue = "cancel";
   dialog.showModal();

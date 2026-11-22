@@ -131,7 +131,7 @@ function releaseRow(r, installed, latest) {
       const n = NEWS.find((x) => c.text.startsWith(`**${x.title}.**`));
       return el("li", { className: c.kind }, el("span", { className: "news-kind", textContent: NEWS_KINDS[c.kind] }),
         el("p", {}, ...inlineMd(c.text),
-          ...(n ? [" ", el("button", { type: "button", className: "news-go", textContent: "Show me", onclick: () => showOption(n) })] : [])));
+          ...(n ? [" ", el("button", { type: "button", className: "news-go", textContent: trWith("Go to {0}", tr(n.title)), onclick: () => showOption(n) })] : [])));
     })));
 }
 async function openNews() {

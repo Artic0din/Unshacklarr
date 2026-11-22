@@ -174,6 +174,7 @@ function watchRunningChipEdge(row) {
   return update;
 }
 const syncRunningChipEdge = watchRunningChipEdge($("#con-running"));
+document.querySelectorAll(".toolbar .seg, .ax-seg, .sched-filter, .seasons, .ds-nav:not(.set-jumps), .ep-sel, #tab-log .con-views, header nav").forEach((el) => watchRunningChipEdge(el));
 function drawRunningChips(items) {
   const row = $("#con-running");
   const chips = items.flatMap((item) => {
@@ -198,7 +199,7 @@ function drawConsole(liveOnly) {  // liveOnly: a tick of the live feed, the same
   const liveItems = jobsOf(runCards.filter((c) => isLive(c) || liveJobs.has(c.batch)));
   drawRunningChips(liveItems);
   $("#con-live-n").textContent = live.length || "";
-  $("#runs-live").replaceChildren(...(liveItems.length ? liveItems.map(itemRow) : [el("p", { className: "con-empty", textContent: "Nothing is downloading right now." })]));
+  $("#runs-live").replaceChildren(...(liveItems.length ? liveItems.map(itemRow) : [el("p", { className: "con-empty", textContent: "Nothing is downloading right now. Start one from a series, or select Run sync now." })]));
   glideBars($("#runs-live"));
   if (!liveOnly) {  // the history and its counts: unchanged while the same downloads only move on
     const query = $("#con-search").value.trim(), q = query.toLowerCase();
@@ -407,7 +408,7 @@ function renderJob(j) {
   const retryPrimary = retryable.some((c) => !failures.get(c.id)?.nonTransient);
   const groupFailures = j.cards.length > 1 && reasons.size > 0;
   const title = new Set(j.cards.map((c) => c.series)).size > 1 ? `${j.cards.length} episodes` : `${first.series} · ${j.cards.length} episodes`;
-  $("#cd-top-title").textContent = title;
+  $("#cd-top-title").textContent = $("#cd-top-title").title = title;
   const signIn = signInAction(j.cards.find(signInFailed), !retryPrimary);
   const acts = [series ? el("button", { className: "btn small", textContent: "Open series", dataset: { fk: "open" }, onclick: () => openDrawer(series) }) : "",
     st.live && st.n.queued ? el("button", { className: `btn small${st.paused && !signIn && !retryPrimary ? " primary" : ""}`, textContent: st.paused ? "Resume" : "Pause", dataset: { fk: "pause" },
@@ -956,7 +957,7 @@ async function showStats() {
       el("td", { textContent: v.last_success ? ago(v.last_success) : "never" }), el("td", { textContent: v.average ? duration(v.average * 1000) : "–" })))));
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;grid-template-columns:minmax(0,1fr);gap:22px" },
     el("div", { className: "cd-head" }, el("div", {}, el("h2", { textContent: "Stats" }),
-      el("small", { className: "line1", textContent: st.since ? `From the history kept since ${day(new Date(st.since))}` : "Nothing in the history yet" }))),
+      el("small", { className: "line1", textContent: st.since ? `From the history kept since ${day(new Date(st.since))}` : "Nothing in the history yet. Start a download from Series, or select Run sync now." }))),
     el("div", { className: "kpis" }, ...[["Downloaded, 30 days", fmt(m.downloaded)], ["Success rate", fmt(m.success, "%")], ["Failed", fmt(m.failed)],
       ["Kept", fmt(m.kept)], ["Average time", m.average ? duration(m.average * 1000) : "–"]]
       .map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v })))),
@@ -1038,7 +1039,8 @@ function renderDetail(c) {
       el("small", { className: "line1", textContent: `${svcName(c.service)}${onService} · ${KIND[c.kind] || c.kind} · started ${day(started)} ${started.toLocaleTimeString(LOCALE)}` }),
       el("small", { className: "line2" }, el("b", { textContent: `${svcName(c.service)}${onService}` }), `${KIND[c.kind] || c.kind} · ${day(started)} ${time(started)}`)),
     el("div", { className: "act" }, ...acts));
-  $("#cd-top-title").textContent = `${c.series} ${c.sxxeyy}`;
+  const topTitle = `${c.series} ${c.sxxeyy}`;
+  $("#cd-top-title").textContent = $("#cd-top-title").title = topTitle;
   $("#cd-foot").replaceChildren(...acts.map((b) => { const copy = b.cloneNode(true); copy.onclick = b.onclick; return copy; }));
   const parts = [head, ...runBody(c)];
   $("#cd-main").replaceChildren(el("div", { style: "display:grid;gap:18px" }, ...parts));
@@ -1172,7 +1174,7 @@ async function downloadDiagnostic(c) {
   try {
     const r = await fetch(`/api/runs/${encodeURIComponent(c.id)}/diagnostic`);
     if (!r.ok) throw await responseError(r);
-    const a = el("a", { href: URL.createObjectURL(await r.blob()), download: `unshacklarr-diagnostic-${c.id}.md` });
+    const a = el("a", { href: URL.createObjectURL(await r.blob()), download: `downstream-diagnostic-${c.id}.md` });
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);  // Safari fails the download if the file goes at the click
     toast("Diagnostic saved: check it, then attach it to the issue");
@@ -1218,7 +1220,7 @@ function stepList(c) {
   return el("div", {},
     el("div", { className: "steps", role: "list", ariaLabel: "Steps" },
       ...states.flatMap((st, i) => st === "skip" ? [] : [el("span", { className: st, role: "listitem", style: `--t:-${Date.now() % 1600}ms`, ...(["now", "fail", "halt"].includes(st) ? { ariaCurrent: "step" } : {}) },
-        el("span", { className: "l", textContent: STEPS[i] }),
+        el("span", { className: "l", textContent: STEPS[i], title: STEPS[i] }),
         el("span", { className: "sr-only", textContent: st === "halt" ? OUTCOME[c.outcome] || STEP_STATE.halt : STEP_STATE[st] || OUTCOME[c.outcome] }))])),
     active < 0 ? "" : el("div", { className: `step-caption ${states[active]}`, ariaHidden: "true", textContent: STEPS[active] }));
 }

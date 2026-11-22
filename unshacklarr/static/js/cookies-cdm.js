@@ -228,7 +228,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   }
   const def = typeof data.map.default === "string" ? data.map.default : "";
   const defaultDevice = deviceOf(def), defaultProblem = def !== "none" && (!defaultDevice || problem(defaultDevice));
-  const defButton = el("button", { type: "button", className: `btn small cdm-pop-btn${defaultProblem ? " primary" : ""}`, dataset: { key: "svc:default" }, textContent: "Change",
+  const defButton = el("button", { type: "button", className: `btn small cdm-pop-btn${defaultProblem ? " primary" : ""}`, dataset: { key: "svc:default" }, textContent: "Change default device",
     onclick: (e) => cdmPicker(e.currentTarget, "default", def) });
   const others = data.services.filter((t) => !shown.some((x) => x.toLowerCase() === t.toLowerCase()) && t !== "EXAMPLE");
   const addSvc = el("button", { type: "button", className: "btn small cdm-pop-btn", dataset: { key: "add" }, textContent: "+ Another service", onclick: (e) => {
@@ -268,7 +268,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   const folded = found.length - list.length;
   const counts = { all: data.devices.length, Widevine: data.devices.filter((d) => d.kind === "Widevine").length,
     PlayReady: data.devices.filter((d) => d.kind === "PlayReady").length, used: data.devices.filter((d) => d.used_by.length).length, problems: data.devices.filter(problem).length };
-  const filters = el("div", { className: "con-filters", role: "group", ariaLabel: "Show" }, ...[["all", "All"], ["Widevine", "Widevine"], ["PlayReady", "PlayReady"], ["used", "In use"], ["problems", "Problems"]]
+  const filters = el("div", { className: "con-filters", role: "group", ariaLabel: "Filter devices" }, ...[["all", "All"], ["Widevine", "Widevine"], ["PlayReady", "PlayReady"], ["used", "In use"], ["problems", "Problems"]]
     .map(([k, t]) => el("button", { ariaPressed: String(cdmFilter === k), textContent: `${t} (${counts[k]})`, onclick: () => { cdmFilter = k; renderCdm(); } })));
   const search = el("input", { type: "search", className: "con-search", placeholder: "Search a device, a maker, a service", value: cdmQuery, ariaLabel: "Search the devices" });
   search.oninput = () => { cdmQuery = search.value; renderCdm(true); };
@@ -338,9 +338,9 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   if (typing && $("#cdm-devices")) { $("#cdm-devices").replaceWith(devices); $("#cdm-test-all").replaceWith(testAll); return; }
   keepFocus($("#cdm-list"), () => $("#cdm-list").replaceChildren(
     cdmCard('<svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h6M4 17h10"/><path d="m15 9 4 3-4 3"/></svg>', "Which device each service uses",
-      "Click a service to move it to another device. A change applies to the next download.", null, services),
+      "Select a service to move it to another device. A change applies to the next download.", null, services),
     cdmCard('<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>', "Devices",
-      "The .wvd and .prd files in the CDM folder. Click one for its details; a test asks the DRM's test server for a license.", null,
+      "The .wvd and .prd files in the CDM folder. Select one for its details; a test asks the DRM's test server for a license.", null,
       ...(data.details_error ? [el("p", { className: "cdm-note", textContent: `${data.details_error}. The list below comes from the files alone.` })] : []),
       el("div", { className: "cdm-tools" }, search, testAll),
       filters,

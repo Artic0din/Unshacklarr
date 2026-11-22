@@ -5686,8 +5686,8 @@ def test_automatic_backups_are_kept_listed_and_restore_a_new_install(tmp_path, m
         at = start + timedelta(days=day)
         os.utime(web.make_backup(at), (at.timestamp(), at.timestamp()))
     names = [p.name for p in web.saved_backups()]
-    assert names == ["unshacklarr-2026-10-06-0900.yaml", "unshacklarr-2026-10-05-0900.yaml", "unshacklarr-2026-10-04-0900.yaml"]
-    for bad in ("../config.yaml", "unshacklarr-2026-01-01-0000.yaml", ""):
+    assert names == ["downstream-2026-10-06-0900.yaml", "downstream-2026-10-05-0900.yaml", "downstream-2026-10-04-0900.yaml"]
+    for bad in ("../config.yaml", "downstream-2026-01-01-0000.yaml", "unshacklarr-2026-01-01-0000.yaml", ""):
         try:
             web.saved_backup(bad)
             raise AssertionError(bad)
@@ -9595,3 +9595,13 @@ def test_a_language_check_sonarr_refuses_can_be_asked_again(tmp_path, monkeypatc
     with pytest.raises(web.web.HTTPBadGateway):
         asyncio.run(web.languages_action(Request()))
     assert web.language_scan["running"] is False
+
+
+def test_interface_audit_error_messages_and_legacy_backup_names(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    msg = web.sonarr_unreachable(RuntimeError("timed out"))
+    assert "Can't reach Sonarr" in msg and "timed out" in msg and "Settings › Connections › Sonarr" in msg
+    assert web.BACKUP_NAME.match("downstream-2026-10-06-0900.yaml")
+    assert web.BACKUP_NAME.match("unshacklarr-2026-10-06-0900.yaml")
+    assert "Reload the page" in web.UNKNOWN_JOB and "Reload the page" in web.JOB_OVER and "Reload the page" in web.UNKNOWN_DOWNLOAD
+    assert "sign in" in web.ALREADY_SET_UP.lower() and "startup log" in web.WRONG_SETUP_CODE

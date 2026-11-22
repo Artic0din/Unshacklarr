@@ -710,7 +710,8 @@ done.then(() => console.log(JSON.stringify({ during, after: nodes["#discard"].di
 def test_the_save_bar_offers_discard_and_announces_itself():
     page = (STATIC / "index.html").read_text()
     bar = page[page.index('<div class="savebar"'):].split("</div>", 1)[0]
-    assert 'role="status"' in bar.split(">", 1)[0]
+    assert 'role="status"' not in bar.split(">", 1)[0]
+    assert '<div class="sr-only" id="savebar-status" role="status"></div>' in page
     assert bar.index('id="discard"') < bar.index('id="save"')
 
 @pytest.mark.parametrize("poster", ["", "https://img.example/p.jpg"])

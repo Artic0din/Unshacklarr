@@ -74,7 +74,7 @@ async function uyEditor(text) {
     { tag: [CM.tags.punctuation, CM.tags.separator, CM.tags.squareBracket, CM.tags.brace], color: "var(--muted)" },
   ]);
   const theme = CM.EditorView.theme({
-    "&": { color: "var(--text)", backgroundColor: "var(--bg)", fontSize: "13px" },
+    "&": { color: "var(--text)", backgroundColor: "var(--bg)", fontSize: "var(--fs-sub)" },
     ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", lineHeight: "1.55" },
     ".cm-content": { caretColor: "var(--text)" }, ".cm-cursor": { borderLeftColor: "var(--text)" },
     ".cm-gutters": { backgroundColor: "var(--panel)", color: "var(--muted)", border: "none", borderRight: "1px solid var(--line)" },
@@ -166,9 +166,10 @@ $("#uy-versions").onchange = async () => {
   } catch (err) { toast(err.message, true); }
   $("#uy-versions").value = "";
 };
-$("#uy-save").onclick = async () => {
+async function uySave() {
   const button = $("#uy-save");
   button.disabled = true;
+  let ok = false;
   try {
     const text = uyText();
     const r = await api("/api/unshackle/config-file/save", { method: "POST", body: JSON.stringify({ password: uy.password, text, base: uy.base }) });
@@ -179,6 +180,9 @@ $("#uy-save").onclick = async () => {
     if (!$("#uy-diff").hidden) $("#uy-show").click();
     toast(!r.saved ? "No change to save" : r.restart ? "Saved. The serve section changed: restart Unshackle for it to apply"
       : "Saved: the next download uses it");
+    ok = true;
   } catch (err) { uyError(err.message); }
   button.disabled = false;
-};
+  return ok;
+}
+$("#uy-save").onclick = uySave;

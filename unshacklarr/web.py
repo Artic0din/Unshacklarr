@@ -51,6 +51,16 @@ HERE = Path(__file__).parent
 SERIES_FILE = sonarr_sync.CONFIG_FILE
 UNSHACKLE = sonarr_sync.UNSHACKLE
 
+UNKNOWN_JOB = "This job is no longer available. Reload the page to see its latest state."
+JOB_OVER = "This job has already finished. Reload the page to see its result."
+UNKNOWN_DOWNLOAD = "This download is no longer available. Reload the page to see its latest state."
+ALREADY_SET_UP = "DownStream is already set up. Sign in instead."
+WRONG_SETUP_CODE = "Wrong setup code. Find it in DownStream's startup log (docker logs downstream)."
+
+
+def sonarr_unreachable(error: Exception) -> str:
+    return f"Can't reach Sonarr. Check its address in Settings › Connections › Sonarr and that Sonarr is running, then try again. ({no_credentials(error)})"
+
 # Streaming sites, and the codes a service for each goes by in one Unshackle or another (HBO Max is MAX here,
 # HMAX there), best first: for a site no installed service names in its help, the first of them installed.
 SITES = {
@@ -1119,7 +1129,7 @@ async def state(_):
     try:
         series = await sonarr_side
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=sonarr_unreachable(e))
     cards = await asyncio.to_thread(run_cards) if sonarr_sync.RUNS_DIR.exists() else []
     authentication_entries = await asyncio.to_thread(authentication_services, service_entries)
     others, only_there = await asyncio.to_thread(sonarrs_of_series, {s["tvdbId"] for s in series})
@@ -1168,7 +1178,7 @@ def specs_of(tag: str) -> list[dict]:
     entry = next((s for s in sonarr_sync.backend_for(tag).services() if s["tag"] == tag), None)
     specs = with_remote(tag, options.service_specs(entry) if entry else [])
     if entry is None and not specs:
-        raise web.HTTPNotFound(text="Unknown service")
+        raise web.HTTPNotFound(text="Unknown service. Reload the page or check Settings › Services & Devices › Services.")
     return specs
 
 
@@ -1463,11 +1473,11 @@ def check_season_pages(given, key: str, known: dict | None = None) -> dict:
         try:
             season, there = int(season), int((page or {}).get("season") or 1)
         except (TypeError, ValueError):
-            raise web.HTTPBadRequest(text=f"Series {key}, seasons listed as separate shows: {season!r} is not a season number.") from None
+            raise web.HTTPBadRequest(text=f"Series {key}, seasons listed as separate series: {season!r} is not a season number.") from None
         if season < 1 or not 1 <= there <= 9999:
-            raise web.HTTPBadRequest(text=f"Series {key}, seasons listed as separate shows: season {season} or its season {there} on the show's page is not a valid number.")
+            raise web.HTTPBadRequest(text=f"Series {key}, seasons listed as separate series: season {season} or its season {there} on the series' page is not a valid number.")
         if not url or url.startswith("-") or any(c.isspace() for c in url):
-            raise web.HTTPBadRequest(text=f"Series {key}, seasons listed as separate shows: season {season} needs one URL or ID, without spaces.")
+            raise web.HTTPBadRequest(text=f"Series {key}, seasons listed as separate series: season {season} needs one URL or ID, without spaces.")
         service = str((page or {}).get("service") or "")
         if service:
             check_service(service, known, f"season {season} of {key}")
@@ -1856,7 +1866,7 @@ def check_settings(body: dict, previous: dict) -> dict:
         settings[key] = previous.get(key, sonarr_sync.SETTINGS_DEFAULTS[key])
     mode = str(body.get("unshackle_mode") or "")
     if mode not in ("", "local", "remote"):
-        raise web.HTTPBadRequest(text="unshackle runs either here (local) or elsewhere (remote)")
+        raise web.HTTPBadRequest(text="Unshackle runs either here (local) or elsewhere (remote)")
     settings["unshackle_mode"] = mode
     for name in ("unshackle_command", "downloads", "unshackle_downloads", "sonarr_downloads", "cookies_dir", "cache_dir", "unshackle_config_dir"):
         settings[name] = str(body.get(name) or "").strip().rstrip("/\\")
@@ -2548,7 +2558,7 @@ def sonarr_health() -> dict:
     try:
         return {"ok": True, "version": sonarr_get_version()}
     except (requests.RequestException, ValueError) as e:
-        return {"ok": False, "error": f"Sonarr is unreachable: {no_credentials(e)}"}
+        return {"ok": False, "error": sonarr_unreachable(e)}
 
 
 def sonarr_get_version() -> str:
@@ -2770,8 +2780,8 @@ async def start_authentication_setup(request):
         )
     except ValueError as error:
         raise web.HTTPBadRequest(text=str(error)) from None
-    except UnshackleError:
-        raise web.HTTPBadGateway(text="Unshackle could not start sign-in") from None
+    except UnshackleError as e:
+        raise web.HTTPBadGateway(text=f"Could not start sign-in: {no_credentials(e)}. Check that Unshackle is running, then try again.") from None
     return web.json_response(result)
 
 
@@ -2788,8 +2798,8 @@ async def answer_authentication_setup(request):
         )
     except ValueError as error:
         raise web.HTTPBadRequest(text=str(error)) from None
-    except UnshackleError:
-        raise web.HTTPBadGateway(text="Unshackle did not accept the response") from None
+    except UnshackleError as e:
+        raise web.HTTPBadGateway(text=f"Unshackle did not accept the response: {no_credentials(e)}. Check that Unshackle is running, then try again.") from None
     return web.json_response(result)
 
 
@@ -2802,8 +2812,8 @@ async def cancel_authentication_setup(request):
         )
     except ValueError as error:
         raise web.HTTPBadRequest(text=str(error)) from None
-    except UnshackleError:
-        raise web.HTTPBadGateway(text="Unshackle could not cancel sign-in") from None
+    except UnshackleError as e:
+        raise web.HTTPBadGateway(text=f"Could not cancel sign-in: {no_credentials(e)}. Check that Unshackle is running, then try again.") from None
     return web.json_response(result)
 
 
@@ -2951,7 +2961,7 @@ async def save_cookies(request):
     except (cookies.CookieError, cdm.CdmError, UnshackleError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:
-        raise web.HTTPBadGateway(text=f"Could not write the cookie file: {e}")
+        raise web.HTTPBadGateway(text=f"Could not save the cookie file ({no_credentials(e)}). Check that DownStream can write to Unshackle's cookies folder, then try again.")
     clear_unwritable_cache()
     return web.json_response(saved)
 
@@ -3102,7 +3112,7 @@ async def cdm_action(request):
     except (cdm.CdmError, UnshackleError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:
-        raise web.HTTPBadGateway(text=f"Could not write Unshackle's files: {e}")
+        raise web.HTTPBadGateway(text=f"Could not save Unshackle's files ({no_credentials(e)}). Check that DownStream can write to Unshackle's config and CDM folders, then try again.")
     UNSHACKLE.configure(UNSHACKLE.settings)  # its cdm: section changed: the next download asks serve, not the copy kept 10 minutes
     return web.json_response(await asyncio.to_thread(cdm_state))
 
@@ -3154,7 +3164,7 @@ def backup_text(config: dict) -> str:
 async def backup(request):
     """The settings as a file, every secret in them but the password and the session: asked for with the password."""
     await reauth(request, str((await json_object(request)).get("password") or ""))
-    return web.json_response({"name": f"unshacklarr-{datetime.now(sonarr_sync.LOCAL):%Y-%m-%d}.yaml", "text": backup_text(read_config())})
+    return web.json_response({"name": f"downstream-{datetime.now(sonarr_sync.LOCAL):%Y-%m-%d}.yaml", "text": backup_text(read_config())})
 
 
 def backup_data(text: str, passphrase: str = "") -> dict:
@@ -3199,7 +3209,7 @@ async def restore(request):
 # Automatic backups (#15): the same file as Download a backup, written in the data folder every so many days, the
 # newest kept. Listed in Account with a Download behind the password, and offered by the setup of a new install.
 BACKUPS_DIR = sonarr_sync.DATA / "backups"
-BACKUP_NAME = re.compile(r"unshacklarr-\d{4}-\d{2}-\d{2}-\d{4}\.yaml")
+BACKUP_NAME = re.compile(r"(?:downstream|unshacklarr)-\d{4}-\d{2}-\d{2}-\d{4}\.yaml")
 
 
 def saved_backups() -> list[Path]:
@@ -3219,7 +3229,7 @@ def make_backup(now: datetime | None = None) -> Path | None:
     if saved and now.timestamp() - saved[0].stat().st_mtime < every * 86400 - 600:  # slack for the hourly check
         return None
     BACKUPS_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path = BACKUPS_DIR / f"unshacklarr-{now:%Y-%m-%d-%H%M}.yaml"
+    path = BACKUPS_DIR / f"downstream-{now:%Y-%m-%d-%H%M}.yaml"
     write_atomic(path, backup_text(read_config()), PRIVATE)
     for old in saved_backups()[max(1, int(sonarr_sync.SETTINGS.get("backup_keep") or 14)):]:
         old.unlink(missing_ok=True)
@@ -3261,7 +3271,7 @@ async def backup_offsite(request):
         write_config(config)
     sent = {}
     if config["settings"]["backup_remote"]:
-        name = f"unshacklarr-{datetime.now(sonarr_sync.LOCAL):%Y-%m-%d-%H%M}.yaml"
+        name = f"downstream-{datetime.now(sonarr_sync.LOCAL):%Y-%m-%d-%H%M}.yaml"
         sent = await asyncio.to_thread(send_offsite, name, backup_text(config))
     return web.json_response({"sent": sent, "settings": public_config(read_config())["settings"]})
 
@@ -3270,7 +3280,7 @@ def saved_backup(name: str) -> Path:
     """One of the automatic backups, by its name only: never a path."""
     path = BACKUPS_DIR / name
     if not BACKUP_NAME.fullmatch(name) or not path.is_file():
-        raise web.HTTPNotFound(text=f"No backup named {name}")
+        raise web.HTTPNotFound(text=f"No backup named {name}. Reload the page to refresh the backup list.")
     return path
 
 
@@ -3371,7 +3381,7 @@ async def unshackle_yaml(request):
     if action == "version":
         version = str(body.get("id") or "")
         if not VERSION_ID.fullmatch(version) or not (CONFIG_HISTORY / f"{version}.yaml").exists():
-            raise web.HTTPNotFound(text="No such version")
+            raise web.HTTPNotFound(text="That saved version is no longer available. Reopen unshackle.yaml to refresh the list.")
         return web.json_response({"text": (CONFIG_HISTORY / f"{version}.yaml").read_text(encoding="utf8")})
     new = str(body.get("text") or "")
     if len(new) > 1_000_000:
@@ -3390,7 +3400,7 @@ async def allow_proxies(_):
     unshackle.yaml, the file before kept in the editor's history. serve reads it at its next start."""
     key = str(sonarr_sync.SETTINGS.get("unshackle_api_key") or "")
     if UNSHACKLE.mode == "local" or not key:
-        raise web.HTTPBadRequest(text="DownStream gives its own Unshackle that right when it starts it")
+        raise web.HTTPBadRequest(text="Local Unshackle already has proxy permission. This action is only needed for a remote Unshackle server.")
     try:
         path, wvds, prds = await asyncio.to_thread(cdm_paths)
         cdm.regular(path)
@@ -3410,7 +3420,7 @@ MAINTENANCE = {"clear-cache", "clear-temp", "refresh-services", "clear-finished"
 async def unshackle_maintenance(request):
     action = request.match_info["action"]
     if action not in MAINTENANCE:
-        raise web.HTTPNotFound(text="Unknown maintenance action")
+        raise web.HTTPNotFound(text="Unknown maintenance action. Reload the page and try again.")
     try:
         path = "/api/download/jobs/clear-finished" if action == "clear-finished" else f"/api/maintenance/{action}"
         result = await asyncio.to_thread(UNSHACKLE.call, "POST", path)
@@ -3438,7 +3448,7 @@ def cache_folder() -> Path:
 def clear_service_cache(tag: str) -> int:
     """Empty one service's folder of Unshackle's cache (its logins, tokens and sessions): the bytes freed."""
     if tag not in {s["tag"] for s in UNSHACKLE.services()}:
-        raise web.HTTPNotFound(text="Unknown service")
+        raise web.HTTPNotFound(text="Unknown service. Reload the page or check Settings › Services & Devices › Services.")
     if ((read_config().get("service_defaults") or {}).get(tag) or {}).get("backend"):
         raise web.HTTPBadRequest(text=f"{tag} downloads on another Unshackle server: clear its cache there")
     if any(j.get("service") == tag and j.get("status") in ("queued", "downloading") for j in UNSHACKLE.jobs()):
@@ -3474,7 +3484,7 @@ async def clear_cache_of(request):
 async def cancel_job(request):
     job_id = request.match_info["job_id"]
     if not re.fullmatch(r"[0-9a-f-]{8,64}", job_id):
-        raise web.HTTPBadRequest(text="Unknown job")
+        raise web.HTTPBadRequest(text=UNKNOWN_JOB)
     try:
         await asyncio.to_thread(UNSHACKLE.cancel, job_id)
     except UnshackleError as e:
@@ -3487,7 +3497,7 @@ async def unshackle_log(_):
         return web.json_response({"log": UNSHACKLE.local.tail(400, "\n")})
     found = await asyncio.to_thread(UNSHACKLE.dashboard, await asyncio.to_thread(dashboard_key), "logs")
     if found is None:
-        raise web.HTTPBadRequest(text="Its log needs serve: dashboard: key: in unshackle.yaml (Unshackle after 6.0.0)")
+        raise web.HTTPBadRequest(text="To view a remote Unshackle log, set serve.dashboard.key in unshackle.yaml (requires Unshackle 6.0.1 or newer), then restart Unshackle.")
     lines = [f"{datetime.fromtimestamp(float(r.get('ts') or 0)).strftime('%H:%M:%S')} {r.get('level')} {r.get('logger')}: {r.get('msg')}"
              for r in found.get("records") or [] if not str(r.get("logger") or "").startswith("aiohttp.access")]  # not every request
     return web.json_response({"log": "\n".join(lines[-400:])})
@@ -3496,14 +3506,14 @@ async def unshackle_log(_):
 async def stop_run(request):
     run_id = request.match_info["run_id"]
     if not RUN_ID.fullmatch(run_id):
-        raise web.HTTPBadRequest(text="Unknown download")
+        raise web.HTTPBadRequest(text=UNKNOWN_DOWNLOAD)
     try:
         card = json.loads((sonarr_sync.RUNS_DIR / f"{run_id}.json").read_text())
     except (OSError, ValueError):
         card = {}
     job_id = card.get("job_id")
     if run_id not in sonarr_sync.EpisodeRun.active:
-        raise web.HTTPConflict(text="This download is not running")
+        raise web.HTTPConflict(text="This download has already finished. Reload the page to see its result.")
     # marked whatever it does now: it ends where it waits for a slot, or before its next download reaches serve
     # (between two tries, a later episode of its job, a fallback try)
     with sonarr_sync.slots:
@@ -3531,7 +3541,7 @@ async def stop_job(request):
     Nothing marks the job itself: an episode can be queued again in it."""
     batch = request.match_info["batch"]
     if not BATCH_ID.fullmatch(batch):
-        raise web.HTTPBadRequest(text="Unknown job")
+        raise web.HTTPBadRequest(text=UNKNOWN_JOB)
     sonarr_sync.pause_job(batch, False)  # a paused job stops too: its loop wakes to skip what was cancelled
     for episode_id, card in list(sonarr_sync.waiting.items()):
         if card.get("batch") == batch and (taken := sonarr_sync.take_out(episode_id)):
@@ -3578,12 +3588,12 @@ async def job_options(request):
     the series left as it is."""
     batch = request.match_info["batch"]
     if not BATCH_ID.fullmatch(batch):
-        raise web.HTTPBadRequest(text="Unknown job")
+        raise web.HTTPBadRequest(text=UNKNOWN_JOB)
     shown = lambda o: {k: masked_options((o or {}).get(k)) for k in ("options", "service_options")}  # a proxy's credentials masked
     if request.method == "GET":  # with the options its episodes have without them, for the dialog to start from
         return web.json_response({**shown(sonarr_sync.job_options.get(batch)), "base": shown(await asyncio.to_thread(job_base_options, batch))})
     if batch not in sonarr_sync.running_jobs:
-        raise web.HTTPConflict(text="This job is over")
+        raise web.HTTPConflict(text=JOB_OVER)
     body = await json_object(request)
     service, was = str(body.get("service") or ""), sonarr_sync.job_options.get(batch) or {}
     known = await asyncio.to_thread(known_services)
@@ -3602,9 +3612,9 @@ async def pause_job(request):
     """Pause a job (the download going on ends, the next one waits) or let it go on."""
     batch = request.match_info["batch"]
     if not BATCH_ID.fullmatch(batch):
-        raise web.HTTPBadRequest(text="Unknown job")
+        raise web.HTTPBadRequest(text=UNKNOWN_JOB)
     if batch not in sonarr_sync.running_jobs:
-        raise web.HTTPConflict(text="This job is over")
+        raise web.HTTPConflict(text=JOB_OVER)
     sonarr_sync.pause_job(batch, request.match_info["action"] == "pause")
     return web.json_response({"paused": batch in sonarr_sync.paused_jobs})
 
@@ -3637,14 +3647,14 @@ async def requeue(request):
     body = await json_object(request)
     batch, run_id = str(body.get("batch") or ""), str(body.get("run") or "")
     if not BATCH_ID.fullmatch(batch) or not RUN_ID.fullmatch(run_id):
-        raise web.HTTPBadRequest(text="Unknown job")
+        raise web.HTTPBadRequest(text=UNKNOWN_JOB)
     card = sonarr_sync.RUNS_DIR / f"{run_id}.json"
     try:
         cancelled = json.loads(card.read_text())
     except (OSError, ValueError):
-        raise web.HTTPConflict(text="This episode is not cancelled any more")
+        raise web.HTTPConflict(text="This episode is no longer cancelled. Reload the page to see its latest state.")
     if cancelled.get("outcome") != "cancelled" or cancelled.get("episodeId") != episode_id or cancelled.get("batch") != batch:
-        raise web.HTTPConflict(text="This episode is not cancelled any more")
+        raise web.HTTPConflict(text="This episode is no longer cancelled. Reload the page to see its latest state.")
     card.unlink(missing_ok=True)  # queued again: its "cancelled" card goes
     replace = cancelled.get("replace") is True  # picked with Replace anyway: it still replaces
     sonarr = cancelled.get("instance") if isinstance(cancelled.get("instance"), str) else ""
@@ -3680,16 +3690,16 @@ async def answer_run(request):
     """The person's answer to the question a running download asks (its input_prompt), passed to Unshackle."""
     run_id = request.match_info["run_id"]
     if not RUN_ID.fullmatch(run_id):
-        raise web.HTTPBadRequest(text="Unknown download")
+        raise web.HTTPBadRequest(text=UNKNOWN_DOWNLOAD)
     answer = str((await json_object(request)).get("response") or "").strip()
     if not answer or len(answer) > 200:
         raise web.HTTPBadRequest(text="Type the answer first")
     try:
         card = json.loads((sonarr_sync.RUNS_DIR / f"{run_id}.json").read_text())
     except (OSError, ValueError):
-        raise web.HTTPNotFound(text="No such download") from None
+        raise web.HTTPNotFound(text=UNKNOWN_DOWNLOAD) from None
     if run_id not in sonarr_sync.EpisodeRun.active or not card.get("prompt") or not card.get("job_id"):
-        raise web.HTTPConflict(text="This download asks nothing now")
+        raise web.HTTPConflict(text="This download is no longer waiting for input. Reload the page to see its latest state.")
     try:
         await asyncio.to_thread(sonarr_sync.backend_named(card.get("backend")).call, "POST", f"/api/download/jobs/{card['job_id']}/input",
                                 json={"response": answer})
@@ -3748,11 +3758,11 @@ async def answer_remote_login(request):
 async def delete_run(request):
     run_id = request.match_info["run_id"]
     if not RUN_ID.fullmatch(run_id):
-        raise web.HTTPBadRequest(text="Unknown download")
+        raise web.HTTPBadRequest(text=UNKNOWN_DOWNLOAD)
     if run_id in sonarr_sync.EpisodeRun.active:
         raise web.HTTPConflict(text="This download is running: stop it first")
     if not await asyncio.to_thread(forget_runs, lambda c: c["id"] != run_id):
-        raise web.HTTPNotFound(text="No such download in the history")
+        raise web.HTTPNotFound(text="This download is no longer in the history. Reload the page to see the current history.")
     return web.json_response({"deleted": 1})
 
 
@@ -3761,13 +3771,13 @@ async def delete_job(request):
     stop the job first."""
     batch = request.match_info["batch"]
     if not BATCH_ID.fullmatch(batch):
-        raise web.HTTPBadRequest(text="Unknown job")
+        raise web.HTTPBadRequest(text=UNKNOWN_JOB)
     if any(c.get("batch") == batch for c in sonarr_sync.waiting.values()) or \
             any(c.get("batch") == batch and c["outcome"] == "running" for c in await asyncio.to_thread(run_cards)):
         raise web.HTTPConflict(text="This job is still going on: stop it first")
     deleted = await asyncio.to_thread(forget_runs, lambda c: c.get("batch") != batch)
     if not deleted:
-        raise web.HTTPNotFound(text="No such job in the history")
+        raise web.HTTPNotFound(text="This job is no longer in the history. Reload the page to see the current history.")
     return web.json_response({"deleted": deleted})
 
 
@@ -3834,7 +3844,7 @@ async def schedule(_):
     try:
         missing = await asyncio.to_thread(wanted)
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=sonarr_unreachable(e))
     runs = await asyncio.to_thread(latest_runs)
     return web.json_response({
         "nextSync": next_sync(now).isoformat(),
@@ -3867,7 +3877,7 @@ async def calendar(request):
         ) if (ep.get("series") or {}).get("tvdbId") not in own]
         episodes += await asyncio.to_thread(sonarr_sync.broadcast_episodes, config, start, start + timedelta(days=days), plans)
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=sonarr_unreachable(e))
     runs = await asyncio.to_thread(latest_runs)
     return web.json_response(await asyncio.to_thread(lambda: [  # each looks for its folder on the downloads mount
         d for ep in sorted(episodes, key=lambda e: e.get("airDateUtc") or "")
@@ -4268,7 +4278,7 @@ async def episodes(request):
     try:  # each episode with its file in one answer, not the files asked apart
         eps = await asyncio.to_thread(on_sonarr, inst, sonarr_sync.sonarr_get, "episode", seriesId=series_id, includeSubresources="episodeFile")
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=sonarr_unreachable(e))
     return web.json_response([
         {**{k: e.get(k) for k in ("id", "seasonNumber", "episodeNumber", "title", "airDateUtc", "hasFile", "monitored")},
          "file": file_summary(e["episodeFile"]) if e.get("hasFile") and e.get("episodeFile") else None}
@@ -4337,7 +4347,7 @@ async def series_fresh(request):
     try:
         s = await asyncio.to_thread(sonarr_sync.sonarr_get, f"series/{int(request.match_info['series_id'])}")
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}") from None
+        raise web.HTTPBadGateway(text=sonarr_unreachable(e)) from None
     kept = sonarr_sync._series_by_tvdb.get("", (0.0, {}))[1]
     if s.get("tvdbId") in kept:
         kept[s["tvdbId"]] = s  # the library kept here: the sync's labels say its new title too
@@ -4353,7 +4363,7 @@ async def series_language(request):
     try:
         await asyncio.to_thread(set_series_language, tvdb, name)
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr did not change it: {no_credentials(e)}") from None
+        raise web.HTTPBadGateway(text=f"Sonarr did not change it: {no_credentials(e)}. Check that Sonarr is running, then try again.") from None
     return web.json_response({"language": name})
 
 
@@ -5248,7 +5258,7 @@ async def probe(request):
     except UnshackleError as e:
         raise web.HTTPBadGateway(text=no_credentials(e))
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=sonarr_unreachable(e))
 
 
 async def release_seen(request):
@@ -5402,7 +5412,7 @@ def cdm_refusal(ids: list[int]) -> str:
     try:
         episodes = sonarr_sync.chosen_episodes(ids)
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=sonarr_unreachable(e))
     pages = [sonarr_sync.season_page(show, ep["seasonNumber"]) for ep in episodes if (show := shows.get(ep["series"]["tvdbId"]))]
     return next((lacking[p["service"]] for p in pages  # a device named for the season's service needs no mapping
                  if p["service"] in lacking and not sonarr_sync.stacked(p, config)[0].get("--cdm")), "")
@@ -5420,7 +5430,7 @@ async def download(request):
           f"{', with its own numbering' if numbering is not None else ''}", flush=True)
     batch = str(body.get("batch") or "")  # a retry from a job: it stays in that job
     if batch and not BATCH_ID.fullmatch(batch):
-        raise web.HTTPBadRequest(text="Unknown job")
+        raise web.HTTPBadRequest(text=UNKNOWN_JOB)
     inst = sonarr_named(str(body.get("sonarr") or ""))  # episodes picked in another Sonarr: its ids, its ladder
     if why := await asyncio.to_thread(on_sonarr, inst, cdm_refusal, ids):
         raise web.HTTPBadRequest(text=why)
@@ -5822,7 +5832,7 @@ async def languages_action(request):
             await asyncio.to_thread(sonarr_sync.sonarr_get, "system/status")
         except requests.RequestException as e:
             language_scan["running"] = False
-            raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}") from None
+            raise web.HTTPBadGateway(text=sonarr_unreachable(e)) from None
         threading.Thread(target=scan_languages, daemon=True).start()
     return web.json_response({"running": language_scan["running"]})
 
@@ -5880,7 +5890,7 @@ async def library_browse(request):
     try:
         return web.json_response(await asyncio.to_thread(on_sonarr, inst, sonarr_dirs, path))
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr did not list {path or 'its folders'}: {no_credentials(e)}") from None
+        raise web.HTTPBadGateway(text=f"Sonarr did not list {path or 'its folders'}: {no_credentials(e)}. Check that Sonarr is running, then try again.") from None
 
 
 LIBRARY_GUESSES = ["/library", "/media", "/tv", "/mnt"]  # where a library is usually mounted, besides the container's mounts
@@ -5926,7 +5936,7 @@ def library_check(root: str, local: str) -> dict:
             return out
         files = sonarr_sync.sonarr_get("episodefile", seriesId=serie["id"])
     except requests.RequestException as e:
-        out["why"] = f"Sonarr is unreachable: {no_credentials(e)}"
+        out["why"] = sonarr_unreachable(e)
         return out
     if not files:
         out["why"] = "Sonarr has no episode file to try"
@@ -6045,7 +6055,7 @@ async def missing(request):
     try:
         items = await asyncio.to_thread(on_sonarr, inst, missing_of_managed, int(days) if days else None)
     except requests.RequestException as e:
-        raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=sonarr_unreachable(e))
     return web.json_response({"items": items})
 
 
@@ -6171,10 +6181,10 @@ def diagnostic(run_id: str) -> str:
 async def run_diagnostic(request):
     run_id = request.match_info["run_id"]
     if not RUN_ID.fullmatch(run_id) or not (sonarr_sync.RUNS_DIR / f"{run_id}.json").exists():
-        raise web.HTTPNotFound(text="No such attempt")
+        raise web.HTTPNotFound(text=UNKNOWN_DOWNLOAD)
     text = await asyncio.to_thread(diagnostic, run_id)
     return web.Response(text=text, content_type="text/markdown",
-                        headers={"Content-Disposition": f'attachment; filename="unshacklarr-diagnostic-{run_id}.md"'})
+                        headers={"Content-Disposition": f'attachment; filename="downstream-diagnostic-{run_id}.md"'})
 
 
 cards_read: tuple[int, list[dict]] = (0, [])
@@ -6518,10 +6528,10 @@ async def terminal(request):
     one after the other as they come, until the last is done."""
     origin = urlparse(request.headers.get("Origin", "")).netloc
     if origin != request.host:  # other sites open in the browser must not read it
-        raise web.HTTPForbidden(text="Cross-origin terminal refused")
+        raise web.HTTPForbidden(text="Terminal connection refused because the request came from another site. Open DownStream directly and try again.")
     run_id, batch = request.query.get("run", ""), request.query.get("batch", "")
     if not (RUN_ID.fullmatch(run_id) or BATCH_ID.fullmatch(batch)):
-        raise web.HTTPBadRequest(text="Unknown download")
+        raise web.HTTPBadRequest(text=UNKNOWN_DOWNLOAD)
     ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
     try:
@@ -6903,7 +6913,7 @@ async def v1_start_download(request):
                 names = [found[x] for x in names]
             ids = await asyncio.to_thread(on_sonarr, inst, episode_ids_of, tvdb, names)
         except requests.RequestException as e:
-            raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}")
+            raise web.HTTPBadGateway(text=sonarr_unreachable(e))
     if not ids or not isinstance(ids, list) or not all(type(i) is int and i > 0 for i in ids):
         raise web.HTTPBadRequest(text='Give "episodeIds", or "tvdbId" and "episodes" such as ["S01E02"]')
     if len(ids) > 100:
@@ -6913,7 +6923,7 @@ async def v1_start_download(request):
     numbering = None
     if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries: as the page's Retry
         if not (alike := await asyncio.to_thread(retried_alike, ids, inst["name"] if inst else "")):
-            raise web.HTTPBadRequest(text="These episodes were last tried with different numbering, Replace anyway or audio language: retry them apart")
+            raise web.HTTPBadRequest(text="These episodes were last tried with different numbering, Replace anyway, or audio language. Retry them separately.")
         numbering, replace, audio = alike[0], replace or alike[1], audio or alike[2]
     if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
         raise web.HTTPConflict(text=why)
@@ -7008,9 +7018,9 @@ async def setup_found(request):
     given: before, anyone who reaches a fresh install would learn its addresses and folders."""
     body = await json_object(request)
     if read_config()["auth"].get("password"):
-        raise web.HTTPForbidden(text="DownStream is set up already")
+        raise web.HTTPForbidden(text=ALREADY_SET_UP)
     if not trusted(request, body):
-        raise web.HTTPForbidden(text="Wrong setup code: it is in DownStream's log")
+        raise web.HTTPForbidden(text=WRONG_SETUP_CODE)
     settings = sonarr_sync.load_settings(read_config())
     return web.json_response({
         **{k: settings[k] for k in ("sonarr_url", "sonarr_downloads", "unshackle_url", "unshackle_command", "downloads", "unshackle_downloads")},
@@ -7077,9 +7087,9 @@ async def setup_backups(request):
     """The setup of a new install: the backups found in its data folder, once the setup code is given."""
     body = await json_object(request)
     if read_config()["auth"].get("password"):
-        raise web.HTTPForbidden(text="DownStream is set up already")
+        raise web.HTTPForbidden(text=ALREADY_SET_UP)
     if not trusted(request, body):
-        raise web.HTTPForbidden(text="Wrong setup code: it is in DownStream's log")
+        raise web.HTTPForbidden(text=WRONG_SETUP_CODE)
     return web.json_response({"saved": backups_info()["saved"]})
 
 
@@ -7089,10 +7099,10 @@ async def setup_restore(request):
     brings, and said how it went, but the restore is done either way: in a rebuild, one may not be back yet."""
     config = read_config()
     if config["auth"].get("password"):
-        raise web.HTTPForbidden(text="Already set up")
+        raise web.HTTPForbidden(text=ALREADY_SET_UP)
     body = await json_object(request)
     if not setup_code_ok(body):
-        raise web.HTTPForbidden(text="Wrong setup code: DownStream prints it when it starts (docker logs downstream)")
+        raise web.HTTPForbidden(text=WRONG_SETUP_CODE)
     password = str(body.get("password") or "")
     if len(password) < 8:
         raise web.HTTPBadRequest(text="Password must be at least 8 characters")
@@ -7107,7 +7117,7 @@ async def setup_restore(request):
         await asyncio.to_thread(sonarr_status, settings["sonarr_url"], settings["sonarr_api_key"])
         checks["sonarr"] = {"ok": True}
     except (requests.RequestException, ValueError) as e:
-        checks["sonarr"] = {"ok": False, "error": f"Sonarr is unreachable: {no_credentials(e)}"}
+        checks["sonarr"] = {"ok": False, "error": sonarr_unreachable(e)}
     try:
         await asyncio.to_thread(check_unshackle, settings)
         checks["unshackle"] = {"ok": True}
@@ -7189,7 +7199,7 @@ async def test_sonarr(request):
     try:
         version = await asyncio.to_thread(sonarr_status, url, key)
     except (requests.RequestException, ValueError) as e:
-        raise web.HTTPBadGateway(text=f"Could not reach Sonarr: {no_credentials(e)}")
+        raise web.HTTPBadGateway(text=f"Can't reach Sonarr. Check its address and API key, and that Sonarr is running, then try again. ({no_credentials(e)})")
     return web.json_response({"version": version})
 
 
@@ -7225,7 +7235,7 @@ async def test_unshackle(request):
     except UnshackleError as e:
         raise web.HTTPBadGateway(text=no_credentials(e))
     if not count:
-        raise web.HTTPBadGateway(text="unshackle answers, but has no services: add yours to its services folder")
+        raise web.HTTPBadGateway(text="Unshackle answers, but has no services: add yours to its services folder")
     return web.json_response({"services": count})
 
 
@@ -7243,10 +7253,10 @@ async def setup(request):
     """First run: the password, Unshackle and Sonarr, in one go."""
     config = read_config()
     if config["auth"].get("password"):
-        raise web.HTTPForbidden(text="Already set up")
+        raise web.HTTPForbidden(text=ALREADY_SET_UP)
     body = await json_object(request)
     if not setup_code_ok(body):
-        raise web.HTTPForbidden(text="Wrong setup code: DownStream prints it when it starts (docker logs downstream)")
+        raise web.HTTPForbidden(text=WRONG_SETUP_CODE)
     password = str(body.get("password") or "")
     if len(password) < 8:
         raise web.HTTPBadRequest(text="Password must be at least 8 characters")
@@ -7290,7 +7300,7 @@ async def change_password(request):
     try:
         await reauth(request, str(body.get("current") or ""))  # login's limit on tries
     except web.HTTPForbidden:
-        raise web.HTTPForbidden(text="The current password is wrong") from None  # not 401: the page reads that as a lost session
+        raise web.HTTPForbidden(text="Wrong password") from None  # not 401: the page reads that as a lost session
     new = str(body.get("new") or "")
     if len(new) < 8:
         raise web.HTTPBadRequest(text="Password must be at least 8 characters")

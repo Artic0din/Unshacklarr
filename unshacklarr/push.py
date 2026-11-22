@@ -17,7 +17,7 @@ from pywebpush import WebPushException, webpush
 from unshacklarr.files import PRIVATE, no_credentials, read_json, write_atomic
 
 # The VAPID subject: Apple refuses an address it cannot take for real (".invalid": 403 BadJwtToken)
-CONTACT = "mailto:" + os.environ.get("PUSH_CONTACT", "unshacklarr@example.com")
+CONTACT = "mailto:" + os.environ.get("PUSH_CONTACT", "downstream@example.com")
 _lock = threading.Lock()
 
 

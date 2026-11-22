@@ -236,7 +236,16 @@ const barsSeen = new ResizeObserver(measureBars);
 function showTab(name, fromRoute = false, quiet = false) {
   const changedTab = name !== currentTab;
   if (currentTab === "yaml" && name !== "yaml") {  // leaving the editor: it forgets the password and the file
-    if (uyDirty() && !confirm("Leave unshackle.yaml without saving your changes?")) { if (fromRoute) navigate(true); return; }
+    if (uyDirty()) {
+      askUnsaved("unshackle.yaml").then(async (choice) => {
+        if (choice === "save") {
+          if (!await uySave()) { if (fromRoute) navigate(true); return; }
+        } else if (choice !== "discard") { if (fromRoute) navigate(true); return; }
+        uyReset();
+        showTab(name, fromRoute, quiet);
+      });
+      return;
+    }
     uyReset();
   }
   if (name !== currentTab && currentTab === "settings") {

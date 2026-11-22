@@ -799,7 +799,7 @@ def test_running_strip_keeps_overflow_cue_without_scroll_timeline():
     assert switcher("chip-overflow") == [True, False, True, False]
     css = load_css()
     assert re.search(r"@supports not \(animation-timeline: scroll\(\)\)\s*\{\s*"
-                     r"\.con-running\.more-chips\s*\{[^}]*mask-image:", css)
+                     r":is\([^\n]*\.con-running[^\n]*\)\.more-chips\s*\{[^}]*mask-image:", css)
 
 
 def test_switcher_follows_run_selection_and_only_shows_chips_for_running_downloads():

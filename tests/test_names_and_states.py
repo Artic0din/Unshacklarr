@@ -150,8 +150,8 @@ if (scenario === "hidden") {  // the Schedule's hidden series: the name starts w
   run(schedule.match(/^\$\("#hidden-open"\)\.onclick = [\s\S]*?^\};/m)[0]);
   $("#hidden-open").onclick();
   const box = find($("#hidden-rows"), (n) => n.tag === "input");
-  const label = find($("#hidden-rows"), (n) => n.className === "switch");
-  out.hidden = [label.texts[0], attr(box, "aria-label")];
+  const label = find($("#hidden-rows"), (n) => n.tag === "label");
+  out.hidden = [label.texts[0], attr(box, "aria-label"), box.className];
 }
 
 if (scenario === "select") {  // Series selection: the count is a status; the toggle keeps one name and says it is pressed
@@ -186,7 +186,7 @@ def run_scenario(name):
 
 
 def test_each_option_value_is_named_by_its_flag():
-    assert run_scenario("options")["names"] == [["text", "--quality value"], ["checkbox", "--no-cache"]]
+    assert run_scenario("options")["names"] == [["text", "--quality value"], ["checkbox", "--no-cache on"]]
 
 
 def test_the_language_corner_is_a_disclosure_named_in_the_language():
@@ -224,8 +224,8 @@ def test_the_columns_move_up_and_down_in_a_vertical_list():
 
 
 def test_a_hidden_series_switch_is_named_from_its_visible_label():
-    label, name = run_scenario("hidden")["hidden"]
-    assert label == "In schedule" and name.startswith(label)
+    label, name, cls = run_scenario("hidden")["hidden"]
+    assert label == "In schedule" and name.startswith(label) and cls == "switch"
 
 
 def test_the_selection_count_is_a_status_and_the_toggle_keeps_one_name():

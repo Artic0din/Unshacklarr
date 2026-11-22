@@ -270,7 +270,7 @@ console.log(JSON.stringify({
                      ["cal-ep mine st-ok", "Managed · Downloaded"], ["cal-ep mine st-none", "Managed"], ["cal-ep st-none", "Not managed"]],
         "count": [["Managed", 1], ["Not managed", 1]],
         "dayLabels": [
-            "Sunday, November 1: 3 episodes, Managed: 3",
+            "Sunday, November 1: 3 episodes, Managed: 3, Late · not on SBS yet: 1, Waiting for Sonarr: 1, Downloaded: 1",
             "Monday, November 2: 2 episodes, Managed: 1, Not managed: 1",
         ],
     }
