@@ -2683,6 +2683,22 @@ def test_a_series_is_failing_after_three_failures_in_a_row(tmp_path, monkeypatch
                       3: {"failing": 3, "cause": "", "since": "2026-09-06"}}  # unfinished tries do not break a streak
 
 
+def test_push_devices_are_kept_when_their_list_cannot_be_read(tmp_path):
+    # A list it cannot read (a NAS share gone for a moment, a damaged file) is never written over with one device
+    import pytest
+    from unshacklarr import push
+    p = push.Push(tmp_path)
+    p.subscribe({"endpoint": "https://push.example/a", "keys": {"p256dh": "k", "auth": "a"}})
+    saved = (tmp_path / "push.json").read_text()
+    (tmp_path / "push.json").write_text(saved[:-3])  # damaged
+    damaged = (tmp_path / "push.json").read_text()
+    with pytest.raises(OSError):
+        p.subscribe({"endpoint": "https://push.example/b", "keys": {"p256dh": "k", "auth": "a"}})
+    with pytest.raises(OSError):
+        p.unsubscribe("https://push.example/a")
+    assert (tmp_path / "push.json").read_text() == damaged
+
+
 def test_push_devices_come_and_go(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from unshacklarr import push

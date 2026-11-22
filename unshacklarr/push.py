@@ -41,8 +41,9 @@ class Push:
         raw = self.vapid().public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
         return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
-    def subscriptions(self) -> list[dict]:
-        return read_json(self.subs_file, [])
+    def subscriptions(self, strict: bool = False) -> list[dict]:
+        """strict, for a list written back: one it cannot read raises instead of being taken for none."""
+        return read_json(self.subs_file, [], strict=strict, invalid_raises=strict)
 
     def _save(self, subs: list[dict]) -> None:
         write_atomic(self.subs_file, json.dumps(subs), PRIVATE)  # each device's push keys
@@ -51,7 +52,7 @@ class Push:
         if not str(sub.get("endpoint", "")).startswith("https://") or not (sub.get("keys") or {}).get("p256dh"):
             raise ValueError("Not a push subscription")
         with _lock:
-            subs = [s for s in self.subscriptions() if s["endpoint"] != sub["endpoint"]]
+            subs = [s for s in self.subscriptions(strict=True) if s["endpoint"] != sub["endpoint"]]
             subs.append({"endpoint": sub["endpoint"], "keys": sub["keys"], "label": label[:80]})
             self._save(subs)
 
@@ -62,7 +63,7 @@ class Push:
 
     def unsubscribe(self, endpoint: str) -> None:
         with _lock:
-            self._save([s for s in self.subscriptions() if s["endpoint"] != endpoint])
+            self._save([s for s in self.subscriptions(strict=True) if s["endpoint"] != endpoint])
 
     def send(self, title: str, body: str, only: str | None = None) -> int:
         """To every device (or the one given); a device its push service no longer knows is dropped."""
@@ -94,5 +95,8 @@ class Push:
                 self.last_error = f"{host} could not be reached. Check the DownStream log."
                 print(f"Push: {host}: {no_credentials(e)}", flush=True)
         for endpoint in gone:
-            self.unsubscribe(endpoint)
+            try:
+                self.unsubscribe(endpoint)
+            except OSError as e:  # the list unreadable now: dropped at a later message
+                print(f"Push: could not drop a device: {no_credentials(e)}", flush=True)
         return sent

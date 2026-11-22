@@ -5280,11 +5280,16 @@ async def push_subscribe(request):
         await asyncio.to_thread(sonarr_sync.PUSH.subscribe, body.get("subscription") or {}, str(body.get("label") or ""))
     except ValueError as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
+    except OSError as e:
+        raise web.HTTPServiceUnavailable(text=f"Could not read the list of devices: {no_credentials(e)}")
     return web.json_response({"devices": len(sonarr_sync.PUSH.subscriptions())})
 
 
 async def push_unsubscribe(request):
-    await asyncio.to_thread(sonarr_sync.PUSH.unsubscribe, str((await json_object(request)).get("endpoint") or ""))
+    try:
+        await asyncio.to_thread(sonarr_sync.PUSH.unsubscribe, str((await json_object(request)).get("endpoint") or ""))
+    except OSError as e:
+        raise web.HTTPServiceUnavailable(text=f"Could not read the list of devices: {no_credentials(e)}")
     return web.json_response({"devices": len(sonarr_sync.PUSH.subscriptions())})
 
 
