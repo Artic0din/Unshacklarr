@@ -176,6 +176,7 @@ function updateTitle() {
 let routed = false;
 function applyRoute(event) {
   showTab.leave = (showTab.leave || 0) + 1;
+  if (currentTab === "yaml" && $("#unsaved-dialog")?.open) $("#unsaved-dialog").close("keep");
   const sameInboxPage = event && syncInboxRoute();
   if (event && !sameInboxPage) cancelSettingsJump();
   if (location.hash.startsWith("#/inbox")) {  // a push notification touched: the bell's list over the current page
@@ -242,11 +243,15 @@ function showTab(name, fromRoute = false, quiet = false, after = null) {
   if (currentTab === "yaml" && name !== "yaml") {  // leaving the editor: it forgets the password and the file
     if (uyDirty()) {
       const token = showTab.leave = (showTab.leave || 0) + 1;
+      if ($("#unsaved-dialog")?.open) $("#unsaved-dialog").close("keep");
       askUnsaved("unshackle.yaml").then(async (choice) => {
         if (token !== showTab.leave) return;
         if (choice === "save") {
-          if (!(await uySave()) || token !== showTab.leave || uyDirty()) { if (token === showTab.leave && fromRoute) navigate(true); return; }
-        } else if (choice !== "discard") { if (fromRoute) navigate(true); return; }
+          if (!(await uySave()) || token !== showTab.leave || uyDirty()) {
+            if (token === showTab.leave) navigate(true);
+            return;
+          }
+        } else if (choice !== "discard") { navigate(true); return; }
         uyReset();
         showTab(name, fromRoute, quiet, after);
       });
