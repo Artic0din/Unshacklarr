@@ -299,7 +299,7 @@ let servicesCookiesAsked = null;  // the cookie files read once for the badge, b
 function loadServiceCookies() {
   // a failure (refused, or answered with an error) is asked again at the next round: never kept until a reload
   const again = () => { servicesCookiesAsked = null; };
-  return servicesCookiesAsked ||= api("/api/cookies").then((cookies) => { if (cookies.error) again(); else servicesCookies ??= cookies; }, again).then(() => paintServicesBadge());
+  return servicesCookiesAsked ||= api("/api/cookies").then((cookies) => { if (cookies.error) again(); else if (!servicesCookies || servicesCookies.error) servicesCookies = cookies; }, again).then(() => paintServicesBadge());
 }
 function needingText(n) { return n === 1 ? "1 service needs attention" : `${n} services need attention`; }
 /* The count of the rows that need attention, beside Services in the Settings list, from any page. */

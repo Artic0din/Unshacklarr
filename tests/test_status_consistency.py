@@ -454,7 +454,7 @@ ctx.api = async (path) => {
 };
 vm.runInContext(grab(src, /^let servicesCookiesAsked = .*$/m), ctx);
 vm.runInContext(grab(src, /^function loadServiceCookies\(.*?^\}/ms), ctx);
-vm.runInContext("servicesCookies = null", ctx);
+vm.runInContext("servicesCookies = { folder: null, files: {}, error: 'read by the Services page while down' }", ctx);
 ctx.loadServiceCookies().then(() => ctx.loadServiceCookies()).then(() => ctx.loadServiceCookies())
   .then(() => console.log(JSON.stringify({ asked, cookies: Object.keys(vm.runInContext("servicesCookies", ctx).files) })));
 """, str(JS / "services.js"))
