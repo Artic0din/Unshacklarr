@@ -4809,6 +4809,27 @@ def test_the_sync_grid_restarts_at_local_midnight_every_day(tmp_path, monkeypatc
             assert runs == slots - 1, (every, day)
 
 
+def test_a_check_before_release_that_fails_keeps_what_it_told(tmp_path, monkeypatch):
+    # Show1 told (no CDM), then Show2's check fails: the next round must not tell Show1 again
+    from datetime import datetime, timezone
+    web = reloaded_web(tmp_path, monkeypatch)
+    now = datetime(2026, 10, 5, 18, tzinfo=timezone.utc)
+    series = {1: {"service": "MAX", "title": "a", "release_time": "20:00"}, 2: {"service": "NF", "title": "b", "release_time": "20:00"}}
+    config = {"auth": {"password": "x"}, "series": series, "notifications": {}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    ep = lambda i: {"id": i, "seasonNumber": 1, "episodeNumber": 2, "airDateUtc": "2026-10-05T19:00:00Z", "hasFile": False,
+                    "series": {"tvdbId": i, "title": f"Show{i}"}}
+    monkeypatch.setattr(web, "calendar_episodes", lambda config, start, end: [ep(1), ep(2)])
+    monkeypatch.setattr(web.sonarr_sync, "no_cdm", lambda tag, config=None: "No CDM for MAX" if tag == "MAX" else "")
+    monkeypatch.setattr(web, "list_titles", lambda show: (_ for _ in ()).throw(ValueError("bad option")))
+    sent = []
+    monkeypatch.setattr(web.sonarr_sync, "notify", lambda settings, level, title, message, **k: sent.append(title))
+    for _ in range(2):
+        with pytest.raises(ValueError):
+            web.precheck(now)
+    assert sent == ["Not ready for its release: Show1 S01E02"]
+
+
 def test_a_series_is_checked_hours_before_its_release_and_told_once(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))

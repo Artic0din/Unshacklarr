@@ -297,8 +297,9 @@ function renderServices() {
 let servicesCookiesAsked = null;  // the cookie files read once for the badge, before Services is opened
 /* An expired or missing cookie file needs attention too: the Settings badge reads them from any page, once. */
 function loadServiceCookies() {
-  // a failure is asked again at the next round: the badge must not stay blank until a reload
-  return servicesCookiesAsked ||= api("/api/cookies").then((cookies) => { servicesCookies ??= cookies; }, () => { servicesCookiesAsked = null; }).then(() => paintServicesBadge());
+  // a failure (refused, or answered with an error) is asked again at the next round: never kept until a reload
+  const again = () => { servicesCookiesAsked = null; };
+  return servicesCookiesAsked ||= api("/api/cookies").then((cookies) => { if (cookies.error) again(); else servicesCookies ??= cookies; }, again).then(() => paintServicesBadge());
 }
 function needingText(n) { return n === 1 ? "1 service needs attention" : `${n} services need attention`; }
 /* The count of the rows that need attention, beside Services in the Settings list, from any page. */
