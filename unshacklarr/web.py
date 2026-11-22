@@ -2278,26 +2278,28 @@ def precheck(now: datetime) -> list[str]:
         if at and datetime.fromisoformat(at) <= now + PRECHECK_AHEAD:
             coming.setdefault((ep["series"]["tvdbId"], ep["seasonNumber"]), []).append(ep | {"first_try": at})
     told = []
-    for (tvdb, season), eps in coming.items():
-        show = sonarr_sync.season_page(series[tvdb], season)
-        problem = "" if sonarr_sync.stacked(show, config)[0].get("--cdm") else sonarr_sync.no_cdm(show["service"])  # its own device
-        if not problem:
-            try:
-                premiere = any(e["episodeNumber"] == 1 for e in eps)  # nothing out yet: an empty list is normal
-                if not any(t.get("type") == "episode" for t in list_titles(show)) and not premiere:
-                    problem = f"{show['service']} lists no episodes for this series: is its URL still right?"
-            except UnshackleError as e:
-                problem = str(e)
-        for ep in eps:
-            done[str(ep["id"])] = now.isoformat()
-        if problem:
-            ep = min(eps, key=lambda e: e["first_try"])
-            label = f"{ep['series']['title']} S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}"
-            when = datetime.fromisoformat(ep["first_try"]).astimezone(sonarr_sync.LOCAL).strftime("%H:%M")
-            title = f"Not ready for its release: {label}"
-            sonarr_sync.notify(config["notifications"], "error", title, f"{problem[:1200]}\nIt is first tried at {when}: fix it before then.")
-            told.append(title)
-    write_atomic(PRECHECKED_FILE, json.dumps(done))
+    try:
+        for (tvdb, season), eps in coming.items():
+            show = sonarr_sync.season_page(series[tvdb], season)
+            problem = "" if sonarr_sync.stacked(show, config)[0].get("--cdm") else sonarr_sync.no_cdm(show["service"])  # its own device
+            if not problem:
+                try:
+                    premiere = any(e["episodeNumber"] == 1 for e in eps)  # nothing out yet: an empty list is normal
+                    if not any(t.get("type") == "episode" for t in list_titles(show)) and not premiere:
+                        problem = f"{show['service']} lists no episodes for this series: is its URL still right?"
+                except UnshackleError as e:
+                    problem = str(e)
+            for ep in eps:
+                done[str(ep["id"])] = now.isoformat()
+            if problem:
+                ep = min(eps, key=lambda e: e["first_try"])
+                label = f"{ep['series']['title']} S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}"
+                when = datetime.fromisoformat(ep["first_try"]).astimezone(sonarr_sync.LOCAL).strftime("%H:%M")
+                title = f"Not ready for its release: {label}"
+                sonarr_sync.notify(config["notifications"], "error", title, f"{problem[:1200]}\nIt is first tried at {when}: fix it before then.")
+                told.append(title)
+    finally:  # kept even when one check failed: what was told is not told again
+        write_atomic(PRECHECKED_FILE, json.dumps(done))
     return told
 
 
@@ -2390,14 +2392,15 @@ def check_upgrades(now: datetime) -> list[str]:
             sonarr_sync.record_authentication_observations(authentication_observations)
         except OSError as error:
             print(f"Could not persist authentication observations: {no_credentials(error)}", flush=True)
-    with sonarr_sync.upgrades_lock:  # read again: a download may have added or taken one meanwhile
-        watched = read_json(sonarr_sync.UPGRADES_FILE, {})
-        for key in dropped:
-            watched.pop(key, None)
-        for key in checked:
-            if key in watched:
-                watched[key]["checked"] = now.isoformat()
-        write_atomic(sonarr_sync.UPGRADES_FILE, json.dumps(watched))
+        # kept even when one check failed: what was told is not told again, and the ones before it are not asked again
+        with sonarr_sync.upgrades_lock:  # read again: a download may have added or taken one meanwhile
+            watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+            for key in dropped:
+                watched.pop(key, None)
+            for key in checked:
+                if key in watched:
+                    watched[key]["checked"] = now.isoformat()
+            write_atomic(sonarr_sync.UPGRADES_FILE, json.dumps(watched))
     return started
 
 

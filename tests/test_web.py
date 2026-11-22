@@ -5193,6 +5193,37 @@ def test_upgrade_auth_failure_is_recorded_without_stopping_later_checks(tmp_path
     assert sync.read_authentication_observations()["first"]["FIRST"]["state"] == "validated"
 
 
+def test_an_upgrade_check_that_fails_keeps_what_it_told_and_checked(tmp_path, monkeypatch):
+    # A past its days is told and dropped; B's service then fails: A must not be told again at the next check
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = {"series": {111: {"service": "TF1", "title": "a"}, 222: {"service": "TF1", "title": "b"}}, "notifications": {}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    for episode_id, tvdb in ((1, 111), (2, 222)):
+        sync.note_upgrade({"id": episode_id, "seasonNumber": 1, "episodeNumber": episode_id,
+                           "series": {"tvdbId": tvdb, "title": f"Show{tvdb}"}}, config["series"][tvdb], f"S01E0{episode_id}", "fr")
+    watched = json.loads(sync.UPGRADES_FILE.read_text())
+    watched["1"]["since"] = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    sync.UPGRADES_FILE.write_text(json.dumps(watched))
+    told = []
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, message: told.append(title))
+    monkeypatch.setattr(sync, "backend_for", lambda tag, current_config=None: type("Backend", (), {"name": "b"})())
+    monkeypatch.setattr(sync, "download_request", lambda show, current_config, wanted, out, selected_backend=None: {})
+    monkeypatch.setattr(sync, "tracks_on_service", lambda *a, **k: (_ for _ in ()).throw(sync.UnshackleError("Provider unavailable")))
+    now = datetime.now(timezone.utc) + timedelta(days=2)
+    with pytest.raises(sync.UnshackleError):
+        web.check_upgrades(now)
+    assert web.check_upgrades(now + timedelta(hours=1)) == []  # B checked once: not asked again within the day
+    assert told == ["Kept without fr audio: Show111 S01E01"]
+    assert "1" not in json.loads(sync.UPGRADES_FILE.read_text())
+
+
 def test_upgrade_scan_flushes_completed_authentication_evidence_on_later_error(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
 
