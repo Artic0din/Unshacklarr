@@ -42,16 +42,16 @@
     <a href="#/schedule" data-tab="schedule" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Schedule</span></a>
     <a href="#/series" data-tab="series"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h10"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span>Series</span></a>
     <a href="#/activity" data-tab="log"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Activity</span><b class="nav-busy" id="nav-busy" hidden></b></a>
-    <a href="#/settings" data-tab="settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></a>
+    <a href="#/settings" data-tab="settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="long">Settings</span><span class="short">Options</span></a>
   </nav>
-  <span class="health" id="health">
-    <button data-health="unshackle"><i class="dot"></i><span class="hn"><span>Unshackle</span><small></small></span></button>
-    <button data-health="sonarr"><i class="dot"></i><span class="hn"><span>Sonarr</span><small></small></span></button>
-  </span>
   <a class="update-pill" id="update" target="_blank" rel="noopener" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span></span></a>
   <button class="btn approval-reopen" id="approval-reopen" type="button" hidden>Approval</button>
   <button class="btn" id="bell" aria-label="Notifications"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><b class="count" id="bell-count" hidden></b></button>
   <button class="btn" id="sync" aria-label="Run sync now" aria-describedby="last-sync"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg><span class="sync-text"><span id="sync-label">Run sync now</span><small class="last-sync" id="last-sync"></small></span></button>
+  <span class="health" id="health">
+    <button data-health="unshackle"><i class="dot"></i><span class="hn"><span>Unshackle</span><small></small></span></button>
+    <button data-health="sonarr"><i class="dot"></i><span class="hn"><span>Sonarr</span><small></small></span></button>
+  </span>
 </header>
 
 <main id="main" tabindex="-1">
@@ -92,6 +92,7 @@
         </div>
       </div>
     </div>
+    <div class="sr-only" id="wall-count" role="status"></div>
     <div class="wall" id="wall" aria-busy="true"><span class="sr-only" role="status">Loading series…</span><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
   </section>
 
@@ -353,7 +354,7 @@
           <div class="sx-grid">
             <div class="field"><label for="ug-recheck">Ask again after</label><div class="unit"><input id="ug-recheck" type="number" data-set="upgrade_recheck_days" data-num min="0" max="3650"><span>days</span></div><small>0: always ask.</small></div>
             <div class="field"><label for="ug-age">Only episodes from the last</label><div class="unit"><input id="ug-age" type="number" data-set="upgrade_max_age_years" data-num min="0" max="100"><span>years</span></div><small>Older episodes are not checked. 0: all of them.</small></div>
-            <div class="field" id="ug-every-field"><label for="ug-every">Check automatically every</label><div class="unit"><input id="ug-every" type="number" data-set="upgrade_check_days" data-num min="0" max="365"><span>days</span></div><small>Each check asks the service only about episodes whose answer is older than Ask again after, so use fewer days than that. 0: only when you click Check.</small></div>
+            <div class="field" id="ug-every-field"><label for="ug-every">Check automatically every</label><div class="unit"><input id="ug-every" type="number" data-set="upgrade_check_days" data-num min="0" max="365"><span>days</span></div><small>Each check asks the service only about episodes whose answer is older than Ask again after, so use fewer days than that. 0: only when you select Check.</small></div>
             <div class="field" id="ug-spread-field"><label for="ug-spread">Spread the questions</label><div class="unit"><input id="ug-spread" type="number" data-set="upgrade_recheck_spread" data-num min="0" max="90"><span>%</span></div><small>Each episode's answer is kept up to this percentage less than Ask again after, a different amount for each episode, so episodes checked on the same day are not all asked about again on the same day. 0: no spreading.</small></div>
           </div>
           <label class="ug-switch" id="ug-new-field"><input type="checkbox" class="switch" id="ug-new"><span><b>Check new series</b><small>A series you set up with episodes already on disk is checked within the hour, without waiting for the next automatic check.</small></span></label>
@@ -425,8 +426,8 @@
           </div>
           <div class="nt-wide">
             <div class="nt-level nt-quiet-row"><svg class="nt-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><label for="nt-quiet-on"><b>Quiet hours</b><small id="nt-quiet-say"></small></label>
-              <span class="nt-quiet" id="nt-quiet" hidden><input type="time" id="nt-quiet-from" value="23:00" aria-label="Quiet from"><span>to</span><input type="time" id="nt-quiet-to" value="08:00" aria-label="Quiet until"></span>
-              <input type="checkbox" class="switch" id="nt-quiet-on"></div>
+              <input type="checkbox" class="switch" id="nt-quiet-on">
+              <span class="nt-quiet" id="nt-quiet" hidden><input type="time" id="nt-quiet-from" value="23:00" aria-label="Quiet from"><span>to</span><input type="time" id="nt-quiet-to" value="08:00" aria-label="Quiet until"></span></div>
           </div>
           <div class="nt-sub">Late episodes</div>
           <p class="nt-explain">Sonarr says an episode has aired, but its service still does not have it.<br>After this delay, you get one <b>Needs a look</b> message (“Still unavailable”) per episode.<br>Useful to spot an episode the service will never have, or a numbering that does not match.</p>
@@ -556,7 +557,7 @@
           <div id="bo-fields" hidden>
             <div class="sx-grid">
               <div class="field"><label for="bo-url" id="bo-url-l">Folder URL</label><input id="bo-url" type="url" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-url-help"></small></div>
-              <div class="field bo-s3"><label for="bo-bucket">Bucket</label><input id="bo-bucket" type="text" placeholder="my-bucket/unshacklarr" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"></div>
+              <div class="field bo-s3"><label for="bo-bucket">Bucket</label><input id="bo-bucket" type="text" placeholder="my-bucket/downstream" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"></div>
               <div class="field"><label for="bo-user" id="bo-user-l">User name</label><input id="bo-user" type="text" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-user-help"></small></div>
               <div class="field"><label for="bo-secret"><span id="bo-secret-l">Password</span> <span class="sx-saved" id="bo-secret-saved" hidden><svg class="ico inl" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved</span></label><input id="bo-secret" type="password" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small id="bo-secret-help"></small></div>
               <div class="field bo-s3"><label for="bo-region">Region</label><input id="bo-region" type="text" placeholder="us-east-1" autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" spellcheck="false"><small>Leave empty for us-east-1. For Cloudflare R2, enter auto.</small></div>
@@ -600,7 +601,7 @@
         <p class="con-state" id="sync-state"></p>
         <div class="con-gh"><span>History</span><button class="gh-act" id="hist-clear" type="button">Clear…</button></div>
         <input type="search" class="con-search" id="con-search" placeholder="Search a series" aria-label="Search the history">
-        <div class="con-filters" role="group" aria-label="Show">
+        <div class="con-filters" role="group" aria-label="Filter downloads">
           <button data-f="all" aria-pressed="true">All <span></span></button><button data-f="downloaded" aria-pressed="false">Downloaded <span></span></button>
           <button data-f="failed" aria-pressed="false">Failed <span></span></button><button data-f="kept" aria-pressed="false">Kept <span></span></button>
           <button data-f="stopped" aria-pressed="false">Stopped <span></span></button>
@@ -749,7 +750,7 @@
           </div>
           <div class="bc-days" id="d-bc-days" role="group" aria-label="Days of the week"></div>
           <div class="bc-cal" id="d-bc-cal"></div>
-          <small class="help">Click a day to set 0, 1, 2 or 3 episodes (0: none that day). Orange: different from the usual schedule.</small>
+          <small class="help">Select a day to set 0, 1, 2 or 3 episodes (0: none that day). Orange: different from the usual schedule.</small>
           <small class="help">The Schedule page uses these dates instead of Sonarr's, from the first day on. Earlier episodes are left out of it, but they are still downloaded when they air on Sonarr's dates.</small>
           <ol class="bc-list" id="d-bc-list"></ol>
         </div>
@@ -830,7 +831,7 @@
       </div>
       <div class="sx-grid">
         <div class="field">
-          <label for="d-filename">Show name in file names</label>
+          <label for="d-filename">Series name in file names</label>
           <input type="text" id="d-filename">
           <small>Used in the file name and the MKV title. Leave empty to use the name Sonarr gives the series.</small>
         </div>
@@ -848,7 +849,7 @@
           <small>Sonarr season = service season, comma-separated. <code>34=29</code></small>
         </div>
         <div class="field" id="d-pages-field">
-          <label for="d-pages">Seasons listed as separate shows</label>
+          <label for="d-pages">Seasons listed as separate series</label>
           <textarea id="d-pages" rows="2" spellcheck="false" placeholder="S02 https://www.sbs.com.au/ondemand/tv-series/apollo-has-fallen"></textarea>
           <small>One per line. Append the service's season number if it isn't 1. <code>S02 &lt;url&gt;</code></small>
         </div>
@@ -912,13 +913,13 @@
   <div class="inbox-head"><div><h2 id="inbox-title" tabindex="-1" autofocus>Notifications</h2><small id="inbox-summary"></small></div><span class="inbox-actions">
     <button class="inbox-clear" id="inbox-clear" type="button" title="Clear every notification except those waiting for you"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>Clear</span></button>
     <button class="inbox-x" id="inbox-full" type="button" aria-label="Open the whole list" title="Open the whole list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
-    <button class="inbox-x" id="inbox-close" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span></div>
-  <div class="inbox-filters" id="inbox-filters" role="group" aria-label="Show"></div>
+    <button class="inbox-x" id="inbox-close" type="button" aria-label="Close notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span></div>
+  <div class="inbox-filters" id="inbox-filters" role="group" aria-label="Filter notifications"></div>
   <div id="inbox-list"></div>
 </dialog>
 <dialog class="modal" id="news-dlg" aria-labelledby="news-title">
   <div class="modal-head"><div><h2 id="news-title" tabindex="-1" autofocus>What's new</h2><p id="news-version"></p></div>
-    <button class="inbox-x" id="news-x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <button class="inbox-x" id="news-x" type="button" aria-label="Close release notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="news-rels" id="news-list"></div>
   <div class="modal-actions news-foot"><a href="https://github.com/OwnzZzZ/Unshacklarr/releases" target="_blank" rel="noopener">All releases on GitHub ↗</a>
     <button class="btn" id="news-close" type="button">Close</button></div>
@@ -926,17 +927,17 @@
 <dialog class="modal" id="clear-dialog" aria-labelledby="clear-title">
   <form method="dialog">
     <h2 id="clear-title">Clear the history</h2>
-    <p>Deletes finished downloads from the history, with their Unshackle output. Downloads in progress stay. Your files and Sonarr are not touched.</p>
+    <p id="clear-text">This permanently deletes finished downloads from the history, with their Unshackle output. They cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.</p>
     <div class="modal-actions">
       <button class="btn" value="cancel">Cancel</button>
-      <button class="btn danger" value="all" id="clear-all">Clear all</button>
+      <button class="btn danger" value="all" id="clear-all">Clear all downloads</button>
       <button class="btn primary" value="failed" id="clear-failed" autofocus>Clear failed</button>
     </div>
   </form>
 </dialog>
 <dialog class="modal wide" id="oneoff-dialog" aria-labelledby="oneoff-title">
   <div class="modal-head"><h2 id="oneoff-title">Numbering</h2>
-    <button class="inbox-x" id="oneoff-x" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <button class="inbox-x" id="oneoff-x" type="button" aria-label="Close numbering"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <p>Only for the episodes picked now. The series keeps its own settings.</p>
   <div id="oneoff-cdm"></div>
   <ul class="oneoff-preview" id="oneoff-preview" aria-live="polite"></ul>
@@ -1022,7 +1023,7 @@
     <p id="unsaved-text"></p>
     <div class="modal-actions">
       <button class="btn" value="keep">Keep editing</button>
-      <button class="btn danger" value="discard">Discard</button>
+      <button class="btn danger" value="discard">Discard changes</button>
       <button class="btn primary" value="save" autofocus>Save</button>
     </div>
   </form>
@@ -1091,13 +1092,14 @@
 <div class="sched-pop" id="sched-pop" role="dialog" aria-labelledby="sched-det-h" tabindex="-1" hidden></div>
 <dialog class="modal" id="sched-dlg" aria-labelledby="sched-det-h"></dialog>
 
-<div class="savebar" id="savebar" role="status" hidden>
+<div class="savebar" id="savebar" hidden>
   <span>Unsaved changes</span>
   <span class="savebar-actions">
     <button class="btn" id="discard">Discard changes</button>
     <button class="btn primary" id="save">Save changes</button>
   </span>
 </div>
+<div class="sr-only" id="savebar-status" role="status"></div>
 
 <script src="/js/core.js"></script>
 <script src="/js/series.js"></script>

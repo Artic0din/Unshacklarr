@@ -103,7 +103,7 @@ function renderBroadcast() {
   for (let d = new Date(first); d.getMonth() === first.getMonth(); d.setDate(d.getDate() + 1)) {
     const iso = isoDay(d), n = iso < plan.start ? 0 : broadcastCount(plan, d, plan.start), changed = iso in (plan.evenings || {});
     const usual = Number(((plan.every === "daily" || (plan.days || []).includes(weekday(d)) || iso === plan.start) ? plan.per_evening || 1 : 0));
-    const say = `${COUNT.episode(n)} that day${changed ? " (changed)" : ""}: click to change`;
+    const say = `${COUNT.episode(n)} that day${changed ? " (changed)" : ""}: select to change`;
     cells.push(el("button", { type: "button", className: `${n ? "on" : ""}${changed ? " changed" : ""}${iso === today ? " today" : ""}`,
       disabled: iso < plan.start, title: say, ariaLabel: `${d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })} · ${say}`,
       onclick: () => {
@@ -747,14 +747,14 @@ function renderCatchUp() {
       ...(renumbered ? [el("small", { className: "renum ok", textContent: renumbered > 1 ? `${renumbered} episodes have another number on ${svc}: Download takes care of them` : `1 episode has another number on ${svc}: Download takes care of it` })] : []),
       // a whole season on a show of its own there (SBS: Has Fallen's S02 is "Apollo Has Fallen"): offered, saved with the series
       ...Object.entries(epPages).map(([season, p]) => el("small", { className: "renum" },
-        el("span", { className: "ok", textContent: p.count === 1 ? `${svc} lists season ${season} as a separate show: ${p.name} (1 episode). ` : `${svc} lists season ${season} as a separate show: ${p.name} (${p.count} episodes). ` }),
-        el("button", { className: "btn small", type: "button", textContent: "Use this show", title: p.url, onclick: () => {
+        el("span", { className: "ok", textContent: p.count === 1 ? `${svc} lists season ${season} as a separate series: ${p.name} (1 episode). ` : `${svc} lists season ${season} as a separate series: ${p.name} (${p.count} episodes). ` }),
+        el("button", { className: "btn small", type: "button", textContent: "Use this series", title: p.url, onclick: () => {
           const conf = S.config.series[current.tvdbId];
           conf.season_pages = { ...(conf.season_pages || {}), [season]: { url: p.url, ...(p.season ? { season: p.season } : {}) } };
           delete epPages[season];
           fillPages(conf);
           dirty();
-          toast(`Season ${season} will be downloaded from ${p.name}. Click Save, then check ${svc} again.`);
+          toast(`Season ${season} will be downloaded from ${p.name}. Select Save, then check ${svc} again.`);
           renderCatchUp();
         } }))),
       // a season its service lacks, found on another one by the weekly check: offered, never set on its own
@@ -766,7 +766,7 @@ function renderCatchUp() {
             delete epElsewhere[season];
             fillPages(conf);
             dirty();
-            toast(`Season ${season} will be downloaded from ${svcName(p.service)}. Click Save, then check again.`);
+            toast(`Season ${season} will be downloaded from ${svcName(p.service)}. Select Save, then check again.`);
             renderCatchUp();
           } })))),
     el("div", { className: "catchup-acts" },
@@ -850,8 +850,10 @@ function renderSeason() {
     const odd = e.file ? oddities(e.file, norm) : {};
     const run = epBusy.get(e.id);
     const number = `E${pad2(e.episodeNumber)}`, status = labels[state(e)];
+    const tip = fileTooltip(e), tipId = tip ? `ep-tip-${e.id}` : "";
     const box = el("input", { type: "checkbox", ariaLabel: number, checked: picked.has(e.id), disabled: !!run, title: run ? "Downloading now" : "",
       onchange: () => { box.checked ? picked.add(e.id) : picked.delete(e.id); updateEpBar(); } });
+    if (tipId) box.setAttribute("aria-describedby", tipId);
     const subs = e.file ? subtitleSummary(e.file.subtitles, required, odd.subs, e.id, number, expanded.has(`ep-subs-${e.id}`)) : null;
     if (subs && !showSubsColumn) {
       subs.cell.classList.add("ep-mobile-subs");
@@ -861,7 +863,8 @@ function renderSeason() {
       onclick: (event) => { if (!event.target.closest("input, button, a, [role=button]")) box.click(); } },
       box,
       el("span", { className: "num", textContent: number }),
-      el("span", { className: "t", title: fileTooltip(e) }, e.title ? episodeTitle(current.tvdbId, `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`, e.title, "tt") : el("span", { className: "tt", textContent: "TBA" }),  // the title gives way, its badge doesn't
+      el("span", { className: "t", title: tip }, e.title ? episodeTitle(current.tvdbId, `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)}`, e.title, "tt") : el("span", { className: "tt", textContent: "TBA" }),  // the title gives way, its badge doesn't
+        ...(tip ? [el("span", { className: "sr-only", id: tipId, textContent: tip })] : []),
         ...(run ? [el("em", { className: "ep-busy", textContent: isQueued(run) ? "Queued" : afterTracks(run) || `Downloading ${Math.round(Number(run.live?.progress) || 0)}%` })] : []),
         ...(!run && epAvail ? serviceBadge(e) : [])),
       ...(e.file ? [fileLine(e.file, odd)] : []),

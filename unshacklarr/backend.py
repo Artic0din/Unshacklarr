@@ -200,7 +200,7 @@ def unshackle_python(command: str) -> tuple[str, Path]:
     for name in ("python.exe", "python3", "python"):  # a Windows .exe launcher, or an odd shebang
         if (script.parent / name).exists():
             return str(script.parent / name), folder
-    raise UnshackleError(f"Could not tell which Python runs {script}")
+    raise UnshackleError(f"Could not tell which Python runs {script}. Check the Unshackle command in Settings › Connections › Unshackle, then try again.")
 
 
 EXAMPLE_KEYS = {"change-me-to-a-long-random-string", "the-UNSHACKLE_API_KEY-of-.env"}
@@ -264,7 +264,7 @@ class Local:
                 pass_fds=(sock.fileno(),) if handed else (),
             )
         except OSError as e:  # its Python is gone or not runnable: health and callers handle UnshackleError only
-            raise UnshackleError(f"Could not start unshackle serve with {python}: {e}") from e
+            raise UnshackleError(f"Could not start unshackle serve with {python}: {no_credentials(e)}") from e
         finally:
             if handed:
                 sock.close()  # serve has its own copy
@@ -319,12 +319,12 @@ class Local:
             try:
                 out = subprocess.run([python, "-c", ask], cwd=folder, capture_output=True, text=True, timeout=60)
             except subprocess.TimeoutExpired as e:
-                raise UnshackleError(f"unshackle did not answer within 60 s when asked where its files are ({python})") from e
+                raise UnshackleError(f"Unshackle did not answer within 60 s when asked where its files are ({python})") from e
             except OSError as e:
-                raise UnshackleError(f"Could not ask unshackle where its files are with {python}: {e}") from e
+                raise UnshackleError(f"Could not ask Unshackle where its files are with {python} ({no_credentials(e)}). Check the Unshackle command in Settings › Connections › Unshackle, then try again.") from e
             lines = out.stdout.rstrip("\n").split("\n")[-6:]  # its first line is empty with no unshackle.yaml yet
             if out.returncode or len(lines) != 6:
-                raise UnshackleError(f"Could not ask unshackle where its files are: {out.stderr.strip()[-300:]}")
+                raise UnshackleError(f"Could not ask Unshackle where its files are: {out.stderr.strip()[-300:]}")
             cached = self._paths = (command, dict(zip(("config", "cookies", "wvds", "prds", "temp", "cache"), map(Path, lines))))
         return cached[1]
 

@@ -32,7 +32,7 @@ def has(text, rule):
 
 
 def test_a_runs_buttons_wrap_instead_of_running_off_the_screen():
-    has(media("max-width: 700px"), ".cd-foot { display: flex; flex-wrap: wrap; gap: 10px; }")
+    has(media("max-width: 700px"), ".cd-foot { display: flex; flex-wrap: wrap; gap: var(--sp-2-5); }")
 
 
 def test_a_live_card_stacks_speed_and_time_under_the_episode_while_narrow():
@@ -71,7 +71,7 @@ def test_phone_episode_titles_can_wrap_past_two_lines_without_clipping():
 
 
 def test_the_setup_error_wraps_inside_the_card_when_it_sits_under_its_field():
-    has(media("max-width: 1180px"), "transform: none; margin-top: 8px; width: auto; max-width: 100%; }")
+    has(media("max-width: 1180px"), "transform: none; margin-top: var(--sp-2); width: auto; max-width: 100%; }")
 
 
 def test_inbox_actions_stay_together_and_clear_keeps_its_name_when_icon_only():
@@ -93,7 +93,7 @@ def test_inbox_filters_wrap_whole_pills_instead_of_clipping_the_last_one():
 def test_main_nav_pills_keep_the_current_page_distinct_and_touch_targets_at_44px():
     has(CSS, "nav a { background: none; border: 0; min-height: 40px; padding: 0 var(--sp-4); border-radius: var(--radius-pill);")
     has(CSS, 'nav a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }')
-    has(media("max-width: 700px"), "nav { position: fixed; left: var(--sp-3); right: var(--sp-3); bottom: calc(var(--sp-3) + env(safe-area-inset-bottom));")
+    has(media("max-width: 700px"), "nav { position: fixed; left: max(var(--sp-3), env(safe-area-inset-left)); right: max(var(--sp-3), env(safe-area-inset-right)); bottom: calc(var(--sp-3) + env(safe-area-inset-bottom));")
     has(media("max-width: 700px"), "nav a { min-inline-size: 44px; }")
 
 
@@ -134,7 +134,7 @@ def test_every_small_control_on_a_phone_is_44px_to_the_finger():
     for target in ("#update", ".btn.small", ".seg.small button", ".pill", ".icon-hide", ".sc-open", "#d-meta a", ".ds-nav a", ".ax-seg button",
                    "input[type=checkbox]:not(.switch)"):  # a 22px box, 44px to the finger
         assert target in slop[:slop.index("{")], target
-    has(phone, ".health button { min-width: 44px; min-height: 44px; padding: 0 8px;")
+    has(phone, ".health button { min-width: 44px; min-height: 44px; padding: 0 var(--sp-2);")
     has(phone, ".seg button { min-height: 44px; }")
     has(phone, ".ep-sel button { min-width: 44px; min-height: 44px; }")
 
@@ -149,8 +149,8 @@ def test_the_series_shortcuts_stay_pinned_below_the_head_except_on_a_short_scree
     has(media("max-width: 700px"), ".ds-nav { top: var(--d-head, 118px); }")
     has(media("max-width: 700px"), "html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: calc(var(--d-head, 118px) + 64px); }")
     short = media("max-width: 700px) and (max-height: 480px")
-    has(short, ".d-head, .ds-nav { position: static; }")
-    has(short, "html:has(body.drawer-open), html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: 8px; }")
+    has(short, ".d-head, .ds-nav, .dock, .savebar, .sel-bar { position: static; }")
+    has(short, "html:has(body.drawer-open), html:has(body.drawer-open #dt-settings:not([hidden])) { scroll-padding-top: var(--sp-2); }")
 
 
 def test_lighting_a_shortcut_scrolls_only_the_bar_sideways_and_counts_only_what_is_pinned():
@@ -235,7 +235,7 @@ def test_device_chips_and_job_counts_are_at_least_44px_on_touch():
 def test_phone_job_stats_wrap_as_groups_without_splitting_figures():
     has(CSS, ".cd-stats { display: flex; gap: 28px; flex-wrap: wrap; }")
     phone = media("max-width: 700px")
-    has(phone, ".cd-stats { gap: 12px 22px; }")
+    has(phone, ".cd-stats { gap: var(--sp-3) 22px; }")
     assert re.search(r"\.cd-stats b \{[^}]*white-space: nowrap;", phone)
 
 

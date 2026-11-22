@@ -96,7 +96,7 @@ function inheritedRows(root, from, own, redraw) {
       el("code", { textContent: flag }),
       el("span", { className: "val" }, el("span", { className: "v", textContent: value === true ? "on" : String(value) }),
         el("small", { textContent: over ? `${src} · replaced below for this series` : src })),
-      over ? el("span") : el("button", { type: "button", className: "btn small", textContent: "Change", title: "Set it differently for this series only",
+      over ? el("span") : el("button", { type: "button", className: "btn small", textContent: "Change", ariaLabel: trWith("Change {0} for this series", flag), title: "Set it differently for this series only",
         onclick: () => { own[flag] = value; dirty(); redraw(); } }));
   }));
   root.hidden = !last.size;
@@ -180,7 +180,7 @@ $("#sx-name").addEventListener("input", (e) => {
   const v = e.target.value.trim(), help = $("#sx-name-help");
   const why = !v ? "" : (S.config.settings.sonarrs || []).some((i) => i.name === v) ? "Another Sonarr has this name"
     : !/^[A-Za-z][A-Za-z0-9-]{0,23}$/.test(v) ? "A letter, then letters, digits or dashes" : "";
-  e.target.classList.toggle("bad", !!why);
+  markInvalid(e.target, help, !!why);
   help.classList.toggle("bad", !!why);
   help.textContent = why || "The name shown on each series to tell the libraries apart when you have more than one Sonarr. Leave empty to use “Sonarr”.";
 });
@@ -303,7 +303,7 @@ function akShow(k, key) {
   $("#ak-say").textContent = key ? "Copy it now: it will not be shown again." : set && k.created ? `Created ${ago(k.created)}` : "";
 }
 function akPassSay(text) {
-  $("#ak-pass").classList.toggle("bad", !!text);
+  markInvalid($("#ak-pass"), $("#ak-pass-say"), !!text);
   $("#ak-pass-say").className = `pw-match ${text ? "bad" : ""}`;
   $("#ak-pass-say").textContent = text || ($("#ak-saved").hidden ? "Asked again before a key is made." : "Asked again: the old key stops working.");
 }
@@ -399,12 +399,12 @@ function renderOffsite() {
 }
 const boWrong = (id, text) => {
   const f = $(id), help = f.closest(".field").querySelector("small");
-  f.classList.add("bad");
+  markInvalid(f, help, true);
   help.dataset.was ??= help.textContent;
   help.textContent = text;
   help.classList.add("status-err");
   f.focus();
-  f.addEventListener("input", () => { f.classList.remove("bad"); help.textContent = help.dataset.was; help.classList.remove("status-err"); delete help.dataset.was; }, { once: true });
+  f.addEventListener("input", () => { markInvalid(f, help, false); help.textContent = help.dataset.was; help.classList.remove("status-err"); delete help.dataset.was; }, { once: true });
 };
 $("#bo-send").onclick = async (e) => {
   const set = S.config.settings, s3 = boKind === "s3";
@@ -514,7 +514,7 @@ function renderRegion() {
   const offset = at({ timeZoneName: "shortOffset" }).split(" ").pop().replace("GMT", "UTC");
   state.querySelector("small").textContent = [tz.replaceAll("_", " "), offset, set.country ? names.of(set.country) || set.country : ""].filter(Boolean).join(" · ");
   const typed = $("#countries").value.toUpperCase().split(/[\s,]+/).filter(Boolean);
-  $("#countries").classList.toggle("bad", typed.some((c) => !COUNTRIES.split(" ").includes(c)));
+  markInvalid($("#countries"), $("#rg-countries"), typed.some((c) => !COUNTRIES.split(" ").includes(c)));
   $("#rg-countries").replaceChildren(...typed.map((c) => COUNTRIES.split(" ").includes(c)
     ? el("span", { className: "rg-chip", textContent: names.of(c) || c })
     : el("span", { className: "rg-chip bad", textContent: `${c}: not a country code` })));
@@ -540,7 +540,7 @@ const BUILDERS = {
     fields: [["token", "Bot token", "123456789:AAE…"], ["chat", "Chat ID", "123456789"]], url: (f) => `tgram://${f.token}/${f.chat}`,
     check: (f) => !/^\d+:[\w-]{20,}$/.test(f.token) ? ["token", "A bot token looks like 123456789:AAE…"] : /^-?\d+$|^@\w+$/.test(f.chat) || ["chat", "A chat ID is a number (or @channel)"] },
   ntfy: { hint: "Install the ntfy app and subscribe to a topic. Pick a name that is hard to guess: anyone who knows it can read your messages.",
-    fields: [["topic", "Topic", "unshacklarr-7f3k"], ["server", "Server, if not ntfy.sh", "ntfy.example.com"]],
+    fields: [["topic", "Topic", "downstream-7f3k"], ["server", "Server, if not ntfy.sh", "ntfy.example.com"]],
     url: (f) => f.server ? `ntfys://${f.server.replace(/^https?:\/\//, "").replace(/\/+$/, "")}/${f.topic}` : `ntfy://${f.topic}`,
     check: (f) => /^[\w-]{1,64}$/.test(f.topic) || ["topic", "A topic: letters, digits, - and _"] },
   Pushover: { hint: "Your user key is shown on pushover.net once you sign in. Create an application there to get the API token.",
@@ -880,7 +880,9 @@ async function refreshLog() {
   if (paused.length) $("#sync-state").append(el("span", { className: "status-err", textContent:
     ` Paused for ${paused.join(", ")}: choose a quality ladder in Settings › Connections › Sonarr.` }));
   $("#sync").disabled = running;
-  $("#sync-label").textContent = running ? "Sync running…" : "Run sync now";
+  const syncText = running ? "Sync running…" : "Run sync now";
+  $("#sync-label").textContent = syncText;
+  $("#sync").setAttribute("aria-label", tr(syncText));
   $("#sync").classList.toggle("spin", running);
   clearTimeout(logTimer);
   logTimer = setTimeout(refreshLog, running ? 3000 : 60000);

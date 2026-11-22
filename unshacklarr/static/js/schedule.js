@@ -45,7 +45,7 @@ const inScope = (d) => !isHidden(d) && ({ all: true, mine: d.managed, other: !d.
 /* Hidden series: out of the calendar (not out of the downloads), saved at once. */
 async function hideSeries(d, hidden, quiet = false) {
   try { S.config.hidden_series = await api("/api/hidden", { method: "POST", body: JSON.stringify({ tvdbId: d.tvdbId, hidden }) }); }
-  catch (e) { return toast(`Could not ${hidden ? "hide" : "show"} ${d.series}: ${e.message}`, true); }
+  catch (e) { return toast(hidden ? `Could not hide ${d.series}: ${e.message}` : `Could not show ${d.series}: ${e.message}`, true); }
   if (!quiet) toast(hidden ? `${d.series} hidden from the schedule` : `${d.series} is back in the schedule`, false,
     ["Undo", () => hideSeries(d, !hidden)]);
   renderHideToggle();
@@ -86,9 +86,9 @@ function renderHiddenButton() {
 $("#hidden-open").onclick = () => {
   const rows = S.config.hidden_series.map((tvdbId) => {
     const series = S.series.find((x) => x.tvdbId === tvdbId), name = series?.title || `TVDB ${tvdbId}`;
-    const input = el("input", { type: "checkbox", checked: false, ariaLabel: trWith("In schedule: {0}", name) });
+    const input = el("input", { type: "checkbox", className: "switch", checked: false, ariaLabel: trWith("In schedule: {0}", name) });
     const li = el("li", { className: "off" }, el("img", { alt: "", loading: "lazy", src: posterSrc(series?.poster, name), onerror: posterFail(name) }), el("span", { className: "n", textContent: name }),
-      el("label", { className: "switch" }, "In schedule", input, el("i")));
+      el("label", { className: "hidden-sw" }, "In schedule", input));
     input.onchange = async () => {
       li.classList.toggle("off", !input.checked);
       await hideSeries({ tvdbId, series: name }, !input.checked, true);
@@ -207,7 +207,7 @@ function renderWeek() {
         el("span", { className: "num", textContent: date.toLocaleDateString(LOCALE, { day: "numeric", month: month ? "short" : undefined }) }),
         ...(key === today ? [el("span", { className: "rel", textContent: "Today" })] : key === tomorrow ? [el("span", { className: "rel", textContent: "Tomorrow" })] : [])),
       list.length ? el("small", { className: "n", textContent: countText(list) }) : "",
-      ...(list.length ? list.map((e) => schedCard(e, whenText(e))) : [el("p", { className: "day-empty", textContent: "Nothing that day." })]));
+      ...(list.length ? list.map((e) => schedCard(e, whenText(e))) : [el("p", { className: "day-empty", textContent: "No episodes airing. Track more in Series." })]));
   });
   board.style.setProperty("--week-columns", tracks.join(" "));
   keepCardFocus(board, () => board.replaceChildren(...days));
@@ -270,9 +270,12 @@ function renderMonth() {
     const other = list.length - mine;
     // the three shown: yours first, never in "+N more"; then in the order they air
     const shown = [...list].sort((a, b) => b.managed - a.managed).slice(0, 3).sort(byWhen);
+    const statusCounts = new Map();
+    for (const d of list) { const st = schedStatus(d)?.[1]; if (st) statusCounts.set(st, (statusCounts.get(st) || 0) + 1); }
+    const statusNote = [...statusCounts].map(([label, count]) => `${tr(label)}: ${count}`).join(", ");
     const cell = el("button", {
       className: "cal-cell" + (date.getMonth() !== first.getMonth() ? " out" : "") + (key === today ? " today" : "") + (key === cal.pick ? " picked" : ""),
-      ariaLabel: `${date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })}: ${COUNT.episode(list.length)}${mine ? `, ${managed}: ${mine}` : ""}${other ? `, ${notManaged}: ${other}` : ""}`,
+      ariaLabel: `${date.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" })}: ${COUNT.episode(list.length)}${mine ? `, ${managed}: ${mine}` : ""}${other ? `, ${notManaged}: ${other}` : ""}${statusNote ? `, ${statusNote}` : ""}`,
       ariaPressed: String(key === cal.pick),
       onclick: () => { pickDay(key); renderMonth(); $("#cal-day").scrollIntoView({ behavior: SCROLL, block: "nearest" }); },
     },
@@ -290,7 +293,7 @@ function renderMonth() {
   keepCardFocus(listBox, () => listBox.replaceChildren(...(picked ? [
     el("h3", { className: "sched-day", textContent: day(dayOfKey(cal.pick)) }),
     picked.length ? el("div", { className: "sched-cards" }, ...picked.sort(byWhen).map((d) => schedCard(d, whenText(d))))
-      : el("p", { className: "muted", textContent: "Nothing that day." })] : [])));
+      : el("p", { className: "muted", textContent: "No episodes scheduled that day. Select another day, or add a series in Series." })] : [])));
   syncDetails();
 }
 function moveMonth(step) {

@@ -8,7 +8,7 @@
   --ok: #65d8a0; --ok-tint: #17392a; --warn: #e8b651; --warn-ink: #241a03; --err: #ff8a75; --err-ink: #2a0c06;
   --line-strong: #52564a;  /* a divider or thumb that must show on --panel; never text */
   --scrim: rgb(8 8 4 / .64);
-  --live: #f2552c;  /* the pulsing dot of something running now; never a fill or a button */
+  --live: #f58c24;  /* the pulsing dot of something running now; never a fill or a button */
   --term-bg: #10110e; --tk-video: #8fb3ff; --tk-audio: #cfa0ff; --code-string: #a8d68f; --net-chip: #e9ebe3;
   --dim: grayscale(.85) brightness(.6);
   /* One rhythm for every form: a field's name to its input, its input to its help, one field to the next */
@@ -16,14 +16,15 @@
   /* A field stands out from the card it sits on: a darker ground, an edge you can see */
   --field-bg: var(--bg); --field-line: #7d8275; --field-line-hover: #a1a594;
   /* Type scale in rem, so text follows the browser's text-size setting */
-  --fs-caption: .6875rem; --fs-footnote: .75rem; --fs-sub: .8125rem; --fs-callout: .875rem; --fs-body: .9375rem;
+  --fs-caption: .75rem; --fs-footnote: .75rem; --fs-sub: .8125rem; --fs-callout: .875rem; --fs-body: .9375rem;
   --fs-headline: 1.125rem; --fs-title3: 1.25rem; --fs-title2: 1.375rem; --fs-title1: 1.75rem;
+  --ls-caps: .05em;
   --font-figure: -apple-system, "SF Pro Display", system-ui, sans-serif;
   /* Corners by what a thing is: fields and rows inside a card; tiles (posters, schedule, episode and download cards);
      cards, modals and menus; pills (buttons, nav, segments, filters, badges, switches, toasts) */
   --radius-field: 10px; --radius-tile: 16px; --radius-card: 28px; --radius-bar: 36px; --radius-pill: 999px;
   --radius-inline: 6px;  /* thumbnails, code, swatches: small things the design system gives no corner */
-  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
+  --sp-1: 4px; --sp-1-5: 6px; --sp-2: 8px; --sp-2-5: 10px; --sp-3: 12px; --sp-3-5: 14px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px;
   --header-bottom: calc(var(--header-top, 0px) + var(--head-h, 65px));
   --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a0b05' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");  /* a tick on a light fill, in --accent-ink */
   --ic-search-field: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aca9a6' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E");  /* in --muted */

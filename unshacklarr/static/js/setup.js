@@ -23,16 +23,17 @@ document.addEventListener("focusout", (e) => {
   const x = e.target;
   if (!(x instanceof HTMLInputElement) || x.type !== "url" || x.closest(".wiz-step")) return;  // the setup says it on Next
   const problem = urlProblem(x.value);
-  x.classList.toggle("bad", !!problem);
   let hint = x.nextElementSibling?.classList.contains("url-hint") ? x.nextElementSibling : null;
   if (problem && !hint) x.after(hint = el("small", { className: "url-hint", role: "alert" }));
+  markInvalid(x, hint, !!problem);
   if (hint) problem ? hint.textContent = problem : hint.remove();
 });
 document.addEventListener("input", (e) => {
   const x = e.target;
   if (x instanceof HTMLInputElement && x.type === "url" && x.classList.contains("bad") && !urlProblem(x.value)) {
-    x.classList.remove("bad");
-    if (x.nextElementSibling?.classList.contains("url-hint")) x.nextElementSibling.remove();
+    const hint = x.nextElementSibling?.classList.contains("url-hint") ? x.nextElementSibling : null;
+    markInvalid(x, hint, false);
+    if (hint) hint.remove();
   }
 });
 
@@ -93,7 +94,7 @@ function listPicker(real, all, { placeholder, none, exact = false }) {
     shown.sort((a, b) => (plain(b.name).startsWith(q) || b.code.toLowerCase() === q) - (plain(a.name).startsWith(q) || a.code.toLowerCase() === q));
     active = shown.length ? Math.max(0, shown.findIndex((c) => c.code === current()?.code)) : -1;
     list.replaceChildren(...shown.map((c, i) => el("li", { id: `${list.id}-${i}`, role: "option", className: i === active ? "on" : "", ariaSelected: String(i === active),
-      onmousedown: (e) => { e.preventDefault(); pick(c); } }, el("span", { textContent: c.name }), el("small", { textContent: c.small }))));
+      onmousedown: (e) => { e.preventDefault(); pick(c); } }, el("span", { textContent: c.name, title: c.name }), el("small", { textContent: c.small }))));
     if (!shown.length) list.append(el("li", { className: "cp-none", textContent: none }));
     list.style.top = `${input.offsetTop + input.offsetHeight + 4}px`;  // right under the input, over its help
     list.hidden = false;

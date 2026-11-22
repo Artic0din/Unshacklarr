@@ -130,7 +130,7 @@ function renderUnshackleStatus(st) {
           e.target.disabled = true;
           try { await api(`/api/unshackle/jobs/${encodeURIComponent(j.id)}/cancel`, { method: "POST" }); toast("Cancelling"); setTimeout(loadUnshackleStatus, 1500); }
           catch (err) { e.target.disabled = false; toast(err.message, true); }
-        } }))))] : [el("small", { className: "muted", textContent: "Nothing is downloading or waiting." })])),
+        } }))))] : [el("small", { className: "muted", textContent: "Nothing is downloading or waiting. Start a download from Series, or select Run sync now." })])),
     ...(Object.keys(st.errors || {}).length ? [el("div", { className: "st-sect" }, el("b", { textContent: "Errors since it started" }),
       el("small", { className: "muted", textContent: Object.entries(st.errors).sort((a, b) => b[1] - a[1]).map(([svc, n]) => `${svc} ${n}`).join(" · ") }))] : []),
     ...(st.sessions?.length ? [el("div", { className: "st-sect" }, el("b", { textContent: "Remote sessions" }),
@@ -183,7 +183,7 @@ async function loadUnshackleStatus() {
 }
 async function restartUnshackle() {
   $("#u-status").replaceChildren(loading("Restarting Unshackle…"));
-  try { renderUnshackleStatus(await api("/api/unshackle/restart", { method: "POST", wait: 120 })); toast("unshackle restarted"); }
+  try { renderUnshackleStatus(await api("/api/unshackle/restart", { method: "POST", wait: 120 })); toast("Unshackle restarted"); }
   catch (e) { toast(e.message, true); loadUnshackleStatus(); }
 }
 async function showServeLog() {
@@ -244,7 +244,7 @@ async function openBulk() {
       title: l ? l.url : "Leave it without a service",
     }, el("input", { type: "radio", name, value: l ? JSON.stringify([l.service, l.url]) : "",
       checked: !l, onchange: pickCount }), l ? (l.name ? `${svcName(l.service)} · ${l.name}` : svcName(l.service)) : "Skip",
-      l ? el("small", { textContent: l.country }) : "");
+      l ? el("small", { textContent: l.country, title: l.country }) : "");
     li.querySelector(".opts").replaceChildren(...(usable.length ? [...usable.map(opt), opt(null, -1)] : [el("span", { className: "none", textContent: "Nothing found on TMDB" })]));
     $("#bulk-progress").textContent = `Checked ${++done} of ${todo.length}`;
     pickCount();
@@ -314,7 +314,7 @@ $("#d-probe").onclick = async () => {
       el("b", { textContent: c.sxxeyy }),
       el("span", { className: "mut", textContent: c.service && c.service !== c.sxxeyy ? `= ${c.service}` : "" }),
       el("span", {}, c.found ? `${c.name || ""} ` : c.aired ? "not on the service" + (c.hasFile ? " (on disk already)" : "") : "not aired yet",
-        c.found && c.file ? el("code", { textContent: ` → ${c.file}` }) : "")));
+        c.found && c.file ? el("code", { textContent: ` → ${c.file}`, title: c.file }) : "")));
     const maps = Object.entries(r.season_map);
     const apply = maps.length ? [el("div", { className: "probe-map" },
       el("span", { textContent: `The service numbers ${maps.map(([a, b]) => `Sonarr season ${a} as ${b}`).join(", ")}.` }),

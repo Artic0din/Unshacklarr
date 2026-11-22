@@ -349,3 +349,100 @@ def test_every_language_translates_the_skip_link_and_the_light_states():
             if path.name != "en.json":
                 assert translated.get(text), f"{path.name}: {text!r}"
                 assert ("{0}" in translated[text]) == ("{0}" in text), f"{path.name}: {text!r} placeholder"
+
+
+def test_interface_audit_accessibility_guards():
+    page = PAGE.read_text(encoding="utf8")
+    core = (JS / "core.js").read_text(encoding="utf8")
+    nav = (JS / "navigation.js").read_text(encoding="utf8")
+    series = (JS / "series.js").read_text(encoding="utf8")
+    css = load_css()
+    assert '<div class="sr-only" id="wall-count" role="status"></div>' in page
+    assert '$("#wall-count")' in core
+    assert 'el("button", { type: "button", className: `${className} spoiler`' in core
+    assert 'textContent: " (switched off)"' in core
+    assert 'ariaDescribedBy' in series or 'aria-describedby' in series
+    assert 'matches(":hover, :focus-within")' in core and ', 5000);' in core
+    assert 'Settings › Connections › Unshackle' in core
+    assert "confirm(" not in nav
+    for bad in ("order: 10", "order: 5", "order: 1;"):
+        assert bad not in css, bad
+    assert not re.search(r"\.dock\.open > \.cd-raw[^{]*\{[^}]*order:", css)
+    assert not re.search(r"\.modal-actions[^{]*\{[^}]*column-reverse", css)
+    for name in ("quality.js", "setup.js", "settings-options.js"):
+        assert "markInvalid(" in (JS / name).read_text(encoding="utf8"), name
+
+
+def test_quality_height_validation_leaves_bitrate_valid_and_wall_count_announces_empty():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm"), path = require("path");
+const core = fs.readFileSync(process.argv[1], "utf8");
+const qual = fs.readFileSync(path.join(path.dirname(process.argv[1]), "quality.js"), "utf8");
+const mk = (tag, props = {}, ...kids) => {
+  const attrs = {}, cls = new Set((props.className || "").split(" ").filter(Boolean));
+  return { tag, ...props, kids, attrs, dataset: props.dataset || {},
+    classList: { toggle: (c, on) => on ? cls.add(c) : cls.delete(c), contains: (c) => cls.has(c) },
+    setAttribute(k, v) { attrs[k] = String(v); }, getAttribute(k) { return attrs[k] ?? null; },
+    removeAttribute(k) { delete attrs[k]; } };
+};
+const ctx = { el: mk, CODECS: [["", "Any"]], RANGES: [["", "Any"]], qlId: () => 1, dirty() {}, renderQuality() {}, qlFocus() {} };
+vm.createContext(ctx);
+vm.runInContext(core.match(/let messageIds = 0;[\s\S]*?^function markInvalid[\s\S]*?^\}/m)[0] + "\n" + qual.match(/^function stepRow\([\s\S]*?^\}/m)[0], ctx);
+const st = { codec: "", range: "SDR", min: 720, max: 1080, max_kbps: 5000 };
+const row = ctx.stepRow({ steps: [st] }, st, 0);
+const inputs = [];
+const walk = (n) => { if (n && typeof n === "object") { if (n.tag === "input") inputs.push(n); (n.kids || []).forEach(walk); } };
+walk(row);
+inputs[0].oninput({ target: { value: "2160" } });
+const invalidAfterBad = inputs.map((i) => [i.ariaLabel, i.getAttribute("aria-invalid"), Boolean(i.getAttribute("aria-describedby"))]);
+inputs[0].oninput({ target: { value: "720" } });
+const invalidAfterFix = inputs.map((i) => [i.ariaLabel, i.getAttribute("aria-invalid"), Boolean(i.getAttribute("aria-describedby"))]);
+console.log(JSON.stringify({ invalidAfterBad, invalidAfterFix }));
+""")
+    assert shown["invalidAfterBad"] == [
+        ["Lowest height", "true", True],
+        ["Highest height", "true", True],
+        ["Highest bitrate, kbps", None, False],
+    ]
+    assert shown["invalidAfterFix"] == [
+        ["Lowest height", None, False],
+        ["Highest height", None, False],
+        ["Highest bitrate, kbps", None, False],
+    ]
+    core_src = (JS / "core.js").read_text(encoding="utf8")
+    assert 'if (wc) wc.textContent = cards.length ? (cards.length === 1 ? "1 series" : `${cards.length} series`) : emptyTitle;' in core_src
+
+
+def test_leaving_dirty_yaml_editor_completes_navigation_after_confirmation():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm"), path = require("path");
+const nav = fs.readFileSync(path.join(path.dirname(process.argv[1]), "navigation.js"), "utf8");
+const yaml = fs.readFileSync(path.join(path.dirname(process.argv[1]), "yaml-editor.js"), "utf8");
+let choice = "discard", dirty = true, navTabs = [], saved = 0;
+const back = {};
+const ctx = {
+  currentTab: "yaml", termSocket: null, landOnLive: false,
+  uyDirty: () => dirty, uyReset: () => { dirty = false; }, uySave: async () => { saved++; return true; },
+  askUnsaved: async () => choice,
+  navigate: (push) => navTabs.push([ctx.currentTab, push]),
+  showSettingsList() {}, closeDetails() {}, updateTitle() {}, loadSettingsSec() {}, loadSchedule() {},
+  $: (sel) => sel === "#uy-back" ? back : { hidden: true },
+  document: { querySelectorAll: () => [] },
+};
+vm.createContext(ctx);
+vm.runInContext(nav.match(/^function showTab\([\s\S]*?^\}/m)[0] + "\n" + yaml.match(/^\$\("#uy-back"\)\.onclick = .*$/m)[0], ctx);
+(async () => {
+  choice = "cancel";
+  back.onclick();
+  await new Promise((r) => setTimeout(r, 0));
+  const afterCancel = { tab: ctx.currentTab, dirty, navTabs: [...navTabs] };
+  navTabs = [];
+  choice = "save";
+  back.onclick();
+  await new Promise((r) => setTimeout(r, 0));
+  const afterSave = { tab: ctx.currentTab, dirty, saved, navTabs: [...navTabs] };
+  console.log(JSON.stringify({ afterCancel, afterSave }));
+})();
+""")
+    assert shown["afterCancel"] == {"tab": "yaml", "dirty": True, "navTabs": [["yaml", True]]}
+    assert shown["afterSave"] == {"tab": "settings", "dirty": False, "saved": 1, "navTabs": [["settings", True]]}

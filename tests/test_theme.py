@@ -401,7 +401,7 @@ def test_a_tablet_header_gives_up_its_words_to_stay_on_one_row(width):
 @pytest.mark.parametrize("width", [701, 941, 1024, 1041, 1130, 1240])
 def test_a_status_with_words_takes_its_own_row_wherever_the_words_cannot_fit(width):
     # "Unreachable" and "Update available" need about 130 px each: at 941 one pushed the sync button alone onto a second row
-    assert re.search(r"\.health \{ order: 10; flex-basis: 100%", css_at(width))
+    assert re.search(r"\.health \{ flex-basis: 100%", css_at(width))
     assert "#bell { margin-left: auto; }" in css_at(width)
 
 
@@ -498,3 +498,19 @@ def test_forced_colors_show_the_systems_checkbox_and_the_chosen_segment():
     assert forced and "appearance: auto" in forced[1] and "background: none" in forced[1]  # the system draws tick and dash itself
     chosen = re.search(r"@media \(forced-colors: active\) \{\s*:is\(\.d-tabs, \.seg, \.ax-seg\) button\[aria-pressed=\"true\"\] \{([^}]*)\}", CSS)
     assert chosen and "text-decoration: underline" in chosen[1]  # the fill is gone in system colours
+
+
+def test_interface_audit_visual_and_layout_guards():
+    assert DARK["live"] != DARK["err"] and DARK["live"] != DARK["warn"]
+    for surface in ("bg", "panel", "well"):
+        assert contrast(DARK["live"], DARK[surface]) >= 4.5, surface
+    caption = float(re.search(r"--fs-caption:\s*([\d.]+)rem", CSS)[1])
+    assert caption >= 0.75
+    assert "box-shadow: inset 0 0 0 1.5px var(--warn)" in CSS
+    assert "scrollbar-width: none" not in CSS
+    assert "vector-effect: non-scaling-stroke" in CSS
+    assert not re.search(r"cubic-bezier\([^)]*,\s*1\.\d+", CSS)
+    assert re.search(r"\.wz-progress b\s*\{[^}]*background:\s*var\(--accent\)", CSS)
+    assert re.search(r"\.toast\s*\{[^}]*border:\s*1px solid var\(--line-strong\)", CSS)
+    assert re.search(r"\.modal-actions\s*\{[^}]*position:\s*sticky;\s*bottom:\s*0;", CSS)
+    assert re.search(r"prefers-reduced-motion: reduce[\s\S]*con-chip-edge", CSS)

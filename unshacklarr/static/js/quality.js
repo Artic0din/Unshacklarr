@@ -212,11 +212,13 @@ function stepRow(lad, st, i) {
     dataset: { fk: `ql-step:${sid}:${key}` },
     placeholder: key === "max" ? "any" : "0", value: st[key] || "", oninput: (e) => {
       st[key] = Math.max(0, parseInt(e.target.value, 10) || 0);
-      const bad = st.max && st.min > st.max;
-      row.classList.toggle("bad", !!bad);
+      const bad = Boolean(st.max && st.min > st.max);
+      row.classList.toggle("bad", bad);
       why.textContent = bad ? "The lowest height is above the highest" : "";
+      for (const inp of [minInput, maxInput]) markInvalid(inp, why, bad);
       dirty();
     } });
+  const minInput = height("min", "Lowest height"), maxInput = height("max", "Highest height");
   const move = (to, label, path, dir) => el("button", { type: "button", className: "ql-icon", ariaLabel: label, disabled: to < 0 || to >= n,
     dataset: { fk: `ql-step:${sid}:${dir}` },
     innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`, onclick: () => {
@@ -226,7 +228,7 @@ function stepRow(lad, st, i) {
   const row = el("li", { className: "ql-step" },
     el("span", { className: "ql-n", textContent: String(i + 1) }),
     sel(CODECS, "codec"), sel(RANGES, "range"),
-    el("span", { className: "ql-h" }, height("min", "Lowest height"), el("span", { textContent: "to" }), height("max", "Highest height"), el("span", { textContent: "p" }),
+    el("span", { className: "ql-h" }, minInput, el("span", { textContent: "to" }), maxInput, el("span", { textContent: "p" }),
       el("input", { type: "number", min: 0, max: 1000000, step: 100, inputMode: "numeric", ariaLabel: "Highest bitrate, kbps", placeholder: "any",
         dataset: { fk: `ql-step:${sid}:kbps` },
         value: st.max_kbps || "", oninput: (e) => { const v = Math.max(0, parseInt(e.target.value, 10) || 0); if (v) st.max_kbps = v; else delete st.max_kbps; dirty(); } }),
@@ -486,7 +488,7 @@ function renderUpgradeSeries() {
     el("input", { type: "checkbox", checked: s.conf.skip_upgrades !== true, onchange: (e) => {
       if (e.target.checked) delete s.conf.skip_upgrades; else s.conf.skip_upgrades = true;
       dirty(); upgradeSay(all);
-    } }), el("span", { textContent: s.title }))));
+    } }), el("span", { textContent: s.title, title: s.title }))));
   if (!shown.length) box.replaceChildren(all.length
     ? el("div", { role: "status" }, el("p", { className: "dx-empty", textContent: `No series matches “${typed}”.` }),
         el("button", { type: "button", className: "btn small", textContent: "Clear search", onclick: () => { $("#ug-find").value = ""; renderUpgradeSeries(); $("#ug-find").focus(); } }))
@@ -501,7 +503,7 @@ function upgradeSay(all) {
   st.querySelector("b").textContent = `${on} of ${all.length} series checked`;
   const every = Number(S.config.settings?.upgrade_check_days ?? 7);
   $("#ug-new").checked = !!S.config.settings?.upgrade_check_new;
-  st.querySelector("small").textContent = [every ? (every === 1 ? "Checked automatically every day" : `Checked automatically every ${every} days`) : "Checked only when you click Check",
+  st.querySelector("small").textContent = [every ? (every === 1 ? "Checked automatically every day" : `Checked automatically every ${every} days`) : "Checked only when you select Check",
     days ? (days === 1 ? "Answers kept 1 day" : `Answers kept ${days} days`) : "Asked every time",
     S.config.settings?.upgrade_other_groups ? "Other release groups are replaced" : ""].filter(Boolean).join(" · ");
 }
@@ -653,7 +655,7 @@ function openFolders(side, start, use) {
     $("#folder-path").textContent = here;
     $("#folder-use").disabled = !r.path;
     const row = (label, path, folder = true) => el("button", { type: "button", className: "url-hit", onclick: () => load(path) },
-      ...(folder ? [el("i", { innerHTML: FOLDER_ICON })] : [el("i", {}, icon("arrowUp"))]), el("span", { textContent: label }));
+      ...(folder ? [el("i", { innerHTML: FOLDER_ICON })] : [el("i", {}, icon("arrowUp"))]), el("span", { textContent: label, title: label }));
     $("#folder-list").replaceChildren(...(r.parent != null ? [row("Up", r.parent, false)] : []),
       ...r.dirs.map((d) => row(d.split(/[\\/]/).filter(Boolean).pop() || d, d)),
       ...(!r.dirs.length ? [el("p", { className: "muted", textContent: "No folder in it." })] : []));

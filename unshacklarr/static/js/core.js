@@ -282,18 +282,18 @@ function askToConfirm(title, text, verb, trigger = null) {
   }, { once: true }));
 }
 /* Asking a service that is slow to answer: after 20 s, it may be waiting for a sign-in only Unshackle's log shows. */
-const slowHint = (svc) => setTimeout(() => toast(`${svc} is slow to answer. It may be waiting for you to sign in: look at Unshackle's log.`, false, ["OK", () => {}]), 20000);
-function toast(msg, err = false, action = null) {  // action: [label, onclick], e.g. ["Undo", …]
-  const t = document.createElement("div"), stays = err || action;  // an error or a choice waits to be read: no time limit
+const slowHint = (svc) => setTimeout(() => toast(`${svc} is slow to answer. It may be waiting for you to sign in: check Unshackle's log in Settings › Connections › Unshackle.`, false, true), 20000);
+function toast(msg, err = false, action = null) {  // action: [label, onclick] or true (stays until dismissed)
+  const t = document.createElement("div"), stays = Boolean(err || action);  // an error or a choice waits to be read: no time limit
   t.className = "toast" + (err ? " err" : "") + (stays ? " act" : "");
   t.setAttribute("role", err ? "alert" : "status");
   t.textContent = msg;
-  if (action) t.append(el("button", { textContent: action[0], onclick: () => { t.remove(); action[1](); } }));
+  if (Array.isArray(action)) t.append(el("button", { textContent: action[0], onclick: () => { t.remove(); action[1](); } }));
   if (stays) t.append(el("button", { className: "toast-x", textContent: "Dismiss", onclick: () => t.remove() }));
   $("#toasts").append(t);
   onTop($("#toasts"));  // above a window open as a modal too
-  // a plain note goes by itself, but not while the pointer is on it or its text is selected
-  const later = () => setTimeout(() => t.matches(":hover") || getSelection().containsNode(t, true) ? later() : t.remove(), 2500);
+  // a plain note goes by itself, but not while hovered, focused, or selected
+  const later = () => setTimeout(() => t.matches(":hover, :focus-within") || getSelection().containsNode(t, true) ? later() : t.remove(), 5000);
   if (!stays) later();
 }
 
@@ -337,6 +337,7 @@ function dirty() {  // a change put back as it was hides the bar again
   renderCommands();
   unsaved = configKey(S.config) !== savedConfig;
   $("#savebar").hidden = !unsaved;
+  const st = $("#savebar-status"); if (st) st.textContent = unsaved ? (typeof tr === "function" ? tr("Unsaved changes") : "Unsaved changes") : "";
   $("#d-save").hidden = !unsaved;
   if (current) renderInherited(S.config.series[current.tvdbId]);  // a series option may now hide an inherited one
 }
@@ -362,9 +363,8 @@ function episodeTitle(tvdbId, sxxeyy, title, className = "") {
     try { localStorage.setItem("downstream.revealed", JSON.stringify([...revealed].slice(-2000))); localStorage.removeItem("unshacklarr.revealed"); } catch { /* shown for now */ }
     ev.currentTarget.replaceWith(el("span", { className, textContent: title }));
   };
-  return el("span", { className: `${className} spoiler`.trim(), textContent: title, role: "button", tabIndex: 0,
-    ariaLabel: "Hidden episode title. Press to show it.", title: "Show the title", onclick: show,
-    onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") show(ev); } });
+  return el("button", { type: "button", className: `${className} spoiler`.trim(), textContent: title,
+    ariaLabel: "Hidden episode title. Select to show it.", title: "Show the title", onclick: show });
 }
 
 function el(tag, { dataset, ...props } = {}, ...children) {
@@ -419,7 +419,7 @@ function optionsEditor(root, specs, values, anyFlag = false) {  // anyFlag: a se
     const spec = specs.find((s) => s.flag === flag) || { flag, help: "", is_flag: typeof value === "boolean", choices: [] };
     let input;
     if (spec.is_flag) {
-      input = el("label", { className: "check" }, el("input", { type: "checkbox", checked: !!value, ariaLabel: flag, onchange: (e) => { values[flag] = e.target.checked; dirty(); } }), "on");
+      input = el("label", { className: "check" }, el("input", { type: "checkbox", checked: !!value, ariaLabel: trWith("{0} on", flag), onchange: (e) => { values[flag] = e.target.checked; dirty(); } }), "on");
     } else {
       input = el("input", { type: "text", value: value ?? "", placeholder: spec.choices.length ? spec.choices.join(", ") : spec.help, ariaLabel: trWith("{0} value", flag),
         oninput: (e) => { values[flag] = e.target.value; dirty(); } });
@@ -567,7 +567,7 @@ function renderWall() {
         const off = (name, main) => Boolean(conf?.service) && Boolean(main ? conf.main_off : conf.sonarrs?.[name]?.off);
         libs = el("span", { className: "lib" }, ...[...(s.id ? [[mainSonarr(), true]] : []), ...libsOf(s).map((o) => [o.name, false])]
           .flatMap(([n, main], i) => [...(i ? [" · "] : []),
-            el("span", { textContent: n, ...(off(n, main) ? { className: "lib-off", title: "Switched off" } : {}) })]));
+            el("span", off(n, main) ? { className: "lib-off", title: "Switched off" } : {}, n, ...(off(n, main) ? [el("span", { className: "sr-only", textContent: " (switched off)" })] : []))]));
       }
       const sick = conf?.service && S.health[s.tvdbId];
       if (sick) art.append(el("span", { className: "sick", role: "img", ariaLabel: sick.cause ? `Failing: ${sick.cause}` : "Failing",
@@ -578,8 +578,8 @@ function renderWall() {
         art.append(off);
       }
       // the button's name reads title, state, then service: the art comes last, the CSS draws it on top
-      if (conf?.service) art.append(el("span", { className: "svc", textContent: svcName(conf.service), title: svcName(conf.service) }));
-      if (libs) art.append(libs);
+      const badges = [libs, conf?.service && el("span", { className: "svc", textContent: svcName(conf.service), title: svcName(conf.service) })].filter(Boolean);
+      if (badges.length) art.append(el("span", { className: "art-badges" }, ...badges));
       const card = el("button", { className: "poster" + (conf?.service ? " on" : "") + (SEL.ids.has(s.tvdbId) ? " picked" : ""),
         ariaPressed: SEL.on ? String(SEL.ids.has(s.tvdbId)) : null, onclick: () => SEL.on ? pickSeries(s.tvdbId) : openDrawer(s) },
         el("span", { className: "name", textContent: s.title }),
@@ -591,13 +591,16 @@ function renderWall() {
       return card;
     });
   const managed0 = document.querySelector("#tab-series .seg [aria-pressed=true]").dataset.managed === "*" && !counts["*"];
+  const emptyTitle = managed0 ? "No series is downloading yet." : query ? `No series match “${query}”.` : "No series match these filters.";
   const empty = managed0
-    ? el("div", { className: "empty" }, el("b", { textContent: "No series is downloading yet." }),
+    ? el("div", { className: "empty" }, el("b", { textContent: emptyTitle }),
         "Open a series under All, pick a service or one of the links found on TMDB, then save.")
     : el("div", { className: "empty", role: "status" },
-        el("b", { textContent: query ? `No series match “${query}”.` : "No series match these filters." }), "Clear the search or pick another filter.",
+        el("b", { textContent: emptyTitle }), "Clear the search or pick another filter.",
         el("button", { type: "button", className: "btn small", textContent: "Clear filters", onclick: () => { clearWallFilters(); $("#search").focus(); } }));
   $("#wall").removeAttribute("aria-busy");
+  const wc = $("#wall-count");
+  if (wc) wc.textContent = cards.length ? (cards.length === 1 ? "1 series" : `${cards.length} series`) : emptyTitle;
   keepFocus($("#wall"), () => $("#wall").replaceChildren(...(cards.length ? cards : [empty])));
 }
 
@@ -766,7 +769,7 @@ const drawerChanged = () => !!current && drawerSnapshot?.id === current.tvdbId &
 function discardDrawer() {  // the series as it was when its panel opened; the bar goes if nothing else waits
   const { id, existed, conf } = drawerSnapshot;
   if (existed) S.config.series[id] = JSON.parse(conf); else delete S.config.series[id];
-  if (configKey(S.config) === savedConfig) { unsaved = false; $("#savebar").hidden = true; $("#d-save").hidden = true; }
+  if (configKey(S.config) === savedConfig) { unsaved = false; $("#savebar").hidden = true; $("#d-save").hidden = true; const st = $("#savebar-status"); if (st) st.textContent = ""; }
 }
 function askUnsaved(name) {
   const dialog = $("#unsaved-dialog");
@@ -837,7 +840,7 @@ function networkButton(s, tag) {
     showFind(false);
     $("#d-find-q").value = s.title;
     $("#d-find-open").click();
-  } }, el("b", { textContent: svcName(tag) }), el("span", { textContent: `Find ${s.title} on ${svcName(tag)}` }));
+  } }, el("b", { textContent: svcName(tag) }), el("span", { textContent: `Find ${s.title} on ${svcName(tag)}`, title: `Find ${s.title} on ${svcName(tag)}` }));
 }
 /* No link from TMDB: the channel's service is all there is to offer. */
 function networkPick(s, box, none, lead) {
@@ -865,12 +868,15 @@ async function loadSuggestions(s, refresh = false) {
   if (current !== s) return;  // another series was opened meanwhile
   if (!links.length && !brands.length) return networkPick(s, box, `TMDB lists no supported service in ${S.config.tmdb_countries.join(", ")}. Enter it below by hand.`,
     "TMDB lists no supported service.");
-  box.replaceChildren(...links.map((l) => el("button", {
-    ariaLabel: `Use ${svcName(l.service)}: ${[l.name, l.url].filter(Boolean).join(", ")}`,
-    onclick: () => applySuggestion(l),
-  }, el("b", { textContent: svcName(l.service) }), el("span", { textContent: (l.name ? `${l.name} · ` : "")  // a service linking several titles names each
-    + (l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.found_by === "homepage" ? `TMDB homepage · ${l.url}` : l.url) }),
-    el("small", { textContent: l.country }))));
+  box.replaceChildren(...links.map((l) => {
+    const label = (l.name ? `${l.name} · ` : "")  // a service linking several titles names each
+      + (l.needs_series_url || l.episode ? `episode link · ${l.url}` : l.found_by === "search" ? `found by its title · ${l.url}` : l.found_by === "homepage" ? `TMDB homepage · ${l.url}` : l.url);
+    return el("button", {
+      ariaLabel: `Use ${svcName(l.service)}: ${[l.name, l.url].filter(Boolean).join(", ")}`,
+      onclick: () => applySuggestion(l),
+    }, el("b", { textContent: svcName(l.service) }), el("span", { textContent: label, title: label }),
+      el("small", { textContent: l.country }));
+  }));
   box.querySelectorAll("button").forEach((b, i) => b.dataset.url = links[i].url);
   const network = S.networkServices?.[s.tvdbId];  // after TMDB's links: theirs keep their order
   if (network && !links.some((l) => l.service === network)) box.append(networkButton(s, network));
