@@ -774,12 +774,12 @@ function discardDrawer() {  // the series as it was when its panel opened; the b
 let unsavedPending = null;
 function closeUnsaved() {
   const dialog = $("#unsaved-dialog");
-  if (unsavedPending) { const stop = unsavedPending; unsavedPending = null; stop("keep"); }
+  if (unsavedPending) { const stop = unsavedPending; unsavedPending = null; stop("superseded"); }
   if (dialog?.open) dialog.close("keep");
 }
 function askUnsaved(name) {
   const dialog = $("#unsaved-dialog");
-  if (unsavedPending) { const stop = unsavedPending; unsavedPending = null; stop("keep"); }
+  if (unsavedPending) { const stop = unsavedPending; unsavedPending = null; stop("superseded"); }
   $("#unsaved-text").textContent = `${name}: its settings changed and are not saved yet.`;
   dialog.returnValue = "keep";
   if (!dialog.open) dialog.showModal();
@@ -801,6 +801,7 @@ async function closeDrawer(fromRoute = false) {
   if (!$("#drawer").classList.contains("open")) return true;
   if (drawerChanged()) {
     const choice = await askUnsaved(current.title);
+    if (choice === "superseded") return false;
     if (choice === "save") {
       try { await save(); } catch (e) { toast(e.saved ? e.message : `Could not save: ${e.message}`, true); return keepDrawer(fromRoute); }
     } else if (choice === "discard") discardDrawer();

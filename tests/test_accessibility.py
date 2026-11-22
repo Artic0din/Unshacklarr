@@ -572,7 +572,47 @@ const resetState = async (hash = "#/unshackle.yaml") => {
   pendingSave.resolve(); await tick();
   const afterReturnDuringSave = { tab: ctx.currentTab, destroyed, sections: [...sections], hash: ctx.location.hash };
 
-  // 11. Clear history dialog distinguishes failed-only vs all finished downloads
+  // 11. Superseded drawer askUnsaved resolves to "superseded" immediately without restoring a stale drawer URL
+  await resetState("#/series");
+  const drawerEl = { open: true, classList: { contains: (c) => c === "open" && drawerEl.open, remove: (c) => { if (c === "open") drawerEl.open = false; } } };
+  const backdropEl = { classList: { remove() {} } };
+  let drawerDiscards = 0, drawerHistoryPushes = [];
+  const dCtx = {
+    current: { tvdbId: 42, title: "Show" }, drawerTab: "settings", drawerPushed: true, wallScroll: 0,
+    drawerOpener: null, drawerOpenerCard: null,
+    drawerChanged: () => true, discardDrawer: () => { drawerDiscards++; },
+    leaveNews() {}, drawerModal() {}, updateTitle() {}, renderWall() {}, scrollTo() {}, returnFocus() {}, navigate() {},
+    routeHash: () => "#/series/s/42/settings",
+    history: { pushState: (_, __, h) => drawerHistoryPushes.push(h) },
+    document: { body: { classList: { remove() {} } } },
+    $: (sel) => ({ "#unsaved-dialog": dialog, "#unsaved-text": {}, "#drawer": drawerEl, "#backdrop": backdropEl })[sel],
+  };
+  vm.createContext(dCtx);
+  vm.runInContext(
+    core.match(/^let unsavedPending = null;[\s\S]*?^function keepDrawer\([\s\S]*?^\}/m)[0],
+    dCtx,
+  );
+  const firstPrompt = dCtx.askUnsaved("Show");
+  const secondPrompt = dCtx.askUnsaved("Show");
+  const firstResolvedBeforeAnswer = await firstPrompt;
+  dialog.close("discard");
+  const secondResolvedAfterAnswer = await secondPrompt;
+  await tick();
+  // Press Back twice on a dirty drawer: first closeDrawer(true) is superseded without pushing history; second discards cleanly
+  const firstClose = dCtx.closeDrawer(true);
+  const secondClose = dCtx.closeDrawer(true);
+  const firstCloseResult = await firstClose;
+  const pushesAfterSupersede = [...drawerHistoryPushes];
+  dialog.close("discard");
+  const secondCloseResult = await secondClose;
+  await tick();
+  const supersededDrawer = {
+    firstResolvedBeforeAnswer, secondResolvedAfterAnswer,
+    firstCloseResult, secondCloseResult,
+    pushesAfterSupersede, drawerHistoryPushes, drawerOpen: drawerEl.open, drawerDiscards,
+  };
+
+  // 12. Clear history dialog distinguishes failed-only vs all finished downloads
   const cNodes = { "#hist-clear": {}, "#clear-text": {}, "#clear-failed": {}, "#clear-all": {}, "#clear-dialog": { showModal() {}, addEventListener() {} } };
   const aCtx = { $: (s) => cNodes[s], runCards: [{ outcome: "downloaded" }, { outcome: "failed" }, { outcome: "failed" }],
     isLive: () => false, COUNT: { download: (n) => `${n} downloads` }, toast() {} };
@@ -583,7 +623,7 @@ const resetState = async (hash = "#/unshackle.yaml") => {
 
   console.log(JSON.stringify({
     afterCancel, afterFailedSave, afterEditDuringSave, afterSave, afterDiscard,
-    whilePending, afterDeepLink, afterStaleReturn, drawerPromptKept, afterSecondRoute, afterDirectSupersede, afterReturnDuringSave, clearCopy,
+    whilePending, afterDeepLink, afterStaleReturn, drawerPromptKept, afterSecondRoute, afterDirectSupersede, afterReturnDuringSave, supersededDrawer, clearCopy,
   }));
 })();
 """)
@@ -599,5 +639,15 @@ const resetState = async (hash = "#/unshackle.yaml") => {
     assert shown["afterSecondRoute"] == {"dialogOpen": True, "modalThrows": 0, "hashBeforeChoice": "#/series", "tab": "series", "dirty": False, "sections": [], "hash": "#/series"}
     assert shown["afterDirectSupersede"] == {"dialogOpen": True, "modalThrows": 0, "tab": "schedule", "dirty": False, "hash": "#/schedule"}
     assert shown["afterReturnDuringSave"] == {"tab": "yaml", "destroyed": 0, "sections": [], "hash": "#/unshackle.yaml"}
+    assert shown["supersededDrawer"] == {
+        "firstResolvedBeforeAnswer": "superseded",
+        "secondResolvedAfterAnswer": "discard",
+        "firstCloseResult": False,
+        "secondCloseResult": True,
+        "pushesAfterSupersede": [],
+        "drawerHistoryPushes": [],
+        "drawerOpen": False,
+        "drawerDiscards": 1,
+    }
     assert "Clear 2 failed" in shown["clearCopy"]["text"] and "only failed" in shown["clearCopy"]["text"]
     assert "Clear 3 downloads" in shown["clearCopy"]["text"] and "all finished downloads" in shown["clearCopy"]["text"]
