@@ -5793,11 +5793,12 @@ async def languages_action(request):
     if request.match_info["action"] == "stop":
         language_scan["stop"] = True
     elif not language_scan["running"]:
+        language_scan["running"] = True  # before the wait below: a second click meanwhile (another tab) is not a second check
         try:  # its answer at once, not a scan that fails out of sight
             await asyncio.to_thread(sonarr_sync.sonarr_get, "system/status")
         except requests.RequestException as e:
+            language_scan["running"] = False
             raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}") from None
-        language_scan["running"] = True  # at once: a second click before the thread starts is not a second check
         threading.Thread(target=scan_languages, daemon=True).start()
     return web.json_response({"running": language_scan["running"]})
 

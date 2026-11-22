@@ -9420,3 +9420,39 @@ def test_a_devices_pane_change_keeps_unshackle_yaml_as_it_was_in_its_history(tmp
     asyncio.run(web.cdm_action(Request()))
     assert "keep-me" not in (folder / "unshackle.yaml").read_text()
     assert [p.read_text() for p in web.CONFIG_HISTORY.glob("*.yaml")] == [before]
+
+
+def test_two_language_checks_asked_at_once_start_one_scan(tmp_path, monkeypatch):
+    # Two tabs click Check while Sonarr's answer is on its way: one scan, not two on the same progress
+    import threading
+    web = reloaded_web(tmp_path, monkeypatch)
+    gate, started = threading.Event(), []
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path: gate.wait(5))
+    monkeypatch.setattr(web, "scan_languages", lambda: started.append(True))
+
+    class Request:
+        match_info = {"action": "start"}
+
+    async def both():
+        first = asyncio.create_task(web.languages_action(Request()))
+        await asyncio.sleep(0.05)
+        second = asyncio.create_task(web.languages_action(Request()))
+        await asyncio.sleep(0.05)
+        gate.set()
+        await asyncio.gather(first, second)
+    asyncio.run(both())
+    for t in threading.enumerate():
+        if t is not threading.current_thread() and t.daemon:
+            t.join(1)
+    assert started == [True]
+
+
+def test_a_language_check_sonarr_refuses_can_be_asked_again(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path: (_ for _ in ()).throw(web.requests.ConnectionError("down")))
+
+    class Request:
+        match_info = {"action": "start"}
+    with pytest.raises(web.web.HTTPBadGateway):
+        asyncio.run(web.languages_action(Request()))
+    assert web.language_scan["running"] is False
