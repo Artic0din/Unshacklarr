@@ -411,3 +411,38 @@ console.log(JSON.stringify({ invalidAfterBad, invalidAfterFix }));
     ]
     core_src = (JS / "core.js").read_text(encoding="utf8")
     assert 'if (wc) wc.textContent = cards.length ? (cards.length === 1 ? "1 series" : `${cards.length} series`) : emptyTitle;' in core_src
+
+
+def test_leaving_dirty_yaml_editor_completes_navigation_after_confirmation():
+    shown = node(r"""
+const fs = require("fs"), vm = require("vm"), path = require("path");
+const nav = fs.readFileSync(path.join(path.dirname(process.argv[1]), "navigation.js"), "utf8");
+const yaml = fs.readFileSync(path.join(path.dirname(process.argv[1]), "yaml-editor.js"), "utf8");
+let choice = "discard", dirty = true, navTabs = [], saved = 0;
+const back = {};
+const ctx = {
+  currentTab: "yaml", termSocket: null, landOnLive: false,
+  uyDirty: () => dirty, uyReset: () => { dirty = false; }, uySave: async () => { saved++; return true; },
+  askUnsaved: async () => choice,
+  navigate: (push) => navTabs.push([ctx.currentTab, push]),
+  showSettingsList() {}, closeDetails() {}, updateTitle() {}, loadSettingsSec() {}, loadSchedule() {},
+  $: (sel) => sel === "#uy-back" ? back : { hidden: true },
+  document: { querySelectorAll: () => [] },
+};
+vm.createContext(ctx);
+vm.runInContext(nav.match(/^function showTab\([\s\S]*?^\}/m)[0] + "\n" + yaml.match(/^\$\("#uy-back"\)\.onclick = .*$/m)[0], ctx);
+(async () => {
+  choice = "cancel";
+  back.onclick();
+  await new Promise((r) => setTimeout(r, 0));
+  const afterCancel = { tab: ctx.currentTab, dirty, navTabs: [...navTabs] };
+  navTabs = [];
+  choice = "save";
+  back.onclick();
+  await new Promise((r) => setTimeout(r, 0));
+  const afterSave = { tab: ctx.currentTab, dirty, saved, navTabs: [...navTabs] };
+  console.log(JSON.stringify({ afterCancel, afterSave }));
+})();
+""")
+    assert shown["afterCancel"] == {"tab": "yaml", "dirty": True, "navTabs": [["yaml", True]]}
+    assert shown["afterSave"] == {"tab": "settings", "dirty": False, "saved": 1, "navTabs": [["settings", True]]}

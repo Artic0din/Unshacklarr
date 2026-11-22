@@ -124,8 +124,8 @@ function showSettingsSec(name, fromRoute = false, push = false, target = null, r
 }
 function openSettings(name, target) {
   const fromTab = currentTab !== "settings";
-  if (fromTab) showTab("settings", true);
-  if (currentTab === "settings") showSettingsSec(name, false, fromTab, target);
+  if (fromTab) showTab("settings", true, false, () => showSettingsSec(name, false, true, target));
+  else showSettingsSec(name, false, false, target);
 }
 document.querySelectorAll(".set-nav [data-sec]").forEach((x) => x.onclick = () => showSettingsSec(x.dataset.sec));
 $("#tab-settings").addEventListener("click", (e) => {
@@ -233,7 +233,7 @@ function measureBars() {
 }
 const barsSeen = new ResizeObserver(measureBars);
 [$("header"), ...BOTTOM_BARS].forEach((n) => barsSeen.observe(n));
-function showTab(name, fromRoute = false, quiet = false) {
+function showTab(name, fromRoute = false, quiet = false, after = null) {
   const changedTab = name !== currentTab;
   if (currentTab === "yaml" && name !== "yaml") {  // leaving the editor: it forgets the password and the file
     if (uyDirty()) {
@@ -242,7 +242,7 @@ function showTab(name, fromRoute = false, quiet = false) {
           if (!await uySave()) { if (fromRoute) navigate(true); return; }
         } else if (choice !== "discard") { if (fromRoute) navigate(true); return; }
         uyReset();
-        showTab(name, fromRoute, quiet);
+        showTab(name, fromRoute, quiet, after);
       });
       return;
     }
@@ -271,12 +271,12 @@ function showTab(name, fromRoute = false, quiet = false) {
   else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
   if (name === "settings" && !fromRoute) loadSettingsSec();
   if (name === "schedule") loadSchedule();
+  if (after) after();
 }
 document.querySelectorAll("nav [data-tab]").forEach((b) => b.onclick = (e) => {
   if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;  // a new tab or window: the browser opens the link
   e.preventDefault();
-  showTab(b.dataset.tab);
-  if (b.dataset.tab === "log" && currentTab === "log") landOnLive = true;
+  showTab(b.dataset.tab, false, false, b.dataset.tab === "log" ? () => { landOnLive = true; } : null);
 });
 // the hash is the route: the skip link moves the focus itself and leaves the URL as it is
 $(".skip").onclick = (e) => { e.preventDefault(); $("main").focus(); };

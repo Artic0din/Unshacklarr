@@ -12,7 +12,7 @@ function uyReset() {
   $("#uy-password").value = ""; $("#uy-path").textContent = "";
 }
 $("#uy-open").onclick = () => { uyReset(); showTab("yaml"); $("#uy-password").focus(); };
-$("#uy-back").onclick = () => { showTab("settings", true); navigate(true); };
+$("#uy-back").onclick = () => showTab("settings", true, false, () => navigate(true));
 window.addEventListener("beforeunload", (e) => { if (currentTab === "yaml" && uyDirty()) e.preventDefault(); });
 function uyError(text) { $("#uy-error").textContent = text || ""; }
 function uyVersions(list) {
