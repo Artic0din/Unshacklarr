@@ -8478,6 +8478,27 @@ def test_a_retry_keeps_the_audio_language_of_the_attempt_it_retries(monkeypatch)
     assert started == [([5], "fr"), ([6], ""), ([5], "")]
 
 
+def test_a_retry_keeps_the_season_map_of_the_attempt_it_retries(monkeypatch):
+    # The card's numbering comes back from JSON with its season numbers as text: the retry must still map S02 to S01
+    import asyncio
+    from unshacklarr import web
+    cards = [{"episodeId": 5, "numbering": {"season_map": {"2": 1}}}]
+    monkeypatch.setattr(web, "cards_on_disk", lambda: cards)
+    monkeypatch.setattr(web.sonarr_sync.RUNS_DIR.__class__, "exists", lambda self: True)
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    monkeypatch.setattr(web, "room_for_one_more", lambda: None)
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append(k["numbering"]))
+
+    class Request:
+        def __init__(self, body): self.body = body
+        async def json(self): return self.body
+    asyncio.run(web.download(Request({"episodeIds": [5], "retry": True})))
+    assert started == [{"season_map": {2: 1}}]
+    assert web.sonarr_sync.service_episode(started[0], 2, 5) == "S01E05"
+
+
 def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
     # Added at the end, they go in as picked; retries go in next, each before the one after it, so last first
     import asyncio

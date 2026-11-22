@@ -5328,7 +5328,8 @@ def retried_numbering(ids: list[int], batch: str, instance: str) -> dict | None:
     """The numbering a download was given for itself (from the page: by title, or set for it), which a retry
     of it repeats; None when its last attempt used the series' own. The episodes of one retry come from one
     job, given one numbering: the first found stands for them all."""
-    return next((card["numbering"] for card in last_attempts(ids, batch, instance) if card.get("numbering") is not None), None)
+    numbering = next((card["numbering"] for card in last_attempts(ids, batch, instance) if card.get("numbering") is not None), None)
+    return None if numbering is None else check_numbering(numbering, "the retried download")  # JSON made its season numbers text
 
 
 def retried_replace(ids: list[int], batch: str, instance: str) -> bool:
