@@ -3051,7 +3051,7 @@ async def cdm_reprovision(request):
 async def list_cdm(_):
     try:
         return web.json_response(await asyncio.to_thread(cdm_state))
-    except UnshackleError as e:
+    except (UnshackleError, cdm.CdmError) as e:
         return web.json_response({"folder": None, "error": no_credentials(e)})
 
 
@@ -3323,7 +3323,7 @@ async def unshackle_yaml(request):
     await reauth(request, str(body.get("password") or ""))
     try:
         path = (await asyncio.to_thread(cdm_paths))[0]
-    except yaml.YAMLError:  # the folders are read from the file: a syntax error is what the editor is there to fix
+    except (yaml.YAMLError, cdm.BrokenYaml):  # the folders are read from the file: a syntax error is what the editor is there to fix
         path = Path(sonarr_sync.SETTINGS["unshackle_config_dir"]) / "unshackle.yaml"
     except (UnshackleError, cdm.CdmError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))

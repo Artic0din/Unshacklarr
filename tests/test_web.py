@@ -9376,3 +9376,29 @@ def test_a_languages_check_against_a_sonarr_without_api_v5_says_so_at_once(tmp_p
 
     status, text = asyncio.run(go())
     assert status == 502 and "/api/v5/system/status" in text and not web.language_scan["running"]
+
+
+def test_a_broken_unshackle_yaml_is_named_in_the_cookies_and_devices_panes(tmp_path, monkeypatch):
+    # A syntax error in unshackle.yaml: the panes say so (not a bare 500), and the editor still opens it to fix
+    web = reloaded_web(tmp_path, monkeypatch)
+    folder = tmp_path / "unshackle"
+    folder.mkdir()
+    (folder / "unshackle.yaml").write_text("directories: [cookies: x\n")
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", str(folder))
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "cookies_dir", "")
+
+    async def reauth(request, password):
+        return None
+    monkeypatch.setattr(web, "reauth", reauth)
+
+    class Request:
+        def __init__(self, action, body=None):
+            self.match_info, self.body = {"action": action}, body or {}
+        async def json(self): return self.body
+    for handler in (web.list_cookies, web.list_cdm):
+        assert "unshackle.yaml" in json.loads(asyncio.run(handler(None)).text)["error"]
+    with pytest.raises(web.web.HTTPBadRequest) as refused:
+        asyncio.run(web.cdm_action(Request("remote-delete", {"name": "x"})))
+    assert refused.value.text == "unshackle.yaml has a syntax error at line 2: fix it in Settings or in the file"
+    opened = json.loads(asyncio.run(web.unshackle_yaml(Request("open"))).text)
+    assert opened["text"] == "directories: [cookies: x\n"
