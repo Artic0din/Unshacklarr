@@ -1789,13 +1789,10 @@ def check_proxy_auth(header, sources) -> tuple[str, str]:
     return header, ", ".join(networks)
 
 
-def proxy_auth_of(settings: dict) -> tuple[str, str]:
-    """Signing in through a reverse proxy as saved, written as checked: a hand-written 10.0.0.1 is 10.0.0.1/32."""
-    header, sources = settings.get("proxy_auth_header"), settings.get("proxy_auth_from")
-    try:
-        return check_proxy_auth(header, sources)
-    except web.HTTPBadRequest:  # a hand-written value a Save refuses: compared as it is
-        return str(header or ""), str(sources or "")
+def proxy_auth_of(settings: dict) -> tuple[str, frozenset]:
+    """Who signing in through a reverse proxy lets in, as from_proxy and proxy_user read it: a hand-written 10.0.0.1
+    is the same as 10.0.0.1/32, and a list they refuse trusts no one."""
+    return str(settings.get("proxy_auth_header") or ""), frozenset(proxy_networks(settings.get("proxy_auth_from")))
 
 
 OFFSITE_SETTINGS = ("backup_remote", "backup_remote_url", "backup_remote_user", "backup_remote_secret", "backup_remote_bucket",
@@ -6579,11 +6576,17 @@ def from_proxy(request) -> bool:
     X-Forwarded-For, which anyone writes."""
     try:
         peer = ipaddress.ip_address(request.remote or "")
-        networks = [ipaddress.ip_network(s.strip(), strict=False)
-                    for s in str(sonarr_sync.SETTINGS.get("proxy_auth_from") or "").split(",") if s.strip()]
     except ValueError:
         return False
-    return any(peer in n for n in networks if n.version == peer.version)
+    return any(peer in n for n in proxy_networks(sonarr_sync.SETTINGS.get("proxy_auth_from")) if n.version == peer.version)
+
+
+def proxy_networks(sources) -> list:
+    """The proxy's addresses as saved, comma-separated; none when one of them can't be read."""
+    try:
+        return [ipaddress.ip_network(s.strip(), strict=False) for s in str(sources or "").split(",") if s.strip()]
+    except ValueError:
+        return []
 
 
 def proxy_user(request) -> str:

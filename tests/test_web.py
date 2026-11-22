@@ -9367,3 +9367,12 @@ def test_wrong_passwords_are_counted_per_ipv6_network_not_per_address(tmp_path, 
     assert ip("2001:db8:1:3::1") != ip("2001:db8:1:2::1")
     assert ip("::ffff:192.0.2.7") == "192.0.2.7" and ip("::ffff:192.0.2.8") == "192.0.2.8"
     assert ip("192.0.2.7") == "192.0.2.7" and ip(None) == "?"
+
+
+def test_a_proxy_list_that_trusted_no_one_is_not_turned_on_by_another_change(tmp_path, monkeypatch):
+    # "10.0.0.1 10.0.0.2" by hand: from_proxy refuses it, so no one is trusted; a Save would write it as a valid list
+    web = reloaded_web(tmp_path, monkeypatch)
+    old = {"proxy_auth_header": "Remote-User", "proxy_auth_from": "10.0.0.1 10.0.0.2"}
+    new = {"proxy_auth_header": "Remote-User", "proxy_auth_from": "10.0.0.1/32, 10.0.0.2/32"}
+    assert web.proxy_auth_of(old) != web.proxy_auth_of(new)
+    assert web.proxy_auth_of({**old, "proxy_auth_from": "10.0.0.1"}) == web.proxy_auth_of({**new, "proxy_auth_from": "10.0.0.1/32"})
