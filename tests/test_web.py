@@ -5041,6 +5041,11 @@ def test_a_restore_reads_series_numbers_written_as_text(tmp_path, monkeypatch):
     web = reloaded_web(tmp_path, monkeypatch)
     data = web.backup_data(yaml.safe_dump({"series": {"71663": {"service": "TF1", "title": "t"}}}))
     assert list(data["series"]) == [71663]
+    for series, said in (({"²": {}}, "Its series entry '²' is not in the format DownStream writes"),
+                         ({71663: {}, "71663": {}}, "It lists the same series twice")):
+        with pytest.raises(web.web.HTTPBadRequest) as refused:
+            web.backup_data(yaml.safe_dump({"series": series}, allow_unicode=True))
+        assert refused.value.text == said
 
 
 def test_a_restore_checks_other_sonarrs_against_the_backups_own_main_one(tmp_path, monkeypatch):
@@ -9450,6 +9455,14 @@ def test_a_devices_pane_change_keeps_unshackle_yaml_as_it_was_in_its_history(tmp
     asyncio.run(web.cdm_action(Request()))
     assert "keep-me" not in (folder / "unshackle.yaml").read_text()
     assert [p.read_text() for p in web.CONFIG_HISTORY.glob("*.yaml")] == [before]
+
+    # the history can't be written: the change is made all the same, the cache refreshed, and the log says so
+    (folder / "unshackle.yaml").write_text(before)
+    monkeypatch.setattr(web, "keep_unshackle_yaml", lambda old: (_ for _ in ()).throw(OSError("read-only")))
+    configured = []
+    monkeypatch.setattr(web.UNSHACKLE, "configure", lambda settings: configured.append(True))
+    asyncio.run(web.cdm_action(Request()))
+    assert configured == [True] and "keep-me" not in (folder / "unshackle.yaml").read_text()
 
 
 def test_two_language_checks_asked_at_once_start_one_scan(tmp_path, monkeypatch):

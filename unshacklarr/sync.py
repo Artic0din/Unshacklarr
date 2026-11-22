@@ -630,6 +630,7 @@ def send_held(settings: dict) -> bool:
     """The quiet hours are over: what came meanwhile, in one message."""
     global held_pushed, held_failures
     if in_quiet_hours(settings):
+        held_failures = 0  # the tries of the summary before: the night's new messages get their own hour
         return False
     held = read_json(HELD_FILE, [])
     if not held:

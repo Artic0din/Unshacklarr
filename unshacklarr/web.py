@@ -3078,7 +3078,10 @@ async def cdm_action(request):
             device = body.get("device")
             await asyncio.to_thread(cdm.choose, conf, wvds, prds, str(body.get("service") or ""), str(device) if device else None)
         if before is not None and await asyncio.to_thread(conf.read_text, encoding="utf8") != before:
-            await asyncio.to_thread(keep_unshackle_yaml, before)  # its comments too: the editor's history gets them back
+            try:
+                await asyncio.to_thread(keep_unshackle_yaml, before)  # its comments too: the editor's history gets them back
+            except OSError as e:  # the change is made: said in the log, not turned into a failure
+                print(f"Could not keep unshackle.yaml in its history: {no_credentials(e)}", flush=True)
     except (cdm.CdmError, UnshackleError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:
@@ -3103,8 +3106,10 @@ def backup_problem(data) -> str | None:
         if data.get(key) is not None and not isinstance(data[key], kind):
             return f"Its {key} section is not in the format DownStream writes"
     for key, show in (data.get("series") or {}).items():
-        if not str(key).isdigit() or not isinstance(show, dict):
+        if not re.fullmatch(r"[0-9]+", str(key)) or not isinstance(show, dict):  # not isdigit: it takes "²"
             return f"Its series entry {key!r} is not in the format DownStream writes"
+    if len({int(k) for k in data.get("series") or {}}) != len(data.get("series") or {}):  # 71663 and '71663'
+        return "It lists the same series twice"
     settings = data.get("settings") or {}
     for key, (low, high) in NUMBER_SETTINGS.items():  # a value a Save refuses would stop the app starting, or divide by zero
         value = settings.get(key)

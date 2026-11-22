@@ -3422,6 +3422,12 @@ def test_a_held_summary_no_address_ever_takes_is_dropped_after_an_hour_of_tries(
     sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
     for _ in range(sync.HELD_TRIES - 1):
         assert sync.send_held(settings) is False
+    # quiet hours again before the hour is up: the night's summary gets its own hour of tries
+    monkeypatch.setattr(sync, "in_quiet_hours", lambda s, now=None: bool(s.get("quiet")))
+    assert sync.send_held({**settings, "quiet": {"from": "00:00", "to": "23:59"}}) is False
+    tries.clear()
+    for _ in range(sync.HELD_TRIES - 1):
+        assert sync.send_held(settings) is False
     assert sync.HELD_FILE.exists()
     assert sync.send_held(settings) is False and not sync.HELD_FILE.exists()
     assert "gave up" in capsys.readouterr().err
