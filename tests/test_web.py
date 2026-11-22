@@ -9378,12 +9378,14 @@ def test_a_proxy_list_that_trusted_no_one_is_not_turned_on_by_another_change(tmp
     assert web.proxy_auth_of({**old, "proxy_auth_from": "10.0.0.1"}) == web.proxy_auth_of({**new, "proxy_auth_from": "10.0.0.1/32"})
 
 
-def test_a_proxy_list_that_trusted_no_one_stays_so_through_an_unrelated_save(tmp_path, monkeypatch):
+@pytest.mark.parametrize("header", ["Remote-User", None])  # None: no header in config.yaml, the page sends ""
+def test_a_proxy_list_that_trusted_no_one_stays_so_through_an_unrelated_save(tmp_path, monkeypatch, header):
     # the page sends it back untouched: saved as it was (still trusting no one), with no password asked
     from aiohttp.test_utils import TestClient, TestServer
     web = reloaded_web(tmp_path, monkeypatch)
     config = web.read_config()
-    config["settings"].update(proxy_auth_header="Remote-User", proxy_auth_from="10.0.0.1 10.0.0.2")
+    config["settings"].pop("proxy_auth_header", None)
+    config["settings"].update(proxy_auth_from="10.0.0.1 10.0.0.2", **({"proxy_auth_header": header} if header else {}))
     web.write_config({**config, "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
 
     async def go():
