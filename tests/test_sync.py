@@ -737,12 +737,12 @@ def test_a_job_can_lose_a_queued_episode_or_stop(tmp_path, monkeypatch):
         started.append(payload["wanted"][0])
         if payload["wanted"][0] == "S02E05":
             sync.waiting.pop(206, None)
-            sync.unqueued.add(206)  # S02E06 taken out of the queue from Activity
+            sync.unqueued.add((run.card["batch"], 206))  # S02E06 taken out of the queue from Activity
         if payload["wanted"][0] == "S02E07":  # then the whole job stopped: its queued ones cancelled
             for i, card in list(sync.waiting.items()):
                 if card.get("batch") == run.card["batch"]:
                     sync.waiting.pop(i)
-                    sync.unqueued.add(i)
+                    sync.unqueued.add((run.card["batch"], i))
         raise sync.UnshackleError("no such title")
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
@@ -756,6 +756,22 @@ def test_a_job_can_lose_a_queued_episode_or_stop(tmp_path, monkeypatch):
     assert [(c["outcome"], c["batch"], "waiting" in c, bool(c["ended"])) for c in kept] == [("cancelled", "b", False, True)]  # still in its job
 
 
+def test_an_episode_taken_out_of_one_job_is_still_downloaded_by_another(tmp_path, monkeypatch):
+    # Taken out of job A's queue, then downloaded on its own: that download happens, and A still skips it
+    sync = load(tmp_path, monkeypatch)
+    started = []
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: started.append(payload["wanted"][0]))
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "finish_download", lambda *a, **k: None, raising=False)
+    sync.waiting[205] = {"batch": "20261122-100000-aaaaaa", "tvdbId": 111, "sxxeyy": "S02E05"}
+    assert sync.take_out(205)
+    sync.sync(sync.read_file(), {}, [episode(111, 2, 5)], manual=True, kind="manual")
+    assert started == ["S02E05"]
+    assert ("20261122-100000-aaaaaa", 205) in sync.unqueued  # job A, reaching it, still skips it
+    sync.unqueued.clear()
+
+
 def test_a_cancelled_episode_queued_again_keeps_its_place_or_goes_last(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     started = []
@@ -766,7 +782,7 @@ def test_a_cancelled_episode_queued_again_keeps_its_place_or_goes_last(tmp_path,
         if sx == "S02E05":  # S02E06 and S02E07 cancelled, then S02E06 queued again before its turn
             for i in (206, 207):
                 sync.waiting.pop(i)
-                sync.unqueued.add(i)
+                sync.unqueued.add((batch, i))
             assert sync.add_to_job(batch, episode(111, 2, 6), {"service": "RTLP"})
         if sx == "S02E08":  # S02E07, skipped by now, queued again: it goes last
             assert sync.add_to_job(batch, episode(111, 2, 7), {"service": "RTLP"}) and 207 in sync.waiting

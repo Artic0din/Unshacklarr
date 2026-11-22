@@ -8638,8 +8638,8 @@ def test_a_queued_episode_taken_out_is_never_handed_to_the_job_loop_as_well(tmp_
 
             def loop_turn():  # the job loop's turn for that episode, as it takes it
                 with sync.jobs_lock:
-                    seen.append(key in sync.unqueued)
-                    sync.unqueued.discard(key)
+                    seen.append((batch, key) in sync.unqueued)
+                    sync.unqueued.discard((batch, key))
             turns.append(threading.Thread(target=loop_turn))
             turns[-1].start()
             turns[-1].join(0.3)

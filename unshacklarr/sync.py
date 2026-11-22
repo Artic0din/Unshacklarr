@@ -681,7 +681,7 @@ def chosen_episodes(ids: list[int]):
 current = threading.local()  # the download attempt this thread works on: what trace() writes to
 # Episodes picked together wait for the one before them: episode id -> a card for Activity, meanwhile
 waiting: dict[int, dict] = {}
-unqueued: set[int] = set()  # episodes taken out of a job's queue from Activity: skipped when their turn comes
+unqueued: set[tuple[str | None, int]] = set()  # (job, episode) taken out of that job's queue from Activity: skipped when its turn comes
 
 
 # A job's episode list, while it runs: an episode queued again is added to it, until the last is taken
@@ -817,8 +817,8 @@ def add_to_job(batch: str, ep: dict, show: dict, replace: bool = False, first: b
         job = running_jobs.get(batch)
         if not job or job["closed"] or bool(job.get("replace")) != replace:
             return False
-        if ep["id"] in unqueued:
-            unqueued.discard(ep["id"])  # its turn has not come: it keeps its place
+        if (batch, ep["id"]) in unqueued:
+            unqueued.discard((batch, ep["id"]))  # its turn has not come: it keeps its place
         elif first:
             job["episodes"].insert(job.get("at", 0), ep)
         else:
@@ -833,8 +833,8 @@ def take_out(episode_id: int) -> dict | None:
     the job loop, taking its turn, sees it still queued or taken out, never the card gone without the mark."""
     with jobs_lock:
         card = waiting.pop(episode_id, None)
-        if card is not None:
-            unqueued.add(episode_id)
+        if card is not None:  # this job's only: another job (or a download on its own) of the episode still runs it
+            unqueued.add((card.get("batch"), episode_id))
     return card
 
 
@@ -4629,7 +4629,7 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
         with jobs_lock:
             for episode_id in job["stubs"]:
                 waiting.pop(episode_id, None)
-                unqueued.discard(episode_id)
+                unqueued.discard((batch, episode_id))
         with jobs_lock:
             others = [j for j in batch_jobs.pop(batch, []) if j is not job] if batch else []
             last = not others
@@ -4758,8 +4758,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
             with jobs_lock:  # its turn; add_to_job must not slip in between
                 if (waiting.get(ep["id"]) or {}).get("batch") == batch:  # its own stub, never another job's
                     waiting.pop(ep["id"], None)
-                taken_out = ep["id"] in unqueued
-                unqueued.discard(ep["id"])
+                taken_out = (batch, ep["id"]) in unqueued
+                unqueued.discard((batch, ep["id"]))
             if taken_out:
                 continue  # taken out of the queue
             show = series.get(ep["series"]["tvdbId"])
