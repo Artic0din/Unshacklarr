@@ -175,6 +175,7 @@ function updateTitle() {
 }
 let routed = false;
 function applyRoute(event) {
+  showTab.leave = (showTab.leave || 0) + 1;
   const sameInboxPage = event && syncInboxRoute();
   if (event && !sameInboxPage) cancelSettingsJump();
   if (location.hash.startsWith("#/inbox")) {  // a push notification touched: the bell's list over the current page
@@ -184,22 +185,25 @@ function applyRoute(event) {
   const route = parseRoute();
   const alreadyOpen = inSettingsSec() && route.sec === settingsRoute;
   const sameTab = routed && route.tab === currentTab;
-  if (!routed || route.tab !== currentTab) showTab(route.tab, true);  // closing a series keeps its tab as it was
-  if (route.sec) {
-    // Toggling the Inbox on the same entry must not steal focus or restart a Settings jump.
-    const sameTarget = sameInboxPage && JSON.stringify(history.state?.settings?.target ?? null) === JSON.stringify(settingsTarget);
-    if (alreadyOpen && (!event || route.id || current || sameTarget)) loadSettingsSec();
-    else showSettingsSec(route.sec, true, false, null, Boolean(event));
-  } else if (route.tab === "settings" && !sameInboxPage) { showSettingsList(true, sameTab); loadSettingsSec(); }
-  routed = true;
-  if (currentTab === "log" && !route.id) syncActivityRoute(sameTab);
-  if (sameInboxPage) return;  // drawer and title are tied to the hash, not the history entry
-  const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
-  if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
-  else if (series && route.view) showDrawerTab(route.view, true);
-  else if (!series && current) closeDrawer(true);
-  updateTitle();
-  if (history.state?.inbox && !$("#inbox-dialog").open) openInbox();
+  const finish = () => {
+    if (route.sec) {
+      // Toggling the Inbox on the same entry must not steal focus or restart a Settings jump.
+      const sameTarget = sameInboxPage && JSON.stringify(history.state?.settings?.target ?? null) === JSON.stringify(settingsTarget);
+      if (alreadyOpen && (!event || route.id || current || sameTarget)) loadSettingsSec();
+      else showSettingsSec(route.sec, true, false, null, Boolean(event));
+    } else if (route.tab === "settings" && !sameInboxPage) { showSettingsList(true, sameTab); loadSettingsSec(); }
+    routed = true;
+    if (currentTab === "log" && !route.id) syncActivityRoute(sameTab);
+    if (sameInboxPage) return;  // drawer and title are tied to the hash, not the history entry
+    const series = route.id && S.series.find((x) => String(x.tvdbId) === route.id);
+    if (series && current?.tvdbId !== series.tvdbId) openDrawer(series, route.view, true);
+    else if (series && route.view) showDrawerTab(route.view, true);
+    else if (!series && current) closeDrawer(true);
+    updateTitle();
+    if (history.state?.inbox && !$("#inbox-dialog").open) openInbox();
+  };
+  if (!routed || route.tab !== currentTab) showTab(route.tab, true, false, finish);  // closing a series keeps its tab as it was
+  else finish();
 }
 window.addEventListener("popstate", applyRoute);
 // Startup can scroll without user input; only input should interrupt a jump that is still loading.
@@ -237,9 +241,11 @@ function showTab(name, fromRoute = false, quiet = false, after = null) {
   const changedTab = name !== currentTab;
   if (currentTab === "yaml" && name !== "yaml") {  // leaving the editor: it forgets the password and the file
     if (uyDirty()) {
+      const token = showTab.leave = (showTab.leave || 0) + 1;
       askUnsaved("unshackle.yaml").then(async (choice) => {
+        if (token !== showTab.leave) return;
         if (choice === "save") {
-          if (!await uySave()) { if (fromRoute) navigate(true); return; }
+          if (!(await uySave()) || token !== showTab.leave || uyDirty()) { if (token === showTab.leave && fromRoute) navigate(true); return; }
         } else if (choice !== "discard") { if (fromRoute) navigate(true); return; }
         uyReset();
         showTab(name, fromRoute, quiet, after);
@@ -262,15 +268,16 @@ function showTab(name, fromRoute = false, quiet = false, after = null) {
   });
   document.querySelectorAll("main > section").forEach((s) => s.hidden = s.id !== "tab-" + name);
   if (!fromRoute) navigate(true);
-  if (quiet || $("#initial-state-error")?.hidden === false) return;
-  if (name === "log") {
-    if (!fromRoute && changedTab) syncActivityRoute(false);
-    refreshLog();
-    openActivity();
+  if (!quiet && $("#initial-state-error")?.hidden !== false) {
+    if (name === "log") {
+      if (!fromRoute && changedTab) syncActivityRoute(false);
+      refreshLog();
+      openActivity();
+    }
+    else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
+    if (name === "settings" && !fromRoute) loadSettingsSec();
+    if (name === "schedule") loadSchedule();
   }
-  else if (termSocket) { termSocket.close(); termSocket = null; termFor = null; termQuery = ""; }  // Activity left: its output stops streaming
-  if (name === "settings" && !fromRoute) loadSettingsSec();
-  if (name === "schedule") loadSchedule();
   if (after) after();
 }
 document.querySelectorAll("nav [data-tab]").forEach((b) => b.onclick = (e) => {

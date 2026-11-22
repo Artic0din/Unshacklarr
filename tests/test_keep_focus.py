@@ -205,7 +205,7 @@ if (scenario === "settings") {  // a phone: a section opens on its heading, Back
   const loads = [], location = { hash: "" }, dlg = { close() {} };
   const history = { state: null, pushState(state, _, hash = location.hash) { this.replaceState(state, _, hash); },
     replaceState(state, _, hash = location.hash) { this.state = state; location.hash = hash; } };
-  Object.assign(ctx, { current: null, location, showTab(tab) { run(`currentTab = ${JSON.stringify(tab)}`); },
+  Object.assign(ctx, { current: null, location, showTab(tab, _fromRoute, _quiet, after) { run(`currentTab = ${JSON.stringify(tab)}`); after?.(); },
     phone: true, window: { scrollY: 0 }, ResizeObserver: class { observe() {} disconnect() {} },
     leaveSettingsNews() {}, updateTitle() {}, scrollTo() {}, S: { series: [], config: {} },
     history,

@@ -2452,5 +2452,6 @@
  "{0} lists season {1} as a separate series: {2} (1 episode).": "{0} führt Staffel {1} als eigene Serie: {2} (1 Episode).",
  "{0} lists season {1} as a separate series: {2} ({3} episodes).": "{0} führt Staffel {1} als eigene Serie: {2} ({3} Episoden).",
  "{0} on": "{0} ein",
- "{0} that day{1}: select to change": "{0} an dem Tag{1}: zum Ändern auswählen"
+ "{0} that day{1}: select to change": "{0} an dem Tag{1}: zum Ändern auswählen",
+ "Choose Clear {0} failed to permanently delete only failed entries, or Clear {1} to delete all finished downloads and their Unshackle output. Removed entries cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.": "Wähle „{0} fehlgeschlagene löschen“, um nur fehlgeschlagene Einträge dauerhaft zu löschen, oder „{1} löschen“, um alle abgeschlossenen Downloads samt Unshackle-Ausgabe zu löschen. Gelöschte Einträge lassen sich nicht wiederherstellen. Laufende Downloads bleiben erhalten. Deine Dateien und Sonarr bleiben unberührt."
 }

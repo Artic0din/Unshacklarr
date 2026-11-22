@@ -418,31 +418,98 @@ def test_leaving_dirty_yaml_editor_completes_navigation_after_confirmation():
 const fs = require("fs"), vm = require("vm"), path = require("path");
 const nav = fs.readFileSync(path.join(path.dirname(process.argv[1]), "navigation.js"), "utf8");
 const yaml = fs.readFileSync(path.join(path.dirname(process.argv[1]), "yaml-editor.js"), "utf8");
-let choice = "discard", dirty = true, navTabs = [], saved = 0;
+const attempts = fs.readFileSync(path.join(path.dirname(process.argv[1]), "attempts.js"), "utf8");
+let choice = "discard", dirty = true, saveOk = true, editWhileSaving = false, navTabs = [], saved = 0, resets = 0, sections = [], resolveAsk = null;
 const back = {};
 const ctx = {
-  currentTab: "yaml", termSocket: null, landOnLive: false,
-  uyDirty: () => dirty, uyReset: () => { dirty = false; }, uySave: async () => { saved++; return true; },
-  askUnsaved: async () => choice,
+  currentTab: "yaml", routed: true, termSocket: null, landOnLive: false, current: null, settingsRoute: "", settingsTarget: null,
+  S: { series: [] }, TAB_OF: { activity: "log", terminal: "log", defaults: "settings", "unshackle.yaml": "yaml" },
+  HASH_OF: { log: "activity", yaml: "unshackle.yaml" },
+  location: { hash: "#/settings/notifications" }, history: { state: null },
+  uyDirty: () => dirty, uyReset: () => { dirty = false; resets++; },
+  uySave: async () => { saved++; if (saveOk && !editWhileSaving) dirty = false; return saveOk; },
+  askUnsaved: () => resolveAsk ? new Promise((r) => { resolveAsk = r; }) : Promise.resolve(choice),
   navigate: (push) => navTabs.push([ctx.currentTab, push]),
+  inSettingsSec: () => ctx.currentTab === "settings",
+  showSettingsSec: (sec) => sections.push([ctx.currentTab, sec]),
   showSettingsList() {}, closeDetails() {}, updateTitle() {}, loadSettingsSec() {}, loadSchedule() {},
-  $: (sel) => sel === "#uy-back" ? back : { hidden: true },
+  syncInboxRoute: () => false, cancelSettingsJump() {}, syncActivityRoute() {}, openInbox() {},
+  $: (sel) => sel === "#uy-back" ? back : { hidden: true, open: false },
   document: { querySelectorAll: () => [] },
 };
 vm.createContext(ctx);
-vm.runInContext(nav.match(/^function showTab\([\s\S]*?^\}/m)[0] + "\n" + yaml.match(/^\$\("#uy-back"\)\.onclick = .*$/m)[0], ctx);
+vm.runInContext(
+  nav.match(/^function parseRoute\([\s\S]*?^\}/m)[0] + "\n"
+  + nav.match(/^function applyRoute\([\s\S]*?^\}/m)[0] + "\n"
+  + nav.match(/^function showTab\([\s\S]*?^\}/m)[0] + "\n"
+  + yaml.match(/^\$\("#uy-back"\)\.onclick = .*$/m)[0],
+  ctx,
+);
+const resetState = () => {
+  ctx.currentTab = "yaml"; dirty = true; saveOk = true; editWhileSaving = false;
+  navTabs = []; saved = 0; resets = 0; sections = []; resolveAsk = null;
+};
 (async () => {
-  choice = "cancel";
-  back.onclick();
-  await new Promise((r) => setTimeout(r, 0));
-  const afterCancel = { tab: ctx.currentTab, dirty, navTabs: [...navTabs] };
-  navTabs = [];
-  choice = "save";
-  back.onclick();
-  await new Promise((r) => setTimeout(r, 0));
-  const afterSave = { tab: ctx.currentTab, dirty, saved, navTabs: [...navTabs] };
-  console.log(JSON.stringify({ afterCancel, afterSave }));
+  // 1. Cancel keeps yaml open and restores route
+  resetState(); choice = "cancel";
+  back.onclick(); await new Promise((r) => setTimeout(r, 0));
+  const afterCancel = { tab: ctx.currentTab, dirty, saved, resets, navTabs: [...navTabs] };
+
+  // 2. Failed save keeps yaml open and dirty
+  resetState(); choice = "save"; saveOk = false;
+  back.onclick(); await new Promise((r) => setTimeout(r, 0));
+  const afterFailedSave = { tab: ctx.currentTab, dirty, saved, resets, navTabs: [...navTabs] };
+
+  // 3. Edit typed while save is pending keeps yaml open without resetting
+  resetState(); choice = "save"; saveOk = true; editWhileSaving = true;
+  back.onclick(); await new Promise((r) => setTimeout(r, 0));
+  const afterEditDuringSave = { tab: ctx.currentTab, dirty, saved, resets, navTabs: [...navTabs] };
+
+  // 4. Clean save resets editor and navigates to settings
+  resetState(); choice = "save";
+  back.onclick(); await new Promise((r) => setTimeout(r, 0));
+  const afterSave = { tab: ctx.currentTab, dirty, saved, resets: resets > 0, navTabs: [...navTabs] };
+
+  // 5. Discard skips save, resets editor, and navigates to settings
+  resetState(); choice = "discard";
+  back.onclick(); await new Promise((r) => setTimeout(r, 0));
+  const afterDiscard = { tab: ctx.currentTab, dirty, saved, resets: resets > 0, navTabs: [...navTabs] };
+
+  // 6. applyRoute deep link defers Settings section until confirmation resolves
+  resetState(); ctx.location.hash = "#/settings/notifications"; resolveAsk = () => {};
+  ctx.applyRoute({ type: "popstate" });
+  const whilePending = { tab: ctx.currentTab, sections: [...sections] };
+  resolveAsk("discard"); await new Promise((r) => setTimeout(r, 0));
+  const afterDeepLink = { tab: ctx.currentTab, dirty, sections: [...sections] };
+
+  // 7. History move back to YAML while prompt is open invalidates the stale leave
+  resetState(); ctx.location.hash = "#/settings/notifications"; resolveAsk = () => {};
+  ctx.applyRoute({ type: "popstate" });
+  const staleResolve = resolveAsk;
+  ctx.location.hash = "#/unshackle.yaml";
+  ctx.applyRoute({ type: "popstate" });
+  staleResolve("discard"); await new Promise((r) => setTimeout(r, 0));
+  const afterStaleReturn = { tab: ctx.currentTab, dirty, resets, sections: [...sections], hash: ctx.location.hash };
+
+  // 8. Clear history dialog distinguishes failed-only vs all finished downloads
+  const nodes = { "#hist-clear": {}, "#clear-text": {}, "#clear-failed": {}, "#clear-all": {}, "#clear-dialog": { showModal() {}, addEventListener() {} } };
+  const aCtx = { $: (s) => nodes[s], runCards: [{ outcome: "downloaded" }, { outcome: "failed" }, { outcome: "failed" }],
+    isLive: () => false, COUNT: { download: (n) => `${n} downloads` }, toast() {} };
+  vm.createContext(aCtx);
+  vm.runInContext(attempts.match(/^\$\("#hist-clear"\)\.onclick = [\s\S]*?^\};/m)[0], aCtx);
+  nodes["#hist-clear"].onclick();
+  const clearCopy = { text: nodes["#clear-text"].textContent, failed: nodes["#clear-failed"].textContent, all: nodes["#clear-all"].textContent };
+
+  console.log(JSON.stringify({ afterCancel, afterFailedSave, afterEditDuringSave, afterSave, afterDiscard, whilePending, afterDeepLink, afterStaleReturn, clearCopy }));
 })();
 """)
-    assert shown["afterCancel"] == {"tab": "yaml", "dirty": True, "navTabs": [["yaml", True]]}
-    assert shown["afterSave"] == {"tab": "settings", "dirty": False, "saved": 1, "navTabs": [["settings", True]]}
+    assert shown["afterCancel"] == {"tab": "yaml", "dirty": True, "saved": 0, "resets": 0, "navTabs": [["yaml", True]]}
+    assert shown["afterFailedSave"] == {"tab": "yaml", "dirty": True, "saved": 1, "resets": 0, "navTabs": [["yaml", True]]}
+    assert shown["afterEditDuringSave"] == {"tab": "yaml", "dirty": True, "saved": 1, "resets": 0, "navTabs": [["yaml", True]]}
+    assert shown["afterSave"] == {"tab": "settings", "dirty": False, "saved": 1, "resets": True, "navTabs": [["settings", True]]}
+    assert shown["afterDiscard"] == {"tab": "settings", "dirty": False, "saved": 0, "resets": True, "navTabs": [["settings", True]]}
+    assert shown["whilePending"] == {"tab": "yaml", "sections": []}
+    assert shown["afterDeepLink"] == {"tab": "settings", "dirty": False, "sections": [["settings", "notifications"]]}
+    assert shown["afterStaleReturn"] == {"tab": "yaml", "dirty": True, "resets": 0, "sections": [], "hash": "#/unshackle.yaml"}
+    assert "Clear 2 failed" in shown["clearCopy"]["text"] and "only failed" in shown["clearCopy"]["text"]
+    assert "Clear 3 downloads" in shown["clearCopy"]["text"] and "all finished downloads" in shown["clearCopy"]["text"]
