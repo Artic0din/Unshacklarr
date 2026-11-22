@@ -9329,8 +9329,9 @@ def test_signing_in_through_a_proxy_is_changed_with_the_password_only(tmp_path, 
                 reply = await client.put("/api/config", json=body, headers=page)
                 return reply.status, await reply.text()
             backdoor = {"proxy_auth_header": "X-Me", "proxy_auth_from": "0.0.0.0/0, ::/0"}
-            return [await put(backdoor), await put(backdoor, password="wrong-one"), await put({"country": "FR"}),
-                    await put(backdoor, password="password1")]
+            refused = [await put(backdoor), await put(backdoor, password="wrong-one")]
+            assert not web.read_config()["settings"].get("proxy_auth_header")  # nothing written by a refused Save
+            return [*refused, await put({"country": "FR"}), await put(backdoor, password="password1")]
     (refused, status_wrong, other, allowed) = asyncio.run(go())
     assert refused == (403, "Type your password to change signing in through a reverse proxy")
     assert status_wrong == (403, "Wrong password")
@@ -9338,7 +9339,8 @@ def test_signing_in_through_a_proxy_is_changed_with_the_password_only(tmp_path, 
     assert web.read_config()["settings"]["proxy_auth_header"] == "X-Me"
 
 
-def test_a_proxy_address_written_by_hand_does_not_need_the_password_for_other_changes(tmp_path, monkeypatch):
+@pytest.mark.parametrize("sent", [None, "10.0.0.1/32"])  # sent back as written, or as a Save writes it
+def test_a_proxy_address_written_by_hand_does_not_need_the_password_for_other_changes(tmp_path, monkeypatch, sent):
     # 10.0.0.1 in config.yaml is saved as 10.0.0.1/32: the same proxy, not a change asking for the password
     from aiohttp.test_utils import TestClient, TestServer
     web = reloaded_web(tmp_path, monkeypatch)
@@ -9351,7 +9353,7 @@ def test_a_proxy_address_written_by_hand_does_not_need_the_password_for_other_ch
             page = {"X-Unshackle": "1"}
             await client.post("/api/login", json={"password": "password1"}, headers=page)
             public = web.public_config(web.read_config())
-            body = {**public, "settings": {**public["settings"], "country": "FR"}, "changed": ["settings"],
+            body = {**public, "settings": {**public["settings"], "country": "FR", **({"proxy_auth_from": sent} if sent else {})}, "changed": ["settings"],
                     "base": {"settings": public["versions"]["settings"]}}
             reply = await client.put("/api/config", json=body, headers=page)
             return reply.status, await reply.text()
