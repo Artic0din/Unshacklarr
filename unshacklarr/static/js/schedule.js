@@ -521,7 +521,7 @@ async function refreshBusy() {
       S.authenticationLive = b.authentication || [];
       S.authenticationSetups = b.authentication_setups || [];
       if (showingSettings("services")) renderServices();  // a sign-in waiting for its answer moves on its own
-      else if (servicesCookies) paintServicesBadge();
+      else if (servicesCookies && !servicesCookies.error) paintServicesBadge();  // an error (Unshackle down when read): asked again
       else loadServiceCookies();
     } catch { /* offline a moment: the next round */ }
   }

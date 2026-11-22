@@ -741,14 +741,14 @@ def test_a_duration_names_the_unit_of_each_part():
 const src = read(process.argv[1]);
 const ctx = sandbox();
 vm.runInContext(grab(src, /^function duration\(.*?^\}/ms) + "\nthis.duration = duration;", ctx);
-console.log(JSON.stringify([25000, 144000, 3900000].map((ms) => ctx.duration(ms))));
+console.log(JSON.stringify([25000, 144000, 3900000, 7199000].map((ms) => ctx.duration(ms))));
 """, str(JS / "activity.js"))
-    assert shown == ["25 s", "2 min 24 s", "1 h 05 min"]
+    assert shown == ["25 s", "2 min 24 s", "1 h 05 min", "1 h 59 min"]  # never "1 h 00 min" just before 2 h
 
 
 def test_the_server_names_the_unit_of_each_part_of_a_duration_too():
     from unshacklarr import sync
-    assert [sync.human_time(s) for s in (25, 144, 3900)] == ["25 s", "2 min 24 s", "1 h 05 min"]
+    assert [sync.human_time(s) for s in (25, 144, 3900, 7199)] == ["25 s", "2 min 24 s", "1 h 05 min", "1 h 59 min"]
 
 
 def test_the_logo_goes_to_the_schedule_and_is_named_from_its_text():

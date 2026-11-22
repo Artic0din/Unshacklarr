@@ -2683,6 +2683,22 @@ def test_a_series_is_failing_after_three_failures_in_a_row(tmp_path, monkeypatch
                       3: {"failing": 3, "cause": "", "since": "2026-09-06"}}  # unfinished tries do not break a streak
 
 
+def test_push_devices_are_kept_when_their_list_cannot_be_read(tmp_path):
+    # A list it cannot read (a NAS share gone for a moment, a damaged file) is never written over with one device
+    import pytest
+    from unshacklarr import push
+    p = push.Push(tmp_path)
+    p.subscribe({"endpoint": "https://push.example/a", "keys": {"p256dh": "k", "auth": "a"}})
+    saved = (tmp_path / "push.json").read_text()
+    (tmp_path / "push.json").write_text(saved[:-3])  # damaged
+    damaged = (tmp_path / "push.json").read_text()
+    with pytest.raises(OSError):
+        p.subscribe({"endpoint": "https://push.example/b", "keys": {"p256dh": "k", "auth": "a"}})
+    with pytest.raises(OSError):
+        p.unsubscribe("https://push.example/a")
+    assert (tmp_path / "push.json").read_text() == damaged
+
+
 def test_push_devices_come_and_go(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from unshacklarr import push
@@ -4793,6 +4809,28 @@ def test_the_sync_grid_restarts_at_local_midnight_every_day(tmp_path, monkeypatc
             assert runs == slots - 1, (every, day)
 
 
+def test_a_check_before_release_that_fails_keeps_what_it_told(tmp_path, monkeypatch):
+    # Show1 told (no CDM), then Show2's check fails: the next round must not tell Show1 again
+    from datetime import datetime, timezone
+    web = reloaded_web(tmp_path, monkeypatch)
+    now = datetime(2026, 10, 5, 18, tzinfo=timezone.utc)
+    series = {1: {"service": "MAX", "title": "a", "release_time": "20:00"}, 2: {"service": "NF", "title": "b", "release_time": "20:00"}}
+    config = {"auth": {"password": "x"}, "series": series, "notifications": {}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", timezone.utc)
+    ep = lambda i: {"id": i, "seasonNumber": 1, "episodeNumber": 2, "airDateUtc": "2026-10-05T19:00:00Z", "hasFile": False,
+                    "series": {"tvdbId": i, "title": f"Show{i}"}}
+    monkeypatch.setattr(web, "calendar_episodes", lambda config, start, end: [ep(1), ep(2)])
+    monkeypatch.setattr(web.sonarr_sync, "no_cdm", lambda tag, config=None: "No CDM for MAX" if tag == "MAX" else "")
+    monkeypatch.setattr(web, "list_titles", lambda show: (_ for _ in ()).throw(ValueError("bad option")))
+    sent = []
+    monkeypatch.setattr(web.sonarr_sync, "notify", lambda settings, level, title, message, **k: sent.append(title))
+    for _ in range(2):
+        with pytest.raises(ValueError):
+            web.precheck(now)
+    assert sent == ["Not ready for its release: Show1 S01E02"]
+
+
 def test_a_series_is_checked_hours_before_its_release_and_told_once(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
@@ -4997,6 +5035,19 @@ def test_a_restore_takes_a_null_number_setting_as_its_default(tmp_path, monkeypa
     assert status == 200, text
 
 
+def test_a_restore_reads_series_numbers_written_as_text(tmp_path, monkeypatch):
+    # a hand-edited backup with '71663': its series is found by the sync, which looks series up by number
+    import yaml
+    web = reloaded_web(tmp_path, monkeypatch)
+    data = web.backup_data(yaml.safe_dump({"series": {"71663": {"service": "TF1", "title": "t"}}}))
+    assert list(data["series"]) == [71663]
+    for series, said in (({"²": {}}, "Its series entry '²' is not in the format DownStream writes"),
+                         ({71663: {}, "71663": {}}, "It lists the same series twice")):
+        with pytest.raises(web.web.HTTPBadRequest) as refused:
+            web.backup_data(yaml.safe_dump({"series": series}, allow_unicode=True))
+        assert refused.value.text == said
+
+
 def test_a_restore_checks_other_sonarrs_against_the_backups_own_main_one(tmp_path, monkeypatch):
     # the backup's main Sonarr replaces this install's: an other Sonarr at this install's main address is fine
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
@@ -5191,6 +5242,37 @@ def test_upgrade_auth_failure_is_recorded_without_stopping_later_checks(tmp_path
 
     assert web.check_upgrades(now + timedelta(days=2)) == []
     assert sync.read_authentication_observations()["first"]["FIRST"]["state"] == "validated"
+
+
+def test_an_upgrade_check_that_fails_keeps_what_it_told_and_checked(tmp_path, monkeypatch):
+    # A past its days is told and dropped; B's service then fails: A must not be told again at the next check
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+
+    sync = importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    config = {"series": {111: {"service": "TF1", "title": "a"}, 222: {"service": "TF1", "title": "b"}}, "notifications": {}}
+    monkeypatch.setattr(web, "read_config", lambda: config)
+    for episode_id, tvdb in ((1, 111), (2, 222)):
+        sync.note_upgrade({"id": episode_id, "seasonNumber": 1, "episodeNumber": episode_id,
+                           "series": {"tvdbId": tvdb, "title": f"Show{tvdb}"}}, config["series"][tvdb], f"S01E0{episode_id}", "fr")
+    watched = json.loads(sync.UPGRADES_FILE.read_text())
+    watched["1"]["since"] = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    sync.UPGRADES_FILE.write_text(json.dumps(watched))
+    told = []
+    monkeypatch.setattr(sync, "notify", lambda settings, level, title, message: told.append(title))
+    monkeypatch.setattr(sync, "backend_for", lambda tag, current_config=None: type("Backend", (), {"name": "b"})())
+    monkeypatch.setattr(sync, "download_request", lambda show, current_config, wanted, out, selected_backend=None: {})
+    monkeypatch.setattr(sync, "tracks_on_service", lambda *a, **k: (_ for _ in ()).throw(sync.UnshackleError("Provider unavailable")))
+    now = datetime.now(timezone.utc) + timedelta(days=2)
+    with pytest.raises(sync.UnshackleError):
+        web.check_upgrades(now)
+    assert web.check_upgrades(now + timedelta(hours=1)) == []  # B checked once: not asked again within the day
+    assert told == ["Kept without fr audio: Show111 S01E01"]
+    assert "1" not in json.loads(sync.UPGRADES_FILE.read_text())
 
 
 def test_upgrade_scan_flushes_completed_authentication_evidence_on_later_error(tmp_path, monkeypatch):
@@ -8478,6 +8560,27 @@ def test_a_retry_keeps_the_audio_language_of_the_attempt_it_retries(monkeypatch)
     assert started == [([5], "fr"), ([6], ""), ([5], "")]
 
 
+def test_a_retry_keeps_the_season_map_of_the_attempt_it_retries(monkeypatch):
+    # The card's numbering comes back from JSON with its season numbers as text: the retry must still map S02 to S01
+    import asyncio
+    from unshacklarr import web
+    cards = [{"episodeId": 5, "numbering": {"season_map": {"2": 1}}}]
+    monkeypatch.setattr(web, "cards_on_disk", lambda: cards)
+    monkeypatch.setattr(web.sonarr_sync.RUNS_DIR.__class__, "exists", lambda self: True)
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    monkeypatch.setattr(web, "room_for_one_more", lambda: None)
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append(k["numbering"]))
+
+    class Request:
+        def __init__(self, body): self.body = body
+        async def json(self): return self.body
+    asyncio.run(web.download(Request({"episodeIds": [5], "retry": True})))
+    assert started == [{"season_map": {2: 1}}]
+    assert web.sonarr_sync.service_episode(started[0], 2, 5) == "S01E05"
+
+
 def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
     # Added at the end, they go in as picked; retries go in next, each before the one after it, so last first
     import asyncio
@@ -8617,8 +8720,8 @@ def test_a_queued_episode_taken_out_is_never_handed_to_the_job_loop_as_well(tmp_
 
             def loop_turn():  # the job loop's turn for that episode, as it takes it
                 with sync.jobs_lock:
-                    seen.append(key in sync.unqueued)
-                    sync.unqueued.discard(key)
+                    seen.append((batch, key) in sync.unqueued)
+                    sync.unqueued.discard((batch, key))
             turns.append(threading.Thread(target=loop_turn))
             turns[-1].start()
             turns[-1].join(0.3)
@@ -9404,3 +9507,91 @@ def test_a_proxy_list_that_trusted_no_one_stays_so_through_an_unrelated_save(tmp
     saved = web.read_config()["settings"]
     assert saved["country"] == "FR" and saved["proxy_auth_from"] == "10.0.0.1 10.0.0.2"
     assert web.proxy_networks(saved["proxy_auth_from"]) == []
+
+
+def test_a_broken_unshackle_yaml_is_named_in_the_cookies_and_devices_panes(tmp_path, monkeypatch):
+    # A syntax error in unshackle.yaml: the panes say so (not a bare 500), and the editor still opens it to fix
+    web = reloaded_web(tmp_path, monkeypatch)
+    folder = tmp_path / "unshackle"
+    folder.mkdir()
+    (folder / "unshackle.yaml").write_text("directories: [cookies: x\n")
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", str(folder))
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "cookies_dir", "")
+
+    async def reauth(request, password):
+        return None
+    monkeypatch.setattr(web, "reauth", reauth)
+
+    class Request:
+        def __init__(self, action, body=None):
+            self.match_info, self.body = {"action": action}, body or {}
+        async def json(self): return self.body
+    for handler in (web.list_cookies, web.list_cdm):
+        assert "unshackle.yaml" in json.loads(asyncio.run(handler(None)).text)["error"]
+    with pytest.raises(web.web.HTTPBadRequest) as refused:
+        asyncio.run(web.cdm_action(Request("remote-delete", {"name": "x"})))
+    assert refused.value.text == "unshackle.yaml has a syntax error at line 2: fix it in Settings or in the file"
+    opened = json.loads(asyncio.run(web.unshackle_yaml(Request("open"))).text)
+    assert opened["text"] == "directories: [cookies: x\n"
+
+
+def test_a_devices_pane_change_keeps_unshackle_yaml_as_it_was_in_its_history(tmp_path, monkeypatch):
+    # A remote CDM deleted from the Devices pane rewrites its block, comments included: the file before is kept
+    web = reloaded_web(tmp_path, monkeypatch)
+    folder = tmp_path / "unshackle"
+    folder.mkdir()
+    before = "remote_cdm:\n  - name: a\n    type: decrypt_labs\n  # - name: old\n  #   secret: keep-me\n"
+    (folder / "unshackle.yaml").write_text(before)
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", str(folder))
+    monkeypatch.setattr(web, "cdm_state", lambda: {})
+
+    class Request:
+        match_info = {"action": "remote-delete"}
+        async def json(self): return {"name": "a"}
+    asyncio.run(web.cdm_action(Request()))
+    assert "keep-me" not in (folder / "unshackle.yaml").read_text()
+    assert [p.read_text() for p in web.CONFIG_HISTORY.glob("*.yaml")] == [before]
+
+    # the history can't be written: the change is made all the same, the cache refreshed, and the log says so
+    (folder / "unshackle.yaml").write_text(before)
+    monkeypatch.setattr(web, "keep_unshackle_yaml", lambda old: (_ for _ in ()).throw(OSError("read-only")))
+    configured = []
+    monkeypatch.setattr(web.UNSHACKLE, "configure", lambda settings: configured.append(True))
+    asyncio.run(web.cdm_action(Request()))
+    assert configured == [True] and "keep-me" not in (folder / "unshackle.yaml").read_text()
+
+
+def test_two_language_checks_asked_at_once_start_one_scan(tmp_path, monkeypatch):
+    # Two tabs click Check while Sonarr's answer is on its way: one scan, not two on the same progress
+    import threading
+    web = reloaded_web(tmp_path, monkeypatch)
+    gate, started = threading.Event(), []
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path: gate.wait(5))
+    monkeypatch.setattr(web, "scan_languages", lambda: started.append(True))
+
+    class Request:
+        match_info = {"action": "start"}
+
+    async def both():
+        first = asyncio.create_task(web.languages_action(Request()))
+        await asyncio.sleep(0.05)
+        second = asyncio.create_task(web.languages_action(Request()))
+        await asyncio.sleep(0.05)
+        gate.set()
+        await asyncio.gather(first, second)
+    asyncio.run(both())
+    for t in threading.enumerate():
+        if t is not threading.current_thread() and t.daemon:
+            t.join(1)
+    assert started == [True]
+
+
+def test_a_language_check_sonarr_refuses_can_be_asked_again(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web.sonarr_sync, "sonarr_get", lambda path: (_ for _ in ()).throw(web.requests.ConnectionError("down")))
+
+    class Request:
+        match_info = {"action": "start"}
+    with pytest.raises(web.web.HTTPBadGateway):
+        asyncio.run(web.languages_action(Request()))
+    assert web.language_scan["running"] is False
