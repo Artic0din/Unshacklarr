@@ -12,7 +12,7 @@ const speedLog = {};  // run id -> [[time, progress]], for the time left
 
 function duration(ms) {
   const s = Math.round(ms / 1000);
-  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s` : `${Math.floor(s / 3600)} h ${String(Math.round(s / 60) % 60).padStart(2, "0")} min`;
+  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s` : `${Math.floor(s / 3600)} h ${String(Math.floor(s / 60) % 60).padStart(2, "0")} min`;
 }
 const posterOf = (c) => { const s = S.series.find((x) => x.tvdbId === c.tvdbId); return posterSrc(s?.poster, s?.title || c.series); };
 const isLive = (c) => c.outcome === "running";
