@@ -4817,6 +4817,7 @@ def test_a_check_before_release_that_fails_keeps_what_it_told(tmp_path, monkeypa
     series = {1: {"service": "MAX", "title": "a", "release_time": "20:00"}, 2: {"service": "NF", "title": "b", "release_time": "20:00"}}
     config = {"auth": {"password": "x"}, "series": series, "notifications": {}}
     monkeypatch.setattr(web, "read_config", lambda: config)
+    monkeypatch.setattr(web.sonarr_sync, "LOCAL", timezone.utc)
     ep = lambda i: {"id": i, "seasonNumber": 1, "episodeNumber": 2, "airDateUtc": "2026-10-05T19:00:00Z", "hasFile": False,
                     "series": {"tvdbId": i, "title": f"Show{i}"}}
     monkeypatch.setattr(web, "calendar_episodes", lambda config, start, end: [ep(1), ep(2)])
