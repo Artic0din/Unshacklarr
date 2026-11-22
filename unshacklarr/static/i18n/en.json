@@ -547,6 +547,10 @@
   "label"
  ],
  "Checking…": [],
+ "Choose Clear {0} failed to permanently delete only failed entries, or Clear {1} to delete all finished downloads and their Unshackle output. Removed entries cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.": [
+  "failedN",
+  "COUNT.download(done.length)"
+ ],
  "Choose a folder": [],
  "Choose a passphrase: the backups are encrypted with it.": [],
  "Choose a quality ladder for Sonarr {0} in Settings › Connections › Sonarr first": [

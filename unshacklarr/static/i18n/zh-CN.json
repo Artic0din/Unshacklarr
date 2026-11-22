@@ -2467,5 +2467,6 @@
  "{0} lists season {1} as a separate series: {2} (1 episode).": "{0} 将第 {1} 季列为独立剧集：{2}（1 集）。",
  "{0} lists season {1} as a separate series: {2} ({3} episodes).": "{0} 将第 {1} 季列为独立剧集：{2}（{3} 集）。",
  "{0} on": "{0} 开启",
- "{0} that day{1}: select to change": "当天 {0}{1}：选择以更改"
+ "{0} that day{1}: select to change": "当天 {0}{1}：选择以更改",
+ "Choose Clear {0} failed to permanently delete only failed entries, or Clear {1} to delete all finished downloads and their Unshackle output. Removed entries cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.": "选择“清除 {0} 个失败项”可永久仅删除失败记录，或选择“清除 {1}”以删除所有已完成的下载及其 Unshackle 输出。已删除的记录无法恢复。进行中的下载会保留。你的文件和 Sonarr 不会受到影响。"
 }

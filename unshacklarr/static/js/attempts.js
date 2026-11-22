@@ -43,7 +43,9 @@ $("#hist-clear").onclick = () => {
   const done = runCards.filter((c) => !isLive(c));
   const failedN = done.filter((c) => c.outcome === "failed").length;
   if (!done.length) return toast("The history is already empty");
-  $("#clear-text").textContent = `This permanently deletes ${COUNT.download(done.length)} from the history, with their Unshackle output. They cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.`;
+  $("#clear-text").textContent = failedN
+    ? `Choose Clear ${failedN} failed to permanently delete only failed entries, or Clear ${COUNT.download(done.length)} to delete all finished downloads and their Unshackle output. Removed entries cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.`
+    : `This permanently deletes ${COUNT.download(done.length)} from the history, with their Unshackle output. They cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.`;
   $("#clear-failed").textContent = `Clear ${failedN} failed`;
   $("#clear-failed").disabled = !failedN;
   $("#clear-all").textContent = `Clear ${COUNT.download(done.length)}`;

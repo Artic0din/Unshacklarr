@@ -2525,5 +2525,6 @@
  "{0} lists season {1} as a separate series: {2} (1 episode).": "{0} указывает сезон {1} как отдельный сериал: {2} (1 серия).",
  "{0} lists season {1} as a separate series: {2} ({3} episodes).": "{0} указывает сезон {1} как отдельный сериал: {2} ({3} серий).",
  "{0} on": "{0} вкл.",
- "{0} that day{1}: select to change": "{0} в этот день{1}: выберите, чтобы изменить"
+ "{0} that day{1}: select to change": "{0} в этот день{1}: выберите, чтобы изменить",
+ "Choose Clear {0} failed to permanently delete only failed entries, or Clear {1} to delete all finished downloads and their Unshackle output. Removed entries cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.": "Выберите «Очистить {0} с ошибкой», чтобы навсегда удалить только неудачные попытки, или «Очистить {1}», чтобы удалить все завершённые загрузки и вывод Unshackle. Удалённые записи нельзя восстановить. Текущие загрузки останутся. Ваши файлы и Sonarr не будут затронуты."
 }

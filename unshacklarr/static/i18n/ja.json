@@ -2462,5 +2462,6 @@
  "{0} lists season {1} as a separate series: {2} (1 episode).": "{0}はシーズン{1}を別シリーズとして扱っています：{2}（1エピソード）。",
  "{0} lists season {1} as a separate series: {2} ({3} episodes).": "{0}はシーズン{1}を別シリーズとして扱っています：{2}（{3}エピソード）。",
  "{0} on": "{0} オン",
- "{0} that day{1}: select to change": "その日は{0}{1}：選択して変更"
+ "{0} that day{1}: select to change": "その日は{0}{1}：選択して変更",
+ "Choose Clear {0} failed to permanently delete only failed entries, or Clear {1} to delete all finished downloads and their Unshackle output. Removed entries cannot be brought back. Downloads in progress stay. Your files and Sonarr are not touched.": "失敗した項目のみを完全に削除するには「失敗した {0} 件を削除」を、完了したすべてのダウンロードと Unshackle の出力を削除するには「{1} を削除」を選択してください。削除した項目は元に戻せません。進行中のダウンロードは残ります。ファイルと Sonarr には影響しません。"
 }

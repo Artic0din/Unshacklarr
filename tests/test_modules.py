@@ -564,6 +564,22 @@ def test_a_local_serve_whose_python_is_missing_is_an_unshackle_error(tmp_path):
     assert local.process is None
 
 
+def test_local_serve_startup_error_redacts_credentials(tmp_path, monkeypatch):
+    from unshacklarr.backend import Local
+    local = Local(tmp_path / "serve.log")
+
+    def boom(*args, **kwargs):
+        raise OSError("cannot launch https://alice:super-secret@proxy.example/bin/python?token=tok123")
+
+    monkeypatch.setattr("unshacklarr.backend.subprocess.Popen", boom)
+    with pytest.raises(UnshackleError) as err:
+        local.start(broken_command(tmp_path))
+    message = str(err.value)
+    assert "super-secret" not in message and "tok123" not in message
+    assert "https://***@proxy.example/bin/python?token=***" in message
+    assert local.process is None
+
+
 def test_asking_where_unshackle_keeps_its_files_is_an_unshackle_error_when_it_cannot_run_or_hangs(tmp_path, monkeypatch):
     import subprocess
     from unshacklarr.backend import Local
