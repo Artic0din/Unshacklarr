@@ -712,7 +712,13 @@ async function save() {
   const names = sonarrNames();  // as sent: a rename made while the Save runs is not saved yet
   const sentLibraries = JSON.stringify(S.sonarrsOf);  // under those names
   const sentUrls = names.map(([i]) => i.url);  // and their addresses as sent: one edited meanwhile is no rename
-  const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series, changed, base: unitBase }) });
+  // signing in through a reverse proxy lets people in without the password: changed with it only
+  const was = JSON.parse(savedConfig || "{}").settings || {};
+  const proxyChanged = ["proxy_auth_header", "proxy_auth_from"].some((k) => (S.config.settings[k] || "") !== (was[k] || ""));
+  if (proxyChanged && !$("#ac-proxy-pw").value) throw new Error("Type your password to change signing in through a reverse proxy");
+  const password = proxyChanged ? { password: $("#ac-proxy-pw").value } : {};
+  const saved = await api("/api/config", { method: "PUT", body: JSON.stringify({ ...S.config, series, changed, base: unitBase, ...password }) });
+  $("#ac-proxy-pw").value = "";
   // Another tab renamed a Sonarr: each series' settings and libraries on this page are keyed by the old name, so the
   // page asks for a reload rather than re-key them all. This Save stays saved.
   const theirSonarrs = Array.isArray(saved?.settings?.sonarrs) ? saved.settings.sonarrs : [];

@@ -9308,3 +9308,32 @@ def test_a_languages_check_against_a_sonarr_without_api_v5_says_so_at_once(tmp_p
 
     status, text = asyncio.run(go())
     assert status == 502 and "/api/v5/system/status" in text and not web.language_scan["running"]
+
+
+def test_signing_in_through_a_proxy_is_changed_with_the_password_only(tmp_path, monkeypatch):
+    # A session alone (a stolen cookie) must not turn on header sign-in from anywhere: that access would outlive the
+    # password and "log out others". Other settings still save without it.
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+
+            async def put(settings, **extra):
+                public = web.public_config(web.read_config())
+                body = {**public, "settings": {**public["settings"], **settings}, "changed": ["settings"],
+                        "base": {"settings": public["versions"]["settings"]}, **extra}
+                reply = await client.put("/api/config", json=body, headers=page)
+                return reply.status, await reply.text()
+            backdoor = {"proxy_auth_header": "X-Me", "proxy_auth_from": "0.0.0.0/0, ::/0"}
+            return [await put(backdoor), await put(backdoor, password="wrong-one"), await put({"country": "FR"}),
+                    await put(backdoor, password="password1")]
+    (refused, status_wrong, other, allowed) = asyncio.run(go())
+    assert refused == (403, "Type your password to change signing in through a reverse proxy")
+    assert status_wrong == (403, "Wrong password")
+    assert other[0] == 200 and allowed[0] == 200
+    assert web.read_config()["settings"]["proxy_auth_header"] == "X-Me"
+

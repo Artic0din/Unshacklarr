@@ -1290,12 +1290,18 @@ async def service_profiles(request):
 
 async def save_config(request):
     body = await json_object(request)
+    if reauthed := "password" in body:  # sent only with a change of signing in through a reverse proxy (below)
+        await reauth(request, str(body.pop("password") or ""))
     known = await asyncio.to_thread(known_services)  # waited on first: a save from another tab meanwhile is read below
     with CONFIG_LOCK:  # read, merged, checked and written at once: nothing saved in between is written over
         previous = read_config()
         merge_page_changes(body, public_config(previous))
         real_config(body, previous)  # the secrets the browser only saw masked
         config = checked_config(body, previous, known)
+        proxy = lambda s: (s.get("proxy_auth_header") or "", s.get("proxy_auth_from") or "")  # noqa: E731
+        if proxy(config["settings"]) != proxy(previous["settings"]) and not reauthed:
+            # it lets in whoever sends the header from those addresses: a session alone must not grant lasting access
+            raise web.HTTPForbidden(text="Type your password to change signing in through a reverse proxy")
         for key, show in (body.get("series") or {}).items():
             learned, saved = previous["series"].get(int(key)) or {}, config["series"].get(int(key))
             if saved is None or (learned.get("service"), str(learned.get("title"))) != (saved.get("service"), str(saved.get("title"))):
