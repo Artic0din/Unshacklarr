@@ -1290,12 +1290,20 @@ async def service_profiles(request):
 
 async def save_config(request):
     body = await json_object(request)
+    if reauthed := "password" in body:  # sent only with a change of signing in through a reverse proxy (below)
+        await reauth(request, str(body.pop("password") or ""))
     known = await asyncio.to_thread(known_services)  # waited on first: a save from another tab meanwhile is read below
     with CONFIG_LOCK:  # read, merged, checked and written at once: nothing saved in between is written over
         previous = read_config()
         merge_page_changes(body, public_config(previous))
         real_config(body, previous)  # the secrets the browser only saw masked
+        sent = {k: (body.get("settings") or {}).get(k) for k in PROXY_AUTH}
         config = checked_config(body, previous, known)
+        if all((sent[k] or "") == (previous["settings"].get(k) or "") for k in PROXY_AUTH):  # not edited: kept as written, never rewritten into
+            config["settings"].update({k: previous["settings"][k] for k in PROXY_AUTH if k in previous["settings"]})  # a list it trusts
+        if proxy_auth_of(config["settings"]) != proxy_auth_of(previous["settings"]) and not reauthed:
+            # it lets in whoever sends the header from those addresses: a session alone must not grant lasting access
+            raise web.HTTPForbidden(text="Type your password to change signing in through a reverse proxy")
         for key, show in (body.get("series") or {}).items():
             learned, saved = previous["series"].get(int(key)) or {}, config["series"].get(int(key))
             if saved is None or (learned.get("service"), str(learned.get("title"))) != (saved.get("service"), str(saved.get("title"))):
@@ -1782,6 +1790,15 @@ def check_proxy_auth(header, sources) -> tuple[str, str]:
     if not networks:
         raise web.HTTPBadRequest(text="Enter the addresses the reverse proxy connects from. Without them, anyone could send the header")
     return header, ", ".join(networks)
+
+
+PROXY_AUTH = ("proxy_auth_header", "proxy_auth_from")
+
+
+def proxy_auth_of(settings: dict) -> tuple[str, frozenset]:
+    """Who signing in through a reverse proxy lets in, as from_proxy and proxy_user read it: a hand-written 10.0.0.1
+    is the same as 10.0.0.1/32, and a list they refuse trusts no one."""
+    return str(settings.get("proxy_auth_header") or ""), frozenset(proxy_networks(settings.get("proxy_auth_from")))
 
 
 OFFSITE_SETTINGS = ("backup_remote", "backup_remote_url", "backup_remote_user", "backup_remote_secret", "backup_remote_bucket",
@@ -6590,11 +6607,17 @@ def from_proxy(request) -> bool:
     X-Forwarded-For, which anyone writes."""
     try:
         peer = ipaddress.ip_address(request.remote or "")
-        networks = [ipaddress.ip_network(s.strip(), strict=False)
-                    for s in str(sonarr_sync.SETTINGS.get("proxy_auth_from") or "").split(",") if s.strip()]
     except ValueError:
         return False
-    return any(peer in n for n in networks if n.version == peer.version)
+    return any(peer in n for n in proxy_networks(sonarr_sync.SETTINGS.get("proxy_auth_from")) if n.version == peer.version)
+
+
+def proxy_networks(sources) -> list:
+    """The proxy's addresses as saved, comma-separated; none when one of them can't be read."""
+    try:
+        return [ipaddress.ip_network(s.strip(), strict=False) for s in str(sources or "").split(",") if s.strip()]
+    except ValueError:
+        return []
 
 
 def proxy_user(request) -> str:
@@ -6688,7 +6711,15 @@ def client_ip(request) -> str:
     """Who is trying to log in. X-Real-IP is believed only from the proxy's listed addresses, as the proxy sets it
     itself; X-Forwarded-For never: its first entry is the client's to write, which would let anyone dodge the limit."""
     remote = request.remote or "?"
-    return (request.headers.get("X-Real-IP", "").strip() if from_proxy(request) else "") or remote
+    ip = (request.headers.get("X-Real-IP", "").strip() if from_proxy(request) else "") or remote
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if address.version == 6 and address.ipv4_mapped:  # an IPv4 client on a dual-stack socket: its own address
+        return str(address.ipv4_mapped)
+    # an IPv6 client holds a whole /64: counted per address, it would get a fresh limit for every try
+    return str(ipaddress.ip_network(f"{address}/64", strict=False)) if address.version == 6 else ip
 
 
 # ---- The API for other programs: /api/v1, with an API key; its answers keep their shape (docs/API.md) ----

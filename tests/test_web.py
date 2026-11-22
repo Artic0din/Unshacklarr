@@ -9413,6 +9413,102 @@ def test_a_languages_check_against_a_sonarr_without_api_v5_says_so_at_once(tmp_p
     assert status == 502 and "/api/v5/system/status" in text and not web.language_scan["running"]
 
 
+def test_signing_in_through_a_proxy_is_changed_with_the_password_only(tmp_path, monkeypatch):
+    # A session alone (a stolen cookie) must not turn on header sign-in from anywhere: that access would outlive the
+    # password and "log out others". Other settings still save without it.
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+
+            async def put(settings, **extra):
+                public = web.public_config(web.read_config())
+                body = {**public, "settings": {**public["settings"], **settings}, "changed": ["settings"],
+                        "base": {"settings": public["versions"]["settings"]}, **extra}
+                reply = await client.put("/api/config", json=body, headers=page)
+                return reply.status, await reply.text()
+            backdoor = {"proxy_auth_header": "X-Me", "proxy_auth_from": "0.0.0.0/0, ::/0"}
+            refused = [await put(backdoor), await put(backdoor, password="wrong-one")]
+            assert not web.read_config()["settings"].get("proxy_auth_header")  # nothing written by a refused Save
+            return [*refused, await put({"country": "FR"}), await put(backdoor, password="password1")]
+    (refused, status_wrong, other, allowed) = asyncio.run(go())
+    assert refused == (403, "Type your password to change signing in through a reverse proxy")
+    assert status_wrong == (403, "Wrong password")
+    assert other[0] == 200 and allowed[0] == 200
+    assert web.read_config()["settings"]["proxy_auth_header"] == "X-Me"
+
+
+@pytest.mark.parametrize("sent", [None, "10.0.0.1/32"])  # sent back as written, or as a Save writes it
+def test_a_proxy_address_written_by_hand_does_not_need_the_password_for_other_changes(tmp_path, monkeypatch, sent):
+    # 10.0.0.1 in config.yaml is saved as 10.0.0.1/32: the same proxy, not a change asking for the password
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    config = web.read_config()
+    config["settings"].update(proxy_auth_header="Remote-User", proxy_auth_from="10.0.0.1")
+    web.write_config({**config, "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            public = web.public_config(web.read_config())
+            body = {**public, "settings": {**public["settings"], "country": "FR", **({"proxy_auth_from": sent} if sent else {})}, "changed": ["settings"],
+                    "base": {"settings": public["versions"]["settings"]}}
+            reply = await client.put("/api/config", json=body, headers=page)
+            return reply.status, await reply.text()
+    status, text = asyncio.run(go())
+    assert status == 200, text
+
+
+def test_wrong_passwords_are_counted_per_ipv6_network_not_per_address(tmp_path, monkeypatch):
+    # an IPv6 client holds a whole /64: a fresh address per try must not get a fresh limit; IPv4 (mapped too) as before
+    web = reloaded_web(tmp_path, monkeypatch)
+    ip = lambda remote: web.client_ip(SimpleNamespace(remote=remote, headers={}))
+    assert ip("2001:db8:1:2::1") == ip("2001:db8:1:2:ffff::9") == "2001:db8:1:2::/64"
+    assert ip("2001:db8:1:3::1") != ip("2001:db8:1:2::1")
+    assert ip("::ffff:192.0.2.7") == "192.0.2.7" and ip("::ffff:192.0.2.8") == "192.0.2.8"
+    assert ip("192.0.2.7") == "192.0.2.7" and ip(None) == "?"
+
+
+def test_a_proxy_list_that_trusted_no_one_is_not_turned_on_by_another_change(tmp_path, monkeypatch):
+    # "10.0.0.1 10.0.0.2" by hand: from_proxy refuses it, so no one is trusted; a Save would write it as a valid list
+    web = reloaded_web(tmp_path, monkeypatch)
+    old = {"proxy_auth_header": "Remote-User", "proxy_auth_from": "10.0.0.1 10.0.0.2"}
+    new = {"proxy_auth_header": "Remote-User", "proxy_auth_from": "10.0.0.1/32, 10.0.0.2/32"}
+    assert web.proxy_auth_of(old) != web.proxy_auth_of(new)
+    assert web.proxy_auth_of({**old, "proxy_auth_from": "10.0.0.1"}) == web.proxy_auth_of({**new, "proxy_auth_from": "10.0.0.1/32"})
+
+
+@pytest.mark.parametrize("header", ["Remote-User", None])  # None: no header in config.yaml, the page sends ""
+def test_a_proxy_list_that_trusted_no_one_stays_so_through_an_unrelated_save(tmp_path, monkeypatch, header):
+    # the page sends it back untouched: saved as it was (still trusting no one), with no password asked
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    config = web.read_config()
+    config["settings"].pop("proxy_auth_header", None)
+    config["settings"].update(proxy_auth_from="10.0.0.1 10.0.0.2", **({"proxy_auth_header": header} if header else {}))
+    web.write_config({**config, "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            public = web.public_config(web.read_config())
+            body = {**public, "settings": {**public["settings"], "country": "FR"}, "changed": ["settings"],
+                    "base": {"settings": public["versions"]["settings"]}}
+            reply = await client.put("/api/config", json=body, headers=page)
+            return reply.status, await reply.text()
+    status, text = asyncio.run(go())
+    assert status == 200, text
+    saved = web.read_config()["settings"]
+    assert saved["country"] == "FR" and saved["proxy_auth_from"] == "10.0.0.1 10.0.0.2"
+    assert web.proxy_networks(saved["proxy_auth_from"]) == []
+
+
 def test_a_broken_unshackle_yaml_is_named_in_the_cookies_and_devices_panes(tmp_path, monkeypatch):
     # A syntax error in unshackle.yaml: the panes say so (not a bare 500), and the editor still opens it to fix
     web = reloaded_web(tmp_path, monkeypatch)

@@ -8,6 +8,10 @@ Every change worth knowing, newest first. The format follows
 
 ### Security
 
+- **Signing in through a reverse proxy is changed with the password only.** A session alone could turn it on for any
+  address, and that access would have outlived a new password.
+- **Wrong passwords are counted per IPv6 network (/64).** A client could get a fresh limit with each address of its
+  network.
 - **Session revocation.** The app now refuses to verify sessions when the sign-out record is corrupt. (#367)
 - **cryptography 50.0.2.** Its wheels carry OpenSSL 4.0.3, a security release whose most severe fix is High. Push
   notifications are signed and encrypted with it.
