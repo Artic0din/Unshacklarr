@@ -1297,7 +1297,10 @@ async def save_config(request):
         previous = read_config()
         merge_page_changes(body, public_config(previous))
         real_config(body, previous)  # the secrets the browser only saw masked
+        sent = {k: (body.get("settings") or {}).get(k) for k in PROXY_AUTH}
         config = checked_config(body, previous, known)
+        if all(sent[k] == previous["settings"].get(k) for k in PROXY_AUTH):  # not edited: kept as written, never rewritten into
+            config["settings"].update({k: previous["settings"][k] for k in PROXY_AUTH if k in previous["settings"]})  # a list it trusts
         if proxy_auth_of(config["settings"]) != proxy_auth_of(previous["settings"]) and not reauthed:
             # it lets in whoever sends the header from those addresses: a session alone must not grant lasting access
             raise web.HTTPForbidden(text="Type your password to change signing in through a reverse proxy")
@@ -1787,6 +1790,9 @@ def check_proxy_auth(header, sources) -> tuple[str, str]:
     if not networks:
         raise web.HTTPBadRequest(text="Enter the addresses the reverse proxy connects from. Without them, anyone could send the header")
     return header, ", ".join(networks)
+
+
+PROXY_AUTH = ("proxy_auth_header", "proxy_auth_from")
 
 
 def proxy_auth_of(settings: dict) -> tuple[str, frozenset]:

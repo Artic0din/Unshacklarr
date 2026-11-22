@@ -9376,3 +9376,27 @@ def test_a_proxy_list_that_trusted_no_one_is_not_turned_on_by_another_change(tmp
     new = {"proxy_auth_header": "Remote-User", "proxy_auth_from": "10.0.0.1/32, 10.0.0.2/32"}
     assert web.proxy_auth_of(old) != web.proxy_auth_of(new)
     assert web.proxy_auth_of({**old, "proxy_auth_from": "10.0.0.1"}) == web.proxy_auth_of({**new, "proxy_auth_from": "10.0.0.1/32"})
+
+
+def test_a_proxy_list_that_trusted_no_one_stays_so_through_an_unrelated_save(tmp_path, monkeypatch):
+    # the page sends it back untouched: saved as it was (still trusting no one), with no password asked
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    config = web.read_config()
+    config["settings"].update(proxy_auth_header="Remote-User", proxy_auth_from="10.0.0.1 10.0.0.2")
+    web.write_config({**config, "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            public = web.public_config(web.read_config())
+            body = {**public, "settings": {**public["settings"], "country": "FR"}, "changed": ["settings"],
+                    "base": {"settings": public["versions"]["settings"]}}
+            reply = await client.put("/api/config", json=body, headers=page)
+            return reply.status, await reply.text()
+    status, text = asyncio.run(go())
+    assert status == 200, text
+    saved = web.read_config()["settings"]
+    assert saved["country"] == "FR" and saved["proxy_auth_from"] == "10.0.0.1 10.0.0.2"
+    assert web.proxy_networks(saved["proxy_auth_from"]) == []
