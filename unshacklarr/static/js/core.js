@@ -824,7 +824,8 @@ async function closeDrawer(fromRoute = false) {
   return true;
 }
 function keepDrawer(fromRoute) {  // it stays open; the back button already left its address: back to it
-  if (fromRoute) { drawerPushed = true; history.pushState(null, "", routeHash()); }
+  const hash = routeHash();
+  if (fromRoute || location.hash !== hash) { drawerPushed = true; history.pushState(null, "", hash); }
   return false;
 }
 
