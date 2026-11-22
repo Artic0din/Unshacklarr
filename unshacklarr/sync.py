@@ -3756,7 +3756,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             run.finish("downloaded", "", f"{want} audio added to the file")
             notify(config.get("notifications") or {}, "success", f"Audio added: {label}", f"The {want} audio track was added to the file.")
             return True
-        except (RuntimeError, JobFailed, UnshackleError, ValueError, subprocess.CalledProcessError, requests.RequestException) as e:
+        except (RuntimeError, JobFailed, UnshackleError, ValueError, OSError, subprocess.CalledProcessError, requests.RequestException) as e:
             run.say(f"{label}: {e}")
             if getattr(e, "error_code", "") == "AUTH_FAILED":
                 run.observe_authentication(show["service"], str(run.card.get("backend") or ""), "needs_user_action")

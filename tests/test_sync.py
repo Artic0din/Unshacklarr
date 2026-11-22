@@ -4901,6 +4901,13 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
         assert sync.add_track(205, "fr") is False
     assert sync.same_source({"path": "/tv/Show - S01E01.mkv", "originalFilePath": "x/Doc.2026.1080p.iP.WEB-DL.mkv"}, "iP")
     assert not sync.same_source({"sceneName": "Show.S01E01.ip.WEB-DL"}, "iP")  # a short tag as Unshackle writes it
+    # a folder it cannot write: the attempt ends failed, never a card left running, and no second download
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    shutil.rmtree(folder, ignore_errors=True)
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (_ for _ in ()).throw(PermissionError("denied")))
+    assert sync.add_track(205, "fr") is True
+    newest = max((tmp_path / "runs").glob("*.json"), key=lambda p: p.stat().st_mtime_ns)
+    assert json.loads(newest.read_text())["outcome"] == "failed"
 
 
 def test_audio_only_authentication_failure_is_kept_as_evidence(tmp_path, monkeypatch):
