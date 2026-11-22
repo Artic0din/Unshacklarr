@@ -9402,3 +9402,21 @@ def test_a_broken_unshackle_yaml_is_named_in_the_cookies_and_devices_panes(tmp_p
     assert refused.value.text == "unshackle.yaml has a syntax error at line 2: fix it in Settings or in the file"
     opened = json.loads(asyncio.run(web.unshackle_yaml(Request("open"))).text)
     assert opened["text"] == "directories: [cookies: x\n"
+
+
+def test_a_devices_pane_change_keeps_unshackle_yaml_as_it_was_in_its_history(tmp_path, monkeypatch):
+    # A remote CDM deleted from the Devices pane rewrites its block, comments included: the file before is kept
+    web = reloaded_web(tmp_path, monkeypatch)
+    folder = tmp_path / "unshackle"
+    folder.mkdir()
+    before = "remote_cdm:\n  - name: a\n    type: decrypt_labs\n  # - name: old\n  #   secret: keep-me\n"
+    (folder / "unshackle.yaml").write_text(before)
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", str(folder))
+    monkeypatch.setattr(web, "cdm_state", lambda: {})
+
+    class Request:
+        match_info = {"action": "remote-delete"}
+        async def json(self): return {"name": "a"}
+    asyncio.run(web.cdm_action(Request()))
+    assert "keep-me" not in (folder / "unshackle.yaml").read_text()
+    assert [p.read_text() for p in web.CONFIG_HISTORY.glob("*.yaml")] == [before]

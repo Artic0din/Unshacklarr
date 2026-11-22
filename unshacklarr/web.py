@@ -3060,6 +3060,7 @@ async def cdm_action(request):
     action = request.match_info["action"]
     try:
         conf, wvds, prds = await asyncio.to_thread(cdm_paths)
+        before = await asyncio.to_thread(lambda: conf.read_text(encoding="utf8") if conf.exists() else None)
         if action == "add":
             try:
                 content = base64.b64decode(str(body.get("data") or ""), validate=True)
@@ -3076,6 +3077,8 @@ async def cdm_action(request):
         else:
             device = body.get("device")
             await asyncio.to_thread(cdm.choose, conf, wvds, prds, str(body.get("service") or ""), str(device) if device else None)
+        if before is not None and await asyncio.to_thread(conf.read_text, encoding="utf8") != before:
+            await asyncio.to_thread(keep_unshackle_yaml, before)  # its comments too: the editor's history gets them back
     except (cdm.CdmError, UnshackleError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:
@@ -3303,12 +3306,17 @@ def yaml_problem(text: str) -> str | None:
     return None
 
 
-def save_unshackle_yaml(path: Path, old: str, new: str) -> dict:
-    """Keep the file as it was, then write the new one (with the file's own permissions)."""
+def keep_unshackle_yaml(old: str) -> None:
+    """unshackle.yaml as it was before a change, in the editor's history."""
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     write_atomic(CONFIG_HISTORY / f"{stamp}.yaml", old, PRIVATE)
     for extra in sorted(CONFIG_HISTORY.glob("*.yaml"), reverse=True)[CONFIG_KEEP:]:
         extra.unlink(missing_ok=True)
+
+
+def save_unshackle_yaml(path: Path, old: str, new: str) -> dict:
+    """Keep the file as it was, then write the new one (with the file's own permissions)."""
+    keep_unshackle_yaml(old)
     write_atomic(path, new)
     broken = yaml_problem(old)  # saving over a broken file is how it gets fixed
     before, after = {} if broken else yaml.safe_load(old) or {}, yaml.safe_load(new) or {}
