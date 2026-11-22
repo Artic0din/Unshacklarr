@@ -3422,9 +3422,8 @@ def test_a_held_summary_no_address_ever_takes_is_dropped_after_an_hour_of_tries(
     sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
     for _ in range(sync.HELD_TRIES - 1):
         assert sync.send_held(settings) is False
-    # quiet hours again before the hour is up: the night's summary gets its own hour of tries
-    monkeypatch.setattr(sync, "in_quiet_hours", lambda s, now=None: bool(s.get("quiet")))
-    assert sync.send_held({**settings, "quiet": {"from": "00:00", "to": "23:59"}}) is False
+    # a new message held meanwhile: the summary is another one, with its own hour of tries
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}, {"level": "error", "title": "Failed: Show S01E05"}]))
     tries.clear()
     for _ in range(sync.HELD_TRIES - 1):
         assert sync.send_held(settings) is False

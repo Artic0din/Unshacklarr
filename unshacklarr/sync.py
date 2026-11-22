@@ -623,18 +623,19 @@ def notify(settings: dict, level: str, title: str, message: str, action: dict | 
 
 held_pushed: list | None = None  # the summary the devices already have, while an address still fails to take it
 HELD_TRIES = 60  # tried each minute: an hour, then a summary no address takes is given up
-held_failures = 0
+held_failures, held_tried = 0, None  # the failed tries of this very summary: new messages held start it afresh
 
 
 def send_held(settings: dict) -> bool:
     """The quiet hours are over: what came meanwhile, in one message."""
-    global held_pushed, held_failures
+    global held_pushed, held_failures, held_tried
     if in_quiet_hours(settings):
-        held_failures = 0  # the tries of the summary before: the night's new messages get their own hour
         return False
     held = read_json(HELD_FILE, [])
     if not held:
         return False
+    if held != held_tried:
+        held_failures, held_tried = 0, held
     worst = "error" if any(h["level"] == "error" for h in held) else "warning" if any(h["level"] == "warning" for h in held) else "success"
     lines = [f"{'✓' if h['level'] == 'success' else '!' if h['level'] == 'warning' else '✗'} {h['title']}" for h in held[:30]]
     more = f"\n…and {len(held) - 30} more" if len(held) > 30 else ""
