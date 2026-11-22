@@ -322,7 +322,7 @@ class Local:
                 raise UnshackleError(f"unshackle did not answer within 60 s when asked where its files are ({python})") from e
             except OSError as e:
                 raise UnshackleError(f"Could not ask unshackle where its files are with {python}: {e}") from e
-            lines = out.stdout.strip().splitlines()[-6:]
+            lines = out.stdout.rstrip("\n").split("\n")[-6:]  # its first line is empty with no unshackle.yaml yet
             if out.returncode or len(lines) != 6:
                 raise UnshackleError(f"Could not ask unshackle where its files are: {out.stderr.strip()[-300:]}")
             cached = self._paths = (command, dict(zip(("config", "cookies", "wvds", "prds", "temp", "cache"), map(Path, lines))))

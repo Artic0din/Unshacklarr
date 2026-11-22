@@ -439,6 +439,36 @@ Promise.all([ctx.loadServiceCookies(), ctx.loadServiceCookies()]).then(() => con
     assert shown == {"asked": ["/api/cookies"], "cookies": ["DSNP"]}
 
 
+def test_the_settings_badge_asks_for_the_cookie_files_again_after_a_failure():
+    # Unshackle restarting at that moment: the next round asks again, the badge does not stay blank until a reload
+    shown = node(SERVICES + r"""
+const asked = [];
+let up = false;
+let round = 0;
+ctx.api = async (path) => {
+  asked.push(path);
+  round += 1;
+  if (round === 1) throw new Error("down");  // refused
+  if (round === 2) return { folder: null, error: "unshackle serve is unreachable", files: {} };  // answered with its error
+  return { folder: "/c", files: { DSNP: [] } };
+};
+vm.runInContext(grab(src, /^let servicesCookiesAsked = .*$/m), ctx);
+vm.runInContext(grab(src, /^function loadServiceCookies\(.*?^\}/ms), ctx);
+vm.runInContext("servicesCookies = { folder: null, files: {}, error: 'read by the Services page while down' }", ctx);
+const files = () => Object.keys(vm.runInContext("servicesCookies", ctx).files);
+const seen = [];
+ctx.loadServiceCookies().then(() => ctx.loadServiceCookies()).then(() => ctx.loadServiceCookies())
+  .then(() => {
+    seen.push(files());
+    // read well, then the Services page stores an error (Unshackle down when it was opened): asked again, not the old read
+    vm.runInContext("servicesCookies = { folder: null, files: {}, error: 'down' }", ctx);
+    return ctx.loadServiceCookies();
+  })
+  .then(() => console.log(JSON.stringify({ asked, seen, cookies: files() })));
+""", str(JS / "services.js"))
+    assert shown == {"asked": ["/api/cookies"] * 4, "seen": [["DSNP"]], "cookies": ["DSNP"]}
+
+
 def test_the_setup_country_follows_the_time_zone_until_one_is_picked():
     shown = node(r"""
 const ctx = sandbox();

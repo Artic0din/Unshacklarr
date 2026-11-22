@@ -32,10 +32,19 @@ class CdmError(ValueError):
     """What is wrong, in words for the page."""
 
 
+class BrokenYaml(CdmError):
+    """unshackle.yaml cannot be read: the panes say so, and its editor opens it to fix."""
+
+
 def directory(yaml_file: Path, key: str, default: str) -> Path:
     """A folder of Unshackle's, found next to unshackle.yaml: its directories: section names it for
     Unshackle's own filesystem, so only its last part is kept."""
-    named = (read(yaml_file).get("directories") or {}).get(key) or default
+    try:
+        named = (read(yaml_file).get("directories") or {}).get(key) or default
+    except yaml.YAMLError as e:
+        mark = getattr(e, "problem_mark", None)
+        where = f" at line {mark.line + 1}" if mark else ""
+        raise BrokenYaml(f"unshackle.yaml has a syntax error{where}: fix it in Settings or in the file") from e
     name = Path(str(named)).name
     if name in ("", ".", ".."):  # "..", "/" or ".": not a folder next to unshackle.yaml
         raise CdmError(f"unshackle.yaml's directories: {key}: {named!r} is not a folder next to it")

@@ -294,10 +294,12 @@ function renderServices() {
   }
   revealService();
 }
-let servicesCookiesAsked = null;  // the cookie files read once for the badge, before Services is opened
-/* An expired or missing cookie file needs attention too: the Settings badge reads them from any page, once. */
+let servicesCookiesAsked = null;  // the badge's read of the cookie files while it is on its way: two rounds share it
+/* An expired or missing cookie file needs attention too: the Settings badge reads them from any page, until it has
+   them. A failure (refused, or answered with an error) leaves no files kept, so the next round asks again. */
 function loadServiceCookies() {
-  return servicesCookiesAsked ||= api("/api/cookies").then((cookies) => { servicesCookies ??= cookies; }, () => {}).then(() => paintServicesBadge());
+  return servicesCookiesAsked ||= api("/api/cookies").then((cookies) => { if (!cookies.error && (!servicesCookies || servicesCookies.error)) servicesCookies = cookies; }, () => {})
+    .then(() => { servicesCookiesAsked = null; paintServicesBadge(); });
 }
 function needingText(n) { return n === 1 ? "1 service needs attention" : `${n} services need attention`; }
 /* The count of the rows that need attention, beside Services in the Settings list, from any page. */

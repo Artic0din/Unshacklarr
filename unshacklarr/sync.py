@@ -622,16 +622,20 @@ def notify(settings: dict, level: str, title: str, message: str, action: dict | 
 
 
 held_pushed: list | None = None  # the summary the devices already have, while an address still fails to take it
+HELD_TRIES = 60  # tried each minute: an hour, then a summary no address takes is given up
+held_failures, held_tried = 0, None  # the failed tries of this very summary: new messages held start it afresh
 
 
 def send_held(settings: dict) -> bool:
     """The quiet hours are over: what came meanwhile, in one message."""
-    global held_pushed
+    global held_pushed, held_failures, held_tried
     if in_quiet_hours(settings):
         return False
     held = read_json(HELD_FILE, [])
     if not held:
         return False
+    if held != held_tried:
+        held_failures, held_tried = 0, held
     worst = "error" if any(h["level"] == "error" for h in held) else "warning" if any(h["level"] == "warning" for h in held) else "success"
     lines = [f"{'✓' if h['level'] == 'success' else '!' if h['level'] == 'warning' else '✗'} {h['title']}" for h in held[:30]]
     more = f"\n…and {len(held) - 30} more" if len(held) > 30 else ""
@@ -642,14 +646,18 @@ def send_held(settings: dict) -> bool:
     if not device_failed:  # a push that raised is tried again with the next attempt
         held_pushed = held
     takes = any(worst in (ALL_LEVELS if t.get("levels") is None else t["levels"]) for t in notification_targets(settings))
-    if delivered or not takes:  # sent, or no address takes it: else kept, tried again next minute
+    held_failures = 0 if delivered else held_failures + 1
+    given_up = takes and held_failures >= HELD_TRIES
+    if given_up:  # an address gone for good (a deleted webhook) must not be asked every minute forever
+        print(f"Quiet hours: gave up sending the summary of {len(held)} held messages after {HELD_TRIES} tries", file=sys.stderr)
+    if delivered or not takes or given_up:  # sent, or no address takes it: else kept, tried again next minute
         with sent_lock:
             try:
                 current = read_json(HELD_FILE, [], strict=True)
             except OSError as e:  # unreadable for a moment: kept, and the devices not pushed it again next minute
                 print(f"Quiet hours: could not read the held messages back: {no_credentials(e)}", file=sys.stderr)
                 return delivered
-            held_pushed = None
+            held_pushed, held_failures = None, 0
             rest = current[len(held):] if current[:len(held)] == held else current  # what came while it was going out stays
             if rest:
                 write_atomic(HELD_FILE, json.dumps(rest))
@@ -681,7 +689,7 @@ def chosen_episodes(ids: list[int]):
 current = threading.local()  # the download attempt this thread works on: what trace() writes to
 # Episodes picked together wait for the one before them: episode id -> a card for Activity, meanwhile
 waiting: dict[int, dict] = {}
-unqueued: set[int] = set()  # episodes taken out of a job's queue from Activity: skipped when their turn comes
+unqueued: set[tuple[str | None, int]] = set()  # (job, episode) taken out of that job's queue from Activity: skipped when its turn comes
 
 
 # A job's episode list, while it runs: an episode queued again is added to it, until the last is taken
@@ -817,8 +825,8 @@ def add_to_job(batch: str, ep: dict, show: dict, replace: bool = False, first: b
         job = running_jobs.get(batch)
         if not job or job["closed"] or bool(job.get("replace")) != replace:
             return False
-        if ep["id"] in unqueued:
-            unqueued.discard(ep["id"])  # its turn has not come: it keeps its place
+        if (batch, ep["id"]) in unqueued:
+            unqueued.discard((batch, ep["id"]))  # its turn has not come: it keeps its place
         elif first:
             job["episodes"].insert(job.get("at", 0), ep)
         else:
@@ -833,8 +841,8 @@ def take_out(episode_id: int) -> dict | None:
     the job loop, taking its turn, sees it still queued or taken out, never the card gone without the mark."""
     with jobs_lock:
         card = waiting.pop(episode_id, None)
-        if card is not None:
-            unqueued.add(episode_id)
+        if card is not None:  # this job's only: another job (or a download on its own) of the episode still runs it
+            unqueued.add((card.get("batch"), episode_id))
     return card
 
 
@@ -1992,6 +2000,8 @@ def prune_runs() -> None:
     cards = sorted(RUNS_DIR.glob("*.json"), reverse=True)  # ids start with the time: newest first
     too_old = (datetime.now(timezone.utc) - timedelta(days=RUNS_MAX_DAYS)).strftime("%Y%m%d")
     for card in cards[RUNS_KEEP:] + [c for c in cards[:RUNS_KEEP] if c.name[:8] < too_old]:
+        if card.stem in EpisodeRun.active:  # still running: its card and log are written to yet
+            continue
         for path in RUNS_DIR.glob(f"{card.stem}.*"):
             path.unlink(missing_ok=True)
 
@@ -3754,7 +3764,7 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
             run.finish("downloaded", "", f"{want} audio added to the file")
             notify(config.get("notifications") or {}, "success", f"Audio added: {label}", f"The {want} audio track was added to the file.")
             return True
-        except (RuntimeError, JobFailed, UnshackleError, ValueError, subprocess.CalledProcessError, requests.RequestException) as e:
+        except (RuntimeError, JobFailed, UnshackleError, ValueError, OSError, subprocess.CalledProcessError, requests.RequestException) as e:
             run.say(f"{label}: {e}")
             if getattr(e, "error_code", "") == "AUTH_FAILED":
                 run.observe_authentication(show["service"], str(run.card.get("backend") or ""), "needs_user_action")
@@ -4629,7 +4639,7 @@ def sync(config: dict, settings: dict, episodes, manual: bool = False, replace: 
         with jobs_lock:
             for episode_id in job["stubs"]:
                 waiting.pop(episode_id, None)
-                unqueued.discard(episode_id)
+                unqueued.discard((batch, episode_id))
         with jobs_lock:
             others = [j for j in batch_jobs.pop(batch, []) if j is not job] if batch else []
             last = not others
@@ -4758,8 +4768,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
             with jobs_lock:  # its turn; add_to_job must not slip in between
                 if (waiting.get(ep["id"]) or {}).get("batch") == batch:  # its own stub, never another job's
                     waiting.pop(ep["id"], None)
-                taken_out = ep["id"] in unqueued
-                unqueued.discard(ep["id"])
+                taken_out = (batch, ep["id"]) in unqueued
+                unqueued.discard((batch, ep["id"]))
             if taken_out:
                 continue  # taken out of the queue
             show = series.get(ep["series"]["tvdbId"])

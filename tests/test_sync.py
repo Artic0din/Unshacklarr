@@ -737,12 +737,12 @@ def test_a_job_can_lose_a_queued_episode_or_stop(tmp_path, monkeypatch):
         started.append(payload["wanted"][0])
         if payload["wanted"][0] == "S02E05":
             sync.waiting.pop(206, None)
-            sync.unqueued.add(206)  # S02E06 taken out of the queue from Activity
+            sync.unqueued.add((run.card["batch"], 206))  # S02E06 taken out of the queue from Activity
         if payload["wanted"][0] == "S02E07":  # then the whole job stopped: its queued ones cancelled
             for i, card in list(sync.waiting.items()):
                 if card.get("batch") == run.card["batch"]:
                     sync.waiting.pop(i)
-                    sync.unqueued.add(i)
+                    sync.unqueued.add((run.card["batch"], i))
         raise sync.UnshackleError("no such title")
 
     monkeypatch.setattr(sync, "run_job_retrying", download)
@@ -756,6 +756,22 @@ def test_a_job_can_lose_a_queued_episode_or_stop(tmp_path, monkeypatch):
     assert [(c["outcome"], c["batch"], "waiting" in c, bool(c["ended"])) for c in kept] == [("cancelled", "b", False, True)]  # still in its job
 
 
+def test_an_episode_taken_out_of_one_job_is_still_downloaded_by_another(tmp_path, monkeypatch):
+    # Taken out of job A's queue, then downloaded on its own: that download happens, and A still skips it
+    sync = load(tmp_path, monkeypatch)
+    started = []
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: started.append(payload["wanted"][0]))
+    monkeypatch.setattr(sync, "download_request", lambda show, config, sx, out, backend=None: {"service": "RTLP", "title_id": "t", "wanted": [sx], "output_dir": str(out)})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "finish_download", lambda *a, **k: None, raising=False)
+    sync.waiting[205] = {"batch": "20261122-100000-aaaaaa", "tvdbId": 111, "sxxeyy": "S02E05"}
+    assert sync.take_out(205)
+    sync.sync(sync.read_file(), {}, [episode(111, 2, 5)], manual=True, kind="manual")
+    assert started == ["S02E05"]
+    assert ("20261122-100000-aaaaaa", 205) in sync.unqueued  # job A, reaching it, still skips it
+    sync.unqueued.clear()
+
+
 def test_a_cancelled_episode_queued_again_keeps_its_place_or_goes_last(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     started = []
@@ -766,7 +782,7 @@ def test_a_cancelled_episode_queued_again_keeps_its_place_or_goes_last(tmp_path,
         if sx == "S02E05":  # S02E06 and S02E07 cancelled, then S02E06 queued again before its turn
             for i in (206, 207):
                 sync.waiting.pop(i)
-                sync.unqueued.add(i)
+                sync.unqueued.add((batch, i))
             assert sync.add_to_job(batch, episode(111, 2, 6), {"service": "RTLP"})
         if sx == "S02E08":  # S02E07, skipped by now, queued again: it goes last
             assert sync.add_to_job(batch, episode(111, 2, 7), {"service": "RTLP"}) and 207 in sync.waiting
@@ -3396,6 +3412,27 @@ def test_a_held_summary_is_kept_until_it_is_delivered_and_keeps_what_came_meanwh
     assert not sync.HELD_FILE.exists()  # the one address takes failures only: this summary has nowhere to go
 
 
+def test_a_held_summary_no_address_ever_takes_is_dropped_after_an_hour_of_tries(tmp_path, monkeypatch, capsys):
+    # Its only address is gone for good (a deleted webhook): tried each minute for an hour, then given up, said once
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    tries = []
+    monkeypatch.setattr(sync, "send_to", lambda url, level, title, message, details=None: tries.append(url) or "404 Not Found")
+    settings = {"targets": [{"url": "discord://gone", "levels": ["success", "warning", "error"]}]}
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    for _ in range(sync.HELD_TRIES - 1):
+        assert sync.send_held(settings) is False
+    # a new message held meanwhile: the summary is another one, with its own hour of tries
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}, {"level": "error", "title": "Failed: Show S01E05"}]))
+    tries.clear()
+    for _ in range(sync.HELD_TRIES - 1):
+        assert sync.send_held(settings) is False
+    assert sync.HELD_FILE.exists()
+    assert sync.send_held(settings) is False and not sync.HELD_FILE.exists()
+    assert "gave up" in capsys.readouterr().err
+    assert sync.send_held(settings) is False and len(tries) == sync.HELD_TRIES  # nothing left to try
+
+
 def test_an_address_with_no_level_ticked_gets_nothing_and_one_without_a_levels_key_gets_all(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
@@ -4885,6 +4922,13 @@ def test_the_preferred_audio_is_added_to_the_file_it_has(tmp_path, monkeypatch):
         assert sync.add_track(205, "fr") is False
     assert sync.same_source({"path": "/tv/Show - S01E01.mkv", "originalFilePath": "x/Doc.2026.1080p.iP.WEB-DL.mkv"}, "iP")
     assert not sync.same_source({"sceneName": "Show.S01E01.ip.WEB-DL"}, "iP")  # a short tag as Unshackle writes it
+    # a folder it cannot write: the attempt ends failed, never a card left running, and no second download
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    shutil.rmtree(folder, ignore_errors=True)
+    monkeypatch.setattr(sync, "run_job_retrying", lambda payload, run=None: (_ for _ in ()).throw(PermissionError("denied")))
+    assert sync.add_track(205, "fr") is True
+    newest = max((tmp_path / "runs").glob("*.json"), key=lambda p: p.stat().st_mtime_ns)
+    assert json.loads(newest.read_text())["outcome"] == "failed"
 
 
 def test_audio_only_authentication_failure_is_kept_as_evidence(tmp_path, monkeypatch):
@@ -7438,3 +7482,18 @@ def test_a_folder_an_audio_add_left_marked_is_never_offered_or_imported(tmp_path
     with pytest.raises(RuntimeError):
         sync.import_leftover("unshackle-111-S02E05")
     assert imported == []
+
+
+def test_history_cleanup_never_deletes_a_run_still_going(tmp_path, monkeypatch):
+    # Past the number of runs kept, a long download still running keeps its card and its log
+    sync = load(tmp_path, monkeypatch)
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(sync, "RUNS_KEEP", 2)
+    ids = [f"20261122-10000{n}-111-S02E0{n}" for n in range(1, 5)]
+    for run_id in ids:
+        (sync.RUNS_DIR / f"{run_id}.json").write_text("{}")
+        (sync.RUNS_DIR / f"{run_id}.log").write_text("output")
+    monkeypatch.setattr(sync.EpisodeRun, "active", {ids[0]})
+    sync.prune_runs()
+    assert sorted(p.name for p in sync.RUNS_DIR.iterdir()) == sorted(
+        f"{i}.{ext}" for i in (ids[0], ids[2], ids[3]) for ext in ("json", "log"))

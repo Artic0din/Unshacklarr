@@ -209,6 +209,20 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Retried a download with the season map of the attempt it repeats, so a retry no longer asks the service for the wrong season.
+- Took an episode out of one job's queue only, so a download of it on its own is no longer skipped.
+- Kept the upgrade and pre-release checks' bookkeeping when one service fails, so the same notification is not sent every round.
+- Kept the card and log of a download still running when history is pruned.
+- Kept the push devices when their list cannot be read, instead of keeping only the newest.
+- Read a local Unshackle's folders when it has no `unshackle.yaml` yet.
+- Named a syntax error in `unshackle.yaml` in the Cookies and Devices panes, instead of a server error.
+- Kept `unshackle.yaml` in the editor's history before a Devices change, so comments it drops can be got back.
+- Started one language scan when Check is clicked in two tabs at once.
+- Ended an audio-add attempt that hits a file error as failed, instead of leaving it running.
+- Gave up a quiet-hours summary after an hour of failed tries to an address that is gone.
+- Restored series written with quoted numbers in a hand-edited backup.
+- Showed durations just under two hours as 1 h 59 min, not 1 h 00 min.
+- Asked for the cookie files again after a failed read, so the Settings badge does not stay blank.
 - Restored green for available episodes, healthy managed series and high-quality files, with quieter outlines for unavailable episodes.
 - Kept Region country chips neutral and reserved green for delivered notifications.
 - Distinguished possible catch-up upgrades in amber from confirmed results in green.

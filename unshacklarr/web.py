@@ -2278,26 +2278,28 @@ def precheck(now: datetime) -> list[str]:
         if at and datetime.fromisoformat(at) <= now + PRECHECK_AHEAD:
             coming.setdefault((ep["series"]["tvdbId"], ep["seasonNumber"]), []).append(ep | {"first_try": at})
     told = []
-    for (tvdb, season), eps in coming.items():
-        show = sonarr_sync.season_page(series[tvdb], season)
-        problem = "" if sonarr_sync.stacked(show, config)[0].get("--cdm") else sonarr_sync.no_cdm(show["service"])  # its own device
-        if not problem:
-            try:
-                premiere = any(e["episodeNumber"] == 1 for e in eps)  # nothing out yet: an empty list is normal
-                if not any(t.get("type") == "episode" for t in list_titles(show)) and not premiere:
-                    problem = f"{show['service']} lists no episodes for this series: is its URL still right?"
-            except UnshackleError as e:
-                problem = str(e)
-        for ep in eps:
-            done[str(ep["id"])] = now.isoformat()
-        if problem:
-            ep = min(eps, key=lambda e: e["first_try"])
-            label = f"{ep['series']['title']} S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}"
-            when = datetime.fromisoformat(ep["first_try"]).astimezone(sonarr_sync.LOCAL).strftime("%H:%M")
-            title = f"Not ready for its release: {label}"
-            sonarr_sync.notify(config["notifications"], "error", title, f"{problem[:1200]}\nIt is first tried at {when}: fix it before then.")
-            told.append(title)
-    write_atomic(PRECHECKED_FILE, json.dumps(done))
+    try:
+        for (tvdb, season), eps in coming.items():
+            show = sonarr_sync.season_page(series[tvdb], season)
+            problem = "" if sonarr_sync.stacked(show, config)[0].get("--cdm") else sonarr_sync.no_cdm(show["service"])  # its own device
+            if not problem:
+                try:
+                    premiere = any(e["episodeNumber"] == 1 for e in eps)  # nothing out yet: an empty list is normal
+                    if not any(t.get("type") == "episode" for t in list_titles(show)) and not premiere:
+                        problem = f"{show['service']} lists no episodes for this series: is its URL still right?"
+                except UnshackleError as e:
+                    problem = str(e)
+            for ep in eps:
+                done[str(ep["id"])] = now.isoformat()
+            if problem:
+                ep = min(eps, key=lambda e: e["first_try"])
+                label = f"{ep['series']['title']} S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}"
+                when = datetime.fromisoformat(ep["first_try"]).astimezone(sonarr_sync.LOCAL).strftime("%H:%M")
+                title = f"Not ready for its release: {label}"
+                sonarr_sync.notify(config["notifications"], "error", title, f"{problem[:1200]}\nIt is first tried at {when}: fix it before then.")
+                told.append(title)
+    finally:  # kept even when one check failed: what was told is not told again
+        write_atomic(PRECHECKED_FILE, json.dumps(done))
     return told
 
 
@@ -2390,14 +2392,15 @@ def check_upgrades(now: datetime) -> list[str]:
             sonarr_sync.record_authentication_observations(authentication_observations)
         except OSError as error:
             print(f"Could not persist authentication observations: {no_credentials(error)}", flush=True)
-    with sonarr_sync.upgrades_lock:  # read again: a download may have added or taken one meanwhile
-        watched = read_json(sonarr_sync.UPGRADES_FILE, {})
-        for key in dropped:
-            watched.pop(key, None)
-        for key in checked:
-            if key in watched:
-                watched[key]["checked"] = now.isoformat()
-        write_atomic(sonarr_sync.UPGRADES_FILE, json.dumps(watched))
+        # kept even when one check failed: what was told is not told again, and the ones before it are not asked again
+        with sonarr_sync.upgrades_lock:  # read again: a download may have added or taken one meanwhile
+            watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+            for key in dropped:
+                watched.pop(key, None)
+            for key in checked:
+                if key in watched:
+                    watched[key]["checked"] = now.isoformat()
+            write_atomic(sonarr_sync.UPGRADES_FILE, json.dumps(watched))
     return started
 
 
@@ -3048,7 +3051,7 @@ async def cdm_reprovision(request):
 async def list_cdm(_):
     try:
         return web.json_response(await asyncio.to_thread(cdm_state))
-    except UnshackleError as e:
+    except (UnshackleError, cdm.CdmError) as e:
         return web.json_response({"folder": None, "error": no_credentials(e)})
 
 
@@ -3057,6 +3060,7 @@ async def cdm_action(request):
     action = request.match_info["action"]
     try:
         conf, wvds, prds = await asyncio.to_thread(cdm_paths)
+        before = await asyncio.to_thread(lambda: conf.read_text(encoding="utf8") if conf.exists() else None)
         if action == "add":
             try:
                 content = base64.b64decode(str(body.get("data") or ""), validate=True)
@@ -3073,6 +3077,11 @@ async def cdm_action(request):
         else:
             device = body.get("device")
             await asyncio.to_thread(cdm.choose, conf, wvds, prds, str(body.get("service") or ""), str(device) if device else None)
+        if before is not None and await asyncio.to_thread(conf.read_text, encoding="utf8") != before:
+            try:
+                await asyncio.to_thread(keep_unshackle_yaml, before)  # its comments too: the editor's history gets them back
+            except OSError as e:  # the change is made: said in the log, not turned into a failure
+                print(f"Could not keep unshackle.yaml in its history: {no_credentials(e)}", flush=True)
     except (cdm.CdmError, UnshackleError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:
@@ -3097,8 +3106,10 @@ def backup_problem(data) -> str | None:
         if data.get(key) is not None and not isinstance(data[key], kind):
             return f"Its {key} section is not in the format DownStream writes"
     for key, show in (data.get("series") or {}).items():
-        if not str(key).isdigit() or not isinstance(show, dict):
+        if not re.fullmatch(r"[0-9]+", str(key)) or not isinstance(show, dict):  # not isdigit: it takes "²"
             return f"Its series entry {key!r} is not in the format DownStream writes"
+    if len({int(k) for k in data.get("series") or {}}) != len(data.get("series") or {}):  # 71663 and '71663'
+        return "It lists the same series twice"
     settings = data.get("settings") or {}
     for key, (low, high) in NUMBER_SETTINGS.items():  # a value a Save refuses would stop the app starting, or divide by zero
         value = settings.get(key)
@@ -3145,6 +3156,8 @@ def backup_data(text: str, passphrase: str = "") -> dict:
         raise web.HTTPBadRequest(text="Not a DownStream backup: the file is not valid YAML") from None
     if problem := backup_problem(data):
         raise web.HTTPBadRequest(text=problem)
+    # series by number, as the sync looks them up: a hand-edited '71663' is the same series (backup_problem checked them)
+    data["series"] = {int(k): v for k, v in (data.get("series") or {}).items()}
     # what a Save refuses (a server or a Sonarr without a name, a series' bad value) would stop the app starting:
     # refused here, before anything is written. Services by their name only: it may come from another install's
     restored = {"settings": {}, "auth": {}, "defaults": {}, "service_defaults": {}, "series": {}, "notifications": {},
@@ -3300,12 +3313,17 @@ def yaml_problem(text: str) -> str | None:
     return None
 
 
-def save_unshackle_yaml(path: Path, old: str, new: str) -> dict:
-    """Keep the file as it was, then write the new one (with the file's own permissions)."""
+def keep_unshackle_yaml(old: str) -> None:
+    """unshackle.yaml as it was before a change, in the editor's history."""
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     write_atomic(CONFIG_HISTORY / f"{stamp}.yaml", old, PRIVATE)
     for extra in sorted(CONFIG_HISTORY.glob("*.yaml"), reverse=True)[CONFIG_KEEP:]:
         extra.unlink(missing_ok=True)
+
+
+def save_unshackle_yaml(path: Path, old: str, new: str) -> dict:
+    """Keep the file as it was, then write the new one (with the file's own permissions)."""
+    keep_unshackle_yaml(old)
     write_atomic(path, new)
     broken = yaml_problem(old)  # saving over a broken file is how it gets fixed
     before, after = {} if broken else yaml.safe_load(old) or {}, yaml.safe_load(new) or {}
@@ -3320,7 +3338,7 @@ async def unshackle_yaml(request):
     await reauth(request, str(body.get("password") or ""))
     try:
         path = (await asyncio.to_thread(cdm_paths))[0]
-    except yaml.YAMLError:  # the folders are read from the file: a syntax error is what the editor is there to fix
+    except (yaml.YAMLError, cdm.BrokenYaml):  # the folders are read from the file: a syntax error is what the editor is there to fix
         path = Path(sonarr_sync.SETTINGS["unshackle_config_dir"]) / "unshackle.yaml"
     except (UnshackleError, cdm.CdmError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
@@ -5277,11 +5295,16 @@ async def push_subscribe(request):
         await asyncio.to_thread(sonarr_sync.PUSH.subscribe, body.get("subscription") or {}, str(body.get("label") or ""))
     except ValueError as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
+    except OSError as e:
+        raise web.HTTPServiceUnavailable(text=f"Could not read the list of devices: {no_credentials(e)}")
     return web.json_response({"devices": len(sonarr_sync.PUSH.subscriptions())})
 
 
 async def push_unsubscribe(request):
-    await asyncio.to_thread(sonarr_sync.PUSH.unsubscribe, str((await json_object(request)).get("endpoint") or ""))
+    try:
+        await asyncio.to_thread(sonarr_sync.PUSH.unsubscribe, str((await json_object(request)).get("endpoint") or ""))
+    except OSError as e:
+        raise web.HTTPServiceUnavailable(text=f"Could not read the list of devices: {no_credentials(e)}")
     return web.json_response({"devices": len(sonarr_sync.PUSH.subscriptions())})
 
 
@@ -5328,7 +5351,8 @@ def retried_numbering(ids: list[int], batch: str, instance: str) -> dict | None:
     """The numbering a download was given for itself (from the page: by title, or set for it), which a retry
     of it repeats; None when its last attempt used the series' own. The episodes of one retry come from one
     job, given one numbering: the first found stands for them all."""
-    return next((card["numbering"] for card in last_attempts(ids, batch, instance) if card.get("numbering") is not None), None)
+    numbering = next((card["numbering"] for card in last_attempts(ids, batch, instance) if card.get("numbering") is not None), None)
+    return None if numbering is None else check_numbering(numbering, "the retried download")  # JSON made its season numbers text
 
 
 def retried_replace(ids: list[int], batch: str, instance: str) -> bool:
@@ -5776,11 +5800,12 @@ async def languages_action(request):
     if request.match_info["action"] == "stop":
         language_scan["stop"] = True
     elif not language_scan["running"]:
+        language_scan["running"] = True  # before the wait below: a second click meanwhile (another tab) is not a second check
         try:  # its answer at once, not a scan that fails out of sight
             await asyncio.to_thread(sonarr_sync.sonarr_get, "system/status")
         except requests.RequestException as e:
+            language_scan["running"] = False
             raise web.HTTPBadGateway(text=f"Sonarr is unreachable: {no_credentials(e)}") from None
-        language_scan["running"] = True  # at once: a second click before the thread starts is not a second check
         threading.Thread(target=scan_languages, daemon=True).start()
     return web.json_response({"running": language_scan["running"]})
 
