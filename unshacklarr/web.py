@@ -1298,8 +1298,7 @@ async def save_config(request):
         merge_page_changes(body, public_config(previous))
         real_config(body, previous)  # the secrets the browser only saw masked
         config = checked_config(body, previous, known)
-        proxy = lambda s: (s.get("proxy_auth_header") or "", s.get("proxy_auth_from") or "")  # noqa: E731
-        if proxy(config["settings"]) != proxy(previous["settings"]) and not reauthed:
+        if proxy_auth_of(config["settings"]) != proxy_auth_of(previous["settings"]) and not reauthed:
             # it lets in whoever sends the header from those addresses: a session alone must not grant lasting access
             raise web.HTTPForbidden(text="Type your password to change signing in through a reverse proxy")
         for key, show in (body.get("series") or {}).items():
@@ -1788,6 +1787,15 @@ def check_proxy_auth(header, sources) -> tuple[str, str]:
     if not networks:
         raise web.HTTPBadRequest(text="Enter the addresses the reverse proxy connects from. Without them, anyone could send the header")
     return header, ", ".join(networks)
+
+
+def proxy_auth_of(settings: dict) -> tuple[str, str]:
+    """Signing in through a reverse proxy as saved, written as checked: a hand-written 10.0.0.1 is 10.0.0.1/32."""
+    header, sources = settings.get("proxy_auth_header"), settings.get("proxy_auth_from")
+    try:
+        return check_proxy_auth(header, sources)
+    except web.HTTPBadRequest:  # a hand-written value a Save refuses: compared as it is
+        return str(header or ""), str(sources or "")
 
 
 OFFSITE_SETTINGS = ("backup_remote", "backup_remote_url", "backup_remote_user", "backup_remote_secret", "backup_remote_bucket",

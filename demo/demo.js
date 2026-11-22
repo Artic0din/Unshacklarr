@@ -162,7 +162,7 @@
     const demoBackups = [{ name: "unshacklarr-2026-10-06-0300.yaml", at: new Date(Date.now() - 864e5).toISOString(), size: 7300 },
       { name: "unshacklarr-2026-10-05-0300.yaml", at: new Date(Date.now() - 2 * 864e5).toISOString(), size: 7100 }];
     if (p === "/api/state") return { ...copy(R["/api/state"]), config: copy(config()), backups: { count: 2, folder: "/data/backups", latest: demoBackups[0].at, saved: demoBackups } };
-    if (p === "/api/config") { mem.config = body; keep(); return { saved: true }; }
+    if (p === "/api/config") { const { password, ...saved } = body; mem.config = saved; keep(); return { saved: true }; }  // a password typed is never kept
     if (p === "/api/backup/offsite") {  // nothing leaves the demo: the place is kept, the backup said to be sent
       const c = config(), set = { ...body.settings };
       for (const k of ["backup_remote_secret", "backup_passphrase"]) { set[`${k}_set`] = !!(set[k] || c.settings[`${k}_set`]) && !!set.backup_remote; delete set[k]; }

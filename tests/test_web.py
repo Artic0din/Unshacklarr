@@ -9338,6 +9338,27 @@ def test_signing_in_through_a_proxy_is_changed_with_the_password_only(tmp_path, 
     assert web.read_config()["settings"]["proxy_auth_header"] == "X-Me"
 
 
+def test_a_proxy_address_written_by_hand_does_not_need_the_password_for_other_changes(tmp_path, monkeypatch):
+    # 10.0.0.1 in config.yaml is saved as 10.0.0.1/32: the same proxy, not a change asking for the password
+    from aiohttp.test_utils import TestClient, TestServer
+    web = reloaded_web(tmp_path, monkeypatch)
+    config = web.read_config()
+    config["settings"].update(proxy_auth_header="Remote-User", proxy_auth_from="10.0.0.1")
+    web.write_config({**config, "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            await client.post("/api/login", json={"password": "password1"}, headers=page)
+            public = web.public_config(web.read_config())
+            body = {**public, "settings": {**public["settings"], "country": "FR"}, "changed": ["settings"],
+                    "base": {"settings": public["versions"]["settings"]}}
+            reply = await client.put("/api/config", json=body, headers=page)
+            return reply.status, await reply.text()
+    status, text = asyncio.run(go())
+    assert status == 200, text
+
+
 def test_wrong_passwords_are_counted_per_ipv6_network_not_per_address(tmp_path, monkeypatch):
     # an IPv6 client holds a whole /64: a fresh address per try must not get a fresh limit; IPv4 (mapped too) as before
     web = reloaded_web(tmp_path, monkeypatch)
