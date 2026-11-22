@@ -622,11 +622,13 @@ def notify(settings: dict, level: str, title: str, message: str, action: dict | 
 
 
 held_pushed: list | None = None  # the summary the devices already have, while an address still fails to take it
+HELD_TRIES = 60  # tried each minute: an hour, then a summary no address takes is given up
+held_failures = 0
 
 
 def send_held(settings: dict) -> bool:
     """The quiet hours are over: what came meanwhile, in one message."""
-    global held_pushed
+    global held_pushed, held_failures
     if in_quiet_hours(settings):
         return False
     held = read_json(HELD_FILE, [])
@@ -642,14 +644,18 @@ def send_held(settings: dict) -> bool:
     if not device_failed:  # a push that raised is tried again with the next attempt
         held_pushed = held
     takes = any(worst in (ALL_LEVELS if t.get("levels") is None else t["levels"]) for t in notification_targets(settings))
-    if delivered or not takes:  # sent, or no address takes it: else kept, tried again next minute
+    held_failures = 0 if delivered else held_failures + 1
+    given_up = takes and held_failures >= HELD_TRIES
+    if given_up:  # an address gone for good (a deleted webhook) must not be asked every minute forever
+        print(f"Quiet hours: gave up sending the summary of {len(held)} held messages after {HELD_TRIES} tries", file=sys.stderr)
+    if delivered or not takes or given_up:  # sent, or no address takes it: else kept, tried again next minute
         with sent_lock:
             try:
                 current = read_json(HELD_FILE, [], strict=True)
             except OSError as e:  # unreadable for a moment: kept, and the devices not pushed it again next minute
                 print(f"Quiet hours: could not read the held messages back: {no_credentials(e)}", file=sys.stderr)
                 return delivered
-            held_pushed = None
+            held_pushed, held_failures = None, 0
             rest = current[len(held):] if current[:len(held)] == held else current  # what came while it was going out stays
             if rest:
                 write_atomic(HELD_FILE, json.dumps(rest))

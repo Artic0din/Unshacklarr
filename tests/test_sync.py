@@ -3412,6 +3412,22 @@ def test_a_held_summary_is_kept_until_it_is_delivered_and_keeps_what_came_meanwh
     assert not sync.HELD_FILE.exists()  # the one address takes failures only: this summary has nowhere to go
 
 
+def test_a_held_summary_no_address_ever_takes_is_dropped_after_an_hour_of_tries(tmp_path, monkeypatch, capsys):
+    # Its only address is gone for good (a deleted webhook): tried each minute for an hour, then given up, said once
+    sync = load(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
+    tries = []
+    monkeypatch.setattr(sync, "send_to", lambda url, level, title, message, details=None: tries.append(url) or "404 Not Found")
+    settings = {"targets": [{"url": "discord://gone", "levels": ["success", "warning", "error"]}]}
+    sync.write_atomic(sync.HELD_FILE, json.dumps([{"level": "error", "title": "Failed: Show S01E04"}]))
+    for _ in range(sync.HELD_TRIES - 1):
+        assert sync.send_held(settings) is False
+    assert sync.HELD_FILE.exists()
+    assert sync.send_held(settings) is False and not sync.HELD_FILE.exists()
+    assert "gave up" in capsys.readouterr().err
+    assert sync.send_held(settings) is False and len(tries) == sync.HELD_TRIES  # nothing left to try
+
+
 def test_an_address_with_no_level_ticked_gets_nothing_and_one_without_a_levels_key_gets_all(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
     monkeypatch.setattr(sync.PUSH, "send", lambda *a, **k: 0)
