@@ -422,13 +422,20 @@ const yaml = fs.readFileSync(path.join(path.dirname(process.argv[1]), "yaml-edit
 const attempts = fs.readFileSync(path.join(path.dirname(process.argv[1]), "attempts.js"), "utf8");
 
 let docText = "a: 1\n", pendingSave = null, saveShouldFail = false;
-let navTabs = [], sections = [], titleUpdates = [], destroyed = 0, modalThrows = 0;
+let navTabs = [], sections = [], drawers = [], titleUpdates = [], destroyed = 0, modalThrows = 0;
 const back = {};
 const dialog = {
   open: false, returnValue: "", listeners: [],
   showModal() { if (this.open) { modalThrows++; throw new Error("already open"); } this.open = true; },
-  close(val) { if (!this.open) return; this.open = false; this.returnValue = val ?? this.returnValue; const ls = this.listeners.splice(0); ls.forEach((f) => f()); },
+  close(val) {
+    if (!this.open) return;
+    this.open = false;
+    this.returnValue = val ?? this.returnValue;
+    // real HTML <dialog>.close() dispatches "close" asynchronously on a queued task
+    setTimeout(() => { [...this.listeners].forEach((f) => f()); }, 0);
+  },
   addEventListener(ev, fn) { if (ev === "close") this.listeners.push(fn); },
+  removeEventListener(ev, fn) { if (ev === "close") this.listeners = this.listeners.filter((f) => f !== fn); },
 };
 const nodes = {
   "#uy-back": back, "#unsaved-dialog": dialog, "#unsaved-text": {},
@@ -444,7 +451,7 @@ const history = {
 };
 const ctx = {
   currentTab: "yaml", routed: true, termSocket: null, landOnLive: false, current: null, settingsRoute: "connections", settingsTarget: null,
-  S: { series: [] }, TAB_OF: { activity: "log", terminal: "log", defaults: "settings", "unshackle.yaml": "yaml" },
+  S: { series: [{ tvdbId: 42, title: "Show" }] }, TAB_OF: { activity: "log", terminal: "log", defaults: "settings", "unshackle.yaml": "yaml" },
   HASH_OF: { log: "activity", yaml: "unshackle.yaml" },
   location: { hash: "#/unshackle.yaml" }, history,
   api: () => new Promise((resolve, reject) => {
@@ -454,6 +461,8 @@ const ctx = {
   inSettingsSec: () => ctx.currentTab === "settings",
   settingsHref: (r) => `#/settings/${r}`,
   showSettingsSec: (sec) => sections.push([ctx.currentTab, sec]),
+  openDrawer: (s, view) => drawers.push([ctx.currentTab, s.tvdbId, view]),
+  showDrawerTab() {}, closeDrawer() {},
   showSettingsList() {}, closeDetails() {}, loadSettingsSec() {}, loadSchedule() {},
   updateTitle: () => titleUpdates.push(ctx.currentTab),
   syncInboxRoute: () => false, cancelSettingsJump() {}, syncActivityRoute() {}, openInbox() {},
@@ -462,7 +471,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(
-  core.match(/^function askUnsaved\([\s\S]*?^\}/m)[0] + "\n"
+  core.match(/^let unsavedPending = null;[\s\S]*?^function askUnsaved\([\s\S]*?^\}/m)[0] + "\n"
   + yaml.match(/^const uy = [\s\S]*?^function uyReset\([\s\S]*?^\}/m)[0] + "\n"
   + yaml.match(/^async function uySave\([\s\S]*?^\}/m)[0] + "\n"
   + nav.match(/^function routeHash\([\s\S]*?^\}/m)[0] + "\n"
@@ -473,9 +482,11 @@ vm.runInContext(
   + yaml.match(/^\$\("#uy-back"\)\.onclick = .*$/m)[0] + "\nthis.uy = uy; this.uyDirty = uyDirty;",
   ctx,
 );
-const tick = () => new Promise((r) => setTimeout(r, 0));
-const resetState = (hash = "#/unshackle.yaml") => {
-  if (dialog.open) dialog.close("keep");
+const tick = () => new Promise((r) => setTimeout(r, 10));
+const resetState = async (hash = "#/unshackle.yaml") => {
+  ctx.closeUnsaved();
+  ctx.showTab.yamlPrompt = false;
+  await tick();
   docText = "a: 2\n";
   Object.assign(ctx.uy, {
     password: "pw", base: "b1", original: "a: 1\n",
@@ -483,63 +494,77 @@ const resetState = (hash = "#/unshackle.yaml") => {
   });
   ctx.currentTab = "yaml"; ctx.location.hash = hash;
   pendingSave = null; saveShouldFail = false;
-  navTabs = []; sections = []; titleUpdates = []; destroyed = 0; modalThrows = 0;
+  navTabs = []; sections = []; drawers = []; titleUpdates = []; destroyed = 0; modalThrows = 0;
 };
 (async () => {
   // 1. Cancel keeps yaml open, dirty, and restores route if hash pointed elsewhere
-  resetState("#/settings/notifications");
+  await resetState("#/settings/notifications");
   ctx.showTab("series"); // fromRoute=false superseding leave
   dialog.close("keep"); await tick();
   const afterCancel = { tab: ctx.currentTab, dirty: ctx.uyDirty(), destroyed, hash: ctx.location.hash };
 
-  // 2. Failed real uySave keeps yaml open and dirty
-  resetState(); saveShouldFail = true;
-  back.onclick(); dialog.close("save"); await tick(); pendingSave.resolve(); await tick();
+  // 2. Failed direct save with a displaced non-YAML URL keeps yaml open, dirty, and restores YAML hash
+  await resetState("#/settings/notifications"); saveShouldFail = true;
+  ctx.showTab("series"); dialog.close("save"); await tick(); pendingSave.resolve(); await tick();
   const afterFailedSave = { tab: ctx.currentTab, dirty: ctx.uyDirty(), destroyed, hash: ctx.location.hash };
 
   // 3. Edit typed while real uySave is in flight keeps yaml open with the new text
-  resetState();
+  await resetState();
   back.onclick(); dialog.close("save"); await tick();
   docText = "a: 3\n"; // edited while request is pending
   pendingSave.resolve(); await tick();
   const afterEditDuringSave = { tab: ctx.currentTab, dirty: ctx.uyDirty(), original: ctx.uy.original, text: docText, destroyed, hash: ctx.location.hash };
 
   // 4. Clean real uySave saves snapshot, resets editor, and updates route to settings
-  resetState();
+  await resetState();
   back.onclick(); dialog.close("save"); await tick(); pendingSave.resolve(); await tick();
   const afterSave = { tab: ctx.currentTab, dirty: ctx.uyDirty(), destroyed, hash: ctx.location.hash };
 
   // 5. Discard skips save, resets editor, and navigates to settings
-  resetState();
+  await resetState();
   back.onclick(); dialog.close("discard"); await tick();
   const afterDiscard = { tab: ctx.currentTab, dirty: ctx.uyDirty(), pendingSave: Boolean(pendingSave), destroyed, hash: ctx.location.hash };
 
-  // 6. applyRoute deep link defers Settings section AND title until confirmation resolves
-  resetState("#/settings/notifications");
+  // 6. applyRoute deep link defers Settings section, destination drawer, AND title until confirmation resolves
+  await resetState("#/settings/notifications/s/42/settings");
   ctx.applyRoute({ type: "popstate" });
-  const whilePending = { tab: ctx.currentTab, dialogOpen: dialog.open, sections: [...sections], titleUpdates: [...titleUpdates] };
+  const whilePending = { tab: ctx.currentTab, dialogOpen: dialog.open, sections: [...sections], drawers: [...drawers], titleUpdates: [...titleUpdates] };
   dialog.close("discard"); await tick();
-  const afterDeepLink = { tab: ctx.currentTab, dirty: ctx.uyDirty(), sections: [...sections], titleUpdates: [...titleUpdates] };
+  const afterDeepLink = { tab: ctx.currentTab, dirty: ctx.uyDirty(), sections: [...sections], drawers: [...drawers], titleUpdates: [...titleUpdates] };
 
-  // 7. History move back to YAML closes the stale dialog so no stale choice remains active
-  resetState("#/settings/notifications");
+  // 7. History move back to YAML closes the stale YAML dialog, but leaves a drawer-owned dialog open
+  await resetState("#/settings/notifications");
   ctx.applyRoute({ type: "popstate" });
   ctx.location.hash = "#/unshackle.yaml";
   ctx.applyRoute({ type: "popstate" });
   await tick();
   const afterStaleReturn = { tab: ctx.currentTab, dialogOpen: dialog.open, dirty: ctx.uyDirty(), destroyed, sections: [...sections], hash: ctx.location.hash };
+  await resetState("#/unshackle.yaml");
+  ctx.askUnsaved("Show"); // drawer-owned prompt (showTab.yamlPrompt is false)
+  ctx.applyRoute({ type: "popstate" });
+  const drawerPromptKept = dialog.open;
 
-  // 8. Second non-YAML history move while dialog is open closes/reopens without throwing and applies latest route
-  resetState("#/settings/notifications");
+  // 8. Second non-YAML history move with async dialog close ignores stale close event and applies latest route
+  await resetState("#/settings/notifications");
   ctx.applyRoute({ type: "popstate" });
   ctx.location.hash = "#/series";
   ctx.applyRoute({ type: "popstate" });
-  const secondOpen = { dialogOpen: dialog.open, modalThrows };
+  await tick(); // let queued async close event from #1 fire while reopened dialog #2 is open
+  const secondStillOpen = { dialogOpen: dialog.open, modalThrows, hashBeforeChoice: ctx.location.hash };
   dialog.close("discard"); await tick();
-  const afterSecondRoute = { ...secondOpen, tab: ctx.currentTab, dirty: ctx.uyDirty(), sections: [...sections], hash: ctx.location.hash };
+  const afterSecondRoute = { ...secondStillOpen, tab: ctx.currentTab, dirty: ctx.uyDirty(), sections: [...sections], hash: ctx.location.hash };
 
-  // 9. Returning to YAML while real uySave is pending aborts reset and navigation when save resolves
-  resetState("#/settings/notifications");
+  // 9. Direct superseding showTab calls while dialog is open do not throw and latest choice wins
+  await resetState();
+  ctx.showTab("series");
+  ctx.showTab("schedule");
+  await tick();
+  const directStillOpen = { dialogOpen: dialog.open, modalThrows };
+  dialog.close("discard"); await tick();
+  const afterDirectSupersede = { ...directStillOpen, tab: ctx.currentTab, dirty: ctx.uyDirty(), hash: ctx.location.hash };
+
+  // 10. Returning to YAML while real uySave is pending aborts reset and navigation when save resolves
+  await resetState("#/settings/notifications");
   ctx.applyRoute({ type: "popstate" });
   dialog.close("save"); await tick();
   ctx.location.hash = "#/unshackle.yaml";
@@ -547,7 +572,7 @@ const resetState = (hash = "#/unshackle.yaml") => {
   pendingSave.resolve(); await tick();
   const afterReturnDuringSave = { tab: ctx.currentTab, destroyed, sections: [...sections], hash: ctx.location.hash };
 
-  // 10. Clear history dialog distinguishes failed-only vs all finished downloads
+  // 11. Clear history dialog distinguishes failed-only vs all finished downloads
   const cNodes = { "#hist-clear": {}, "#clear-text": {}, "#clear-failed": {}, "#clear-all": {}, "#clear-dialog": { showModal() {}, addEventListener() {} } };
   const aCtx = { $: (s) => cNodes[s], runCards: [{ outcome: "downloaded" }, { outcome: "failed" }, { outcome: "failed" }],
     isLive: () => false, COUNT: { download: (n) => `${n} downloads` }, toast() {} };
@@ -558,7 +583,7 @@ const resetState = (hash = "#/unshackle.yaml") => {
 
   console.log(JSON.stringify({
     afterCancel, afterFailedSave, afterEditDuringSave, afterSave, afterDiscard,
-    whilePending, afterDeepLink, afterStaleReturn, afterSecondRoute, afterReturnDuringSave, clearCopy,
+    whilePending, afterDeepLink, afterStaleReturn, drawerPromptKept, afterSecondRoute, afterDirectSupersede, afterReturnDuringSave, clearCopy,
   }));
 })();
 """)
@@ -567,10 +592,12 @@ const resetState = (hash = "#/unshackle.yaml") => {
     assert shown["afterEditDuringSave"] == {"tab": "yaml", "dirty": True, "original": "a: 2\n", "text": "a: 3\n", "destroyed": 0, "hash": "#/unshackle.yaml"}
     assert shown["afterSave"] == {"tab": "settings", "dirty": False, "destroyed": 1, "hash": "#/settings/connections"}
     assert shown["afterDiscard"] == {"tab": "settings", "dirty": False, "pendingSave": False, "destroyed": 1, "hash": "#/settings/connections"}
-    assert shown["whilePending"] == {"tab": "yaml", "dialogOpen": True, "sections": [], "titleUpdates": []}
-    assert shown["afterDeepLink"] == {"tab": "settings", "dirty": False, "sections": [["settings", "notifications"]], "titleUpdates": ["settings", "settings"]}
+    assert shown["whilePending"] == {"tab": "yaml", "dialogOpen": True, "sections": [], "drawers": [], "titleUpdates": []}
+    assert shown["afterDeepLink"] == {"tab": "settings", "dirty": False, "sections": [["settings", "notifications"]], "drawers": [["settings", 42, "settings"]], "titleUpdates": ["settings", "settings"]}
     assert shown["afterStaleReturn"] == {"tab": "yaml", "dialogOpen": False, "dirty": True, "destroyed": 0, "sections": [], "hash": "#/unshackle.yaml"}
-    assert shown["afterSecondRoute"] == {"dialogOpen": True, "modalThrows": 0, "tab": "series", "dirty": False, "sections": [], "hash": "#/series"}
+    assert shown["drawerPromptKept"] is True
+    assert shown["afterSecondRoute"] == {"dialogOpen": True, "modalThrows": 0, "hashBeforeChoice": "#/series", "tab": "series", "dirty": False, "sections": [], "hash": "#/series"}
+    assert shown["afterDirectSupersede"] == {"dialogOpen": True, "modalThrows": 0, "tab": "schedule", "dirty": False, "hash": "#/schedule"}
     assert shown["afterReturnDuringSave"] == {"tab": "yaml", "destroyed": 0, "sections": [], "hash": "#/unshackle.yaml"}
     assert "Clear 2 failed" in shown["clearCopy"]["text"] and "only failed" in shown["clearCopy"]["text"]
     assert "Clear 3 downloads" in shown["clearCopy"]["text"] and "all finished downloads" in shown["clearCopy"]["text"]

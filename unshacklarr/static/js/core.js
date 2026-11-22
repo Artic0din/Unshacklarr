@@ -771,12 +771,31 @@ function discardDrawer() {  // the series as it was when its panel opened; the b
   if (existed) S.config.series[id] = JSON.parse(conf); else delete S.config.series[id];
   if (configKey(S.config) === savedConfig) { unsaved = false; $("#savebar").hidden = true; $("#d-save").hidden = true; const st = $("#savebar-status"); if (st) st.textContent = ""; }
 }
+let unsavedPending = null;
+function closeUnsaved() {
+  const dialog = $("#unsaved-dialog");
+  if (unsavedPending) { const stop = unsavedPending; unsavedPending = null; stop("keep"); }
+  if (dialog?.open) dialog.close("keep");
+}
 function askUnsaved(name) {
   const dialog = $("#unsaved-dialog");
+  if (unsavedPending) { const stop = unsavedPending; unsavedPending = null; stop("keep"); }
   $("#unsaved-text").textContent = `${name}: its settings changed and are not saved yet.`;
   dialog.returnValue = "keep";
-  dialog.showModal();
-  return new Promise((done) => dialog.addEventListener("close", () => done(dialog.returnValue || "keep"), { once: true }));
+  if (!dialog.open) dialog.showModal();
+  return new Promise((done) => {
+    const onClose = () => {
+      if (dialog.open) return;  // a queued close event from before reopening
+      finish(dialog.returnValue || "keep");
+    };
+    const finish = (choice) => {
+      dialog.removeEventListener("close", onClose);
+      if (unsavedPending === finish) unsavedPending = null;
+      done(choice);
+    };
+    unsavedPending = finish;
+    dialog.addEventListener("close", onClose);
+  });
 }
 async function closeDrawer(fromRoute = false) {
   if (!$("#drawer").classList.contains("open")) return true;
