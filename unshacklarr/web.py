@@ -3151,6 +3151,8 @@ def backup_data(text: str, passphrase: str = "") -> dict:
         raise web.HTTPBadRequest(text="Not a DownStream backup: the file is not valid YAML") from None
     if problem := backup_problem(data):
         raise web.HTTPBadRequest(text=problem)
+    # series by number, as the sync looks them up: a hand-edited '71663' is the same series (backup_problem checked them)
+    data["series"] = {int(k): v for k, v in (data.get("series") or {}).items()}
     # what a Save refuses (a server or a Sonarr without a name, a series' bad value) would stop the app starting:
     # refused here, before anything is written. Services by their name only: it may come from another install's
     restored = {"settings": {}, "auth": {}, "defaults": {}, "service_defaults": {}, "series": {}, "notifications": {},

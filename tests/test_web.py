@@ -5013,6 +5013,14 @@ def test_a_restore_takes_a_null_number_setting_as_its_default(tmp_path, monkeypa
     assert status == 200, text
 
 
+def test_a_restore_reads_series_numbers_written_as_text(tmp_path, monkeypatch):
+    # a hand-edited backup with '71663': its series is found by the sync, which looks series up by number
+    import yaml
+    web = reloaded_web(tmp_path, monkeypatch)
+    data = web.backup_data(yaml.safe_dump({"series": {"71663": {"service": "TF1", "title": "t"}}}))
+    assert list(data["series"]) == [71663]
+
+
 def test_a_restore_checks_other_sonarrs_against_the_backups_own_main_one(tmp_path, monkeypatch):
     # the backup's main Sonarr replaces this install's: an other Sonarr at this install's main address is fine
     monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
