@@ -6669,7 +6669,15 @@ def client_ip(request) -> str:
     """Who is trying to log in. X-Real-IP is believed only from the proxy's listed addresses, as the proxy sets it
     itself; X-Forwarded-For never: its first entry is the client's to write, which would let anyone dodge the limit."""
     remote = request.remote or "?"
-    return (request.headers.get("X-Real-IP", "").strip() if from_proxy(request) else "") or remote
+    ip = (request.headers.get("X-Real-IP", "").strip() if from_proxy(request) else "") or remote
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if address.version == 6 and address.ipv4_mapped:  # an IPv4 client on a dual-stack socket: its own address
+        return str(address.ipv4_mapped)
+    # an IPv6 client holds a whole /64: counted per address, it would get a fresh limit for every try
+    return str(ipaddress.ip_network(f"{address}/64", strict=False)) if address.version == 6 else ip
 
 
 # ---- The API for other programs: /api/v1, with an API key; its answers keep their shape (docs/API.md) ----

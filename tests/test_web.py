@@ -9337,3 +9337,12 @@ def test_signing_in_through_a_proxy_is_changed_with_the_password_only(tmp_path, 
     assert other[0] == 200 and allowed[0] == 200
     assert web.read_config()["settings"]["proxy_auth_header"] == "X-Me"
 
+
+def test_wrong_passwords_are_counted_per_ipv6_network_not_per_address(tmp_path, monkeypatch):
+    # an IPv6 client holds a whole /64: a fresh address per try must not get a fresh limit; IPv4 (mapped too) as before
+    web = reloaded_web(tmp_path, monkeypatch)
+    ip = lambda remote: web.client_ip(SimpleNamespace(remote=remote, headers={}))
+    assert ip("2001:db8:1:2::1") == ip("2001:db8:1:2:ffff::9") == "2001:db8:1:2::/64"
+    assert ip("2001:db8:1:3::1") != ip("2001:db8:1:2::1")
+    assert ip("::ffff:192.0.2.7") == "192.0.2.7" and ip("::ffff:192.0.2.8") == "192.0.2.8"
+    assert ip("192.0.2.7") == "192.0.2.7" and ip(None) == "?"
