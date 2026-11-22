@@ -1992,6 +1992,8 @@ def prune_runs() -> None:
     cards = sorted(RUNS_DIR.glob("*.json"), reverse=True)  # ids start with the time: newest first
     too_old = (datetime.now(timezone.utc) - timedelta(days=RUNS_MAX_DAYS)).strftime("%Y%m%d")
     for card in cards[RUNS_KEEP:] + [c for c in cards[:RUNS_KEEP] if c.name[:8] < too_old]:
+        if card.stem in EpisodeRun.active:  # still running: its card and log are written to yet
+            continue
         for path in RUNS_DIR.glob(f"{card.stem}.*"):
             path.unlink(missing_ok=True)
 

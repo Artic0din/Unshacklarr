@@ -7454,3 +7454,18 @@ def test_a_folder_an_audio_add_left_marked_is_never_offered_or_imported(tmp_path
     with pytest.raises(RuntimeError):
         sync.import_leftover("unshackle-111-S02E05")
     assert imported == []
+
+
+def test_history_cleanup_never_deletes_a_run_still_going(tmp_path, monkeypatch):
+    # Past the number of runs kept, a long download still running keeps its card and its log
+    sync = load(tmp_path, monkeypatch)
+    sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(sync, "RUNS_KEEP", 2)
+    ids = [f"20261122-10000{n}-111-S02E0{n}" for n in range(1, 5)]
+    for run_id in ids:
+        (sync.RUNS_DIR / f"{run_id}.json").write_text("{}")
+        (sync.RUNS_DIR / f"{run_id}.log").write_text("output")
+    monkeypatch.setattr(sync.EpisodeRun, "active", {ids[0]})
+    sync.prune_runs()
+    assert sorted(p.name for p in sync.RUNS_DIR.iterdir()) == sorted(
+        f"{i}.{ext}" for i in (ids[0], ids[2], ids[3]) for ext in ("json", "log"))
