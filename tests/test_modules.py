@@ -902,6 +902,19 @@ def test_a_restart_makes_unshackle_say_again_where_its_folders_are(tmp_path, mon
     assert local.cookies_dir("unshackle") == Path("/new/cookies")  # sign-ins are looked for where it keeps them now
 
 
+def test_an_unshackle_with_no_config_file_still_says_where_its_folders_are(tmp_path, monkeypatch):
+    # No unshackle.yaml yet: its first line is empty, and the five folders after it are still read
+    import sys
+    import types
+    import unshacklarr.backend as backend
+
+    out = "\n/c/cookies\n/c/wvds\n/c/prds\n/c/temp\n/c/cache\n"
+    monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
+    monkeypatch.setattr(backend.subprocess, "run", lambda argv, **kwargs: types.SimpleNamespace(stdout=out, stderr="", returncode=0))
+    found = backend.Local(tmp_path / "serve.log").paths("unshackle")
+    assert str(found["config"]) == "." and found["cookies"] == Path("/c/cookies") and found["cache"] == Path("/c/cache")
+
+
 def test_a_restart_that_fails_is_not_started_again_by_the_callers_waiting_on_it(tmp_path, monkeypatch):
     import unshacklarr.backend as backend
 
