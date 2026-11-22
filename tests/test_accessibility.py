@@ -582,6 +582,7 @@ const resetState = async (hash = "#/unshackle.yaml") => {
     drawerOpener: null, drawerOpenerCard: null,
     drawerChanged: () => true, discardDrawer: () => { drawerDiscards++; },
     leaveNews() {}, drawerModal() {}, updateTitle() {}, renderWall() {}, scrollTo() {}, returnFocus() {}, navigate() {},
+    TAB_OF: { activity: "log", terminal: "log", defaults: "settings", "unshackle.yaml": "yaml" },
     location: { hash: "#/series" },
     routeHash: () => "#/series/s/42/settings",
     history: { pushState: (_, __, h) => { dCtx.location.hash = h; drawerHistoryPushes.push(h); } },
@@ -590,7 +591,8 @@ const resetState = async (hash = "#/unshackle.yaml") => {
   };
   vm.createContext(dCtx);
   vm.runInContext(
-    core.match(/^let unsavedPending = null;[\s\S]*?^function keepDrawer\([\s\S]*?^\}/m)[0],
+    nav.match(/^function parseRoute\([\s\S]*?^\}/m)[0] + "\n"
+    + core.match(/^let unsavedPending = null;[\s\S]*?^function keepDrawer\([\s\S]*?^\}/m)[0],
     dCtx,
   );
   const firstPrompt = dCtx.askUnsaved("Show");
@@ -599,7 +601,14 @@ const resetState = async (hash = "#/unshackle.yaml") => {
   dialog.close("discard");
   const secondResolvedAfterAnswer = await secondPrompt;
   await tick();
+  // Local close + Keep when URL omits view (#/series/s/42) does not push a duplicate history entry
+  dCtx.location.hash = "#/series/s/42";
+  const bareClose = dCtx.closeDrawer(false);
+  dialog.close("keep");
+  await bareClose; await tick();
+  const pushesOnBareDrawerHash = [...drawerHistoryPushes];
   // Back -> closeDrawer(true) displaced URL to #/series, then closeDrawer(false) supersedes and user chooses Keep: restores drawer URL
+  dCtx.location.hash = "#/series";
   const backThenClose1 = dCtx.closeDrawer(true);
   const backThenClose2 = dCtx.closeDrawer(false);
   const backThenClose1Result = await backThenClose1;
@@ -620,7 +629,7 @@ const resetState = async (hash = "#/unshackle.yaml") => {
   const secondCloseResult = await secondClose;
   await tick();
   const supersededDrawer = {
-    firstResolvedBeforeAnswer, secondResolvedAfterAnswer,
+    firstResolvedBeforeAnswer, secondResolvedAfterAnswer, pushesOnBareDrawerHash,
     backThenClose1Result, backThenClose2Result, pushesBeforeKeep, pushesAfterKeep, hashAfterKeep,
     firstCloseResult, secondCloseResult,
     pushesAfterSupersede, drawerHistoryPushes, drawerOpen: drawerEl.open, drawerDiscards,
@@ -656,6 +665,7 @@ const resetState = async (hash = "#/unshackle.yaml") => {
     assert shown["supersededDrawer"] == {
         "firstResolvedBeforeAnswer": "superseded",
         "secondResolvedAfterAnswer": "discard",
+        "pushesOnBareDrawerHash": [],
         "backThenClose1Result": False,
         "backThenClose2Result": False,
         "pushesBeforeKeep": [],
