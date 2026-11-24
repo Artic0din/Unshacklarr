@@ -214,6 +214,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- Sent the local Unshackle server's secret key with its startup health check, so local mode starts against Unshackle 7 instead of giving up after 90 s.
 - Retried a download with the season map of the attempt it repeats, so a retry no longer asks the service for the wrong season.
 - Took an episode out of one job's queue only, so a download of it on its own is no longer skipped.
 - Kept the upgrade and pre-release checks' bookkeeping when one service fails, so the same notification is not sent every round.

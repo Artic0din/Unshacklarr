@@ -451,7 +451,7 @@ def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path
         "    seen = {'argv': sys.argv, 'key': config.serve['api_secret'], 'env': [k for k in os.environ if k.startswith('UNSHACKLARR')],\n"
         "            'users': config.serve.get('users')}\n"
         "    app = web.Application()\n"
-        "    app.router.add_get('/api/health', lambda r: web.json_response(seen))\n"
+        "    app.router.add_get('/api/health', lambda r: web.json_response(seen) if r.headers.get('X-Secret-Key') == seen['key'] else web.json_response({'status': 401}, status=401))\n"
         "    app.router.add_get('/api/remote/logins', lambda r: web.json_response({'logins': []}))\n"
         "    web.run_app(app, host='127.0.0.1', port=1, print=None)\n")  # port 1: only the handed socket can serve
     command = tmp_path / ".venv" / "bin" / "unshackle"  # a git clone's: the launcher runs from the clone
@@ -462,7 +462,7 @@ def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path
     try:
         local.start(str(command))
         import requests
-        seen = requests.get(f"{local.url}/api/health", timeout=5).json()
+        seen = requests.get(f"{local.url}/api/health", headers={"X-Secret-Key": local.key}, timeout=5).json()
         assert seen["key"] == local.key and seen["env"] == []  # the key arrived, and left the environment
         assert str(local.url.rsplit(":", 1)[1]) not in " ".join(seen["argv"])  # nor the port on the command line
         # Unshackle 6 serves its proxies only to a key with server_proxy: this run's key has it (5.x reads no such field)
@@ -544,6 +544,51 @@ def test_a_local_serve_retries_a_transient_secure_approval_check(tmp_path, monke
 
     local.start("unshackle")
 
+    assert local.process is not None
+
+
+def test_a_local_serve_sends_its_secret_key_to_the_health_check(tmp_path, monkeypatch):
+    import sys
+    import unshacklarr.backend as backend
+
+    class Process:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            return 0
+
+    class Response:
+        def __init__(self, status):
+            self.status_code = status
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise backend.requests.HTTPError(f"{self.status_code} response")
+
+    seen_headers = []
+    now = iter((0.0, 0.0, 91.0))
+    monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
+    monkeypatch.setattr(backend.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(backend.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(backend.time, "monotonic", lambda: next(now, 91.0))
+
+    def fake_get(url, **kwargs):
+        headers = kwargs.get("headers") or {}
+        if url.endswith("/api/health"):
+            seen_headers.append(headers)
+        if headers.get("X-Secret-Key") != local.key:
+            return Response(401)
+        return Response(200)
+
+    monkeypatch.setattr(backend.requests, "get", fake_get)
+    local = backend.Local(tmp_path / "serve.log")
+
+    local.start("unshackle")
+    assert seen_headers == [{"X-Secret-Key": local.key}]
     assert local.process is not None
 
 
