@@ -436,9 +436,11 @@ def test_a_linked_unshackle_yaml_or_a_folder_outside_it_is_refused(tmp_path):
         pass
 
 
-def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path):
+def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path, monkeypatch):
     import sys
     from unshacklarr.backend import Local
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("ALL_PROXY", "http://127.0.0.1:1")
     pkg = tmp_path / "unshackle" / "core"
     pkg.mkdir(parents=True)
     (tmp_path / "unshackle" / "__init__.py").write_text("")
@@ -462,7 +464,12 @@ def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path
     try:
         local.start(str(command))
         import requests
-        seen = requests.get(f"{local.url}/api/health", headers={"X-Secret-Key": local.key}, timeout=5).json()
+        seen = requests.get(
+            f"{local.url}/api/health",
+            headers={"X-Secret-Key": local.key},
+            proxies={"http": None, "https": None, "all": None},
+            timeout=5,
+        ).json()
         assert seen["key"] == local.key and seen["env"] == []  # the key arrived, and left the environment
         assert str(local.url.rsplit(":", 1)[1]) not in " ".join(seen["argv"])  # nor the port on the command line
         # Unshackle 6 serves its proxies only to a key with server_proxy: this run's key has it (5.x reads no such field)
@@ -569,7 +576,7 @@ def test_a_local_serve_sends_its_secret_key_to_the_health_check(tmp_path, monkey
             if self.status_code >= 400:
                 raise backend.requests.HTTPError(f"{self.status_code} response")
 
-    seen_headers = []
+    seen = []
     now = iter((0.0, 0.0, 91.0))
     monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
     monkeypatch.setattr(backend.subprocess, "Popen", lambda *args, **kwargs: Process())
@@ -578,8 +585,7 @@ def test_a_local_serve_sends_its_secret_key_to_the_health_check(tmp_path, monkey
 
     def fake_get(url, **kwargs):
         headers = kwargs.get("headers") or {}
-        if url.endswith("/api/health"):
-            seen_headers.append(headers)
+        seen.append((url, headers, kwargs.get("allow_redirects"), kwargs.get("proxies")))
         if headers.get("X-Secret-Key") != local.key:
             return Response(401)
         return Response(200)
@@ -588,8 +594,43 @@ def test_a_local_serve_sends_its_secret_key_to_the_health_check(tmp_path, monkey
     local = backend.Local(tmp_path / "serve.log")
 
     local.start("unshackle")
-    assert seen_headers == [{"X-Secret-Key": local.key}]
+    expected_proxies = {"http": None, "https": None, "all": None}
+    assert seen == [
+        (f"{local.url}/api/health", {"X-Secret-Key": local.key}, False, expected_proxies),
+        (f"{local.url}/api/remote/logins", {"X-Secret-Key": local.key}, False, expected_proxies),
+    ]
     assert local.process is not None
+
+
+def test_a_local_serve_rejects_a_redirect_from_the_health_check(tmp_path, monkeypatch):
+    import sys
+    import unshacklarr.backend as backend
+
+    class Process:
+        def poll(self):
+            return None
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            return 0
+
+    class Response:
+        def __init__(self, status):
+            self.status_code = status
+
+    now = iter((0.0, 0.0, 91.0))
+    monkeypatch.setattr(backend, "unshackle_python", lambda command: (sys.executable, tmp_path))
+    monkeypatch.setattr(backend.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(backend.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(backend.time, "monotonic", lambda: next(now, 91.0))
+    monkeypatch.setattr(backend.requests, "get", lambda url, **kwargs: Response(302))
+    local = backend.Local(tmp_path / "serve.log")
+
+    with pytest.raises(UnshackleError, match="did not answer within 90 s"):
+        local.start("unshackle")
+    assert local.process is None
 
 
 def broken_command(tmp_path):
