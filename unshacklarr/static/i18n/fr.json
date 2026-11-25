@@ -571,7 +571,7 @@
  "See the history in Activity for why.": "Voir l'historique dans Activité pour savoir pourquoi.",
  "Select": "Sélectionner",
  "Select all {0}": "Tout sélectionner ({0})",
- "Select the lowest bitrate track within the specified quality. Requires -q/--quality.": "Sélectionner la piste au débit le plus bas dans la qualité indiquée. Nécessite -q/--quality.",
+ "Select the lowest bitrate track within the specified quality, or of the lowest resolution if no quality is set.": "Sélectionner la piste au débit le plus bas dans la qualité indiquée, ou dans la résolution la plus basse si aucune qualité n'est définie.",
  "Send": "Envoyer",
  "Send a test": "Envoyer un test",
  "Sent: the download goes on": "Envoyé: le téléchargement continue",

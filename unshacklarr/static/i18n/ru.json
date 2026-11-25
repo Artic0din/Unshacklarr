@@ -580,7 +580,7 @@
  "See the history in Activity for why.": "Причина — в истории на вкладке «Активность».",
  "Select": "Выбрать",
  "Select all {0}": "Выбрать все ({0})",
- "Select the lowest bitrate track within the specified quality. Requires -q/--quality.": "Выбирать дорожку с наименьшим битрейтом в заданном качестве. Требует -q/--quality.",
+ "Select the lowest bitrate track within the specified quality, or of the lowest resolution if no quality is set.": "Выбирать дорожку с наименьшим битрейтом в заданном качестве или в самом низком разрешении, если качество не указано.",
  "Send": "Отправить",
  "Send a test": "Отправить тест",
  "Sent: the download goes on": "Отправлено: загрузка продолжается",

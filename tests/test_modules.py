@@ -19,7 +19,7 @@ import time
 
 def test_container_sources_are_immutable_and_identifiable():
     root = Path(__file__).parents[1]
-    core_commit = "58a62dd86248ccdbe94978ed5c3cfc5efff6a8e8"
+    core_commit = "306f167b956265b47aada64eb3f273618dd5c17d"
     core = (root / "docker" / "unshackle.Dockerfile").read_text()
     app = (root / "Dockerfile").read_text()
     github = (root / ".github" / "workflows" / "ci.yml").read_text()
