@@ -439,8 +439,10 @@ def test_a_linked_unshackle_yaml_or_a_folder_outside_it_is_refused(tmp_path):
 def test_a_local_serve_gets_its_socket_and_key_without_the_command_line(tmp_path, monkeypatch):
     import sys
     from unshacklarr.backend import Local
-    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
-    monkeypatch.setenv("ALL_PROXY", "http://127.0.0.1:1")
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
+    for name in ("HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.setenv(name, "http://127.0.0.1:1")
     pkg = tmp_path / "unshackle" / "core"
     pkg.mkdir(parents=True)
     (tmp_path / "unshackle" / "__init__.py").write_text("")
