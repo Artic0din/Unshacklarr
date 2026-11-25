@@ -272,23 +272,24 @@ class Local:
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
                 raise UnshackleError(f"unshackle serve stopped at start: {self.tail()}")
+            probe = {"headers": {"X-Secret-Key": self.key}, "timeout": 2, "allow_redirects": False,
+                     "proxies": {"http": None, "https": None, "all": None}}
             try:
-                requests.get(f"{self.url}/api/health", timeout=2).raise_for_status()
+                health = requests.get(f"{self.url}/api/health", **probe)
+                if not 200 <= health.status_code < 300:
+                    raise requests.HTTPError(f"Unexpected health response status: {health.status_code}", response=health)
             except requests.RequestException:
                 time.sleep(0.5)
                 continue
             try:
-                response = requests.get(
-                    f"{self.url}/api/remote/logins",
-                    headers={"X-Secret-Key": self.key},
-                    timeout=2,
-                )
+                response = requests.get(f"{self.url}/api/remote/logins", **probe)
                 if response.status_code in (404, 405):
                     self.stop()
                     raise UnshackleError(
                         "The configured Unshackle does not support secure device approvals; update it before using this local core"
                     )
-                response.raise_for_status()
+                if not 200 <= response.status_code < 300:
+                    raise requests.HTTPError(f"Unexpected remote logins response status: {response.status_code}", response=response)
             except UnshackleError:
                 raise
             except requests.RequestException:
