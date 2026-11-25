@@ -69,7 +69,7 @@ DL_OPTIONS = [
     ('download_processes', 'int', "Split a track's segment downloads across this many processes; only engages for large segment batches (default 1).", []),
     ('continue_downloads', 'flag', 'Keep completed segment files across runs and resume a previously failed download.', []),
     ('downloads', 'int', 'Amount of tracks to download concurrently.', []),
-    ('worst', 'flag', 'Select the lowest bitrate track within the specified quality, or of the lowest resolution if no quality is set.', []),
+    ('worst', 'flag', 'Select the lowest bitrate track within the specified quality, or of the lowest resolution when no quality is set (requires -q/--quality before Unshackle 7.0).', []),
     ('best_available', 'flag', 'Continue with best available quality if requested resolutions are not available.', []),
     ('repack', 'flag', 'Add REPACK tag to the output filename.', []),
     ('tag', 'text', 'Set the Group Tag to be used, overriding the config tag and any tag rules.', []),

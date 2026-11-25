@@ -579,7 +579,7 @@
  "See the history in Activity for why.": "理由はアクティビティの履歴を確認してください。",
  "Select": "選択",
  "Select all {0}": "{0} 件をすべて選択",
- "Select the lowest bitrate track within the specified quality, or of the lowest resolution if no quality is set.": "指定した画質の中で最も低いビットレートのトラックを選びます。画質が指定されていない場合は最も低い解像度から選びます。",
+ "Select the lowest bitrate track within the specified quality, or of the lowest resolution when no quality is set (requires -q/--quality before Unshackle 7.0).": "指定した画質の中で最も低いビットレートのトラックを選びます。画質が指定されていない場合は最も低い解像度から選びます（Unshackle 7.0 未満では -q/--quality が必要です）。",
  "Send": "送信",
  "Send a test": "テスト送信",
  "Sent: the download goes on": "送信しました。ダウンロードを続行します",

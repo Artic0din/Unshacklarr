@@ -2164,7 +2164,7 @@
   "eps[0].series"
  ],
  "Select none": [],
- "Select the lowest bitrate track within the specified quality, or of the lowest resolution if no quality is set.": [],
+ "Select the lowest bitrate track within the specified quality, or of the lowest resolution when no quality is set (requires -q/--quality before Unshackle 7.0).": [],
  "Select {0}": [
   "COUNT.upgrade(upgrades.length)"
  ],

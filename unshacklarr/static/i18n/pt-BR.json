@@ -574,7 +574,7 @@
  "See the history in Activity for why.": "Veja o motivo no histórico, em Atividade.",
  "Select": "Selecionar",
  "Select all {0}": "Selecionar todos os {0}",
- "Select the lowest bitrate track within the specified quality, or of the lowest resolution if no quality is set.": "Escolhe a faixa de menor taxa de bits dentro da qualidade indicada, ou da menor resolução se nenhuma qualidade for definida.",
+ "Select the lowest bitrate track within the specified quality, or of the lowest resolution when no quality is set (requires -q/--quality before Unshackle 7.0).": "Escolhe a faixa de menor taxa de bits dentro da qualidade indicada, ou da menor resolução quando nenhuma qualidade for definida (exige -q/--quality antes do Unshackle 7.0).",
  "Send": "Enviar",
  "Send a test": "Enviar um teste",
  "Sent: the download goes on": "Enviado: o download continua",
