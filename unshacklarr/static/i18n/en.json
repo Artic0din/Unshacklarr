@@ -2164,7 +2164,7 @@
   "eps[0].series"
  ],
  "Select none": [],
- "Select the lowest bitrate track within the specified quality. Requires -q/--quality.": [],
+ "Select the lowest bitrate track within the specified quality, or of the lowest resolution when no quality is set (requires -q/--quality before Unshackle 7.0).": [],
  "Select {0}": [
   "COUNT.upgrade(upgrades.length)"
  ],
@@ -2958,6 +2958,12 @@
   "byTitle.map((e) => `S${pad2(e.seasonNumber)}E${pad2(e.episodeNumber)} as ${epAvail[e.id].service}`).join(\", \")"
  ],
  "Undo": [],
+ "Unexpected health response status: {0}": [
+  "health.status_code"
+ ],
+ "Unexpected remote logins response status: {0}": [
+  "response.status_code"
+ ],
  "Unexpected {0} in the reply": [
   "what"
  ],

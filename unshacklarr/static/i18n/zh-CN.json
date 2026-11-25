@@ -579,7 +579,7 @@
  "See the history in Activity for why.": "原因请查看“活动”中的历史。",
  "Select": "选择",
  "Select all {0}": "全选 {0} 项",
- "Select the lowest bitrate track within the specified quality. Requires -q/--quality.": "在指定画质中选择码率最低的轨道。需要 -q/--quality。",
+ "Select the lowest bitrate track within the specified quality, or of the lowest resolution when no quality is set (requires -q/--quality before Unshackle 7.0).": "在指定画质中选择码率最低的轨道；未指定画质时选择最低分辨率中的轨道（Unshackle 7.0 之前需要 -q/--quality）。",
  "Send": "发送",
  "Send a test": "发送测试",
  "Sent: the download goes on": "已发送：下载继续进行",

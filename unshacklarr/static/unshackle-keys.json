@@ -150,7 +150,7 @@
     "type": "bool"
    },
    "best_available": {
-    "info": "Warn instead of failing when a requested resolution, range, or language is missing, or when one DRM system does not license under --all-drm.",
+    "info": "Warn instead of failing when a requested resolution, range, video language, or audio language is missing, or when one DRM system does not license under --all-drm.",
     "type": "bool"
    },
    "channels": {
@@ -174,7 +174,7 @@
     "type": "bool"
    },
    "generate_dv": {
-    "info": "With -r HYBRID, make Dolby Vision from the HDR10+ metadata when a title has no DV track.",
+    "info": "With -r HYBRID, make Dolby Vision from the HDR10+ metadata or the decoded video when a title has no DV track.",
     "type": "bool"
    },
    "lang": {
@@ -194,12 +194,16 @@
     "type": "list"
    },
    "range": {
-    "info": "Colour range(s): SDR, HLG, HDR10, HDR10P, DV, HYBRID.",
+    "info": "Colour range(s): SDR, HLG, HDR10, HDR10P, VIVID, DV, HYBRID.",
     "type": "list"
    },
    "s_lang": {
     "info": "Subtitle language(s).",
     "type": "list"
+   },
+   "skip_missing": {
+    "info": "Skip a title that misses a required language (require_audio, require_video, require_subs) or a track that a filter asks for, and continue with the next title.",
+    "type": "bool"
    },
    "slow": {
     "info": "Inter-title delay, e.g.",
@@ -207,6 +211,10 @@
    },
    "speed_limit": {
     "info": "Total download speed cap across all downloads combined, e.g.",
+    "type": "str"
+   },
+   "sub_font": {
+    "info": "Font for subtitles converted to ASS; implies sub_format: ass.",
     "type": "str"
    },
    "sub_format": {
@@ -270,11 +278,14 @@
    "audio": {
     "info": "At least one audio language matches."
    },
+   "audio_contain_all": {
+    "info": "Every listed language must be present in the audio."
+   },
    "subs_contain": {
     "info": "At least one subtitle language matches."
    },
    "subs_contain_all": {
-    "info": "Every listed language must be present."
+    "info": "Every listed language must be present in the subtitles."
    }
   },
   "type": "dict"
@@ -297,6 +308,10 @@
    "default_language": {
     "info": "Force which language is flagged default per track type, e.g.",
     "type": "dict"
+   },
+   "default_subtitle_type": {
+    "info": "The subtitle types that can take the default flag, in order: forced, normal, sdh (CC counts as SDH, and cc is the same as sdh).",
+    "type": "str or list"
    },
    "merge_audio": {
     "info": "Merge all audio into one file.",
@@ -505,7 +520,6 @@
  "scene_naming": {
   "info": "If set to any non-null value, unshackle exits with an error directing you to configure output_template instead."
  },
- "series_year": {},
  "serve": {
   "info": "Configuration for the serve command (the built-in REST API server).",
   "keys": {
@@ -600,6 +614,10 @@
  "subtitle": {
   "info": "Subtitle handling: SDH stripping, format conversion, and whether unshackle muxes the subtitles",
   "keys": {
+   "ass_style": {
+    "info": "Style for subtitles converted to ASS, as pysubs2 or ASS style fields (fontname, fontsize, primarycolor or PrimaryColour, ...) for a 1080-line picture.",
+    "type": "dict"
+   },
    "conversion_method": {
     "info": "Subtitle conversion backend.",
     "type": "str"
@@ -607,6 +625,10 @@
    "convert_before_strip": {
     "info": "Convert to the working format before stripping SDH.",
     "type": "bool"
+   },
+   "dedupe_codecs": {
+    "info": "Subtitle codecs in order of preference, by value or name, for example [VTT, STPP, WVTT].",
+    "type": "list"
    },
    "group_by": {
     "info": "Which key groups the subtitle tracks.",
@@ -706,5 +728,9 @@
  "vault_timeout": {
   "info": "Timeout in seconds for vault operations.",
   "type": "float"
+ },
+ "wide_output": {
+  "info": "Print the dl title and track listings at the terminal width.",
+  "type": "bool"
  }
 }

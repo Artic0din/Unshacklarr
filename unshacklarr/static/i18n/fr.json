@@ -571,7 +571,7 @@
  "See the history in Activity for why.": "Voir l'historique dans Activité pour savoir pourquoi.",
  "Select": "Sélectionner",
  "Select all {0}": "Tout sélectionner ({0})",
- "Select the lowest bitrate track within the specified quality. Requires -q/--quality.": "Sélectionner la piste au débit le plus bas dans la qualité indiquée. Nécessite -q/--quality.",
+ "Select the lowest bitrate track within the specified quality, or of the lowest resolution when no quality is set (requires -q/--quality before Unshackle 7.0).": "Sélectionner la piste au débit le plus bas dans la qualité indiquée, ou dans la résolution la plus basse lorsqu'aucune qualité n'est définie (nécessite -q/--quality avant Unshackle 7.0).",
  "Send": "Envoyer",
  "Send a test": "Envoyer un test",
  "Sent: the download goes on": "Envoyé: le téléchargement continue",

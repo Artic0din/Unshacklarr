@@ -26,7 +26,7 @@ services:
       dockerfile: unshackle.Dockerfile
       args:
         UNSHACKLE_REPO: https://github.com/Artic0din/unshackle.git
-        UNSHACKLE_COMMIT: 58a62dd86248ccdbe94978ed5c3cfc5efff6a8e8
+        UNSHACKLE_COMMIT: 306f167b956265b47aada64eb3f273618dd5c17d
     image: unshackle-serve:latest
     container_name: unshackle
     restart: unless-stopped
