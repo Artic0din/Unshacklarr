@@ -11026,3 +11026,876 @@ def test_review_worker_setup_failure_ends_admission_and_releases_capacity(tmp_pa
     assert (second["job_id"] == first["job_id"]) == retry
     assert store.get_job(second["job_id"]).state == "failed"
     assert sync.reserved_starts == set()
+
+
+def test_unconfirmed_attempt_resumes_in_place_and_when_workerless(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    sync.SETTINGS["downloads_at_once"] = 1
+    monkeypatch.setattr(sync, "POLL_MISSES", 1)
+    monkeypatch.setattr(sync, "SERVE_RETRY_AFTER", ())
+    monkeypatch.setattr(sync, "RETRY_AFTER", ())
+    monkeypatch.setattr(sync.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+
+    paused_with_unconfirmed = threading.Event()
+    resumed_after_pause = threading.Event()
+    downloads = []
+
+    class LiveBackend:
+        name = ""
+
+        def download(self, payload):
+            downloads.append(payload)
+            return "job-u1"
+
+        def job(self, job_id):
+            if not resumed_after_pause.is_set():
+                raise sync.UnshackleError("unshackle serve is unreachable")
+            return {"status": "completed", "output_files": []}
+
+        def cancel(self, job_id):
+            raise sync.UnshackleError("unshackle serve is unreachable")
+
+    backend = LiveBackend()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    ep = {"id": 1, "seriesId": 1, "seasonNumber": 1, "episodeNumber": 1, "hasFile": False,
+          "series": {"tvdbId": 1, "title": "Show", "path": "/tv/Show"}}
+    payload = {"service": "TEST", "title_id": "t", "wanted": ["S01E01"], "output_dir": str(sync.episode_folder(ep))}
+    batch = "20261021-121220-33d6d0"
+    item = jobs.episode_item(None, 1)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {}), job_id=batch)
+    run = sync.EpisodeRun(ep, {"service": "TEST"}, "manual", "S01E01", batch=batch)
+    worker_errors = []
+
+    pause = sync.pause_job
+
+    def observe_pause(target_batch, held):
+        pause(target_batch, held)
+        if target_batch == batch and held and "unconfirmed_job" in run.card:
+            paused_with_unconfirmed.set()
+
+    monkeypatch.setattr(sync, "pause_job", observe_pause)
+
+    def run_worker():
+        sync.running_jobs[batch] = {}
+        try:
+            sync.run_job_retrying(payload, run)
+            run.finish("downloaded")
+        except Exception as error:
+            worker_errors.append(error)
+            run.finish("failed", str(error))
+        finally:
+            sync.running_jobs.pop(batch, None)
+            sync.release_job(batch)
+
+    worker = threading.Thread(target=run_worker, daemon=True)
+
+    def make_app():
+        application = web.web.Application()
+        application.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        application.router.add_post("/api/jobs/resume-all", web.pause_all_jobs)
+        return application
+
+    async def drive_live():
+        async with TestClient(TestServer(make_app())) as client:
+            worker.start()
+            assert await asyncio.to_thread(paused_with_unconfirmed.wait, 5)
+            slot_free = threading.Event()
+
+            def take_slot():
+                with sync.download_slot(""):
+                    slot_free.set()
+
+            competitor = threading.Thread(target=take_slot, daemon=True)
+            competitor.start()
+            assert await asyncio.to_thread(slot_free.wait, 2)
+            competitor.join(2)
+            assert store.get_job(batch).state == "paused"
+            assert store.get_job(batch).children[0].attempt_job_id == "job-u1"
+            resumed_after_pause.set()
+            response = await client.post(f"/api/jobs/{batch}/resume")
+            assert response.status == 200
+            assert (await response.json()) == {"paused": False}
+
+    asyncio.run(drive_live())
+    worker.join(5)
+    assert not worker.is_alive()
+    assert not worker_errors
+    assert len(downloads) == 1
+    assert store.get_job(batch).state == "completed"
+
+    relaunched = []
+    started_workerless = threading.Event()
+
+    def track_launch(ids, **kwargs):
+        relaunched.append((ids, kwargs.get("batch")))
+        store.complete_child(kwargs["batch"], jobs.episode_item(None, ids[0]).id)
+        started_workerless.set()
+        return None
+
+    monkeypatch.setattr(web, "run_sync", track_launch)
+    for idx, use_resume_all in enumerate((False, True), 1):
+        workerless_batch = f"20261021-12122{idx}-33d6d0"
+        req = web.download_request([10 + idx], "", "manual", False, None)
+        store.admit(req, job_id=workerless_batch)
+        store.start_child_attempt(workerless_batch, req.items[0].id, f"job-workerless-{idx}", backend="")
+        sync.pause_job(workerless_batch, True)
+        assert store.get_job(workerless_batch).state == "paused"
+        assert workerless_batch not in sync.running_jobs
+
+        async def drive_workerless(route="/api/jobs/resume-all" if use_resume_all else f"/api/jobs/{workerless_batch}/resume"):
+            async with TestClient(TestServer(make_app())) as client:
+                resp = await client.post(route)
+                assert resp.status == 200
+
+        asyncio.run(drive_workerless())
+        assert started_workerless.wait(2)
+        started_workerless.clear()
+        assert store.get_job(workerless_batch).state == "completed"
+        assert sync.reserved_starts == set()
+
+    assert relaunched == [([11], "20261021-121221-33d6d0"), ([12], "20261021-121222-33d6d0")]
+
+
+def test_v1_audio_add_adopts_retained_attempt_through_resume_queue(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    library = tmp_path / "lib" / "Show" / "Season 01"
+    library.mkdir(parents=True)
+    (library / "Show - S01E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(
+        upgrade_mode="add_track",
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    ep = {"id": 5, "seriesId": 1, "episodeFileId": 9, "seasonNumber": 1, "episodeNumber": 5,
+          "series": {"tvdbId": 7, "title": "Show"}}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **_: {"path": "/tv/Show/Season 01/Show - S01E05.mkv", "sceneName": ""})
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync,
+        "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv")
+        else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    out = sync.episode_folder(ep)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "audio.mka").write_bytes(b"audio")
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"),
+        SimpleNamespace(returncode=0, stdout=""),
+    )[1])
+    imports = []
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+
+    downloads = []
+
+    class Serve:
+        name = ""
+        settings = {}
+
+        def download(self, payload):
+            downloads.append(payload)
+            return "unexpected-second-download"
+
+        def job(self, job_id):
+            return {"status": "completed", "output_files": [str(out / "audio.mka")]}
+
+        def jobs(self):
+            return []
+
+    serve = Serve()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: serve)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: serve)
+
+    batch = "20261021-121229-33d6d0"
+    item = jobs.episode_item(None, 5)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, item.id, "audio-retained-1", state="downloading", backend="")
+
+    assert web.resume_queue() == 1
+    assert batch in web.audio_passes
+    thread = web.audio_passes[batch].thread
+    thread.join(5)
+    assert not thread.is_alive()
+    assert not downloads
+    assert imports == [(5, True)]
+    assert store.get_job(batch).state == "completed"
+
+
+@pytest.mark.parametrize("kind", ["manual", "audio_add"])
+def test_single_job_resume_at_capacity_refuses_without_deadlock(tmp_path, monkeypatch, kind):
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    sync.running_jobs["occupant"] = {}
+    batch = "20261021-121230-33d6d0"
+    options = {"kind": "audio_add", "audio": "fr"} if kind == "audio_add" else {"kind": "manual"}
+    request = jobs.NormalizedJobRequest(None, None, (jobs.episode_item(None, 5),), options)
+    store.admit(request, job_id=batch)
+    sync.pause_job(batch, True)
+    assert store.get_job(batch).state == "paused"
+
+    started = []
+    if kind == "audio_add":
+        monkeypatch.setattr(web, "try_add_audio", lambda ep_id, lang, force: (started.append((ep_id, lang, force)), "added")[1])
+    else:
+        monkeypatch.setattr(web, "run_sync", lambda ids, **kw: (started.append((ids, kw.get("batch"))), store.complete_child(batch, request.items[0].id))[0] and None)
+
+    def make_app():
+        application = web.web.Application()
+        application.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        return application
+
+    async def drive():
+        async with TestClient(TestServer(make_app())) as client:
+            refused = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert refused.status == 429
+            assert refused.headers["X-Admission-Code"] == "capacity_full"
+            assert store.get_job(batch).state == "paused"
+            assert batch in sync.paused_jobs
+            assert not sync.reserved_starts
+            assert not started
+
+            sync.running_jobs.pop("occupant")
+            allowed = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert allowed.status == 200
+            assert await allowed.json() == {"paused": False}
+
+    asyncio.run(drive())
+    if kind == "audio_add" and (audio_pass := web.audio_passes.get(batch)) is not None:
+        audio_pass.thread.join(5)
+        assert not audio_pass.thread.is_alive()
+    assert started
+    assert store.get_job(batch).state == "completed"
+    assert not sync.reserved_starts
+
+
+def test_resume_all_launches_workerless_audio_add_at_asked_capacity(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    sync.SETTINGS.update(
+        downloads_at_once=1,
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    library = tmp_path / "lib" / "Show" / "Season 01"
+    library.mkdir(parents=True)
+    (library / "Show - S01E05.mkv").write_bytes(b"video")
+    ep = {"id": 5, "seriesId": 1, "episodeFileId": 9, "seasonNumber": 1, "episodeNumber": 5,
+          "series": {"tvdbId": 7, "title": "Show"}}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **_: {"path": "/tv/Show/Season 01/Show - S01E05.mkv", "sceneName": ""})
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), SimpleNamespace(returncode=0, stdout="")
+    )[1])
+    imports = []
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+
+    out = sync.episode_folder(ep)
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "services": lambda self: [],
+        "dl_config": lambda self: {},
+        "jobs": lambda self: [],
+        "download": lambda self, payload: (out.mkdir(parents=True, exist_ok=True), (out / "audio.mka").write_bytes(b"audio"), "audio-job")[2],
+        "job": lambda self, job_id: {"status": "completed", "output_files": [str(out / "audio.mka")]},
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+
+    sync.running_jobs["occupant"] = {}
+    slot_held, slot_release = threading.Event(), threading.Event()
+
+    def occupy_slot():
+        with sync.download_slot(""):
+            slot_held.set()
+            assert slot_release.wait(5)
+
+    occupant = threading.Thread(target=occupy_slot, daemon=True)
+    occupant.start()
+    assert slot_held.wait(2)
+
+    batch = "20261021-121231-audio"
+    item = jobs.episode_item(None, 5)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    sync.pause_job(batch, True)
+
+    try:
+        async def resume_all():
+            from aiohttp.test_utils import TestClient, TestServer
+            app = web.web.Application()
+            app.router.add_post("/api/jobs/resume-all", web.pause_all_jobs)
+            async with TestClient(TestServer(app)) as client:
+                resp = await asyncio.wait_for(client.post("/api/jobs/resume-all"), timeout=3)
+                assert resp.status == 200
+                assert await resp.json() == {"paused": False}
+
+        asyncio.run(resume_all())
+        assert batch in web.audio_passes
+        thread = web.audio_passes[batch].thread
+        sync.running_jobs.pop("occupant", None)
+    finally:
+        slot_release.set()
+        occupant.join(2)
+
+    thread.join(5)
+    assert not thread.is_alive()
+    assert imports == [(5, True)]
+    assert store.get_job(batch).state == "completed"
+    assert not sync.reserved_starts
+
+
+@pytest.mark.parametrize("resume_all_first", [False, True])
+def test_concurrent_resume_and_resume_all_do_not_duplicate_worker(tmp_path, monkeypatch, resume_all_first):
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    ep = {"id": 5, "seriesId": 1, "seasonNumber": 1, "episodeNumber": 5, "hasFile": False,
+          "series": {"tvdbId": 7, "title": "Show", "path": "/tv/Show"}}
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    for operation in ("apply_ladder", "free_space_problem", "library_space_problem", "finalize", "check_audio",
+                      "check_subs", "lacks_preferred", "note_upgrade", "after_download", "notify_series",
+                      "setup_of", "by_title", "fallback_show", "wrong_number"):
+        monkeypatch.setattr(sync, operation, lambda *a, **kw: None)
+
+    out = sync.episode_folder(ep)
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "services": lambda self: [],
+        "dl_config": lambda self: {},
+        "jobs": lambda self: [],
+        "download": lambda self, payload: (out.mkdir(parents=True, exist_ok=True), (out / "Show.S01E05.mkv").write_bytes(b"video"), "job-1")[2],
+        "job": lambda self, job_id: {"status": "completed", "output_files": [str(out / "Show.S01E05.mkv")]},
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: None)
+
+    entered_chosen = threading.Event()
+    release_chosen = threading.Event()
+    chosen_calls = []
+
+    def slow_chosen(ids):
+        chosen_calls.append(list(ids))
+        entered_chosen.set()
+        assert release_chosen.wait(5)
+        return [ep]
+
+    monkeypatch.setattr(sync, "chosen_episodes", slow_chosen)
+
+    main_calls = 0
+    orig_main = sync.main
+
+    def track_main(*args, **kwargs):
+        nonlocal main_calls
+        main_calls += 1
+        return orig_main(*args, **kwargs)
+
+    monkeypatch.setattr(sync, "main", track_main)
+
+    batch = "20261021-121232-33d6d0"
+    request = jobs.NormalizedJobRequest(None, None, (jobs.episode_item(None, 5),), {"kind": "manual"})
+    store.admit(request, job_id=batch)
+    sync.pause_job(batch, True)
+
+    def make_app():
+        application = web.web.Application()
+        application.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        application.router.add_post("/api/jobs/resume-all", web.pause_all_jobs)
+        return application
+
+    async def drive():
+        async with TestClient(TestServer(make_app())) as client:
+            first_route = "/api/jobs/resume-all" if resume_all_first else f"/api/jobs/{batch}/resume"
+            second_route = f"/api/jobs/{batch}/resume" if resume_all_first else "/api/jobs/resume-all"
+            first = await asyncio.wait_for(client.post(first_route), timeout=3)
+            assert first.status == 200
+            assert await asyncio.to_thread(entered_chosen.wait, 5)
+            assert batch not in sync.running_jobs
+            assert batch in sync.reserved_starts
+            second = await asyncio.wait_for(client.post(second_route), timeout=3)
+            assert second.status == 200
+            release_chosen.set()
+
+    try:
+        asyncio.run(drive())
+    finally:
+        release_chosen.set()
+
+    for worker in list(web.sync_threads):
+        worker.join(5)
+        assert not worker.is_alive()
+    assert main_calls == 1
+    assert len(chosen_calls) == 1
+    assert store.get_job(batch).state == "completed"
+    assert not sync.reserved_starts
+
+
+def test_audio_add_retained_attempt_pauses_when_library_file_unavailable(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    library_file = tmp_path / "lib" / "Show" / "Season 01" / "Show - S01E05.mkv"
+    sync.SETTINGS.update(
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    ep = {"id": 5, "seriesId": 1, "episodeFileId": 9, "seasonNumber": 1, "episodeNumber": 5,
+          "series": {"tvdbId": 7, "title": "Show"}}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **_: {"path": "/tv/Show/Season 01/Show - S01E05.mkv", "sceneName": ""})
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), SimpleNamespace(returncode=0, stdout="")
+    )[1])
+    imports, downloads, polls = [], [], []
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+
+    out = sync.episode_folder(ep)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "audio.mka").write_bytes(b"audio")
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "download": lambda self, payload: downloads.append(payload) or "unexpected",
+        "job": lambda self, job_id: (polls.append(job_id), {"status": "completed", "output_files": [str(out / "audio.mka")]})[1],
+        "jobs": lambda self: [],
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+
+    paused_event = threading.Event()
+    real_pause = sync.pause_job
+
+    def observe_pause(target_batch, held):
+        real_pause(target_batch, held)
+        if target_batch == batch and held:
+            paused_event.set()
+
+    monkeypatch.setattr(sync, "pause_job", observe_pause)
+
+    batch = "20261021-121233-33d6d0"
+    item = jobs.episode_item(None, 5)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, item.id, "audio-retained-1", state="downloading", backend="")
+
+    assert web.resume_queue() == 1
+    assert paused_event.wait(5)
+    assert polls and set(polls) == {"audio-retained-1"}
+    before_resume_polls = len(polls)
+    assert batch in sync.paused_jobs
+    assert batch in store.pause_state()[1]
+    assert (out / "audio.mka").is_file()
+    assert not imports
+
+    library_file.parent.mkdir(parents=True, exist_ok=True)
+    library_file.write_bytes(b"video")
+
+    async def resume_after_mount():
+        from aiohttp.test_utils import TestClient, TestServer
+        app = web.web.Application()
+        app.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        async with TestClient(TestServer(app)) as client:
+            resp = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert resp.status == 200
+            assert await resp.json() == {"paused": False}
+
+    audio_pass = web.audio_passes[batch]
+    asyncio.run(resume_after_mount())
+    audio_pass.thread.join(5)
+    assert not audio_pass.thread.is_alive()
+    assert not downloads
+    assert len(polls) == before_resume_polls
+    assert imports == [(5, True)]
+    assert store.get_job(batch).state == "completed"
+
+
+def test_audio_add_retained_attempt_pauses_on_transient_sonarr_error(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    library = tmp_path / "lib" / "Show" / "Season 01"
+    library.mkdir(parents=True)
+    for ep_num in (5, 6):
+        (library / f"Show - S01E{ep_num:02}.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    episodes = {
+        ep_num: {"id": ep_num, "seriesId": 1, "episodeFileId": 8 + ep_num, "seasonNumber": 1, "episodeNumber": ep_num,
+                 "series": {"tvdbId": 7, "title": "Show"}}
+        for ep_num in (5, 6)
+    }
+    sonarr_ready = threading.Event()
+    paused_event = threading.Event()
+    real_pause = sync.pause_job
+
+    def observe_pause(target_batch, held):
+        real_pause(target_batch, held)
+        if target_batch == batch and held:
+            paused_event.set()
+
+    monkeypatch.setattr(sync, "pause_job", observe_pause)
+
+    def fetch_episodes(ids):
+        if not sonarr_ready.is_set():
+            raise web.requests.ConnectionError("sonarr down")
+        return [episodes[ep_id] for ep_id in ids]
+
+    monkeypatch.setattr(sync, "chosen_episodes", fetch_episodes)
+    monkeypatch.setattr(
+        sync,
+        "sonarr_get",
+        lambda path, **_: {"path": f"/tv/Show/Season 01/Show - S01E0{int(path.rsplit('/', 1)[1]) - 8:01}.mkv", "sceneName": ""},
+    )
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), SimpleNamespace(returncode=0, stdout="")
+    )[1])
+    imports, downloads = [], []
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+
+    out5 = sync.episode_folder(episodes[5])
+    out6 = sync.episode_folder(episodes[6])
+    out5.mkdir(parents=True, exist_ok=True)
+    (out5 / "audio.mka").write_bytes(b"audio")
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "services": lambda self: [],
+        "dl_config": lambda self: {},
+        "jobs": lambda self: [],
+        "download": lambda self, payload: (
+            downloads.append(payload),
+            Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True),
+            (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"audio"),
+            "audio-ep6",
+        )[3],
+        "job": lambda self, job_id: {
+            "status": "completed",
+            "output_files": [str((out5 if job_id == "audio-retained-2" else out6) / "audio.mka")],
+        },
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+
+    batch = "20261021-121234-33d6d0"
+    items = (jobs.episode_item(None, 5), jobs.episode_item(None, 6))
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, items[0].id, "audio-retained-2", state="downloading", backend="")
+
+    assert web.resume_queue() == 2
+    assert paused_event.wait(5)
+    assert batch in sync.paused_jobs
+    assert batch in store.pause_state()[1]
+    assert batch in web.audio_passes
+    audio_pass = web.audio_passes[batch]
+
+    sonarr_ready.set()
+
+    async def resume_after_sonarr():
+        from aiohttp.test_utils import TestClient, TestServer
+        app = web.web.Application()
+        app.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        async with TestClient(TestServer(app)) as client:
+            resp = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert resp.status == 200
+            assert await resp.json() == {"paused": False}
+
+    asyncio.run(resume_after_sonarr())
+    audio_pass.thread.join(5)
+    assert not audio_pass.thread.is_alive()
+    assert len(downloads) == 1 and downloads[0]["wanted"] == ["S01E06"]
+    assert imports == [(5, True), (6, True)]
+    assert store.get_job(batch).state == "completed"
+
+
+def test_audio_add_structural_fallback_clears_marked_mkv_and_completes_whole_download(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    ep = {"id": 5, "seriesId": 1, "episodeFileId": 0, "seasonNumber": 1, "episodeNumber": 5, "hasFile": False,
+          "series": {"tvdbId": 7, "title": "Show", "path": "/tv/Show"}}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    for operation in ("apply_ladder", "free_space_problem", "library_space_problem", "finalize", "check_audio",
+                      "check_subs", "lacks_preferred", "note_upgrade", "after_download", "notify_series",
+                      "setup_of", "by_title", "fallback_show", "wrong_number"):
+        monkeypatch.setattr(sync, operation, lambda *a, **kw: None)
+
+    out = sync.episode_folder(ep)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / sync.AUDIO_ADD).touch()
+    (out / "audio.mkv").write_bytes(b"audio-in-mkv")
+
+    cancelled, downloads, imports = [], [], []
+
+    class Serve:
+        name = ""
+        settings = {}
+
+        def services(self):
+            return []
+
+        def dl_config(self):
+            return {}
+
+        def jobs(self):
+            return []
+
+        def call(self, method, path, **_):
+            return {"episodes": [{"audio": [{"language": "fr"}]}]}
+
+        def job(self, job_id):
+            return {"status": "completed", "output_files": [str(out / "audio.mkv")]}
+
+        def cancel(self, job_id):
+            cancelled.append(job_id)
+
+        def download(self, payload):
+            downloads.append(payload)
+            target = Path(payload["output_dir"]) / "Show.S01E05.mkv"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"whole-video")
+            return "whole-job-1"
+
+    backend = Serve()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: (
+        sync.shutil.rmtree(folder, ignore_errors=True),
+        imports.append((e["id"], replace)),
+    ))
+
+    batch = "20261021-121236-33d6d0"
+    item = jobs.episode_item(None, 5)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, item.id, "audio-completed-mkv", state="downloading", backend="")
+
+    assert web.resume_queue() == 1
+    if (audio_pass := web.audio_passes.get(batch)) is not None:
+        audio_pass.thread.join(5)
+        assert not audio_pass.thread.is_alive()
+    for worker in list(web.sync_threads):
+        worker.join(5)
+        assert not worker.is_alive()
+
+    assert not cancelled
+    assert len(downloads) == 1
+    assert downloads[0].get("audio_only") is not True
+    assert downloads[0].get("wanted") == ["S01E05"]
+    assert imports == [(5, True)]
+    assert store.get_job(batch).state == "completed"
+
+
+def test_audio_add_structural_fallback_requeues_retained_attempt_after_unreachable_probe(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    library = tmp_path / "lib" / "Show" / "Season 01"
+    library.mkdir(parents=True)
+    (library / "Show - S01E06.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    ep5 = {"id": 5, "seriesId": 1, "episodeFileId": 0, "seasonNumber": 1, "episodeNumber": 5, "hasFile": False,
+           "series": {"tvdbId": 7, "title": "Show", "path": "/tv/Show"}}
+    ep6 = {"id": 6, "seriesId": 1, "episodeFileId": 14, "seasonNumber": 1, "episodeNumber": 6, "hasFile": True,
+           "series": {"tvdbId": 7, "title": "Show", "path": "/tv/Show"}}
+    episodes = {5: ep5, 6: ep6}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [episodes[ep_id] for ep_id in ids])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **_: {"path": "/tv/Show/Season 01/Show - S01E06.mkv", "sceneName": ""})
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), SimpleNamespace(returncode=0, stdout="")
+    )[1])
+    for operation in ("apply_ladder", "free_space_problem", "library_space_problem", "finalize", "check_audio",
+                      "check_subs", "lacks_preferred", "note_upgrade", "after_download", "notify_series",
+                      "setup_of", "by_title", "fallback_show", "wrong_number"):
+        monkeypatch.setattr(sync, operation, lambda *a, **kw: None)
+
+    backend_ready = threading.Event()
+    paused_event = threading.Event()
+    pause_calls: list[bool] = []
+    real_pause = sync.pause_job
+
+    def observe_pause(target_batch, held):
+        if target_batch == batch:
+            if held:
+                assert list(web.audio_passes[batch].pending) == [(5, "fr", False), (6, "fr", False)]
+            pause_calls.append(held)
+        real_pause(target_batch, held)
+        if target_batch == batch and held:
+            paused_event.set()
+
+    monkeypatch.setattr(sync, "pause_job", observe_pause)
+
+    cancelled, downloads, imports = [], [], []
+    out5 = sync.episode_folder(ep5)
+    out6 = sync.episode_folder(ep6)
+
+    class Serve:
+        name = ""
+        settings = {}
+
+        def services(self):
+            return []
+
+        def dl_config(self):
+            return {}
+
+        def jobs(self):
+            return []
+
+        def call(self, method, path, **_):
+            return {"episodes": [{"audio": [{"language": "fr"}]}]}
+
+        def cancel(self, job_id):
+            cancelled.append(job_id)
+
+        def job(self, job_id):
+            if job_id == "old":
+                if not backend_ready.is_set():
+                    raise sync.UnshackleError("unshackle serve is unreachable")
+                return {"status": "downloading"}
+            if job_id == "ep6-audio":
+                return {"status": "completed", "output_files": [str(out6 / "audio.mka")]}
+            return {"status": "completed", "output_files": [str(out5 / "Show.S01E05.mkv")]}
+
+        def download(self, payload):
+            downloads.append(payload)
+            out = Path(payload["output_dir"])
+            out.mkdir(parents=True, exist_ok=True)
+            if payload.get("audio_only"):
+                (out / "audio.mka").write_bytes(b"audio")
+                return "ep6-audio"
+            (out / "Show.S01E05.mkv").write_bytes(b"whole-video")
+            return "ep5-whole"
+
+    backend = Serve()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: (
+        sync.shutil.rmtree(folder, ignore_errors=True),
+        imports.append((e["id"], replace)),
+    ))
+
+    batch = "20261021-121237-33d6d0"
+    items = (jobs.episode_item(None, 5), jobs.episode_item(None, 6))
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, items[0].id, "old", state="downloading", backend="")
+
+    assert web.resume_queue() == 2
+    assert paused_event.wait(5)
+    assert batch in sync.paused_jobs
+    assert batch in store.pause_state()[1]
+    assert batch in web.audio_passes
+    audio_pass = web.audio_passes[batch]
+    child5 = store.get_job(batch).children[0]
+    assert (child5.state, child5.attempt_job_id) == ("downloading", "old")
+
+    backend_ready.set()
+
+    async def resume_after_backend():
+        from aiohttp.test_utils import TestClient, TestServer
+        app = web.web.Application()
+        app.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        async with TestClient(TestServer(app)) as client:
+            resp = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert resp.status == 200
+            assert await resp.json() == {"paused": False}
+
+    asyncio.run(resume_after_backend())
+    audio_pass.thread.join(5)
+    assert not audio_pass.thread.is_alive()
+    for worker in list(web.sync_threads):
+        worker.join(5)
+        assert not worker.is_alive()
+
+    assert pause_calls == [True, False]
+    assert cancelled == ["old"]
+    assert [(payload.get("wanted"), payload.get("audio_only") is True) for payload in downloads] == [
+        (["S01E06"], True),
+        (["S01E05"], False),
+    ]
+    assert imports == [(6, True), (5, True)]
+    assert store.get_job(batch).state == "completed"

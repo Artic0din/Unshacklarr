@@ -7966,3 +7966,476 @@ def test_review_pending_submission_pause_releases_only_download_slot(tmp_path, m
         run.finish("downloaded")
     assert progressed
     assert followed == ["pending"]
+
+
+def test_audio_add_persists_attempt_and_adopts_on_restart(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    monkeypatch.setattr(
+        sync,
+        "sonarr_get",
+        lambda path, **params: {
+            "path": "/tv/Show/Season 02/Show - S02E05.mkv",
+            "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL",
+        },
+    )
+    out = sync.episode_folder(ep)
+    store = sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    item = jobs.episode_item(None, ep["id"])
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+
+    downloads, imports = [], []
+
+    class Serve:
+        name = ""
+        settings = {}
+
+        def __init__(self, *, crashed_once: bool) -> None:
+            self.crashed_once = crashed_once
+
+        def download(self, payload):
+            downloads.append(payload)
+            return "audio-job-1"
+
+        def job(self, job_id):
+            if not self.crashed_once:
+                raise KeyboardInterrupt
+            (out / "audio.mka").write_bytes(b"audio")
+            return {"status": "completed", "output_files": [str(out / "audio.mka")]}
+
+        def services(self):
+            return []
+
+        def dl_config(self):
+            return {}
+
+        def jobs(self):
+            return []
+
+    monkeypatch.setattr(sync, "backend_named", lambda _name: Serve(crashed_once=False))
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: Serve(crashed_once=False))
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync,
+        "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv")
+        else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+
+    def join_audio(cmd, timeout, **kwargs):
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined")
+        return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+    monkeypatch.setattr(sync, "mkv_run", join_audio)
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+
+    sync.current.audio_batch = batch
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            sync.add_track_outcome(205, "fr")
+    finally:
+        del sync.current.audio_batch
+
+    persisted = store.get_job(batch).children[0]
+    assert persisted.attempt_job_id == "audio-job-1"
+    assert persisted.state == "queued"
+
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "audio.mka").write_bytes(b"audio")
+    restarted = load(tmp_path, monkeypatch)
+    restarted.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    monkeypatch.setattr(restarted, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(
+        restarted,
+        "sonarr_get",
+        lambda path, **params: {
+            "path": "/tv/Show/Season 02/Show - S02E05.mkv",
+            "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL",
+        },
+    )
+    monkeypatch.setattr(restarted, "backend_named", lambda _name: Serve(crashed_once=True))
+    monkeypatch.setattr(restarted, "backend_for", lambda *_args: Serve(crashed_once=True))
+    monkeypatch.setattr(restarted, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        restarted,
+        "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv")
+        else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(restarted, "mkv_run", join_audio)
+    monkeypatch.setattr(restarted, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+    monkeypatch.setattr(restarted, "notify", lambda *a, **k: None)
+
+    restarted.current.audio_batch = batch
+    try:
+        assert restarted.add_track_outcome(205, "fr") == "added"
+    finally:
+        del restarted.current.audio_batch
+
+    assert len(downloads) == 1
+    assert imports == [(205, True)]
+    assert restarted.job_store().get_job(batch).children[0].state == "completed"
+
+
+def test_audio_add_outcome_returns_handled_on_failure(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(
+        sync,
+        "sonarr_get",
+        lambda path, **params: {
+            "path": "/tv/Show/Season 02/Show - S02E05.mkv",
+            "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL",
+        },
+    )
+    store = sync.job_store()
+    batch = "20261021-121218-33d6d0"
+    item = jobs.episode_item(None, ep["id"])
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: SimpleNamespace(name=""))
+    monkeypatch.setattr(sync, "download_request", lambda *a, **kw: {"service": "RTLP", "title_id": "t", "output_dir": str(sync.episode_folder(ep)), "wanted": ["S02E05"]})
+    monkeypatch.setattr(sync, "run_job_retrying", lambda *a, **kw: (_ for _ in ()).throw(PermissionError("denied")))
+
+    sync.current.audio_batch = batch
+    try:
+        assert sync.add_track_outcome(205, "fr") == "handled"
+    finally:
+        del sync.current.audio_batch
+
+    assert store.get_job(batch).children[0].state == "failed"
+
+
+@pytest.mark.parametrize("has_card", [True, False])
+def test_remove_partial_merges_keeps_retained_audio_attempt_until_resume(tmp_path, monkeypatch, has_card):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(library_sonarr_root="/tv", library_local_root=str(tmp_path / "lib"))
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    if has_card:
+        monkeypatch.setattr(sync, "chosen_episodes", lambda _ids: pytest.fail("Should resolve folder from run card"))
+    else:
+        monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep] if ids == [205] else [])
+    batch = "20261021-121219-33d6d0"
+    out = sync.episode_folder(ep)
+    out.mkdir(parents=True)
+    (out / sync.AUDIO_ADD).touch()
+    (out / "audio.mka").write_bytes(b"audio")
+    (out / "Show - S02E05.mkv.part").write_bytes(b"half")
+    stale = sync.DOWNLOADS / "unshackle-999-S01E01"
+    stale.mkdir(parents=True)
+    (stale / sync.AUDIO_ADD).touch()
+    (stale / "stale.mka").write_bytes(b"stale")
+    if has_card:
+        sync.RUNS_DIR.mkdir(parents=True, exist_ok=True)
+        (sync.RUNS_DIR / "20261021-121219-111-S02E05.json").write_text(json.dumps({
+            "id": "20261021-121219-111-S02E05", "batch": batch, "episodeId": 205,
+            "tvdbId": 111, "sxxeyy": "S02E05", "job_id": "audio-retained",
+        }))
+    store = sync.job_store()
+    item = jobs.episode_item(None, 205)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, item.id, "audio-retained", state="downloading", backend="")
+
+    assert sync.remove_partial_merges() == 2
+    assert not stale.exists()
+    assert not (out / "Show - S02E05.mkv.part").exists()
+    assert (out / sync.AUDIO_ADD).is_file()
+    assert (out / "audio.mka").is_file()
+
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(
+        sync,
+        "sonarr_get",
+        lambda path, **params: {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL"},
+    )
+    downloads, imports = [], []
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "download": lambda self, payload: downloads.append(payload) or "unexpected",
+        "job": lambda self, job_id: {"status": "completed", "output_files": [str(out / "audio.mka")]},
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), subprocess.CompletedProcess(cmd, 0, stdout="")
+    )[1])
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+
+    sync.current.audio_batch = batch
+    try:
+        assert sync.add_track_outcome(205, "fr") == "added"
+    finally:
+        del sync.current.audio_batch
+
+    assert not downloads
+    assert imports == [(205, True)]
+    assert store.get_job(batch).children[0].state == "completed"
+
+
+def test_audio_add_adopts_retained_attempt_when_source_differs_without_anyway(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    library = tmp_path / "lib" / "Show" / "Season 02"
+    library.mkdir(parents=True)
+    (library / "Show - S02E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(
+        add_track_other_source="ask",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(
+        sync,
+        "sonarr_get",
+        lambda path, **params: {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.OTHER.WEB-DL"},
+    )
+    monkeypatch.setattr(sync, "ask_audio", lambda *a, **kw: pytest.fail("Retained audio attempt must not ask again"))
+    out = sync.episode_folder(ep)
+    out.mkdir(parents=True)
+    (out / "audio.mka").write_bytes(b"audio")
+    downloads, imports = [], []
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "download": lambda self, payload: downloads.append(payload) or "unexpected",
+        "job": lambda self, job_id: {"status": "completed", "output_files": [str(out / "audio.mka")]},
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), subprocess.CompletedProcess(cmd, 0, stdout="")
+    )[1])
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+
+    store = sync.job_store()
+    batch = "20261021-121220-33d6d0"
+    item = jobs.episode_item(None, 205)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, item.id, "audio-other-source", state="downloading", backend="")
+
+    sync.current.audio_batch = batch
+    try:
+        assert sync.add_track_outcome(205, "fr", anyway=False) == "added"
+    finally:
+        del sync.current.audio_batch
+
+    assert not downloads
+    assert imports == [(205, True)]
+    assert store.get_job(batch).children[0].state == "completed"
+
+
+@pytest.mark.parametrize("kind", ["manual", "audio_add"])
+def test_adopted_attempt_missing_after_unconfirmed_pause_rebuilds_full_payload(tmp_path, monkeypatch, kind):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    sync.SETTINGS.update(
+        downloads_at_once=1,
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    monkeypatch.setattr(sync, "POLL_MISSES", 1)
+    monkeypatch.setattr(sync, "SERVE_RETRY_AFTER", ())
+    monkeypatch.setattr(sync, "RETRY_AFTER", ())
+    monkeypatch.setattr(sync.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    ep = {**episode(111, 2, 5), "episodeFileId": 9}
+    out = sync.episode_folder(ep)
+    if kind == "audio_add":
+        library = tmp_path / "lib" / "Show" / "Season 02"
+        library.mkdir(parents=True)
+        (library / "Show - S02E05.mkv").write_bytes(b"video")
+        monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+        monkeypatch.setattr(
+            sync,
+            "sonarr_get",
+            lambda path, **params: {"path": "/tv/Show/Season 02/Show - S02E05.mkv", "sceneName": "Show.S02E05.1080p.RTLP.WEB-DL"},
+        )
+        monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+        monkeypatch.setattr(
+            sync, "mkv_tracks",
+            lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+            if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+        )
+        monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+            Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), subprocess.CompletedProcess(cmd, 0, stdout="")
+        )[1])
+    else:
+        for operation in ("apply_ladder", "free_space_problem", "library_space_problem", "finalize", "check_audio",
+                          "check_subs", "lacks_preferred", "note_upgrade", "after_download", "notify_series",
+                          "setup_of", "by_title", "fallback_show", "wrong_number"):
+            monkeypatch.setattr(sync, operation, lambda *a, **kw: None)
+
+    imports, downloads = [], []
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+
+    parked = threading.Event()
+    resumed = threading.Event()
+    old_job_calls = 0
+
+    class Serve:
+        name = ""
+        settings = {}
+
+        def services(self):
+            return []
+
+        def dl_config(self):
+            return {}
+
+        def jobs(self):
+            return []
+
+        def cancel(self, _job_id):
+            raise sync.UnshackleError("unshackle serve is unreachable")
+
+        def job(self, job_id):
+            nonlocal old_job_calls
+            if job_id == "job-lost":
+                old_job_calls += 1
+                if old_job_calls == 1:
+                    return {"status": "downloading"}
+                if not resumed.is_set():
+                    raise sync.UnshackleError("unshackle serve is unreachable")
+                error = sync.UnshackleError("not found")
+                error.status = 404
+                raise error
+            target = out / ("audio.mka" if kind == "audio_add" else "Show.S02E05.mkv")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"media")
+            return {"status": "completed", "output_files": [str(target)]}
+
+        def download(self, payload):
+            downloads.append(payload)
+            return "job-resubmitted"
+
+    backend = Serve()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+
+    store = sync.job_store()
+    batch = f"20261021-121225-{kind}"
+    item = jobs.episode_item(None, 205)
+    options = {"kind": "audio_add", "audio": "fr"} if kind == "audio_add" else {"kind": "manual"}
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), options), job_id=batch)
+    store.start_child_attempt(batch, item.id, "job-lost", state="downloading", backend="")
+
+    real_pause = sync.pause_job
+
+    def signal_pause(target_batch, held):
+        real_pause(target_batch, held)
+        if target_batch == batch and held:
+            parked.set()
+
+    monkeypatch.setattr(sync, "pause_job", signal_pause)
+
+    def run_work():
+        if kind == "audio_add":
+            sync.current.audio_batch = batch
+            try:
+                assert sync.add_track_outcome(205, "fr") == "added"
+            finally:
+                del sync.current.audio_batch
+        else:
+            sync.sync(sync.read_file(), {}, [ep], manual=True, kind="manual", batch=batch)
+
+    worker = threading.Thread(target=run_work, daemon=True)
+    worker.start()
+    try:
+        assert parked.wait(5)
+        resumed.set()
+        sync.pause_job(batch, False)
+        worker.join(5)
+        assert not worker.is_alive()
+    finally:
+        resumed.set()
+        sync.pause_job(batch, False)
+        worker.join(2)
+
+    assert len(downloads) == 1
+    assert downloads[0].get("service") == "RTLP"
+    assert downloads[0].get("wanted") == ["S02E05"]
+    if kind == "audio_add":
+        assert downloads[0].get("audio_only") is True and downloads[0].get("a_lang") == ["fr"]
+    assert imports == [(205, kind == "audio_add")]
+    assert store.get_job(batch).children[0].state == "completed"
+
+
+def test_audio_add_structural_fallback_abandons_retained_attempt(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    ep = {**episode(111, 2, 5), "episodeFileId": 0}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    cancelled = []
+    backend = SimpleNamespace(
+        name="",
+        settings={},
+        job=lambda job_id: {"status": "downloading"},
+        cancel=lambda job_id: cancelled.append(job_id),
+    )
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    out = sync.episode_folder(ep)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / sync.AUDIO_ADD).touch()
+    (out / "audio.mkv").write_bytes(b"audio")
+    store = sync.job_store()
+    batch = "20261021-121235-33d6d0"
+    item = jobs.episode_item(None, 205)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, item.id, "audio-stale-file", state="downloading", backend="")
+
+    sync.current.audio_batch = batch
+    try:
+        assert sync.add_track_outcome(205, "fr") == "fallback"
+    finally:
+        del sync.current.audio_batch
+
+    assert cancelled == ["audio-stale-file"]
+    assert not (out / sync.AUDIO_ADD).exists()
+    assert not (out / "audio.mkv").exists()
+    child = store.get_job(batch).children[0]
+    assert child.state == "waiting"
+    assert child.attempt_job_id is None
+    assert store.stage_audio_fallback(batch, [205]) == [205]

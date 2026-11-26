@@ -1993,7 +1993,8 @@ class EpisodeRun:
             store.cancel_child(batch, child.id, paused=held)
         elif outcome in ("failed", "unavailable"):
             if self.card.get("unconfirmed_job"):
-                pause_job(batch, True)
+                if getattr(current, "audio_batch", None) != batch or not (child.attempt_job_id or child.submission):
+                    pause_job(batch, True)
                 return
             failure = jobs.classify_failure(
                 cause, error_code=self.failure_code, phase=(self.card.get("live") or {}).get("phase") or "",
@@ -2964,6 +2965,46 @@ class PendingSubmissionUnreachable(Exception):
         self.batch = batch
 
 
+class ResubmitAdoptedAttempt(Exception):
+    pass
+
+
+def reconcile_unconfirmed_pause(run: EpisodeRun, batch: str) -> str | None:
+    unconfirmed = run.card.get("unconfirmed_job") or {}
+    child = run.durable_child()
+    if child is None or child.state not in jobs.ACTIVE_CHILD_STATES:
+        raise JobFailed("Stopped before it started", "cancelled")
+    attempt_id = str(unconfirmed.get("job_id") or "")
+    backend_name = str(unconfirmed.get("backend") or child.attempt_backend or "")
+    if attempt_id and child.attempt_job_id is None:
+        updated = job_store().start_child_attempt(batch, child.id, attempt_id, backend=backend_name)
+        child = next(item for item in updated.children if item.id == child.id)
+    pause_job(batch, True)
+    run.save()
+    if not await_job_resume(run, batch):
+        raise JobFailed("Stopped before it started", "cancelled")
+    child = run.durable_child()
+    if child is None or child.state not in jobs.ACTIVE_CHILD_STATES:
+        raise JobFailed("Stopped before it started", "cancelled")
+    observed = wait_for_attempt(run, batch, child, backend_name)
+    if observed is None:
+        raise JobFailed("Stopped before it started", "cancelled")
+    updated = job_store().reconcile_child_attempt(batch, child.id, child.attempt_job_id, observed)
+    current_child = next(item for item in updated.children if item.id == child.id)
+    run.card.pop("unconfirmed_job", None)
+    run.save()
+    if current_child.state == "failed":
+        if current_child.failure_scope == "shared" and updated.state in jobs.ACTIVE_JOB_STATES:
+            pause_job(batch, True)
+        raise JobFailed(
+            "Download interrupted" if current_child.interruption_count else "Download failed",
+            error_code="AUTH_FAILED" if current_child.failure and current_child.failure.code == "provider_access" else "",
+        )
+    if current_child.state in jobs.TERMINAL_CHILD_STATES:
+        raise JobFailed("Stopped before it started", "cancelled")
+    return current_child.attempt_job_id
+
+
 def run_job_retrying(payload: dict, run: EpisodeRun | None = None, sleep=time.sleep, *, job_id: str | None = None) -> list[str]:
     """run_job, tried again after 30 s then 2 min when it failed on the network or a service
     hiccup (a timeout, a 502...), after 1, 3 then 10 min when serve itself did not answer; at once, without them,
@@ -2981,6 +3022,15 @@ def run_job_retrying(payload: dict, run: EpisodeRun | None = None, sleep=time.sl
             run.save()
             if not await_job_resume(run, error.batch):
                 raise JobFailed("Stopped before it started", "cancelled") from None
+        except (JobFailed, UnshackleError) as error:
+            batch = str(run.card.get("batch") or "") if isinstance(run, EpisodeRun) else ""
+            child = run.durable_child() if batch and isinstance(run, EpisodeRun) else None
+            if (not isinstance(run, EpisodeRun) or not batch or getattr(error, "status", "failed") == "cancelled"
+                    or not run.card.get("unconfirmed_job") or child is None or child.state not in jobs.ACTIVE_CHILD_STATES):
+                raise
+            job_id = reconcile_unconfirmed_pause(run, batch)
+            if job_id is None and not payload:
+                raise ResubmitAdoptedAttempt from None
 
 
 def retrying(payload: dict, run: EpisodeRun | None, sleep, *, job_id: str | None = None) -> list[str]:
@@ -3946,7 +3996,53 @@ def add_track(episode_id: int, want: str, anyway: bool = False) -> bool:
 
 
 _durable_add_track = add_track
-AudioAddOutcome = Literal["added", "asked", "fallback"]
+AudioAddOutcome = Literal["added", "asked", "fallback", "handled"]
+
+
+def clear_marked_audio_folder(out: Path) -> None:
+    mark = out / AUDIO_ADD
+    if out.is_symlink() or not out.is_dir() or not mark.is_file():
+        return
+    stray = [f for f in out.rglob("*") if (f.is_symlink() or not f.is_dir()) and f != mark]
+    if not unlink_inside(out, stray) and not unlink_inside(out, [mark]):
+        with contextlib.suppress(OSError):
+            if not any(out.iterdir()):
+                out.rmdir()
+
+
+def abandon_retained_audio_attempt(batch: str | None, child: jobs.JobChild | None, backend_name: str,
+                                   out: Path | None = None) -> bool:
+    if not batch or child is None or not (child.attempt_job_id or child.submission):
+        return True
+    store = job_store()
+    if child.submission is not None:
+        observed = recover_submission(child.submission)
+        if observed.status == "unreachable":
+            return False
+        if observed.attempt_id and observed.status in ("queued", "downloading"):
+            try:
+                backend_named(child.submission.backend).cancel(observed.attempt_id)
+            except UnshackleError as error:
+                if error.status != 404:
+                    store.start_child_attempt(batch, child.id, observed.attempt_id, backend=child.submission.backend)
+                    return False
+        store.set_child_submission(batch, child.id, None)
+    elif child.attempt_job_id is not None:
+        observed = probe_attempt(child, backend_name)
+        if observed.status == "unreachable":
+            return False
+        if observed.status in ("queued", "downloading"):
+            try:
+                backend_named(child.attempt_backend if child.attempt_backend is not None else backend_name).cancel(child.attempt_job_id)
+            except UnshackleError as error:
+                if error.status != 404:
+                    return False
+        store.clear_child_attempt(batch, child.id, child.attempt_job_id)
+    if out is not None:
+        with episode_lock(out) as mine:
+            if mine:
+                clear_marked_audio_folder(out)
+    return True
 
 
 def add_track_outcome(episode_id: int, want: str, anyway: bool = False) -> AudioAddOutcome:
@@ -3954,29 +4050,41 @@ def add_track_outcome(episode_id: int, want: str, anyway: bool = False) -> Audio
     config = read_file()
     ep = chosen_episodes([episode_id])[0]
     show = (config.get("series") or {}).get(ep["series"]["tvdbId"]) or {}
+    batch = getattr(current, "audio_batch", None)
+    durable = durable_child(batch, episode_id)
+    observing = bool(durable and (durable.attempt_job_id or durable.submission))
+    backend_hint = (
+        durable.attempt_backend if durable and durable.attempt_backend is not None
+        else (durable.submission.backend if durable and durable.submission else "")
+    )
+    out = episode_folder(ep)
     if not ep.get("episodeFileId") or not show.get("service"):
+        if observing and not abandon_retained_audio_attempt(batch, durable, backend_hint, out):
+            return "handled"
         return "fallback"
     show = season_page(show, ep["seasonNumber"])
     if show.get("programmes") or int(show.get("parts") or 0) > 1:  # found by title, or in parts: the whole episode again
+        if observing and not abandon_retained_audio_attempt(batch, durable, backend_hint, out):
+            return "handled"
         print(f"Add the audio: {ep['series']['title']} is {'separate programmes' if show.get('programmes') else 'in parts'}, the episode is downloaded again", flush=True)
         return "fallback"
     file = sonarr_get(f"episodefile/{ep['episodeFileId']}")
-    if not anyway and not same_source(file, show["service"]) and SETTINGS.get("add_track_other_source") != "add":
+    if not observing and not anyway and not same_source(file, show["service"]) and SETTINGS.get("add_track_other_source") != "add":
         ask_audio(ep, show, want, file)
         return "asked"
     have = library_file(file["path"])
-    if not have.is_file():
+    if not observing and not have.is_file():
         print(f"Add the audio: {have} is out of reach here, the episode is downloaded again", flush=True)
         return "fallback"
-    out = episode_folder(ep)
     sxxeyy = f"S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}"
     service_sxxeyy = service_episode(show, ep["seasonNumber"], ep["episodeNumber"]) or sxxeyy
     label = f"{ep['series']['title']} {sxxeyy}"
-    with episode_lock(out) as mine:
-        if not mine or out.is_symlink() or videos_in(out):  # a download waits there for Sonarr, or a link: never written through
+    with episode_lock(out, wait_until=(lambda: durable_work_pending(batch, episode_id, None)) if durable else None) as mine:
+        if not mine or out.is_symlink() or (not observing and videos_in(out)):  # a download waits there for Sonarr, or a link: never written through
             return "fallback"
-        shutil.rmtree(out, ignore_errors=True)  # left without a video (an import done after its poll gave up, a crash): nothing to keep
-        run = EpisodeRun(ep, show, "upgrade", service_sxxeyy)
+        if not observing:
+            shutil.rmtree(out, ignore_errors=True)  # left without a video (an import done after its poll gave up, a crash): nothing to keep
+        run = EpisodeRun(ep, show, "upgrade", service_sxxeyy, batch)
         got: list[Path] = []
         try:
             run.say(f"{label}: adding the {want} audio from {show['service']} to the file it has")
@@ -3984,11 +4092,38 @@ def add_track_outcome(episode_id: int, want: str, anyway: bool = False) -> Audio
             (out / AUDIO_ADD).touch()  # until the joined file is whole: what a stop leaves here is cleared at the next start
             backend = backend_for(show["service"], config)
             run.card["backend"] = backend.name
-            request = download_request(show, config, service_sxxeyy, out, backend)
-            for k in ("video_only", "subs_only", "no_audio", "lang", "a_lang", "require_audio", "s_lang", "require_subs"):
-                request.pop(k, None)
-            request.update(audio_only=True, a_lang=[want])
-            run_job_retrying(request, run)
+            need_submit = True
+            if batch and durable and observing:
+                backend_name = durable.attempt_backend
+                if backend_name is None:
+                    backend_name = durable.submission.backend if durable.submission else backend.name
+                run.card["backend"] = backend_name
+                resumed = resume_durable_attempt(run, batch, durable, backend_name)
+                if resumed == "finished":
+                    return "handled"
+                if resumed == "downloaded":
+                    need_submit = False
+            while not have.is_file():
+                if not batch or not durable_work_pending(batch, episode_id, None):
+                    print(f"Add the audio: {have} is out of reach here, the episode is downloaded again", flush=True)
+                    return "fallback"
+                run.say(f"{label}: {have} is out of reach here; paused until the library file is reachable")
+                pause_job(batch, True)
+                run.save()
+                if not await_job_resume(run, batch):
+                    run.say(f"\r\n{label}: stopped")
+                    run.finish("stopped")
+                    return "handled"
+            if need_submit:
+                run.card["backend"] = backend.name
+                shutil.rmtree(out, ignore_errors=True)
+                out.mkdir(parents=True, exist_ok=True)
+                (out / AUDIO_ADD).touch()
+                request = download_request(show, config, service_sxxeyy, out, backend)
+                for k in ("video_only", "subs_only", "no_audio", "lang", "a_lang", "require_audio", "s_lang", "require_subs"):
+                    request.pop(k, None)
+                request.update(audio_only=True, a_lang=[want])
+                run_job_retrying(request, run)
             run.observe_authentication(show["service"], backend.name, "validated")
             got[:] = videos_in(out) + [f for f in out.rglob("*.mka")]
             if not got:
@@ -4032,7 +4167,13 @@ def add_track_outcome(episode_id: int, want: str, anyway: bool = False) -> Audio
             run.finish("downloaded", "", f"{want} audio added to the file")
             notify(config.get("notifications") or {}, "success", f"Audio added: {label}", f"The {want} audio track was added to the file.")
             return "added"
+        except jobs.JobStoreError:
+            raise
         except (RuntimeError, JobFailed, UnshackleError, ValueError, OSError, subprocess.CalledProcessError, requests.RequestException) as e:
+            if isinstance(e, JobFailed) and e.status == "cancelled":
+                run.say(f"\r\n{label}: stopped")
+                run.finish("stopped")
+                return "handled" if batch else "added"
             run.say(f"{label}: {e}")
             if getattr(e, "error_code", "") == "AUTH_FAILED":
                 run.observe_authentication(show["service"], str(run.card.get("backend") or ""), "needs_user_action")
@@ -4045,9 +4186,10 @@ def add_track_outcome(episode_id: int, want: str, anyway: bool = False) -> Audio
                 f"The files are in {seen_by('sonarr_downloads', out)}" if videos_in(out) else "",
                 auth_failed=getattr(e, "error_code", "") == "AUTH_FAILED",
             )
-            return "added"
+            return "handled" if batch else "added"
         finally:
-            if not videos_in(out):
+            pending = (durable := run.durable_child()) and (durable.attempt_job_id or durable.submission)
+            if not videos_in(out) and not run.card.get("unconfirmed_job") and not pending:
                 shutil.rmtree(out, ignore_errors=True)
 
 
@@ -4652,8 +4794,84 @@ PARTIAL = ".part"  # an audio merge is written under this suffix, then renamed: 
 AUDIO_ADD = ".audio-add"  # in an episode folder while an audio add works there: its audio alone may be an .mkv
 
 
+def retained_audio_folders() -> tuple[set[str], bool]:
+    """Episode folders whose active durable children still retain a remote attempt or submission."""
+    try:
+        records = job_store().load()
+    except jobs.JobStoreError:
+        return set(), True
+    retained: list[tuple[str, jobs.DownstreamJob, jobs.JobChild]] = []
+    for record in records:
+        if record.state not in jobs.ACTIVE_JOB_STATES:
+            continue
+        for child in record.children:
+            if child.state in jobs.ACTIVE_CHILD_STATES and (child.attempt_job_id is not None or child.submission is not None):
+                retained.append((record.request.sonarr or "", record, child))
+    if not retained:
+        return set(), False
+    folders: set[str] = set()
+    unresolved: list[tuple[str, int]] = []
+    cards: list[dict] | None = None
+    for sonarr_name, record, child in retained:
+        if child.submission is not None and child.submission.output_dir:
+            folders.add(Path(child.submission.output_dir).name)
+            continue
+        episode_id = child.request.sonarr_episode_id
+        if cards is None:
+            cards = []
+            if RUNS_DIR.is_dir():
+                for path in sorted(RUNS_DIR.glob("*.json"), reverse=True):
+                    try:
+                        parsed = json.loads(path.read_text())
+                    except (OSError, ValueError):
+                        continue
+                    if isinstance(parsed, dict):
+                        cards.append(parsed)
+        matched = next(
+            (card for card in cards
+             if card.get("tvdbId") and card.get("sxxeyy")
+             and ((card.get("batch") == record.id and card.get("episodeId") == episode_id
+                   and (card.get("instance") or "") == sonarr_name)
+                  or (child.attempt_job_id and (card.get("job_id") == child.attempt_job_id
+                      or (card.get("unconfirmed_job") or {}).get("job_id") == child.attempt_job_id)))),
+            None,
+        )
+        if matched is not None:
+            inst_name = str(matched.get("instance") or sonarr_name or "")
+            folders.add(f"unshackle-{inst_name + '-' if inst_name else ''}{matched['tvdbId']}-{matched['sxxeyy']}")
+        elif episode_id is not None:
+            unresolved.append((sonarr_name, episode_id))
+        else:
+            return folders, True
+    if not unresolved:
+        return folders, False
+    unknown = False
+    by_sonarr: dict[str, list[int]] = {}
+    for sonarr_name, episode_id in unresolved:
+        by_sonarr.setdefault(sonarr_name, []).append(episode_id)
+    for sonarr_name, episode_ids in by_sonarr.items():
+        if sonarr_name and sonarr_name not in SONARRS:
+            unknown = True
+            continue
+        inst = SONARRS.get(sonarr_name) if sonarr_name else None
+        try:
+            with on_instance(inst):
+                episodes = chosen_episodes(episode_ids)
+                found = {ep["id"]: episode_folder(ep).name for ep in episodes}
+        except (requests.RequestException, RuntimeError, ValueError, OSError, KeyError, TypeError):
+            unknown = True
+            continue
+        for episode_id in episode_ids:
+            if episode_id in found:
+                folders.add(found[episode_id])
+            else:
+                unknown = True
+    return folders, unknown
+
+
 def remove_partial_merges() -> int:
     """At start: the audio merges a crash or a restart cut short, and the folders left empty by them. How many folders."""
+    retained, keep_all_audio = retained_audio_folders()
     removed = 0
     for d in sorted(DOWNLOADS.glob("unshackle-*")) if DOWNLOADS.is_dir() else []:
         if not FOLDER.fullmatch(d.name) or d.is_symlink() or not d.is_dir() or d.name in busy_episodes:
@@ -4661,10 +4879,11 @@ def remove_partial_merges() -> int:
         try:
             stray = [f for f in d.glob(f"*{PARTIAL}") if f.is_file() and not f.is_symlink()]
             mark = d / AUDIO_ADD
-            if mark.is_file():  # an audio add stopped midway: its audio alone must not wait for import as a video
+            clean_audio = mark.is_file() and not keep_all_audio and d.name not in retained
+            if clean_audio:  # an audio add stopped midway: its audio alone must not wait for import as a video
                 stray = [f for f in d.rglob("*") if (f.is_symlink() or not f.is_dir()) and f != mark]
             left = unlink_inside(d, stray)  # the folder may be swapped for a link after these checks
-            if mark.is_file() and not left:  # the mark goes only once nothing it guards is left
+            if clean_audio and mark.is_file() and not left:  # the mark goes only once nothing it guards is left
                 left = unlink_inside(d, [mark])
                 stray.append(mark)
             removed += len(left) < len(stray)
@@ -4998,6 +5217,11 @@ def resume_durable_attempt(run: EpisodeRun, batch: str, child: jobs.JobChild,
     run.card.update(backend=backend_name, job_id=current_child.attempt_job_id)
     try:
         run_job_retrying({}, run, job_id=current_child.attempt_job_id)
+    except ResubmitAdoptedAttempt:
+        if await_job_resume(run, batch):
+            return "submit"
+        run.finish("stopped")
+        return "finished"
     except JobFailed as error:
         if error.status == "cancelled":
             run.finish("stopped")
@@ -5160,7 +5384,7 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
             if out.is_symlink():  # a link named like ours (another writer of the shared folder): never downloaded through,
                 out.unlink(missing_ok=True)  # never taken for one that waits; the link alone goes, not its target (#117)
                 print(f"{label}: {out.name} in the downloads folder was a link, removed", flush=True)
-            if out.exists() and videos_in(out) and not durable:
+            if out.exists() and not (out / AUDIO_ADD).is_file() and videos_in(out) and not durable:
                 print(f"{label}: already in the downloads folder ({out.name}), waiting for Sonarr to import it")
                 with episode_lock(out) as mine:
                     if manual and mine:  # asked for by hand: say why nothing happens, not a silent skip
@@ -5183,6 +5407,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                         job_store().complete_child(batch, durable.id)
                     continue
                 observing = bool(durable and (durable.attempt_job_id or durable.submission))
+                if not observing:
+                    clear_marked_audio_folder(out)
                 if durable and not observing and out.exists() and videos_in(out):
                     run = EpisodeRun(ep, show, kind, service_sxxeyy, batch)
                     run.say(f"{label}: a download already waits in {seen_by('sonarr_downloads', out)}")
@@ -5222,6 +5448,8 @@ def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, rep
                             run.finish("unavailable", f"Not on {show['service']} yet")
                     if outcome != "submit":
                         continue
+                    if out.exists() and not videos_in(out):
+                        shutil.rmtree(out, ignore_errors=True)
                 elif batch and durable and not await_job_resume(run, batch):
                     run.finish("stopped")
                     continue

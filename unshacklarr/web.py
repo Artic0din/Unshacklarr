@@ -31,7 +31,7 @@ import unicodedata
 import weakref
 import zlib
 import zoneinfo
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import suppress
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
@@ -2561,11 +2561,16 @@ def start_audio_pass(episode_ids: list[int], lang: str, *, batch: str, anyway: b
                     outcome = try_add_audio(episode_id, language, force_add)
                 finally:
                     del sonarr_sync.current.audio_batch
+                pause_retained = False
                 with sonarr_sync.upgrades_lock, sonarr_sync.jobs_lock:
                     item_id = jobs.episode_item(None, episode_id).id
                     outcome = normalize_audio_outcome(outcome, episode_id)
-                    if not force_add:
-                        record = store.get_job(batch)
+                    record = store.get_job(batch)
+                    item = next((child for child in record.children if child.request.id == item_id), None) if record else None
+                    if item and item.state in jobs.ACTIVE_CHILD_STATES and (item.attempt_job_id or item.submission):
+                        audio.pending.appendleft((episode_id, language, force_add))
+                        pause_retained = True
+                    elif not force_add:
                         options = record.request.options_for_item(item_id) if record else {}
                         if (options.get("asked") is True or options.get("kind") != "audio_add"
                                 or options.get("anyway") is True):
@@ -2573,10 +2578,14 @@ def start_audio_pass(episode_ids: list[int], lang: str, *, batch: str, anyway: b
                         if outcome == "asked":
                             store.stage_audio_question(batch, episode_id, language)
                             continue
-                    if outcome == "added":
-                        store.complete_child(batch, item_id)
-                    elif outcome == "fallback":
-                        failures[episode_id] = language
+                    if not pause_retained:
+                        if outcome == "added":
+                            if item and item.state in jobs.ACTIVE_CHILD_STATES:
+                                store.complete_child(batch, item_id)
+                        elif outcome == "fallback":
+                            failures[episode_id] = language
+                if pause_retained:
+                    sonarr_sync.pause_job(batch, True)
         except jobs.JobStoreError as error:
             print(f"Could not update the audio job: {no_credentials(error)}", flush=True)
         finally:
@@ -3961,13 +3970,58 @@ async def pause_job(request):
     job = await asyncio.to_thread(lambda: sonarr_sync.job_store().get_job(batch))
     if (job and job.state not in jobs.ACTIVE_JOB_STATES) or (not job and batch not in sonarr_sync.running_jobs):
         raise web.HTTPConflict(text=JOB_OVER)
-    await asyncio.to_thread(sonarr_sync.pause_job, batch, request.match_info["action"] == "pause")
+    pausing = request.match_info["action"] == "pause"
+
+    def apply():
+        if pausing or sonarr_sync.pause_all_active:
+            sonarr_sync.pause_job(batch, pausing)
+            return
+        reserved = False
+        handoff = False
+        try:
+            current = sonarr_sync.job_store().get_job(batch)
+            if (current is not None and current.state in jobs.ACTIVE_JOB_STATES
+                    and not _batch_has_worker_or_reservation(batch)
+                    and _durable_record_groups(current, None, set())[0]):
+                with sonarr_sync.jobs_lock:
+                    if not _batch_has_worker_or_reservation(batch):
+                        if not sonarr_sync.reserve_start(batch, ASKED_AT_ONCE):
+                            raise admission_refusal(jobs.ADMISSION_CAPACITY_REFUSAL)
+                        reserved = True
+            sonarr_sync.pause_job(batch, False)
+            if not sonarr_sync.pause_all_active:
+                updated = sonarr_sync.job_store().get_job(batch)
+                if (updated is not None and updated.state in ("waiting", "running")
+                        and not _batch_has_worker_or_reservation(batch, allow_reserved=batch if reserved else None)
+                        and _durable_record_groups(updated, None, set())[0]):
+                    handoff = reserved
+                    launch_durable_records((updated,), mark_paused=False, reserved_batch=batch if reserved else None)
+        finally:
+            if reserved and not handoff:
+                sonarr_sync.release_reserved_start(batch)
+
+    await asyncio.to_thread(apply)
     return web.json_response({"paused": batch in sonarr_sync.paused_jobs})
 
 
 async def pause_all_jobs(request):
     paused = request.path == "/api/jobs/pause-all"
-    await asyncio.to_thread(sonarr_sync.pause_all if paused else sonarr_sync.resume_all)
+
+    def apply():
+        if paused:
+            sonarr_sync.pause_all()
+            return
+        sonarr_sync.resume_all()
+        if not sonarr_sync.pause_all_active:
+            pending = [
+                record for record in sonarr_sync.job_store().load()
+                if record.state in ("waiting", "running")
+                and not _batch_has_worker_or_reservation(record.id)
+            ]
+            if pending:
+                launch_durable_records(pending, mark_paused=False)
+
+    await asyncio.to_thread(apply)
     return web.json_response({"paused": paused})
 
 
@@ -8185,6 +8239,133 @@ async def security_headers(request, response):
         response.headers.setdefault(name, value)
 
 
+def _batch_has_worker_or_reservation(batch: str, *, allow_reserved: str | None = None) -> bool:
+    with sonarr_sync.capacity_lock:
+        if batch in sonarr_sync.running_jobs or batch in audio_passes:
+            return True
+        return batch in sonarr_sync.reserved_starts and batch != allow_reserved
+
+
+def _durable_record_groups(record: jobs.DownstreamJob, watched: dict | None,
+                           answered_audio: set[int]) -> tuple[list[tuple[dict, list[int]]], dict | None]:
+    effective = record.request.runtime_options()
+    per_item = effective.pop("item_options", {})
+    groups: list[tuple[dict, list[int]]] = []
+    for child in record.children:
+        if child.state not in jobs.ACTIVE_CHILD_STATES or (episode_id := child.request.sonarr_episode_id) is None:
+            continue
+        override = per_item.get(child.request.id) if isinstance(per_item, dict) else None
+        group = {"sonarr": record.request.sonarr, **(override if isinstance(override, dict) else effective)}
+        if effective.get("kind") == "audio_add":
+            if group.get("asked") is True:
+                continue
+            if watched is None:
+                with sonarr_sync.upgrades_lock:
+                    loaded = read_json(sonarr_sync.UPGRADES_FILE, {})
+                    watched = loaded if isinstance(loaded, dict) else {}
+            if audio_confirmation_pending(watched, episode_id):
+                if group.get("kind") == "audio_add" and group.get("anyway") is not True:
+                    continue
+                if group.get("kind") == "upgrade" or group.get("anyway") is True:
+                    answered_audio.add(episode_id)
+        if groups and groups[-1][0] == group:
+            groups[-1][1].append(episode_id)
+        else:
+            groups.append((group, [episode_id]))
+    return groups, watched
+
+
+def launch_durable_records(records: Sequence[jobs.DownstreamJob], *, mark_paused: bool = True,
+                           reserved_batch: str | None = None) -> int:
+    count = 0
+    grouped_jobs = []
+    watched = None
+    answered_audio: set[int] = set()
+    pending_reservation = reserved_batch
+    try:
+        for record in records:
+            if record.state not in jobs.ACTIVE_JOB_STATES:
+                continue
+            if mark_paused and (record.state == "paused" or sonarr_sync.pause_all_active):
+                sonarr_sync.paused_jobs.add(record.id)
+            if _batch_has_worker_or_reservation(record.id, allow_reserved=reserved_batch):
+                continue
+            effective = record.request.runtime_options()
+            if isinstance(override := effective.get("options"), dict):
+                sonarr_sync.job_options[record.id] = override
+            groups, watched = _durable_record_groups(record, watched, answered_audio)
+            if groups:
+                first_kind = groups[0][0].get("kind")
+                if first_kind != "audio_add":
+                    sonarr_sync.number_job(record.id, first_kind == "retry")
+                grouped_jobs.append((record.id, groups))
+        if answered_audio:
+            with sonarr_sync.upgrades_lock:
+                watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+                for episode_id in answered_audio:
+                    (watched.get(str(episode_id)) or {}).pop("asked", None)
+                write_atomic(sonarr_sync.UPGRADES_FILE, json.dumps(watched))
+            for episode_id in answered_audio:
+                sonarr_sync.close_question(f"audio:{episode_id}")
+        for batch, groups in grouped_jobs:
+            holds_reservation = batch == pending_reservation
+            if holds_reservation:
+                pending_reservation = None
+            previous = None
+            try:
+                if _batch_has_worker_or_reservation(batch, allow_reserved=batch if holds_reservation else None):
+                    continue
+                audio_groups = [(group, ids) for group, ids in groups if group.get("kind") == "audio_add"]
+                if audio_groups:
+                    with sonarr_sync.jobs_lock:
+                        if _batch_has_worker_or_reservation(batch, allow_reserved=batch if holds_reservation else None):
+                            continue
+                        for group, ids in audio_groups:
+                            previous = start_audio_pass(ids, group["audio"], batch=batch, anyway=group.get("anyway") is True)
+                            holds_reservation = False
+                            count += len(ids)
+                        whole_group = {"sonarr": None, "kind": "upgrade", "replace": True}
+                        remaining_groups = []
+                        for group, ids in groups:
+                            language = group.get("audio") or ""
+                            if group == whole_group or group == {**whole_group, "audio": language}:
+                                audio_passes[batch].whole.update(dict.fromkeys(ids, language))
+                                count += len(ids)
+                            else:
+                                remaining_groups.append((group, ids))
+                        groups = remaining_groups
+                for group, ids in groups:
+                    if group.get("kind") == "audio_add":
+                        continue
+                    if previous is None and not holds_reservation:
+                        with sonarr_sync.jobs_lock, sonarr_sync.capacity_lock:
+                            if (batch in sonarr_sync.running_jobs or batch in audio_passes
+                                    or batch in sonarr_sync.reserved_starts):
+                                break
+                            sonarr_sync.reserved_starts.add(batch)
+                            holds_reservation = True
+                    if previous is not None:
+                        started = run_sync(ids, replace=group.get("replace") is True, kind=group.get("kind") or "manual",
+                                           numbering=group.get("numbering"), batch=batch, sonarr=group.get("sonarr") or "",
+                                           proxy=group.get("proxy") or "", video=group.get("video"), audio=group.get("audio") or "",
+                                           after=previous)
+                    else:
+                        started = run_sync(ids, replace=group.get("replace") is True, kind=group.get("kind") or "manual",
+                                           numbering=group.get("numbering"), batch=batch, sonarr=group.get("sonarr") or "",
+                                           proxy=group.get("proxy") or "", video=group.get("video"), audio=group.get("audio") or "")
+                    if holds_reservation and run_sync is _durable_run_sync and isinstance(started, threading.Thread):
+                        holds_reservation = False
+                    previous = started if isinstance(started, threading.Thread) else None
+                    count += len(ids)
+            finally:
+                if holds_reservation:
+                    sonarr_sync.release_reserved_start(batch)
+    finally:
+        if pending_reservation:
+            sonarr_sync.release_reserved_start(pending_reservation)
+    return count
+
+
 def resume_queue() -> int:
     store = sonarr_sync.job_store()
     backends: dict[str, str] | None = None
@@ -8210,90 +8391,7 @@ def resume_queue() -> int:
         print(f"Could not restore the download queue: {no_credentials(error)}", flush=True)
         return 0
 
-    count = 0
-    grouped_jobs = []
-    watched = None
-    answered_audio: set[int] = set()
-    for record in records:
-        if record.state not in jobs.ACTIVE_JOB_STATES:
-            continue
-        if record.state == "paused" or sonarr_sync.pause_all_active:
-            sonarr_sync.paused_jobs.add(record.id)
-        effective = record.request.runtime_options()
-        if isinstance(override := effective.get("options"), dict):
-            sonarr_sync.job_options[record.id] = override
-        per_item = effective.pop("item_options", {})
-        groups: list[tuple[dict, list[int]]] = []
-        for child in record.children:
-            if child.state not in jobs.ACTIVE_CHILD_STATES or (episode_id := child.request.sonarr_episode_id) is None:
-                continue
-            override = per_item.get(child.request.id) if isinstance(per_item, dict) else None
-            group = {"sonarr": record.request.sonarr, **(override if isinstance(override, dict) else effective)}
-            if effective.get("kind") == "audio_add":
-                if group.get("asked") is True:
-                    continue
-                if watched is None:
-                    with sonarr_sync.upgrades_lock:
-                        watched = read_json(sonarr_sync.UPGRADES_FILE, {})
-                if audio_confirmation_pending(watched, episode_id):
-                    if group.get("kind") == "audio_add" and group.get("anyway") is not True:
-                        continue
-                    if group.get("kind") == "upgrade" or group.get("anyway") is True:
-                        answered_audio.add(episode_id)
-            if groups and groups[-1][0] == group:
-                groups[-1][1].append(episode_id)
-            else:
-                groups.append((group, [episode_id]))
-        if groups:
-            first_kind = groups[0][0].get("kind")
-            if first_kind != "audio_add":
-                sonarr_sync.number_job(record.id, first_kind == "retry")
-            grouped_jobs.append((record.id, groups))
-    if answered_audio:
-        with sonarr_sync.upgrades_lock:
-            watched = read_json(sonarr_sync.UPGRADES_FILE, {})
-            for episode_id in answered_audio:
-                (watched.get(str(episode_id)) or {}).pop("asked", None)
-            write_atomic(sonarr_sync.UPGRADES_FILE, json.dumps(watched))
-        for episode_id in answered_audio:
-            sonarr_sync.close_question(f"audio:{episode_id}")
-    for batch, groups in grouped_jobs:
-        previous = None
-        audio_groups = [(group, ids) for group, ids in groups if group.get("kind") == "audio_add"]
-        if audio_groups:
-            with sonarr_sync.jobs_lock:
-                if batch not in sonarr_sync.running_jobs and sonarr_sync.reserve_start(batch, ASKED_AT_ONCE):
-                    try:
-                        for group, ids in audio_groups:
-                            previous = start_audio_pass(ids, group["audio"], batch=batch, anyway=group.get("anyway") is True)
-                            count += len(ids)
-                        whole_group = {"sonarr": None, "kind": "upgrade", "replace": True}
-                        remaining_groups = []
-                        for group, ids in groups:
-                            language = group.get("audio") or ""
-                            if group == whole_group or group == {**whole_group, "audio": language}:
-                                audio_passes[batch].whole.update(dict.fromkeys(ids, language))
-                                count += len(ids)
-                            else:
-                                remaining_groups.append((group, ids))
-                        groups = remaining_groups
-                    finally:
-                        sonarr_sync.release_reserved_start(batch)
-        for group, ids in groups:
-            if group.get("kind") == "audio_add":
-                continue
-            if previous is not None:
-                started = run_sync(ids, replace=group.get("replace") is True, kind=group.get("kind") or "manual",
-                                   numbering=group.get("numbering"), batch=batch, sonarr=group.get("sonarr") or "",
-                                   proxy=group.get("proxy") or "", video=group.get("video"), audio=group.get("audio") or "",
-                                   after=previous)
-            else:
-                started = run_sync(ids, replace=group.get("replace") is True, kind=group.get("kind") or "manual",
-                                   numbering=group.get("numbering"), batch=batch, sonarr=group.get("sonarr") or "",
-                                   proxy=group.get("proxy") or "", video=group.get("video"), audio=group.get("audio") or "")
-            previous = started if isinstance(started, threading.Thread) else None
-            count += len(ids)
-    return count
+    return launch_durable_records(records, mark_paused=True)
 
 
 async def restore_queue(_app):
