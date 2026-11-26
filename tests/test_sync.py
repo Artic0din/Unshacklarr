@@ -8596,24 +8596,26 @@ def test_recover_current_submission_after_retry(tmp_path, monkeypatch, direct):
     assert sync.recover_submission(submission, child) == jobs.AttemptObservation("queued", attempt_id="mine")
 
 
-@pytest.mark.parametrize("scenario", ["resume", "shared", "not-listed", "escape", "disappeared", "unreported", "reported", "subs-only"])
+@pytest.mark.parametrize("scenario", ["resume", "resume-subs-only", "shared", "not-listed", "escape", "disappeared", "unreported", "reported", "subs-only"])
 def test_direct_output_attribution(tmp_path, monkeypatch, scenario):
     from unshacklarr import jobs
     sync = load(tmp_path, monkeypatch)
     out = tmp_path if scenario == "shared" else tmp_path / "selected"
     out.mkdir(exist_ok=True)
-    output_file = out / ("film.srt" if scenario == "subs-only" else "film.mkv")
-    if scenario == "resume":
+    subs = scenario in ("subs-only", "resume-subs-only")
+    output_file = out / ("film.srt" if subs else "film.mkv")
+    if scenario in ("resume", "resume-subs-only"):
         output_file.touch()
-    opts = {"--subs-only": True} if scenario == "subs-only" else {}
+    opts = {"--subs-only": True} if subs else {}
     req = jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),),
                                      options=opts, output_dir=str(out))
     store = sync.job_store()
     batch = store.admit(req.to_normalized_request(tmp_path)).job_id
-    if scenario == "resume":
+    if scenario in ("resume", "resume-subs-only"):
         store.start_child_attempt(batch, "film", "attempt")
     monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
-    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda _: "attempt")
+    submitted = []
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda p: submitted.append(p) or "attempt")
     def observe(_):
         if scenario in ("shared", "not-listed", "unreported", "reported", "subs-only"):
             output_file.touch()
@@ -8623,12 +8625,14 @@ def test_direct_output_attribution(tmp_path, monkeypatch, scenario):
             outside = tmp_path / "outside.mkv"
             outside.touch()
             output_file.symlink_to(outside)
-        reported = [output_file.name] if scenario in ("escape", "disappeared", "reported", "subs-only") else []
+        reported = [output_file.name] if scenario in ("escape", "disappeared", "reported", "subs-only", "resume-subs-only") else []
         return {"status": "completed", "output_files": reported}
     monkeypatch.setattr(sync.UNSHACKLE, "job", observe)
     job = store.get_job(batch)
     sync.run_direct_child(job, job.children[0])
-    assert store.get_job(batch).state == ("completed" if scenario in ("reported", "subs-only") else "failed")
+    assert store.get_job(batch).state == ("completed" if scenario in ("reported", "subs-only", "resume-subs-only") else "failed")
+    if scenario == "resume-subs-only":
+        assert submitted == []
 
 
 def test_recover_submission_skips_malformed_run_card(tmp_path, monkeypatch):
@@ -8692,6 +8696,25 @@ def test_direct_retained_attempt_polls_before_output_path_check(tmp_path, monkey
     sync.run_direct_child(job, job.children[0])
     assert polled == ["retained-1"]
     assert store.get_job(batch).children[0].failure == jobs.FailureClassification("child", "manifest")
+
+
+def test_direct_remote_skips_local_cdm_check(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    out = tmp_path / "relayed"
+    req = jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),),
+                                     options={"--remote": True, "--server": "relay"}, output_dir=str(out))
+    store = sync.job_store()
+    batch = store.admit(req.to_normalized_request(tmp_path)).job_id
+    monkeypatch.setattr(sync, "no_cdm", lambda *args, **kwargs: "Missing local CDM")
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda payload: "remote-1")
+    def observe(_):
+        (out / "film.mkv").touch()
+        return {"status": "completed", "output_files": ["film.mkv"]}
+    monkeypatch.setattr(sync.UNSHACKLE, "job", observe)
+    job = store.get_job(batch)
+    sync.run_direct_child(job, job.children[0])
+    assert store.get_job(batch).state == "completed"
 
 
 def test_direct_display_command_masks_query():

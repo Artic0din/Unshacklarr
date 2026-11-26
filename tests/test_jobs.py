@@ -1412,3 +1412,9 @@ def test_direct_stored_selector_normalizes_on_read():
     item = jobs.JobItemRequest.from_dict({"id": "direct:TEST:title:old", "label": "Episode",
                                           "sonarr_episode_id": None, "selector": "S1E1.01"})
     assert item.selector == "S01E01.1"
+
+
+@pytest.mark.parametrize("rel", ["unshackle-111-S01E01", "unshackle-111-S01E01/nested", "unshackle-audio-1"])
+def test_direct_output_rejects_sonarr_namespace(tmp_path, rel):
+    with pytest.raises(jobs.DirectRequestValidationError):
+        jobs.direct_output_path(str(tmp_path / rel), tmp_path)

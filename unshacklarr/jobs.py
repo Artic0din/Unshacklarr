@@ -345,8 +345,10 @@ def direct_output_path(value: str | None, downloads_root: Path) -> Path:
     prefix = next((base for base in (downloads_root, root) if folder.is_relative_to(base)), None)
     if prefix is None:
         raise DirectRequestValidationError("Output directory must be inside downloads")
+    parts = folder.relative_to(prefix).parts
+    _direct_require(not (parts and parts[0].startswith("unshackle-")), "Output directory cannot use Sonarr download folders")
     target = root
-    for part in folder.relative_to(prefix).parts:
+    for part in parts:
         target /= part
         _direct_require(not target.is_symlink(), "Symlink in output directory")
     target = target.resolve()

@@ -6403,6 +6403,7 @@ def direct_request(body: dict) -> jobs.NormalizedJobRequest:
         server = next((s for s in backend.remote_services() if s.get("name") == target), None)
         if server is None:
             raise UnshackleError(f"Remote server {target} could not be reached")
+        dl = {**dl, "--server": target}
         catalog = server.get("services") or []
     else:
         catalog = backend.services()
@@ -6417,7 +6418,7 @@ def direct_request(body: dict) -> jobs.NormalizedJobRequest:
 
 def check_direct_job(request: jobs.NormalizedJobRequest) -> None:
     dl = request.effective_options["options"]
-    if request.service and isinstance(dl, Mapping) and "--cdm" not in dl:
+    if request.service and isinstance(dl, Mapping) and "--cdm" not in dl and dl.get("--remote") is not True:
         if why := sonarr_sync.no_cdm(request.service):
             raise web.HTTPBadRequest(text=why)
     if why := still_on_serve([], direct=request):

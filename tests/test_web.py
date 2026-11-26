@@ -13473,14 +13473,18 @@ def test_direct_remote_schema_validation(tmp_path, monkeypatch):
         "serviceOptions": {"--server-identity": "id-1"},
     })
     assert parsed.effective_options["service_options"] == {"--server-identity": "id-1"}
+    monkeypatch.setattr(sync, "no_cdm", lambda *args, **kwargs: "Missing local CDM")
+    web.check_direct_job(parsed)
     with pytest.raises(web.web.HTTPBadRequest):
         web.direct_request(direct_body() | {"options": {"--remote": True}})
     with pytest.raises(web.UnshackleError):
         web.direct_request(direct_body() | {"options": {"--remote": True, "--server": "down"}})
     monkeypatch.setattr(sync.UNSHACKLE, "config", lambda: {"remote_services": ["relay"]})
-    assert web.direct_request(direct_body() | {
+    inferred = web.direct_request(direct_body() | {
         "options": {"--remote": True}, "serviceOptions": {"--server-identity": "id-1"},
-    }).effective_options["service_options"] == {"--server-identity": "id-1"}
+    })
+    assert inferred.effective_options["service_options"] == {"--server-identity": "id-1"}
+    assert inferred.effective_options["options"] == {"--remote": True, "--server": "relay"}
     with pytest.raises(web.web.HTTPBadRequest):
         web.direct_request(direct_body() | {"options": {"--remote": True, "--server": "missing"}})
     with pytest.raises(web.web.HTTPBadRequest):

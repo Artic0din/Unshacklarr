@@ -5382,7 +5382,7 @@ def _submit_direct(run: EpisodeRun, request: jobs.NormalizedJobRequest, child: j
     effective = request.runtime_options()
     dl, own = effective["options"], effective["service_options"]
     assert isinstance(dl, dict) and isinstance(own, dict) and request.service
-    if "--cdm" not in dl and (problem := no_cdm(request.service, backend=backend)):
+    if "--cdm" not in dl and dl.get("--remote") is not True and (problem := no_cdm(request.service, backend=backend)):
         run.failure_stage = "cdm"
         raise JobFailed(problem)
     remote = seen_by("unshackle_downloads", out, backend.settings)
