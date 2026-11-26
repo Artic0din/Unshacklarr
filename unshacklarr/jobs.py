@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import uuid
+from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager
 from dataclasses import asdict, dataclass, field, replace
@@ -14,9 +15,9 @@ from threading import Event, Lock, RLock
 from time import monotonic
 from types import MappingProxyType
 from typing import Literal, NamedTuple, TypeVar, cast, get_args
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
-from unshacklarr.files import PRIVATE, no_credentials, write_atomic
+from unshacklarr.files import PRIVATE, PRIVATE_QUERY_KEY, check_full_path, no_credentials, write_atomic
 
 if sys.platform == "win32":
     import msvcrt
@@ -250,6 +251,8 @@ class JobItemRequest:
 
     def __post_init__(self) -> None:
         _strip_fields(self, id=self.id, label=self.label, selector=self.selector)
+        if self.selector is not None and self.id.startswith("direct:"):
+            object.__setattr__(self, "selector", direct_selector(self.selector))
         if (episode_id := self.sonarr_episode_id) is not None:
             _require(not isinstance(episode_id, bool) and episode_id > 0, "Expected a positive Sonarr episode ID")
 
@@ -285,6 +288,10 @@ class NormalizedJobRequest:
             "sonarr": self.sonarr,
         }
 
+    @property
+    def direct(self) -> bool:
+        return self.effective_options.get("mode") == "direct"
+
     def options_for_item(self, item_id: str) -> Mapping[str, object]:
         overrides = self.effective_options.get("item_options")
         options = overrides.get(item_id) if isinstance(overrides, Mapping) else None
@@ -301,6 +308,127 @@ class NormalizedJobRequest:
             tuple(map(JobItemRequest.from_dict, _expect(request["items"], list))), _object(request["effective_options"]),
             _optional(request["sonarr"], str),
         )
+
+
+class DirectRequestValidationError(ValueError): ...
+
+
+def _direct_require(condition: bool, message: str) -> None:
+    if not condition:
+        raise DirectRequestValidationError(message)
+
+
+def _direct_text(value: object, limit: int, field_name: str, *, spaces: bool = False) -> str:
+    if not isinstance(value, str) or not value.isprintable():
+        raise DirectRequestValidationError(f"Invalid {field_name}")
+    text = value.strip()
+    _direct_require(0 < len(text) <= limit and (spaces or not any(c.isspace() for c in text)), f"Invalid {field_name}")
+    return text
+
+
+def direct_selector(value: str) -> str:
+    match = re.fullmatch(r"S([0-9]{1,4})E([0-9]{1,4})(?:\.([0-9]{1,2}))?", value, re.I)
+    if not match:
+        raise DirectRequestValidationError("Invalid selector")
+    season, episode, part = match.groups()
+    return f"S{int(season):02d}E{int(episode):02d}" + (f".{int(part)}" if part else "")
+
+
+def direct_output_path(value: str | None, downloads_root: Path) -> Path:
+    folder = downloads_root if value is None else Path(_direct_text(value, 4096, "output directory", spaces=True))
+    try:
+        check_full_path(str(folder))
+    except ValueError as error:
+        raise DirectRequestValidationError("Expected an absolute output path without traversal") from error
+    _direct_require(folder.is_absolute(), "Expected an absolute output path")
+    root = downloads_root.resolve()
+    prefix = next((base for base in (downloads_root, root) if folder.is_relative_to(base)), None)
+    if prefix is None:
+        raise DirectRequestValidationError("Output directory must be inside downloads")
+    parts = folder.relative_to(prefix).parts
+    _direct_require(not (parts and parts[0].startswith("unshackle-")), "Output directory cannot use Sonarr download folders")
+    target = root
+    for part in parts:
+        target /= part
+        _direct_require(not target.is_symlink(), "Symlink in output directory")
+    target = target.resolve()
+    _direct_require(target.is_relative_to(root), "Output directory must be inside downloads")
+    return target
+
+
+def _public_text(text: str) -> bool:
+    decoded = unquote(text)
+    return no_credentials(decoded) == decoded and not re.search(
+        r"\b(?:bearer\s+|(?:password|token|secret|api[_-]?key)\s*[:=])|[\w.+-]+@[\w.-]+\.[\w.-]+", decoded, re.I
+    ) and not any(re.search(r"[A-Za-z0-9_+=-]{32,}", part) for part in decoded.split("/"))
+
+
+_TITLE_UUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", re.I)
+_TITLE_SLUG = re.compile(r"[a-z][a-z0-9]{0,19}(?:-[a-z0-9]{1,20})+", re.I)
+
+
+def _validate_title(title: str) -> None:
+    decoded = unquote(title)
+    _direct_require(not decoded.startswith("-") and decoded.isprintable() and not any(c.isspace() for c in decoded)
+                    and "\\" not in decoded and not re.search(r"\beyJ[\w-]*\.", decoded)
+                    and not PRIVATE_QUERY_KEY.search(decoded), "Invalid title ID")
+    try:
+        url = urlsplit(title)
+        path = unquote(url.path)
+        if url.scheme or url.netloc:
+            _direct_require(url.scheme in ("http", "https") and bool(url.hostname) and url.username is None
+                            and bool(path.strip("/")), "Invalid title URL")
+        else:
+            _direct_require(not path.startswith("/"), "Invalid title ID")
+    except ValueError as error:
+        raise DirectRequestValidationError("Invalid title URL") from error
+    parts = path.split("/")
+    _direct_require(".." not in parts and all(_TITLE_UUID.fullmatch(p) or _TITLE_SLUG.fullmatch(p)
+                    or _public_text(p) for p in parts) and all(_public_text(v) for v in
+                    (url.netloc, url.query, url.fragment)), "Invalid title ID")
+
+
+@dataclass(frozen=True)
+class DirectItemRequest:
+    id: str
+    selector: str | None
+    label: str
+
+
+@dataclass(frozen=True)
+class DirectDownloadRequest:
+    service: str
+    title_id: str
+    items: tuple[DirectItemRequest, ...]
+    options: Mapping[str, object] = field(default_factory=dict)
+    service_options: Mapping[str, object] = field(default_factory=dict)
+    output_dir: str | None = None
+
+    def to_normalized_request(self, downloads_root: Path) -> NormalizedJobRequest:
+        service = _direct_text(self.service, 64, "service")
+        _direct_require(bool(re.fullmatch(r"[A-Za-z0-9_-]+", service)) and service.upper() != "EXAMPLE", "Invalid service")
+        title = _direct_text(self.title_id, 2048, "title ID")
+        _direct_require(title == self.title_id, "Invalid title ID")
+        _validate_title(title)
+        _direct_require(isinstance(self.items, tuple) and bool(self.items), "Select at least one item")
+        items: list[JobItemRequest] = []
+        for item in self.items:
+            _direct_require(isinstance(item, DirectItemRequest), "Invalid direct item")
+            identity = _direct_text(item.id, 128, "item ID")
+            label = _direct_text(item.label, 256, "label", spaces=True)
+            _direct_require(not re.search(r"[<>]", label) and _public_text(label), "Invalid label")
+            selector = item.selector
+            if selector is None:
+                _direct_require(len(self.items) == 1, "Select one film or one or more episodes")
+            else:
+                selector = _direct_text(selector, 16, "selector")
+            key = ":".join(quote(v, safe="") for v in (service, title, identity))
+            items.append(JobItemRequest("direct:" + key, label, selector))
+        _direct_require(len({i.id for i in items}) == len(items) == len({i.selector for i in items}), "Duplicate selection")
+        return NormalizedJobRequest(service, title, tuple(items), {
+            "mode": "direct", "options": self.options, "service_options": self.service_options,
+            "output_dir": str(direct_output_path(self.output_dir, downloads_root)),
+        })
 
 
 @dataclass(frozen=True)
@@ -339,9 +467,12 @@ class JobChild:
     failure: FailureClassification | None = None
     submission: Submission | None = None
     attempt_backend: str | None = None
+    attempt_history: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _strip_fields(self, id=self.id, attempt_job_id=self.attempt_job_id)
+        if self.attempt_job_id and self.attempt_job_id not in self.attempt_history:
+            object.__setattr__(self, "attempt_history", (*self.attempt_history, self.attempt_job_id))
         _require(self.state in JOB_CHILD_STATES, "Invalid child state")
         _require(not isinstance(self.interruption_count, bool) and self.interruption_count >= 0, "Invalid interruption count")
         _require(self.failure is None or self.state != "completed", "Completed children cannot have a failure")
@@ -352,6 +483,7 @@ class JobChild:
 
     def to_dict(self) -> dict[str, object]:
         record = asdict(self)
+        record["attempt_history"] = list(self.attempt_history)
         record.pop("submission")
         if self.attempt_backend is None:
             record.pop("attempt_backend")
@@ -367,7 +499,8 @@ class JobChild:
                    _optional(child["attempt_job_id"], str), _expect(child["interruption_count"], int),
                    FailureClassification.from_dict(failure) if failure is not None else None,
                    Submission.from_dict(submission) if submission is not None else None,
-                   _optional(child.get("attempt_backend"), str))
+                   _optional(child.get("attempt_backend"), str),
+                   tuple(_expect(v, str) for v in _sequence(child.get("attempt_history", []))))
 
 
 @dataclass(frozen=True)
@@ -390,6 +523,12 @@ class DownstreamJob:
             _require(timestamp.utcoffset() is not None, "Expected a timezone-aware datetime")
             object.__setattr__(self, name, timestamp.astimezone(timezone.utc))
         _require(self.updated_at >= self.created_at, "Job was updated before creation")
+
+    def find_child(self, identifier: str) -> JobChild | None:
+        exact = next((c for c in self.children if identifier in (c.id, c.request.id)), None)
+        if exact or not self.request.direct:
+            return exact
+        return next((c for c in self.children if unquote(c.request.id.rsplit(":", 1)[-1]) == identifier), None)
 
     def to_dict(self) -> dict[str, object]:
         return vars(self) | {"request": self.request.to_dict(), "children": [child.to_dict() for child in self.children],
@@ -606,8 +745,20 @@ def classify_failure(cause: str = "", *, error_code: str = "", phase: str = "", 
     return FailureClassification("child", "download")
 
 
+class AttemptConflict(ValueError): ...
+
+
+def _check_attempt_owner(child: JobChild, identifier: str, document: StoreDocument) -> None:
+    if child.attempt_job_id is None and identifier in child.attempt_history:
+        raise AttemptConflict("Attempt already ended")
+    if any(other is not child and identifier in other.attempt_history for job in document.jobs for other in job.children):
+        raise AttemptConflict("Attempt already belongs to another child")
+
+
 def _reconcile_child(child: JobChild, result: AttemptStatus | AttemptObservation) -> JobChild:
     observed = result if isinstance(result, AttemptObservation) else AttemptObservation(result)
+    if observed.attempt_id and observed.attempt_id not in child.attempt_history:
+        child = replace(child, attempt_history=(*child.attempt_history, observed.attempt_id))
     status = observed.status
     if status in ("queued", "downloading", "completed"):
         return replace(child, state="queued" if status == "queued" else "downloading",
@@ -631,13 +782,18 @@ def _existing_admission(active: Sequence[DownstreamJob], request: NormalizedJobR
 
 
 def _check_active_jobs(active: Sequence[DownstreamJob], requested: set[str], *,
-                       request: NormalizedJobRequest | None = None) -> AlreadyQueued | Refused | None:
+                       request: NormalizedJobRequest | None = None, retry: bool = False) -> AlreadyQueued | Refused | None:
+    if request and request.direct:
+        targets = {i.selector for i in request.items if i.id in requested}
+        requested = requested | {c.request.id for job in active if job.request.direct and
+                                 (job.request.service, job.request.title_id) == (request.service, request.title_id)
+                                 for c in job.children if c.request.selector in targets}
     for job in active:
         for child in job.children:
             if child.request.id in requested and child.state == "failed":
                 return Refused("active_failed_child",
                     f"{child.request.label} failed in active job {job.id}. Retry that item in Activity.", job.id, child.id)
-    if request is not None:
+    if request is not None and not retry:
         for job in active:
             if all(child.state != "cancelled" for child in job.children) and _same_job_request(job.request, request):
                 return AlreadyQueued(job.id)
@@ -681,6 +837,10 @@ def activity_retry_duplicate(job: DownstreamJob, request: NormalizedJobRequest) 
     items = [child for child in job.children if child.request.id in selected]
     if len(items) != len(selected) or any(child.state not in ACTIVE_CHILD_STATES for child in items):
         return False
+    if job.request.direct and request.direct:
+        return job.request.service == request.service and job.request.title_id == request.title_id and (
+            job.request.effective_options == request.effective_options
+        )
     if job.request == request:
         return True
     overrides = job.request.effective_options.get("item_options")
@@ -841,7 +1001,7 @@ class JobStore:
                     _publish_store(target, data, before)
                     self._snapshot = data, verified
                     return verified.jobs
-        except LegacyQueueConversionError:
+        except (AttemptConflict, LegacyQueueConversionError):
             raise
         except (OSError, ValueError, KeyError, RecursionError, OverflowError) as error:
             raise JobStoreError(f"Cannot save job store {self.path}") from error
@@ -965,18 +1125,18 @@ class JobStore:
                       paused: bool | None = None, now: datetime | None = None) -> DownstreamJob:
         def update(job: DownstreamJob, document: StoreDocument) -> DownstreamJob:
             children = list(job.children)
-            for index, child in enumerate(children):
-                if child_or_item_id in (child.id, child.request.id):
-                    updated = change(child, document)
-                    if updated == child:
-                        return job
-                    _require(job.state in ACTIVE_JOB_STATES and child.state in ACTIVE_CHILD_STATES, "Job item is not active")
-                    children[index] = updated
-                    hold = document.holds(job) or bool(paused)
-                    failure = updated.failure
-                    state = derive_job_state(children, paused=hold or bool(failure and failure.scope == "shared"))
-                    return replace(job, children=tuple(children), state=state)
-            raise ValueError("Unknown job item")
+            child = job.find_child(child_or_item_id)
+            if child is None:
+                raise ValueError("Unknown job item")
+            updated = change(child, document)
+            if updated == child:
+                return job
+            _require(job.state in ACTIVE_JOB_STATES and child.state in ACTIVE_CHILD_STATES, "Job item is not active")
+            children[children.index(child)] = updated
+            hold = document.holds(job) or bool(paused)
+            failure = updated.failure
+            state = derive_job_state(children, paused=hold or bool(failure and failure.scope == "shared"))
+            return replace(job, children=tuple(children), state=state)
 
         return self._change_job(job_id, update, now)
 
@@ -989,10 +1149,8 @@ class JobStore:
         def start(child: JobChild, document: StoreDocument) -> JobChild:
             identifier = attempt_job_id.strip()
             _require(bool(identifier) and child.state in ACTIVE_CHILD_STATES, "Expected an active item and attempt ID")
+            _check_attempt_owner(child, identifier, document)
             _require(child.attempt_job_id in (None, identifier), "Item already has an attempt")
-            _require(not any(other.id != child.id and other.state in ACTIVE_CHILD_STATES and other.attempt_job_id == identifier
-                             for job in document.jobs if job.state in ACTIVE_JOB_STATES for other in job.children),
-                     "Duplicate active attempt ID")
             return replace(child, state=state, attempt_job_id=identifier, attempt_backend=backend, failure=None, submission=None)
 
         return self._change_child(job_id, child_or_item_id, start, now=now)
@@ -1082,31 +1240,59 @@ class JobStore:
 
     def reconcile_child_attempt(self, job_id: str, child_or_item_id: str, attempt_job_id: str | None,
                                 status: AttemptStatus | AttemptObservation) -> DownstreamJob:
-        return self._change_child(job_id, child_or_item_id, lambda child, _: (
-            _reconcile_child(child, status) if child.attempt_job_id == attempt_job_id else child))
+        def reconcile(child: JobChild, document: StoreDocument) -> JobChild:
+            identifier = status.attempt_id if isinstance(status, AttemptObservation) else None
+            if child.attempt_job_id != attempt_job_id or (identifier and child.attempt_job_id not in (None, identifier)):
+                raise AttemptConflict("Attempt changed")
+            if identifier:
+                _check_attempt_owner(child, identifier, document)
+            return _reconcile_child(child, status)
+
+        return self._change_child(job_id, child_or_item_id, reconcile)
 
     def reconcile_startup(self, probe_attempt: Callable[[DownstreamJob, JobChild], AttemptStatus | AttemptObservation], *,
                           now: datetime | None = None) -> tuple[DownstreamJob, ...]:
         snapshot = self.load()
         changes = {}
+        claims: Counter[str] = Counter()
         for job in snapshot:
             if job.state in ACTIVE_JOB_STATES:
                 for child in job.children:
                     if child.state in ACTIVE_CHILD_STATES and (
                         child.attempt_job_id is not None or child.submission is not None or child.state in ("queued", "downloading", "interrupted")
                     ):
-                        updated = _reconcile_child(child, probe_attempt(job, child))
+                        observed = probe_attempt(job, child)
+                        if isinstance(observed, AttemptObservation) and observed.attempt_id and child.attempt_job_id not in (None, observed.attempt_id):
+                            continue
+                        if isinstance(observed, AttemptObservation) and observed.attempt_id and child.attempt_job_id is None:
+                            if observed.attempt_id in child.attempt_history:
+                                continue
+                            claims[observed.attempt_id] += 1
+                        updated = _reconcile_child(child, observed)
                         if updated != child:
-                            changes[child.id] = child, updated
+                            changes[job.id, child.id] = child, updated
         if not changes:
             return snapshot
 
         def merge(document: StoreDocument) -> StoreDocument:
+            owners = {identifier: (job.id, child.id) for job in document.jobs
+                      for child in job.children for identifier in child.attempt_history}
+
+            def apply(job_id: str, child: JobChild) -> JobChild:
+                owner = job_id, child.id
+                pair = changes.get(owner)
+                if not pair or pair[0] != child:
+                    return child
+                for identifier in pair[1].attempt_history:
+                    if owners.get(identifier, owner) != owner or (identifier not in child.attempt_history and claims[identifier] > 1):
+                        return child
+                owners.update(dict.fromkeys(pair[1].attempt_history, owner))
+                return pair[1]
+
             records = []
             held = dict.fromkeys(document.paused_job_ids)
             for job in document.jobs:
-                children = tuple(pair[1] if (pair := changes.get(child.id)) and child == pair[0] else child
-                                 for child in job.children)
+                children = tuple(apply(job.id, c) for c in job.children)
                 if job.state in ACTIVE_JOB_STATES and children != job.children:
                     shared_failure = any(child.failure_scope == "shared" and child != prior
                                          for child, prior in zip(children, job.children))
@@ -1228,18 +1414,18 @@ class JobStore:
 
 def _retry_job(job: DownstreamJob, document: StoreDocument, item_ids: Collection[str] | None,
                states: Collection[JobChildState], effective_options: Mapping[str, object] | None) -> DownstreamJob | Refused:
-    selected = [child for child in job.children if (item_ids is None or child.request.id in item_ids)
-                and child.state in states]
-    _require(bool(selected) and (item_ids is None or len(selected) == len(item_ids)), "Job items are not eligible to retry")
+    candidates = job.children if item_ids is None else tuple(c for i in item_ids if (c := job.find_child(i)) is not None)
+    selected = [child for child in candidates if child.state in states]
+    _require(bool(selected) and (item_ids is None or len({c.id for c in selected}) == len(item_ids)), "Job items are not eligible to retry")
     selected_ids = {child.request.id for child in selected}
     active = [other for other in document.jobs if other.id != job.id and other.state in ACTIVE_JOB_STATES]
-    conflict = _check_active_jobs(active, selected_ids)
+    conflict = _check_active_jobs(active, selected_ids, request=job.request if job.request.direct else None, retry=True)
     if isinstance(conflict, Refused):
         return conflict
     children = tuple(replace(child, state="waiting", attempt_job_id=None, failure=None, interruption_count=0)
                      if child in selected else child for child in job.children)
     request = job.request
-    if effective_options is not None:
+    if effective_options is not None and not request.direct:
         options = request.runtime_options()
         overrides = _object(options.get("item_options", {}))
         for item_id in selected_ids:

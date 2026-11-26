@@ -8439,3 +8439,354 @@ def test_audio_add_structural_fallback_abandons_retained_attempt(tmp_path, monke
     assert child.state == "waiting"
     assert child.attempt_job_id is None
     assert store.stage_audio_fallback(batch, [205]) == [205]
+
+
+@pytest.mark.parametrize(("selectors", "failure", "expected"), [
+    ([None], "", "completed"), (["S01E01", "S01E02"], "", "completed"),
+    (["S01E01", "S01E02"], "manifest", "completed_with_errors"),
+    (["S01E01", "S01E02"], "invalid credentials", "paused"),
+])
+def test_direct_worker_and_restart(tmp_path, monkeypatch, selectors, failure, expected):
+    from unshacklarr import jobs
+    from unshacklarr import web
+    sync = load(tmp_path, monkeypatch)
+    out = tmp_path / "manual" / "selected"
+    req = jobs.DirectDownloadRequest("RTLP", "movie", tuple(
+        jobs.DirectItemRequest(str(i), selector, "Selection") for i, selector in enumerate(selectors)
+    ), output_dir=str(out)).to_normalized_request(tmp_path)
+    store = sync.job_store()
+    added = store.admit(req)
+    payloads = []
+    sync.UNSHACKLE.settings["unshackle_downloads"] = "/mapped"
+    monkeypatch.setattr(sync, "no_cdm", lambda *args, **kwargs: "")
+    def submit(payload):
+        payloads.append(payload)
+        return f"attempt-{len(payloads)}"
+
+    def observe(identifier):
+        if identifier == "attempt-1" and failure:
+            return {"status": "failed", "error_message": failure}
+        (out / (identifier + ".mkv")).write_bytes(b"video")
+        return {"status": "completed", "output_files": [identifier + ".mkv"]}
+
+    monkeypatch.setattr(sync.UNSHACKLE, "download", submit)
+    monkeypatch.setattr(sync.UNSHACKLE, "job", observe)
+    for name in ("sonarr_get", "finalize", "import_episode", "note_availability", "learn_release",
+                 "library_space_problem", "note_upgrade"):
+        monkeypatch.setattr(sync, name, lambda *args, **kwargs: pytest.fail("Direct called Sonarr/library code"))
+    assert web.resume_queue() == len(selectors)
+    web.sync_threads[-1].join(4)
+    assert not web.sync_threads[-1].is_alive()
+    job = store.get_job(added.job_id)
+    assert job.state == expected
+    attempted = selectors[:1] if expected == "paused" else selectors
+    assert [p.get("wanted") for p in payloads] == [[s] if s else None for s in attempted]
+    if selectors == [None]:
+        assert "wanted" not in payloads[0]
+    assert all(p["output_dir"] == "/mapped/manual/selected" for p in payloads)
+    assert [c.attempt_history for c in job.children[:len(attempted)]] == [(f"attempt-{i+1}",) for i in range(len(attempted))]
+    cards = list(web.cards_on_disk())
+    assert {c["childId"] for c in cards} == {c.id for c in job.children[:len(attempted)]}
+    assert all(c["tvdbId"] is None and c["episodeId"] is None and web.RUN_ID.fullmatch(c["id"]) for c in cards)
+    if expected != "paused":
+        assert list(out.glob("*.mkv"))
+
+
+def test_direct_cli_selectors():
+    from unshacklarr.options import command_line
+    film = {"service": "TEST", "title_id": "movie"}
+    assert command_line(film) == "unshackle dl TEST movie"
+    assert command_line(film | {"wanted": ["S1E1", "S1E2"]}).endswith("-w S1E1 -w S1E2")
+
+
+def test_direct_recovery_excludes_sibling_history_run_cards_and_other_selectors(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    now = datetime.now(timezone.utc)
+    store = sync.job_store()
+    request = jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),))
+    batch = store.admit(request.to_normalized_request(tmp_path)).job_id
+    store.start_child_attempt(batch, "film", "old")
+    store.complete_child(batch, "film")
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    (sync.RUNS_DIR / "earlier.json").write_text(json.dumps({"job_id": "other"}))
+    submission = jobs.Submission("", "RTLP", "movie", "/out", (), now)
+    ids = ["old", "other", "episode", "mine"]
+    monkeypatch.setattr(sync.UNSHACKLE, "jobs", lambda: [
+        {"service": "RTLP", "title_id": "movie", "created_time": now.isoformat(), "job_id": identifier}
+        for identifier in ids])
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda i: {"status": "completed", "parameters":
+                        {"wanted": ["S1E1"] if i == "episode" else [], "output_dir": "/out"}})
+    assert sync.recover_submission(submission) == jobs.AttemptObservation("completed", attempt_id="mine")
+    ids.remove("mine")
+    assert sync.recover_submission(submission).status == "missing"
+
+
+@pytest.mark.parametrize("stage", ["output_path", "storage", "cdm_route"])
+def test_direct_runtime_shared_gate(tmp_path, monkeypatch, stage):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    path = tmp_path / "nested"
+    req = jobs.DirectDownloadRequest("RTLP", "movie", tuple(
+        jobs.DirectItemRequest(str(i), f"S1E{i}", "Episode") for i in (1, 2)
+    ), output_dir=str(path)).to_normalized_request(tmp_path)
+    store = sync.job_store()
+    batch = store.admit(req).job_id
+    if stage == "output_path":
+        path.symlink_to(tmp_path)
+    monkeypatch.setattr(sync, "free_space_problem", lambda: "Low disk" if stage == "storage" else "")
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "Missing device" if stage == "cdm_route" else "")
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda *_: pytest.fail("Shared gate allowed submit"))
+    thread = sync.start_direct_worker(batch)
+    assert thread is not None
+    thread.join(3)
+    assert not thread.is_alive()
+    job = store.get_job(batch)
+    assert job.state == "paused"
+    first, second = job.children
+    assert first.failure == jobs.FailureClassification("shared", stage)
+    assert second.state == "waiting"
+
+
+def test_direct_submit_rechecks_output_after_waiting_for_slot(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    out = tmp_path / "selected"
+    request = jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),),
+                                         output_dir=str(out)).to_normalized_request(tmp_path)
+    store = sync.job_store()
+    batch = store.admit(request).job_id
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    def swap_then_submit(payload, run):
+        out.rmdir()
+        out.symlink_to(tmp_path.parent)
+        return [sync.submit_job(sync.UNSHACKLE, payload, run)]
+    calls = []
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda payload: calls.append(payload) or "attempt")
+    monkeypatch.setattr(sync, "run_job_retrying", swap_then_submit)
+    job = store.get_job(batch)
+    sync.run_direct_child(job, job.children[0])
+    assert not calls
+    assert store.get_job(batch).children[0].failure == jobs.FailureClassification("shared", "output_path")
+
+
+@pytest.mark.parametrize("direct", [True, False])
+def test_recover_current_submission_after_retry(tmp_path, monkeypatch, direct):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    now = datetime.now(timezone.utc)
+    store = sync.job_store()
+    req = (jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),))
+           .to_normalized_request(tmp_path) if direct else
+           jobs.NormalizedJobRequest("RTLP", "movie", (jobs.episode_item("Other", 15),), {}, "Other"))
+    batch = store.admit(req).job_id
+    item = req.items[0].id
+    store.start_child_attempt(batch, item, "old")
+    store.clear_child_attempt(batch, item, "old")
+    submission = jobs.Submission("", "RTLP", "movie", "/out", (), now)
+    child = store.set_child_submission(batch, item, submission).children[0]
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    card = {"batch": batch, "unconfirmed_job": {"job_id": "mine"}, "job_id": "previous-card"}
+    card.update({"childId": child.id} if direct else {"instance": "Other", "episodeId": 15})
+    (sync.RUNS_DIR / "card.json").write_text(json.dumps(card))
+    monkeypatch.setattr(sync.UNSHACKLE, "jobs", lambda: [
+        {"service": "RTLP", "title_id": "movie", "created_time": now.isoformat(), "job_id": identifier}
+        for identifier in ("old", "previous-card", "mine")])
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda _: {"status": "queued", "parameters": {"output_dir": "/out"}})
+    assert sync.recover_submission(submission, child) == jobs.AttemptObservation("queued", attempt_id="mine")
+
+
+@pytest.mark.parametrize("scenario", ["resume", "resume-subs-only", "shared", "not-listed", "escape", "disappeared", "unreported", "reported", "subs-only"])
+def test_direct_output_attribution(tmp_path, monkeypatch, scenario):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    out = tmp_path if scenario == "shared" else tmp_path / "selected"
+    out.mkdir(exist_ok=True)
+    subs = scenario in ("subs-only", "resume-subs-only")
+    output_file = out / ("film.srt" if subs else "film.mkv")
+    if scenario in ("resume", "resume-subs-only"):
+        output_file.touch()
+    opts = {"--subs-only": True} if subs else {}
+    req = jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),),
+                                     options=opts, output_dir=str(out))
+    store = sync.job_store()
+    batch = store.admit(req.to_normalized_request(tmp_path)).job_id
+    if scenario in ("resume", "resume-subs-only"):
+        store.start_child_attempt(batch, "film", "attempt")
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    submitted = []
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda p: submitted.append(p) or "attempt")
+    def observe(_):
+        if scenario in ("shared", "not-listed", "unreported", "reported", "subs-only"):
+            output_file.touch()
+        if scenario == "not-listed":
+            return {"status": "failed", "error_message": "No available episodes found"}
+        if scenario == "escape":
+            outside = tmp_path / "outside.mkv"
+            outside.touch()
+            output_file.symlink_to(outside)
+        reported = [output_file.name] if scenario in ("escape", "disappeared", "reported", "subs-only", "resume-subs-only") else []
+        return {"status": "completed", "output_files": reported}
+    monkeypatch.setattr(sync.UNSHACKLE, "job", observe)
+    job = store.get_job(batch)
+    sync.run_direct_child(job, job.children[0])
+    assert store.get_job(batch).state == ("completed" if scenario in ("reported", "subs-only", "resume-subs-only") else "failed")
+    if scenario == "resume-subs-only":
+        assert submitted == []
+
+
+def test_recover_submission_skips_malformed_run_card(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    now = datetime.now(timezone.utc)
+    store = sync.job_store()
+    req = jobs.NormalizedJobRequest("RTLP", "movie", (jobs.episode_item(None, 22),), {}, None)
+    batch = store.admit(req).job_id
+    submission = jobs.Submission("", "RTLP", "movie", "/out", ("S01E01",), now)
+    child = store.set_child_submission(batch, req.items[0].id, submission).children[0]
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    (sync.RUNS_DIR / "corrupt.json").write_text("{not-json")
+    (sync.RUNS_DIR / "bad-shape.json").write_text(json.dumps({"episodeId": -5, "batch": "b", "unconfirmed_job": {"job_id": "taken"}}))
+    monkeypatch.setattr(sync.UNSHACKLE, "jobs", lambda: [
+        {"service": "RTLP", "title_id": "movie", "created_time": now.isoformat(), "job_id": identifier}
+        for identifier in ("taken", "live-1")])
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda _: {
+        "status": "downloading", "parameters": {"output_dir": "/out", "wanted": ["S01E01"]}})
+    assert sync.recover_submission(submission, child) == jobs.AttemptObservation("downloading", attempt_id="live-1")
+
+
+def test_recover_submission_returns_unreachable_for_ambiguous_sibling(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    now = datetime.now(timezone.utc)
+    store = sync.job_store()
+    req = jobs.DirectDownloadRequest("RTLP", "show", (
+        jobs.DirectItemRequest("a", "S01E01", "Ep 1"),
+        jobs.DirectItemRequest("b", "S01E02", "Ep 2"),
+    ))
+    batch = store.admit(req.to_normalized_request(tmp_path)).job_id
+    shared_submission = jobs.Submission("", "RTLP", "show", "/out", ("S01E01",), now)
+    store.set_child_submission(batch, "a", shared_submission)
+    job = store.set_child_submission(batch, "b", shared_submission)
+    monkeypatch.setattr(sync.UNSHACKLE, "jobs", lambda: [
+        {"service": "RTLP", "title_id": "show", "created_time": now.isoformat(), "job_id": "shared-att"}])
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda _: {
+        "status": "downloading", "parameters": {"output_dir": "/out", "wanted": ["S01E01"]}})
+    assert sync.recover_submission(shared_submission, job.children[0]) == jobs.AttemptObservation("unreachable")
+
+
+def test_direct_retained_attempt_polls_before_output_path_check(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    out = tmp_path / "selected"
+    req = jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),),
+                                     output_dir=str(out))
+    store = sync.job_store()
+    batch = store.admit(req.to_normalized_request(tmp_path)).job_id
+    store.start_child_attempt(batch, "film", "retained-1")
+    outside = tmp_path.parent / f"outside-{tmp_path.name}"
+    outside.mkdir(exist_ok=True)
+    out.symlink_to(outside)
+    polled = []
+    def observe(identifier):
+        polled.append(identifier)
+        return {"status": "failed", "error_message": "manifest error"}
+    monkeypatch.setattr(sync.UNSHACKLE, "job", observe)
+    job = store.get_job(batch)
+    sync.run_direct_child(job, job.children[0])
+    assert polled == ["retained-1"]
+    assert store.get_job(batch).children[0].failure == jobs.FailureClassification("child", "manifest")
+
+
+def test_direct_remote_skips_local_cdm_check(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    out = tmp_path / "relayed"
+    req = jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),),
+                                     options={"--remote": True, "--server": "relay"}, output_dir=str(out))
+    store = sync.job_store()
+    batch = store.admit(req.to_normalized_request(tmp_path)).job_id
+    monkeypatch.setattr(sync, "no_cdm", lambda *args, **kwargs: "Missing local CDM")
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda payload: "remote-1")
+    def observe(_):
+        (out / "film.mkv").touch()
+        return {"status": "completed", "output_files": ["film.mkv"]}
+    monkeypatch.setattr(sync.UNSHACKLE, "job", observe)
+    job = store.get_job(batch)
+    sync.run_direct_child(job, job.children[0])
+    assert store.get_job(batch).state == "completed"
+
+
+def test_direct_display_command_masks_query():
+    from unshacklarr.options import command_line
+    url = "https://example.test/title?api_key=" + "display-private"
+    result = command_line({"service": "RTLP", "title_id": url, "proxy": url})
+    assert "display-private" not in result
+
+
+def test_direct_terminal_release_allows_retry(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    req = jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),))
+    store = sync.job_store()
+    batch = store.admit(req.to_normalized_request(tmp_path)).job_id
+    def paused_then_failed(job, child):
+        sync.pause_job(batch, True)
+        store.fail_child(batch, child.id, jobs.classify_failure())
+    monkeypatch.setattr(sync, "run_direct_child", paused_then_failed)
+    sync.start_direct_worker(batch).join(3)
+    assert store.get_job(batch).state == "failed"
+    assert batch not in sync.paused_jobs
+    store.retry_items(batch, ["film"])
+    monkeypatch.setattr(sync, "run_direct_child", lambda job, child: store.complete_child(job.id, child.id))
+    sync.start_direct_worker(batch).join(3)
+    assert store.get_job(batch).state == "completed"
+
+
+def test_direct_attempt_does_not_hold_audio_cleanup(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    sync = load(tmp_path, monkeypatch)
+    store = sync.job_store()
+    req = jobs.DirectDownloadRequest("RTLP", "movie", (jobs.DirectItemRequest("film", None, "Film"),))
+    batch = store.admit(req.to_normalized_request(tmp_path)).job_id
+    store.start_child_attempt(batch, "film", "direct-attempt")
+    assert sync.retained_audio_folders() == (set(), False)
+
+
+@pytest.mark.parametrize("restart", [True, False], ids=["crash-between-children", "resume-after-pause"])
+def test_direct_remaining_child_waits_for_slot(tmp_path, monkeypatch, restart):
+    from types import SimpleNamespace
+    from unshacklarr import jobs, web
+    sync = load(tmp_path, monkeypatch)
+    store = sync.job_store()
+    req = jobs.DirectDownloadRequest("RTLP", "movie", tuple(
+        jobs.DirectItemRequest(str(i), f"S1E{i}", "Selection") for i in (1, 2)))
+    batch = store.admit(req.to_normalized_request(tmp_path)).job_id
+    store.start_child_attempt(batch, "1", "first")
+    store.complete_child(batch, "1")
+    if not restart:
+        asyncio.run(web.pause_job(SimpleNamespace(match_info={"batch": batch, "action": "pause"})))
+    submitted = []
+    waiting = threading.Event()
+    original_say = sync.EpisodeRun.say
+    def say(run, message):
+        original_say(run, message)
+        if "Waiting:" in message:
+            waiting.set()
+    monkeypatch.setattr(sync.EpisodeRun, "say", say)
+    monkeypatch.setitem(sync.SETTINGS, "downloads_at_once", 1)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    monkeypatch.setattr(sync.UNSHACKLE, "download", lambda payload: submitted.append(payload["wanted"]) or "second")
+    (tmp_path / "episode.mkv").touch()
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda _: {"status": "completed", "output_files": ["episode.mkv"]})
+    with sync.download_slot(""):
+        if restart:
+            assert web.resume_queue() == 1
+        else:
+            asyncio.run(web.pause_job(SimpleNamespace(match_info={"batch": batch, "action": "resume"})))
+        assert waiting.wait(4)
+        assert submitted == []
+    web.sync_threads[-1].join(4)
+    assert submitted == [["S01E02"]]
+    assert [c.attempt_history for c in store.get_job(batch).children] == [("first",), ("second",)]
+    assert store.get_job(batch).state == "completed"

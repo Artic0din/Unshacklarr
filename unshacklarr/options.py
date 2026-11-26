@@ -8,7 +8,7 @@ in unshackle/core/api/handlers.py). A service's own options come from /api/servi
 import re
 import shlex
 
-from .files import CREDENTIALS
+from .files import CREDENTIALS, display_argument
 
 # (name, kind, help, choices). Left out: what DownStream sets itself (wanted, output_dir)
 # or what makes no sense unattended (skip_dl, export, latest_episode).
@@ -180,7 +180,7 @@ def to_params(options: dict, specs: list[dict]) -> dict:
     return params
 
 
-HIDDEN = CREDENTIALS  # a proxy's user:password, masked as in every message
+HIDDEN = CREDENTIALS
 
 
 def command_line(request: dict) -> str:
@@ -194,8 +194,9 @@ def command_line(request: dict) -> str:
         if isinstance(value, bool):
             return [flag_of(name)] if value else []
         value = ",".join(map(str, value)) if isinstance(value, list) else str(value)
-        return [flag_of(name), HIDDEN.sub("//***@", value)]
+        return [flag_of(name), display_argument(value)]
 
     own = [a for k, v in (request.get("service_params") or {}).items() for a in args(k, v)]
     return shlex.join(["unshackle", "dl", *[a for k, v in request.items() if k in dl_names for a in args(k, v)],
-                       request["service"], *own, str(request["title_id"]), "-w", ",".join(request["wanted"])])
+                       request["service"], *own, display_argument(str(request["title_id"])),
+                       *[arg for selector in request.get("wanted") or [] for arg in ("-w", selector)]])

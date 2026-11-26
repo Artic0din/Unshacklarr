@@ -29,6 +29,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Added
 
+- Added direct film and episode downloads without Sonarr. Selected files stay in the requested downloads folder. (#417)
 - Added separate Widevine and PlayReady devices and a preferred DRM setting for default and per-service CDM routes. (#414)
 - Added the shared DevKit pull request check, which rejects non-conventional titles and commit messages, agent attribution and forbidden paths such as `node_modules`.
 - Added six Australian series to the matching corpus, one each on 9Now, 7plus, ABC iview, SBS On Demand, Stan and

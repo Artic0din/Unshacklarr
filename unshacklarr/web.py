@@ -9,6 +9,7 @@ import asyncio
 import base64
 import collections
 import copy
+import dataclasses
 import difflib
 import functools
 import hashlib
@@ -17,7 +18,6 @@ import itertools
 import ipaddress
 import json
 import math
-import ntpath
 import os
 import posixpath
 import re
@@ -31,7 +31,7 @@ import unicodedata
 import weakref
 import zlib
 import zoneinfo
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import suppress
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
@@ -42,7 +42,7 @@ import requests
 import yaml
 from aiohttp import web
 
-from unshacklarr import __version__, cdm, cookies, i18n, jobs, offsite, options, servicecheck
+from unshacklarr import __version__, cdm, cookies, files, i18n, jobs, offsite, options, servicecheck
 from unshacklarr.files import CREDENTIALS, PRIVATE, no_credentials, read_json, write_atomic
 from unshacklarr import sync as sonarr_sync  # the schedule shows the very downloads the sync will ask for
 from unshacklarr.backend import UnshackleError
@@ -1102,7 +1102,7 @@ def series_health(cards: list[dict]) -> dict[int, dict]:
     health: dict[int, dict] = {}
     by_series: dict[int, list[dict]] = {}
     for c in cards:  # newest first
-        if c.get("ended") and c.get("outcome") in ("downloaded", "failed", "kept", "import") and not c.get("instance"):  # the main Sonarr's
+        if c.get("tvdbId") is not None and c.get("ended") and c.get("outcome") in ("downloaded", "failed", "kept", "import") and not c.get("instance"):
             by_series.setdefault(c["tvdbId"], []).append(c)
     for tvdb, runs in by_series.items():
         streak = 0
@@ -1561,9 +1561,10 @@ def check_ladder_name(name, ladders: list[dict], where: str) -> str:
 
 
 def check_full_path(folder: str) -> None:
-    """A folder given from the root (or a drive letter), without ..; an empty one is not set."""
-    if folder and (not (posixpath.isabs(folder) or ntpath.isabs(folder)) or ".." in re.split(r"[\\/]", folder)):
-        raise web.HTTPBadRequest(text=f"{folder} must be a full path, from / (or a drive letter), without ..")
+    try:
+        files.check_full_path(folder)
+    except ValueError as error:
+        raise web.HTTPBadRequest(text=str(error)) from error
 
 
 def check_backends(given, saved) -> list[dict]:
@@ -3908,6 +3909,7 @@ async def stop_job(request):
              if card.get("batch") == batch and card["outcome"] == "running" and not card.get("waiting")]
     stoppable = [card for card in cards if not card.get("job_id") or card.get("step") in ("queued", "downloading")]
     active_items = {jobs.episode_item(card.get("instance"), card["episodeId"]).id for card in stoppable if card.get("episodeId")}
+    active_items.update(c["childId"] for c in stoppable if c.get("childId"))
     for c in cards:
         if c.get("job_id"):
             active_attempts.add(c["job_id"])
@@ -3917,6 +3919,8 @@ async def stop_job(request):
                 await asyncio.to_thread(cancel_stop_attempt, c.get("backend"), c["job_id"])
             except web.HTTPBadGateway as error:
                 failed_attempts[c["job_id"]] = error
+                if c.get("childId"):
+                    failed_items.add(c["childId"])
                 if c.get("episodeId"):
                     failed_items.add(jobs.episode_item(c.get("instance"), c["episodeId"]).id)
             else:
@@ -3983,25 +3987,24 @@ def stop_durable_children(batch: str, active_items: set[str], active_attempts: s
             finish_stopped_child(store, record, child, stopped=True)
             cancelled += 1
         elif submission := child.submission:
-            observed = sonarr_sync.recover_submission(submission)
+            observed = sonarr_sync.recover_submission(submission, child)
             if observed.status == "unreachable":
                 raise web.HTTPBadGateway(text=STOP_UNCONFIRMED)
-            if (attempt := observed.attempt_id) and observed.status in ("queued", "downloading"):
+            if attempt := observed.attempt_id:
+                try:
+                    store.start_child_attempt(batch, child.id, attempt, backend=submission.backend)
+                except jobs.AttemptConflict as error:
+                    raise web.HTTPBadGateway(text=STOP_UNCONFIRMED) from error
                 if attempt in failed_attempts:
-                    store.start_child_attempt(batch, child.id, attempt, state=observed.status, backend=submission.backend)
                     continue
-                if attempt not in active_attempts:
-                    try:
-                        cancel_stop_attempt(submission.backend, attempt)
-                    except web.HTTPBadGateway:
-                        store.start_child_attempt(batch, child.id, attempt, state=observed.status, backend=submission.backend)
-                        raise
+                if observed.status in ("queued", "downloading") and attempt not in active_attempts:
+                    cancel_stop_attempt(submission.backend, attempt)
                     cancelled += 1
-            if child.request.id in failed_items:
+            if child.request.id in failed_items or child.id in failed_items:
                 continue
             finish_stopped_child(store, record, child, stopped=True)
         else:
-            finish_stopped_child(store, record, child, stopped=child.request.id in active_items)
+            finish_stopped_child(store, record, child, stopped=child.request.id in active_items or child.id in active_items)
     return cancelled
 
 
@@ -4060,6 +4063,10 @@ async def job_options(request):
 
     store = await asyncio.to_thread(sonarr_sync.job_store)
     job = await asyncio.to_thread(store.get_job, batch)
+    if job and job.request.direct:
+        if request.method == "GET":
+            return web.json_response({**shown(job.request.runtime_options()), "base": {}})
+        raise web.HTTPConflict(text="Direct download options were set at admission")
     stored = job.request.runtime_options().get("options") if job else None
     if request.method == "GET":  # with the options its episodes have without them, for the dialog to start from
         return web.json_response({**shown(stored if job else sonarr_sync.job_options.get(batch)), "base": shown(await asyncio.to_thread(job_base_options, batch))})
@@ -4109,7 +4116,7 @@ async def pause_job(request):
             current = sonarr_sync.job_store().get_job(batch)
             if (current is not None and current.state in jobs.ACTIVE_JOB_STATES
                     and not _batch_has_worker_or_reservation(batch)
-                    and _durable_record_groups(current, None, set())[0]):
+                    and (current.request.direct or _durable_record_groups(current, None, set())[0])):
                 with sonarr_sync.jobs_lock:
                     if not _batch_has_worker_or_reservation(batch):
                         if not sonarr_sync.reserve_start(batch, ASKED_AT_ONCE):
@@ -4120,7 +4127,7 @@ async def pause_job(request):
                 updated = sonarr_sync.job_store().get_job(batch)
                 if (updated is not None and updated.state in ("waiting", "running")
                         and not _batch_has_worker_or_reservation(batch, allow_reserved=batch if reserved else None)
-                        and _durable_record_groups(updated, None, set())[0]):
+                        and (updated.request.direct or _durable_record_groups(updated, None, set())[0])):
                     handoff = reserved
                     launch_durable_records((updated,), mark_paused=False, reserved_batch=batch if reserved else None)
         finally:
@@ -4352,7 +4359,7 @@ def latest_runs() -> dict[tuple[int, str], str]:
     """Each episode's latest download attempt, (tvdbId, "S01E02") -> its id: the Schedule's way to it in Activity."""
     latest: dict[tuple[int, str], str] = {}
     for card in run_cards() if sonarr_sync.RUNS_DIR.exists() else []:  # newest first
-        if not card.get("waiting"):  # a stub waiting its turn has no detail yet
+        if not card.get("waiting") and card.get("tvdbId") is not None:
             latest.setdefault((card["tvdbId"], card["sxxeyy"]), card["id"])
     return latest
 
@@ -6094,6 +6101,17 @@ def admit_download(store: jobs.JobStore, request: jobs.NormalizedJobRequest, can
                        before_write=refuse_new_job if refusal is not None else None)
 
 
+def start_admitted_direct_download(result: jobs.Added) -> None:
+    try:
+        thread = sonarr_sync.start_direct_worker(result.job_id)
+        if thread is not None:
+            with sonarr_sync.capacity_lock:
+                sync_threads[:] = [t for t in sync_threads if t.is_alive()]
+                sync_threads.append(thread)
+    finally:
+        sonarr_sync.release_reserved_start(result.job_id)
+
+
 def start_admitted_download(result: jobs.Added, ids: list[int], **options) -> None:
     thread = None
     try:
@@ -6110,6 +6128,7 @@ def start_admitted_download(result: jobs.Added, ids: list[int], **options) -> No
 
 async def request_admission(store: jobs.JobStore, normalized: jobs.NormalizedJobRequest, batch: str,
                             ids: list[int], *, check_new_job: Callable[[], None], **options) -> jobs.AdmissionResult:
+    launch = start_admitted_direct_download if normalized.direct else functools.partial(start_admitted_download, ids=ids, **options)
     started_at = datetime.now(timezone.utc)
     candidate = batch or jobs.generate_job_id(started_at)
     cancelled = threading.Event()
@@ -6127,10 +6146,10 @@ async def request_admission(store: jobs.JobStore, normalized: jobs.NormalizedJob
         cancelled.set()
         result = await asyncio.to_thread(store.reconcile_admission, normalized, job_id=candidate, not_before=started_at)
         if isinstance(result, jobs.Added):
-            await asyncio.to_thread(start_admitted_download, result, ids, **options)
+            await asyncio.to_thread(launch, result)
         raise
     if isinstance(result, jobs.Added):
-        await asyncio.to_thread(start_admitted_download, result, ids, **options)
+        await asyncio.to_thread(launch, result)
     return result
 
 
@@ -6308,8 +6327,163 @@ async def download(request):
                                  headers={"X-Admission-Outcome": "refused", "X-Admission-Code": "upstream_unavailable"}) from error
 
 
+DIRECT_FIELDS = {"service", "titleId", "items", "options", "serviceOptions", "outputDir"}
+DIRECT_KEYS = DIRECT_FIELDS | {"title_id", "service_options", "output_dir", "itemIds", "item_ids"}
+SONARR_KEYS = {"episodeIds", "tvdbId", "episodes", "sonarr", "numbering", "replace"}
+RESERVED_FLAGS = {"--wanted", "-w", "--output", "--output-dir", "-o", "--help", "-h", "--version"}
+
+
+def direct_options(raw: object, specs: list[dict]) -> dict[str, object]:
+    if not isinstance(raw, dict):
+        raise web.HTTPBadRequest(text="Expected an options object")
+    known = {flag: spec for spec in specs for flag in (spec["flag"], spec.get("short")) if flag}
+    result: dict[str, object] = {}
+    for flag, value in raw.items():
+        spec = known.get(flag)
+        if not spec or RESERVED_FLAGS.intersection((flag, spec["flag"], spec.get("short"))):
+            raise web.HTTPBadRequest(text="Unsupported download option")
+        kind = spec["kind"]
+        match kind:
+            case "flag":
+                valid = isinstance(value, bool)
+            case "int":
+                valid = type(value) is int
+            case "number":
+                valid = type(value) is int or isinstance(value, float) and math.isfinite(value)
+            case "list" | "int_list":
+                valid = isinstance(value, list) and bool(value) and all(
+                    type(v) is int if kind == "int_list" else isinstance(v, str) and v.isprintable() and bool(v.strip()) for v in value
+                )
+            case _:
+                valid = isinstance(value, str) and value.isprintable() and bool(value.strip())
+        choices = spec.get("choices")
+        if not valid or (choices and any(str(v) not in choices for v in (value if isinstance(value, list) else [value]))):
+            raise web.HTTPBadRequest(text=f"Invalid value for {flag}")
+        canonical = options.flag_of(spec["name"]) if "name" in spec else spec["flag"]
+        if canonical in result or canonical in RESERVED_FLAGS:
+            raise web.HTTPBadRequest(text="Duplicate or reserved download option")
+        result[canonical] = value
+    return result
+
+
+def direct_request(body: dict) -> jobs.NormalizedJobRequest:
+    if body.keys() - DIRECT_FIELDS:
+        raise web.HTTPBadRequest(text="Unknown direct request field")
+    service, title, raw = body.get("service"), body.get("titleId"), body.get("items")
+    if not isinstance(service, str) or not isinstance(title, str) or not isinstance(raw, list):
+        raise web.HTTPBadRequest(text="Expected service, titleId and items")
+    items = []
+    for item in raw:
+        if not isinstance(item, dict) or item.keys() - {"id", "selector", "label"}:
+            raise web.HTTPBadRequest(text="Invalid direct item")
+        identifier, selector, label = item.get("id"), item.get("selector"), item.get("label")
+        if not isinstance(identifier, str) or not isinstance(label, str) or not (selector is None or isinstance(selector, str)):
+            raise web.HTTPBadRequest(text="Invalid direct item")
+        items.append(jobs.DirectItemRequest(identifier, selector, label))
+    try:
+        selected = jobs.DirectDownloadRequest(service, title, tuple(items), output_dir=body.get("outputDir"))
+        normalized = selected.to_normalized_request(sonarr_sync.DOWNLOADS)
+    except jobs.DirectRequestValidationError as error:
+        raise web.HTTPBadRequest(text=str(error)) from error
+    dl = direct_options(body.get("options", {}), options.dl_specs())
+    if "--server" in dl and dl.get("--remote") is not True:
+        raise web.HTTPBadRequest(text="--server requires --remote")
+    backend = sonarr_sync.backend_for(service.strip())
+    if dl.get("--remote") is True:
+        try:
+            target = backend.relayed({"remote": True, **({"server": dl["--server"]} if "--server" in dl else {})})["remote"]
+        except UnshackleError as error:
+            if not str(error).startswith("--remote needs "):
+                raise
+            raise web.HTTPBadRequest(text=str(error)) from error
+        names = backend.config().get("remote_services")
+        configured = names if isinstance(names, list) else []
+        if target not in configured:
+            raise web.HTTPBadRequest(text="Unknown remote server")
+        server = next((s for s in backend.remote_services() if s.get("name") == target), None)
+        if server is None:
+            raise UnshackleError(f"Remote server {target} could not be reached")
+        dl = {**dl, "--server": target}
+        catalog = server.get("services") or []
+    else:
+        catalog = backend.services()
+    matched = next((s for s in catalog if s.get("tag") == normalized.service), None)
+    if matched is None:
+        raise web.HTTPBadRequest(text="Unknown service")
+    return dataclasses.replace(normalized, effective_options={
+        **normalized.effective_options, "options": dl,
+        "service_options": direct_options(body.get("serviceOptions", {}), options.service_specs(matched)),
+    })
+
+
+def check_direct_job(request: jobs.NormalizedJobRequest) -> None:
+    dl = request.effective_options["options"]
+    if request.service and isinstance(dl, Mapping) and "--cdm" not in dl and dl.get("--remote") is not True:
+        if why := sonarr_sync.no_cdm(request.service):
+            raise web.HTTPBadRequest(text=why)
+    if why := still_on_serve([], direct=request):
+        raise web.HTTPConflict(text=why)
+
+
+def direct_retry(body: dict) -> jobs.Added | jobs.AlreadyQueued:
+    batch = body.get("batch")
+    if body.keys() - {"batch", "retry", "itemIds"} or not isinstance(batch, str) or not BATCH_ID.fullmatch(batch):
+        raise web.HTTPBadRequest(text="Invalid direct retry")
+    store = sonarr_sync.job_store()
+    record = store.get_job(batch)
+    if not record or not record.request.direct:
+        raise web.HTTPBadRequest(text=UNKNOWN_JOB)
+    ids = body.get("itemIds")
+    if "itemIds" in body and (not isinstance(ids, list) or not ids or not all(isinstance(i, str) for i in ids)
+                              or len(set(ids)) != len(ids)):
+        raise web.HTTPBadRequest(text="Invalid itemIds")
+    if ids is None:
+        children = [c for c in record.children if c.state in ("failed", "stopped")]
+    else:
+        children = [child for identifier in ids if (child := record.find_child(identifier)) is not None]
+        if len({c.id for c in children}) != len(ids):
+            raise web.HTTPBadRequest(text="Invalid itemIds")
+    if not children:
+        raise web.HTTPBadRequest(text="No matching items to retry")
+    normalized = dataclasses.replace(record.request, items=tuple(c.request for c in children))
+    if jobs.activity_retry_duplicate(record, normalized):
+        return jobs.AlreadyQueued(batch)
+    check_direct_job(normalized)
+    staged = stage_activity_retry(store, batch, normalized)
+    if isinstance(staged, jobs.AlreadyQueued):
+        return staged
+    reserved, before, updated = staged
+    added = jobs.Added(batch)
+    try:
+        start_admitted_direct_download(added)
+    except Exception:
+        rollback_activity_retry(store, before, updated, {i.id for i in normalized.items})
+        raise
+    finally:
+        if reserved:
+            sonarr_sync.release_reserved_start(batch)
+    return added
+
+
+async def direct_download(body: dict) -> web.Response:
+    if body.get("retry") is True:
+        result = await asyncio.to_thread(direct_retry, body)
+    else:
+        normalized = await asyncio.to_thread(direct_request, body)
+        store = await asyncio.to_thread(sonarr_sync.job_store)
+        await asyncio.to_thread(sonarr_sync.ensure_durable_store_migrated, store)
+        result = await request_admission(store, normalized, "", [], check_new_job=functools.partial(check_direct_job, normalized))
+    if isinstance(result, jobs.Refused):
+        raise admission_refusal(result)
+    return web.json_response({"running": True, "outcome": result.outcome, "job_id": result.job_id})
+
+
 async def _download(request):
     body = await json_object(request)
+    if DIRECT_KEYS.intersection(body) and SONARR_KEYS.intersection(body):
+        raise web.HTTPBadRequest(text="Choose a direct or a Sonarr download")
+    if DIRECT_KEYS.intersection(body) or ("episodeIds" not in body and body.get("retry") is True):
+        return await direct_download(body)
     ids = body.get("episodeIds")
     if not isinstance(ids, list) or not ids or not all(type(i) is int and i > 0 for i in ids):
         raise web.HTTPBadRequest(text="Pick at least one episode")
@@ -6330,6 +6504,11 @@ async def _download(request):
     sonarr_name = body.get("sonarr", "")
     if not isinstance(sonarr_name, str):
         raise web.HTTPBadRequest(text="Choose a Sonarr instance by name")
+    store = await asyncio.to_thread(sonarr_sync.job_store)
+    await asyncio.to_thread(sonarr_sync.ensure_durable_store_migrated, store)
+    previous = await asyncio.to_thread(store.get_job, batch) if batch else None
+    if previous and previous.request.direct:
+        raise web.HTTPBadRequest(text="Use itemIds to retry a direct download")
     inst = sonarr_named(sonarr_name)
 
     def check_new_job() -> None:
@@ -6346,9 +6525,6 @@ async def _download(request):
     audio = await asyncio.to_thread(retried_audio, ids, batch, sonarr_name) if retry else ""
     kind = "retry" if retry else "manual"
     normalized = download_request(ids, sonarr_name, kind, replace, numbering, **({"audio": audio} if audio else {}))
-    store = await asyncio.to_thread(sonarr_sync.job_store)
-    await asyncio.to_thread(sonarr_sync.ensure_durable_store_migrated, store)
-    previous = await asyncio.to_thread(store.get_job, batch) if batch else None
     if retry and previous:
         if jobs.activity_retry_duplicate(previous, normalized):
             return web.json_response({"running": True, "outcome": "already_queued", "job_id": batch})
@@ -7051,7 +7227,7 @@ async def missing(request):
     return web.json_response({"items": items})
 
 
-RUN_ID = re.compile(r"\d{8}-\d{6}-\d{6}-\d+-S\d+E\d+")
+RUN_ID = re.compile(r"\d{8}-\d{6}-\d{6}-(?:\d+-S\d+E\d+|direct-[a-f0-9]{32})")
 # What a diagnostic never shows: a URL's query (tokens, license contexts), long keys and hashes, e-mail addresses
 # the query optional: each URL then matches once, where requiring it made every https:// of a long run of URLs
 # without one scan to the run's end and fail
@@ -7154,7 +7330,7 @@ def diagnostic(run_id: str) -> str:
     # no host of the user's anywhere: the settings' addresses and the proxies the attempt went through
     setup = card.get("setup") or {}
     private_hosts = hosts_in(sonarr_sync.load_settings(read_config())) | proxy_hosts(config) | hosts_in([card.get("proxy"), setup.get("proxy")]) \
-        | hosts_in(re.findall(r"--proxy(?:-download)? (\S+)", str(setup.get("command") or "")))
+        | hosts_in(re.findall(r"--proxy(?:-download)? (\S+)", f"{setup.get('command') or ''} {card.get('command') or ''}"))
     via = str((card.get("setup") or {}).get("via") or "")
     if via and via != "this computer" and not via.startswith("remote server"):  # another serve's host: its name only
         card = {**card, "setup": {**card["setup"], "via": via.split(" (")[0] if " (" in via else "another computer"}}
@@ -7202,27 +7378,39 @@ def cards_on_disk() -> list[dict]:
     return cards_read[1]
 
 
-def still_on_serve(ids: list[int], instance: str = "") -> str | None:
-    """Why these episodes can't download now: an earlier attempt's job that serve never confirmed stopped (it didn't
-    answer the cancel) may still run there, or have finished unseen; a second download would land in the same folder.
-    By mj23au, #10."""
-    latest: dict[int, dict] = {}
-    for c in cards_on_disk() if sonarr_sync.RUNS_DIR.exists() else []:  # newest first: each episode's last attempt
-        if c.get("episodeId") in ids and c.get("instance", "") == instance:
+def still_on_serve(ids: list[int], instance: str = "", *, direct: jobs.NormalizedJobRequest | None = None) -> str | None:
+    """An unconfirmed cancellation can leave an earlier download running or completed in the same folder."""
+    latest: dict[int | str | None, dict] = {}
+    targets = {i.selector for i in direct.items} if direct else set()
+    title_prefix = direct.items[0].id.rsplit(":", 1)[0] + ":" if direct else ""
+    for c in cards_on_disk() if sonarr_sync.RUNS_DIR.exists() else []:  # newest first: keep the latest attempt per item
+        if direct and (c.get("childId") or "").startswith(f"{c.get('batch')}:{title_prefix}"):
+            selector = c.get("selector")
+            if selector is not None:
+                try:
+                    selector = jobs.direct_selector(selector)
+                except (jobs.DirectRequestValidationError, TypeError):
+                    continue
+            if selector in targets:
+                latest.setdefault(selector, c)
+        elif c.get("episodeId") in ids and c.get("instance", "") == instance:
             latest.setdefault(c["episodeId"], c)
     for c in latest.values():
         if not (u := c.get("unconfirmed_job")):
             continue
+        label = c.get("sxxeyy") or c.get("series") or "title"
         try:
             status = sonarr_sync.backend_named(u.get("backend") or None).job(u["job_id"]).get("status")
         except UnshackleError as e:
             if e.status != 404:  # unreachable, busy (429) or any other refusal says nothing of it, as in unconfirmed_still_on
-                return f"Unshackle doesn't answer yet: the last try of {c['sxxeyy']} may still be downloading there"
+                return f"Unshackle doesn't answer yet: the last try of {label} may still be downloading there"
             continue  # serve answered 404 (no such job): nothing of it can still be running (by mj23au, #10)
         if status in ("queued", "downloading"):
-            return f"{c['sxxeyy']} is still downloading from its last try"
+            return f"{label} is still downloading from its last try"
         if status == "completed":
-            return f"{c['sxxeyy']} finished after all: import it from Activity, Waiting in downloads"
+            if direct:
+                return "The previous download completed. Check the output folder."
+            return f"{label} finished after all: import it from Activity, Waiting in downloads"
     return None
 
 
@@ -8416,6 +8604,10 @@ def launch_durable_records(records: Sequence[jobs.DownstreamJob], *, mark_paused
             if mark_paused and (record.state == "paused" or sonarr_sync.pause_all_active):
                 sonarr_sync.paused_jobs.add(record.id)
             if _batch_has_worker_or_reservation(record.id, allow_reserved=reserved_batch):
+                continue
+            if record.request.direct:
+                start_admitted_direct_download(jobs.Added(record.id))
+                count += sum(c.state in jobs.ACTIVE_CHILD_STATES for c in record.children)
                 continue
             effective = record.request.runtime_options()
             if isinstance(override := effective.get("options"), dict):
