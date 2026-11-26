@@ -443,6 +443,7 @@
  "Bypass proxy for all downloads. Manifest, license, and auth still use proxy.": [],
  "Bypass title cache for this download.": [],
  "CDM": [],
+ "CDM slots and preferred DRM must be text or null": [],
  "CDM version": [],
  "CDM {0} {1}": [
   "d['name']",
@@ -477,7 +478,7 @@
  "Change default device": [],
  "Change several series": [],
  "Change the device {0} uses": [
-  "svcName(svc)"
+  "role"
  ],
  "Change the numbering and file names for this download only": [],
  "Change the password": [],
@@ -559,11 +560,18 @@
  "Choose a quality ladder for {0}: a ladder, Off, or Same as each series": [
   "name"
  ],
+ "Choose a slot, a preferred DRM, or No CDM": [],
+ "Choose a valid service": [],
+ "Choose a {0} device for the {1} slot": [
+  "label",
+  "label"
+ ],
  "Choose one: nothing is downloaded for this Sonarr until you do.": [],
  "Choose to add the audio or to download the whole episode": [],
  "Choose whether to download the episode again or to add the audio track to the existing file": [],
  "Choose…": [],
  "Chrome": [],
+ "ChromeCDM": [],
  "Clear": [],
  "Clear all downloads": [],
  "Clear cache": [],
@@ -575,6 +583,7 @@
  "Clear finished": [],
  "Clear one service's cache": [],
  "Clear search": [],
+ "Clear slot": [],
  "Clear the history": [],
  "Clear the search or pick another filter.": [],
  "Clear title cache before fetching.": [],
@@ -791,6 +800,7 @@
  "Delivered: look for it, then Add.": [],
  "Details copied": [],
  "Deutsch": [],
+ "Device Type": [],
  "Device certificate": [],
  "Device for {0}": [],
  "Device name": [],
@@ -1482,12 +1492,14 @@
  "Next week": [],
  "Nextcloud, Synology, QNAP, kDrive, pCloud… The folder must already exist.": [],
  "No CDM": [],
+ "No CDM cannot be combined with a device": [],
  "No CDM folder": [],
  "No CDM for this service": [],
  "No CDM for {0}": [],
  "No CDM for {0}: unshackle.yaml sets no device for it and no default device. Pick one in Settings › Services & Devices › Devices (CDM), or No CDM if it has no DRM": [
   "tag"
  ],
+ "No CDM must be true or false": [],
  "No DRM, nothing to decrypt": [],
  "No Sonarr named {0} in Settings › Connections › Sonarr": [
   "name"
@@ -1514,6 +1526,7 @@
   "typed"
  ],
  "No device matches.": [],
+ "No device selected": [],
  "No device under {0} matches “{1}”.": [
   "label",
   "typed"
@@ -1901,6 +1914,8 @@
  "Polish": [],
  "Portuguese": [],
  "Português (Brasil)": [],
+ "Preferred DRM": [],
+ "Preferred DRM must have a device in its slot": [],
  "Previous month": [],
  "Previous week": [],
  "Prime Video": [],
@@ -1942,6 +1957,7 @@
  "Reached: {0}": [
   "COUNT.service(services)"
  ],
+ "Read-only": [],
  "Reading Unshackle's CDMs…": [],
  "Reading the history…": [],
  "Reading the notifications…": [],
@@ -2224,7 +2240,7 @@
  "Set both a start and an end time, or neither.": [],
  "Set both the service and the series URL, or neither.": [],
  "Set by a rule by profile, quality or DRM ({0}): edit it in unshackle.yaml": [
-  "v.rule.join(\", \")"
+  "(route.devices || []).join(\", \")"
  ],
  "Set by the ladder: {0}": [
   "clash.join(\", \")"
@@ -3040,6 +3056,7 @@
  "Upgrades you choose": [],
  "Use a remote unshackle server from remote_services in unshackle.yaml for the service's own calls and its licences; the files still download here. Set it for one service in Per service.": [],
  "Use an https:// address: over http://, the WebDAV password would cross the network unencrypted": [],
+ "Use default": [],
  "Use exact language matching (no variants). With this flag, -l es-419 matches ONLY es-419, not es-ES or other variants.": [],
  "Use it": [],
  "Use its own schedule": [],
@@ -3433,6 +3450,7 @@
  "pause": [],
  "per server": [],
  "pick the day of its first episode": [],
+ "playready": [],
  "portuguese (brazil)": [],
  "prd": [],
  "property": [],
@@ -3523,6 +3541,8 @@
  "sx-state {0}": [
   "cls"
  ],
+ "tag:yaml.org,2002:merge": [],
+ "tag:yaml.org,2002:null": [],
  "tested {0}": [
   "ago(t.at)"
  ],
@@ -3614,13 +3634,14 @@
  "unshackle.yaml": [],
  "unshackle.yaml (tag:)": [],
  "unshackle.yaml changed since you opened it (Settings › Services & Devices › Devices (CDM) writes to it too): open it again": [],
+ "unshackle.yaml has a syntax error: fix it in Settings or in the file": [],
  "unshackle.yaml has a syntax error{0}: fix it in Settings or in the file": [
   "where"
  ],
  "unshackle.yaml must hold settings (key: value), not a list or a single value": [],
  "unshackle.yaml sets no device for it and no default device: its downloads are refused. Pick one in Settings › Services & Devices › Devices (CDM), or No CDM if it has no DRM.": [],
  "unshackle.yaml sets no device for it, so the default one{0} is used. A download fails if the service needs the other DRM (Widevine or PlayReady). Set one under cdm: in Settings › Connections › Unshackle › Edit unshackle.yaml.": [
-  "cdm.default ? ` (${cdm.default})` : \"\""
+  "deviceLabel"
  ],
  "unshackle.yaml's directories: {0}: {1} is not a folder next to it": [
   "key",
@@ -3641,13 +3662,14 @@
  "upgrade on {0}": [],
  "use the default device": [],
  "use {0}, which is not in the CDM folder": [
-  "name"
+  "deviceName"
  ],
  "uses the default device": [],
  "uses {0}, which is not in the CDM folder": [
-  "name"
+  "deviceName"
  ],
  "was revoked": [],
+ "widevine": [],
  "with subtitles in {0}": [
   "', '.join(fixed['s_lang'])"
  ],
@@ -3786,6 +3808,7 @@
  "{0} deleted": [
   "item.folder"
  ],
+ "{0} device for {1}": [],
  "{0} devices": [
   "n"
  ],
@@ -3973,6 +3996,9 @@
  ],
  "{0} is back in the schedule": [
   "d.series"
+ ],
+ "{0} is in use: give its services another device before changing its DRM": [
+  "was"
  ],
  "{0} is in use: give its services another device before renaming it": [
   "was"
@@ -4223,6 +4249,11 @@
  ],
  "{0} remote": [
   "data.remote.length"
+ ],
+ "{0} resolves to the {1} device of the same name: rename one before using {2}": [
+  "name",
+  "kinds[name]",
+  "label"
  ],
  "{0} selected": [
   "n"

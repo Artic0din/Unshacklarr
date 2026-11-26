@@ -909,10 +909,48 @@ function renderSeason() {
 function cdmMissing(tag) {
   const cdm = S.cdm || {};
   if (!tag || !Object.keys(cdm).length) return "";  // Unshackle unreachable: nothing to say
-  if (Object.keys(cdm).some((k) => k !== "default" && k.toLowerCase() === tag.toLowerCase())) return "";
-  if (!cdm.default) return "unshackle.yaml sets no device for it and no default device: its downloads are refused. "
+  const truthy = (value) => Boolean(value && (typeof value !== "object" || (Array.isArray(value) ? value.length : Object.keys(value).length)));
+  const slotsOf = (entry) => entry && typeof entry === "object" && !Array.isArray(entry)
+    ? Object.fromEntries(Object.entries(entry).map(([key, value]) => [key.toLowerCase(), value])) : null;
+  const hasDrmSlots = (slots) => !!(slots && ("widevine" in slots || "playready" in slots));
+  const isQualityKey = (key) => /^(?:>=|<=|>|<)?\d+$/.test(key);
+  const automaticNames = (entry, slots, allowQuality = true) => {
+    if (typeof entry === "string") return entry.trim() ? [entry.trim()] : [];
+    if (!slots) return [];
+    const qualityNames = allowQuality ? Object.entries(entry)
+      .filter(([key, value]) => isQualityKey(key) && truthy(value))
+      .flatMap(([, value]) => automaticNames(value, slotsOf(value), false)) : [];
+    if (!hasDrmSlots(slots)) return [...qualityNames, ...Object.entries(entry)
+      .filter(([key]) => !(allowQuality && isQualityKey(key)))
+      .flatMap(([, value]) => automaticNames(value, slotsOf(value), false))];
+    const first = Object.keys(slots).find((key) => key === "widevine" || key === "playready");
+    const selected = truthy(slots[first]) ? slots[first] : slots.playready;
+    return [...qualityNames, ...(typeof selected === "string" ? automaticNames(selected, null, false) : [])];
+  };
+  const routes = Object.entries(cdm);
+  const lookup = (name) => Object.prototype.hasOwnProperty.call(cdm, name) ? cdm[name]
+    : routes.find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+  const rawEntry = tag.toLowerCase() !== "default" ? lookup(tag) : undefined;
+  const entry = truthy(rawEntry) ? rawEntry : undefined;
+  const defaultEntry = lookup("default");
+  const hasScalarDefault = typeof defaultEntry === "string" && defaultEntry.trim() && defaultEntry.trim() !== "none";
+  const mapInheritsDefault = (item) => {
+    const itemSlots = slotsOf(item);
+    return !!(hasScalarDefault && itemSlots && truthy(item) && !hasDrmSlots(itemSlots) && !truthy(item.default));
+  };
+  const entrySlots = slotsOf(entry);
+  const qualityRules = entrySlots ? Object.entries(entry).filter(([key, value]) => isQualityKey(key) && truthy(value)) : [];
+  const inheritsDefault = mapInheritsDefault(entry) || qualityRules.some(([, value]) => mapInheritsDefault(value));
+  const hasOverride = entry !== undefined && !inheritsDefault;
+  if (entry === "none" || automaticNames(entry, entrySlots).some((name) => name !== "none")) return "";
+  const fallback = hasOverride ? null : defaultEntry;
+  const slots = slotsOf(fallback);
+  if (slots && [slots.widevine, slots.playready].every((entry) => typeof entry === "string" && entry.trim() && entry.trim() !== "none")) return "";
+  const devices = automaticNames(fallback, slots).filter((name) => name !== "none").join(", ");
+  if (!devices) return "unshackle.yaml sets no device for it and no default device: its downloads are refused. "
     + "Pick one in Settings › Services & Devices › Devices (CDM), or No CDM if it has no DRM.";
-  return `unshackle.yaml sets no device for it, so the default one${cdm.default ? ` (${cdm.default})` : ""} is used. A download fails `
+  const deviceLabel = ` (${devices})`;
+  return `unshackle.yaml sets no device for it, so the default one${deviceLabel} is used. A download fails `
     + "if the service needs the other DRM (Widevine or PlayReady). Set one under cdm: in Settings › Connections › Unshackle › Edit unshackle.yaml.";
 }
 function cdmNote(tag) {

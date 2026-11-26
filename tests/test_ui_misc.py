@@ -1417,3 +1417,542 @@ const run = (data) => {
 console.log(JSON.stringify([run({ version: "1.5.0", build: "" }), run({ version: "1.5.0", build: "feat-shell-abc1234" }), run({ version: "", build: "" })]));
 """, str(JS / "setup.js"))
     assert shown == [["DownStream 1.5.0", False, False], ["DownStream feat-shell · abc1234", True, False], ["", False, True]]
+
+
+def test_series_cdm_warning_understands_empty_and_dual_drm_routes():
+    warnings = node(r"""
+const ctx = sandbox({ S: {} });
+vm.runInContext(grab(read(process.argv[1]), /function cdmMissing\b[\s\S]*?\n}\n/), ctx);
+const warn = (cdm) => { ctx.S.cdm = cdm; return ctx.cdmMissing("NF"); };
+console.log(JSON.stringify({
+  empty: warn({ default: {}, nF: { widevine: "", playready: null } }),
+  both: warn({ DeFaUlT: { Widevine: "w", PLAYREADY: "p" }, NF: {} }),
+  one: warn({ default: { Widevine: "w", PlayReady: "none" }, nF: {} }),
+  names: warn({ default: { mobile: { widevine: "w" }, tv: "p" } }),
+  none: warn({ NF: "none" }),
+  shadowed: warn({ DeFaUlT: { Widevine: "w", PLAYREADY: "p" }, nF: { widevine: "", playready: null } }),
+  noneSlot: warn({ default: "fallback", nF: { widevine: "none", playready: " " } }),
+  inheritedScalars: [null, ""].map((nF) => warn({ default: "fallback", nF })),
+  configured: warn({ default: {}, nF: { profile: { playready: "local" } } }),
+  leadingEmptyPlayReady: ["default", "nF"].map((key) => warn({ [key]: { PlayReady: null, Widevine: "w" } })),
+  leadingEmptyWidevine: ["default", "nF"].map((key) => warn({ [key]: { Widevine: null, PlayReady: "p" } })),
+}));
+""", str(JS / "series.js"))
+    assert warnings["empty"].startswith("unshackle.yaml sets no device for it and no default device")
+    assert warnings["shadowed"] == warnings["noneSlot"] == warnings["empty"]
+    assert warnings["both"] == warnings["none"] == warnings["configured"] == ""
+    assert "default one (w) is used" in warnings["one"]
+    assert "default one (w, p) is used" in warnings["names"]
+    assert all("default one (fallback) is used" in warning for warning in warnings["inheritedScalars"])
+    assert warnings["leadingEmptyPlayReady"] == [warnings["empty"]] * 2
+    assert "default one (p) is used" in warnings["leadingEmptyWidevine"][0]
+    assert warnings["leadingEmptyWidevine"][1] == ""
+
+
+@pytest.mark.parametrize(("mapping", "warning"), [
+    ({"default": "browser", "NF": {"example": None}}, "default one (browser) is used"),
+    ({"default": {}, "NF": {"example": None}}, "its downloads are refused"),
+    ({"nf": {"playready": None, "widevine": "old"}, "NF": "browser"}, ""),
+    ({"DEFAULT": "none", "default": "browser", "NF": {}}, "default one (browser) is used"),
+    ({"default": "browser", "NF": {"playready": None, "widevine": "old", "example": None}}, "its downloads are refused"),
+    pytest.param({"default": "browser", "NF": {"playready": None, "1080": "tv"}}, "", id="quality-device"),
+    pytest.param({"default": "browser", "NF": {"playready": None, "1080": None}}, "its downloads are refused", id="empty-quality"),
+    pytest.param({"default": "browser", "NF": {"playready": None, "1080": {}}},
+                 "its downloads are refused", id="empty-quality-dict"),
+    pytest.param({"default": "browser", "NF": {"playready": None, ">=1080": {}}},
+                 "its downloads are refused", id="empty-threshold-quality-dict"),
+    pytest.param({"default": "browser", "NF": {"default": {}}},
+                 "default one (browser) is used", id="empty-profile-default-dict"),
+    pytest.param({"default": "browser", "NF": {"default": []}},
+                 "default one (browser) is used", id="empty-profile-default-list"),
+    pytest.param({"default": "browser", "NF": {"playready": None, "1080": {"default": {}}}},
+                 "default one (browser) is used", id="empty-quality-profile-default-dict"),
+    pytest.param({"default": "browser", "NF": {"playready": None, "1080": {"default": []}}},
+                 "default one (browser) is used", id="empty-quality-profile-default-list"),
+    pytest.param({"default": "browser", "NF": {"widevine": {}, "playready": "tv"}},
+                 "", id="empty-widevine-dict-falls-through"),
+    pytest.param({"default": "browser", "NF": {"widevine": [], "playready": "tv"}},
+                 "", id="empty-widevine-list-falls-through"),
+    pytest.param({"default": "browser", "NF": {"playready": None, "1080": {"example": None}}},
+                 "default one (browser) is used", id="quality-profile-inherits"),
+    pytest.param({"default": {"widevine": "w", "playready": "p"}, "NF": {"playready": None, "1080": {"example": None}}},
+                 "its downloads are refused", id="quality-profile-with-drm-default"),
+    pytest.param({"default": "browser", "NF": {"playready": None, "1080": {"widevine": None}}},
+                 "its downloads are refused", id="quality-drm-slot-blocks-inheritance"),
+    pytest.param({"default": "browser", "NF": {"1080": {"default": "none"}}},
+                 "default one (browser) is used", id="quality-only-profile-default-none"),
+    pytest.param({"default": "browser", "NF": {"playready": None, "1080": {"default": "none"}}},
+                 "its downloads are refused", id="quality-drm-slot-profile-default-none"),
+    pytest.param({"default": "none"}, "its downloads are refused", id="default-none"),
+    pytest.param({"default": "browser", "NF": []}, "default one (browser) is used", id="empty-list-inherits"),
+    pytest.param({"default": "browser", "NF": ["old"]}, "its downloads are refused", id="list-override"),
+])
+def test_series_cdm_warning_matches_upstream_lookup_and_profile_fallback(mapping, warning):
+    from types import SimpleNamespace
+
+    from unshacklarr.sync import no_cdm
+
+    result = node(r"""
+const ctx = sandbox({ S: { cdm: JSON.parse(process.argv[2]) } });
+vm.runInContext(grab(read(process.argv[1]), /function cdmMissing\b[\s\S]*?\n}\n/), ctx);
+console.log(JSON.stringify(ctx.cdmMissing("NF")));
+""", str(JS / "series.js"), json.dumps(mapping))
+    if warning:
+        assert warning in result
+    else:
+        assert result == ""
+    assert bool(no_cdm("NF", backend=SimpleNamespace(cdm_config=lambda: mapping))) == ("its downloads are refused" in result)
+
+
+@pytest.mark.parametrize("phase", ["before-load", "writable", "read-only", "unseeded", "stale-scalar", "advanced-default"])
+def test_loading_devices_preserves_series_cdm_warnings(tmp_path, phase):
+    import yaml
+
+    from unshacklarr import cdm
+
+    refused = "its downloads are refused"
+    inherited = "default one (browser) is used"
+    broken_rule = {"playready": None, "widevine": "browser", "example": None}
+    raw = {
+        "default": "browser",
+        "BROKEN_ADV": broken_rule,
+        "EMPTY_ADV": {"playready": None, "1080": None},
+        "LIST_ADV": ["old"],
+        "EMPTY_RULE_MAP": {"playready": None, "1080": {"widevine": None}},
+        "QUAL_INHERIT": {"playready": None, "1080": {"example": None}},
+        "EMPTY_LIST": [],
+    }
+    expected = {
+        "BROKEN_ADV": refused, "EMPTY_ADV": refused, "LIST_ADV": refused,
+        "EMPTY_RULE_MAP": refused, "QUAL_INHERIT": inherited, "EMPTY_LIST": inherited,
+    }
+    if phase == "stale-scalar":
+        raw = {tag: raw[tag] for tag in ("default", "EMPTY_ADV")}
+        expected = {"EMPTY_ADV": refused}
+    elif phase == "advanced-default":
+        raw = {"default": broken_rule}
+        expected = {"NF": refused}
+    conf = tmp_path / "unshackle.yaml"
+    config = yaml.safe_dump({"cdm": raw}, sort_keys=False)
+    conf.write_text(config + "---\nbrowse: {}\n" if phase == "read-only" else config, encoding="utf8")
+    state = {"folder": str(tmp_path), "services": [], **cdm.state(conf, tmp_path / "WVDs", tmp_path / "PRDs")}
+    seeded = {"broken_adv" if tag == "BROKEN_ADV" else tag: rule for tag, rule in raw.items()}
+    if phase == "unseeded":
+        seeded = {}
+    elif phase == "stale-scalar":
+        seeded = {"default": "browser", "EMPTY_ADV": "old"}
+    shown = node(r"""
+const src = read(process.argv[1]);
+const { phase, seeded, state, tags } = JSON.parse(process.argv[3]);
+const ctx = sandbox({
+  S: { config: { series: {}, settings: {} }, cdm: seeded },
+  cdmFilter: "all", cdmQuery: "", cdmRunning: new Set(), svcName: String,
+  api: async (path) => {
+    if (path !== "/api/cdm") throw Error(path);
+    return state;
+  },
+});
+vm.runInContext(grab(src, /async function loadCdm\b[\s\S]*?\n}\n/)
+  + grab(src, /function renderCdm\b[\s\S]*?\n}\n/)
+  + grab(read(process.argv[2]), /function cdmMissing\b[\s\S]*?\n}\n/), ctx);
+(async () => {
+  if (phase !== "before-load") await ctx.loadCdm();
+  console.log(JSON.stringify({ warnings: tags.map(ctx.cdmMissing), mapping: ctx.S.cdm }));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"),
+        json.dumps({"phase": phase, "seeded": seeded, "state": state, "tags": list(expected)}))
+    mismatches = {
+        tag: actual for (tag, warning), actual in zip(expected.items(), shown["warnings"], strict=True)
+        if warning not in actual
+    }
+    assert not mismatches
+    if phase in ("writable", "advanced-default"):
+        assert shown["mapping"] == raw
+    if phase == "read-only":
+        assert shown["mapping"] == seeded
+
+
+@pytest.mark.parametrize(("config_doc", "expect_empty"), [
+    ({"tvdb_pin": 3000, "cdm": {"default": "samsung_sl3000"}}, False),
+    ({"cdm": {"default": "browser", "NF": "_local_wvd"}}, True),
+    ({"cdm": {"default": "pixel_7_(l3)"}}, False),
+], ids=["redacted-default", "non-name-service", "non-name-default"])
+@pytest.mark.parametrize("seeded_mode", ["seeded", "unseeded"])
+def test_loading_redacted_or_non_name_cdm_routes_agrees_with_preflight(tmp_path, config_doc, expect_empty, seeded_mode):
+    from types import SimpleNamespace
+    import yaml
+
+    from unshacklarr import cdm
+    from unshacklarr.sync import no_cdm
+
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text(yaml.safe_dump(config_doc, sort_keys=False), encoding="utf8")
+    state = {"folder": str(tmp_path), "services": [], **cdm.state(conf, tmp_path / "WVDs", tmp_path / "PRDs")}
+    raw_cdm = config_doc["cdm"]
+    seeded = dict(raw_cdm) if seeded_mode == "seeded" else {}
+    shown = node(r"""
+const src = read(process.argv[1]);
+const { seeded, state } = JSON.parse(process.argv[3]);
+const ctx = sandbox({
+  S: { config: { series: {}, settings: {} }, cdm: seeded },
+  cdmFilter: "all", cdmQuery: "", cdmRunning: new Set(), svcName: String,
+  cdmTitle: (d) => d.name, cdmStatus: () => ["mut", "Not tested", ""], cdmShort: (d) => d.name,
+  api: async (path) => {
+    if (path !== "/api/cdm") throw Error(path);
+    return state;
+  },
+});
+vm.runInContext(grab(src, /async function loadCdm\b[\s\S]*?\n}\n/)
+  + grab(src, /function renderCdm\b[\s\S]*?\n}\n/)
+  + grab(read(process.argv[2]), /function cdmMissing\b[\s\S]*?\n}\n/), ctx);
+(async () => {
+  await ctx.loadCdm();
+  console.log(JSON.stringify({ warning: ctx.cdmMissing("NF"), mapping: ctx.S.cdm }));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"), json.dumps({"seeded": seeded, "state": state}))
+    preflight = no_cdm("NF", backend=SimpleNamespace(cdm_config=lambda: raw_cdm))
+    assert preflight == ""
+    assert ("its downloads are refused" in shown["warning"]) is bool(preflight)
+    if expect_empty:
+        assert shown["warning"] == ""
+    else:
+        assert "is used" in shown["warning"]
+
+
+@pytest.mark.parametrize(("prev_nf", "disk_cdm", "expect_refused", "expect_replaced_value"), [
+    ("old", {"default": "browser", "NF": {"playready": None, "1080": None}}, True, {"default": "none"}),
+    ({"widevine": "wv1", "playready": None}, {"default": "browser", "NF": {"playready": None, "1080": None}}, True, {"default": "none"}),
+    ({}, {"default": "browser", "NF": {"playready": None, "1080": None}}, True, {"default": "none"}),
+    ([], {"default": "browser", "NF": {"playready": None, "1080": None}}, True, {"default": "none"}),
+    ({"profile": "tv"}, {"default": "browser", "NF": {"playready": None, "1080": None}}, True, {"default": "none"}),
+    ({"playready": None, "1080": None}, {"default": "browser", "NF": {"1080": "tv"}}, False, {"rule": {"0": "tv"}}),
+    ({"widevine": "wv1", "playready": None}, {"default": "browser", "NF": "_local_wvd"}, False, {"rule": "configured"}),
+], ids=[
+    "stale-scalar-to-refused", "stale-drm-to-refused", "stale-empty-dict-to-refused",
+    "stale-empty-list-to-refused", "stale-profile-to-refused", "stale-refused-to-quality",
+    "stale-known-device-to-non-name",
+])
+def test_loading_cdm_replaces_stale_cached_rules_when_disk_changes(
+    tmp_path, prev_nf, disk_cdm, expect_refused, expect_replaced_value,
+):
+    from types import SimpleNamespace
+    import yaml
+
+    from unshacklarr import cdm
+    from unshacklarr.sync import no_cdm
+
+    conf = tmp_path / "unshackle.yaml"
+    wvds, prds = tmp_path / "WVDs", tmp_path / "PRDs"
+    cdm.add(wvds, prds, "wv1.wvd", b"WVD")
+    conf.write_text(yaml.safe_dump({"cdm": disk_cdm}, sort_keys=False), encoding="utf8")
+    state = {"folder": str(tmp_path), "services": [], **cdm.state(conf, wvds, prds)}
+    seeded = {"default": "browser", "NF": prev_nf}
+    shown = node(r"""
+const src = read(process.argv[1]);
+const { seeded, state } = JSON.parse(process.argv[3]);
+const ctx = sandbox({
+  S: { config: { series: {}, settings: {} }, cdm: seeded },
+  cdmFilter: "all", cdmQuery: "", cdmRunning: new Set(), svcName: String,
+  cdmTitle: (d) => d.name, cdmStatus: () => ["mut", "Not tested", ""], cdmShort: (d) => d.name,
+  api: async (path) => {
+    if (path !== "/api/cdm") throw Error(path);
+    return state;
+  },
+});
+vm.runInContext(grab(src, /async function loadCdm\b[\s\S]*?\n}\n/)
+  + grab(src, /function renderCdm\b[\s\S]*?\n}\n/)
+  + grab(read(process.argv[2]), /function cdmMissing\b[\s\S]*?\n}\n/), ctx);
+(async () => {
+  await ctx.loadCdm();
+  console.log(JSON.stringify({ warning: ctx.cdmMissing("NF"), mapping: ctx.S.cdm }));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"), json.dumps({"seeded": seeded, "state": state}))
+    preflight = no_cdm("NF", backend=SimpleNamespace(cdm_config=lambda: disk_cdm))
+    assert bool(preflight) is expect_refused
+    if expect_refused:
+        assert "its downloads are refused" in shown["warning"]
+    else:
+        assert shown["warning"] == ""
+    assert shown["mapping"]["NF"] == expect_replaced_value
+
+
+@pytest.mark.parametrize(("source", "falsy_keys", "expect_refused"), [
+    ("cdm:\n  default: {widevine: old, playready: tv}\n  NF: false\n", ("NF",), False),
+    ("cdm:\n  default: {widevine: old, playready: tv}\n  NF: 0\n", ("NF",), False),
+    ('cdm:\n  default: {widevine: old, playready: tv}\n  NF: &e ""\n  OTHER: *e\n', ("NF", "OTHER"), False),
+    ("cdm:\n  default: {widevine: old, playready: tv}\n  NF: null\n  nf: old\n", ("NF",), False),
+    ("cdm:\n  NF: null\n  nf: old\n", ("NF",), True),
+    ("cdm:\n  default: false\n", ("default",), True),
+    ("cdm:\n  default:\n", ("default",), True),
+    ("cdm:\n  default: ''\n", ("default",), True),
+    ("cdm:\n  default:\n  NF:\n", ("default", "NF"), True),
+], ids=[
+    "false", "zero", "aliased-empty-scalar",
+    "duplicate-case-with-default", "duplicate-case-no-default", "default-false",
+    "blank-default-null", "blank-default-empty", "blank-default-and-service",
+])
+@pytest.mark.parametrize("seeded_mode", ["seeded", "unseeded"])
+def test_loading_falsy_non_container_cdm_routes_agrees_with_preflight(
+    tmp_path, source, falsy_keys, expect_refused, seeded_mode,
+):
+    from types import SimpleNamespace
+    import yaml
+
+    from unshacklarr import cdm
+    from unshacklarr.sync import no_cdm
+
+    conf = tmp_path / "unshackle.yaml"
+    wvds, prds = tmp_path / "WVDs", tmp_path / "PRDs"
+    cdm.add(wvds, prds, "old.wvd", b"WVD")
+    cdm.add(wvds, prds, "tv.prd", b"PRD")
+    conf.write_text(source, encoding="utf8")
+    raw_cdm = yaml.safe_load(source)["cdm"]
+    state = {"folder": str(tmp_path), "services": [], **cdm.state(conf, wvds, prds)}
+    seeded = dict(raw_cdm) if seeded_mode == "seeded" else {}
+    shown = node(r"""
+const src = read(process.argv[1]);
+const { seeded, state } = JSON.parse(process.argv[3]);
+const ctx = sandbox({
+  S: { config: { series: {}, settings: {} }, cdm: seeded },
+  cdmFilter: "all", cdmQuery: "", cdmRunning: new Set(), svcName: String,
+  cdmTitle: (d) => d.name, cdmStatus: () => ["mut", "Not tested", ""], cdmShort: (d) => d.name,
+  api: async (path) => {
+    if (path !== "/api/cdm") throw Error(path);
+    return state;
+  },
+});
+vm.runInContext(grab(src, /async function loadCdm\b[\s\S]*?\n}\n/)
+  + grab(src, /function renderCdm\b[\s\S]*?\n}\n/)
+  + grab(read(process.argv[2]), /function cdmMissing\b[\s\S]*?\n}\n/), ctx);
+(async () => {
+  await ctx.loadCdm();
+  console.log(JSON.stringify({ warning: ctx.cdmMissing("NF"), mapping: ctx.S.cdm }));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"), json.dumps({"seeded": seeded, "state": state}))
+    preflight = no_cdm("NF", backend=SimpleNamespace(cdm_config=lambda: raw_cdm))
+    assert bool(preflight) is expect_refused
+    assert ("its downloads are refused" in shown["warning"]) is bool(preflight)
+    if not expect_refused:
+        assert shown["warning"] == ""
+    for key in falsy_keys:
+        assert shown["mapping"][key] is None
+
+
+def test_loading_cdm_replaces_stale_unicode_device_when_redacted_rule_changes(tmp_path):
+    import yaml
+
+    from unshacklarr import cdm
+
+    conf = tmp_path / "unshackle.yaml"
+    wvds, prds = tmp_path / "WVDs", tmp_path / "PRDs"
+    cdm.add(wvds, prds, "tv_é1.wvd", b"WVD")
+    conf.write_text(
+        yaml.safe_dump({"tvdb_pin": "secret_cdm", "cdm": {"default": "browser", "NF": "secret_cdm"}}, sort_keys=False),
+        encoding="utf8",
+    )
+    state = {"folder": str(tmp_path), "services": [], **cdm.state(conf, wvds, prds)}
+    assert any(device["name"] == "tv_é1" for device in state["devices"])
+    assert state["map"]["NF"] == {"rule": []}
+    seeded = {"default": "browser", "NF": {"widevine": "tv_é1"}}
+    shown = node(r"""
+const src = read(process.argv[1]);
+const { seeded, state } = JSON.parse(process.argv[3]);
+const ctx = sandbox({
+  S: { config: { series: {}, settings: {} }, cdm: seeded },
+  cdmFilter: "all", cdmQuery: "", cdmRunning: new Set(), svcName: String,
+  cdmTitle: (d) => d.name, cdmStatus: () => ["mut", "Not tested", ""], cdmShort: (d) => d.name,
+  api: async (path) => {
+    if (path !== "/api/cdm") throw Error(path);
+    return state;
+  },
+});
+vm.runInContext(grab(src, /async function loadCdm\b[\s\S]*?\n}\n/)
+  + grab(src, /function renderCdm\b[\s\S]*?\n}\n/)
+  + grab(read(process.argv[2]), /function cdmMissing\b[\s\S]*?\n}\n/), ctx);
+(async () => {
+  await ctx.loadCdm();
+  console.log(JSON.stringify({ warning: ctx.cdmMissing("NF"), mapping: ctx.S.cdm }));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"), json.dumps({"seeded": seeded, "state": state}))
+    assert shown["warning"] == ""
+    assert shown["mapping"]["NF"] == {"rule": "configured"}
+
+
+def test_device_picker_repairs_the_series_cdm_warning_in_the_same_session():
+    shown = node(r"""
+const src = read(process.argv[1]);
+let list, drawn;
+const calls = [];
+const ctx = sandbox({
+  S: { config: { series: { netflix: { service: "NF" } }, settings: {} }, cdm: {} },
+  $: (sel) => sel === "#cdm-list" ? { replaceChildren: (...kids) => { drawn = { kids }; } } : any,
+  el: (tag, props, ...kids) => ({ ...el(tag, { value: "", ...props }, ...kids),
+    replaceChildren(...children) { this.kids = children; }, get children() { return this.kids; } }),
+  keepFocus: (_, draw) => draw(), svcName: String, trWith: (s, v) => s.replace("{0}", v),
+  cdmFilter: "all", cdmQuery: "", cdmShowUnused: false, cdmRunning: new Set(),
+  COUNT: { device: String, moreDevice: String, problem: String },
+  cdmPopAt: (_anchor, _title, _q, box) => { list = box; }, closeCdmPop() {},
+  api: async (path, { method, body }) => {
+    const sent = JSON.parse(body);
+    calls.push([path, method, sent]);
+    if (sent.no_cdm) return { routes: { NF: { no_cdm: true } }, map: { NF: "none" } };
+    if (sent.widevine === null) return { routes: {}, map: {} };
+    return {
+      routes: { NF: { widevine: "old", playready: null, preferred: "widevine" } },
+      map: { NF: { widevine: "old", playready: null, preferred: "widevine" } },
+    };
+  },
+});
+vm.runInContext(grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + grab(src, /^const cdmUsageName = .*$/m) + "\n"
+  + grab(src, /async function loadCdm\b[\s\S]*?\n}\n/)
+  + ["cdmTitle", "cdmStatus", "cdmShort", "renderCdm", "cdmPicker"].map((name) =>
+    grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n")
+  + grab(read(process.argv[2]), /function cdmMissing\b[\s\S]*?\n}\n/), ctx);
+const walk = (n) => [n, ...(n?.kids || []).flatMap(walk)];
+const click = (key) => {
+  const control = walk(drawn).find((n) => n?.dataset?.fk === key);
+  return control.onclick({ currentTarget: control });
+};
+(async () => {
+  await ctx.loadCdm({
+    folder: "/cdm", services: [], remote: [],
+    devices: [{ name: "old", kind: "Widevine", used_by: ["NF"] }],
+    routes: { NF: { playready: null, widevine: "old", preferred: null } },
+    map: { NF: { playready: null, widevine: "old", preferred: null } },
+  });
+  const warningOnLoad = ctx.cdmMissing("NF").includes("its downloads are refused");
+  ctx.S.cdm = { NF: { playready: null, widevine: "old" } };
+  await click("svc:NF:widevine");
+  await walk(list).find((n) => n?.tag === "button" && n.kids[0].textContent.startsWith("old")).onclick();
+  const warningAfterRepair = ctx.cdmMissing("NF");
+  await click("svc:NF:none");
+  const noCdm = ctx.S.cdm.NF === "none";
+  await click("svc:NF:inherit");
+  console.log(JSON.stringify({ warningOnLoad, warningAfterRepair, noCdm, inherited: !("NF" in ctx.S.cdm), calls }));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(JS / "cookies-cdm.js"), str(JS / "series.js"))
+    assert shown == {
+        "warningOnLoad": True, "warningAfterRepair": "", "noCdm": True, "inherited": True,
+        "calls": [
+            ["/api/cdm/route", "POST", {"service": "NF", "widevine": "old"}],
+            ["/api/cdm/route", "POST", {"service": "NF", "no_cdm": True}],
+            ["/api/cdm/route", "POST", {"service": "NF", "widevine": None, "playready": None}],
+        ],
+    }
+
+
+@pytest.mark.parametrize(("field", "expected"), [
+    ("preferred", "Preferred DRM Widevine"),
+    ("shadowedAlert", True),
+    ("shadowedSubtitle", "mixed"),
+    ("focusAfterNoCdm", "svc:NF:inherit"),
+    ("focusAfterInherit", "svc:NF:widevine"),
+    ("emptyOverrideClears", True),
+    ("readOnlyRows", ["Default", "NF"]),
+    ("readOnlySlot", False),
+    ("readOnlyAddService", False),
+    ("repairPreference", "Preferred DRM PlayReady"),
+    ("repairPreferenceRequest", ["/api/cdm/route", {"service": "NF", "preferred": "widevine"}]),
+    ("repairPickerRequest", ["/api/cdm/route", {"service": "NF", "widevine": "local"}]),
+])
+def test_cdm_route_row_reports_shadowed_devices_and_keeps_action_focus(field, expected):
+    shown = node(r"""
+const src = read(process.argv[1]);
+const route = { widevine: "mixed", playready: "tv", preferred: "widevine" };
+const device = (name, kind) => ({ name, kind, used_by: [] });
+const walk = (n) => [n, ...(n?.kids || []).flatMap(walk)];
+const text = (n) => typeof n === "string" ? n : n.textContent ?? n.kids.map(text).join("");
+const body = {}, document = { body, activeElement: body };
+let drawn, alerts, list;
+const calls = [];
+const button = (key) => walk(drawn).find((n) => n?.dataset?.fk === key);
+const ctx = sandbox({
+  document,
+  $: (sel) => {
+    if (sel === "#cdm-list") return { replaceChildren(...kids) {
+      for (const old of walk(drawn)) if (old?.tag === "button") old.isConnected = false;
+      document.activeElement = body;
+      drawn = { kids };
+    } };
+    if (sel === "#cdm-alerts") return { replaceChildren: (...kids) => { alerts = kids; } };
+    if (sel.startsWith('[data-fk="')) return button(sel.slice(10, -2));
+    return any;
+  },
+  el: (tag, props, ...kids) => ({ ...el(tag, { value: "", ...props }, ...kids), isConnected: true,
+    replaceChildren(...children) { this.kids = children; }, append(...children) { this.kids.push(...children); },
+    get children() { return this.kids; },
+    focus() { document.activeElement = this; } }),
+  keepFocus: (_, draw) => draw(), svcName: String, cdmShort: (d) => `display-${d.name}`,
+  trWith: (s, v) => s.replace("{0}", v),
+  S: { config: { series: { netflix: { service: "NF" } }, settings: {} } },
+  cdmData: {
+    folder: "/cdm", services: ["YT"], routes: { NF: route },
+    devices: [device("mixed", "Widevine"), device("tv", "PlayReady")],
+    remote: [device("mixed", "PlayReady")],
+  },
+  cdmFilter: "all", cdmQuery: "", cdmShowUnused: false, cdmRunning: new Set(),
+  COUNT: { device: String, moreDevice: String, problem: String },
+  cdmPopAt: (_anchor, _title, _q, box) => { list = box; }, closeCdmPop() {},
+  api: async (path, { body }) => {
+    const sent = JSON.parse(body);
+    calls.push([path, sent]);
+    return { routes: sent.no_cdm ? { NF: { no_cdm: true } } : {} };
+  },
+});
+vm.runInContext(grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + grab(src, /^const cdmUsageName = .*$/m) + "\n"
+  + ["cdmTitle", "cdmStatus", "renderCdm", "remoteRow", "cdmPicker"].map((name) =>
+    grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+const click = async (key) => {
+  const control = button(key);
+  control.focus();
+  await control.onclick({ currentTarget: control });
+  return document.activeElement.dataset?.fk ?? null;
+};
+(async () => {
+  ctx.renderCdm();
+  const preferred = text(button("svc:NF:preferred"));
+  const shadowedAlert = alerts.some((n) => walk(n).some((k) => k?.dataset?.key === "fix:NF:widevine"));
+  const shadowedSubtitle = button("svc:NF:widevine").kids[1].textContent;
+  const focusAfterNoCdm = await click("svc:NF:none");
+  const focusAfterInherit = await click("svc:NF:inherit");
+  ctx.cdmData.routes.nF = { widevine: null, playready: null };
+  ctx.renderCdm();
+  const emptyOverrideClears = Boolean(button("svc:nF:inherit"));
+  ctx.cdmData.routes = {};
+  ctx.cdmData.read_only = true;
+  ctx.renderCdm();
+  const readOnlyRows = walk(drawn).filter((n) => n?.tag === "div" && n.className?.split(" ").includes("cdm-route")
+    && text(n).includes("Read-only")).map((n) => text(n.kids[0]));
+  const readOnlySlot = Boolean(button("svc:NF:widevine"));
+  const readOnlyAddService = walk(drawn).some((n) => n?.dataset?.key === "add");
+  const repair = { widevine: "local", playready: null, preferred: null };
+  ctx.cdmData.devices.push(device("local", "Widevine"));
+  ctx.cdmData.read_only = false;
+  ctx.cdmData.routes = { NF: repair };
+  ctx.renderCdm();
+  const preferredButton = button("svc:NF:preferred");
+  const repairPreference = preferredButton ? text(preferredButton) : null;
+  const beforePreference = calls.length;
+  if (preferredButton) await click("svc:NF:preferred");
+  const repairPreferenceRequest = calls[beforePreference] ?? null;
+  ctx.cdmData.routes = { NF: repair };
+  ctx.renderCdm();
+  await click("svc:NF:widevine");
+  const beforePicker = calls.length;
+  await walk(list).find((n) => n?.tag === "button" && text(n).includes("display-local")).onclick();
+  const repairPickerRequest = calls[beforePicker] ?? null;
+  console.log(JSON.stringify({ preferred, shadowedAlert, shadowedSubtitle, focusAfterNoCdm, focusAfterInherit,
+    emptyOverrideClears, readOnlyRows, readOnlySlot, readOnlyAddService, repairPreference, repairPreferenceRequest, repairPickerRequest }));
+})();
+""", str(JS / "cookies-cdm.js"))
+    assert shown[field] == expected
+
+
+def test_cdm_route_buttons_keep_slot_padding_and_space_the_action_label():
+    from css_assets import load_css
+
+    css = load_css()
+    assert ".cdm-route .btn.small.cdm-slot {" in css
+    assert ".cdm-route-actions .btn { display: inline-flex; align-items: baseline; gap: var(--sp-1-5); }" in css

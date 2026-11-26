@@ -7553,7 +7553,11 @@ def test_the_cdm_option_offers_the_devices_unshackle_has(tmp_path, monkeypatch):
     assert line == "unshackle dl --cdm my_l3 NF 1 -w S01E01"
 
 
-@pytest.mark.parametrize("action, body", [("choose", {"service": "NF", "device": "my_l3"}), ("delete", {"name": "my_l3", "kind": "Widevine"})])
+@pytest.mark.parametrize("action, body", [
+    ("choose", {"service": "NF", "device": "my_l3"}),
+    ("delete", {"name": "my_l3", "kind": "Widevine"}),
+    ("route", {"service": "NF", "widevine": "my_l3"}),
+])
 @responses.activate
 def test_a_cdm_action_makes_the_next_download_read_unshackles_config_again(tmp_path, monkeypatch, action, body):
     # sync.no_cdm reads serve's config kept for 10 minutes: picking a device must not leave "No CDM" standing for that long
@@ -7569,11 +7573,24 @@ def test_a_cdm_action_makes_the_next_download_read_unshackles_config_again(tmp_p
     (tmp_path / "WVDs" / "my_l3.wvd").write_bytes(b"WVD\x02\x02\x01" + b"k" * 40)
     (tmp_path / "unshackle.yaml").write_text("cdm:\n  default: other\n" if action == "delete" else "")
     monkeypatch.setattr(web, "cdm_paths", lambda: (tmp_path / "unshackle.yaml", tmp_path / "WVDs", tmp_path / "PRDs"))
-    monkeypatch.setattr(web, "cdm_state", lambda: {})
     web.UNSHACKLE.configure({"unshackle_url": "http://backend:8786", "unshackle_api_key": "test-api-secret"})
     config = responses.get("http://backend:8786/api/config", json={"config": {"cdm": {}}})
     assert web.UNSHACKLE.cdm_config() == {} and web.UNSHACKLE.cdm_config() == {}
     assert config.call_count == 1  # kept
+
+    cdm_routes_payload = web.cdm_routes_payload
+
+    def read_config():
+        assert web.UNSHACKLE.cdm_config() == {}
+        assert config.call_count == 2
+        return {}
+
+    def read_routes(state, *, include_map):
+        read_config()
+        return cdm_routes_payload(state, include_map=include_map)
+
+    monkeypatch.setattr(web, "cdm_state", read_config)
+    monkeypatch.setattr(web, "cdm_routes_payload", read_routes)
 
     async def go():
         async with TestClient(TestServer(web.app)) as client:
@@ -9530,6 +9547,48 @@ def test_a_broken_unshackle_yaml_is_named_in_the_cookies_and_devices_panes(tmp_p
     assert refused.value.text == "unshackle.yaml has a syntax error at line 2: fix it in Settings or in the file"
     opened = json.loads(asyncio.run(web.unshackle_yaml(Request("open"))).text)
     assert opened["text"] == "directories: [cookies: x\n"
+
+
+@pytest.mark.parametrize("broken", [False, True])
+def test_mounted_multi_document_cdm_config_is_read_only(tmp_path, monkeypatch, broken):
+    from aiohttp import web as aiohttp_web
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    original = b"dl: {}\n---\n[\n" if broken else b"dl: {}\n---\nbrowse: {}\n"
+    conf.write_bytes(original)
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", str(tmp_path))
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [])
+    monkeypatch.setattr(web, "cdm_details", lambda: ({}, None))
+    monkeypatch.setattr(web, "CDM_TESTS", tmp_path / "cdm-tests.json")
+    cdm.add(tmp_path / "WVDs", tmp_path / "PRDs", "local.wvd", b"WVD")
+    app = aiohttp_web.Application()
+    app.router.add_get("/api/cdm", web.list_cdm)
+    app.router.add_get("/api/cdm/routes", web.list_cdm_routes)
+    app.router.add_post("/api/cdm/{action:route}", web.cdm_action)
+
+    async def go():
+        async with TestClient(TestServer(app)) as client:
+            routes = await client.get("/api/cdm/routes")
+            state = await client.get("/api/cdm")
+            assert state.status == 200
+            inventory = await state.json()
+            if broken:
+                error = "unshackle.yaml has a syntax error at line 4: fix it in Settings or in the file"
+                assert routes.status == 400 and await routes.text() == error
+                assert inventory["error"] == error
+            else:
+                error = cdm.UNSAFE_EDIT
+                assert routes.status == 200, await routes.text()
+                assert (await routes.json())["read_only"] is True
+                assert inventory["read_only"] is True and "error" not in inventory
+                assert [(device["name"], device["used_by"]) for device in inventory["devices"]] == [("local", [])]
+            save = await client.post("/api/cdm/route", json={"service": "NF", "widevine": "local"})
+            assert save.status == 400 and await save.text() == error
+
+    asyncio.run(go())
+    assert conf.read_bytes() == original
 
 
 def test_a_devices_pane_change_keeps_unshackle_yaml_as_it_was_in_its_history(tmp_path, monkeypatch):
@@ -12033,3 +12092,1158 @@ def test_cookie_import_form_keeps_server_error_visible():
     process.on('beforeExit', () => assert.equal(settled, true));
     """
     subprocess.run(["node", "-e", script, str(STATIC / "js" / "cookies-cdm.js")], check=True)
+
+
+def test_cdm_routes_api_reads_and_saves_only_route_and_device_metadata(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import cdm, sync, web
+
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    importlib.reload(sync)
+    importlib.reload(web)
+    web.write_config({**web.read_config(), "auth": {"password": web.hash_password("password1"), "secret": "s1"}})
+    conf = tmp_path / "unshackle.yaml"
+    wvds, prds = cdm.folders(conf)
+    cdm.add(wvds, prds, "l3.wvd", b"WVD device payload fixture")
+    cdm.add(wvds, prds, "tv.prd", b"PRD device payload fixture")
+    (wvds / "fallback.PRD").write_bytes(b"PRD device payload fixture")
+    conf.write_text(
+        "cdm:\n  default: l3\n  NF:\n    widevine: l3\n    playready: tv\n"
+        "  AMZN:\n    alt: tv\n  YT: none\n"
+        "remote_cdm:\n  - {name: labs, type: decrypt_labs, device_name: SL3000, host: https://example-user:example-pass@cdm.invalid, security_level: {secret: inline fixture}, secret: remote fixture}\n"
+        "# private config fixture\n"
+    )
+    monkeypatch.setattr(web, "cdm_paths", lambda: (conf, wvds, prds))
+    monkeypatch.setattr(web, "cdm_details", lambda: ({
+        ("widevine", "l3"): {"level": "L3", "private_key": "certificate fixture"},
+    }, None))
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [{"tag": "NF"}, {"tag": "AMZN"}, {"tag": "YT"}])
+    test_error = "Rejected https://example-user:example-pass@cdm.invalid"
+    monkeypatch.setattr(web, "cdm_tests", lambda: {"Widevine:l3": {"error": test_error}})
+    monkeypatch.setattr(web, "note_cdm_test", lambda *_: None)
+    monkeypatch.setattr(web.UNSHACKLE, "call", lambda *_, **__: {"ok": False, "error": test_error})
+    history = []
+    monkeypatch.setattr(web, "keep_unshackle_yaml", history.append)
+
+    async def go():
+        async with TestClient(TestServer(web.app)) as client:
+            page = {"X-Unshackle": "1"}
+            assert (await client.post("/api/login", json={"password": "password1"}, headers=page)).status == 200
+
+            async def safe_json(response):
+                body = await response.text()
+                for value in ("device payload fixture", "remote fixture", "private config fixture", "inline fixture", "certificate fixture", "example-user", "example-pass"):
+                    assert value not in body
+                assert response.status == 200, body
+                return json.loads(body)
+
+            tested = await safe_json(await client.post("/api/cdm/test", json={"kind": "Widevine", "name": "l3"}, headers=page))
+            assert tested["error"] == "Rejected https://***@cdm.invalid"
+            state = await safe_json(await client.get("/api/cdm", headers=page))
+            assert state["devices"][0]["info"] == {"level": "L3"}
+            assert state["devices"][0]["test"]["error"] == tested["error"]
+            assert [(d["name"], d["kind"]) for d in state["devices"]] == [
+                ("l3", "Widevine"), ("tv", "PlayReady"), ("fallback", "PlayReady"),
+            ]
+            assert state["remote"][0]["host"] == "https://***@cdm.invalid"
+            assert state["map"]["NF"] == {"widevine": "l3", "playready": "tv", "preferred": "widevine"}
+            assert state["routes"]["AMZN"]["advanced"]
+            routes = await safe_json(await client.get("/api/cdm/routes", headers=page))
+            assert routes["routes"] == state["routes"]
+            assert routes["routes"]["YT"]["no_cdm"]
+            assert routes["services"] == ["AMZN", "NF", "YT"]
+            assert [(d["name"], d["system"]) for d in routes["devices"]] == [
+                ("l3", "Widevine"), ("tv", "PlayReady"),
+                *([("fallback", "PlayReady")] if (wvds / "fallback.prd").is_file() else []),
+                ("labs", "PlayReady"),
+            ]
+            assert "used_by" not in routes
+            assert all(set(d) == {"name", "kind", "system", "remote", "level"} for d in routes["devices"])
+            before = conf.read_bytes()
+            for body in (
+                {"service": "NF", "widevine": "tv"}, {"service": "NF", "playready": "l3"},
+                {"service": "NF", "widevine": ["l3"]}, {"service": ["NF"], "widevine": "l3"},
+                {"service": "NF", "no_cdm": "false"}, {"service": "NF", "preferred": False},
+                {"service": "NF", "widevine": "l3", "playready": None, "preferred": "playready"},
+                {"service": "YT"}, {"service": "default"}, {"service": "default", "no_cdm": True},
+                {"service": "AMZN", "widevine": "l3"},
+            ):
+                response = await client.post("/api/cdm/route", json=body, headers=page)
+                assert response.status == 400, (body, await response.text())
+                assert conf.read_bytes() == before
+            assert history == []
+            saved = await safe_json(await client.post("/api/cdm/route", json={
+                "service": "NF", "widevine": "l3", "playready": "labs", "preferred": "playready",
+            }, headers=page))
+            assert set(saved) == {"devices", "routes", "services", "map", "route", "used_by"}
+            assert saved["devices"] == routes["devices"]
+            assert saved["route"] == saved["routes"]["NF"]
+            assert saved["route"]["devices"] == ["labs", "l3"]
+            assert list(cdm.read(conf)["cdm"]["NF"]) == ["playready", "widevine"]
+            assert history == [before.decode()]
+            intervening = conf.read_text()
+            changed = await safe_json(await client.post("/api/cdm/route", json={
+                "service": "NF", "widevine": None,
+            }, headers=page))
+            assert changed["route"]["devices"] == ["labs"]
+            assert history == [before.decode(), intervening]
+
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("action", ["raw", "proxies"])
+def test_unshackle_yaml_writers_read_after_acquiring_the_route_lock(tmp_path, monkeypatch, action):
+    from aiohttp.web import HTTPConflict
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    paths = (conf, tmp_path / "WVDs", tmp_path / "PRDs")
+    before = "cdm:\n  NF: old\n"
+    intervening = "cdm:\n  NF: new\n"
+    conf.write_text(before)
+    thread = threading.get_ident()
+    lock = cdm._ROUTE_LOCK
+    history = []
+
+    class InterveningRouteEdit:
+        def __enter__(self):
+            assert threading.get_ident() != thread
+            with lock:
+                conf.write_text(intervening)
+            lock.acquire()
+
+        def __exit__(self, *_):
+            lock.release()
+
+    async def body():
+        return {"base": web.fingerprint(before), "text": "cdm: {}\n"}
+
+    async def reauth(*_):
+        pass
+
+    monkeypatch.setattr(cdm, "ROUTE_LOCK", InterveningRouteEdit(), raising=False)
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web, "reauth", reauth)
+    monkeypatch.setattr(web, "keep_unshackle_yaml", history.append)
+    request = SimpleNamespace(match_info={"action": "save"}, json=body)
+    if action == "raw":
+        with pytest.raises(HTTPConflict):
+            asyncio.run(web.unshackle_yaml(request))
+        assert conf.read_text() == intervening
+        assert not history
+    else:
+        monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_api_key", "fixture")
+        monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(mode="remote", proxy_refused="",
+                                                             configure=lambda _: None, settings={}))
+        response = asyncio.run(web.allow_proxies(request))
+        assert json.loads(response.text) == {"saved": True}
+        assert history == [intervening]
+        assert cdm.read(conf)["cdm"] == {"NF": "new"}
+
+
+def test_cdm_action_resolves_directories_after_raw_yaml_save(tmp_path, monkeypatch):
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    before = "directories:\n  wvds: old_devices\ncdm:\n  NF: old\n"
+    intervening = before.replace("old_devices", "new_devices")
+    conf.write_text(before)
+    cdm.add(tmp_path / "new_devices", tmp_path / "PRDs", "new.wvd", b"WVD")
+    lock = cdm.ROUTE_LOCK
+    raw_saved = False
+
+    async def raw_body():
+        return {"base": web.fingerprint(before), "text": intervening}
+
+    async def route_body():
+        return {"service": "NF", "widevine": "new"}
+
+    async def reauth(*_):
+        pass
+
+    class RawSaveGoesFirst:
+        def __enter__(self):
+            nonlocal raw_saved
+            if not raw_saved:
+                raw_saved = True
+                request = SimpleNamespace(match_info={"action": "save"}, json=raw_body)
+                assert json.loads(asyncio.run(web.unshackle_yaml(request)).text)["saved"]
+            lock.acquire()
+
+        def __exit__(self, *_):
+            lock.release()
+
+    monkeypatch.setattr(cdm, "ROUTE_LOCK", RawSaveGoesFirst())
+    monkeypatch.setattr(web, "cdm_paths", lambda: (conf, *cdm.folders(conf)))
+    monkeypatch.setattr(web, "reauth", reauth)
+    monkeypatch.setattr(web, "keep_unshackle_yaml", lambda _: None)
+    monkeypatch.setattr(web, "config_versions", list)
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(configure=lambda _: None, settings={}, services=lambda: []))
+
+    response = asyncio.run(web.cdm_action(SimpleNamespace(match_info={"action": "route"}, json=route_body)))
+    assert json.loads(response.text)["route"]["widevine"] == "new"
+    assert conf.read_text() == intervening.replace("NF: old", "NF: new")
+
+
+@pytest.mark.parametrize("symlink", [True, False], ids=["symlink", "missing"])
+def test_raw_yaml_save_reports_file_errors_after_lock_acquisition(tmp_path, monkeypatch, symlink):
+    from aiohttp import web as aiohttp_web
+    from unshacklarr import cdm, web
+
+    conf, target = tmp_path / "unshackle.yaml", tmp_path / "target.yaml"
+    original = "cdm: {}\n"
+    conf.write_text(original)
+    target.write_text(original)
+    lock = cdm.ROUTE_LOCK
+
+    class ReplaceFileBeforeSave:
+        def __enter__(self):
+            lock.acquire()
+            conf.unlink()
+            if symlink:
+                conf.symlink_to(target)
+
+        def __exit__(self, *_):
+            lock.release()
+
+    async def body():
+        return {"base": web.fingerprint(original), "text": "cdm: {NF: new}\n"}
+
+    async def reauth(*_):
+        pass
+
+    monkeypatch.setattr(cdm, "ROUTE_LOCK", ReplaceFileBeforeSave())
+    monkeypatch.setattr(web, "cdm_paths", lambda: (conf, *cdm.folders(conf)))
+    monkeypatch.setattr(web, "reauth", reauth)
+    request = SimpleNamespace(match_info={"action": "save"}, json=body)
+    with pytest.raises(aiohttp_web.HTTPBadRequest if symlink else aiohttp_web.HTTPNotFound):
+        asyncio.run(web.unshackle_yaml(request))
+    assert target.read_text() == original
+
+
+@pytest.mark.parametrize("endpoint", ["/api/cdm", "/api/cdm/routes", "/api/cdm/route"])
+def test_cdm_api_hides_config_credentials_aliased_into_routes(tmp_path, monkeypatch, endpoint):
+    from aiohttp import web as aiohttp_web
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    wvds, prds = cdm.folders(conf)
+    cdm.add(wvds, prds, "old.wvd", b"WVD")
+    conf.write_text(
+        "decrypt_labs_api_key: &labs fixture-labs\n"
+        "provider_password: &provider fixture-provider\n"
+        "remote_cdm:\n  - name: sample\n    secret: ''\n    Secret: &remote fixture-remote\n"
+        "    auth: {token: &auth fixture-auth, enabled: true}\n"
+        "    headers: {group: [{Authorization: &header fixture-header}]}\n"
+        "  - {name: *labs, type: widevine}\n"
+        "  - {name: display, type: *labs, host: *remote, device_type: *auth, device_name: *header}\n"
+        "serve:\n  api_secret: &api fixture-api\n  dashboard: {key: &dashboard fixture-dashboard}\n"
+        "  users: {&user fixture-user: {nested: {api_key: &user_key fixture-user-key}}}\n"
+        "credentials: {NF: [&login fixture-login]}\n"
+        "key_vaults: [{API_Key: &vault fixture-vault}]\n"
+        "remote_services: {hosted: {Auth: {value: &service 'fixture-user:fixture-pass'}}}\n"
+        "cdm:\n  NF: old\n  AMZN:\n    profile: {labs: *labs, remote: *remote, auth: *auth, user: *user}\n"
+        "    quality: {standard: old, disable: none, invalid: ' leading-space'}\n"
+        "  YT: *labs\n  DSNP: *api\n  ATVP: {widevine: *dashboard, playready: old}\n"
+        "  OTHER: {profile: *provider, header: *header, user_key: *user_key}\n"
+        "  SCALAR: *remote\n  TWO: {widevine: *vault, playready: old}\n"
+        "  NESTED: {profile: {standard: *login, premium: *service, fallback: old}}\n"
+        "  INVALID: {widevine: 'fixture-user:unlisted-pass', playready: old}\n"
+        "  URL: 'https://example-user:example-pass@cdm.invalid'\n"
+        "  *labs: old\n"
+        "  'https://example-user:example-pass@service.invalid': old\n"
+    )
+    config = cdm.read(conf)
+    (wvds / f"{config['cdm']['YT']}.wvd").write_bytes(b"WVD")
+    monkeypatch.setattr(web, "cdm_paths", lambda: (conf, wvds, prds))
+    monkeypatch.setattr(web, "cdm_details", lambda: ({}, None))
+    monkeypatch.setattr(web, "cdm_tests", dict)
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(configure=lambda _: None, settings={}, services=lambda: []))
+    app = aiohttp_web.Application()
+    app.router.add_get("/api/cdm", web.list_cdm)
+    app.router.add_get("/api/cdm/routes", web.list_cdm_routes)
+    app.router.add_post("/api/cdm/{action:route}", web.cdm_action)
+
+    async def go():
+        async with TestClient(TestServer(app)) as client:
+            response = (await client.post(endpoint, json={"service": "NF", "widevine": "old"})
+                        if endpoint == "/api/cdm/route" else await client.get(endpoint))
+            assert response.status == 200
+            body = await response.text()
+            assert not any(f"fixture-{name}" in body for name in (
+                "labs", "remote", "auth", "user", "provider", "header", "api", "dashboard", "login", "vault", "pass",
+            ))
+            assert "example-pass" not in body
+            assert "unlisted-pass" not in body
+            result = json.loads(body)
+            if endpoint == "/api/cdm":
+                assert result["remote"][0]["has_secret"] is True
+                display = next(device for device in result["remote"] if device["name"] == "display")
+                assert not display["editable"]
+                assert not {"host", "device_name", "device_type"} & display.keys()
+            expected = {
+                "AMZN": ["old"], "YT": [], "DSNP": [], "ATVP": ["old"], "OTHER": [], "URL": [],
+                "SCALAR": [], "TWO": ["old"], "NESTED": ["old"], "INVALID": ["old"],
+            }
+            for service, devices in expected.items():
+                assert result["routes"][service] == {
+                    "service": service, "advanced": True, "no_cdm": False, "widevine": None,
+                    "playready": None, "preferred": None, "devices": devices,
+                }
+                if endpoint != "/api/cdm/routes":
+                    assert result["map"][service] == {"rule": devices}
+
+    asyncio.run(go())
+
+
+def test_cdm_route_response_uses_the_written_snapshot_even_if_yaml_changes_again(tmp_path, monkeypatch):
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    paths = (conf, *cdm.folders(conf))
+    cdm.add(*paths[1:], "beta.wvd", b"WVD")
+    cdm.add(*paths[1:], "alpha.wvd", b"WVD")
+    conf.write_text(
+        "cdm:\n  NF: beta\n  AMZN: {profile: ' leading-space', remote: '@lab'}\n"
+        "remote_cdm:\n  - {name: '@lab', type: widevine}\n  - {name: '@lab', type: playready}\n"
+    )
+    (paths[1] / " leading-space.wvd").write_bytes(b"WVD")
+    (paths[2] / "alpha").mkdir(parents=True)
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(configure=lambda _: None, settings={}, services=lambda: []))
+    def keep_history(_):
+        assert cdm.ROUTE_LOCK._is_owned()
+        cdm.set_route(*paths, "NF", widevine="beta")
+
+    monkeypatch.setattr(web, "keep_unshackle_yaml", keep_history)
+
+    async def body():
+        return {"service": "NF", "widevine": "alpha"}
+
+    response = asyncio.run(web.cdm_action(SimpleNamespace(match_info={"action": "route"}, json=body)))
+    result = json.loads(response.text)
+    assert cdm.get_route(*paths, "NF").widevine == "beta"
+    assert result["route"] == result["routes"]["NF"]
+    assert result["route"]["widevine"] == result["map"]["NF"] == "alpha"
+    assert result["routes"]["AMZN"]["devices"] == []
+    assert result["used_by"] == {
+        "remote": {"@lab": [["AMZN"], []]},
+        "local": {"Widevine:0: leading-space": ["AMZN"], "Widevine:0:alpha": ["NF"],
+                  "Widevine:0:beta": [], "PlayReady:1:alpha": []},
+    }
+    assert [d["name"] for d in result["devices"]] == ["alpha", "beta"]
+
+
+def test_cdm_history_preserves_serialized_edits_during_same_clock_tick(tmp_path, monkeypatch):
+    from datetime import datetime
+    from unshacklarr import cdm, web
+
+    class FrozenClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 26, 12, 0, 0, 42, tzinfo=tz)
+
+    conf = tmp_path / "unshackle.yaml"
+    initial = "cdm:\n  default: old\n"
+    conf.write_text(initial)
+    paths = (conf, *cdm.folders(conf))
+    cdm.add(*paths[1:], "old.wvd", b"WVD")
+    monkeypatch.setattr(web, "CONFIG_HISTORY", tmp_path / "history")
+    monkeypatch.setattr(web, "datetime", FrozenClock)
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(configure=lambda _: None, settings={}, services=lambda: []))
+
+    async def post(service):
+        async def body():
+            return {"service": service, "widevine": "old"}
+
+        return await web.cdm_action(SimpleNamespace(match_info={"action": "route"}, json=body))
+
+    for service in ("NF", "AMZN", "YT"):
+        assert asyncio.run(post(service)).status == 200
+
+    versions = [entry["id"] for entry in web.config_versions()]
+    assert versions == [f"20261126-120000-{stamp:06d}" for stamp in (44, 43, 42)]
+    assert [(web.CONFIG_HISTORY / f"{stamp}.yaml").read_text() for stamp in versions] == [
+        initial + "  NF: old\n  AMZN: old\n", initial + "  NF: old\n", initial,
+    ]
+
+
+@pytest.mark.parametrize("handler", ["list_cdm", "list_cdm_routes"])
+@pytest.mark.parametrize("readonly", [False, True])
+def test_cdm_api_reports_section_read_only_even_without_service_overrides(tmp_path, monkeypatch, handler, readonly):
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text("cdm: &routes {}\ncopy: *routes\n" if readonly else "cdm: {}\n")
+    monkeypatch.setattr(web, "cdm_paths", lambda: (conf, *cdm.folders(conf)))
+    monkeypatch.setattr(web, "cdm_details", lambda: ({}, None))
+    monkeypatch.setattr(web, "cdm_tests", dict)
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(services=lambda: [{"tag": "NF"}]))
+
+    response = asyncio.run(getattr(web, handler)(None))
+    assert response.status == 200
+    result = json.loads(response.text)
+    assert result["routes"] == {} and result["services"] == ["NF"]
+    assert result["read_only"] is readonly
+
+
+@pytest.mark.parametrize("handler", ["list_cdm", "list_cdm_routes"])
+def test_cdm_get_holds_the_route_lock_through_paths_and_state(tmp_path, monkeypatch, handler):
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    paths = (conf, *cdm.folders(conf))
+    conf.write_text("cdm: {NF: none}\n")
+    seen = []
+    read_bytes, read_text = type(conf).read_bytes, type(conf).read_text
+
+    def observe_paths():
+        seen.append(("paths", cdm.ROUTE_LOCK._is_owned()))
+        return paths
+
+    def observe_read(read):
+        def observed(path, *args, **kwargs):
+            if path == conf:
+                seen.append(("config read", cdm.ROUTE_LOCK._is_owned()))
+            return read(path, *args, **kwargs)
+        return observed
+
+    monkeypatch.setattr(web, "cdm_paths", observe_paths)
+    monkeypatch.setattr(type(conf), "read_bytes", observe_read(read_bytes))
+    monkeypatch.setattr(type(conf), "read_text", observe_read(read_text))
+    monkeypatch.setattr(web, "cdm_details", lambda: ({}, None))
+    monkeypatch.setattr(web, "cdm_tests", dict)
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(services=lambda: []))
+    response = asyncio.run(getattr(web, handler)(None))
+    assert response.status == 200
+    assert seen == [("paths", True), ("config read", True)]
+
+
+def test_playready_certificate_folder_is_only_shown_in_management_inventory(tmp_path, monkeypatch):
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text("cdm: {}\n")
+    paths = (conf, *cdm.folders(conf))
+    (paths[2] / "certificates").mkdir(parents=True)
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [])
+    monkeypatch.setattr(web, "cdm_details", lambda: ({}, None))
+    monkeypatch.setattr(web, "cdm_tests", dict)
+
+    management = json.loads(asyncio.run(web.list_cdm(None)).text)
+    assert [(d["name"], d["folder"], d["routable"]) for d in management["devices"]] == [
+        ("certificates", True, False),
+    ]
+    assert json.loads(asyncio.run(web.list_cdm_routes(None)).text)["devices"] == []
+
+
+def test_cdm_route_picker_inventory_excludes_invalid_names(tmp_path, monkeypatch):
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text("remote_cdm:\n  - {name: '@lab'}\n  - {name: none}\n  - {name: lab}\n")
+    paths = (conf, *cdm.folders(conf))
+    paths[1].mkdir()
+    (paths[1] / " leading-space.wvd").write_bytes(b"WVD")
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [])
+
+    assert [d["name"] for d in web.cdm_routes()["devices"]] == ["lab"]
+
+
+@pytest.mark.parametrize(("endpoint", "case"), [
+    ("/api/cdm", "host"), ("/api/cdm", "short-path-and-query"), ("/api/cdm", "info"),
+    ("/api/cdm", "short-info"),
+    ("/api/cdm", "numeric-info"), ("/api/cdm", "encoded-host"),
+    ("/api/cdm", "auth-schema"), ("/api/cdm/routes", "auth-schema"),
+    ("/api/cdm", "numeric"), ("/api/cdm/routes", "numeric"), ("/api/cdm/route", "numeric"),
+    ("/api/cdm", "names"), ("/api/cdm/routes", "names"), ("/api/cdm/route", "names"),
+    ("/api/cdm", "types"), ("/api/cdm/routes", "types"), ("/api/cdm/route", "types"),
+    ("/api/cdm", "booleans"),
+    ("/api/cdm", "invalid-inventory"), ("/api/cdm/routes", "invalid-inventory"),
+    ("/api/cdm/route", "invalid-inventory"),
+])
+def test_cdm_endpoints_filter_remote_config_metadata(tmp_path, monkeypatch, endpoint, case):
+    from aiohttp import web as aiohttp_web
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import cdm, web
+
+    marker = "fixture-route-" + "credential"
+    encoded = "%66" + marker[1:]
+    double_encoded = "%25" + encoded[1:]
+    cases = {
+        "host": f"auth: {{header: {marker}}}\nremote_cdm:\n"
+                f"  - {{name: lab, host: https://cdm.invalid/prefix-{marker}/playready}}\n",
+        "short-path-and-query": "credentials: {value: abc}\nremote_cdm:\n"
+                                "  - {name: lab, host: 'https://cdm.invalid/abc/abcd?device=abc&safe=abcd'}\n",
+        "info": f"credentials: {{value: {marker}}}\n",
+        "short-info": "credentials: {value: abc}\n",
+        "numeric-info": "serve: {users: {2750: {pin: 2845}}}\n",
+        "encoded-host": f"auth: {{value: {marker}, pin: abc}}\nremote_cdm:\n"
+                        f"  - {{name: lab, host: 'https://cdm.invalid/prefix-{encoded}/playready?"
+                        f"device={double_encoded}&pin=%61bc&safe=abcd#{double_encoded}'}}\n"
+                        f"  - {{name: '{encoded}'}}\n",
+        "auth-schema": "auth: {type: widevine, Header_Name: alpha, method: bearer, value: fixture-hidden}\n"
+                       "remote_cdm:\n  - {name: alpha, type: widevine, device_name: bearer}\n"
+                       "  - {name: fixture-hidden, type: widevine}\n",
+        "numeric": "serve: {users: {2750: {pin: &pin 2845}}}\nremote_cdm:\n"
+                   "  - {name: lab, security_level: *pin, system_id: 2750}\n",
+        "names": f"auth: {{value: &labs {marker}}}\nremote_cdm:\n"
+                 "  - {name: lab}\n  - {name: [*labs]}\n  - {name: {secret: inline}}\n  - {name: 789}\n",
+        "types": f"auth: {{value: &labs {marker}}}\nremote_cdm:\n"
+                 "  - {name: lab, type: [*labs]}\n  - {name: other, type: {secret: inline}}\n",
+        "booleans": "remote_cdm:\n  - {name: lab, host: true, device_name: true, device_type: false}\n",
+        "invalid-inventory": "remote_cdm: 17\n",
+    }
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text(cases[case])
+    paths = (conf, *cdm.folders(conf))
+    cdm.add(*paths[1:], "old.wvd", b"WVD")
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    info = {"info": {"company": f"https://fixture-user:fixture-pass@cdm.invalid/{marker}"},
+            "short-info": {"serial": "abc"},
+            "numeric-info": {"system_id": 2750, "serial": 2845, "level": 3,
+                             "reprovisionable": True, "vmp": True, "unreadable": False},
+            "encoded-host": {"company": double_encoded}}
+    monkeypatch.setattr(web, "cdm_details", lambda: ({("widevine", "old"): info[case]} if case in info else {}, None))
+    monkeypatch.setattr(web, "cdm_tests", dict)
+    monkeypatch.setattr(web, "keep_unshackle_yaml", lambda _: None)
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(configure=lambda _: None, settings={}, services=lambda: []))
+    app = aiohttp_web.Application()
+    app.router.add_get("/api/cdm", web.list_cdm)
+    app.router.add_get("/api/cdm/routes", web.list_cdm_routes)
+    app.router.add_post("/api/cdm/{action:route}", web.cdm_action)
+
+    async def go():
+        async with TestClient(TestServer(app)) as client:
+            response = (await client.post(endpoint, json={"service": "NF", "widevine": "old"})
+                        if endpoint.endswith("/route") else await client.get(endpoint))
+            assert response.status == 200
+            return await response.text()
+
+    body = asyncio.run(go())
+    assert marker not in body and "inline" not in body
+    result = json.loads(body)
+    if case == "auth-schema":
+        group = result["remote"] if endpoint == "/api/cdm" else result["devices"]
+        assert [device["name"] for device in group if device["name"] != "old"] == ["alpha"]
+        if endpoint == "/api/cdm":
+            assert group[0]["type"] == "widevine"
+            assert group[0]["device_name"] == "bearer"
+    elif case == "numeric-info":
+        info = result["devices"][0]["info"]
+        assert set(info) == {"level", "reprovisionable", "vmp", "unreadable"}
+        assert info["level"] == 3
+        assert info["reprovisionable"] is True
+        assert info["vmp"] is True
+        assert info["unreadable"] is False
+    elif case == "info":
+        assert result["devices"][0]["info"] == {"company": "https://***@cdm.invalid/***"}
+    elif case == "short-info":
+        assert result["devices"][0]["info"] == {"serial": "***"}
+    elif endpoint == "/api/cdm":
+        remote = result["remote"]
+        assert [d["name"] for d in remote] == ({"invalid-inventory": [], "types": ["lab", "other"]}.get(case, ["lab"]))
+        if case == "host":
+            assert remote[0]["host"] == "https://cdm.invalid/prefix-***/playready"
+        elif case == "short-path-and-query":
+            assert remote[0]["host"] == "https://cdm.invalid/***/abcd?device=***&safe=abcd"
+        elif case == "encoded-host":
+            assert remote[0]["host"] == "https://cdm.invalid/***/playready?device=***&pin=***&safe=abcd#***"
+            assert result["devices"][0]["info"] == {"company": "***"}
+        elif case == "types":
+            assert all(d["type"] == d["label"] == "" and not d["editable"] for d in remote)
+        elif case == "booleans":
+            assert not {"host", "device_name", "device_type"} & remote[0].keys()
+    else:
+        remote = [d for d in result["devices"] if d["remote"]]
+        assert [d["name"] for d in remote] == ({"invalid-inventory": [], "types": ["lab", "other"]}.get(case, ["lab"]))
+        assert all(d["level"] == "" for d in remote)
+    if case == "numeric":
+        assert "2750" not in body and "2845" not in body
+
+
+@pytest.mark.parametrize("kind", ["*marker", "[*marker]", "{}"])
+def test_cdm_remote_save_error_masks_credential_name_and_unsupported_type(tmp_path, monkeypatch, kind):
+    from aiohttp import web as aiohttp_web
+    from unshacklarr import cdm, web
+
+    marker = "fixture-route-" + "credential"
+    conf = tmp_path / "unshackle.yaml"
+    source = f"auth: {{value: &marker {marker}}}\nremote_cdm:\n  - {{name: *marker, type: {kind}}}\n"
+    conf.write_text(source)
+    monkeypatch.setattr(web, "cdm_paths", lambda: (conf, *cdm.folders(conf)))
+
+    async def body():
+        return {"was": marker, "form": {"name": "lab", "type": "decrypt_labs"}}
+
+    with pytest.raises(aiohttp_web.HTTPBadRequest) as error:
+        asyncio.run(web.cdm_action(SimpleNamespace(match_info={"action": "remote-save"}, json=body)))
+    assert error.value.text == "*** is a custom remote CDM: change it in unshackle.yaml"
+    assert conf.read_text() == source
+
+
+@pytest.mark.parametrize("folder", [True, False, "false"])
+def test_cdm_delete_api_targets_the_selected_playready_device(tmp_path, monkeypatch, folder):
+    from aiohttp import web as aiohttp_web
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text("cdm: {}\n")
+    paths = (conf, *cdm.folders(conf))
+    cdm.add(*paths[1:], "play.prd", b"PRD")
+    file, directory = paths[2] / "play.prd", paths[2] / "play"
+    directory.mkdir()
+    tests = tmp_path / "cdm-tests.json"
+    tests.write_text(json.dumps({"PlayReady:play": {"ok": True}}))
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web, "CDM_TESTS", tests)
+    monkeypatch.setattr(web, "cdm_details", lambda: ({}, None))
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(configure=lambda _: None, settings={}, services=lambda: []))
+    app = aiohttp_web.Application()
+    app.router.add_post("/api/cdm/{action:delete}", web.cdm_action)
+
+    async def go():
+        async with TestClient(TestServer(app)) as client:
+            response = await client.post("/api/cdm/delete", json={"name": "play", "kind": "PlayReady", "folder": folder})
+            return response.status, await response.text()
+
+    code, body = asyncio.run(go())
+    if folder == "false":
+        assert (code, body) == (400, "No such device")
+        assert file.is_file() and directory.is_dir()
+    else:
+        assert code == 200
+        assert file.is_file() is folder
+        assert directory.is_dir() is (not folder)
+        assert json.loads(body)["devices"][0]["folder"] is (not folder)
+    assert json.loads(tests.read_text()) == ({} if folder is False else {"PlayReady:play": {"ok": True}})
+
+
+def test_cdm_route_and_remote_metadata_only_expose_drm_levels(tmp_path, monkeypatch):
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text(
+        "label: &label private setting value\n"
+        "remote_cdm:\n"
+        "  - {name: alias, system_id: *label, security_level: *label}\n"
+        "  - {name: boolean, system_id: true, security_level: false}\n"
+        "  - {name: numeric, system_id: 26830, security_level: 3000}\n"
+        "  - {name: too_large, security_level: 12345}\n"
+    )
+    paths = (conf, *cdm.folders(conf))
+    cdm.add(*paths[1:], "valid.wvd", b"WVD\x02\x02\x03")
+    cdm.add(*paths[1:], "out_of_range.wvd", b"WVD\x02\x02\x0a")
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web.UNSHACKLE, "services", lambda: [])
+
+    levels = {d["name"]: d["level"] for d in web.cdm_routes()["devices"]}
+    assert levels == {"alias": "", "boolean": "", "numeric": 3000, "too_large": "", "valid": "L3", "out_of_range": ""}
+    remote = {d["name"]: d for d in cdm.state(*paths)["remote"]}
+    for name in ("alias", "boolean"):
+        assert "system_id" not in remote[name] and "security_level" not in remote[name]
+    assert remote["numeric"]["system_id"] == 26830
+    assert remote["numeric"]["security_level"] == 3000
+
+
+@pytest.mark.parametrize("source", ["result", "exception", "cache"])
+@pytest.mark.parametrize("rotate", [False, True])
+@pytest.mark.parametrize(("query", "config_shape"), [
+    ("q7", "single"),
+    ("%71%37", "single"),
+    ("%71%37", "multiple"),
+])
+def test_cdm_api_masks_config_credentials_in_device_test_errors(tmp_path, monkeypatch, source, rotate, query, config_shape):
+    from aiohttp import web as aiohttp_web
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import cdm, web
+
+    marker = "fixture-device-" + "credential"
+    current = ("updated-device-" + "credential") if rotate else marker
+    latest = "z82" if rotate else "q4"
+    error = (
+        f"Rejected [q4] [{latest}] [at]. Upstream rejected q4. "
+        f"Rejected {marker} with {current} using k19 and q7 at https://example-user:example-pass@cdm.invalid "
+        f"for tv_sl3000 k19.prd v1.k19 at-1. GET https://cdm.invalid/playready?key={query}."
+    )
+    masked = (
+        "Rejected [***] [***] [***]. Upstream rejected ***. "
+        "Rejected *** with *** using *** *** *** *** https://***@cdm.invalid "
+        "for tv_sl3000 k19.prd v1.k19 at-1. GET https://cdm.invalid/playready?key=***."
+    )
+    conf = tmp_path / "unshackle.yaml"
+    prefix = "dl: {}\n---\n" if config_shape == "multiple" else ""
+    initial = f"{prefix}auth: {{headers: [{marker}, k19, q7, and, at, q4]}}\ncdm: {{NF: old}}\n"
+    conf.write_text(initial)
+    cdm.add(tmp_path / "WVDs", tmp_path / "PRDs", "old.wvd", b"WVD")
+    cache = tmp_path / "cdm_tests.json"
+    monkeypatch.setattr(web, "CDM_TESTS", cache)
+    monkeypatch.setitem(web.sonarr_sync.SETTINGS, "unshackle_config_dir", str(tmp_path))
+    monkeypatch.setattr(web, "cdm_details", lambda: ({}, None))
+
+    def call(*args, **kwargs):
+        if rotate:
+            conf.write_text(f"{prefix}auth: {{headers: [{current}, z82]}}\ncdm: {{NF: old}}\n")
+        if source == "exception":
+            raise web.UnshackleError(error)
+        return {"ok": False, "error": error}
+
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(call=call, services=lambda: []))
+    if source == "cache":
+        if rotate:
+            conf.write_text(initial.replace(marker, f"{marker}, {current}, z82"))
+        web.note_cdm_test("Widevine:old", {"ok": False, "error": error})
+    app = aiohttp_web.Application()
+    app.router.add_post("/api/cdm/test", web.cdm_test)
+    app.router.add_get("/api/cdm", web.list_cdm)
+
+    async def go():
+        async with TestClient(TestServer(app)) as client:
+            if source != "cache":
+                response = await client.post("/api/cdm/test", json={"kind": "Widevine", "name": "old"})
+                if source == "exception":
+                    assert response.status == 502
+                    assert await response.text() == masked
+                    assert not cache.exists()
+                else:
+                    assert response.status == 200
+                    assert (await response.json())["error"] == masked
+                    assert web.cdm_tests()["Widevine:old"]["error"] == masked
+            response = await client.get("/api/cdm")
+            assert response.status == 200
+            device = (await response.json())["devices"][0]
+            if source == "exception":
+                assert device["test"] is None
+            else:
+                assert device["test"]["error"] == masked
+
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("source", ["result", "exception"])
+def test_cdm_api_masks_single_char_rotated_credentials(tmp_path, monkeypatch, source):
+    from aiohttp import web as aiohttp_web
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import cdm, web
+
+    error = "Rejected [x] and [z] at https://127.0.0.1:8786/v1.2 for device-x."
+    masked = "Rejected [***] and [***] at https://127.0.0.1:8786/v1.2 for device-x."
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text("auth: {headers: [x]}\ncdm: {NF: old}\n")
+    paths = (conf, *cdm.folders(conf))
+    cdm.add(*paths[1:], "old.wvd", b"WVD")
+    cache = tmp_path / "cdm_tests.json"
+    monkeypatch.setattr(web, "CDM_TESTS", cache)
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web, "cdm_details", lambda: ({}, None))
+
+    def call(*args, **kwargs):
+        conf.write_text("auth: {headers: [z]}\ncdm: {NF: old}\n")
+        if source == "exception":
+            raise web.UnshackleError(error)
+        return {"ok": False, "error": error}
+
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(call=call, services=lambda: []))
+    app = aiohttp_web.Application()
+    app.router.add_post("/api/cdm/test", web.cdm_test)
+    app.router.add_get("/api/cdm", web.list_cdm)
+
+    async def go():
+        async with TestClient(TestServer(app)) as client:
+            posted = await client.post("/api/cdm/test", json={"kind": "Widevine", "name": "old"})
+            listed = await client.get("/api/cdm")
+            assert listed.status == 200
+            device = (await listed.json())["devices"][0]
+            if source == "exception":
+                assert posted.status == 502
+                assert await posted.text() == masked
+                assert device["test"] is None
+            else:
+                assert posted.status == 200
+                assert (await posted.json())["error"] == masked
+                assert web.cdm_tests()["Widevine:old"]["error"] == masked
+                assert device["test"]["error"] == masked
+
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize(("credential", "error", "masked"), [
+    ("q7", "GET https://[::1]/playready?key=%71%37.", "GET https://[::1]/playready?key=***."),
+    ("q7", "GET https://[::1]:8786/playready?key=%71%37.", "GET https://[::1]:8786/playready?key=***."),
+    ("q7", "GET https://[::1]/%71%37/playready.", "GET https://[::1]/***/playready."),
+    (
+        "q7",
+        "GET https://user:pass@[::1]/playready?key=%71%37.",
+        "GET https://***@[::1]/playready?key=***.",
+    ),
+    ("secret", "GET https://[::1]/playready?key=%73%65%63%72%65%74.", "GET https://[::1]/playready?key=***."),
+    ("q7", "[https://[::1]:8786/playready?key=%71%37]", "[https://[::1]:8786/playready?key=***]"),
+    ("q7", "[https://cdm.invalid/playready?key=%71%37].", "[https://cdm.invalid/playready?key=***]."),
+], ids=["query", "port", "path", "userinfo", "prose", "bracketed-ipv6", "bracketed-hostname"])
+def test_cdm_api_masks_url_credentials_in_prose(tmp_path, monkeypatch, credential, error, masked):
+    from aiohttp import web as aiohttp_web
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text(f"auth: {{headers: [{credential}]}}\n")
+    paths = (conf, *cdm.folders(conf))
+    cdm.add(*paths[1:], "old.wvd", b"WVD")
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web, "CDM_TESTS", tmp_path / "cdm_tests.json")
+    monkeypatch.setattr(web, "cdm_details", lambda: ({}, None))
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(
+        call=lambda *args, **kwargs: {"ok": False, "error": error},
+        services=lambda: [],
+    ))
+    app = aiohttp_web.Application()
+    app.router.add_post("/api/cdm/test", web.cdm_test)
+    app.router.add_get("/api/cdm", web.list_cdm)
+
+    async def go():
+        async with TestClient(TestServer(app)) as client:
+            posted = await client.post("/api/cdm/test", json={"kind": "Widevine", "name": "old"})
+            listed = await client.get("/api/cdm")
+            assert (posted.status, listed.status) == (200, 200)
+            posted_error = (await posted.json())["error"]
+            listed_error = (await listed.json())["devices"][0]["test"]["error"]
+            assert (posted_error, listed_error) == (masked, masked)
+
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("source", ["details", "reprovision", "alert"])
+def test_cdm_diagnostic_paths_mask_short_credentials(tmp_path, monkeypatch, source):
+    from aiohttp import web as aiohttp_web
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import cdm, web
+
+    conf = tmp_path / "unshackle.yaml"
+    initial = "auth: {headers: [q4, q7, at]}\ncdm: {NF: tv_sl3000}\n"
+    conf.write_text(initial)
+    paths = (conf, *cdm.folders(conf))
+    cdm.add(*paths[1:], "tv_sl3000.prd", b"PRD")
+    error = (
+        "Rejected [q4] [z82] [at]. Upstream rejected q4. "
+        "GET https://cdm.invalid/playready?key=q7. "
+        "GET https://cdm.invalid/%61%74/?key=%71%37#%71%34! "
+        "While testing for tv_sl3000 and /at/."
+    )
+    masked = (
+        "Rejected [***] [***] [***]. Upstream rejected ***. "
+        "GET https://cdm.invalid/playready?key=***. "
+        "GET https://cdm.invalid/***/?key=***#***! "
+        "While testing for tv_sl3000 and /***/."
+    )
+    monkeypatch.setattr(web, "cdm_paths", lambda: paths)
+    monkeypatch.setattr(web, "CDM_TESTS", tmp_path / "cdm_tests.json")
+
+    def call(method, path, **kwargs):
+        if method == "GET" and source == "alert":
+            return {"devices": []}
+        conf.write_text(initial.replace("q4, q7, at", "z82"))
+        if source == "alert":
+            return {"error": error, "ok": False}
+        raise web.UnshackleError(error)
+
+    monkeypatch.setattr(web, "UNSHACKLE", SimpleNamespace(call=call, services=lambda: []))
+    if source == "alert":
+        sent = []
+        settings = {"events": {"disk": False, "cookies": False, "precheck": False, "cdm": True}}
+        monkeypatch.setattr(web, "read_config", lambda: {"notifications": settings})
+        monkeypatch.setattr(web, "ALERTS_FILE", tmp_path / "alerts.json")
+        monkeypatch.setattr(web.sonarr_sync, "notify", lambda _, level, title, message, **kwargs: sent.append(message))
+        web.check_alerts()
+        assert len(sent) == 1 and sent[0].startswith(masked + ". Used by NF")
+        assert web.cdm_tests()["PlayReady:tv_sl3000"]["error"] == masked
+        return
+
+    app = aiohttp_web.Application()
+    app.router.add_get("/api/cdm", web.list_cdm)
+    app.router.add_post("/api/cdm/reprovision", web.cdm_reprovision)
+
+    async def go():
+        async with TestClient(TestServer(app)) as client:
+            if source == "reprovision":
+                response = await client.post("/api/cdm/reprovision", json={"name": "tv_sl3000"})
+                assert response.status == 400
+                assert await response.text() == masked
+            else:
+                response = await client.get("/api/cdm")
+                assert response.status == 200
+                state = await response.json()
+                assert state["details_error"] == masked
+                assert state["devices"][0]["name"] == "tv_sl3000"
+
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("route", [{}, {"widevine": None, "playready": ""}, {"PlayReady": None, "Widevine": "old"}])
+def test_empty_cdm_routes_do_not_satisfy_download_preflight(route):
+    from unshacklarr.sync import no_cdm
+
+    backend = SimpleNamespace(cdm_config=lambda: {"default": route, "NF": route})
+    assert no_cdm("NF", backend=backend).startswith("No CDM for NF")
+    backend.cdm_config = lambda: {"default": route, "NF": "none"}
+    assert not no_cdm("NF", backend=backend)
+
+
+@pytest.mark.parametrize(("entry", "missing"), [
+    ({"widevine": None, "playready": ""}, True),
+    ({"PlayReady": None, "Widevine": "old"}, True),
+    ({"Widevine": None, "PlayReady": "tv"}, False),
+    ({"PlayReady": "tv", "Widevine": "old"}, False),
+    ({"widevine": ""}, True),
+    ({"widevine": "none"}, True),
+    ({"widevine": " ", "playready": "none"}, True),
+    ({"profile": {"widevine": "local"}}, False),
+    ({"widevine": "old"}, False),
+    ("none", False),
+    ({}, False),
+    ("", False),
+    (None, False),
+])
+def test_download_cdm_preflight_uses_service_override_before_default(entry, missing):
+    from unshacklarr.sync import no_cdm
+
+    backend = SimpleNamespace(cdm_config=lambda: {"DeFaUlT": {"widevine": "fallback"}, "nF": entry})
+    assert bool(no_cdm("NF", backend=backend)) is missing
+
+
+@pytest.mark.parametrize(("mapping", "missing"), [
+    ({"default": "browser", "NF": {"example": None}}, False),
+    ({"default": {}, "NF": {"example": None}}, True),
+    ({"nf": {"playready": None, "widevine": "old"}, "NF": "browser"}, False),
+    ({"DEFAULT": "none", "default": "browser", "NF": {}}, False),
+    ({"default": "browser", "NF": {"playready": None, "widevine": "old", "example": None}}, True),
+])
+def test_download_cdm_preflight_matches_upstream_lookup_and_profile_fallback(mapping, missing):
+    from unshacklarr.sync import no_cdm
+
+    backend = SimpleNamespace(cdm_config=lambda: mapping)
+    assert bool(no_cdm("NF", backend=backend)) is missing
+
+
+@pytest.mark.parametrize(("mapping", "allowed"), [
+    ({"default": "browser", "NF": {"playready": None, "1080": "tv"}}, True),
+    ({"default": "browser", "NF": {"playready": None, "1080": None}}, False),
+    ({"default": "none"}, False),
+    ({"default": "browser", "NF": ["old"]}, False),
+], ids=["quality-device", "empty-quality", "default-none", "list-override"])
+def test_download_cdm_preflight_matches_quality_and_override_rules(tmp_path, mapping, allowed):
+    from unshacklarr import sync
+
+    backend = SimpleNamespace(cdm_config=lambda: mapping, dl_config=lambda: {}, services=lambda: [], settings={})
+    show = {"service": "NF", "title": "example"}
+    reason = sync.no_cdm("NF", backend=backend)
+    if allowed:
+        assert sync.download_request(show, {}, "S01E01", tmp_path, backend) == {
+            "service": "NF", "title_id": "example", "wanted": ["S01E01"], "output_dir": str(tmp_path),
+        }
+        assert reason == ""
+    else:
+        with pytest.raises(ValueError, match="No CDM for NF"):
+            sync.download_request(show, {}, "S01E01", tmp_path, backend)
+        assert reason.startswith("No CDM for NF")
+
+
+@pytest.mark.parametrize("availability", ["missing", "shadowed"])
+def test_cdm_read_only_route_alert_has_no_device_picker(availability):
+    from test_ui_misc import node
+
+    alerts = node(r"""
+const src = read(process.argv[1]);
+const device = (kind) => ({ name: "unavailable", kind, used_by: [] });
+const shadowed = process.argv[2] === "shadowed";
+let alerts;
+const ctx = sandbox({
+  $: (sel) => sel === "#cdm-alerts" ? { replaceChildren: (...kids) => { alerts = kids; } } : any,
+  keepFocus: (_box, draw) => draw(), svcName: String,
+  S: { config: { series: {}, settings: {} } },
+  cdmData: {
+    folder: "/cdm", services: [], routes: {
+      AMZN: { widevine: "unavailable", advanced: true }, NF: { widevine: "unavailable" },
+    },
+    devices: shadowed ? [device("Widevine")] : [],
+    remote: shadowed ? [device("PlayReady")] : [],
+  },
+  cdmFilter: "all", cdmQuery: "", cdmShowUnused: false, cdmRunning: new Set(),
+  COUNT: { device: String, moreDevice: String, problem: String },
+});
+vm.runInContext(grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + grab(src, /^const cdmUsageName = .*$/m) + "\n"
+  + ["cdmTitle", "cdmStatus", "cdmShort", "renderCdm", "remoteRow"].map((name) =>
+    grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+ctx.renderCdm();
+const text = (node) => typeof node === "string" ? node : node.textContent ?? node.kids.map(text).join("");
+console.log(JSON.stringify(alerts.map((alert) => [text(alert.kids[0]), ...alert.kids.slice(1).map(text)])));
+""", str(STATIC / "js" / "cookies-cdm.js"), availability)
+    assert alerts == [
+        ["AMZN uses unavailable, which is not in the CDM folder"],
+        ["NF uses unavailable, which is not in the CDM folder", "Pick a device"],
+    ]
+
+
+def test_cdm_management_submits_the_selected_playready_file_or_folder():
+    from test_ui_misc import node
+
+    calls = node(r"""
+const src = read(process.argv[1]);
+const devices = [false, true].map((folder) => ({ name: "play", kind: "PlayReady", folder, used_by: [] }));
+let cards, menu;
+const calls = [];
+const data = { folder: "/cdm", services: [], devices, remote: [], routes: {} };
+const ctx = sandbox({
+  $: (sel) => sel === "#cdm-list" ? { replaceChildren: (...kids) => { cards = kids; } } : any,
+  keepFocus: (_box, draw) => draw(), COUNT: { device: String, moreDevice: String, problem: String },
+  cdmData: data, cdmFilter: "all", cdmQuery: "", cdmShowUnused: true, cdmRunning: new Set(),
+  S: { config: { series: {}, settings: {} } },
+  cdmPopAt: (_anchor, _title, box) => { menu = box; }, confirmClick: () => true,
+  api: async (path, { method, body }) => { calls.push([path, method, JSON.parse(body)]); return data; },
+});
+vm.runInContext(grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + grab(src, /^const cdmUsageName = .*$/m) + "\n"
+  + ["cdmTitle", "cdmStatus", "cdmShort", "renderCdm"].map((name) =>
+    grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+const walk = (n) => [n, ...(n?.kids || []).flatMap(walk)];
+(async () => {
+  for (const shown of ["play.prd", "play/"]) {
+    ctx.renderCdm();
+    const row = walk(cards[1]).find((n) => n?.className?.startsWith("cdm-dev ")
+      && walk(n).some((kid) => kid?.textContent === shown));
+    walk(row).find((n) => n?.title === "Actions").onclick({ currentTarget: any });
+    await menu.kids.find((b) => b?.kids?.[0]?.textContent === "Delete").onclick({ currentTarget: any });
+  }
+  console.log(JSON.stringify(calls));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(STATIC / "js" / "cookies-cdm.js"))
+    assert calls == [
+        ["/api/cdm/delete", "POST", {"name": "play", "kind": "PlayReady", "folder": False}],
+        ["/api/cdm/delete", "POST", {"name": "play", "kind": "PlayReady", "folder": True}],
+    ]
+
+
+@pytest.mark.parametrize("usage_format", ["keyed", "omitted"])
+def test_cdm_route_controls_filter_slots_and_render_the_saved_readback(usage_format):
+    from test_ui_misc import node
+
+    shown = node(r"""
+const src = read(process.argv[1]);
+const keyed = process.argv[2] === "keyed";
+const device = (name, kind) => ({ name, kind, used_by: [] });
+const data = {
+  folder: "/cdm", services: ["NF", "AMZN", "YT", "FLOW"], map: { default: "beta", YT: "none" },
+  routes: {
+    default: { widevine: "alpha", preferred: "widevine" },
+    NF: { widevine: "alpha", playready: "beta", preferred: "widevine" },
+    AMZN: { advanced: true, devices: ["alpha"] }, YT: { no_cdm: true }, FLOW: { advanced: true, no_cdm: true },
+  },
+  devices: [device("alpha", "Widevine"), device("beta", "PlayReady"), device("beta", "Widevine"), device("wv-api", "PlayReady"),
+    { ...device("alpha", "PlayReady"), routable: false },
+    { ...device("certificates", "PlayReady"), folder: true, routable: false }],
+  remote: [device("wv-api", "Widevine"), device("pr-api", "PlayReady"),
+    device("wv-api", "Widevine"),
+    device("outside/device", "Widevine"), device("@lab", "PlayReady"), device("none", "PlayReady")],
+};
+let drawn, list;
+const calls = [];
+const ctx = sandbox({
+  $: (sel) => sel === "#cdm-list" ? { replaceChildren: (...kids) => { drawn = kids[0]; } } : any,
+  el: (tag, props, ...kids) => ({ ...el(tag, { value: "", ...props }, ...kids),
+    replaceChildren(...k) { this.kids = k; }, append(...k) { this.kids.push(...k); }, get children() { return this.kids; } }),
+  keepFocus: (_box, draw) => draw(), COUNT: { device: String, moreDevice: String, problem: String },
+  cdmData: data, cdmFilter: "all", cdmQuery: "", cdmTesting: false, cdmShowUnused: false,
+  cdmRunning: new Set(), S: { config: { series: {}, settings: {} } },
+  svcName: String, trWith: (s, v) => s.replace("{0}", v),
+  cdmPopAt: (_anchor, _title, _q, box) => { list = box; }, closeCdmPop() {},
+  api: async (path, { method, body }) => {
+    const sent = JSON.parse(body);
+    calls.push([path, method, sent]);
+    const routes = { ...data.routes };
+    if (sent.widevine === null && sent.playready === null) delete routes[sent.service];
+    else routes[sent.service] = {
+      ...routes[sent.service], widevine: "alpha", playready: "beta", preferred: "playready", devices: ["beta", "alpha"],
+    };
+    const used_by = sent.service === "default" && keyed ? {
+      remote: { "wv-api": [["HIDDEN"], []], "pr-api": [[]] },
+      local: { "Widevine:0:alpha": ["AMZN", "HIDDEN", "NF", "default"], "PlayReady:0:beta": ["NF", "default"],
+        "Widevine:0:beta": [], "PlayReady:0:wv-api": [], "PlayReady:0:alpha": [] },
+    } : undefined;
+    return { devices: [{ name: "safe metadata only" }], map: { ...data.map, [sent.service]: routes[sent.service] }, routes, used_by };
+  },
+});
+vm.runInContext(grab(src, /const cdmCard = [\s\S]*?\.\.\.body\);\n/)
+  + grab(src, /^const cdmUsageName = .*$/m) + "\n"
+  + ["cdmTitle", "cdmStatus", "cdmShort", "renderCdm", "cdmPicker"].map((name) =>
+    grab(src, new RegExp(`function ${name}\\b[\\s\\S]*?\\n}\\n`))).join("\n"), ctx);
+const walk = (n) => [n, ...(n?.kids || []).flatMap(walk)];
+const row = (label) => walk(drawn).find((n) => n?.className?.split(" ").includes("cdm-grp")
+  && n.kids[0]?.textContent === label);
+const buttons = (n) => walk(n).filter((k) => k?.tag === "button");
+const readText = (n) => walk(n).map((k) => k?.textContent || "").join(" ");
+const labeled = (n, label) => buttons(n).find((b) => (b.ariaLabel || readText(b).trim()).startsWith(label));
+const optionNames = () => buttons(list).map((b) => b.kids[0].textContent);
+(async () => {
+  ctx.renderCdm();
+  const def = row("Default"), nf = row("NF"), advanced = row("AMZN"), none = row("YT");
+  const widevine = labeled(def, "Widevine"), playready = labeled(def, "PlayReady");
+  const report = {
+    defaultSlots: !!widevine && !!playready, serviceSlots: !!labeled(nf, "Widevine") && !!labeled(nf, "PlayReady"),
+    preferred: !!labeled(nf, "Preferred DRM"),
+    readOnly: readText(advanced).includes("Read-only") && !buttons(advanced).length,
+    noCdm: readText(none).includes("No CDM") && !readText(def).includes("No CDM"),
+    readOnlyNoCdm: readText(row("FLOW")).includes("No CDM") && !buttons(row("FLOW")).length,
+    widevineAvailable: widevine?.title === "Change default device",
+  };
+  if (widevine && playready) {
+    widevine.onclick({ currentTarget: widevine });
+    report.widevineOptions = optionNames();
+    playready.onclick({ currentTarget: playready });
+    report.playreadyOptions = optionNames();
+    await buttons(list).find((b) => b.kids[0].textContent.startsWith("pr-api"))?.onclick();
+    report.inventoryPreserved = ctx.cdmData.folder === "/cdm" && ctx.cdmData.devices === data.devices && ctx.cdmData.remote === data.remote;
+    report.usage = ctx.cdmData.devices.map((d) => d.used_by);
+    report.remoteUsage = ctx.cdmData.remote.map((d) => d.used_by);
+    report.readback = readText(row("Default")).includes("beta") && !readText(row("Default")).includes("pr-api");
+    const preferred = labeled(row("NF"), "Preferred DRM");
+    await preferred.onclick({ currentTarget: preferred });
+    const inherit = labeled(row("NF"), "Use default");
+    await inherit.onclick({ currentTarget: inherit });
+    report.inherited = !ctx.cdmData.routes.NF && ctx.cdmData.devices[1].used_by.join() === "default";
+    ctx.cdmData.read_only = true;
+    playready.onclick({ currentTarget: playready });
+    await buttons(list).find((b) => b.kids[0].textContent.startsWith("pr-api"))?.onclick();
+    if (keyed) {
+      data.devices = [data.devices[2]];
+      ctx.renderCdm(false, { routes: data.routes, used_by: {
+        remote: { "wv-api": [["NF"], []], "pr-api": [[]] },
+        local: { "Widevine:0:alpha": ["NF"], "Widevine:0:beta": [] },
+      } });
+      report.staleLocalUsage = data.devices[0].used_by;
+      report.duplicateRemoteUsage = data.remote.filter((d) => d.name === "wv-api").map((d) => d.used_by);
+    }
+  }
+  console.log(JSON.stringify({ ...report, calls }));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""", str(STATIC / "js" / "cookies-cdm.js"), usage_format)
+    assert shown == {
+        "defaultSlots": True, "serviceSlots": True, "preferred": True, "readOnly": True, "noCdm": True,
+        "readOnlyNoCdm": True, "widevineAvailable": True,
+        "widevineOptions": ["alpha · WV", "wv-api · Remote WV"],
+        "playreadyOptions": ["beta · PR", "pr-api · Remote PR"], "readback": True,
+        "inventoryPreserved": True,
+        "usage": [["AMZN", "HIDDEN", "NF", "default"] if usage_format == "keyed" else ["AMZN", "NF", "default"],
+                  ["NF", "default"], [], [], [], []],
+        "remoteUsage": [["HIDDEN"] if usage_format == "keyed" else [], [], [], [], [], []], "inherited": True,
+        **({"staleLocalUsage": [], "duplicateRemoteUsage": [["NF"], []]} if usage_format == "keyed" else {}),
+        "calls": [
+            ["/api/cdm/route", "POST", {"service": "default", "playready": "pr-api"}],
+            ["/api/cdm/route", "POST", {"service": "NF", "preferred": "playready"}],
+            ["/api/cdm/route", "POST", {"service": "NF", "widevine": None, "playready": None}],
+        ],
+    }

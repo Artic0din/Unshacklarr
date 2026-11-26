@@ -98,6 +98,7 @@ from unshacklarr.backend import (
     UnshackleError,
     authentication_observation,
 )
+from unshacklarr.cdm import NO_CDM
 from unshacklarr.files import no_credentials, read_json, write_atomic
 from unshacklarr.push import Push
 
@@ -3485,12 +3486,50 @@ def service_entry(tag: str, config: dict | None = None, backend: Unshackle | Non
 def no_cdm(tag: str, config: dict | None = None, backend: Unshackle | None = None) -> str:
     """Why a service cannot be downloaded for want of a CDM: unshackle.yaml gives it no device and has no
     default one, so Unshackle would fail on its first license. Empty when a device decrypts it, when it is
-    set to none (no DRM), or when it can't be told (Unshackle unreachable, no cdm: section read)."""
+    set to none for the service (no DRM), or when it can't be told (Unshackle unreachable, no cdm: section read)."""
     try:
-        cdm = (backend or backend_for(tag, config)).cdm_config()
+        mapping = (backend or backend_for(tag, config)).cdm_config()
     except UnshackleError:
         return ""
-    if not cdm or any(str(k).lower() in ("default", tag.lower()) and v for k, v in cdm.items()):
+    if not mapping:
+        return ""
+
+    def lookup(name: str) -> object:
+        if name in mapping:
+            return mapping[name]
+        return next((value for key, value in mapping.items() if isinstance(key, str) and key.lower() == name.lower()), None)
+
+    default_entry = lookup("default")
+    service_entry = lookup(tag)
+    if service_entry == NO_CDM:
+        return ""
+    entry = service_entry or default_entry
+
+    drm_systems = {"widevine", "playready"}
+
+    def is_quality_key(key: object) -> bool:
+        return isinstance(key, str) and bool(re.fullmatch(r"(?:>=|<=|>|<)?\d+", key))
+
+    def resolves_after_quality(candidate: object, *, allow_default: bool = True) -> bool:
+        if isinstance(candidate, str):
+            return candidate.strip() not in ("", NO_CDM)
+        if isinstance(candidate, dict) and candidate:
+            slots = {key.lower(): value for key, value in candidate.items() if isinstance(key, str)}
+            if drm_systems & slots.keys():
+                first = next(key for key in slots if key in drm_systems)
+                selected = slots[first] or slots.get("playready")
+                return isinstance(selected, str) and selected.strip() not in ("", NO_CDM)
+            if any(resolves_after_quality(value, allow_default=False) for value in candidate.values()):
+                return True
+            return (allow_default and not candidate.get("default")
+                    and isinstance(default_entry, str) and default_entry.strip() not in ("", NO_CDM))
+        return False
+
+    # A matching quality rule can supply a device before Unshackle looks at the outer DRM slots.
+    if isinstance(entry, dict) and any(is_quality_key(key) and value and resolves_after_quality(value)
+                                       for key, value in entry.items()):
+        return ""
+    if resolves_after_quality(entry):
         return ""
     return (f"No CDM for {tag}: unshackle.yaml sets no device for it and no default device. "
             "Pick one in Settings › Services & Devices › Devices (CDM), or No CDM if it has no DRM")
