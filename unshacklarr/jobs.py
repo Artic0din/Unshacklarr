@@ -334,14 +334,19 @@ def _fsync_directory_fd(fd: int) -> None:
             raise
 
 
-def _sync_directory(directory: Path) -> None:
-    if os.name == "nt":
-        return
-    fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0))
-    try:
-        _fsync_directory_fd(fd)
-    finally:
-        os.close(fd)
+def _publish_store(target: Path, data: bytes, *, first_save: bool) -> None:
+    if first_save:
+        _sync_ancestors(target.parent)
+    with ExitStack() as cleanup:
+        directory_fd: int | None = None
+        if os.name != "nt":
+            flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0)
+            directory_fd = os.open(target.parent, flags)
+            cleanup.callback(os.close, directory_fd)
+        # Effective options can contain proxy credentials.
+        write_atomic(target, data, mode=PRIVATE)
+        if directory_fd is not None:
+            _fsync_directory_fd(directory_fd)
 
 
 def _sync_ancestors(directory: Path) -> None:
@@ -453,11 +458,7 @@ class JobStore:
                     _require(verified == updated, "Encoded job records differ from the originals")
                     if self._target_path() != target or _read_bytes(target) != before:
                         continue
-                    # Effective options can contain proxy credentials.
-                    if before is None:
-                        _sync_ancestors(target.parent)
-                    write_atomic(target, data, mode=PRIVATE)
-                    _sync_directory(target.parent)
+                    _publish_store(target, data, first_save=before is None)
                     return verified.jobs
         except LegacyQueueConversionError:
             raise
@@ -589,21 +590,26 @@ def _reconcile_staged_job(
 ) -> DownstreamJob:
     if prior is None:
         return incoming
-    if baseline == (incoming.request, incoming.state):
-        return prior
-    prior_children = {child.id: child for child in prior.children}
-    children = tuple(
-        replace(saved, request=child.request) if (saved := prior_children.get(child.id)) is not None else child
-        for child in incoming.children
-    )
+    if baseline is not None and incoming.request == baseline[0]:
+        request, children, added_work = prior.request, prior.children, False
+    else:
+        request = incoming.request
+        prior_children = {child.id: child for child in prior.children}
+        children = tuple(
+            replace(saved, request=child.request) if (saved := prior_children.get(child.id)) is not None else child
+            for child in incoming.children
+        )
+        added_work = any(child.id not in prior_children for child in incoming.children)
     next_state = prior.state
-    if prior.state in ("waiting", "paused") and baseline is not None and incoming.state != baseline[1]:
+    if added_work and prior.state not in ("waiting", "running", "paused"):
         next_state = incoming.state
-    if (prior.request, prior.children, prior.state) == (incoming.request, children, next_state):
+    elif prior.state in ("waiting", "paused") and baseline is not None and incoming.state != baseline[1]:
+        next_state = incoming.state
+    if (prior.request, prior.children, prior.state) == (request, children, next_state):
         return prior
     return replace(
-        incoming, children=children, state=next_state,
-        created_at=prior.created_at, updated_at=max(prior.updated_at, incoming.updated_at),
+        prior, request=request, children=children, state=next_state,
+        updated_at=max(prior.updated_at, incoming.updated_at),
     )
 
 

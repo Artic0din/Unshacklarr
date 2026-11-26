@@ -215,7 +215,7 @@ def test_store_keeps_a_concurrent_save_after_rename(store: jobs.JobStore, monkey
 def test_store_syncs_parent_directory_after_atomic_rename(
     store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    write_atomic, fsync = jobs.write_atomic, os.fsync
+    write_atomic, fsync, open_fd = jobs.write_atomic, os.fsync, os.open
     parent_stat = store.path.parent.stat()
     calls: list[str] = []
     fail_with = errno.EINVAL
@@ -238,6 +238,17 @@ def test_store_syncs_parent_directory_after_atomic_rename(
     fail_with = errno.EIO
     with pytest.raises(jobs.JobStoreError):
         store.save([JOB])
+
+    def deny_open(path: str | bytes | os.PathLike[str] | os.PathLike[bytes], flags: int, mode: int = 0o777) -> int:
+        if os.fspath(path) == os.fspath(store.path.parent):
+            raise PermissionError(errno.EACCES, "unreadable directory")
+        return open_fd(path, flags, mode)
+
+    calls.clear()
+    monkeypatch.setattr(os, "open", deny_open)
+    with pytest.raises(jobs.JobStoreError):
+        store.save([replace(JOB, state="paused")])
+    assert "renamed" not in calls and store.load() == (JOB,)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="requires POSIX directory sync")
@@ -744,6 +755,29 @@ def test_restaging_applies_source_pause_changes_only_to_waiting_or_paused_parent
     updated, = jobs.convert_legacy_queue_file(source, store)
     assert updated.state == expected_state
     assert store.load() == (updated,)
+
+
+def test_restaging_pause_preserves_live_request_and_new_episode_reopens_terminal(
+    source: Path, store: jobs.JobStore
+) -> None:
+    first, _ = jobs.convert_legacy_queue_file(source, store, converted_at=CONVERTED)
+    live_request = replace(first.request, service="crunchyroll", title_id="show-1",
+                           effective_options={**first.request.effective_options, "custom": "live"})
+    live = replace(first, state="paused", request=live_request, children=tuple(
+        replace(child, request=item) for child, item in zip(first.children, live_request.items, strict=True)
+    ))
+    store.save([live])
+
+    source.write_text(json.dumps({BATCH: {**LEGACY[BATCH], "paused": False}}))
+    toggled, = jobs.convert_legacy_queue_file(source, store, converted_at=CONVERTED + timedelta(hours=1))
+    assert toggled.state == "waiting" and toggled.request == live_request and toggled.children == live.children
+
+    done = replace(toggled, state="completed", children=tuple(replace(c, state="completed") for c in toggled.children))
+    store.save([done])
+    source.write_text(json.dumps({BATCH: {**LEGACY[BATCH], "paused": False, "episodes": [3, 4, 5]}}))
+    reopened, = jobs.convert_legacy_queue_file(source, store, converted_at=CONVERTED + timedelta(hours=2))
+    assert reopened.state == "waiting"
+    assert [child.state for child in reopened.children] == ["completed", "completed", "waiting"]
 
 
 def test_overlapping_staging_publishes_in_lock_order(
