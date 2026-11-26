@@ -1,6 +1,6 @@
 import asyncio
-import fcntl
-import importlib
+import errno
+import importlib.util
 import json
 import os
 import select
@@ -17,7 +17,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import Path
-from types import MappingProxyType, SimpleNamespace
+from types import MappingProxyType, ModuleType, SimpleNamespace
 from typing import NoReturn
 from unittest.mock import AsyncMock
 
@@ -124,14 +124,25 @@ def test_store_round_trip_replaces_public_mode_with_private_mode(store: jobs.Job
     store.save([JOB])
     store.path.chmod(0o644)
     assert store.save([first, JOB]) == store.load() == (first, JOB)
-    assert stat.S_IMODE(store.path.stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(store.path.stat().st_mode) == 0o600
     assert json.loads(store.path.read_bytes()) == {"schema_version": 1, "jobs": [first.to_dict(), JOB.to_dict()]}
 
 
-@pytest.mark.parametrize("document", [b"\xff", b"{", b"[]", b'{"schema_version":true,"jobs":[]}',
-                                       b'{"schema_version":2,"jobs":[]}', b'{"schema_version":1,"jobs":[{}]}',
-                                       *(json.dumps({"schema_version": 1, "jobs": [JOB.to_dict()], "staged_job_ids": ids}).encode()
-                                         for ids in (None, [True], ["missing"], [JOB.id, JOB.id]))])
+@pytest.mark.parametrize("document", [
+    b"\xff", b"{", b"[]", b'{"schema_version":true,"jobs":[]}',
+    b'{"schema_version":2,"jobs":[]}', b'{"schema_version":1,"jobs":[{}]}',
+    b'{"schema_version":2,"schema_version":1,"jobs":[]}',
+    *(json.dumps({"schema_version": 1, "jobs": [JOB.to_dict()], "staged_job_ids": ids}).encode()
+      for ids in (None, [True], ["missing"], [JOB.id, JOB.id])),
+    *(json.dumps({
+        "schema_version": 1, "jobs": [JOB.to_dict()], "staged_job_ids": [JOB.id], "staged_baselines": baselines,
+    }).encode() for baselines in (
+        None, [], {"missing": {"request": REQUEST.to_dict(), "state": "waiting"}},
+        {JOB.id: []}, {JOB.id: {"request": {}, "state": "waiting"}},
+        {JOB.id: {"request": REQUEST.to_dict(), "state": "unknown"}},
+    )),
+])
 def test_store_fails_closed_on_bad_documents(store: jobs.JobStore, document: bytes) -> None:
     store.path.write_bytes(document)
     with pytest.raises(jobs.JobStoreError):
@@ -200,9 +211,114 @@ def test_store_keeps_a_concurrent_save_after_rename(store: jobs.JobStore, monkey
     assert store.load() == (newer,)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX directory sync")
+def test_store_syncs_parent_directory_after_atomic_rename(
+    store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_atomic, fsync = jobs.write_atomic, os.fsync
+    parent_stat = store.path.parent.stat()
+    calls: list[str] = []
+    fail_with = errno.EINVAL
+
+    def record_write(path: Path, data: bytes, mode: int | None = None) -> None:
+        write_atomic(path, data, mode=mode)
+        calls.append("renamed")
+
+    def sync_or_reject(fd: int) -> None:
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode) and (info.st_dev, info.st_ino) == (parent_stat.st_dev, parent_stat.st_ino):
+            calls.append("synced parent")
+            raise OSError(fail_with, "directory sync failure")
+        fsync(fd)
+
+    monkeypatch.setattr(jobs, "write_atomic", record_write)
+    monkeypatch.setattr(os, "fsync", sync_or_reject)
+    assert store.save([JOB]) == store.load() == (JOB,)
+    assert calls == ["renamed", "synced parent"]
+    fail_with = errno.EIO
+    with pytest.raises(jobs.JobStoreError):
+        store.save([JOB])
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX directory sync")
+def test_first_save_syncs_ancestors_across_retry_and_precreated_dirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_atomic, fsync = jobs.write_atomic, os.fsync
+    root = tmp_path / "root"
+    root.mkdir()
+    root_id = (root.stat().st_dev, root.stat().st_ino)
+    events: list[tuple[int, int] | str] = []
+    fail_on: tuple[int, int] | None = root_id
+
+    def record_write(path: Path, data: bytes, mode: int | None = None) -> None:
+        write_atomic(path, data, mode=mode)
+        events.append("renamed")
+
+    def track_sync(fd: int) -> None:
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode):
+            identity = (info.st_dev, info.st_ino)
+            if identity == fail_on:
+                raise OSError(errno.EIO, "ancestor sync failed")
+            events.append(identity)
+        fsync(fd)
+
+    monkeypatch.setattr(jobs, "write_atomic", record_write)
+    monkeypatch.setattr(os, "fsync", track_sync)
+    nested = jobs.JobStore(root / "nested" / "sub" / "jobs.json")
+    for _ in range(2):
+        with pytest.raises(jobs.JobStoreError):
+            nested.save([JOB])
+        assert nested.path.parent.is_dir() and not nested.path.exists()
+    fail_on = None
+    precreated = root / "other" / "sub"
+    precreated.mkdir(parents=True)
+    for target_dir in (nested.path.parent, precreated):
+        events.clear()
+        current = jobs.JobStore(target_dir / "jobs.json")
+        assert current.save([JOB]) == current.load() == (JOB,)
+        renamed = events.index("renamed")
+        mid, leaf = target_dir.parent.stat(), target_dir.stat()
+        assert events[renamed - 2 : renamed + 2] == [
+            root_id, (mid.st_dev, mid.st_ino), "renamed", (leaf.st_dev, leaf.st_ino),
+        ]
+
+
+def test_windows_locking_fallback_works_without_fcntl(
+    store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    msvcrt = ModuleType("msvcrt")
+    lock, unlock = 1, 0
+    operations: list[int] = []
+
+    def locking(fd: int, operation: int, length: int) -> None:
+        assert os.lseek(fd, 0, os.SEEK_CUR) == 0 and length == 1
+        operations.append(operation)
+        os.lseek(fd, 1, os.SEEK_SET)
+        if operations == [lock]:
+            raise OSError(errno.EACCES, "busy")
+
+    vars(msvcrt).update(LK_LOCK=lock, LK_UNLCK=unlock, locking=locking)
+    spec = importlib.util.spec_from_file_location("windows_jobs_test", jobs.__file__)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    with monkeypatch.context() as patch:
+        patch.setattr(sys, "platform", "win32")
+        patch.setitem(sys.modules, "fcntl", None)
+        patch.setitem(sys.modules, "msvcrt", msvcrt)
+        patch.setitem(sys.modules, spec.name, module)
+        spec.loader.exec_module(module)
+        windows_store = module.JobStore(store.path)
+        windows_job = module.DownstreamJob.from_dict(JOB.to_dict())
+        assert windows_store.save([windows_job]) == windows_store.load() == (windows_job,)
+    assert operations == [lock, lock, unlock]
+
+
 def test_staging_and_other_process_serialize_via_file_lock(
     source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    pytest.importorskip("fcntl")
     parent_tmp, child_tmp = tmp_path / "parent_tmp", tmp_path / "child_tmp"
     parent_tmp.mkdir()
     child_tmp.mkdir()
@@ -244,123 +360,128 @@ def test_staging_and_other_process_serialize_via_file_lock(
     assert not any(parent_tmp.iterdir()) and not any(child_tmp.iterdir())
 
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="fork unavailable")
-def test_staging_and_forked_writer_serialize_via_file_lock(
-    source: Path, store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    write_atomic, lockf = jobs.write_atomic, fcntl.lockf
-    child_pid, wait_status = 0, None
-    def fork_before_write(path: Path, data: bytes, mode: int | None = None) -> None:
-        nonlocal child_pid
-        read_fd, write_fd = os.pipe()
+if sys.platform != "win32":
+    @pytest.mark.skipif(not hasattr(os, "fork"), reason="fork unavailable")
+    def test_staging_and_forked_writer_serialize_via_file_lock(
+        source: Path, store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fcntl = pytest.importorskip("fcntl")
+        write_atomic, lockf = jobs.write_atomic, fcntl.lockf
+        child_pid, wait_status = 0, None
+        def fork_before_write(path: Path, data: bytes, mode: int | None = None) -> None:
+            nonlocal child_pid
+            read_fd, write_fd = os.pipe()
 
-        def report_contention(fd: int, operation: int) -> None:
-            if operation == fcntl.LOCK_EX:
-                with pytest.raises(BlockingIOError):
-                    lockf(fd, operation | fcntl.LOCK_NB)
-                os.write(write_fd, b"blocked")
-            lockf(fd, operation)
-            if operation == fcntl.LOCK_EX:
-                assert [job.id for job in store.load()] == [BATCH, LATER_BATCH]
+            def report_contention(fd: int, operation: int) -> None:
+                if operation == fcntl.LOCK_EX:
+                    with pytest.raises(BlockingIOError):
+                        lockf(fd, operation | fcntl.LOCK_NB)
+                    os.write(write_fd, b"blocked")
+                lockf(fd, operation)
+                if operation == fcntl.LOCK_EX:
+                    assert [job.id for job in store.load()] == [BATCH, LATER_BATCH]
 
-        child_pid = os.fork()
-        if child_pid == 0:
-            os.close(read_fd)
-            exit_code = 1
-            try:
-                monkeypatch.setattr(jobs, "write_atomic", write_atomic)
-                monkeypatch.setattr(fcntl, "lockf", report_contention)
-                assert jobs.JobStore(store.path).save([JOB]) == (JOB,)
-                exit_code = 0
-            finally:
-                os._exit(exit_code)
-        os.close(write_fd)
-        with os.fdopen(read_fd, "rb", buffering=0) as signal:
-            assert select.select([signal], [], [], 10)[0], "The forked writer did not reach its save"
-            assert signal.read(7) == b"blocked", "The forked writer bypassed the file lock"
-        write_atomic(path, data, mode=mode)
+            child_pid = os.fork()
+            if child_pid == 0:
+                os.close(read_fd)
+                exit_code = 1
+                try:
+                    monkeypatch.setattr(jobs, "write_atomic", write_atomic)
+                    monkeypatch.setattr(fcntl, "lockf", report_contention)
+                    assert jobs.JobStore(store.path).save([JOB]) == (JOB,)
+                    exit_code = 0
+                finally:
+                    os._exit(exit_code)
+            os.close(write_fd)
+            with os.fdopen(read_fd, "rb", buffering=0) as signal:
+                assert select.select([signal], [], [], 10)[0], "The forked writer did not reach its save"
+                assert signal.read(7) == b"blocked", "The forked writer bypassed the file lock"
+            write_atomic(path, data, mode=mode)
 
-    monkeypatch.setattr(jobs, "write_atomic", fork_before_write)
-    try:
-        staged = jobs.convert_legacy_queue_file(source, store)
-    finally:
-        if child_pid:
-            _, wait_status = os.waitpid(child_pid, 0)
-    assert wait_status == 0
-    assert [job.id for job in staged] == [BATCH, LATER_BATCH]
-    assert store.load() == (JOB,)
-
-
-def _try_lock(lock: Callable[[int, int], object], fd: int, operation: int) -> None:
-    if operation == fcntl.LOCK_EX:
-        operation |= fcntl.LOCK_NB
-    lock(fd, operation)
+        monkeypatch.setattr(jobs, "write_atomic", fork_before_write)
+        try:
+            staged = jobs.convert_legacy_queue_file(source, store)
+        finally:
+            if child_pid:
+                _, wait_status = os.waitpid(child_pid, 0)
+        assert wait_status == 0
+        assert [job.id for job in staged] == [BATCH, LATER_BATCH]
+        assert store.load() == (JOB,)
 
 
-def _save_after_lock_owner_exits(
-    store: jobs.JobStore, start_fd: int, result_fd: int, patch: pytest.MonkeyPatch
-) -> NoReturn:
-    result = b"failed"
-    try:
-        patch.undo()
-        assert select.select([start_fd], [], [], 10)[0]
-        assert os.read(start_fd, 1) == b"1"
-        for name in ("flock", "lockf"):
-            patch.setattr(fcntl, name, partial(_try_lock, getattr(fcntl, name)))
-        assert jobs.JobStore(store.path).save([JOB]) == (JOB,)
-        result = b"saved"
-    except jobs.JobStoreError as error:
-        if isinstance(error.__cause__, BlockingIOError):
-            result = b"blocked"
-    finally:
-        os.write(result_fd, result)
-        os._exit(0 if result == b"saved" else 1)
+    def _try_lock(lock: Callable[[int, int], object], fd: int, operation: int) -> None:
+        fcntl = pytest.importorskip("fcntl")
+        if operation == fcntl.LOCK_EX:
+            operation |= fcntl.LOCK_NB
+        lock(fd, operation)
 
 
-def _exit_during_conversion(source: Path, store: jobs.JobStore, start_fd: int, result_fd: int) -> NoReturn:
-    lock_path = store.path.resolve().with_name(f".{store.path.name}.lock")
-    open_file = os.open
-    patch = pytest.MonkeyPatch()
+    def _save_after_lock_owner_exits(
+        store: jobs.JobStore, start_fd: int, result_fd: int, patch: pytest.MonkeyPatch
+    ) -> NoReturn:
+        fcntl = pytest.importorskip("fcntl")
+        result = b"failed"
+        try:
+            patch.undo()
+            assert select.select([start_fd], [], [], 10)[0]
+            assert os.read(start_fd, 1) == b"1"
+            for name in ("flock", "lockf"):
+                patch.setattr(fcntl, name, partial(_try_lock, getattr(fcntl, name)))
+            assert jobs.JobStore(store.path).save([JOB]) == (JOB,)
+            result = b"saved"
+        except jobs.JobStoreError as error:
+            if isinstance(error.__cause__, BlockingIOError):
+                result = b"blocked"
+        finally:
+            os.write(result_fd, result)
+            os._exit(0 if result == b"saved" else 1)
 
-    def open_then_fork(
-        path: str | bytes | os.PathLike[str] | os.PathLike[bytes], flags: int, mode: int = 0o777,
-        *, dir_fd: int | None = None,
-    ) -> int:
-        fd = open_file(path, flags, mode, dir_fd=dir_fd)
-        if path == lock_path and os.fork() == 0:
-            _save_after_lock_owner_exits(store, start_fd, result_fd, patch)
-        return fd
 
-    try:
-        patch.setattr(os, "open", open_then_fork)
-        patch.setattr(os, "replace", lambda src, dst: os._exit(0))
-        jobs.convert_legacy_queue_file(source, store)
-    finally:
-        os._exit(1)
+    def _exit_during_conversion(source: Path, store: jobs.JobStore, start_fd: int, result_fd: int) -> NoReturn:
+        lock_path = store.path.resolve().with_name(f".{store.path.name}.lock")
+        open_file = os.open
+        patch = pytest.MonkeyPatch()
+
+        def open_then_fork(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes], flags: int, mode: int = 0o777,
+            *, dir_fd: int | None = None,
+        ) -> int:
+            fd = open_file(path, flags, mode, dir_fd=dir_fd)
+            if path == lock_path and os.fork() == 0:
+                _save_after_lock_owner_exits(store, start_fd, result_fd, patch)
+            return fd
+
+        try:
+            patch.setattr(os, "open", open_then_fork)
+            patch.setattr(os, "replace", lambda src, dst: os._exit(0))
+            jobs.convert_legacy_queue_file(source, store)
+        finally:
+            os._exit(1)
 
 
-@pytest.mark.skipif(not hasattr(os, "fork"), reason="fork unavailable")
-def test_fork_during_lock_open_releases_on_parent_exit(source: Path, store: jobs.JobStore) -> None:
-    start_read, start_write = os.pipe()
-    result_read, result_write = os.pipe()
-    helper_pid = os.fork()
-    if helper_pid == 0:
-        os.close(start_write)
-        os.close(result_read)
-        _exit_during_conversion(source, store, start_read, result_write)
-    os.close(start_read)
-    os.close(result_write)
-    try:
-        _, wait_status = os.waitpid(helper_pid, 0)
-        assert os.waitstatus_to_exitcode(wait_status) == 0
-        assert store.load() == ()
-        os.write(start_write, b"1")
-        assert select.select([result_read], [], [], 10)[0], "The grandchild did not report its save result"
-        assert os.read(result_read, 7) == b"saved"
-    finally:
-        os.close(start_write)
-        os.close(result_read)
-    assert store.load() == (JOB,)
+    @pytest.mark.skipif(not hasattr(os, "fork"), reason="fork unavailable")
+    def test_fork_during_lock_open_releases_on_parent_exit(source: Path, store: jobs.JobStore) -> None:
+        pytest.importorskip("fcntl")
+        start_read, start_write = os.pipe()
+        result_read, result_write = os.pipe()
+        helper_pid = os.fork()
+        if helper_pid == 0:
+            os.close(start_write)
+            os.close(result_read)
+            _exit_during_conversion(source, store, start_read, result_write)
+        os.close(start_read)
+        os.close(result_write)
+        try:
+            _, wait_status = os.waitpid(helper_pid, 0)
+            assert os.waitstatus_to_exitcode(wait_status) == 0
+            assert store.load() == ()
+            os.write(start_write, b"1")
+            assert select.select([result_read], [], [], 10)[0], "The grandchild did not report its save result"
+            assert os.read(result_read, 7) == b"saved"
+        finally:
+            os.close(start_write)
+            os.close(result_read)
+        assert store.load() == (JOB,)
 
 
 def test_converts_both_queue_formats_offline(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -513,6 +634,8 @@ def test_legacy_numbering_accepts_falsy_fields_in_read_only_snapshots() -> None:
 
 
 @pytest.mark.parametrize("raw", [b"\xff", '{"broken":', "null", "[]", {"bad-batch": {"episodes": [3]}},
+                                 f'{{"{BATCH}":{{"episodes":[3]}},"{BATCH}":{{"episodes":[4]}}}}',
+                                 f'{{"{BATCH}":{{"episodes":[3],"options":{{"quality":720,"quality":1080}}}}}}',
                                  {BATCH: []}, {BATCH: [None]}, {BATCH: {"episodes": []}},
                                  {BATCH: {"episodes": [True]}}, {BATCH: {"episodes": [-1]}}])
 def test_rejects_invalid_legacy_queue(raw: bytes | str | Mapping[str, object]) -> None:
@@ -557,8 +680,70 @@ def test_file_staging_reconciles_the_whole_snapshot(source: Path, store: jobs.Jo
     assert store.load() == (unowned, updated)
     source.write_bytes(b"{}")
     assert jobs.convert_legacy_queue_file(source, store) == store.load() == (unowned,)
-    assert "staged_job_ids" not in json.loads(store.path.read_bytes())
+    assert set(json.loads(store.path.read_bytes())) == {"schema_version", "jobs"}
     assert source.read_bytes() == b"{}"
+
+
+@pytest.mark.parametrize("state", ["running", "waiting"])
+def test_restaging_preserves_saved_job_and_child_progress(
+    source: Path, store: jobs.JobStore, state: jobs.JobState
+) -> None:
+    first, later = jobs.convert_legacy_queue_file(source, store, converted_at=CONVERTED)
+    failed = replace(
+        first.children[0], state="failed", attempt_job_id="attempt-1", interruption_count=2,
+        failure=jobs.FailureClassification("child", "download"),
+    )
+    saved = replace(
+        first, state=state, children=(failed, *first.children[1:]),
+        created_at=CREATED - timedelta(days=1), updated_at=CONVERTED + timedelta(days=1),
+    )
+    store.save([saved, later])
+    assert jobs.convert_legacy_queue_file(
+        source, store, converted_at=CONVERTED + timedelta(days=2),
+    ) == store.load() == (saved, later)
+
+    revised_options = {"options": {"--a-lang": ["de"]}}
+    source.write_text(json.dumps({**LEGACY, BATCH: {**LEGACY[BATCH], "options": revised_options}}))
+    updated, untouched = jobs.convert_legacy_queue_file(source, store, converted_at=CONVERTED)
+    assert updated.request.effective_options["options"] == {"options": {"--a-lang": ("de",)}}
+    assert updated.children == saved.children and updated.state == state
+    assert (updated.created_at, updated.updated_at) == (saved.created_at, saved.updated_at)
+    assert untouched == later and store.load() == (updated, later)
+
+
+def test_first_restage_of_pre_baseline_store_preserves_saved_parent_state(
+    source: Path, store: jobs.JobStore
+) -> None:
+    source.write_text(json.dumps({BATCH: {**LEGACY[BATCH], "paused": True}}))
+    incoming, = jobs.convert_legacy_queue(source.read_bytes())
+    saved = replace(incoming, state="waiting")
+    store.path.write_text(json.dumps({
+        "schema_version": 1, "jobs": [saved.to_dict()], "staged_job_ids": [BATCH],
+    }))
+    assert store.load() == (saved,)
+
+    assert jobs.convert_legacy_queue_file(source, store) == store.load() == (saved,)
+    baselines = json.loads(store.path.read_bytes())["staged_baselines"]
+    assert baselines == {BATCH: {"request": incoming.request.to_dict(), "state": "paused"}}
+
+
+@pytest.mark.parametrize(("paused", "saved_state", "expected_state"), [
+    (False, "waiting", "paused"),
+    (True, "paused", "waiting"),
+    (False, "running", "running"),
+    (True, "running", "running"),
+])
+def test_restaging_applies_source_pause_changes_only_to_waiting_or_paused_parents(
+    source: Path, store: jobs.JobStore, paused: bool, saved_state: jobs.JobState, expected_state: jobs.JobState
+) -> None:
+    source.write_text(json.dumps({BATCH: {**LEGACY[BATCH], "paused": paused}}))
+    initial, = jobs.convert_legacy_queue_file(source, store)
+    store.save([replace(initial, state=saved_state)])
+
+    source.write_text(json.dumps({BATCH: {**LEGACY[BATCH], "paused": not paused}}))
+    updated, = jobs.convert_legacy_queue_file(source, store)
+    assert updated.state == expected_state
+    assert store.load() == (updated,)
 
 
 def test_overlapping_staging_publishes_in_lock_order(
@@ -596,8 +781,15 @@ def test_overlapping_staging_publishes_in_lock_order(
 def test_file_conversion_refuses_source_alias(tmp_path: Path) -> None:
     source, alias = tmp_path / "legacy.json", tmp_path / "alias.json"
     source.write_bytes(OLD_QUEUE)
-    alias.symlink_to(source)
-    for target in (source, alias, tmp_path / "queue.json"):
+    targets = [source, tmp_path / "queue.json"]
+    try:
+        alias.symlink_to(source)
+    except (OSError, NotImplementedError):
+        if os.name != "nt":
+            raise
+    else:
+        targets.append(alias)
+    for target in targets:
         with pytest.raises(ValueError):
             jobs.convert_legacy_queue_file(source, target)
     assert source.read_bytes() == OLD_QUEUE

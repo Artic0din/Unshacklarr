@@ -1,8 +1,9 @@
-import fcntl
+import errno
 import json
 import math
 import os
 import re
+import sys
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager
 from dataclasses import asdict, dataclass, field, replace
@@ -14,6 +15,36 @@ from typing import Literal, NamedTuple, TypeVar, get_args
 from urllib.parse import quote
 
 from unshacklarr.files import PRIVATE, write_atomic
+
+if sys.platform == "win32":
+    import msvcrt
+    from time import sleep
+
+    WINDOWS_LOCK_RETRY_SECONDS = 0.05
+
+    def _lock_fd(fd: int) -> None:
+        while True:
+            os.lseek(fd, 0, os.SEEK_SET)
+            try:
+                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+                return
+            except OSError as error:
+                if error.errno not in (errno.EACCES, errno.EDEADLK):
+                    raise
+                sleep(WINDOWS_LOCK_RETRY_SECONDS)
+
+    def _unlock_fd(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+else:
+    import fcntl
+
+    def _lock_fd(fd: int) -> None:
+        fcntl.lockf(fd, fcntl.LOCK_EX)
+
+    def _unlock_fd(fd: int) -> None:
+        fcntl.lockf(fd, fcntl.LOCK_UN)
+
 
 SCHEMA_VERSION = 1
 LEGACY_QUEUE_FILENAME = "queue.json"
@@ -80,6 +111,15 @@ def _strip_fields(record: object, **fields: str | None) -> None:
 
 def _object(value: object) -> dict[str, object]:
     return {_expect(key, str): item for key, item in _expect(value, Mapping).items()}
+
+
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Duplicate JSON object key: {key!r}")
+        result[key] = value
+    return result
 
 
 def _sequence(value: object) -> Sequence[object]:
@@ -252,10 +292,11 @@ class DownstreamJob:
 class StoreDocument(NamedTuple):
     jobs: tuple[DownstreamJob, ...]
     staged_job_ids: frozenset[str]
+    staged_baselines: Mapping[str, tuple[NormalizedJobRequest, JobState]] = MappingProxyType({})
 
 
 def _parse_store_document(raw: bytes) -> StoreDocument:
-    document = _object(json.loads(raw.decode("utf-8")))
+    document = _object(json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object))
     _require(_expect(document["schema_version"], int) == SCHEMA_VERSION, "Unknown job store schema")
     records = tuple(map(DownstreamJob.from_dict, _expect(document["jobs"], list)))
     child_ids = [child.id for job in records for child in job.children]
@@ -264,7 +305,65 @@ def _parse_store_document(raw: bytes) -> StoreDocument:
     staged_ids = _expect(document.get("staged_job_ids", []), list)
     staged = frozenset(_expect(job_id, str) for job_id in staged_ids)
     _require(len(staged) == len(staged_ids) and staged <= job_ids, "Invalid staged job IDs")
-    return StoreDocument(records, staged)
+    raw_baselines = _object(document.get("staged_baselines", {}))
+    _require(raw_baselines.keys() <= staged, "Invalid staged baseline IDs")
+    baselines: dict[str, tuple[NormalizedJobRequest, JobState]] = {}
+    for job_id, baseline in raw_baselines.items():
+        fields = _object(baseline)
+        baselines[job_id] = NormalizedJobRequest.from_dict(fields["request"]), _choice(fields["state"], JOB_STATES)
+    return StoreDocument(records, staged, MappingProxyType(baselines))
+
+
+def _encode_store_document(updated: StoreDocument) -> bytes:
+    document: dict[str, object] = {"schema_version": SCHEMA_VERSION, "jobs": [job.to_dict() for job in updated.jobs]}
+    if updated.staged_job_ids:
+        document["staged_job_ids"] = sorted(updated.staged_job_ids)
+    if updated.staged_baselines:
+        document["staged_baselines"] = {
+            job_id: {"request": request.to_dict(), "state": state}
+            for job_id, (request, state) in updated.staged_baselines.items()
+        }
+    return json.dumps(document, allow_nan=False, indent=2).encode("utf-8")
+
+
+def _fsync_directory_fd(fd: int) -> None:
+    try:
+        os.fsync(fd)
+    except OSError as error:
+        if error.errno not in (errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP):
+            raise
+
+
+def _sync_directory(directory: Path) -> None:
+    if os.name == "nt":
+        return
+    fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0))
+    try:
+        _fsync_directory_fd(fd)
+    finally:
+        os.close(fd)
+
+
+def _sync_ancestors(directory: Path) -> None:
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0)
+    dev = directory.stat().st_dev
+    with ExitStack() as opened:
+        fds: list[int] = []
+        current = directory
+        while current.parent != current:
+            current = current.parent
+            try:
+                fd = os.open(current, flags)
+            except PermissionError:
+                break
+            opened.callback(os.close, fd)
+            if os.fstat(fd).st_dev != dev:
+                break
+            fds.append(fd)
+        for fd in reversed(fds):
+            _fsync_directory_fd(fd)
 
 
 def _reset_locks_after_fork() -> None:
@@ -274,7 +373,7 @@ def _reset_locks_after_fork() -> None:
     _LOCKS_GUARD = Lock()
 
 
-if hasattr(os, "register_at_fork"):
+if sys.platform != "win32" and hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_child=_reset_locks_after_fork)
 
 
@@ -291,8 +390,8 @@ def _acquire_lock(target: Path) -> Iterator[None]:
             flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
             fd = os.open(lock_path, flags, PRIVATE)
             cleanup.callback(os.close, fd)
-            fcntl.lockf(fd, fcntl.LOCK_EX)
-            cleanup.callback(fcntl.lockf, fd, fcntl.LOCK_UN)
+            _lock_fd(fd)
+            cleanup.callback(_unlock_fd, fd)
         _LOCK_DEPTH[key] = depth + 1
         try:
             yield
@@ -333,7 +432,9 @@ class JobStore:
         job_ids = {job.id for job in records}
 
         def keep_staged(existing: StoreDocument) -> StoreDocument:
-            return StoreDocument(records, existing.staged_job_ids & job_ids)
+            kept = existing.staged_job_ids & job_ids
+            baselines = {job_id: baseline for job_id, baseline in existing.staged_baselines.items() if job_id in kept}
+            return StoreDocument(records, kept, MappingProxyType(baselines))
 
         return self._update(keep_staged)
 
@@ -347,18 +448,16 @@ class JobStore:
                     before = _read_bytes(target)
                     existing = StoreDocument((), frozenset()) if before is None else _parse_store_document(before)
                     updated = merge(existing)
-                    document: dict[str, object] = {
-                        "schema_version": SCHEMA_VERSION, "jobs": [job.to_dict() for job in updated.jobs],
-                    }
-                    if updated.staged_job_ids:
-                        document["staged_job_ids"] = sorted(updated.staged_job_ids)
-                    data = json.dumps(document, allow_nan=False, indent=2).encode("utf-8")
+                    data = _encode_store_document(updated)
                     verified = _parse_store_document(data)
                     _require(verified == updated, "Encoded job records differ from the originals")
                     if self._target_path() != target or _read_bytes(target) != before:
                         continue
                     # Effective options can contain proxy credentials.
+                    if before is None:
+                        _sync_ancestors(target.parent)
                     write_atomic(target, data, mode=PRIVATE)
+                    _sync_directory(target.parent)
                     return verified.jobs
         except LegacyQueueConversionError:
             raise
@@ -477,12 +576,35 @@ def convert_legacy_queue(
     """Convert a legacy snapshot without I/O or starting work."""
     try:
         text = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-        payload: object = json.loads(text) if isinstance(text, str) else text
+        payload: object = json.loads(text, object_pairs_hook=_unique_object) if isinstance(text, str) else text
         _require(converted_at is None or converted_at.utcoffset() is not None, "Expected a timezone-aware datetime")
         updated = converted_at.astimezone(timezone.utc) if converted_at is not None else None
         return tuple(_convert_batch(batch, value, updated) for batch, value in sorted(_object(payload).items()))
     except (ValueError, TypeError, KeyError, RecursionError, OverflowError) as error:
         raise LegacyQueueConversionError("Invalid legacy queue") from error
+
+
+def _reconcile_staged_job(
+    prior: DownstreamJob | None, incoming: DownstreamJob, baseline: tuple[NormalizedJobRequest, JobState] | None
+) -> DownstreamJob:
+    if prior is None:
+        return incoming
+    if baseline == (incoming.request, incoming.state):
+        return prior
+    prior_children = {child.id: child for child in prior.children}
+    children = tuple(
+        replace(saved, request=child.request) if (saved := prior_children.get(child.id)) is not None else child
+        for child in incoming.children
+    )
+    next_state = prior.state
+    if prior.state in ("waiting", "paused") and baseline is not None and incoming.state != baseline[1]:
+        next_state = incoming.state
+    if (prior.request, prior.children, prior.state) == (incoming.request, children, next_state):
+        return prior
+    return replace(
+        incoming, children=children, state=next_state,
+        created_at=prior.created_at, updated_at=max(prior.updated_at, incoming.updated_at),
+    )
 
 
 def convert_legacy_queue_file(source_path: Path, target: JobStore | Path, *,
@@ -497,12 +619,10 @@ def convert_legacy_queue_file(source_path: Path, target: JobStore | Path, *,
         _require(unstaged.isdisjoint(converted), "Cannot overwrite an unstaged job")
         merged = {job.id: job for job in existing.jobs if job.id in converted or job.id in unstaged}
         for job_id, job in converted.items():
-            prior = merged.get(job_id)
-            if prior is not None:
-                if (prior.request, prior.children, prior.state) == (job.request, job.children, job.state):
-                    continue
-                job = replace(job, created_at=prior.created_at, updated_at=max(prior.updated_at, job.updated_at))
-            merged[job_id] = job
-        return StoreDocument(tuple(merged.values()), frozenset(converted))
+            merged[job_id] = _reconcile_staged_job(merged.get(job_id), job, existing.staged_baselines.get(job_id))
+        baselines: dict[str, tuple[NormalizedJobRequest, JobState]] = {
+            job_id: (job.request, job.state) for job_id, job in converted.items()
+        }
+        return StoreDocument(tuple(merged.values()), frozenset(converted), MappingProxyType(baselines))
 
     return store._update(merge)
