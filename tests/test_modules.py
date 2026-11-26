@@ -3,8 +3,11 @@
 import json
 import os
 import stat
+import sys
 import threading
+from http.cookiejar import MozillaCookieJar
 from pathlib import Path
+from typing import cast
 
 import pytest
 import responses
@@ -12,7 +15,7 @@ import yaml
 
 from unshacklarr.backend import Unshackle, UnshackleError
 from unshacklarr.cdm import CdmError, NO_CDM, add, choose, delete, folders, read, remote_delete, remote_save, state
-from unshacklarr.cookies import CookieError, list_all, normalise, parse, save
+from unshacklarr.cookies import CookieError, from_json, list_all, normalise, parse, save
 from unshacklarr.files import PRIVATE, no_credentials, shared_or_private, write_atomic
 import time
 
@@ -185,8 +188,8 @@ def test_cookie_files_are_read_saved_and_kept_in_their_folder(tmp_path):
     # formats, expiry, no path outside the folder
     netscape = "# Netscape HTTP Cookie File\n.molotov.tv\tTRUE\t/\tTRUE\t4102444800\ttoken\tabc\n#HttpOnly_.molotov.tv\tTRUE\t/\tTRUE\t0\tsid\tx\n"
     assert [c["name"] for c in parse(netscape)] == ["token", "sid"]
-    js = json.dumps([{"domain": ".crave.ca", "name": "a", "value": "1", "expirationDate": 1, "httpOnly": True, "secure": True}])
-    assert parse(normalise(js))[0] == {"domain": "crave.ca", "name": "a", "expires": 1}
+    js = json.dumps([{"domain": ".crave.ca", "name": "a", "value": "1", "expirationDate": 4102444800, "httpOnly": True, "secure": True}])
+    assert parse(normalise(js))[0] == {"domain": "crave.ca", "name": "a", "expires": 4102444800}
     d = tmp_path
     folder = Path(d)
     save(folder, "MLT", "default", netscape)
@@ -197,7 +200,11 @@ def test_cookie_files_are_read_saved_and_kept_in_their_folder(tmp_path):
     s = save(folder, "RTLP", "default", rtl)
     assert (s["expired"], s["session"], s["expires"]) == (False, 1, None)
     old = ".x.tv\tTRUE\t/\tTRUE\t1000\ttoken\tv"
-    assert save(folder, "OLD", "default", old)["expired"]  # a dated login, past, no session: expired
+    with pytest.raises(CookieError, match="expired"):
+        save(folder, "OLD", "default", old)
+    assert not (folder / "OLD").exists()
+    (folder / "OLD.txt").write_text(old)
+    assert list_all(folder)["OLD"][0]["expired"]
     for bad in (("../x", "default"), ("MLT", "../../etc"), ("MLT", "a/b")):
         try:
             save(folder, *bad, netscape)
@@ -1108,3 +1115,677 @@ console.log(JSON.stringify({ revealed: ctx.out, keys: Object.fromEntries(store) 
     assert results["room"] == {"revealed": ["1-S01E01"], "keys": {"downstream.revealed": '["1-S01E01"]'}}
     # storage full: still shown, and kept under the old key until it can move
     assert results["full"] == {"revealed": ["1-S01E01"], "keys": {"unshacklarr.revealed": '["1-S01E01"]'}}
+
+
+_COOKIE_ROW = ".x.tv\tTRUE\t/\tFALSE\t0\tsid\tsynth-valid-1"
+_JSON_COOKIE = {"domain": ".x.tv", "name": "sid", "value": "synth-valid-1"}
+
+
+@pytest.mark.parametrize(("field", "replacement", "reason"), [
+    (0, "", "invalid cookie domain"), (0, "x y", "invalid cookie domain"),
+    (1, "true", "domain flag must be TRUE or FALSE"),
+    (2, "path", "cookie path must start with '/'"), (2, "/a b", "cookie path must start with '/'"),
+    (3, "no", "secure flag must be TRUE or FALSE"),
+    *((4, expiry, "expiry date is not a valid timestamp") for expiry in ("?", "nan", "inf", "-1")),
+    (5, " ", "missing cookie name"), (5, "", "missing cookie name"),
+    (0, " #HttpOnly_.x.tv", "unexpected leading whitespace before #HttpOnly_"),
+    (6, "two\tfields", "expected 7 tab-separated fields"),
+    (None, "", "expected 7 tab-separated fields"),
+])
+def test_cookie_import_reports_source_line(field, replacement, reason):
+    from unshacklarr import cookies
+    fields = _COOKIE_ROW.split("\t")
+    if field is not None:
+        fields[field] = replacement
+    bad = (" " if field is None else "\t").join(fields)
+    text = "\r\n".join(("", "# Netscape HTTP Cookie File", "# comment", _COOKIE_ROW, bad))
+    with pytest.raises(CookieError) as error:
+        normalise(text)
+    assert isinstance(error.value, cookies.CookieParseError)
+    assert (error.value.line_number, error.value.reason) == (5, reason)
+    assert str(error.value) == f"Line 5: {reason}"
+    with pytest.raises(cookies.CookieParseError, match="Line 5"):
+        parse(text, strict=True)
+    assert parse(text) == parse(_COOKIE_ROW)
+
+
+@pytest.mark.parametrize("text", ["{bad", "[1,", "{}", '{"cookies": "bad"}', '{"cookies": null}', '{"other": []}'])
+def test_cookie_rejected_json_leaves_no_files(tmp_path, text):
+    with pytest.raises(CookieError):
+        save(tmp_path / "Cookies", "NF", "default", text)
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("item", ["synth-never-echo-99", None, {"domain": ".x.tv"},
+    {"domain": ".x.tv", "name": "sid"}, *({**_JSON_COOKIE, **change} for change in (
+        {"value": 123}, {"httpOnly": "yes"}, {"expirationDate": True}, {"expirationDate": -50},
+        {"value": "a\tb"}, {"expires": False, "expirationDate": 0}, {"expires": "inf"}, {"path": 123},
+    ))], ids=["string", "null", "missing-name", "missing-value", "value-type", "flag-type",
+              "expiry-bool", "expiry-negative", "tab", "second-expiry", "infinity", "path-type"])
+def test_cookie_import_rejects_entire_malformed_json_array(item):
+    with pytest.raises(CookieError, match=r"^Cookie #2:") as error:
+        normalise(json.dumps([_JSON_COOKIE, item]))
+    assert "synth-" not in str(error.value)
+
+
+@pytest.mark.parametrize("name", ["cf_clearance", "__cf_bm", "ak_bmsc", "bm_sv", "_ga", "AWSALBTG", "utsdc"])
+def test_cookie_import_requires_login_cookie(name):
+    for expiry in ("0", "4102444800"):
+        with pytest.raises(CookieError, match="No usable login cookies"):
+            normalise(_COOKIE_ROW.replace("sid", name).replace("\t0\t", f"\t{expiry}\t"))
+
+
+@pytest.mark.parametrize("text", [_COOKIE_ROW.rsplit("\t", 1)[0] + "\t", json.dumps([{**_JSON_COOKIE, "value": ""}])])
+def test_cookie_import_empty_session_value(text):
+    with pytest.raises(CookieError, match="No usable login cookies"):
+        normalise(text)
+
+
+@pytest.mark.parametrize("wrapped", [True, False])
+def test_cookie_import_filters_expired_json(wrapped):
+    rows = [{**_JSON_COOKIE, "expirationDate": 1000}, {**_JSON_COOKIE, "expires": -1, "session": True},
+            {**_JSON_COOKIE, "expirationDate": None, "session": True}, {**_JSON_COOKIE, "expirationDate": 1001}]
+    with pytest.raises(CookieError, match="expired"):
+        normalise(json.dumps(rows[:1]), now=1000)
+    result = normalise(json.dumps({"cookies": rows} if wrapped else rows), now=1000)
+    assert result.startswith("# Netscape HTTP Cookie File\n")
+    assert [r["expires"] for r in parse(result)] == [0, 0, 1001]
+
+
+@pytest.mark.parametrize("expiration_date", [0, "0"], ids=["number", "string"])
+def test_cookie_import_zero_expiration_date_uses_expires(tmp_path, expiration_date):
+    save(tmp_path, "NF", "", _COOKIE_ROW)
+    path = tmp_path / "NF.txt"
+    original = path.read_bytes()
+    cookie = {**_JSON_COOKIE, "expirationDate": expiration_date}
+    text = json.dumps([{**cookie, "expires": 1}])
+    with pytest.raises(CookieError, match="expired") as normalise_error:
+        normalise(text, now=2)
+    with pytest.raises(CookieError, match="expired") as save_error:
+        save(tmp_path, "NF", "", text)
+    for error in (normalise_error, save_error):
+        assert _JSON_COOKIE["value"] not in str(error.value)
+    assert path.read_bytes() == original
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    future = json.dumps([{**cookie, "expires": 4102444800}])
+    assert parse(normalise(future, now=2))[0]["expires"] == 4102444800
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_cookie_import_rejects_nonstandard_json_constants(tmp_path, constant):
+    save(tmp_path, "NF", "", _COOKIE_ROW)
+    path = tmp_path / "NF.txt"
+    original = path.read_bytes()
+    text = json.dumps([{**_JSON_COOKIE, "extra": float(constant)}])
+    with pytest.raises(CookieError, match="^Neither a Netscape cookie file nor a JSON export$"):
+        save(tmp_path, "NF", "", text)
+    assert path.read_bytes() == original
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize(("prefix", "suffix"), [
+    ("[", r', "extra": "\uD800"}]'),
+    ("[", r', "extra": "\uDC00"}]'),
+    ("[", r', "\uD800": 1}]'),
+    ("[", r', "extra": ["\uD800"]}]'),
+    ("[", r', "extra": "\uD800", "extra": "ok"}]'),
+    (r'{"meta": "\uD800", "cookies": [', "}]}"),
+], ids=["high", "low", "key", "nested-list", "overwritten", "wrapper"])
+def test_cookie_import_rejects_discarded_lone_surrogate(tmp_path, prefix, suffix):
+    save(tmp_path, "NF", "", _COOKIE_ROW)
+    path = tmp_path / "NF.txt"
+    original = path.read_bytes()
+    text = prefix + json.dumps(_JSON_COOKIE)[:-1] + suffix
+    with pytest.raises(CookieError, match="^Neither a Netscape cookie file nor a JSON export$") as error:
+        save(tmp_path, "NF", "", text)
+    assert _JSON_COOKIE["value"] not in str(error.value)
+    assert path.read_bytes() == original
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize(
+    "text",
+    [r'["\uD800"]', r'["\uDC00"]', r'"\uD800"', r'"\uDC00"'],
+    ids=["array-high", "array-low", "string-high", "string-low"],
+)
+@pytest.mark.parametrize("operation", ["from_json", "normalise", "save"])
+def test_cookie_import_rejects_lone_surrogate(tmp_path, text, operation):
+    save(tmp_path, "NF", "", _COOKIE_ROW)
+    path = tmp_path / "NF.txt"
+    original = path.read_bytes()
+    with pytest.raises(CookieError, match="^Neither a Netscape cookie file nor a JSON export$"):
+        if operation == "from_json":
+            from_json(text)
+        elif operation == "normalise":
+            normalise(text)
+        else:
+            save(tmp_path, "NF", "", text)
+    assert path.read_bytes() == original
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_cookie_import_accepts_escaped_surrogate_pair(tmp_path):
+    text = json.dumps([{**_JSON_COOKIE, "extra": "\U0001f600"}], ensure_ascii=True)
+    save(tmp_path, "NF", "", text)
+    assert (tmp_path / "NF.txt").read_text() == normalise(json.dumps([_JSON_COOKIE]))
+
+
+def test_cookie_import_preserves_files_and_filters_expired_netscape(tmp_path):
+    header = "# Netscape HTTP Cookie File"
+    current = "#HttpOnly_" + _COOKIE_ROW.replace("\t0\t", "\t\t")
+    old = _COOKIE_ROW.replace("\t0\t", "\t1000\t")
+    text = "\ufeff\r\n" + "\r\n".join((header, "# comment", old, current))
+    folder = tmp_path / "Cookies"
+    with pytest.raises(CookieError, match="expired"):
+        save(folder, "NF", "", old)
+    assert not folder.exists()
+    save(folder, "NF", "", text)
+    path = folder / "NF.txt"
+    content, mode = path.read_bytes(), path.stat().st_mode
+    assert content.decode() == "\n".join((header, "# comment", current, ""))
+    assert stat.S_IMODE(mode) == 0o600
+    with pytest.raises(CookieError):
+        save(folder, "NF", "", "invalid")
+    assert path.read_bytes() == content and path.stat().st_mode == mode
+    assert list(folder.iterdir()) == [path]
+    folder.chmod(0o2770)
+    inode = path.stat().st_ino
+    save(folder, "NF", "", _COOKIE_ROW)
+    assert path.stat().st_ino != inode and stat.S_IMODE(path.stat().st_mode) == 0o660
+
+
+@pytest.mark.parametrize(("key", "expiry"), [("expires", 4102444800), ("expirationDate", 1),
+                                             ("expires", 0.5)])
+def test_cookie_session_conflicting_date(key, expiry):
+    with pytest.raises(CookieError, match="session cookie cannot have an expiry date"):
+        normalise(json.dumps([{**_JSON_COOKIE, "session": True, key: expiry}]))
+
+
+@pytest.mark.parametrize("expiry", [None, -1, "-1", 0])
+def test_cookie_session_sentinels(expiry):
+    assert parse(normalise(json.dumps([{**_JSON_COOKIE, "session": True, "expirationDate": expiry}])))[0]["expires"] == 0
+
+
+@pytest.mark.parametrize("as_json", [False, True])
+def test_cookie_fractional_epoch_is_dated(as_json):
+    old = {**_JSON_COOKIE, "expires": 0.5, "name": "old"}
+    row = _COOKIE_ROW.replace("\t0\tsid", "\t0.5\told")
+    assert parse(row)[0]["expires"] == 1
+    with pytest.raises(CookieError, match="expired"):
+        normalise(json.dumps([old]) if as_json else row, now=2)
+    mixed = json.dumps([old, _JSON_COOKIE]) if as_json else row + "\n" + _COOKIE_ROW
+    assert parse(normalise(mixed, now=2)) == parse(_COOKIE_ROW)
+
+
+@pytest.mark.parametrize(("domain", "flag"), [("example.org", "TRUE"), (".example.org", "FALSE")])
+def test_cookie_domain_flag_mismatch(domain, flag):
+    from unshacklarr.cookies import CookieParseError
+    row = _COOKIE_ROW.replace(".x.tv\tTRUE", f"{domain}\t{flag}")
+    assert parse(row)[0]["domain"] == "example.org"
+    with pytest.raises(CookieParseError, match=r"^Line 3: domain flag must match leading dot$"):
+        normalise("# comment\n\n" + row)
+    assert parse(normalise(_COOKIE_ROW.replace(".x.tv\tTRUE", "example.org\tFALSE")))
+
+
+@pytest.mark.parametrize("name", [" cf_clearance", "sid ", "a b", "sid=1", "sid;other"])
+def test_cookie_invalid_name(tmp_path, name):
+    from unshacklarr.cookies import CookieParseError
+    with pytest.raises(CookieParseError, match="^Line 1: invalid cookie name$"):
+        save(tmp_path, "NF", "default", _COOKIE_ROW.replace("sid", name))
+    with pytest.raises(CookieError, match="^Cookie #1: missing or invalid domain or name$"):
+        save(tmp_path, "NF", "default", json.dumps([{**_JSON_COOKIE, "name": name}]))
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("surrogate", ["\ud800", "\udc00"], ids=["high", "low"])
+@pytest.mark.parametrize("last_line", [_COOKIE_ROW, "# comment"], ids=["row", "comment"])
+def test_cookie_surrogate_reports_physical_line(tmp_path, surrogate, last_line):
+    from unshacklarr.cookies import CookieParseError
+
+    folder = tmp_path / "Cookies"
+    save(folder, "NF", "default", _COOKIE_ROW)
+    path = folder / "NF" / "default.txt"
+    before = path.read_bytes()
+    text = "\n".join(("# Netscape HTTP Cookie File", _COOKIE_ROW, last_line + surrogate))
+    for operation in (lambda: parse(text, strict=True), lambda: normalise(text),
+                      lambda: save(folder, "NF", "default", text)):
+        with pytest.raises(CookieParseError, match="^Line 3: invalid UTF-8 text$") as error:
+            operation()
+        assert error.value.line_number == 3
+    assert path.read_bytes() == before
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("ensure_ascii", [True, False], ids=["escaped", "raw"])
+def test_cookie_json_surrogate_preserves_file(tmp_path, ensure_ascii):
+    folder = tmp_path / "Cookies"
+    save(folder, "NF", "default", _COOKIE_ROW)
+    path = folder / "NF" / "default.txt"
+    before = path.read_bytes()
+    text = json.dumps([{**_JSON_COOKIE, "value": "\ud800"}], ensure_ascii=ensure_ascii)
+    for operation in (lambda: normalise(text), lambda: save(folder, "NF", "default", text)):
+        with pytest.raises(CookieError, match="^Neither a Netscape cookie file nor a JSON export$"):
+            operation()
+    assert path.read_bytes() == before
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_cookie_normalise_requires_text():
+    with pytest.raises(CookieError, match="^Neither a Netscape cookie file nor a JSON export$"):
+        normalise(cast(str, None))
+
+
+def _load_cookie_jar(tmp_path: Path, text: str):
+    jar_path = tmp_path / "jar.txt"
+    jar_path.write_text(text, encoding="utf-8")
+    jar = MozillaCookieJar(str(jar_path))
+    jar.load(ignore_discard=True, ignore_expires=True)
+    return list(jar)
+
+
+@pytest.mark.parametrize("as_json", [False, True])
+@pytest.mark.parametrize("scenario", ["empty-last", "valid-last", "expired-empty", "other-path"])
+def test_cookie_duplicate_replacement(tmp_path, as_json, scenario):
+    empty = {**_JSON_COOKIE, "value": "", "expires": 1 if scenario == "expired-empty" else 0,
+             "path": "/other" if scenario == "other-path" else "/"}
+    rows = [_JSON_COOKIE, empty]
+    if scenario == "valid-last":
+        rows.reverse()
+    text = json.dumps(rows) if as_json else "\n".join(
+        "\t".join((r["domain"], "TRUE", r.get("path", "/"), "FALSE", str(r.get("expires", 0)), r["name"], r["value"]))
+        for r in rows)
+    if scenario == "empty-last":
+        with pytest.raises(CookieError, match="No usable login cookies"):
+            normalise(text, now=2)
+    else:
+        cookies = _load_cookie_jar(tmp_path, normalise(text, now=2))
+        assert [(c.path, c.value) for c in cookies if c.value] == [("/", _JSON_COOKIE["value"])]
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["netscape", "json"])
+@pytest.mark.parametrize(("first", "last"), [("live", ""), ("", "live")])
+def test_cookie_mixed_case_duplicate(tmp_path, as_json, first, last):
+    rows = [(".EXAMPLE.ORG", first), (".example.org", last)]
+    if as_json:
+        text = json.dumps([{**_JSON_COOKIE, "domain": domain, "value": value} for domain, value in rows])
+    else:
+        text = "\n".join(f"{domain}\tTRUE\t/\tFALSE\t0\tsid\t{value}" for domain, value in rows)
+    if last:
+        cookie, = _load_cookie_jar(tmp_path, normalise(text))
+        assert (cookie.domain, cookie.value) == (".example.org", last)
+    else:
+        with pytest.raises(CookieError, match="No usable login cookies"):
+            normalise(text)
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["netscape", "json"])
+@pytest.mark.parametrize(("blank", "duplicate"), [
+    ("   ", False), ("\u00a0", False), ("&#32;", False), ('""', False), ('"   "', False),
+    ("   ", True), ('""', True),
+])
+def test_cookie_blank_login_preserves_saved_profile(tmp_path, as_json, blank, duplicate):
+    save(tmp_path, "NF", "default", _COOKIE_ROW)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    rows = [(".X.TV", "synthetic-first")] if duplicate else []
+    rows.append((".x.tv", blank))
+    if as_json:
+        text = json.dumps([{**_JSON_COOKIE, "domain": d, "value": v} for d, v in rows])
+    else:
+        text = "\n".join(f"{d}\tTRUE\t/\tFALSE\t0\tsid\t{v}" for d, v in rows)
+    with pytest.raises(CookieError, match="No usable login cookies") as parsed:
+        normalise(text)
+    with pytest.raises(CookieError, match="No usable login cookies") as saved:
+        save(tmp_path, "NF", "default", text)
+    for error in (parsed, saved):
+        assert all(value not in str(error.value) for _, value in rows)
+        assert _JSON_COOKIE["value"] not in str(error.value)
+    assert path.read_bytes() == before
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize(("prefix", "date", "expected"), [
+    ("", "0.0", 0), ("", "4102444800.5", 4102444800), ("#HttpOnly_", "0.0", 0),
+])
+def test_cookie_fractional_expiry_round_trip(tmp_path, prefix, date, expected):
+    row = prefix + _COOKIE_ROW
+    result = normalise(row.replace("\t0\t", f"\t{date}\t"), now=2)
+    assert result.splitlines()[1] == row.replace("\t0\t", f"\t{expected}\t")
+    cookie, = _load_cookie_jar(tmp_path, result)
+    assert (cookie.value, cookie.expires) == (_JSON_COOKIE["value"], expected)
+
+
+@pytest.mark.parametrize("domain", [
+    "$host", ".", "...", "example.org/", "example.org/path", "example.org:443", "https://example.org",
+    "..example.org", "example..org", "example.org.", "-example.org", "example-.org", "localhost", ".localhost",
+])
+def test_cookie_rejects_unloadable_domain(domain):
+    from unshacklarr.cookies import CookieParseError
+    flag = "TRUE" if domain.startswith(".") else "FALSE"
+    with pytest.raises(CookieParseError, match="Line 1: invalid cookie domain"):
+        normalise(_COOKIE_ROW.replace(".x.tv\tTRUE", f"{domain}\t{flag}"))
+    with pytest.raises(CookieError, match="Cookie #1: missing or invalid domain or name"):
+        normalise(json.dumps([{**_JSON_COOKIE, "domain": domain}]))
+
+@pytest.mark.parametrize("path", ["/path?a=1", "/path#frag", "/path;param"])
+def test_cookie_rejects_invalid_path_before_write(tmp_path, path):
+    from unshacklarr.cookies import CookieParseError
+    with pytest.raises(CookieParseError, match="^Line 2: cookie path must start with '/'$"):
+        save(tmp_path, "NF", "default", "\n" + _COOKIE_ROW.replace("\t/\t", f"\t{path}\t"))
+    with pytest.raises(CookieError, match="^Cookie #1: invalid cookie path$"):
+        save(tmp_path, "NF", "default", json.dumps([{**_JSON_COOKIE, "path": path}]))
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("field,invalid", [
+    ("path", "/path\x80"), ("path", "/path\x9f"), ("name", "sid\x80"), ("name", "sid\x9f"),
+])
+@pytest.mark.parametrize("as_json", [False, True], ids=["netscape", "json"])
+def test_cookie_c1_controls_preserve_saved_file(tmp_path, as_json, field, invalid):
+    from unshacklarr.cookies import CookieParseError
+
+    save(tmp_path, "NF", "default", _COOKIE_ROW)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    if as_json:
+        text = json.dumps([{**_JSON_COOKIE, field: invalid}])
+        with pytest.raises(CookieError, match="^Cookie #1:") as error:
+            save(tmp_path, "NF", "default", text)
+        message = str(error.value)
+        value = _JSON_COOKIE["value"]
+    else:
+        fields = _COOKIE_ROW.split("\t")
+        fields[2 if field == "path" else 5] = invalid
+        text = "# Netscape HTTP Cookie File\n\n" + "\t".join(fields)
+        with pytest.raises(CookieParseError) as parse_error:
+            save(tmp_path, "NF", "default", text)
+        assert parse_error.value.line_number == 3
+        message = str(parse_error.value)
+        value = fields[6].rstrip("\n")
+    assert value not in message
+    assert path.read_bytes() == before
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("as_json", [False, True])
+def test_cookie_invalid_domain_preserves_saved_file(tmp_path, as_json):
+    save(tmp_path, "NF", "default", _COOKIE_ROW)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    text = (json.dumps([{**_JSON_COOKIE, "domain": "example.org/"}]) if as_json
+            else _COOKIE_ROW.replace(".x.tv\tTRUE", "example.org/\tFALSE"))
+    with pytest.raises(CookieError) as error:
+        save(tmp_path, "NF", "default", text)
+    assert _JSON_COOKIE["value"] not in str(error.value)
+    assert path.read_bytes() == before
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("domain", [".x.tv", "example.org", "127.0.0.1", ".xn--bcher-kva.example"])
+@pytest.mark.parametrize("as_json", [False, True])
+def test_cookie_valid_domain_reaches_request(tmp_path, domain, as_json):
+    from urllib.request import Request
+    flag = "TRUE" if domain.startswith(".") else "FALSE"
+    expires = 4102444800
+    text = (json.dumps([{**_JSON_COOKIE, "domain": domain, "expires": expires}]) if as_json
+            else _COOKIE_ROW.replace(".x.tv\tTRUE", f"{domain}\t{flag}").replace("\t0\t", f"\t{expires}\t"))
+    save(tmp_path, "NF", "default", text)
+    jar = MozillaCookieJar(str(tmp_path / "NF" / "default.txt"))
+    jar.load()
+    request = Request(f"https://{domain.lstrip('.')}/")
+    jar.add_cookie_header(request)
+    assert request.get_header("Cookie") == f"sid={_JSON_COOKIE['value']}"
+
+
+@pytest.mark.parametrize("field,invalid", [
+    *(("value", "prefix" + separator + "suffix") for separator in (
+        "\x85", "\u2028", "\u2029", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x00",
+        "&#10;", "&#9;", "&#8232;", "&Tab;", "&NewLine;",
+    )),
+    *(("expires", date) for date in ("0\x0b", "4102444800\u2028", " 4102444800", "4102444800 ",
+                                     "41_02444800", "+4102444800", "-4102444800")),
+    *(("name", name) for name in ('a,b', 'a"b', 'a(b)', 'a/b', 'a:b', 'a?b', 'a@b',
+                                  'a[b]', 'a\\b', 'a{b}', 'sid\u0100')),
+    ("path", "/café"), ("path", '/a"b'),
+    ("path", "/path&#63;query"), ("name", "sid&#61;extra"),
+])
+@pytest.mark.parametrize("as_json", [False, True], ids=["netscape", "json"])
+def test_cookie_runtime_delimiters_preserve_saved_file(tmp_path, field, invalid, as_json):
+    from unshacklarr.cookies import CookieParseError
+
+    save(tmp_path, "NF", "default", _COOKIE_ROW)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    fields = _COOKIE_ROW.rstrip("\n").split("\t")
+    fields[{"path": 2, "expires": 4, "name": 5, "value": 6}[field]] = invalid
+    text = (json.dumps([{**_JSON_COOKIE, field: invalid}]) if as_json
+            else "# Netscape HTTP Cookie File\n" + "\t".join(fields))
+    for operation in (from_json if as_json else lambda t: parse(t, strict=True),
+                      normalise, lambda t: save(tmp_path, "NF", "default", t)):
+        with pytest.raises(CookieError if as_json else CookieParseError,
+                           match="^Cookie #1:" if as_json else "^Line 2:") as error:
+            operation(text)
+        if isinstance(error.value, CookieParseError):
+            assert error.value.line_number == 2
+        for fragment in ("prefix", "suffix", _JSON_COOKIE["value"]):
+            assert fragment not in str(error.value)
+    assert path.read_bytes() == before
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+_OVERSIZED_ENTITY = "&#" + "9" * (getattr(sys, "get_int_max_str_digits", lambda: 4300)() + 1) + ";"
+
+
+@pytest.mark.parametrize("field", ["comment", "path", "name", "value"])
+def test_cookie_netscape_decoder_error(tmp_path, field):
+    from unshacklarr.cookies import CookieParseError
+
+    save(tmp_path, "NF", "default", _COOKIE_ROW)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    invalid = "synthetic-private" + _OVERSIZED_ENTITY
+    fields = _COOKIE_ROW.split("\t")
+    if field == "comment":
+        line = "# " + invalid
+    else:
+        fields[{"path": 2, "name": 5, "value": 6}[field]] = ("/" if field == "path" else "") + invalid
+        line = "\t".join(fields)
+    text = _COOKIE_ROW + "\n" + line
+    for operation in (lambda: parse(text, strict=True), lambda: normalise(text),
+                      lambda: save(tmp_path, "NF", "default", text)):
+        with pytest.raises(CookieParseError, match="^Line 2:") as error:
+            operation()
+        assert "synthetic-private" not in str(error.value)
+    assert parse(text) == parse(_COOKIE_ROW)
+    assert path.read_bytes() == before and stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("field", ["path", "name", "value"])
+def test_cookie_json_decoder_error(tmp_path, field):
+    save(tmp_path, "NF", "default", _COOKIE_ROW)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    invalid = ("/" if field == "path" else "") + "synthetic-private" + _OVERSIZED_ENTITY
+    text = json.dumps([_JSON_COOKIE, {**_JSON_COOKIE, field: invalid}])
+    for operation in (from_json, normalise, lambda t: save(tmp_path, "NF", "default", t)):
+        with pytest.raises(CookieError, match="^Cookie #2:") as error:
+            operation(text)
+        assert "synthetic-private" not in str(error.value)
+    assert path.read_bytes() == before and stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("line", ["\t" * 6, "\t", "\x0b", "\x85", "\u2028", "\x85# comment"])
+def test_cookie_strict_import_rejects_malformed_whitespace(tmp_path, line):
+    from unshacklarr.cookies import CookieParseError
+
+    save(tmp_path, "NF", "default", _COOKIE_ROW)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    marker = "synthetic-whitespace-regression"
+    valid = _COOKIE_ROW.rsplit("\t", 1)[0] + "\t" + marker
+    text = valid + "\n" + line
+    assert parse(text) == parse(valid)
+    for operation in (lambda: parse(text, strict=True), lambda: normalise(text),
+                      lambda: save(tmp_path, "NF", "default", text)):
+        with pytest.raises(CookieParseError, match="^Line 2:") as error:
+            operation()
+        assert error.value.line_number == 2
+        assert marker not in str(error.value)
+    assert path.read_bytes() == before
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("line", ["   ", "  # comment", "\t# comment"])
+def test_cookie_import_accepts_spaces_and_indented_comments(line):
+    text = _COOKIE_ROW + "\n" + line
+    assert parse(text, strict=True) == parse(_COOKIE_ROW)
+    expected = normalise(_COOKIE_ROW) + (line + "\n" if "#" in line else "")
+    assert normalise(text) == expected
+
+
+def test_cookie_import_rejects_tab_before_httponly():
+    from unshacklarr.cookies import CookieParseError
+
+    with pytest.raises(CookieParseError, match="^Line 2: unexpected leading whitespace before #HttpOnly_"):
+        normalise(_COOKIE_ROW + "\n\t#HttpOnly_" + _COOKIE_ROW)
+
+
+@pytest.mark.parametrize("comment", ["# text\x85more", "# text\u2028more", "# text&#10;more", "#&#72;ttpOnly_"])
+def test_cookie_runtime_comment_reports_physical_line(comment):
+    from unshacklarr.cookies import CookieParseError
+
+    with pytest.raises(CookieParseError, match="^Line 3: invalid comment line$") as error:
+        parse("# Netscape HTTP Cookie File\n\n" + comment, strict=True)
+    assert error.value.line_number == 3
+
+
+@pytest.mark.parametrize("value,decoded", [("a=1&b=2", "a=1&b=2"), ("a&amp;b", "a&b"), ("a&#133;b", "a…b")])
+@pytest.mark.parametrize("as_json", [False, True], ids=["netscape", "json"])
+def test_cookie_benign_values_survive_runtime_decoding(tmp_path, value, decoded, as_json):
+    import html
+
+    fields = _COOKIE_ROW.rstrip("\n").split("\t")
+    fields[-1] = value
+    comment = "# col1\tcol2"
+    text = (json.dumps([{**_JSON_COOKIE, "value": value}]) if as_json
+            else comment + "\n" + "\t".join(fields))
+    save(tmp_path, "NF", "default", text)
+    rows = html.unescape((tmp_path / "NF" / "default.txt").read_text()).splitlines(keepends=False)
+    assert rows[:-1] == (["# Netscape HTTP Cookie File"] if as_json else ["# Netscape HTTP Cookie File", comment])
+    assert len(rows[-1].split("\t")) == 7
+    assert rows[-1].split("\t")[-1] == decoded
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["netscape", "json"])
+@pytest.mark.parametrize("rows,reason", [
+    ([("/", "cf&#95;clearance", "present")], "No usable login cookies"),
+    ([("/", "__cf&#95;bm", "present")], "No usable login cookies"),
+    ([("/", "sid", "synth-valid-1"), ("/", "s&#105;d", "")], "No usable login cookies"),
+    ([("/", "sid", "present"), ("/", "sid", "&#1;")], "No usable login cookies"),
+    ([("/", "sid", "present"), ("/", "sid", "&#xfffe;")], "No usable login cookies"),
+    ([("/&#1;", "sid", "present"), ("/", "sid", "")], "No usable login cookies"),
+    ([("/", "sid", "&#1;")], "No usable login cookies"),
+    ([("/", "sid", "&#xfffe;")], "No usable login cookies"),
+    ([("/", "&#1;", "present")], "missing"),
+], ids=["clearance", "bot-management", "duplicate-name", "duplicate-control", "duplicate-noncharacter",
+        "duplicate-path", "empty-control", "empty-noncharacter", "empty-name"])
+def test_cookie_save_validates_decoded_login(tmp_path, as_json, rows, reason):
+    save(tmp_path, "NF", "default", _COOKIE_ROW)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    if as_json:
+        text = json.dumps([{**_JSON_COOKIE, "path": p, "name": n, "value": v} for p, n, v in rows])
+    else:
+        text = "\n".join("\t".join(("example.com", "FALSE", p, "FALSE", "0", n, v)) for p, n, v in rows)
+    if reason == "missing":
+        reason = "missing or invalid domain or name" if as_json else "missing cookie name"
+    with pytest.raises(CookieError, match=reason) as error:
+        save(tmp_path, "NF", "default", text)
+    assert all(value not in str(error.value) for _, _, value in rows if value)
+    assert _JSON_COOKIE["value"] not in str(error.value)
+    assert path.read_bytes() == before
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("tab", ["&#9;", "&Tab;"])
+def test_cookie_save_rejects_encoded_comment_tab(tmp_path, tab):
+    from unshacklarr.cookies import CookieParseError
+
+    save(tmp_path, "NF", "default", _COOKIE_ROW)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    with pytest.raises(CookieParseError, match="invalid comment line") as error:
+        save(tmp_path, "NF", "default", f"# Netscape HTTP Cookie File\n# col1{tab}col2\n" + _COOKIE_ROW)
+    assert error.value.line_number == 2
+    assert _COOKIE_ROW.rstrip("\n").split("\t")[-1] not in str(error.value)
+    assert path.read_bytes() == before
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["netscape", "json"])
+@pytest.mark.parametrize("name,path,date", [
+    (".AspNetCore.Cookies", "/%C3%A9", "0"),
+    ("__Host-sid", "/api/v1", "0.0"),
+    ("sid!#$%&'*+-.^_`|~", "/", "4102444800"),
+    ("s&#105;d", "/a&amp;b", "4102444800.5"),
+])
+def test_cookie_save_accepts_valid_fields(tmp_path, as_json, name, path, date):
+    fields = _COOKIE_ROW.rstrip("\n").split("\t")
+    fields[2], fields[4], fields[5] = path, date, name
+    text = json.dumps([{**_JSON_COOKIE, "name": name, "path": path, "expires": date}]) if as_json else "\t".join(fields)
+    save(tmp_path, "NF", "default", text)
+    saved = (tmp_path / "NF" / "default.txt").read_text().splitlines()[-1].split("\t")
+    assert (saved[2], saved[4], saved[5]) == (path, str(int(float(date))), name)
+
+
+def _expiry_export(form: str, date: str, *, session: bool = False) -> str:
+    if form == "netscape":
+        return "# Netscape HTTP Cookie File\n" + _COOKIE_ROW.replace("\t0\t", f"\t{date}\t")
+    cookie = {**_JSON_COOKIE, "session": session, "expires": "EXPIRY"}
+    return json.dumps([cookie]).replace('"EXPIRY"', json.dumps(date) if form == "string" else date)
+
+
+@pytest.mark.parametrize("form", ["netscape", "string", "number"])
+@pytest.mark.parametrize("date", ["1e-999", "0." + "0" * 400 + "1"], ids=["exponent", "fraction"])
+def test_cookie_tiny_expiry_preserves_previous_import(tmp_path, form, date):
+    text = _expiry_export(form, date)
+    assert parse(normalise(text, now=0))[0]["expires"] == 1
+    save(tmp_path, "NF", "", _COOKIE_ROW)
+    path = tmp_path / "NF.txt"
+    previous = path.read_bytes()
+    with pytest.raises(CookieError, match="expired") as normalise_error:
+        normalise(text, now=2)
+    with pytest.raises(CookieError, match="expired") as save_error:
+        save(tmp_path, "NF", "", text)
+    for error in (normalise_error, save_error):
+        assert _JSON_COOKIE["value"] not in str(error.value)
+    assert path.read_bytes() == previous
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("form", ["netscape", "string", "number"])
+@pytest.mark.parametrize("date", ["-1e-999", "1e500", "1e9999999", "-1e500"])
+def test_cookie_invalid_extreme_expiry(form, date):
+    from unshacklarr.cookies import CookieParseError
+
+    reason = "expiry date must not be negative" if (form, date) == ("number", "-1e-999") else "expiry date is not a valid timestamp"
+    location = "Line 2" if form == "netscape" else "Cookie #1"
+    with pytest.raises(CookieParseError if form == "netscape" else CookieError, match=f"^{location}: {reason}$") as error:
+        normalise(_expiry_export(form, date), now=2)
+    assert _JSON_COOKIE["value"] not in str(error.value)
+
+
+def test_cookie_tiny_session_expiry_conflict():
+    with pytest.raises(CookieError, match="Cookie #1: session cookie cannot have an expiry date") as error:
+        normalise(_expiry_export("number", "1e-999", session=True))
+    assert _JSON_COOKIE["value"] not in str(error.value)
+    assert parse(normalise(_expiry_export("number", "0.0", session=True)))[0]["expires"] == 0
+
+
+def test_cookie_fractional_json_expiry_with_unicode_escape(tmp_path):
+    text = json.dumps([{**_JSON_COOKIE, "expires": 4000000000.5, "value": "café"}])
+    assert r"\u00e9" in text
+    result = normalise(text)
+    assert "\t4000000000\tsid\tcafé\n" in result
+    save(tmp_path, "NF", "", text)
+    assert (tmp_path / "NF.txt").read_text() == result

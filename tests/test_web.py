@@ -3,6 +3,7 @@ import hashlib
 import importlib
 import json
 import re
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -9605,3 +9606,136 @@ def test_interface_audit_error_messages_and_legacy_backup_names(tmp_path, monkey
     assert web.BACKUP_NAME.match("unshacklarr-2026-10-06-0900.yaml")
     assert "Reload the page" in web.UNKNOWN_JOB and "Reload the page" in web.JOB_OVER and "Reload the page" in web.UNKNOWN_DOWNLOAD
     assert "sign in" in web.ALREADY_SET_UP.lower() and "startup log" in web.WRONG_SETUP_CODE
+
+
+def _blank_cookie_http_cases(marker):
+    blank = {"domain": ".x.tv", "name": "sid", "value": "   "}
+    good = {**blank, "domain": ".X.TV", "value": marker}
+    for rows in ([blank], [good, blank]):
+        yield json.dumps(rows), "No usable login"
+        yield "\n".join("{domain}\tTRUE\t/\tFALSE\t0\t{name}\t{value}".format(**row) for row in rows), "No usable login"
+
+
+def test_cookie_import_http_handles_decoder_failure(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    folder = tmp_path / "Cookies"
+    auth = {"password": "synth-hash", "secret": "synth-signing"}
+    web.write_config({**web.read_config(), "auth": auth})
+    marker = "synth-never-echo-99"
+    row = ".x.tv\tTRUE\t/\tFALSE\t0\tsid\tsynth-valid-1"
+
+    async def run():
+        async with TestClient(TestServer(web.app)) as client:
+            monkeypatch.setitem(web.sonarr_sync.SETTINGS, "cookies_dir", str(folder))
+            client.session.cookie_jar.update_cookies({web.SESSION_COOKIE: web.session_value(auth)})
+
+            async def post(text):
+                return await client.post("/api/cookies", headers={"X-Unshackle": "1"},
+                                         json={"service": "NF", "profile": "default", "text": text})
+
+            assert (await post(row)).status == 200
+            path = folder / "NF" / "default.txt"
+            before = path.read_bytes()
+            invalid = marker + "&#" + "9" * (getattr(sys, "get_int_max_str_digits", lambda: 4300)() + 1) + ";"
+            cookie = {"domain": ".x.tv", "name": "sid", "value": "present"}
+            for text, reason in [(row + "\n" + row.rsplit("\t", 1)[0] + "\t" + invalid, "Line 2:"),
+                                 (json.dumps([cookie, {**cookie, "value": invalid}]), "Cookie #2:")]:
+                response = await post(text)
+                assert response.status == 400
+                body = await response.text()
+                assert body.startswith(reason) and marker not in body
+                assert path.read_bytes() == before and path.stat().st_mode & 0o777 == 0o600
+
+    asyncio.run(run())
+
+
+def test_cookie_import_http_preserves_saved_login(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
+    import unshacklarr.sync
+    import unshacklarr.web
+    importlib.reload(unshacklarr.sync)
+    web = importlib.reload(unshacklarr.web)
+    folder = tmp_path / "Cookies"
+    auth = {"password": "synth-hash", "secret": "synth-signing"}
+    web.write_config({**web.read_config(), "auth": auth})
+    marker = "synth-never-echo-99"
+    row = ".x.tv\tTRUE\t/\tFALSE\t0\tsid\tsynth-valid-1"
+    expired = row.replace("\t0\t", "\t1000\t")
+
+    async def run():
+        async with TestClient(TestServer(web.app)) as client:
+            monkeypatch.setitem(web.sonarr_sync.SETTINGS, "cookies_dir", str(folder))
+            client.session.cookie_jar.update_cookies({web.SESSION_COOKIE: web.session_value(auth)})
+
+            async def post(text):
+                return await client.post("/api/cookies", headers={"X-Unshackle": "1"},
+                                         json={"service": "NF", "profile": "default", "text": text})
+
+            invalid = json.dumps([{"domain": ".x.tv", "name": "sid", "value": "\ud800"}])
+            for malformed in (invalid, row + "\ud800"):
+                assert (await post(malformed)).status == 400
+                assert not folder.exists()
+            assert (await post(row)).status == 200
+            path = folder / "NF" / "default.txt"
+            before = path.read_bytes()
+            for text, reason in [
+                *_blank_cookie_http_cases(marker),
+                ("# comment\n" + row + "\n" + marker, "Line 3"),
+                ("[1,", "JSON"), (json.dumps([{"domain": ".x.tv", "name": "sid", "value": marker}, marker]), "Cookie #2"),
+                (invalid, "JSON"), (row + "\ud800", "Line 1"),
+                ("# Netscape HTTP Cookie File\n" + row + "\n" + row + "\ud800", "Line 3"),
+                (expired, "expired"), (row.replace("sid", "__cf_bm"), "No usable login"), ([marker], "strings"),
+            ]:
+                response = await post(text)
+                assert response.status == 400
+                message = await response.text()
+                assert reason in message and marker not in message
+                assert path.read_bytes() == before and path.stat().st_mode & 0o777 == 0o600
+            inode = path.stat().st_ino
+            fresh = row.replace("sid", "fresh")
+            assert (await post(fresh + "\n" + expired)).status == 200
+            assert path.read_text() == "# Netscape HTTP Cookie File\n" + fresh + "\n"
+            assert path.stat().st_ino != inode and path.stat().st_mode & 0o777 == 0o600
+
+    asyncio.run(run())
+
+
+def test_cookie_import_form_keeps_server_error_visible():
+    import shutil
+    import subprocess
+    if not shutil.which("node"):
+        pytest.skip("node is not installed")
+    script = """
+    const assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs');
+    const nodes = new Map();
+    const $ = id => {
+      if (!nodes.has(id)) nodes.set(id, {value: 'synth-input'});
+      return nodes.get(id);
+    };
+    let open = true;
+    $('#cookie-dialog').close = () => { open = false; };
+    $('#ck-error').replaceChildren = message => { $('#ck-error').message = message; };
+    const message = 'Line 3: expected 7 tab-separated fields';
+    const api = async (url, options) => {
+      assert.equal(url, '/api/cookies');
+      assert.equal(options.method, 'POST');
+      throw Object.assign(new Error(message), {status: 400});
+    };
+    vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), {
+      $, api, failed: text => text, document: {addEventListener() {}}, addEventListener() {}
+    });
+    let settled = false;
+    $('#ck-form').onsubmit({submitter: {value: 'save'}, preventDefault() {}}).then(() => {
+      assert.equal($('#ck-error').message, message);
+      assert.equal(open, true);
+      settled = true;
+    });
+    process.on('beforeExit', () => assert.equal(settled, true));
+    """
+    subprocess.run(["node", "-e", script, str(STATIC / "js" / "cookies-cdm.js")], check=True)
