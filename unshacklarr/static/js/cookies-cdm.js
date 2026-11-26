@@ -44,7 +44,7 @@ $("#ck-form").onsubmit = async (e) => {
 };
 
 /* CDM: Unshackle's devices (what they are, whether they still get a license) and which one each service uses. */
-let cdmData = null, cdmFilter = "all", cdmQuery = "", cdmTesting = false, cdmShowUnused = false;
+let cdmData = null, cdmFilter = "all", cdmQuery = "", cdmTesting = false, cdmShowUnused = false, cdmExtraService = "", cdmRouteSaving = false;
 const cdmOpen = new Set();  // devices whose details are unfolded
 const cdmRunning = new Set(), cdmJust = new Set();  // devices being tested; just tested (their result pops in)
 async function loadCdm(data) {
@@ -150,23 +150,52 @@ async function cdmChoose(service, device, also = []) {  // also: other services 
   } catch (e) { toast(e.message, true); loadCdm(); }
 }
 /* Pick a device for a service: searched, grouped by DRM, what uses each in sight. */
-function cdmPicker(anchor, service, current, also = []) {
+function cdmPicker(anchor, service, current = "", also = [], slot = null) {
   const data = cdmData, q = el("input", { type: "search", className: "cdm-pop-search", placeholder: "Search a device", ariaLabel: "Search a device" });
   const list = el("div", { className: "cdm-pop-list" });
-  const devices = [...data.devices.filter((d) => !d.info?.unreadable), ...data.remote.map((r) => ({ ...r, remote: true }))];
-  const byDefault = [...data.devices, ...data.remote].find((d) => d.name === data.map.default);
+  const ordered = [...data.remote.map((r) => ({ ...r, remote: true })),
+    ...data.devices.filter((d) => !d.folder && d.kind === "PlayReady"),
+    ...data.devices.filter((d) => !d.folder && d.kind === "Widevine"),
+    ...data.devices.filter((d) => d.folder)].filter((d) =>
+    d.routable !== false && d.name !== "none" && /^[A-Za-z0-9][\p{L}\p{N}_.@ -]{0,150}$/u.test(d.name));
+  const devices = ordered.filter((d, index) => !d.info?.unreadable && ordered.findIndex((entry) => entry.name === d.name) === index);
+  const byDefault = devices.find((d) => d.name === data.map?.default);
+  const system = slot === "widevine" ? "Widevine" : "PlayReady";
+  const other = slot === "widevine" ? "playready" : "widevine";
+  const routeFor = (svc) => {
+    const routes = cdmData.routes || {};
+    return routes[Object.keys(routes).find((k) => k.toLowerCase() === svc.toLowerCase())] || {};
+  };
+  const canClear = current && (service.toLowerCase() !== "default" || routeFor(service)[other]);
+  const select = async (value) => {
+    if (value === (current || "") && (!slot || !value || routeFor(service).preferred)) return closeCdmPop();
+    if (!slot) { closeCdmPop(); return cdmChoose(service, value || null, also); }
+    if (cdmRouteSaving === true || (value ? !devices.some((d) => d.name === value && d.kind === system) : !canClear)) return;
+    closeCdmPop();
+    cdmRouteSaving = true;
+    anchor.ariaBusy = "true";
+    let update = null;
+    try {
+      for (const svc of [service, ...also]) {
+        if (cdmData.read_only || routeFor(svc).advanced) continue;
+        update = await api("/api/cdm/route", { method: "POST", body: JSON.stringify({ service: svc, [slot]: value || null }) });
+      }
+    } catch (e) { toast(e.message, true); }
+    finally { cdmRouteSaving = false; anchor.ariaBusy = "false"; renderCdm(false, update); }
+  };
   const opt = (value, main, sub) => el("button", { type: "button", className: `cdm-opt${value === (current || "") ? " on" : ""}`,
-    onclick: () => { closeCdmPop(); if (value !== (current || "")) cdmChoose(service, value || null, also); } },
+    onclick: () => select(value) },
     el("b", { textContent: main, title: main }), ...(sub ? [el("small", { textContent: sub })] : []));
   const draw = () => {
     const text = q.value.trim().toLowerCase();
     const fits = (d) => !text || `${d.name} ${cdmTitle(d)} ${d.used_by.join(" ")} ${d.used_by.map(cdmUsageName).join(" ")}`.toLowerCase().includes(text);
     list.replaceChildren(
-      ...(service !== "default" && !text ? [opt("", "The default device", byDefault ? cdmShort(byDefault) : ""),
+      ...(slot && canClear && !text ? [opt("", "Clear slot", "")] : []),
+      ...(!slot && service !== "default" && !text ? [opt("", "The default device", byDefault ? cdmShort(byDefault) : ""),
         opt("none", "No CDM", "No DRM, nothing to decrypt")] : []),
       ...[["Widevine", (d) => !d.remote && d.kind === "Widevine"], ["PlayReady", (d) => !d.remote && d.kind === "PlayReady"], ["Remote", (d) => d.remote]]
         .flatMap(([name, kind]) => {
-          const found = devices.filter(kind).filter(fits);
+          const found = devices.filter((d) => kind(d) && (!slot || d.kind === system) && fits(d));
           return found.length ? [el("small", { className: "cdm-pop-h", textContent: name }),
             ...found.map((d) => opt(d.name, cdmShort(d), d.used_by.length ? trWith("Used by {0}", d.used_by.map(cdmUsageName).join(", ")) : ""))] : [];
         }));
@@ -193,7 +222,7 @@ function emptyDevices(known) {
     ...(typed ? [el("button", { type: "button", className: "btn small", textContent: "Clear search", onclick: () => { cdmQuery = ""; renderCdm(); $("#cdm-list .con-search")?.focus(); } })] : []),
     ...(label ? [el("button", { type: "button", className: "btn small", textContent: "Show all", onclick: () => { cdmFilter = "all"; renderCdm(); $("#cdm-list .con-filters [aria-pressed=true]")?.focus(); } })] : []));
 }
-function renderCdm(typing = false) {  // typing: in the search box, whose own element must stay
+function renderCdm(typing = false, update = null) {  // typing: in the search box, whose own element must stay
   const data = cdmData;
   $("#cdm-folder").textContent = data.folder || "";
   $("#cdm-add").hidden = !data.folder;
@@ -202,58 +231,208 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
   if (!data.folder && S.config.settings.unshackle_mode === "remote") { show("", "Managed where Unshackle runs", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren();
     return $("#cdm-list").replaceChildren(el("p", { className: "muted", textContent: "To manage its devices here too, mount the folder of its unshackle.yaml and set its path in Settings › Connections › Unshackle, Folders." })); }
   if (!data.folder) { show("down", "No CDM folder", ""); $("#cdm-alerts").replaceChildren(); $("#cdm-hero-test").replaceChildren(); return $("#cdm-list").replaceChildren(el("p", { className: "status-err", textContent: data.error })); }
-  const all = [...data.devices, ...data.remote.map((r) => ({ ...r, remote: true }))];
-  const deviceOf = (name) => all.find((d) => d.name === name);
-  const problem = (d) => d.info?.unreadable || (d.test && !d.test.ok);
-  // Services, grouped by the device they use: one line a device, a service's chip to change its own
-  const inSeries = Object.values(S.config.series).map((c) => c.service).filter(Boolean);
-  const shown = [...new Set([...Object.keys(data.map).filter((k) => k.toLowerCase() !== "default"), ...inSeries])]
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  const current = (svc) => data.map[Object.keys(data.map).find((k) => k.toLowerCase() === svc.toLowerCase())];
-  const chip = (svc, now) => el("button", { type: "button", className: "cdm-chip cdm-pop-btn", dataset: { key: `svc:${svc}` }, textContent: svcName(svc),
-    title: `Change the device ${svcName(svc)} uses`, onclick: (e) => cdmPicker(e.currentTarget, svc, now) });
-  const deviceCell = (name) => {
-    if (name === "none") return el("span", { className: "cdm-to" }, el("b", { textContent: "No CDM" }), el("small", { textContent: "no DRM: no device used" }));
-    const d = deviceOf(name);
-    return el("span", { className: `cdm-to${d ? "" : " bad"}` }, el("b", { textContent: d ? cdmShort(d) : name }),
-      el("small", { textContent: d ? (problem(d) ? cdmStatus(d)[1] : d.name) : "not in the CDM folder: pick another" }));
-  };
-  const groups = new Map();
-  const rules = [], onDefault = [];
-  for (const svc of shown) {
-    const v = current(svc);
-    if (v && typeof v === "object") rules.push([svc, v]);
-    else if (v) groups.set(v, [...(groups.get(v) || []), svc]);
-    else onDefault.push(svc);
+  const local = [...data.devices.filter((d) => !d.folder && d.kind === "PlayReady"),
+    ...data.devices.filter((d) => !d.folder && d.kind === "Widevine"), ...data.devices.filter((d) => d.folder)]
+    .filter((d) => d.routable !== false);
+  if (update) {
+    data.routes = update.routes;
+    if (update.map) data.map = update.map;
+    if (update.services) data.services = update.services;
+    if (update.used_by) {
+      const { remote, local: localUsage } = update.used_by;
+      const seen = new Map();
+      data.remote.forEach((r) => {
+        const count = seen.get(r.name) || 0;
+        seen.set(r.name, count + 1);
+        r.used_by = remote[r.name]?.[count] ?? [];
+      });
+      data.devices.forEach((d) => {
+        d.used_by = localUsage[`${d.kind}:${d.folder ? 1 : 0}:${d.name}`] ?? [];
+      });
+    } else {
+      const winners = new Map();
+      for (const d of [...data.remote, ...data.devices]) d.used_by = [];
+      for (const d of [...data.remote, ...local]) {
+        if (!winners.has(d.name)) winners.set(d.name, d);
+      }
+      for (const service of Object.keys(data.routes).sort()) {
+        const route = data.routes[service];
+        for (const name of new Set(route.devices || [route.widevine, route.playready])) {
+          winners.get(name)?.used_by.push(service);
+        }
+      }
+    }
   }
-  const def = typeof data.map.default === "string" ? data.map.default : "";
-  const defaultDevice = deviceOf(def), defaultProblem = def !== "none" && (!defaultDevice || problem(defaultDevice));
-  const defButton = el("button", { type: "button", className: `btn small cdm-pop-btn${defaultProblem ? " primary" : ""}`, dataset: { key: "svc:default" }, textContent: "Change default device",
-    onclick: (e) => cdmPicker(e.currentTarget, "default", def) });
-  const others = data.services.filter((t) => !shown.some((x) => x.toLowerCase() === t.toLowerCase()) && t !== "EXAMPLE");
+  if (data.map && !data.read_only && typeof S === "object" && S) {
+    // Series reads YAML-shaped routes. Keep slot order and exclude the editor's preferred DRM metadata.
+    const prev = S.cdm && typeof S.cdm === "object" ? S.cdm : {};
+    const prevKeys = Object.keys(prev);
+    const truthy = (v) => Boolean(v && (typeof v !== "object" || (Array.isArray(v) ? v.length : Object.keys(v).length)));
+    const slotsOf = (v) => v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).map(([k, val]) => [k.toLowerCase(), val])) : null;
+    const hasDrm = (s) => !!(s && ("widevine" in s || "playready" in s));
+    const isQual = (k) => /^(?:>=|<=|>|<)?\d+$/.test(k);
+    const resolves = (v, allowQual = true, allowDef = false) => {
+      if (typeof v === "string") return Boolean(v.trim() && v.trim() !== "none");
+      const s = slotsOf(v);
+      if (!s || !Object.keys(s).length) return false;
+      if (allowQual && Object.entries(v).some(([k, val]) => isQual(k) && truthy(val) && resolves(val, false, allowDef))) return true;
+      if (hasDrm(s)) {
+        const first = Object.keys(s).find((k) => k === "widevine" || k === "playready");
+        const selected = truthy(s[first]) ? s[first] : s.playready;
+        return typeof selected === "string" && Boolean(selected.trim() && selected.trim() !== "none");
+      }
+      return (allowDef && !truthy(v.default)) || Object.values(v).some((val) => resolves(val, false));
+    };
+    const stringsIn = (v) => typeof v === "string" ? (v ? [v] : [])
+      : v && typeof v === "object" ? Object.values(v).flatMap(stringsIn) : [];
+    const knownDevices = new Set([...(data.devices || []), ...(data.remote || [])].map((d) => d.name));
+    const RESOLVES = 2, INHERITS = 1, REFUSES = 0;
+    S.cdm = Object.fromEntries(Object.entries(data.map).map(([service, entry]) => {
+      if (data.routes?.[service]?.no_cdm) return [service, "none"];
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [service, entry];
+      if (Array.isArray(entry.rule) || entry.rule === null || entry.rule === false) {
+        const expectedState = Array.isArray(entry.rule) ? RESOLVES : entry.rule === null ? INHERITS : REFUSES;
+        const key = Object.prototype.hasOwnProperty.call(prev, service) ? service
+          : prevKeys.find((k) => k.toLowerCase() === service.toLowerCase());
+        const prior = key !== undefined ? prev[key] : undefined;
+        const priorState = resolves(prior) ? RESOLVES : resolves(prior, true, true) ? INHERITS : REFUSES;
+        const priorStrings = stringsIn(prior);
+        const devicesMatch = expectedState !== RESOLVES || (entry.rule.length
+          ? typeof prior === "object" && entry.rule.every((d) => priorStrings.includes(d))
+          : !priorStrings.some((d) => /^[A-Za-z0-9][\p{L}\p{N}_.@ -]{0,150}$/u.test(d) && knownDevices.has(d)));
+        if (key !== undefined && truthy(prior) && priorState === expectedState && devicesMatch) return [service, prior];
+        if (expectedState === RESOLVES) return [service, entry.rule.length ? { rule: { ...entry.rule } } : { rule: "configured" }];
+        return [service, expectedState === INHERITS ? { rule: null } : { default: "none" }];
+      }
+      const { preferred, ...slots } = entry;
+      return [service, slots];
+    }));
+  }
+  const ordered = [...data.remote.map((r) => ({ ...r, remote: true })), ...local];
+  const deviceOf = (name, system) => {
+    const winner = ordered.find((d) => d.name === name);
+    return winner && (!system || winner.kind === system) ? winner : undefined;
+  };
+  const problem = (d) => d.info?.unreadable || (d.test && !d.test.ok);
+  const defaultSlot = (route) => route.preferred || "widevine";
+  const configured = Object.keys(data.routes || data.map || {});
+  const current = (svc) => {
+    const key = configured.find((k) => k.toLowerCase() === svc.toLowerCase());
+    if (data.routes || data.read_only) {
+      const entry = data.routes?.[key] || {};
+      return data.read_only ? { ...entry, advanced: true } : entry;
+    }
+    const raw = data.map?.[key];
+    if (raw === "none") return { no_cdm: true };
+    if (typeof raw === "string") {
+      if (!raw) return {};
+      const device = deviceOf(raw);
+      const drm = device?.kind === "PlayReady" || (!device && /(?:^|[_\W])sl\d{3,4}\b/i.test(raw)) ? "playready" : "widevine";
+      return { [drm]: raw, preferred: drm };
+    }
+    if (raw?.rule) return { advanced: true, devices: raw.rule };
+    return raw || {};
+  };
+  const tags = new Map();
+  for (const svc of [...configured, ...Object.values(S.config.series).map((c) => c.service),
+    typeof cdmExtraService === "string" ? cdmExtraService : ""]) {
+    if (svc && svc.toLowerCase() !== "default" && !tags.has(svc.toLowerCase())) tags.set(svc.toLowerCase(), svc);
+  }
+  const shown = [...tags.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  const defRoute = current("default"), def = defRoute.no_cdm ? "none" : defRoute[defaultSlot(defRoute)] || "";
+  const defaultDevice = deviceOf(def, defaultSlot(defRoute) === "playready" ? "PlayReady" : "Widevine");
+  const defaultProblem = def !== "none" && (!defaultDevice || problem(defaultDevice));
+  const others = data.services.filter((t) => !tags.has(t.toLowerCase()) && t.toLowerCase() !== "default" && t !== "EXAMPLE");
   const addSvc = el("button", { type: "button", className: "btn small cdm-pop-btn", dataset: { key: "add" }, textContent: "+ Another service", onclick: (e) => {
     const anchor = e.currentTarget, q = el("input", { type: "search", className: "cdm-pop-search", placeholder: "Search a service" }), list = el("div", { className: "cdm-pop-list" });
+    const open = (service) => {
+      closeCdmPop();
+      cdmExtraService = service;
+      renderCdm();
+      $(`[data-key="svc:${service}:widevine"]`)?.focus();
+    };
     const draw = () => list.replaceChildren(...others.filter((t) => `${t} ${svcName(t)}`.toLowerCase().includes(q.value.trim().toLowerCase()))
-      .map((t) => el("button", { type: "button", className: "cdm-opt", onclick: () => { closeCdmPop(); anchor.dataset.key = `svc:${t}`; cdmPicker(anchor, t, ""); } }, el("b", { textContent: svcName(t) }))));
+      .map((t) => el("button", { type: "button", className: "cdm-opt", onclick: () => open(t) }, el("b", { textContent: svcName(t) }))));
     q.oninput = draw; draw();
     if (cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: "A device of its own for…" }), q, list)) q.focus();
   } });
+  const save = async (button, service, change) => {
+    if (cdmRouteSaving === true) return;
+    cdmRouteSaving = true;
+    button.ariaBusy = "true";
+    try {
+      const update = await api("/api/cdm/route", { method: "POST", body: JSON.stringify({ service, ...change }) });
+      const restoreFocus = typeof document !== "undefined" && document.activeElement === button;
+      renderCdm(false, update);
+      if (restoreFocus && !button.isConnected && document.activeElement === document.body) {
+        ($(`[data-fk="svc:${service}:inherit"]`) || $(`[data-fk="svc:${service}:widevine"]`))?.focus();
+      }
+    } catch (e) { toast(e.message, true); }
+    finally { cdmRouteSaving = false; button.ariaBusy = "false"; }
+  };
+  const routeRow = (service, route) => {
+    const isDefault = service === "default", role = isDefault ? "Default" : cdmUsageName(service);
+    const label = el("span", { className: "cdm-lbl", textContent: role });
+    const row = (...children) => el("div", { className: `cdm-grp cdm-route${isDefault ? " cdm-default" : ""}` }, label, ...children);
+    if (route.advanced) return row(el("div", { className: "cdm-to" }, el("b", { textContent: "Read-only" }),
+      ...(route.no_cdm ? [el("span", { className: "cdm-chip static", textContent: "No CDM", title: "no DRM: no device used" })] : []),
+      el("small", { textContent: `Set by a rule by profile, quality or DRM (${(route.devices || []).join(", ")}): edit it in unshackle.yaml` })));
+    const fill = typeof trWith === "function" ? trWith : (s, ...v) => s.replace(/\{(\d+)\}/g, (_, i) => v[i]);
+    const slot = ([drm, system]) => {
+      const name = route[drm], device = deviceOf(name, system);
+      const main = isDefault && drm === defaultSlot(route), key = main ? "svc:default" : `svc:${service}:${drm}`;
+      return el("button", { type: "button", className: `btn small cdm-pop-btn cdm-slot${main && defaultProblem ? " primary" : ""}`,
+        dataset: { key, fk: `svc:${service}:${drm}` }, ariaLabel: fill("{0} device for {1}", system, role),
+        title: name && !device ? "not in the CDM folder: pick another"
+          : isDefault ? "Change default device" : `Change the device ${role} uses`,
+        onclick: (e) => cdmPicker(e.currentTarget, service, name, [], drm) },
+      el("b", { textContent: system }), el("small", { textContent: name ? (device ? cdmShort(device) : name) : "No device selected" }));
+    };
+    const action = (key, text, change, value) => el("button", { type: "button", className: "btn small", dataset: { fk: `svc:${service}:${key}` },
+      ...(key === "inherit" ? { title: "use the default device" } : {}),
+      onclick: (e) => save(e.currentTarget, service, change) }, el("b", { textContent: text }), ...(value ? [" ", el("small", { textContent: value })] : []));
+    const hasDevice = route.widevine || route.playready;
+    const hasOverride = Boolean(hasDevice || route.no_cdm || configured.some((k) => k.toLowerCase() === service.toLowerCase()));
+    const prefersPlayReady = route.preferred === "playready" || !route.playready;
+    const preference = prefersPlayReady ? "PlayReady" : "Widevine";
+    return row(el("div", { className: "cdm-route-slots" }, ...[["widevine", "Widevine"], ["playready", "PlayReady"]].map(slot)),
+      el("div", { className: "cdm-route-actions" },
+        ...(route.widevine && (route.playready || !route.preferred) ? [action("preferred", "Preferred DRM", {
+          preferred: prefersPlayReady ? "widevine" : "playready",
+        }, preference)] : []),
+        ...(isDefault ? [] : [
+          route.no_cdm ? el("span", { className: "cdm-chip static", textContent: "No CDM", title: "no DRM: no device used" })
+            : action("none", "No CDM", { no_cdm: true }),
+          ...(hasOverride ? [action("inherit", "Use default", { widevine: null, playready: null })] : [el("small", { textContent: "uses the default device" })]),
+        ])));
+  };
   const services = el("div", { className: "cdm-svcs-box" },
-    el("div", { className: "cdm-grp cdm-default" }, el("span", { className: "cdm-lbl", textContent: "Default" }), deviceCell(def), defButton),
-    ...[...groups.entries()].sort((a, b) => b[1].length - a[1].length).map(([name, svcs]) =>
-      el("div", { className: `cdm-grp${deviceOf(name) || name === "none" ? "" : " bad"}` }, el("span", { className: "cdm-chips" }, ...svcs.map((svc) => chip(svc, name))), deviceCell(name))),
-    ...(onDefault.length ? [el("div", { className: "cdm-grp cdm-fold" }, el("span", { className: "cdm-chips" }, ...onDefault.map((svc) => chip(svc, ""))),
-      el("span", { className: "cdm-to" }, el("small", { textContent: onDefault.length === 1 ? "uses the default device" : "use the default device" })))] : []),
-    ...rules.map(([svc, v]) => el("div", { className: "cdm-grp" }, el("span", { className: "cdm-chips" }, el("span", { className: "cdm-chip static", textContent: svcName(svc) })),
-      el("span", { className: "cdm-to" }, el("small", { textContent: `Set by a rule by profile, quality or DRM (${v.rule.join(", ")}): edit it in unshackle.yaml` })))),
-    ...(others.length ? [el("div", { className: "cdm-add-svc" }, addSvc)] : []));
-  // What needs you: a service on a device that is not there, a device in use that failed its test
+    ...["default", ...shown].map((svc) => routeRow(svc, current(svc))),
+    ...(!data.read_only && others.length ? [el("div", { className: "cdm-add-svc" }, addSvc)] : []));
+  const missingReplacementGroups = new Map();
+  for (const service of ["default", ...shown]) {
+    const route = current(service);
+    for (const drmSlot of ["widevine", "playready"]) {
+      const deviceName = route[drmSlot];
+      if (!deviceName || deviceOf(deviceName, drmSlot === "widevine" ? "Widevine" : "PlayReady")) continue;
+      const isDefault = service === "default";
+      const readOnly = Boolean(route.advanced);
+      const groupKey = JSON.stringify({ deviceName, drmSlot, isDefault, readOnly });
+      if (!missingReplacementGroups.has(groupKey)) {
+        missingReplacementGroups.set(groupKey, { deviceName, drmSlot, isDefault, readOnly, services: [] });
+      }
+      missingReplacementGroups.get(groupKey).services.push(service);
+    }
+  }
   const alerts = [
-    ...[def, ...groups.keys()].filter((name) => name && name !== "none" && !deviceOf(name)).map((name) => {
-      const svcs = name === def ? ["the default"] : groups.get(name);
-      const fix = el("button", { type: "button", className: `btn small cdm-pop-btn${name === def ? "" : " primary"}`, dataset: { key: `fix:${name}` }, textContent: "Pick a device",
-        onclick: (e) => name === def ? cdmPicker(e.currentTarget, "default", name) : cdmPicker(e.currentTarget, svcs[0], name, svcs.slice(1)) });
-      return el("div", { className: "cdm-alert" }, el("span", {}, el("b", { textContent: svcs.map(cdmUsageName).join(", ") }), svcs.length === 1 ? ` uses ${name}, which is not in the CDM folder` : ` use ${name}, which is not in the CDM folder`), fix);
+    ...[...missingReplacementGroups.values()].map(({ deviceName, drmSlot, isDefault, readOnly, services }) => {
+      const [first, ...also] = services;
+      const svcs = isDefault ? ["the default"] : services;
+      const actions = readOnly ? [] : [el("button", { type: "button", className: `btn small cdm-pop-btn${isDefault ? "" : " primary"}`,
+        dataset: { key: `fix:${first}:${drmSlot}` }, textContent: "Pick a device",
+        onclick: (e) => cdmPicker(e.currentTarget, first, deviceName, also, drmSlot) })];
+      return el("div", { className: "cdm-alert" }, el("span", {}, el("b", { textContent: svcs.map(cdmUsageName).join(", ") }), svcs.length === 1 ? ` uses ${deviceName}, which is not in the CDM folder` : ` use ${deviceName}, which is not in the CDM folder`), ...actions);
     }),
     ...data.devices.filter((d) => d.used_by.length && problem(d)).map((d) => el("div", { className: "cdm-alert" },
       el("span", {}, el("b", { textContent: cdmShort(d) }), `, used by ${d.used_by.map(cdmUsageName).join(", ")}: ${cdmStatus(d)[2]}`))),
@@ -300,7 +479,7 @@ function renderCdm(typing = false) {  // typing: in the search box, whose own el
       const b = e.currentTarget;
       if (!confirmClick(b, `Delete ${cdmShort(d)}?`, b.querySelector("b"))) return;
       closeCdmPop();
-      try { cdmData = await api("/api/cdm/delete", { method: "POST", body: JSON.stringify({ name: d.name, kind: d.kind }) }); renderCdm(); }
+      try { cdmData = await api("/api/cdm/delete", { method: "POST", body: JSON.stringify({ name: d.name, kind: d.kind, folder: Boolean(d.folder) }) }); renderCdm(); }
       catch (err) { toast(err.message, true); }
     }, { danger: true, disabled: d.used_by.length > 0, sub: d.used_by.length ? "In use: move its services first" : "" });
     cdmPopAt(anchor, el("b", { className: "cdm-pop-t", textContent: cdmShort(d), title: cdmShort(d) }), el("div", { className: "cdm-pop-list" }, test, reprov, del))?.classList.add("menu");

@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import stat
 import sys
 import threading
@@ -1816,3 +1817,1184 @@ def test_cookie_fractional_json_expiry_with_unicode_escape(tmp_path):
     assert "\t4000000000\tsid\tcafé\n" in result
     save(tmp_path, "NF", "", text)
     assert (tmp_path / "NF.txt").read_text() == result
+
+
+@pytest.fixture
+def cdm_routes(tmp_path):
+    conf = tmp_path / "unshackle.yaml"
+    wvds, prds = folders(conf)
+    add(wvds, prds, "old.wvd", b"WVD")
+    add(wvds, prds, "new.wvd", b"WVD")
+    add(wvds, prds, "tv.prd", b"PRD")
+    (prds / "tv_folder").mkdir()
+    conf.write_text(
+        "# my settings\n"
+        "cdm:  # routes\n"
+        "  default: 'old'  # standard\n"
+        "  'NF':  # Netflix\n"
+        '    Widevine: "old"  # mobile\n'
+        "    # keep this note\n"
+        "    playready: 'tv'  # television\n"
+        "  YT: none\n"
+        "dl:\n  sub_format: 'srt'\n"
+        "serve:\n  port: 8786\n"
+        "remote_cdm:\n"
+        "  - {name: wv_api, type: widevine}\n"
+        "  - {name: pr_api, type: playready, device_type: PLAYREADY}\n"
+        "  - {name: typed_only, type: playready}\n"
+        "  - {name: labs_two, type: decrypt_labs, device_name: SL2000}\n"
+        "  - {name: labs_three, type: decrypt_labs, device_name: sl3000}\n"
+    )
+    conf.chmod(0o640)
+    return conf, wvds, prds
+
+
+def test_cdm_route_preserves_the_other_slot_and_yaml_presentation(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    original = conf.read_text()
+    edited = cdm.set_route(*cdm_routes, "nf", widevine="new", playready="tv")
+    assert conf.read_text() == original.replace('Widevine: "old"', 'Widevine: "new"')
+    assert edited.to_dict() == {
+        "service": "NF", "widevine": "new", "playready": "tv", "preferred": "widevine",
+        "advanced": False, "no_cdm": False, "devices": ["new", "tv"],
+    }
+    swapped = cdm.set_route(*cdm_routes, "NF", widevine="new", playready="tv", preferred="playready")
+    assert swapped == cdm.get_route(*cdm_routes, "nf")
+    assert swapped.devices == ("tv", "new")
+    assert list(read(conf)["cdm"]) == ["default", "NF", "YT"]
+    assert list(read(conf)["cdm"]["NF"]) == ["playready", "Widevine"]
+    assert conf.read_text() == original.replace(
+        '    Widevine: "old"  # mobile\n    # keep this note\n    playready: \'tv\'  # television\n',
+        '    # keep this note\n    playready: \'tv\'  # television\n    Widevine: "new"  # mobile\n',
+    )
+    restored = cdm.set_route(*cdm_routes, "NF", widevine="new", playready="tv", preferred="widevine")
+    assert restored == edited == cdm.get_route(*cdm_routes, "NF")
+    assert conf.read_text() == original.replace('Widevine: "old"', 'Widevine: "new"')
+    assert stat.S_IMODE(conf.stat().st_mode) == 0o640
+
+
+@pytest.mark.parametrize("source", [
+    "  NF:\n    widevine: old\n    PlayReady: null  # other slot note\n",
+    "  NF:\n    PlayReady: ~  # other slot note\n    widevine: old\n",
+    '  NF:\n    playready: ""  # other slot note\n    widevine: old\n',
+    "  NF:\n    widevine: old\n    playready:  # other slot note\n",
+    "  NF: {widevine: old, playready: null}  # route note\n",
+    "  NF: {'PlayReady': ~, widevine: old}  # route note\n",
+    '  NF: {playready: "", widevine: old}\n',
+    "  NF: {widevine: old, playready:}\n",
+])
+def test_cdm_route_preserves_omitted_empty_slot_until_explicitly_cleared(cdm_routes, source):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text("cdm:\n" + source)
+    saved = cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert saved.widevine == "new" and saved.playready is None
+    slots = read(conf)["cdm"]["NF"]
+    assert list(slots)[0] == "widevine"
+    original = yaml.safe_load(source)["NF"]
+    assert list(slots.items())[1] == next((key, value) for key, value in original.items() if key != "widevine")
+    if next(iter(original)) == "widevine":
+        assert conf.read_text() == "cdm:\n" + source.replace("widevine: old", "widevine: new")
+
+    cdm.set_route(*cdm_routes, "NF", playready=None)
+    assert read(conf)["cdm"] == {"NF": "new"}
+
+
+@pytest.mark.parametrize("source", [
+    '  NF:\n    "Widevine": "old"  # per-slot note\n',
+    '  NF: {"Widevine": "old"}  # route note\n',
+])
+def test_cdm_route_preserves_a_single_slot_mapping_until_the_other_slot_is_cleared(cdm_routes, source):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text("cdm:\n" + source)
+    cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_text() == "cdm:\n" + source.replace('"old"', '"new"')
+    assert read(conf)["cdm"]["NF"] == {"Widevine": "new"}
+
+    cdm.set_route(*cdm_routes, "NF", widevine="new", playready=None)
+    assert read(conf)["cdm"]["NF"] == "new"
+
+
+@pytest.mark.parametrize("change", [{"preferred": "widevine"}, {"widevine": "old"}])
+def test_cdm_route_with_leading_empty_playready_exposes_and_repairs_missing_preference(cdm_routes, change):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text("cdm:\n  NF: {playready: null, Widevine: old}\n  OTHER: {widevine: null, PlayReady: tv}\n")
+    routes = cdm.state(*cdm_routes)["routes"]
+    assert routes["NF"]["widevine"] == "old"
+    assert routes["NF"]["preferred"] is None
+    assert routes["OTHER"]["preferred"] == "playready"
+
+    saved = cdm.set_route(*cdm_routes, "NF", **change)
+    assert saved.preferred == "widevine"
+    assert list(read(conf)["cdm"]["NF"].items()) == [("Widevine", "old"), ("playready", None)]
+
+
+def test_cdm_route_marks_non_service_names_read_only(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    source = 'cdm:\n  "my service": old\n'
+    conf.write_text(source)
+    assert state(*cdm_routes)["routes"]["my service"]["advanced"]
+    assert cdm.get_route(*cdm_routes, "my service").advanced
+    with pytest.raises(cdm.CdmError, match="Choose a valid service"):
+        cdm.set_route(*cdm_routes, "my service", widevine="new")
+    assert conf.read_text() == source
+
+
+@pytest.mark.parametrize("playready_first", [False, True])
+def test_cdm_route_shrinks_block_mapping_in_place(cdm_routes, playready_first):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    widevine = '    Widevine: "old"  # mobile\n'
+    playready = "    playready: missing_pr  # television\n"
+    first, second = (playready, widevine) if playready_first else (widevine, playready)
+    original = f"cdm:\n  NF:  # Netflix\n{first}    # between slots\n{second}  YT: none\n"
+    conf.write_text(original)
+
+    saved = cdm.set_route(*cdm_routes, "NF", widevine=None)
+
+    assert conf.read_text() == original.replace(widevine, "    # mobile\n")
+    assert saved == cdm.get_route(*cdm_routes, "NF")
+    assert saved.devices == ("missing_pr",)
+    assert not saved.advanced
+
+
+def test_cdm_route_clear_omits_service_from_saved_routes(cdm_routes):
+    from unshacklarr import cdm
+
+    saved, _, saved_state = cdm.save_route_state(*cdm_routes, "NF", widevine=None, playready=None)
+
+    assert saved == cdm.CdmRoute("NF")
+    assert "NF" not in saved_state["routes"]
+    assert saved_state == cdm.state(*cdm_routes)
+
+
+@pytest.mark.parametrize(("slot", "name"), [
+    ("playready", "old"), ("playready", "wv_api"), ("widevine", "tv"), ("widevine", "tv_folder"),
+    ("playready", "typed_only"), ("widevine", "pr_api"), ("widevine", "labs_two"), ("widevine", "labs_three"),
+])
+def test_cdm_route_rejects_devices_from_the_other_drm(cdm_routes, slot, name):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    before = conf.read_bytes()
+    with pytest.raises(CdmError, match="Widevine|PlayReady"):
+        cdm.set_route(*cdm_routes, "NF", **{slot: name})
+    assert conf.read_bytes() == before
+
+
+@pytest.mark.parametrize("rule", [
+    "{'>=1080': tv, default: old}", "{1080: tv}", "{alt: old}",
+    "{widevine: {default: old}}", "{}", "[old]", "{widevine: none}", "{Widevine: old, widevine: new}",
+    "{widevine: old, widevine: new}",
+])
+def test_advanced_cdm_routes_are_read_only(cdm_routes, rule):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text(f"cdm:\n  default: old\n  NF: {rule}\n")
+    before = conf.read_bytes()
+    assert cdm.get_route(*cdm_routes, "NF").advanced
+    with pytest.raises(CdmError):
+        cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_bytes() == before
+
+
+@pytest.mark.parametrize("section", ["cdm: {default: old, NF: old}", "cdm:\n  NF: old\n  nf: old",
+                                      "cdm:\n  NF: old\n  NF: old"])
+def test_cdm_route_refuses_ambiguous_or_flow_edits(cdm_routes, section):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text(f"{section}\n")
+    before = conf.read_bytes()
+    with pytest.raises(CdmError):
+        cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_bytes() == before
+
+
+def test_cdm_routes_in_nonempty_top_level_flow_mapping_are_read_only(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text("cdm: {default: old, NF: none}\n")
+    routes = cdm.state(*cdm_routes)["routes"]
+    assert {name: route["advanced"] for name, route in routes.items()} == {"default": True, "NF": True}
+    assert routes["default"]["widevine"] == "old"
+    assert cdm.get_route(*cdm_routes, "nf").no_cdm
+
+
+@pytest.mark.parametrize("config", [
+    "slots: &slots {playready: tv}\ncdm:\n  NF:\n    <<: *slots\n    widevine: old\n",
+    "slots: &slots {playready: tv}\ncdm:\n  NF: {<<: *slots, widevine: old}\n",
+    "routes: &routes {NF: {playready: tv, widevine: old}}\ncdm:\n  <<: *routes\n",
+])
+def test_cdm_route_merge_keys_leave_the_yaml_read_only(cdm_routes, config):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text(config)
+    route = cdm.get_route(*cdm_routes, "NF")
+    assert route.advanced and set(route.devices) == {"old", "tv"}
+    with pytest.raises(CdmError, match="rule by profile"):
+        cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_text() == config
+
+
+def test_cdm_route_section_inherited_through_root_merge_is_read_only(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text("<<: {cdm: {NF: old}}\n")
+    state = cdm.state(*cdm_routes)
+    assert state["read_only"] is True
+    assert state["routes"]["NF"]["widevine"] == "old"
+
+
+@pytest.mark.parametrize("writer", ["route", "choose"])
+def test_cdm_writers_refuse_edits_to_a_root_merged_section(cdm_routes, writer):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    source = "<<: {cdm: {NF: old}}\n"
+
+    def write(device):
+        if writer == "route":
+            cdm.set_route(*cdm_routes, "YT", widevine=device)
+        else:
+            cdm.choose(*cdm_routes, "YT", device)
+
+    conf.write_text(source)
+    with pytest.raises(CdmError, match=re.escape(cdm.UNSAFE_EDIT)):
+        write(None)
+    assert conf.read_text() == source
+
+    conf.write_text("dl: {}\n")
+    assert cdm.state(*cdm_routes)["read_only"] is False
+    write("new")
+    assert read(conf)["cdm"] == {"YT": "new"}
+
+
+@pytest.mark.parametrize(("config", "service"), [
+    ("cdm: &routes\n  NF: old\nother: *routes\n", "NF"),
+    ("cdm:\n  NF: &device old\n  AMZN: *device\n", "NF"),
+    ("cdm:\n  NF: &device old\n  AMZN: *device\n", "AMZN"),
+    ("cdm:\n  NF: {widevine: &device old, playready: tv}\nother: *device\n", "NF"),
+    ("cdm:\n  &service NF: old\nother: *service\n", "NF"),
+    ("cdm:\n  NF: {&slot widevine: old, playready: tv}\nother: *slot\n", "NF"),
+    ("cdm:\n  123: old\n", "123"),
+    ("cdm:\n  ON: old\n", "True"),
+])
+def test_cdm_route_marks_shared_aliases_and_non_string_keys_read_only(cdm_routes, config, service):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text(config)
+    route = cdm.get_route(*cdm_routes, service)
+    assert route.advanced and route.widevine == "old"
+    with pytest.raises(CdmError, match="rule by profile"):
+        cdm.set_route(*cdm_routes, service, widevine="new")
+    assert conf.read_text() == config
+
+
+def test_cdm_route_remote_system_uses_exact_legacy_key_precedence(cdm_routes):
+    from unshacklarr import cdm
+
+    cdm_routes[0].write_text(
+        "cdm:\n  default: legacy_pr\n  NF: legacy_wv\n"
+        "remote_cdm:\n"
+        "  - {name: legacy_pr, device_type: CHROME, Device Type: playready}\n"
+        "  - {name: legacy_wv, device_type: PLAYREADY, Device Type: CHROME}\n"
+    )
+    assert cdm.get_route(*cdm_routes, "default").playready == "legacy_pr"
+    assert cdm.get_route(*cdm_routes, "NF").widevine == "legacy_wv"
+
+
+def test_default_route_transitions_keep_a_device_and_services_can_inherit_or_use_no_cdm(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    assert cdm.get_route(*cdm_routes, "default").preferred == "widevine"
+    cdm.set_route(*cdm_routes, "default", widevine="old", playready="tv")
+    assert list(read(conf)["cdm"]["default"]) == ["widevine", "playready"]
+    cdm.set_route(*cdm_routes, "DEFAULT", widevine="old", playready="tv", preferred="playready")
+    assert list(read(conf)["cdm"]["default"]) == ["playready", "widevine"]
+    assert cdm.set_route(*cdm_routes, "default", widevine="old", playready=None).widevine == "old"
+    assert "  default: 'old'  # standard\n" in conf.read_text()
+    before = conf.read_bytes()
+    for service, fields in (("default", {"widevine": None, "playready": None}), ("DEFAULT", {"no_cdm": True}),
+                            ("YT", {"no_cdm": True, "widevine": "old"})):
+        with pytest.raises(CdmError):
+            cdm.set_route(*cdm_routes, service, **fields)
+        assert conf.read_bytes() == before
+    assert cdm.get_route(*cdm_routes, "YT").no_cdm
+    assert cdm.set_route(*cdm_routes, "NF", no_cdm=True).no_cdm
+    assert read(conf)["cdm"]["NF"] == NO_CDM
+    assert not cdm.set_route(*cdm_routes, "NF", widevine=None, playready=None).devices
+    assert "NF" not in read(conf)["cdm"]
+    assert all(comment in conf.read_text() for comment in ("# Netflix", "# mobile", "# keep this note", "# television"))
+    assert read(conf)["cdm"]["default"] == "old"
+
+
+def test_new_cdm_route_keeps_crlf_and_quotes_yaml_like_names(cdm_routes):
+    from unshacklarr import cdm
+
+    conf, wvds, prds = cdm_routes
+    add(wvds, prds, "yes.wvd", b"WVD")
+    original = b"# config\r\ncdm:\r\n  default: old  # default\r\n\r\n# downloads\r\ndl: {}\r\n"
+    conf.write_bytes(original)
+    assert cdm.set_route(*cdm_routes, "ON", widevine="yes") == cdm.get_route(*cdm_routes, "ON")
+    assert read(conf)["cdm"] == {"default": "old", "ON": "yes"}
+    assert conf.read_bytes() == original.replace(b"\r\n\r\n", b'\r\n  "ON": "yes"\r\n\r\n')
+
+
+
+def test_cdm_route_remote_classification_and_name_resolution(cdm_routes):
+    from unshacklarr import cdm
+
+    conf, wvds, prds = cdm_routes
+    add(wvds, prds, "tv.wvd", b"WVD")
+    add(wvds, prds, "tv_folder.wvd", b"WVD")
+    add(prds, prds, "tv_sl3000.prd", b"PRD")
+    (prds / "tv_sl3000").mkdir()
+    with conf.open("a") as file:
+        file.write(
+            "  - {name: old, type: custom_api, device: {name: ' sl2000 '}}\n"
+            "  - {name: old, type: widevine}\n"
+            "  - {name: custom_type, type: custom_api, device: {type: PLAYREADY}}\n"
+            "  - {name: similar_type, device_type: NOT_PLAYREADY}\n"
+            "  - {name: labs_space, type: decrypt_labs, device_name: ' SL2000'}\n"
+        )
+    assert cdm.get_route(*cdm_routes, "default").widevine == "old"
+    with pytest.raises(CdmError, match="tv resolves to the PlayReady device of the same name"):
+        cdm.set_route(*cdm_routes, "NF", widevine="tv")
+    assert cdm.set_route(*cdm_routes, "NF", widevine="old").widevine == "old"
+    assert cdm.set_route(*cdm_routes, "NF", widevine="typed_only").widevine == "typed_only"
+    assert cdm.set_route(*cdm_routes, "AMZN", widevine="tv_folder").widevine == "tv_folder"
+    assert cdm.set_route(*cdm_routes, "DSNP", playready="tv_sl3000").playready == "tv_sl3000"
+    state = cdm.state(*cdm_routes)
+    assert {d["name"]: d["kind"] for d in state["remote"] if d["name"] != "old"} == {
+        "pr_api": "PlayReady", "typed_only": "Widevine", "wv_api": "Widevine", "labs_two": "PlayReady",
+        "labs_three": "PlayReady", "custom_type": "PlayReady", "similar_type": "Widevine",
+        "labs_space": "Widevine",
+    }
+    assert [(d["kind"], d["used_by"]) for d in state["remote"] if d["name"] == "old"] == [
+        ("Widevine", ["default"]), ("Widevine", []),
+    ]
+    usage = {(d["name"], d["kind"], d["folder"]): d["used_by"] for d in state["devices"]}
+    assert usage["tv", "PlayReady", False] == ["NF"]
+    assert usage["tv", "Widevine", False] == []
+    assert usage["tv_folder", "Widevine", False] == ["AMZN"]
+    assert usage["tv_folder", "PlayReady", True] == []
+    assert usage["tv_sl3000", "PlayReady", False] == ["DSNP"]
+    assert usage["tv_sl3000", "PlayReady", True] == []
+
+
+def test_cdm_route_omitted_slots_preserve_intervening_edits(cdm_routes):
+    from unshacklarr import cdm
+
+    stale = cdm.get_route(*cdm_routes, "NF")
+    original = cdm_routes[0].read_text()
+    changed, before = cdm.save_route(*cdm_routes, "NF", playready="pr_api")
+    assert before == original
+    after_first = cdm_routes[0].read_text()
+    assert changed.playready != stale.playready
+    saved, before = cdm.save_route(*cdm_routes, "NF", widevine="new")
+    assert before == after_first
+    assert (saved.widevine, saved.playready) == ("new", "pr_api")
+    assert cdm.set_route(*cdm_routes, "NF", preferred="playready").devices == ("pr_api", "new")
+    assert cdm.set_route(*cdm_routes, "NF", widevine=None, playready=None).devices == ()
+    assert cdm.save_route(*cdm_routes, "NF", widevine=None, playready=None)[1] is None
+
+
+def test_cdm_route_edits_single_line_flow_and_preserves_its_comment(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text("cdm:\n  NF: {widevine: old, playready: tv}  # note\ndl: {}\n")
+    assert cdm.set_route(*cdm_routes, "NF", widevine="new").devices == ("new", "tv")
+    assert conf.read_text() == "cdm:\n  NF: {widevine: new, playready: tv}  # note\ndl: {}\n"
+    assert cdm.set_route(*cdm_routes, "NF", preferred="playready").devices == ("tv", "new")
+    assert "NF: {playready: tv, widevine: new}  # note" in conf.read_text()
+    cdm.set_route(*cdm_routes, "NF", widevine=None, playready=None)
+    assert conf.read_text() == "cdm:\n  # note\ndl: {}\n"
+
+
+def test_cdm_route_leaves_multiline_flow_read_only(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    original = "cdm:\n  NF: {widevine: old,\n       playready: tv}  # note\n"
+    conf.write_text(original)
+    assert cdm.get_route(*cdm_routes, "NF").advanced
+    with pytest.raises(CdmError, match="rule by profile"):
+        cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_text() == original
+
+
+def test_cdm_route_flow_keeps_key_and_value_quotes_on_reorder_and_collapse(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text('cdm:\n  NF: {"Widevine": "old", \'PlayReady\': \'tv\'}  # note\n')
+    cdm.set_route(*cdm_routes, "NF", widevine="new", preferred="playready")
+    assert conf.read_text() == 'cdm:\n  NF: {\'PlayReady\': \'tv\', "Widevine": "new"}  # note\n'
+    cdm.set_route(*cdm_routes, "NF", widevine=None)
+    assert conf.read_text() == "cdm:\n  NF: 'tv'  # note\n"
+
+
+@pytest.mark.parametrize("name", ["@labs", "..."])
+def test_cdm_route_refuses_writing_names_outside_the_device_name_pattern(cdm_routes, name):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    original = f'cdm: {{}}\nremote_cdm:\n  - {{name: "{name}", type: widevine}}\n'
+    conf.write_text(original)
+    with pytest.raises(CdmError, match=cdm.UNSAFE_EDIT):
+        cdm.set_route(*cdm_routes, "DSNP", widevine=name)
+    assert conf.read_text() == original
+
+
+def test_cdm_route_uses_the_indentation_of_an_empty_top_level_section(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text("    cdm:  # routes\n    dl: {}\n")
+    cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_text() == "    cdm:  # routes\n      NF: new\n    dl: {}\n"
+
+
+def test_playready_certificate_folder_is_listed_and_deletable_without_being_routable(cdm_routes):
+    from unshacklarr import cdm
+
+    conf, wvds, prds = cdm_routes
+    original = conf.read_bytes()
+    folder = next(d for d in cdm.devices(wvds, prds) if d["name"] == "tv_folder")
+    assert folder["kind"] == "PlayReady" and folder["folder"] and not folder["routable"]
+    with pytest.raises(CdmError, match="Choose a PlayReady device"):
+        cdm.set_route(*cdm_routes, "AMZN", playready="tv_folder")
+    with pytest.raises(CdmError, match="No device called"):
+        cdm.choose(*cdm_routes, "AMZN", "tv_folder")
+    assert conf.read_bytes() == original
+    cdm.delete(*cdm_routes, "tv_folder", "PlayReady")
+    assert not (prds / "tv_folder").exists()
+
+
+def test_cdm_route_resolves_prd_in_wvds_before_wvd_and_folders(cdm_routes):
+    from unshacklarr import cdm
+
+    conf, wvds, prds = cdm_routes
+    (wvds / "mixed.prd").write_bytes(b"PRD")
+    (wvds / "mixed.wvd").write_bytes(b"WVD")
+    (prds / "mixed").mkdir()
+    conf.write_text("cdm:\n  default: mixed\n")
+    assert cdm.get_route(*cdm_routes, "default").playready == "mixed"
+    mixed = [d for d in cdm.state(*cdm_routes)["devices"] if d["name"] == "mixed"]
+    assert [(d["kind"], d["folder"], d["used_by"]) for d in mixed] == [
+        ("Widevine", False, []), ("PlayReady", True, []), ("PlayReady", False, ["default"]),
+    ]
+    with pytest.raises(CdmError, match="resolves to the PlayReady device"):
+        cdm.set_route(*cdm_routes, "NF", widevine="mixed")
+    assert cdm.set_route(*cdm_routes, "NF", playready="mixed").playready == "mixed"
+
+
+@pytest.mark.parametrize(("filename", "slot", "kind"), [
+    ("fallback.PRD", "playready", "PlayReady"), ("fallback.WVD", "widevine", "Widevine"),
+])
+def test_cdm_route_requires_a_resolvable_lowercase_extension(cdm_routes, monkeypatch, filename, slot, kind):
+    from unshacklarr import cdm
+
+    conf, wvds, prds = cdm_routes
+    uploaded = wvds / filename
+    uploaded.write_bytes(filename[-3:].encode())
+    lowercase = uploaded.with_suffix(uploaded.suffix.lower())
+    if lowercase.is_file():
+        # Exercise case-sensitive lookups for the fixture on case-insensitive macOS volumes too.
+        is_file = type(uploaded).is_file
+
+        def exact_case(path):
+            return str(path) != str(lowercase) and is_file(path)
+
+        monkeypatch.setattr(type(uploaded), "is_file", exact_case)
+    assert not lowercase.is_file()
+    before = conf.read_bytes()
+    with pytest.raises(CdmError, match=f"Choose a {kind} device"):
+        cdm.set_route(*cdm_routes, "AMZN", **{slot: "fallback"})
+    assert conf.read_bytes() == before
+    shown = next(d for d in cdm.state(*cdm_routes)["devices"] if d["name"] == "fallback")
+    assert shown["routable"] is False
+    cdm.delete(conf, wvds, prds, "fallback", kind)
+    assert not uploaded.exists()
+
+
+def test_cdm_route_uses_the_lowercase_prd_fallback_when_the_primary_is_unroutable(cdm_routes, monkeypatch):
+    from unshacklarr import cdm
+
+    _, wvds, prds = cdm_routes
+    primary = prds / "fallback.PRD"
+    fallback = wvds / "fallback.prd"
+    primary.write_bytes(b"PRD")
+    fallback.write_bytes(b"PRD")
+    if primary.with_suffix(".prd").is_file():
+        is_file = type(primary).is_file
+        monkeypatch.setattr(type(primary), "is_file", lambda path: path != primary.with_suffix(".prd") and is_file(path))
+    assert cdm.set_route(*cdm_routes, "NF", playready="fallback").playready == "fallback"
+    with pytest.raises(CdmError, match="is used by NF"):
+        cdm.delete(*cdm_routes, "fallback", "PlayReady")
+    cdm.set_route(*cdm_routes, "NF", playready=None)
+    cdm.delete(*cdm_routes, "fallback", "PlayReady")
+    assert primary.is_file() and not fallback.exists()
+
+
+def test_cdm_delete_uses_prds_before_wvds_for_playready_files(cdm_routes):
+    conf, wvds, prds = cdm_routes
+    primary, fallback = prds / "extra.prd", wvds / "extra.PRD"
+    primary.write_bytes(b"PRD")
+    fallback.write_bytes(b"PRD")
+    assert sum(d["name"] == "extra" for d in state(*cdm_routes)["devices"]) == 1
+
+    delete(conf, wvds, prds, "extra", "PlayReady")
+    assert not primary.exists()
+    assert fallback.is_file()
+    delete(conf, wvds, prds, "extra", "PlayReady")
+    assert not fallback.exists()
+
+
+@pytest.mark.parametrize("folder", [True, False, None, "false"])
+def test_cdm_delete_distinguishes_same_named_playready_file_and_folder(cdm_routes, folder):
+    from unshacklarr import cdm
+
+    _, _, prds = cdm_routes
+    file, directory = prds / "play.prd", prds / "play"
+    file.write_bytes(b"PRD")
+    directory.mkdir()
+
+    if folder == "false":
+        with pytest.raises(cdm.CdmError, match="No such device"):
+            cdm.delete(*cdm_routes, "play", "PlayReady", folder=folder)
+        assert file.is_file() and directory.is_dir()
+        return
+
+    selection = {} if folder is None else {"folder": folder}
+    cdm.delete(*cdm_routes, "play", "PlayReady", **selection)
+    assert file.is_file() is (folder is True)
+    assert directory.is_dir() is (folder is not True)
+
+
+def test_cdm_delete_protects_a_device_referenced_by_a_redacted_rule(cdm_routes):
+    conf, wvds, prds = cdm_routes
+    conf.write_text("decrypt_labs_api_key: &alias old\ncdm:\n  NF: {profile: *alias}\n")
+
+    assert state(*cdm_routes)["routes"]["NF"]["devices"] == []
+    with pytest.raises(CdmError, match="is used by NF"):
+        delete(conf, wvds, prds, "old", "Widevine")
+    assert (wvds / "old.wvd").is_file()
+
+
+@pytest.mark.parametrize("target", ["local", "remote", "hidden_local", "hidden_remote"])
+def test_cdm_delete_keeps_references_without_echoing_credential_service_keys(cdm_routes, target):
+    from unshacklarr import cdm
+
+    conf, wvds, _ = cdm_routes
+    marker = "fixture-private"
+    name = marker if target.startswith("hidden_") else "device"
+    remote = target.endswith("remote")
+    conf.write_text(
+        f"credentials: {{private: &private {marker}}}\n"
+        f"cdm:\n  *private: {name}\n"
+        + (f"remote_cdm:\n  - {{name: {name}, type: widevine}}\n" if remote else "")
+    )
+    if not remote:
+        (wvds / f"{name}.wvd").write_bytes(b"WVD")
+    with pytest.raises(CdmError, match="used by a configured rule") as error:
+        if remote:
+            cdm.remote_delete(conf, name)
+        else:
+            cdm.delete(*cdm_routes, name, "Widevine")
+    assert marker not in str(error.value)
+
+
+@pytest.mark.parametrize("writer", ["route", "choose"])
+def test_cdm_route_cannot_save_a_service_that_matches_a_config_credential(cdm_routes, writer):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    service = "fixture-private"
+    original = f"credentials: {{private: {service}}}\ncdm:\n  NF: old\n"
+    conf.write_text(original)
+    with pytest.raises(CdmError, match="Choose a valid service"):
+        if writer == "route":
+            cdm.set_route(*cdm_routes, service, widevine="new")
+        else:
+            cdm.choose(*cdm_routes, service, "new")
+    assert conf.read_text() == original
+
+
+def test_cdm_route_rejects_empty_patch_without_removing_no_cdm(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    original = conf.read_bytes()
+    with pytest.raises(CdmError, match="Choose a slot, a preferred DRM, or No CDM"):
+        cdm.save_route(*cdm_routes, "YT")
+    assert conf.read_bytes() == original
+
+
+@pytest.mark.parametrize("slot, value", [("widevine", "new"), ("widevine", None)])
+def test_cdm_route_can_repair_or_clear_one_broken_slot(cdm_routes, slot, value):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text("cdm:\n  default: {widevine: missing_wv, playready: missing_pr}\n")
+    saved = cdm.set_route(*cdm_routes, "default", **{slot: value})
+    assert saved == cdm.get_route(*cdm_routes, "default")
+    assert (saved.widevine, saved.playready) == (value, "missing_pr")
+    assert read(conf)["cdm"]["default"]["playready"] == "missing_pr"
+
+
+def test_cdm_route_refuses_to_promote_a_missing_device(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    source = "cdm:\n  NF: {widevine: old, playready: missing}\n"
+    conf.write_text(source)
+    with pytest.raises(CdmError, match="Choose a PlayReady device"):
+        cdm.set_route(*cdm_routes, "NF", preferred="playready")
+    assert conf.read_text() == source
+    assert cdm.set_route(*cdm_routes, "NF", widevine="new").playready == "missing"
+
+
+def test_remote_cdm_in_use_cannot_change_drm_system(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    before = "cdm:\n  NF: {mobile: labs}\nremote_cdm:\n  - {name: labs, type: decrypt_labs, device_name: L1}\n"
+    conf.write_text(before)
+    form = {"name": "labs", "type": "decrypt_labs", "device_name": "SL3000"}
+    with pytest.raises(CdmError, match="is in use"):
+        cdm.remote_save(conf, form, "labs")
+    assert conf.read_text() == before
+    assert cdm.remote_save(conf, {**form, "device_name": "L3"}, "labs") == before
+
+
+@pytest.mark.parametrize("action", ["add", "delete"])
+def test_cdm_device_mutations_hold_the_route_lock(cdm_routes, monkeypatch, action):
+    from unshacklarr import cdm
+
+    conf, wvds, prds = cdm_routes
+    lock = getattr(cdm, "ROUTE_LOCK", cdm._ROUTE_LOCK)
+    seen = []
+    if action == "add":
+        write = cdm.write_atomic
+
+        def observe(*args):
+            seen.append(lock._is_owned())
+            return write(*args)
+
+        monkeypatch.setattr(cdm, "write_atomic", observe)
+        cdm.add(wvds, prds, "extra.wvd", b"WVD")
+    else:
+        state, unlink = cdm._state_from, type(conf).unlink
+
+        def observe_state(*args, **kwargs):
+            seen.append(lock._is_owned())
+            return state(*args, **kwargs)
+
+        def observe_unlink(path, *args, **kwargs):
+            seen.append(lock._is_owned())
+            return unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(cdm, "_state_from", observe_state)
+        monkeypatch.setattr(type(conf), "unlink", observe_unlink)
+        cdm.delete(conf, wvds, prds, "new", "Widevine")
+    assert seen == ([True] if action == "add" else [True, True])
+
+
+@pytest.mark.parametrize("empty", ["{}", "null", "~"])
+def test_cdm_route_adds_to_an_explicitly_empty_section(cdm_routes, empty):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text(f"cdm: {empty}  # routes\n\n# downloads\ndl: {{}}\n")
+    cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_text() == "cdm:  # routes\n  NF: new\n\n# downloads\ndl: {}\n"
+
+
+def test_cdm_route_inserts_after_a_block_before_the_next_sections_comments(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    existing = "cdm:\n  AMZN:\n    widevine: old\n    playready: tv\n"
+    following = "\n# downloads\ndl: {}\n"
+    conf.write_text(existing + following)
+    cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_text() == existing + "  NF: new\n" + following
+
+
+def test_cdm_route_rejects_invalid_generated_yaml_without_writing(cdm_routes, monkeypatch):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    original = conf.read_bytes()
+    monkeypatch.setattr(cdm, "_edit_route", lambda *_: "cdm: [")
+    with pytest.raises(CdmError, match=cdm.UNSAFE_EDIT):
+        cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_bytes() == original
+
+
+@pytest.mark.parametrize("duplicate", ["slot", "service"])
+@pytest.mark.parametrize("stage", ["before-write", "readback"])
+def test_cdm_route_verification_detects_duplicate_yaml_keys(cdm_routes, monkeypatch, duplicate, stage):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    original = "cdm:\n  NF:\n    widevine: old\n    playready: tv\n"
+    conf.write_text(original)
+    edited = original.replace("widevine: old", "widevine: new")
+    duplicate_yaml = (edited + "    playready: tv\n" if duplicate == "slot"
+                      else edited.replace("  NF:\n", "  NF: old\n  NF:\n"))
+    if stage == "before-write":
+        monkeypatch.setattr(cdm, "_edit_route", lambda *_: duplicate_yaml)
+    else:
+        write = cdm.write_atomic
+        monkeypatch.setattr(cdm, "write_atomic", lambda path, _: write(path, duplicate_yaml))
+
+    with pytest.raises(CdmError, match=cdm.UNSAFE_EDIT):
+        cdm.set_route(*cdm_routes, "NF", widevine="new")
+    if stage == "before-write":
+        assert conf.read_text() == original
+
+
+@pytest.mark.parametrize("section", ["cdm", "other"])
+def test_cdm_route_readback_rejects_reordered_sibling_items(cdm_routes, monkeypatch, section):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text(
+        "cdm:\n  NF: old\n  AMZN: {Widevine: old, playready: tv}\n"
+        "other:\n  - {first: 1, second: 2}\n"
+    )
+    original, reordered = (
+        ("Widevine: old, playready: tv", "playready: tv, Widevine: old")
+        if section == "cdm" else ("first: 1, second: 2", "second: 2, first: 1")
+    )
+    write = cdm.write_atomic
+    monkeypatch.setattr(cdm, "write_atomic", lambda path, edited: write(path, edited.replace(original, reordered)))
+
+    with pytest.raises(CdmError, match=cdm.UNSAFE_EDIT):
+        cdm.set_route(*cdm_routes, "NF", widevine="new")
+
+
+@pytest.mark.parametrize("source", [
+    "  NF:\n    widevine:\n      old\n",
+    "  NF:\n    widevine: \"old\n      device\"\n",
+    "  NF: >-\n    old\n",
+    "  ? NF\n  : old\n",
+])
+def test_cdm_route_uneditable_line_syntax_is_read_only(cdm_routes, source):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    original = "cdm:\n" + source
+    conf.write_text(original)
+    assert cdm.get_route(*cdm_routes, "NF").advanced
+    with pytest.raises(CdmError, match="change it in unshackle.yaml"):
+        cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_text() == original
+
+
+@pytest.mark.parametrize("header, sibling", [
+    ("cdm: &routes", ""),
+    ("cdm: &routes", "copy: *routes\n"),
+    ("cdm: !!map", ""),
+    ("&section cdm:", "copy: {*section: old}\n"),
+])
+def test_cdm_route_with_uneditable_section_header_is_read_only(cdm_routes, header, sibling):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    original = f"{header}\n  NF: old\n{sibling}"
+    conf.write_text(original)
+    payload = cdm.state(*cdm_routes)
+    assert payload["routes"]["NF"]["advanced"]
+    assert payload["read_only"] is True
+    with pytest.raises(CdmError):
+        cdm.set_route(*cdm_routes, "NF", widevine="new")
+    assert conf.read_text() == original
+
+
+@pytest.mark.parametrize("value", ['""', '{widevine: ""}', "{widevine: null, playready: null}"])
+@pytest.mark.parametrize("clear", [False, True])
+def test_cdm_explicitly_empty_slots_are_editable(cdm_routes, value, clear):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text(f"cdm:\n  NF: {value}\n")
+    assert cdm.get_route(*cdm_routes, "NF") == cdm.CdmRoute("NF")
+    assert ("NF" in cdm.state(*cdm_routes)["routes"]) == value.startswith("{")
+    saved = cdm.set_route(*cdm_routes, "NF", widevine=None if clear else "new", playready=None)
+    assert saved.widevine == (None if clear else "new")
+    assert read(conf)["cdm"] == (None if clear else {"NF": "new"})
+
+
+def test_cdm_route_reorders_leading_slot_comments_with_their_devices(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    browser = '    # Browser device\n    widevine: "old"\n'
+    television = "    # Television device\n    playready: 'tv'\n"
+    conf.write_text("cdm:\n  NF:\n" + browser + television)
+    saved = cdm.set_route(*cdm_routes, "NF", preferred="playready")
+    assert saved.preferred == "playready"
+    assert conf.read_text() == "cdm:\n  NF:\n" + television + browser
+
+
+@pytest.mark.parametrize(("browser", "television"), [
+    ('    Widevine: "old"  # mobile\n', "    # TV certificate\n    playready: 'tv'\n"),
+    ('    Widevine: "browser"  # mobile\n', "    # TV certificate\n    playready: 'tv'  # borrowed\n"),
+    ("    widevine: old\n", "    # TV note\n    playready: tv  # inline\n"),
+])
+def test_cdm_route_reorders_a_standalone_second_slot_comment_in_both_directions(cdm_routes, browser, television):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    header = "cdm:\n  NF:\n"
+    cdm.add(*cdm_routes[1:], "browser.wvd", b"WVD")
+    conf.write_text(header + browser + television)
+    assert cdm.set_route(*cdm_routes, "NF", preferred="playready").preferred == "playready"
+    assert conf.read_text() == header + television + browser
+    assert cdm.set_route(*cdm_routes, "NF", preferred="widevine").preferred == "widevine"
+    assert conf.read_text() == header + browser + television
+
+
+def test_cdm_mounted_multi_document_yaml_keeps_a_redacted_read_only_inventory(tmp_path):
+    from unshacklarr import cdm
+
+    conf = tmp_path / "unshackle.yaml"
+    original = (
+        b"dl: {}\ndirectories: {wvds: ignored}\nauth: {headers: [q4]}\n"
+        b"---\nbrowse: {}\nauth: {headers: [z82]}\n"
+    )
+    conf.write_bytes(original)
+    wvds, prds = tmp_path / "WVDs", tmp_path / "PRDs"
+    assert cdm.folders(conf) == (wvds, prds)
+    for name in ("q4", "z82", "local"):
+        cdm.add(wvds, prds, f"{name}.wvd", b"WVD")
+    inventory, secrets = cdm.state_with_secrets(conf, wvds, prds)
+    assert secrets == {"q4", "z82"}
+    assert [(device["name"], device["used_by"]) for device in inventory["devices"]] == [("local", [])]
+    assert inventory["read_only"] is True
+    assert inventory["remote"] == [] and inventory["map"] == inventory["routes"] == {}
+    with pytest.raises(cdm.CdmError, match=cdm.UNSAFE_EDIT):
+        cdm.set_route(conf, wvds, prds, "NF", widevine="local")
+    assert conf.read_bytes() == original
+
+
+def test_cdm_multi_document_inventory_redacts_using_the_same_yaml_snapshot(tmp_path, monkeypatch):
+    from unshacklarr import cdm
+
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_bytes(b"dl: {}\n---\nauth: {headers: [q4]}\n")
+    wvds, prds = tmp_path / "WVDs", tmp_path / "PRDs"
+    for name in ("q4", "local"):
+        cdm.add(wvds, prds, f"{name}.wvd", b"WVD")
+    read_bytes = Path.read_bytes
+
+    def replace_after_read(path: Path) -> bytes:
+        snapshot = read_bytes(path)
+        if path == conf:
+            conf.write_bytes(b"dl: {}\n")
+        return snapshot
+
+    monkeypatch.setattr(Path, "read_bytes", replace_after_read)
+    inventory, redactions = cdm.state_with_secrets(conf, wvds, prds)
+    assert inventory["read_only"] is True
+    assert [device["name"] for device in inventory["devices"]] == ["local"]
+    assert redactions == {"q4"}
+
+
+def test_cdm_reports_syntax_errors_in_later_yaml_documents(tmp_path):
+    from unshacklarr import cdm
+
+    conf = tmp_path / "unshackle.yaml"
+    conf.write_text("dl: {}\n---\n[\n")
+    with pytest.raises(cdm.BrokenYaml, match="syntax error at line 4"):
+        cdm.folders(conf)
+    with pytest.raises(cdm.BrokenYaml, match="syntax error"):
+        cdm.state(conf, tmp_path / "WVDs", tmp_path / "PRDs")
+
+
+@pytest.mark.parametrize("host", ["cdm.invalid", "[::1]"])
+def test_cdm_masks_encoded_credentials_in_bare_diagnostic_urls(host):
+    from unshacklarr import cdm
+
+    assert cdm.mask_diagnostic(f"https://{host}/playready?key=%71%37", {"q7"}) == f"https://{host}/playready?key=***"
+
+
+def test_cdm_masks_single_char_credentials_without_corrupting_identifiers():
+    from unshacklarr import cdm
+
+    text = "Rejected [x] and [z] at https://127.0.0.1:8786/v1.2 for device-x tv_sl3000 k19.prd."
+    expected = "Rejected [***] and [***] at https://127.0.0.1:8786/v1.2 for device-x tv_sl3000 k19.prd."
+    assert cdm.mask_diagnostic(text, {"x", "z", "1", "2"}) == expected
+
+
+@pytest.mark.parametrize(("source", "updated"), [
+    ('cdm:\n  NF: {Widevine: null, "PlayReady": "old_pr"}  # keep\n',
+     'cdm:\n  NF: {Widevine: null, "PlayReady": "tv"}  # keep\n'),
+    ('cdm:\n  NF:\n    Widevine: null\n    "PlayReady": "old_pr"  # keep\n',
+     'cdm:\n  NF:\n    Widevine: null\n    "PlayReady": "tv"  # keep\n'),
+])
+def test_cdm_route_preserves_slot_order_when_updating_effective_playready(cdm_routes, source, updated):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text(source)
+    assert cdm.get_route(*cdm_routes, "NF").preferred == "playready"
+    assert cdm.set_route(*cdm_routes, "NF", playready="tv").preferred == "playready"
+    assert conf.read_text() == updated
+
+
+def test_cdm_compatibility_map_preserves_first_drm_slot_on_read_and_repair(cdm_routes):
+    from unshacklarr import cdm
+
+    cdm_routes[0].write_text("cdm:\n  NF: {PlayReady: null, Widevine: old}\n")
+    assert list(cdm.state(*cdm_routes)["map"]["NF"].items())[:2] == [("playready", None), ("widevine", "old")]
+    _, _, saved = cdm.save_route_state(*cdm_routes, "NF", widevine="old")
+    assert list(saved["map"]["NF"].items())[:2] == [("widevine", "old"), ("playready", None)]
+
+
+def test_cdm_compatibility_map_distinguishes_inheritance_from_empty_slots(cdm_routes):
+    from unshacklarr import cdm
+
+    cdm_routes[0].write_text("cdm:\n  default: old\n  NF: {}\n  EMPTY: []\n  YT: {widevine: null, playready: null}\n")
+    mapping = cdm.state(*cdm_routes)["map"]
+    assert mapping["NF"] == {}
+    assert mapping["EMPTY"] == []
+    assert mapping["YT"] == {"widevine": None, "playready": None, "preferred": None}
+
+
+@pytest.mark.parametrize("rule", [
+    "{example: null}",
+    "{'1080': {default: none}}",
+    "{playready: null, '1080': {default: []}}",
+])
+def test_cdm_compatibility_map_summarizes_advanced_rules_that_inherit(cdm_routes, rule):
+    from unshacklarr import cdm
+
+    cdm_routes[0].write_text(f"cdm:\n  default: old\n  NF: {rule}\n")
+    assert cdm.state(*cdm_routes)["map"]["NF"] == {"rule": None}
+
+
+def test_cdm_compatibility_map_refuses_unresolved_rule_and_keeps_device_usage(cdm_routes):
+    from unshacklarr import cdm
+
+    cdm_routes[0].write_text("cdm:\n  default: new\n  NF: {playready: null, widevine: old, example: null}\n")
+    state = cdm.state(*cdm_routes)
+    assert state["routes"]["NF"]["devices"] == ["old"]
+    assert next(device for device in state["devices"] if device["name"] == "old")["used_by"] == ["NF"]
+    assert state["map"]["NF"] == {"rule": False}
+
+
+@pytest.mark.parametrize(("source", "expected"), [
+    ("cdm:\n  default: {widevine: old, playready: tv}\n  NF: false\n", {"NF": None}),
+    ("cdm:\n  default: {widevine: old, playready: tv}\n  NF: 0\n", {"NF": None}),
+    ('cdm:\n  default: {widevine: old, playready: tv}\n  NF: &e ""\n  OTHER: *e\n', {"NF": None, "OTHER": None}),
+    ("cdm:\n  default: {widevine: old, playready: tv}\n  NF: null\n  nf: old\n", {"NF": None, "nf": {"rule": ["old"]}}),
+    ("cdm:\n  NF: null\n  nf: old\n", {"NF": None, "nf": {"rule": ["old"]}}),
+    ("cdm:\n  default: false\n", {"default": None}),
+], ids=[
+    "false", "zero", "aliased-empty-scalar",
+    "duplicate-case-with-default", "duplicate-case-no-default", "default-false",
+])
+def test_cdm_compatibility_map_emits_none_for_falsy_non_container_advanced_entries(cdm_routes, source, expected):
+    from unshacklarr import cdm
+
+    cdm_routes[0].write_text(source)
+    state = cdm.state(*cdm_routes)
+    for key, value in expected.items():
+        assert state["routes"][key]["advanced"] is True
+        if value is None:
+            assert state["map"][key] is None
+        else:
+            assert state["map"][key] == value
+
+
+@pytest.mark.parametrize(("source", "expected_map"), [
+    ("cdm:\n  default:\n", {"default": None}),
+    ("cdm:\n  default: ''\n", {"default": None}),
+    ("cdm:\n  default:\n  NF:\n", {"default": None, "NF": None}),
+    ("tvdb_pin: 3000\ncdm:\n  default:\n  '3000':\n", {"default": None}),
+    ("cdm: {}\n", {}),
+], ids=[
+    "blank-default-null",
+    "blank-default-empty",
+    "blank-default-and-service",
+    "blank-secret-key-redacted",
+    "empty-cdm-mapping",
+])
+def test_cdm_compatibility_map_emits_none_for_non_secret_blank_entries(cdm_routes, source, expected_map):
+    from unshacklarr import cdm
+
+    cdm_routes[0].write_text(source)
+    state = cdm.state(*cdm_routes)
+    assert state["routes"] == {}
+    assert state["map"] == expected_map
+
+
+@pytest.mark.parametrize(("source", "written"), [
+    ("{}\n", None),
+    ("dl: {}\n...\n", "dl: {}\ncdm:\n  NF: new\n...\n"),
+    ("dl: {}\r\n... # end\r\n\r\n# trailing", "dl: {}\r\ncdm:\r\n  NF: new\r\n... # end\r\n\r\n# trailing"),
+    ("---\ndl: {}\n---\nother: 1\n", None),
+    ("<<: {cdm: {NF: old}}\n", None),
+])
+@pytest.mark.parametrize("writer", ["slots", "choose"])
+def test_cdm_section_creation_agrees_with_read_only_state(cdm_routes, source, written, writer):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_bytes(source.encode())
+
+    def write(device):
+        if writer == "slots":
+            cdm.set_route(*cdm_routes, "NF", widevine=device)
+        else:
+            cdm.choose(*cdm_routes, "NF", device)
+
+    if written is None:
+        assert cdm.state(*cdm_routes)["read_only"] is True
+        for device in ("new", None):
+            with pytest.raises(cdm.CdmError, match=re.escape(cdm.UNSAFE_EDIT)):
+                write(device)
+        assert conf.read_bytes() == source.encode()
+    else:
+        assert cdm.state(*cdm_routes)["read_only"] is False
+        write("new")
+        assert conf.read_bytes() == written.encode()
+        assert cdm.get_route(*cdm_routes, "NF").widevine == "new"
+
+
+@pytest.mark.parametrize("value", ["", " null", ' ""'])
+@pytest.mark.parametrize("writer", ["slots", "choose"])
+def test_cdm_route_empty_scalar_inherits_and_preserves_key_when_edited(cdm_routes, value, writer):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text(f"cdm:\n  NF:{value}  # Netflix\n")
+    assert "NF" not in cdm.state(*cdm_routes)["routes"]
+    assert not cdm.get_route(*cdm_routes, "nf").advanced
+    if writer == "slots":
+        cdm.set_route(*cdm_routes, "nf", widevine="new")
+    else:
+        cdm.choose(*cdm_routes, "nf", "new")
+    rendered = '"new"' if value == ' ""' else "new"
+    assert conf.read_text() == f"cdm:\n  NF: {rendered}  # Netflix\n"
+
+
+@pytest.mark.parametrize("empty", ["null", "~", '""', ""])
+def test_cdm_route_adds_missing_slot_before_empty_slot_and_its_comment(cdm_routes, empty):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    head = "cdm:\n  NF:  # Netflix\n"
+    sibling = f"    # Browser device\n    Widevine:{' ' + empty if empty else ''}  # keep\n"
+    conf.write_text(head + sibling)
+    before = read(conf)["cdm"]["NF"]
+
+    saved = cdm.set_route(*cdm_routes, "NF", playready="tv")
+
+    assert saved.playready == "tv" and saved.preferred == "playready"
+    assert list(read(conf)["cdm"]["NF"].items()) == [("playready", "tv"), *before.items()]
+    assert conf.read_text() == head + "    playready: tv\n" + sibling
+
+
+def test_cdm_route_adds_missing_slot_to_flow_mapping(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    conf.write_text('cdm:\n  NF: {Widevine: ""}  # Netflix\n')
+
+    cdm.set_route(*cdm_routes, "NF", playready="tv")
+
+    assert conf.read_text() == 'cdm:\n  NF: {playready: tv, Widevine: ""}  # Netflix\n'
+
+
+def test_cdm_route_cannot_promote_an_omitted_wrong_drm_slot_in_combined_edit(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    before = "cdm:\n  NF: {widevine: old, playready: old}\n"
+    conf.write_text(before)
+
+    with pytest.raises(cdm.CdmError, match="Choose a PlayReady device"):
+        cdm.set_route(*cdm_routes, "NF", widevine="new", preferred="playready")
+    assert conf.read_text() == before
+    assert cdm.set_route(*cdm_routes, "NF", widevine="new").widevine == "new"
+    assert read(conf)["cdm"]["NF"]["playready"] == "old"
+
+
+@pytest.mark.parametrize("section", ["remote_cdm: {}\n", "remote_cdm: 17\n", "cdm: []\n"])
+@pytest.mark.parametrize("action", ["save", "delete"])
+def test_remote_cdm_changes_refuse_malformed_sections(cdm_routes, section, action):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    source = section + ("remote_cdm: [{name: lab}]\n" if section.startswith("cdm:") else "")
+    conf.write_text(source)
+
+    with pytest.raises(cdm.CdmError, match=cdm.UNSAFE_EDIT):
+        if action == "save":
+            cdm.remote_save(conf, {"name": "lab", "type": "decrypt_labs"}, None)
+        else:
+            cdm.remote_delete(conf, "lab")
+    assert conf.read_text() == source
+
+
+def test_cdm_choose_uses_verified_writer_and_returns_overwritten_bytes(cdm_routes):
+    from unshacklarr import cdm
+
+    conf, wvds, prds = cdm_routes
+    original = b"# config\r\ncdm: {}  # routes\r\n"
+    conf.write_bytes(original)
+    assert cdm.choose(conf, wvds, prds, "NF", "new") == original.decode()
+    assert conf.read_bytes() == b"# config\r\ncdm:  # routes\r\n  NF: new\r\n"
+    assert cdm.choose(conf, wvds, prds, "NF", "new") is None
+
+
+def test_remote_cdm_save_keeps_the_address_when_a_masked_path_is_submitted(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    segment = "fixture-path-value"
+    host = f"https://cdm.invalid/{segment}/playready"
+    conf.write_text(
+        "remote_cdm:\n"
+        f"  - {{name: lab, type: playready, device_type: PLAYREADY, host: {host}, secret: {segment}}}\n"
+    )
+
+    cdm.remote_save(conf, {"name": "lab", "type": "playready", "host": "https://cdm.invalid/***/playready"}, "lab")
+    assert read(conf)["remote_cdm"][0]["host"] == host
+    assert read(conf)["remote_cdm"][0]["secret"] == segment
+
+
+def test_remote_cdm_writes_return_the_exact_overwritten_snapshot(cdm_routes):
+    from unshacklarr import cdm
+
+    conf = cdm_routes[0]
+    before = conf.read_bytes().replace(b"\n", b"\r\n")
+    conf.write_bytes(before)
+    form = {"name": "test_remote", "type": "decrypt_labs", "device_name": "SL3000", "secret": "fixture"}
+    assert cdm.remote_save(conf, form, None) == before.decode()
+    saved = conf.read_bytes()
+    assert cdm.remote_save(conf, form, "test_remote") is None
+    assert cdm.remote_delete(conf, "test_remote") == saved.decode()

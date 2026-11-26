@@ -29,6 +29,7 @@ Every change worth knowing, newest first. The format follows
 
 ### Added
 
+- Added separate Widevine and PlayReady devices and a preferred DRM setting for default and per-service CDM routes. (#414)
 - Added the shared DevKit pull request check, which rejects non-conventional titles and commit messages, agent attribution and forbidden paths such as `node_modules`.
 - Added six Australian series to the matching corpus, one each on 9Now, 7plus, ABC iview, SBS On Demand, Stan and
   Binge, so their numbering is tested: RBT's S05E166 on 9Now, Bluey's Auslan S01E01 (Sonarr's S01E16), Stan's Will &

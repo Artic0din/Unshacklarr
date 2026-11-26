@@ -2946,12 +2946,15 @@ def check_alerts(now: datetime | None = None) -> None:
                 continue
             test = d.get("test")
             if not test or now - datetime.fromisoformat(test["at"]) > CDM_TEST_EVERY:
+                before_secrets = _current_cdm_secrets()
                 try:
                     result = UNSHACKLE.call("POST", "/api/cdm/devices/test", json={"kind": d["kind"].lower(), "name": d["name"]})
                 except UnshackleError:
                     unknown.append(f"cdm:{d['kind']}:{d['name']}")
                     continue  # Unshackle down: told apart
                 test = {k: result.get(k) for k in ("ok", "revoked", "error", "keys")} | {"at": now.isoformat()}
+                if test["error"]:
+                    test["error"] = cdm.mask_diagnostic(str(test["error"]), before_secrets | _current_cdm_secrets())
                 note_cdm_test(f"{d['kind']}:{d['name']}", test)
             if not test.get("ok"):
                 word = "was revoked" if test.get("revoked") else "failed its test"
@@ -3237,6 +3240,14 @@ def cdm_paths() -> tuple[Path, Path, Path]:
                          "and set its path in Settings › Connections › Unshackle (UNSHACKLE_CONFIG_DIR with Docker)")
 
 
+def _current_cdm_secrets() -> set[str]:
+    with cdm.ROUTE_LOCK:
+        try:
+            return cdm.file_secrets(cdm_paths()[0])
+        except (UnshackleError, cdm.CdmError, yaml.YAMLError, OSError, UnicodeError):
+            return set()
+
+
 CDM_TESTS = sonarr_sync.DATA / "cdm_tests.json"  # each device's last test: "Widevine:name": {at, ok, revoked, error, keys}
 cdm_tests_lock = threading.Lock()
 
@@ -3266,18 +3277,37 @@ def cdm_details() -> tuple[dict, str | None]:
     return {(d["kind"], d["name"]): d for d in found}, None
 
 
+CDM_DEVICE_INFO = {
+    "kind", "name", "unreadable", "company", "model", "level", "system_id", "type", "product", "architecture",
+    "cdm_version", "patch_level", "vmp", "serial", "created", "expires", "build", "version", "reprovisionable",
+    "certificates", "chain", "leaf_id",
+}
+
+
 def cdm_state() -> dict:
-    conf, wvds, prds = cdm_paths()
+    with cdm.ROUTE_LOCK:
+        conf, wvds, prds = cdm_paths()
+        state, secrets = cdm.state_with_secrets(conf, wvds, prds)
     try:
         services = sorted(s["tag"] for s in UNSHACKLE.services())
     except UnshackleError:
         services = []
-    state = cdm.state(conf, wvds, prds)
     details, details_error = cdm_details()
     tests = cdm_tests()
+    diagnostic_secrets = secrets
+    if details_error or any(test.get("error") for test in tests.values() if isinstance(test, dict)):
+        diagnostic_secrets = secrets | _current_cdm_secrets()
+    if details_error:
+        details_error = cdm.mask_diagnostic(details_error, diagnostic_secrets)
     for d in state["devices"]:
-        d["info"] = details.get((d["kind"].lower(), d["name"]))
-        d["test"] = tests.get(f"{d['kind']}:{d['name']}")
+        info = details.get((d["kind"].lower(), d["name"]))
+        d["info"] = ({k: cdm._mask_secrets(v, secrets) if isinstance(v, str) else v
+                      for k, v in info.items() if k in CDM_DEVICE_INFO and isinstance(v, (str, int, float))
+                      and (isinstance(v, (str, bool)) or not cdm._contains_secret(str(v), secrets))}
+                     if info else None)
+        test = tests.get(f"{d['kind']}:{d['name']}")
+        d["test"] = ({**test, "error": cdm.mask_diagnostic(str(test["error"]), diagnostic_secrets)}
+                     if test and test.get("error") else test)
     return {"folder": str(conf.parent), **state, "services": services, "details_error": details_error}
 
 
@@ -3287,11 +3317,17 @@ async def cdm_test(request):
     kind, name = str(body.get("kind") or ""), str(body.get("name") or "")
     if kind not in ("Widevine", "PlayReady"):
         raise web.HTTPBadRequest(text="The kind is Widevine or PlayReady")
+
+    before_secrets = await asyncio.to_thread(_current_cdm_secrets)
     try:
         result = await asyncio.to_thread(UNSHACKLE.call, "POST", "/api/cdm/devices/test", json={"kind": kind.lower(), "name": name})
     except UnshackleError as e:
-        raise web.HTTPBadGateway(text=no_credentials(e))
+        secrets = before_secrets | await asyncio.to_thread(_current_cdm_secrets)
+        raise web.HTTPBadGateway(text=cdm.mask_diagnostic(str(e), secrets))
     result = {k: result.get(k) for k in ("ok", "revoked", "error", "keys")} | {"at": datetime.now(timezone.utc).isoformat()}
+    if result["error"]:
+        secrets = before_secrets | await asyncio.to_thread(_current_cdm_secrets)
+        result["error"] = cdm.mask_diagnostic(str(result["error"]), secrets)
     await asyncio.to_thread(note_cdm_test, f"{kind}:{name}", result)
     return web.json_response(result)
 
@@ -3299,10 +3335,12 @@ async def cdm_test(request):
 async def cdm_reprovision(request):
     body = await json_object(request)
     name = str(body.get("name") or "")
+    before_secrets = await asyncio.to_thread(_current_cdm_secrets)
     try:
         done = await asyncio.to_thread(UNSHACKLE.call, "POST", "/api/cdm/devices/reprovision", json={"name": name})
     except UnshackleError as e:
-        raise web.HTTPBadRequest(text=no_credentials(e))
+        secrets = before_secrets | await asyncio.to_thread(_current_cdm_secrets)
+        raise web.HTTPBadRequest(text=cdm.mask_diagnostic(str(e), secrets))
     await asyncio.to_thread(note_cdm_test, f"PlayReady:{name}", None)  # a new certificate: its old test says nothing now
     return web.json_response({"backup": done.get("backup"), "state": await asyncio.to_thread(cdm_state)})
 
@@ -3314,38 +3352,103 @@ async def list_cdm(_):
         return web.json_response({"folder": None, "error": no_credentials(e)})
 
 
+def cdm_routes() -> dict:
+    with cdm.ROUTE_LOCK:
+        state = cdm.state(*cdm_paths())
+    return cdm_routes_payload(state)
+
+
+def cdm_routes_payload(state: dict, *, include_map: bool = False) -> dict:
+    try:
+        services = sorted(s["tag"] for s in UNSHACKLE.services())
+    except UnshackleError:
+        services = []
+    devices = []
+    for remote, group in ((False, state["devices"]), (True, state["remote"])):
+        for device in group:
+            name = device["name"]
+            if (not device.get("routable", True) or not cdm.NAME.fullmatch(name)
+                    or name == cdm.NO_CDM or no_credentials(name) != name):
+                continue
+            level = device.get("security_level", device.get("level", ""))
+            if type(level) not in (int, str) or not re.fullmatch(r"(?:L[123]|SL\d{3,4}|\d{1,4})", str(level)):
+                level = ""
+            devices.append({"name": name, "kind": device["kind"], "system": device["kind"],
+                            "remote": remote, "level": level})
+    result = {"devices": devices, "routes": state["routes"], "services": services}
+    if include_map:
+        result["map"] = state["map"]
+        remote_usage: dict[str, list[list[str]]] = {}
+        for device in state["remote"]:
+            remote_usage.setdefault(device["name"], []).append(device["used_by"])
+        result["used_by"] = {
+            "remote": remote_usage,
+            "local": {f"{d['kind']}:{int(d['folder'])}:{d['name']}": d["used_by"] for d in state["devices"]},
+        }
+    else:
+        result["read_only"] = bool(state.get("read_only"))
+    return result
+
+
+async def list_cdm_routes(_):
+    try:
+        return web.json_response(await asyncio.to_thread(cdm_routes))
+    except (UnshackleError, cdm.CdmError) as e:
+        raise web.HTTPBadRequest(text=no_credentials(e))
+
+
 async def cdm_action(request):
     body = await json_object(request)
     action = request.match_info["action"]
+    folder = body["folder"] if "folder" in body else None
+
+    def mutate() -> tuple[cdm.CdmRoute, dict] | None:
+        with cdm.ROUTE_LOCK:
+            conf, wvds, prds = cdm_paths()
+            before = None
+            saved = None
+            if action == "add":
+                try:
+                    content = base64.b64decode(str(body.get("data") or ""), validate=True)
+                except ValueError:
+                    raise cdm.CdmError("The file did not arrive whole: pick it again") from None
+                cdm.add(wvds, prds, str(body.get("filename") or ""), content)
+            elif action == "delete":
+                cdm.delete(conf, wvds, prds, str(body.get("name") or ""), str(body.get("kind") or ""), folder=folder)
+            elif action == "remote-save":
+                before = cdm.remote_save(conf, body.get("form") or {}, str(body["was"]) if body.get("was") else None)
+            elif action == "remote-delete":
+                before = cdm.remote_delete(conf, str(body.get("name") or ""))
+            elif action == "route":
+                route, before, state = cdm.save_route_state(
+                    conf, wvds, prds, body.get("service"),
+                    preferred=body.get("preferred"), no_cdm=body.get("no_cdm", False),
+                    **{slot: body[slot] for slot in ("widevine", "playready") if slot in body},
+                )
+                saved = route, state
+            else:
+                device = body.get("device")
+                before = cdm.choose(conf, wvds, prds, str(body.get("service") or ""), str(device) if device else None)
+            if before is not None:
+                try:
+                    keep_unshackle_yaml(before)
+                except OSError as e:
+                    print(f"Could not keep unshackle.yaml in its history: {no_credentials(e)}", flush=True)
+            return saved
+
     try:
-        conf, wvds, prds = await asyncio.to_thread(cdm_paths)
-        before = await asyncio.to_thread(lambda: conf.read_text(encoding="utf8") if conf.exists() else None)
-        if action == "add":
-            try:
-                content = base64.b64decode(str(body.get("data") or ""), validate=True)
-            except ValueError:
-                raise cdm.CdmError("The file did not arrive whole: pick it again") from None
-            await asyncio.to_thread(cdm.add, wvds, prds, str(body.get("filename") or ""), content)
-        elif action == "delete":
-            await asyncio.to_thread(cdm.delete, conf, wvds, prds, str(body.get("name") or ""), str(body.get("kind") or ""))
+        saved = await asyncio.to_thread(mutate)
+        if action == "delete" and not folder:
             await asyncio.to_thread(note_cdm_test, f"{body.get('kind')}:{body.get('name')}", None)
-        elif action == "remote-save":
-            await asyncio.to_thread(cdm.remote_save, conf, body.get("form") or {}, str(body["was"]) if body.get("was") else None)
-        elif action == "remote-delete":
-            await asyncio.to_thread(cdm.remote_delete, conf, str(body.get("name") or ""))
-        else:
-            device = body.get("device")
-            await asyncio.to_thread(cdm.choose, conf, wvds, prds, str(body.get("service") or ""), str(device) if device else None)
-        if before is not None and await asyncio.to_thread(conf.read_text, encoding="utf8") != before:
-            try:
-                await asyncio.to_thread(keep_unshackle_yaml, before)  # its comments too: the editor's history gets them back
-            except OSError as e:  # the change is made: said in the log, not turned into a failure
-                print(f"Could not keep unshackle.yaml in its history: {no_credentials(e)}", flush=True)
+        UNSHACKLE.configure(UNSHACKLE.settings)  # the next download asks serve for the current cdm: section
+        if saved is not None:
+            saved_route, saved_state = saved
+            routes = await asyncio.to_thread(cdm_routes_payload, saved_state, include_map=True)
+            return web.json_response({**routes, "route": saved_route.to_dict()})
     except (cdm.CdmError, UnshackleError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:
         raise web.HTTPBadGateway(text=f"Could not save Unshackle's files ({no_credentials(e)}). Check that DownStream can write to Unshackle's config and CDM folders, then try again.")
-    UNSHACKLE.configure(UNSHACKLE.settings)  # its cdm: section changed: the next download asks serve, not the copy kept 10 minutes
     return web.json_response(await asyncio.to_thread(cdm_state))
 
 
@@ -3574,7 +3677,11 @@ def yaml_problem(text: str) -> str | None:
 
 def keep_unshackle_yaml(old: str) -> None:
     """unshackle.yaml as it was before a change, in the editor's history."""
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    stamp_format = "%Y%m%d-%H%M%S-%f"
+    stamp = datetime.now(timezone.utc).strftime(stamp_format)
+    latest = max((p.stem for p in CONFIG_HISTORY.glob("*.yaml") if VERSION_ID.fullmatch(p.stem)), default="")
+    if latest >= stamp:
+        stamp = (datetime.strptime(latest, stamp_format) + timedelta(microseconds=1)).strftime(stamp_format)
     write_atomic(CONFIG_HISTORY / f"{stamp}.yaml", old, PRIVATE)
     for extra in sorted(CONFIG_HISTORY.glob("*.yaml"), reverse=True)[CONFIG_KEEP:]:
         extra.unlink(missing_ok=True)
@@ -3601,14 +3708,15 @@ async def unshackle_yaml(request):
         path = Path(sonarr_sync.SETTINGS["unshackle_config_dir"]) / "unshackle.yaml"
     except (UnshackleError, cdm.CdmError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
-    if not path.exists():
-        raise web.HTTPNotFound(text=f"No unshackle.yaml in {path.parent}")
-    try:
-        cdm.regular(path)
-    except cdm.CdmError as e:
-        raise web.HTTPBadRequest(text=no_credentials(e))
-    text = await asyncio.to_thread(path.read_text, encoding="utf8")
+    if action in ("open", "version"):
+        if not path.exists():
+            raise web.HTTPNotFound(text=f"No unshackle.yaml in {path.parent}")
+        try:
+            cdm.regular(path)
+        except cdm.CdmError as e:
+            raise web.HTTPBadRequest(text=no_credentials(e))
     if action == "open":
+        text = await asyncio.to_thread(path.read_text, encoding="utf8")
         return web.json_response({"text": text, "base": fingerprint(text), "path": str(path), "versions": config_versions()})
     if action == "version":
         version = str(body.get("id") or "")
@@ -3618,13 +3726,25 @@ async def unshackle_yaml(request):
     new = str(body.get("text") or "")
     if len(new) > 1_000_000:
         raise web.HTTPBadRequest(text="That is too large for unshackle.yaml")
-    if body.get("base") != fingerprint(text):
-        raise web.HTTPConflict(text="unshackle.yaml changed since you opened it (Settings › Services & Devices › Devices (CDM) writes to it too): open it again")
-    if problem := yaml_problem(new):
-        raise web.HTTPBadRequest(text=problem)
-    if new == text:
-        return web.json_response({"saved": False, "base": fingerprint(text), "versions": config_versions(), "restart": False})
-    return web.json_response(await asyncio.to_thread(save_unshackle_yaml, path, text, new))
+
+    def save():
+        with cdm.ROUTE_LOCK:
+            conflict = "unshackle.yaml changed since you opened it (Settings › Services & Devices › Devices (CDM) writes to it too): open it again"
+            try:
+                text = cdm.regular(path).read_text(encoding="utf8")
+            except cdm.CdmError as e:
+                raise web.HTTPBadRequest(text=no_credentials(e)) from e
+            except FileNotFoundError as e:
+                raise web.HTTPNotFound(text=f"No unshackle.yaml in {path.parent}") from e
+            if body.get("base") != fingerprint(text):
+                raise web.HTTPConflict(text=conflict)
+            if problem := yaml_problem(new):
+                raise web.HTTPBadRequest(text=problem)
+            if new != text:
+                return save_unshackle_yaml(path, text, new)
+            return {"saved": False, "base": fingerprint(text), "versions": config_versions(), "restart": False}
+
+    return web.json_response(await asyncio.to_thread(save))
 
 
 async def allow_proxies(_):
@@ -3633,17 +3753,21 @@ async def allow_proxies(_):
     key = str(sonarr_sync.SETTINGS.get("unshackle_api_key") or "")
     if UNSHACKLE.mode == "local" or not key:
         raise web.HTTPBadRequest(text="Local Unshackle already has proxy permission. This action is only needed for a remote Unshackle server.")
+    def save():
+        with cdm.ROUTE_LOCK:
+            path, wvds, prds = cdm_paths()
+            text = cdm.regular(path).read_text(encoding="utf8")
+            new = cdm.allow_proxies(text, key, sorted(p.stem for p in wvds.glob("*.wvd")), sorted(p.stem for p in prds.glob("*.prd")))
+            if new != text:
+                save_unshackle_yaml(path, text, new)
+            return new != text
+
     try:
-        path, wvds, prds = await asyncio.to_thread(cdm_paths)
-        cdm.regular(path)
-        text = await asyncio.to_thread(path.read_text, encoding="utf8")
-        new = cdm.allow_proxies(text, key, sorted(p.stem for p in wvds.glob("*.wvd")), sorted(p.stem for p in prds.glob("*.prd")))
+        saved = await asyncio.to_thread(save)
     except (UnshackleError, cdm.CdmError, OSError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
-    if new != text:
-        await asyncio.to_thread(save_unshackle_yaml, path, text, new)
     UNSHACKLE.proxy_refused = ""
-    return web.json_response({"saved": new != text})
+    return web.json_response({"saved": saved})
 
 
 MAINTENANCE = {"clear-cache", "clear-temp", "refresh-services", "clear-finished"}  # serve's own maintenance actions
@@ -8531,7 +8655,8 @@ app.add_routes([
     web.post("/api/cookies/delete", delete_cookies),
     web.post(r"/api/unshackle/config-file/{action:open|version|save}", unshackle_yaml),
     web.get("/api/cdm", list_cdm),
-    web.post(r"/api/cdm/{action:add|delete|choose|remote-save|remote-delete}", cdm_action),
+    web.get("/api/cdm/routes", list_cdm_routes),
+    web.post(r"/api/cdm/{action:add|delete|choose|route|remote-save|remote-delete}", cdm_action),
     web.post("/api/cdm/test", cdm_test),
     web.post("/api/cdm/reprovision", cdm_reprovision),
     web.get("/api/inbox", inbox),
