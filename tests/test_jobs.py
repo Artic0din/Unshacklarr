@@ -778,6 +778,14 @@ def test_restaging_pause_preserves_live_request_and_new_episode_reopens_terminal
     reopened, = jobs.convert_legacy_queue_file(source, store, converted_at=CONVERTED + timedelta(hours=2))
     assert reopened.state == "waiting"
     assert [child.state for child in reopened.children] == ["completed", "completed", "waiting"]
+    terminal_states: tuple[jobs.JobState, ...] = ("cancelled", "removed")
+    for terminal in terminal_states:
+        blocked = replace(reopened, state=terminal)
+        store.save([blocked])
+        source.write_text(json.dumps({BATCH: {**LEGACY[BATCH], "paused": False, "episodes": [3, 4, 5, 6]}}))
+        with pytest.raises(jobs.LegacyQueueConversionError):
+            jobs.convert_legacy_queue_file(source, store, converted_at=CONVERTED + timedelta(hours=3))
+        assert store.load() == (blocked,)
 
 
 def test_overlapping_staging_publishes_in_lock_order(

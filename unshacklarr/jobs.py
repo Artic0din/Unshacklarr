@@ -602,6 +602,8 @@ def _reconcile_staged_job(
         added_work = any(child.id not in prior_children for child in incoming.children)
     next_state = prior.state
     if added_work and prior.state not in ("waiting", "running", "paused"):
+        if prior.state in ("cancelled", "removed"):
+            raise LegacyQueueConversionError(f"Cannot add work to {prior.state} job {prior.id}")
         next_state = incoming.state
     elif prior.state in ("waiting", "paused") and baseline is not None and incoming.state != baseline[1]:
         next_state = incoming.state
