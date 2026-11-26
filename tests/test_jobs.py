@@ -1247,3 +1247,168 @@ def test_admission_double_fault_never_leaves_candidate(
         assert store.path.read_bytes() == original and not backup.exists()
     else:
         assert not store.path.exists() and not backup.exists()
+
+
+def direct_request(*selectors: str | None) -> jobs.DirectDownloadRequest:
+    return jobs.DirectDownloadRequest("TEST", "title", tuple(
+        jobs.DirectItemRequest(str(index), selector, f"Item {index}") for index, selector in enumerate(selectors)
+    ))
+
+
+@pytest.mark.parametrize("selectors", [(), (None, None), (None, "S01E01"), ("",), ("S01",), ("S01E01-E02",),
+                                       ("S01E01,S01E02",), ("s1e1", "S1E1"), ("S01E01\n",)])
+def test_direct_invalid_selection(tmp_path, selectors):
+    with pytest.raises(jobs.DirectRequestValidationError):
+        direct_request(*selectors).to_normalized_request(tmp_path)
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("service", "EXAMPLE"), ("service", "a b"), ("title_id", "-option"), ("title_id", "https://u:p@host/title"),
+    ("title_id", "file:///movie"), ("title_id", "http:movie"), ("title_id", "https://host/"),
+    ("title_id", "/absolute"), ("title_id", "a/../b"), ("title_id", "a\\b"), ("title_id", "a b"),
+    ("output_dir", "relative"), ("output_dir", "/outside"),
+])
+def test_direct_invalid_field(tmp_path, field, value):
+    with pytest.raises(jobs.DirectRequestValidationError):
+        replace(direct_request(None), **{field: value}).to_normalized_request(tmp_path)
+
+
+def test_direct_path_symlink_and_traversal(tmp_path):
+    link = tmp_path / "link"
+    link.symlink_to(tmp_path)
+    for path in (link / "nested", tmp_path / ".." / tmp_path.name):
+        with pytest.raises(jobs.DirectRequestValidationError):
+            replace(direct_request(None), output_dir=str(path)).to_normalized_request(tmp_path)
+
+
+def test_direct_admission_isolation_and_retry(store, tmp_path):
+    req = direct_request(" s01e01 ", "S01E02.1").to_normalized_request(tmp_path)
+    first = req.items[0]
+    assert (first.selector, first.id) == ("S01E01", "direct:TEST:title:0")
+    added = store.admit(req)
+    assert isinstance(added, jobs.Added)
+    assert store.admit(req) == jobs.AlreadyQueued(added.job_id)
+    other = replace(req, items=(replace(first, id="direct:TEST:title:renamed"),))
+    assert store.admit(other).code == "partial_overlap"
+    store.start_child_attempt(added.job_id, "0", "attempt")
+    store.fail_child(added.job_id, "0", jobs.classify_failure())
+    assert store.admit(other).code == "active_failed_child"
+    with pytest.raises(ValueError):
+        store.start_child_attempt(added.job_id, "1", "attempt")
+    with pytest.raises(ValueError):
+        store.reconcile_child_attempt(added.job_id, "1", None, jobs.AttemptObservation("queued", attempt_id="attempt"))
+    store.retry_items(added.job_id, ["0"])
+    for item in req.items:
+        store.complete_child(added.job_id, item.id)
+    assert store.get_job(added.job_id).children[0].attempt_history == ("attempt",)
+    assert isinstance(store.admit(other), jobs.Added)
+
+
+def test_direct_retry_cannot_overlap_identical_new_job(tmp_path, store):
+    req = direct_request(None).to_normalized_request(tmp_path)
+    first = store.admit(req)
+    store.fail_child(first.job_id, "0", jobs.classify_failure())
+    second = store.admit(req)
+    refusal = store.stage_activity_retry(first.job_id, req, reserve=lambda: None)
+    assert refusal == jobs.Refused("partial_overlap", f"Already in active job {second.job_id}: Item 0. "
+                                  "Change the selection or wait for that job to finish.", second.job_id)
+
+
+def test_direct_startup_cannot_claim_attempt_twice(tmp_path, store):
+    req = direct_request("S1E1", "S1E2").to_normalized_request(tmp_path)
+    batch = store.admit(req).job_id
+    submission = jobs.Submission("", "TEST", "title", str(tmp_path), (), CREATED)
+    for item in req.items:
+        store.set_child_submission(batch, item.id, submission)
+    job, = store.reconcile_startup(lambda *_: jobs.AttemptObservation("completed", attempt_id="claimed"))
+    assert all(c.attempt_job_id is None and c.submission == submission for c in job.children)
+    store.start_child_attempt(batch, "0", "current")
+    with pytest.raises(ValueError):
+        store.reconcile_child_attempt(batch, "0", "current", jobs.AttemptObservation("completed", attempt_id="wrong"))
+    with pytest.raises(ValueError):
+        store.reconcile_child_attempt(batch, "0", None, "completed")
+
+
+def test_direct_store_prefers_qualified_child_identity(tmp_path, store):
+    first, second = direct_request("S1E1", "S1E2").items
+    req = replace(direct_request(None), items=(replace(first, id="direct:TEST:title:1"), second)).to_normalized_request(tmp_path)
+    batch = store.admit(req).job_id
+    job = store.complete_child(batch, req.items[1].id)
+    assert [c.state for c in job.children] == ["waiting", "completed"]
+
+
+@pytest.mark.parametrize("item", [
+    jobs.DirectItemRequest("", None, "Film"), jobs.DirectItemRequest("has space", None, "Film"),
+    jobs.DirectItemRequest("id" * 65, None, "Film"), jobs.DirectItemRequest("id", None, ""),
+    jobs.DirectItemRequest("id", None, "label" * 52), jobs.DirectItemRequest("id", None, "x\ny"),
+    jobs.DirectItemRequest("id", None, "Bearer private"), jobs.DirectItemRequest("id", None, "x" * 32),
+])
+def test_direct_invalid_item_identity_and_label(tmp_path, item):
+    with pytest.raises(jobs.DirectRequestValidationError):
+        replace(direct_request(None), items=(item,)).to_normalized_request(tmp_path)
+
+
+def test_direct_duplicate_trimmed_ids(tmp_path):
+    items = (jobs.DirectItemRequest(" x", "S1E1", "One"), jobs.DirectItemRequest("x ", "S1E2", "Two"))
+    with pytest.raises(jobs.DirectRequestValidationError):
+        replace(direct_request(None), items=items).to_normalized_request(tmp_path)
+
+
+@pytest.mark.parametrize("title", [
+    "550e8400-e29b-41d4-a716-446655440000",
+    "https://www.disneyplus.com/movies/the-lord-of-the-rings-the-fellowship-of-the-ring/550e8400-e29b-41d4-a716-446655440000",
+    "https://www.stan.com.au/watch/everything-everywhere-all-at-once-2022",
+])
+def test_direct_public_title_ids(tmp_path, title):
+    assert replace(direct_request(None), title_id=title).to_normalized_request(tmp_path).title_id == title
+
+
+@pytest.mark.parametrize("title", ["https://example.org/a/../b", "https://example.org/a/%2e%2e/b", "a/%2e%2e/b",
+                                   "https://example.org/a%5Cb", "a%20b", "eyJheader.payload.signature",
+                                   *["https://example.org/a?" + k + "=x" for k in
+                                     ("key", "sig", "signature", "session", "auth", "credential", "jwt", "passwd")]])
+def test_direct_unsafe_title_ids(tmp_path, title):
+    with pytest.raises(jobs.DirectRequestValidationError):
+        replace(direct_request(None), title_id=title).to_normalized_request(tmp_path)
+
+
+def test_direct_output_inside_aliased_ancestor(tmp_path):
+    alias = tmp_path / "alias"
+    alias.symlink_to(tmp_path)
+    root = alias / "downloads"
+    root.mkdir()
+    for selected in (None, str(root / "movie"), str(root.resolve() / "movie")):
+        assert jobs.direct_output_path(selected, root) == (Path(selected) if selected else root).resolve()
+    (root / "linked").symlink_to(root)
+    with pytest.raises(jobs.DirectRequestValidationError):
+        jobs.direct_output_path(str(root / "linked" / "movie"), root)
+
+
+def test_direct_selector_padding(tmp_path, store):
+    with pytest.raises(jobs.DirectRequestValidationError):
+        direct_request("S1E1", "S01E01").to_normalized_request(tmp_path)
+    req = direct_request("S1E1.01").to_normalized_request(tmp_path)
+    assert req.items[0].selector == "S01E01.1"
+    store.admit(req)
+    other = replace(direct_request(None), items=(jobs.DirectItemRequest("other", "S01E01.1", "Other"),))
+    assert store.admit(other.to_normalized_request(tmp_path)).code == "partial_overlap"
+
+
+def test_reconciliation_cannot_restore_ended_attempt(store, tmp_path):
+    batch = store.admit(direct_request(None).to_normalized_request(tmp_path)).job_id
+    store.start_child_attempt(batch, "0", "prior")
+    store.clear_child_attempt(batch, "0", "prior")
+    submission = jobs.Submission("", "TEST", "title", str(tmp_path), (), CREATED)
+    store.set_child_submission(batch, "0", submission)
+    observed = jobs.AttemptObservation("queued", attempt_id="prior")
+    with pytest.raises(jobs.AttemptConflict):
+        store.reconcile_child_attempt(batch, "0", None, observed)
+    job, = store.reconcile_startup(lambda *_: observed)
+    assert job.children[0].submission == submission
+    assert job.children[0].attempt_job_id is None
+
+
+def test_direct_stored_selector_normalizes_on_read():
+    item = jobs.JobItemRequest.from_dict({"id": "direct:TEST:title:old", "label": "Episode",
+                                          "sonarr_episode_id": None, "selector": "S1E1.01"})
+    assert item.selector == "S01E01.1"

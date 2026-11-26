@@ -13247,3 +13247,213 @@ const optionNames = () => buttons(list).map((b) => b.kids[0].textContent);
             ["/api/cdm/route", "POST", {"service": "NF", "widevine": None, "playready": None}],
         ],
     }
+
+
+def direct_body():
+    return {"service": "TEST", "titleId": "title", "items": [{"id": "film", "label": "My film"}]}
+
+
+@pytest.mark.parametrize("changes", [
+    {"episodeIds": [1]}, {"replace": False}, {"unknown": True}, {"service": "MISSING"}, {"items": []},
+    {"items": [{"id": 1, "label": "Film"}]}, {"items": [{"id": "f", "label": "<Film>"}]},
+    {"items": [{"id": "f", "label": "Film", "extra": 1}]}, {"options": {"--wanted": "S01E01"}},
+    {"options": {"--quality": True}}, {"serviceOptions": {"--other": False}}, {"outputDir": "/outside"},
+])
+def test_direct_http_refused_before_admission(tmp_path, monkeypatch, changes):
+    web = review_download_setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(web.sonarr_sync.UNSHACKLE, "services", lambda: [{"tag": "TEST"}])
+    request = SimpleNamespace(json=AsyncMock(return_value=direct_body() | changes))
+    with pytest.raises(web.web.HTTPBadRequest) as refusal:
+        asyncio.run(web.download(request))
+    assert refusal.value.headers["X-Admission-Code"] == "invalid_request"
+    assert not web.sonarr_sync.job_store().load()
+
+
+def test_direct_http_admission_and_duplicate(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    monkeypatch.setattr(sync, "DOWNLOADS", tmp_path)
+    monkeypatch.setattr(sync.UNSHACKLE, "services", lambda: [{"tag": "TEST"}])
+    monkeypatch.setattr(sync, "no_cdm", lambda *args: "")
+    launch = Mock()
+    monkeypatch.setattr(web, "start_admitted_direct_download", launch, raising=False)
+    request = SimpleNamespace(json=AsyncMock(return_value=direct_body()))
+    response = json.loads(asyncio.run(web.download(request)).body)
+    assert response["outcome"] == "added"
+    monkeypatch.setattr(sync, "no_cdm", lambda *args: "Missing CDM")
+    assert json.loads(asyncio.run(web.download(request)).body)["outcome"] == "already_queued"
+    launch.assert_called_once()
+    assert sync.job_store().get_job(response["job_id"]).request.sonarr is None
+
+
+def test_direct_service_failure_and_retry(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    monkeypatch.setattr(sync, "DOWNLOADS", tmp_path)
+    worker = Mock()
+    monkeypatch.setattr(web, "start_admitted_direct_download", worker)
+    monkeypatch.setattr(sync.UNSHACKLE, "services", Mock(side_effect=web.UnshackleError("Unavailable")))
+    def post(body):
+        return json.loads(asyncio.run(web.download(SimpleNamespace(json=AsyncMock(return_value=body)))).body)
+    with pytest.raises(web.web.HTTPBadGateway) as refused:
+        post(direct_body())
+    assert refused.value.headers["X-Admission-Outcome"] == "refused"
+    assert not sync.job_store().load()
+    monkeypatch.setattr(sync.UNSHACKLE, "services", lambda: [{"tag": "TEST"}])
+    monkeypatch.setattr(sync, "no_cdm", lambda *args: "Missing CDM")
+    with pytest.raises(web.web.HTTPBadRequest):
+        post(direct_body())
+    assert not sync.job_store().load()
+    response = post(direct_body() | {"options": {"--cdm": "configured"}})
+    batch = response["job_id"]
+    sync.release_reserved_start(batch)
+    store = sync.job_store()
+    store.fail_child(batch, "film", jobs.classify_failure())
+    retry = {"retry": True, "batch": batch}
+    for extra in ({"itemIds": []}, {"itemIds": None}, {"unknown": True}, {"itemIds": [1]}, {"itemIds": ["wrong"]},
+                  {"episodeIds": [1]}):
+        with pytest.raises(web.web.HTTPBadRequest):
+            post(retry | extra)
+        assert store.get_job(batch).state == "failed"
+    assert post(retry | {"itemIds": ["film"]}) == response
+    assert post(retry | {"itemIds": ["film"]}) == response | {"outcome": "already_queued"}
+    assert worker.call_count == 2
+
+
+def test_direct_resume_follows_attempt_then_stop_cancels_only_live_child(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    monkeypatch.setattr(sync, "DOWNLOADS", tmp_path)
+    items = tuple(jobs.DirectItemRequest(str(i), f"S1E{i}", "Episode") for i in (1, 2))
+    store = sync.job_store()
+    batch = store.admit(jobs.DirectDownloadRequest("TEST", "title", items).to_normalized_request(tmp_path)).job_id
+    store.start_child_attempt(batch, "1", "retained", backend="")
+    checked, cancelled = threading.Event(), threading.Event()
+    probes = []
+    def observe(identifier):
+        probes.append(identifier)
+        if len(probes) > 2:
+            checked.set()
+            assert cancelled.wait(5)
+            return {"status": "cancelled"}
+        return {"status": "downloading"}
+    def cancel(identifier):
+        assert identifier == "retained"
+        cancelled.set()
+    monkeypatch.setattr(sync.UNSHACKLE, "job", observe)
+    monkeypatch.setattr(sync.UNSHACKLE, "cancel", cancel)
+    monkeypatch.setattr(sync.UNSHACKLE, "download", Mock(side_effect=AssertionError("Unexpected new submission")))
+    assert web.resume_queue() == 2
+    assert checked.wait(5)
+    result = asyncio.run(web.stop_job(SimpleNamespace(match_info={"batch": batch})))
+    assert json.loads(result.body)["cancelled"] >= 1
+    web.sync_threads[-1].join(5)
+    assert not web.sync_threads[-1].is_alive()
+    assert set(probes) == {"retained"}
+    assert [c.state for c in store.get_job(batch).children] == ["stopped", "cancelled"]
+
+
+@pytest.mark.parametrize(("field", "flag", "value"), [
+    ("options", "--vcodec", ["unknown"]), ("options", "--vbitrate", True), ("options", "--channels", float("nan")),
+    ("options", "--channels", float("inf")), ("options", "--remote", 1), ("options", "--lang", [4]),
+    ("serviceOptions", "-w", "S1E1"), ("serviceOptions", "--wanted", "S1E1"), ("serviceOptions", "--level", "high"),
+    ("serviceOptions", "--level", False), ("serviceOptions", "-o", "elsewhere"), ("serviceOptions", "--help", True),
+])
+def test_direct_option_schema_refusals(tmp_path, monkeypatch, field, flag, value):
+    web = reloaded_web(tmp_path, monkeypatch)
+    params = [{"name": "level", "opts": ["--level"], "type": "text", "choices": ["low"]},
+              {"name": "wanted", "opts": ["--wanted", "-w"]}, {"name": "output", "opts": ["--output", "-o"]},
+              {"name": "help", "opts": ["--help", "-h"], "is_flag": True}]
+    monkeypatch.setattr(web.sonarr_sync.UNSHACKLE, "services", lambda: [{"tag": "TEST", "cli_params": [
+        p | {"kind": "option"} for p in params]}])
+    with pytest.raises(web.web.HTTPBadRequest) as refusal:
+        asyncio.run(web.download(SimpleNamespace(json=AsyncMock(return_value=direct_body() | {field: {flag: value}}))))
+    assert refusal.value.headers["X-Admission-Code"] == "invalid_request"
+    assert not web.sonarr_sync.job_store().load()
+
+
+@pytest.mark.parametrize(("kind", "value"), [("text", "a\nb"), ("list", ["a\tb"])])
+def test_direct_rejects_option_controls(tmp_path, monkeypatch, kind, value):
+    web = reloaded_web(tmp_path, monkeypatch)
+    with pytest.raises(web.web.HTTPBadRequest):
+        web.direct_options({"--test": value}, [{"flag": "--test", "kind": kind}])
+
+
+def test_direct_schema_follows_backend_route(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    def service(name):
+        return [{"tag": "TEST", "cli_params": [{"kind": "option", "name": name, "opts": ["--" + name], "type": "text"}]}]
+    monkeypatch.setattr(sync, "DOWNLOADS", tmp_path)
+    monkeypatch.setattr(sync.UNSHACKLE, "services", lambda: service("main"))
+    backend = Mock()
+    backend.services.return_value = service("other")
+    monkeypatch.setattr(sync, "BACKENDS", {"other": backend})
+    monkeypatch.setattr(sync, "read_file", lambda: {"service_defaults": {"TEST": {"backend": "other"}}})
+    assert web.direct_request(direct_body() | {"serviceOptions": {"--other": "v"}}).effective_options["service_options"] == {"--other": "v"}
+    with pytest.raises(web.web.HTTPBadRequest):
+        web.direct_request(direct_body() | {"serviceOptions": {"--main": "v"}})
+
+
+def test_direct_film_activity_from_disk(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    req = jobs.DirectDownloadRequest("TEST", "title", (jobs.DirectItemRequest("film", None, "My film"),)).to_normalized_request(tmp_path)
+    store = sync.job_store()
+    batch = store.admit(req).job_id
+    child = store.complete_child(batch, "film").children[0]
+    run = sync.EpisodeRun({}, {"title": "https://example.test/movie?key=" + "private-value", "service": "TEST"},
+                          "direct", batch=batch, direct_child=child)
+    run.card.update(command="unshackle dl --proxy http://private.example:8080 TEST title",
+                    unconfirmed_job={"job_id": "uncertain"})
+    run.finish("downloaded")
+    request = SimpleNamespace(query={}, method="GET", match_info={"batch": batch})
+    assert web.latest_runs() == {}
+    assert web.series_health(web.cards_on_disk()) == {}
+    assert json.loads(asyncio.run(web.runs(request)).body)[0]["id"] == run.id
+    assert json.loads(asyncio.run(web.v1_downloads(request)).body)[0]["state"] == "downloaded"
+    assert json.loads(asyncio.run(web.job_options(request)).body)["options"] == {}
+    assert "private.example" not in web.diagnostic(run.id)
+    assert "private-value" not in json.dumps(web.cards_on_disk())
+    run.card["unconfirmed_job"] = {"job_id": "previous"}
+    run.save()
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda _: {"status": "downloading"})
+    assert web.still_on_serve([], direct=req) == "My film is still downloading from its last try"
+    assert json.loads(asyncio.run(web.delete_job(request)).body)["deleted"] == 1
+
+
+def test_direct_failed_cancel_preserves_pending_submission(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    req = jobs.DirectDownloadRequest("TEST", "title", (jobs.DirectItemRequest("film", None, "Film"),)).to_normalized_request(tmp_path)
+    store = sync.job_store()
+    batch = store.admit(req).job_id
+    submission = jobs.Submission("", "TEST", "title", str(tmp_path), (), web.datetime.now(web.timezone.utc))
+    child = store.set_child_submission(batch, "film", submission).children[0]
+    card = {"id": "run", "batch": batch, "childId": child.id, "job_id": "remote", "outcome": "running", "step": "downloading"}
+    monkeypatch.setattr(web, "run_cards", lambda: [card])
+    monkeypatch.setattr(web, "cancel_stop_attempt", Mock(side_effect=web.web.HTTPBadGateway()))
+    monkeypatch.setattr(sync, "recover_submission", lambda *_: jobs.AttemptObservation("missing"))
+    with pytest.raises(web.web.HTTPBadGateway):
+        asyncio.run(web.stop_job(SimpleNamespace(match_info={"batch": batch})))
+    assert store.get_job(batch).children[0].submission == submission
+
+
+def test_direct_legacy_selector_blocks_second_download(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    req = jobs.DirectDownloadRequest("TEST", "title", (jobs.DirectItemRequest("new", "S01E01", "Episode"),))
+    request = req.to_normalized_request(tmp_path)
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    card = {"batch": "batch", "childId": "batch:direct:TEST:title:old", "selector": "S1E1",
+            "sxxeyy": "S1E1", "unconfirmed_job": {"job_id": "running"}}
+    (sync.RUNS_DIR / "direct.json").write_text(json.dumps(card))
+    monkeypatch.setattr(sync.UNSHACKLE, "job", lambda _: {"status": "downloading"})
+    assert web.still_on_serve([], direct=request) == "S1E1 is still downloading from its last try"

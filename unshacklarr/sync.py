@@ -366,8 +366,15 @@ def seen_by(setting: str, folder: Path, settings: dict | None = None) -> str:
     """A folder of the downloads folder, as Unshackle (its settings: another serve's) or Sonarr sees it."""
     if setting == "sonarr_downloads" and settings is None and (inst := instance()):  # another Sonarr: as it sees the folder
         settings = {"sonarr_downloads": inst["downloads"] or SETTINGS.get("sonarr_downloads")}  # empty: as the main one
-    base = str((SETTINGS if settings is None else settings).get(setting) or "").rstrip("/\\")
-    return f"{base}/{folder.name}" if base else str(folder)
+    configured = str((SETTINGS if settings is None else settings).get(setting) or "")
+    if not configured:
+        return str(folder)
+    base = configured.rstrip("/\\")
+    target, root = folder.resolve(), DOWNLOADS.resolve()
+    if target == root:
+        return base or "/"
+    suffix = target.relative_to(root).as_posix() if target.is_relative_to(root) else folder.name
+    return f"{base}/{suffix}"
 
 
 LEVELS = {"success": apprise.NotifyType.SUCCESS, "warning": apprise.NotifyType.WARNING, "error": apprise.NotifyType.FAILURE}
@@ -834,24 +841,50 @@ def observe_attempt(record: dict, attempt_id: str) -> jobs.AttemptObservation:
 SUBMISSION_CLOCK_SKEW = timedelta(seconds=60)
 
 
-def recover_submission(submission: jobs.Submission) -> jobs.AttemptObservation:
+def recover_submission(submission: jobs.Submission, child: jobs.JobChild | None = None) -> jobs.AttemptObservation:
     try:
         backend = backend_named(submission.backend)
+        records = job_store().load()
+        claimed = {identifier for job in records for other in job.children for identifier in other.attempt_history}
+        if child:
+            claimed.update(child.attempt_history)
+            if any(other.id == child.id and other.submission != submission for job in records for other in job.children):
+                return jobs.AttemptObservation("unreachable")
+        siblings = [other.submission for job in records for other in job.children if other.submission
+                    and child and other.id != child.id and other.state in jobs.ACTIVE_CHILD_STATES]
+        for path in RUNS_DIR.glob("*.json"):
+            card = read_json(path, {}, strict=True, invalid_raises=True)
+            if identifier := card.get("job_id"):
+                claimed.add(identifier)
+            owner = card.get("childId")
+            if not owner and card.get("batch") and card.get("episodeId") is not None:
+                item = jobs.episode_item(card.get("instance") or None, card["episodeId"])
+                owner = f"{card['batch']}:{item.id}"
+            if (not child or owner != child.id) and (identifier := (card.get("unconfirmed_job") or {}).get("job_id")):
+                claimed.add(identifier)
         matches: list[jobs.AttemptObservation] = []
         for record in backend.jobs():
             if record.get("service") != submission.service or record.get("title_id") != submission.title_id:
                 continue
-            if parse_time(record["created_time"]) < submission.started_at - SUBMISSION_CLOCK_SKEW:
+            created = parse_time(record["created_time"])
+            if created < submission.started_at - SUBMISSION_CLOCK_SKEW:
                 continue
             attempt_id = str(record["job_id"])
+            if attempt_id in claimed:
+                continue
             detail = backend.job(attempt_id)
             parameters = detail.get("parameters")
             if not isinstance(parameters, dict):
                 return jobs.AttemptObservation("unreachable")
             wanted = parameters.get("wanted") or []
             if parameters.get("output_dir") == submission.output_dir and tuple(wanted) == submission.wanted:
+                if any(other.backend == submission.backend and other.service == submission.service
+                       and other.title_id == submission.title_id and other.output_dir == submission.output_dir
+                       and other.wanted == submission.wanted and created >= other.started_at - SUBMISSION_CLOCK_SKEW
+                       for other in siblings):
+                    return jobs.AttemptObservation("unreachable")
                 matches.append(observe_attempt(detail, attempt_id))
-    except (UnshackleError, KeyError, TypeError, ValueError):
+    except (OSError, UnshackleError, KeyError, TypeError, ValueError):
         return jobs.AttemptObservation("unreachable")
     if len(matches) == 1:
         return matches[0]
@@ -860,7 +893,7 @@ def recover_submission(submission: jobs.Submission) -> jobs.AttemptObservation:
 
 def probe_attempt(child: jobs.JobChild, backend_name: str | None = None) -> jobs.AttemptObservation:
     if child.submission is not None:
-        return recover_submission(child.submission)
+        return recover_submission(child.submission, child)
     if not child.attempt_job_id:
         return jobs.AttemptObservation("missing")
     try:
@@ -1856,15 +1889,25 @@ class EpisodeRun:
     ended_attempt: str | None = None
     failure_stage = ""
     failure_code = ""
+    direct_output_dir: Path | None = None
 
-    def __init__(self, ep: dict, show: dict, kind: str, service_sxxeyy: str = "", batch: str | None = None):
+    def __init__(self, ep: dict, show: dict, kind: str, service_sxxeyy: str = "", batch: str | None = None,
+                 *, direct_child: jobs.JobChild | None = None):
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
         now = datetime.now(timezone.utc)
-        sxxeyy = f"S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}"
-        self.id = f"{now:%Y%m%d-%H%M%S-%f}-{ep['series']['tvdbId']}-{sxxeyy}"
+        if direct_child:
+            series, tvdb = direct_child.request.label, None
+            sxxeyy = direct_child.request.selector or ""
+            suffix = f"direct-{uuid.uuid4().hex}"
+        else:
+            series, tvdb = ep["series"]["title"], ep["series"]["tvdbId"]
+            sxxeyy = f"S{ep['seasonNumber']:02}E{ep['episodeNumber']:02}"
+            suffix = f"{tvdb}-{sxxeyy}"
+        self.id = f"{now:%Y%m%d-%H%M%S-%f}-{suffix}"
         self.card = {
-            "id": self.id, "series": ep["series"]["title"] + (f" · {instance()['name']}" if instance() else ""),  # whose copy it is
-            "tvdbId": ep["series"]["tvdbId"], "sxxeyy": sxxeyy,
+            "id": self.id, "series": series + (f" · {instance()['name']}" if instance() else ""),
+            "tvdbId": tvdb, "sxxeyy": sxxeyy,
+            **({"childId": direct_child.id, "selector": direct_child.request.selector} if direct_child else {}),
             "service": show["service"], "kind": kind, "started": now.isoformat(), "ended": None, "outcome": None,
             "episodeId": ep.get("id"), "serviceEpisode": service_sxxeyy or sxxeyy,
             # For Activity's detail: where it stands (queued, downloading, finishing, importing),
@@ -1977,6 +2020,9 @@ class EpisodeRun:
             print(f"Could not persist authentication observation: {no_credentials(error)}", flush=True)
 
     def durable_child(self) -> jobs.JobChild | None:
+        if identifier := self.card.get("childId"):
+            job = job_store().get_job(self.card["batch"])
+            return next((c for c in job.children if c.id == identifier), None) if job else None
         return durable_child(self.card.get("batch"), self.card.get("episodeId"), self.card.get("instance"))
 
     def finish_durable(self, outcome: str, cause: str, auth_failed: bool) -> None:
@@ -2065,7 +2111,7 @@ class EpisodeRun:
         self.card.pop("auth_attempt_failures", None)
         if outcome in ("downloaded", "import", "kept"):  # a new file: the release watch must not see it missing
             _broadcast_episodes.clear()
-        if outcome == "downloaded":  # a new file: Upgrades' find for it is done with (by mj23au)
+        if outcome == "downloaded" and not self.card.get("childId"):
             drop_upgrade_find(self.card.get("instance", ""), self.card.get("tvdbId"), self.card.get("sxxeyy"))
         self.fold_checks()
         try:
@@ -2095,6 +2141,8 @@ class EpisodeRun:
         that job's): one line in the history, their logs before its own, and how many attempts it makes in all.
         An automatic try (the sync, a release burst) takes only the automatic tries that failed before it: what
         was stopped or picked by hand keeps its own card. The failure last told carries over: told once."""
+        if self.card.get("childId"):
+            return
         attempts = 1
         for path in sorted(RUNS_DIR.glob(f"*-{self.card['tvdbId']}-{self.card['sxxeyy']}.json")):
             try:
@@ -2127,6 +2175,8 @@ class EpisodeRun:
 
     def fold_checks(self) -> None:
         """This episode's earlier "not out yet" cards, taken into this one: their count, and their logs before its own."""
+        if self.card.get("childId"):
+            return
         earlier = []
         for path in sorted(RUNS_DIR.glob(f"*-{self.card['tvdbId']}-{self.card['sxxeyy']}.json")):
             try:
@@ -2692,6 +2742,11 @@ def submit_job(backend, payload: dict, run: EpisodeRun | None) -> str:
     store = job_store() if child else None
     if child and child.state in jobs.TERMINAL_CHILD_STATES:
         raise JobFailed("Stopped before it started", "cancelled")
+    if isinstance(run, EpisodeRun) and run.direct_output_dir is not None:
+        # The slot or a retry may have waited since this folder was first checked.
+        run.failure_stage = "output_path"
+        jobs.direct_output_path(str(run.direct_output_dir), DOWNLOADS)
+        run.failure_stage = ""
     submission = None
     if store and child and payload.get("output_dir") and payload.get("title_id"):
         submission = jobs.Submission(backend.name or "", str(payload["service"]), str(payload["title_id"]),
@@ -3054,6 +3109,8 @@ def retrying(payload: dict, run: EpisodeRun | None, sleep, *, job_id: str | None
                 raise
             job_id = None
             if NOT_LISTED.search(cause):  # serve after 6.0.0 refuses an episode not out yet: nothing came, not a failure
+                if isinstance(run, EpisodeRun) and run.card.get("childId"):
+                    raise
                 return []
             waits = SERVE_RETRY_AFTER if UNREACHABLE in cause else RETRY_AFTER
             wait = waits[tries] if tries < len(waits) else None
@@ -4055,7 +4112,7 @@ def abandon_retained_audio_attempt(batch: str | None, child: jobs.JobChild | Non
         return True
     store = job_store()
     if child.submission is not None:
-        observed = recover_submission(child.submission)
+        observed = recover_submission(child.submission, child)
         if observed.status == "unreachable":
             return False
         if observed.attempt_id and observed.status in ("queued", "downloading"):
@@ -4841,7 +4898,7 @@ def retained_audio_folders() -> tuple[set[str], bool]:
         return set(), True
     retained: list[tuple[str, jobs.DownstreamJob, jobs.JobChild]] = []
     for record in records:
-        if record.state not in jobs.ACTIVE_JOB_STATES:
+        if record.request.direct or record.state not in jobs.ACTIVE_JOB_STATES:
             continue
         for child in record.children:
             if child.state in jobs.ACTIVE_CHILD_STATES and (child.attempt_job_id is not None or child.submission is not None):
@@ -5217,7 +5274,7 @@ def wait_for_attempt(run: EpisodeRun, batch: str, child: jobs.JobChild, backend_
 
 
 def reconcile_pending_submission(run: EpisodeRun, batch: str, child: jobs.JobChild, submission: jobs.Submission) -> str | None:
-    observed = recover_submission(submission)
+    observed = recover_submission(submission, child)
     if observed.status == "unreachable":
         raise PendingSubmissionUnreachable(batch)
     store = job_store()
@@ -5255,7 +5312,9 @@ def resume_durable_attempt(run: EpisodeRun, batch: str, child: jobs.JobChild,
         return "finished"
     run.card.update(backend=backend_name, job_id=current_child.attempt_job_id)
     try:
-        run_job_retrying({}, run, job_id=current_child.attempt_job_id)
+        files = run_job_retrying({}, run, job_id=current_child.attempt_job_id)
+        if run.card.get("childId") and files:
+            run.card["output_files"] = files
     except ResubmitAdoptedAttempt:
         if await_job_resume(run, batch):
             return "submit"
@@ -5271,6 +5330,151 @@ def resume_durable_attempt(run: EpisodeRun, batch: str, child: jobs.JobChild,
             run.finish("failed", cause, "See the run log in Activity for details.", auth_failed=run.failure_code == "AUTH_FAILED")
         return "finished"
     return "downloaded"
+
+
+def _video_snapshot(folder: Path) -> dict[Path, tuple[int, int]]:
+    snapshot = {}
+    for video in videos_in(folder):
+        try:
+            if video.is_file() and video.resolve().is_relative_to(folder):
+                info = video.stat()
+                snapshot[video] = info.st_size, info.st_mtime_ns
+        except FileNotFoundError:
+            continue
+    return snapshot
+
+
+def _reported_direct_output(files: list[str], out: Path, remote: str) -> bool:
+    found_video = False
+    for filename in files:
+        name = filename.replace("\\", "/")
+        prefix = remote.replace("\\", "/").rstrip("/") + "/"
+        path = out / (name.removeprefix(prefix) if name.startswith(prefix) else name)
+        if ".." in path.parts or not path.resolve().is_relative_to(out) or not path.is_file():
+            return False
+        found_video |= path.suffix.lower() in VIDEO
+    return found_video
+
+
+def _submit_direct(run: EpisodeRun, request: jobs.NormalizedJobRequest, child: jobs.JobChild,
+                   out: Path, backend: Unshackle) -> None:
+    if problem := free_space_problem():
+        run.failure_stage = "storage"
+        raise JobFailed(problem)
+    effective = request.runtime_options()
+    dl, own = effective["options"], effective["service_options"]
+    assert isinstance(dl, dict) and isinstance(own, dict) and request.service
+    if "--cdm" not in dl and (problem := no_cdm(request.service, backend=backend)):
+        run.failure_stage = "cdm"
+        raise JobFailed(problem)
+    remote = seen_by("unshackle_downloads", out, backend.settings)
+    payload = {options.name_of(k): v for k, v in dl.items()}
+    payload.update(service=request.service, title_id=request.title_id, output_dir=remote,
+                   service_params={options.name_of(k): v for k, v in own.items()})
+    if child.request.selector:
+        payload["wanted"] = [child.request.selector]
+    run.card["command"] = options.command_line(payload)
+    run.save()
+    before = _video_snapshot(out) if out != DOWNLOADS.resolve() else None
+    files = run_job_retrying(payload, run)
+    if files:
+        if not _reported_direct_output(files, out, remote):
+            raise JobFailed("Unshackle reported no video in the output directory")
+    elif before is None or not (_video_snapshot(out).items() - before.items()):
+        raise JobFailed("Unshackle completed without new output")
+
+
+def run_direct_child(job: jobs.DownstreamJob, child: jobs.JobChild) -> None:
+    request, batch = job.request, job.id
+    service = request.service
+    assert service and request.title_id
+    run = EpisodeRun({}, {"service": service}, "direct", batch=batch, direct_child=child)
+    try:
+        path = request.effective_options["output_dir"]
+        run.failure_stage = "output_path"
+        if not isinstance(path, str):
+            raise jobs.DirectRequestValidationError("Missing output path")
+        out = jobs.direct_output_path(path, DOWNLOADS)
+        run.direct_output_dir = out
+        out.mkdir(parents=True, exist_ok=True)
+        run.failure_stage = ""
+        if child.attempt_job_id or child.submission:
+            backend = backend_named(child.submission.backend if child.submission else child.attempt_backend)
+            run.card["backend"] = backend.name
+            recovered = resume_durable_attempt(run, batch, child, backend.name)
+            if recovered == "finished":
+                return
+            if recovered == "downloaded":
+                remote = seen_by("unshackle_downloads", out, backend.settings)
+                if not _reported_direct_output(run.card.get("output_files") or [], out, remote):
+                    raise JobFailed("Unshackle completed without output")
+                run.finish("downloaded")
+                return
+        else:
+            backend = backend_for(service)
+            run.card["backend"] = backend.name
+        _submit_direct(run, request, child, out, backend)
+        run.finish("downloaded")
+    except (JobFailed, OSError, UnshackleError, ValueError) as error:
+        run.failure_code = getattr(error, "error_code", "")
+        if getattr(error, "proxy_down", False):
+            run.failure_code = "INVALID_PROXY"
+        run.finish("stopped" if getattr(error, "status", "") == "cancelled" else "failed",
+                   getattr(error, "cause", str(error)), auth_failed=run.failure_code == "AUTH_FAILED")
+
+
+def start_direct_worker(batch: str) -> threading.Thread | None:
+    store = job_store()
+    worker: dict = {"kind": "direct", "episodes": [], "stubs": {}, "closed": False}
+
+    def release() -> None:
+        with capacity_lock:
+            running_jobs.pop(batch, None)
+        batch_jobs.pop(batch, None)
+        job = store.get_job(batch)
+        active = bool(job and job.state in jobs.ACTIVE_JOB_STATES)
+        if not active:
+            paused_jobs.discard(batch)
+        release_job(batch, keep_place=active and (batch in paused_jobs or pause_all_active))
+
+    def work() -> None:
+        try:
+            while True:
+                with jobs_lock:
+                    job = store.get_job(batch)
+                    if not job or job.state not in jobs.ACTIVE_JOB_STATES:
+                        release()
+                        return
+                    held = job.state == "paused" or pause_all_active or batch in paused_jobs
+                    child = next((c for c in job.children if c.state in jobs.ACTIVE_CHILD_STATES and
+                                  (not held or c.attempt_job_id or c.submission)), None)
+                    if child is None:
+                        release()
+                        return
+                run_direct_child(job, child)
+        except Exception as error:
+            try:
+                pause_job(batch, True)
+            finally:
+                with jobs_lock:
+                    release()
+            print(f"Direct job paused: {no_credentials(error)}", flush=True)
+
+    with jobs_lock:
+        if batch in running_jobs:
+            return None
+        number_job(batch)
+        with capacity_lock:
+            reserved_starts.discard(batch)
+            running_jobs[batch] = worker
+        batch_jobs[batch] = [worker]
+        thread = threading.Thread(target=work, daemon=True)
+        try:
+            thread.start()
+        except RuntimeError:
+            release()
+            raise
+        return thread
 
 
 def run_episodes(config: dict, settings: dict, episodes: list, manual: bool, replace: bool, kind: str, batch: str | None = None,

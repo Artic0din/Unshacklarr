@@ -2,13 +2,22 @@
 never meets half a file; and with the permissions the caller asks for, not the umask's."""
 
 import json
+import ntpath
 import os
+import posixpath
 import re
 import stat
 import tempfile
 from pathlib import Path
+from urllib.parse import unquote
 
 PRIVATE = 0o600  # its owner only: what anything holding a secret gets
+
+
+def check_full_path(folder: str) -> None:
+    """An empty path leaves the folder unset."""
+    if folder and (not (posixpath.isabs(folder) or ntpath.isabs(folder)) or ".." in re.split(r"[\\/]", folder)):
+        raise ValueError(f"{folder} must be a full path, from / (or a drive letter), without ..")
 
 
 def shared_or_private(folder: Path) -> int:
@@ -35,6 +44,18 @@ def no_credentials(text) -> str:
     masked = CREDENTIALS.sub("//***@", str(text))
     masked = SENSITIVE_QUERY.sub(r"\1***", masked)
     return SENSITIVE_HEADER.sub(lambda match: f"{(match.group(1) or match.group(2)).rstrip()} ***", masked)
+
+
+PRIVATE_QUERY_KEY = re.compile(
+    r"[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|key|auth|secret|password|passwd|"
+    r"sig|signature|session|jwt|credential)(?:=|[&#]|$)", re.I,
+)
+
+
+def display_argument(value: str) -> str:
+    if PRIVATE_QUERY_KEY.search(unquote(value)):
+        return "***"
+    return no_credentials(value)
 
 
 def read_json(path: Path, empty, strict: bool = False, invalid_raises: bool = False):
