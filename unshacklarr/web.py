@@ -3184,9 +3184,12 @@ async def list_cookies(_):
 
 async def save_cookies(request):
     body = await json_object(request)
+    service, profile, text = (body.get(key, "") for key in ("service", "profile", "text"))
+    if not all(isinstance(field, str) for field in (service, profile, text)):
+        raise web.HTTPBadRequest(text="Cookie import fields must be strings")
     try:
         folder = await asyncio.to_thread(cookies_folder)
-        saved = await asyncio.to_thread(cookies.save, folder, str(body.get("service") or ""), str(body.get("profile") or ""), str(body.get("text") or ""))
+        saved = await asyncio.to_thread(cookies.save, folder, service, profile, text)
     except (cookies.CookieError, cdm.CdmError, UnshackleError) as e:
         raise web.HTTPBadRequest(text=no_credentials(e))
     except OSError as e:

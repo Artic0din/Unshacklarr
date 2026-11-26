@@ -224,7 +224,7 @@ Every change worth knowing, newest first. The format follows
   The first startup picked up legacy jobs queued after an empty staging run.
   Choosing to download the whole episode kept the requested audio language, including after a restart.
   A job stayed paused when Unshackle could not confirm that its download stopped. (#416)
-
+- Rejected malformed, all-expired, and anti-bot-only cookie imports before modifying saved cookie files, reporting the broken Netscape line number without exposing cookie values.
 - Sent the local Unshackle server's secret key with its startup health check, so local mode starts against Unshackle 7 instead of giving up after 90 s.
 - Retried a download with the season map of the attempt it repeats, so a retry no longer asks the service for the wrong season.
 - Took an episode out of one job's queue only, so a download of it on its own is no longer skipped.
