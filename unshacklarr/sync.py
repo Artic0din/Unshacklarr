@@ -853,15 +853,28 @@ def recover_submission(submission: jobs.Submission, child: jobs.JobChild | None 
         siblings = [other.submission for job in records for other in job.children if other.submission
                     and child and other.id != child.id and other.state in jobs.ACTIVE_CHILD_STATES]
         for path in RUNS_DIR.glob("*.json"):
-            card = read_json(path, {}, strict=True, invalid_raises=True)
-            if identifier := card.get("job_id"):
+            try:
+                card = read_json(path, {}, strict=True, invalid_raises=True)
+            except (OSError, UnshackleError, ValueError):
+                continue
+            if not isinstance(card, dict):
+                continue
+            if isinstance(identifier := card.get("job_id"), str) and identifier:
                 claimed.add(identifier)
-            owner = card.get("childId")
-            if not owner and card.get("batch") and card.get("episodeId") is not None:
-                item = jobs.episode_item(card.get("instance") or None, card["episodeId"])
-                owner = f"{card['batch']}:{item.id}"
-            if (not child or owner != child.id) and (identifier := (card.get("unconfirmed_job") or {}).get("job_id")):
-                claimed.add(identifier)
+            unconfirmed = card.get("unconfirmed_job")
+            unconfirmed_id = unconfirmed.get("job_id") if isinstance(unconfirmed, dict) else None
+            if not isinstance(unconfirmed_id, str) or not unconfirmed_id:
+                continue
+            owner = card.get("childId") if isinstance(card.get("childId"), str) else ""
+            if not owner and isinstance(card.get("batch"), str) and card.get("batch") and type(card.get("episodeId")) is int:
+                inst = card.get("instance")
+                try:
+                    item = jobs.episode_item(inst if isinstance(inst, str) and inst else None, card["episodeId"])
+                    owner = f"{card['batch']}:{item.id}"
+                except (TypeError, ValueError, OverflowError):
+                    owner = ""
+            if not child or owner != child.id:
+                claimed.add(unconfirmed_id)
         matches: list[jobs.AttemptObservation] = []
         for record in backend.jobs():
             if record.get("service") != submission.service or record.get("title_id") != submission.title_id:
@@ -5332,19 +5345,12 @@ def resume_durable_attempt(run: EpisodeRun, batch: str, child: jobs.JobChild,
     return "downloaded"
 
 
-def _video_snapshot(folder: Path) -> dict[Path, tuple[int, int]]:
-    snapshot = {}
-    for video in videos_in(folder):
-        try:
-            if video.is_file() and video.resolve().is_relative_to(folder):
-                info = video.stat()
-                snapshot[video] = info.st_size, info.st_mtime_ns
-        except FileNotFoundError:
-            continue
-    return snapshot
+NON_VIDEO_FLAGS = ("--audio-only", "--subs-only", "--chapters-only", "--no-video")
 
 
-def _reported_direct_output(files: list[str], out: Path, remote: str) -> bool:
+def _reported_direct_output(files: list[str], out: Path, remote: str, *, require_video: bool = True) -> bool:
+    if not files:
+        return False
     found_video = False
     for filename in files:
         name = filename.replace("\\", "/")
@@ -5353,11 +5359,23 @@ def _reported_direct_output(files: list[str], out: Path, remote: str) -> bool:
         if ".." in path.parts or not path.resolve().is_relative_to(out) or not path.is_file():
             return False
         found_video |= path.suffix.lower() in VIDEO
-    return found_video
+    return found_video if require_video else True
+
+
+def _prepare_direct_output(run: EpisodeRun, request: jobs.NormalizedJobRequest) -> Path:
+    path = request.effective_options["output_dir"]
+    run.failure_stage = "output_path"
+    if not isinstance(path, str):
+        raise jobs.DirectRequestValidationError("Missing output path")
+    out = jobs.direct_output_path(path, DOWNLOADS)
+    run.direct_output_dir = out
+    out.mkdir(parents=True, exist_ok=True)
+    run.failure_stage = ""
+    return out
 
 
 def _submit_direct(run: EpisodeRun, request: jobs.NormalizedJobRequest, child: jobs.JobChild,
-                   out: Path, backend: Unshackle) -> None:
+                   out: Path, backend: Unshackle, *, require_video: bool) -> None:
     if problem := free_space_problem():
         run.failure_stage = "storage"
         raise JobFailed(problem)
@@ -5375,13 +5393,10 @@ def _submit_direct(run: EpisodeRun, request: jobs.NormalizedJobRequest, child: j
         payload["wanted"] = [child.request.selector]
     run.card["command"] = options.command_line(payload)
     run.save()
-    before = _video_snapshot(out) if out != DOWNLOADS.resolve() else None
     files = run_job_retrying(payload, run)
-    if files:
-        if not _reported_direct_output(files, out, remote):
-            raise JobFailed("Unshackle reported no video in the output directory")
-    elif before is None or not (_video_snapshot(out).items() - before.items()):
-        raise JobFailed("Unshackle completed without new output")
+    if not _reported_direct_output(files, out, remote, require_video=require_video):
+        raise JobFailed("Unshackle completed without reported output" if not files
+                        else "Unshackle reported no expected file in the output directory")
 
 
 def run_direct_child(job: jobs.DownstreamJob, child: jobs.JobChild) -> None:
@@ -5390,30 +5405,26 @@ def run_direct_child(job: jobs.DownstreamJob, child: jobs.JobChild) -> None:
     assert service and request.title_id
     run = EpisodeRun({}, {"service": service}, "direct", batch=batch, direct_child=child)
     try:
-        path = request.effective_options["output_dir"]
-        run.failure_stage = "output_path"
-        if not isinstance(path, str):
-            raise jobs.DirectRequestValidationError("Missing output path")
-        out = jobs.direct_output_path(path, DOWNLOADS)
-        run.direct_output_dir = out
-        out.mkdir(parents=True, exist_ok=True)
-        run.failure_stage = ""
+        dl = request.runtime_options()["options"]
+        require_video = not (isinstance(dl, dict) and any(dl.get(flag) for flag in NON_VIDEO_FLAGS))
         if child.attempt_job_id or child.submission:
             backend = backend_named(child.submission.backend if child.submission else child.attempt_backend)
             run.card["backend"] = backend.name
             recovered = resume_durable_attempt(run, batch, child, backend.name)
             if recovered == "finished":
                 return
+            out = _prepare_direct_output(run, request)
             if recovered == "downloaded":
                 remote = seen_by("unshackle_downloads", out, backend.settings)
-                if not _reported_direct_output(run.card.get("output_files") or [], out, remote):
+                if not _reported_direct_output(run.card.get("output_files") or [], out, remote, require_video=require_video):
                     raise JobFailed("Unshackle completed without output")
                 run.finish("downloaded")
                 return
         else:
+            out = _prepare_direct_output(run, request)
             backend = backend_for(service)
             run.card["backend"] = backend.name
-        _submit_direct(run, request, child, out, backend)
+        _submit_direct(run, request, child, out, backend, require_video=require_video)
         run.finish("downloaded")
     except (JobFailed, OSError, UnshackleError, ValueError) as error:
         run.failure_code = getattr(error, "error_code", "")

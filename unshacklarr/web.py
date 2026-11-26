@@ -6385,12 +6385,32 @@ def direct_request(body: dict) -> jobs.NormalizedJobRequest:
         normalized = selected.to_normalized_request(sonarr_sync.DOWNLOADS)
     except jobs.DirectRequestValidationError as error:
         raise web.HTTPBadRequest(text=str(error)) from error
+    dl = direct_options(body.get("options", {}), options.dl_specs())
+    if "--server" in dl and dl.get("--remote") is not True:
+        raise web.HTTPBadRequest(text="--server requires --remote")
     backend = sonarr_sync.backend_for(service.strip())
-    matched = next((s for s in backend.services() if s.get("tag") == normalized.service), None)
+    if dl.get("--remote") is True:
+        try:
+            target = backend.relayed({"remote": True, **({"server": dl["--server"]} if "--server" in dl else {})})["remote"]
+        except UnshackleError as error:
+            if not str(error).startswith("--remote needs "):
+                raise
+            raise web.HTTPBadRequest(text=str(error)) from error
+        names = backend.config().get("remote_services")
+        configured = names if isinstance(names, list) else []
+        if target not in configured:
+            raise web.HTTPBadRequest(text="Unknown remote server")
+        server = next((s for s in backend.remote_services() if s.get("name") == target), None)
+        if server is None:
+            raise UnshackleError(f"Remote server {target} could not be reached")
+        catalog = server.get("services") or []
+    else:
+        catalog = backend.services()
+    matched = next((s for s in catalog if s.get("tag") == normalized.service), None)
     if matched is None:
         raise web.HTTPBadRequest(text="Unknown service")
     return dataclasses.replace(normalized, effective_options={
-        **normalized.effective_options, "options": direct_options(body.get("options", {}), options.dl_specs()),
+        **normalized.effective_options, "options": dl,
         "service_options": direct_options(body.get("serviceOptions", {}), options.service_specs(matched)),
     })
 

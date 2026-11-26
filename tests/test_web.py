@@ -13457,3 +13457,31 @@ def test_direct_legacy_selector_blocks_second_download(tmp_path, monkeypatch):
     (sync.RUNS_DIR / "direct.json").write_text(json.dumps(card))
     monkeypatch.setattr(sync.UNSHACKLE, "job", lambda _: {"status": "downloading"})
     assert web.still_on_serve([], direct=request) == "S1E1 is still downloading from its last try"
+
+
+def test_direct_remote_schema_validation(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    monkeypatch.setattr(sync, "DOWNLOADS", tmp_path)
+    monkeypatch.setattr(sync.UNSHACKLE, "services", lambda: [{"tag": "TEST", "cli_params": []}])
+    remote = [{"name": "relay", "services": [{"tag": "TEST", "cli_params": [
+        {"kind": "option", "name": "server_identity", "opts": ["--server-identity"], "type": "text"}]}]}]
+    monkeypatch.setattr(sync.UNSHACKLE, "remote_services", lambda: remote)
+    monkeypatch.setattr(sync.UNSHACKLE, "config", lambda: {"remote_services": ["relay", "down"]})
+    parsed = web.direct_request(direct_body() | {
+        "options": {"--remote": True, "--server": "relay"},
+        "serviceOptions": {"--server-identity": "id-1"},
+    })
+    assert parsed.effective_options["service_options"] == {"--server-identity": "id-1"}
+    with pytest.raises(web.web.HTTPBadRequest):
+        web.direct_request(direct_body() | {"options": {"--remote": True}})
+    with pytest.raises(web.UnshackleError):
+        web.direct_request(direct_body() | {"options": {"--remote": True, "--server": "down"}})
+    monkeypatch.setattr(sync.UNSHACKLE, "config", lambda: {"remote_services": ["relay"]})
+    assert web.direct_request(direct_body() | {
+        "options": {"--remote": True}, "serviceOptions": {"--server-identity": "id-1"},
+    }).effective_options["service_options"] == {"--server-identity": "id-1"}
+    with pytest.raises(web.web.HTTPBadRequest):
+        web.direct_request(direct_body() | {"options": {"--remote": True, "--server": "missing"}})
+    with pytest.raises(web.web.HTTPBadRequest):
+        web.direct_request(direct_body() | {"options": {"--server": "relay"}})
