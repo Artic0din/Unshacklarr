@@ -215,6 +215,16 @@ Every change worth knowing, newest first. The format follows
 
 ### Fixed
 
+- **Download jobs kept their episode order across restarts.**
+  Activity kept completed episodes and let users retry failed or stopped downloads.
+  Paused jobs stayed paused across restarts.
+  Requests reported whether the selection was added, already queued, or refused, even when a queued job could not reach Unshackle.
+  Repeating an Activity retry returned the existing job, and retries refused at capacity kept their previous status.
+  Activity refused retries for episodes already owned by another active job.
+  The first startup picked up legacy jobs queued after an empty staging run.
+  Choosing to download the whole episode kept the requested audio language, including after a restart.
+  A job stayed paused when Unshackle could not confirm that its download stopped. (#416)
+
 - Sent the local Unshackle server's secret key with its startup health check, so local mode starts against Unshackle 7 instead of giving up after 90 s.
 - Retried a download with the season map of the attempt it repeats, so a retry no longer asks the service for the wrong season.
 - Took an episode out of one job's queue only, so a download of it on its own is no longer skipped.

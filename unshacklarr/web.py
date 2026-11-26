@@ -31,7 +31,7 @@ import unicodedata
 import weakref
 import zlib
 import zoneinfo
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
@@ -42,7 +42,7 @@ import requests
 import yaml
 from aiohttp import web
 
-from unshacklarr import __version__, cdm, cookies, i18n, offsite, options, servicecheck
+from unshacklarr import __version__, cdm, cookies, i18n, jobs, offsite, options, servicecheck
 from unshacklarr.files import CREDENTIALS, PRIVATE, no_credentials, read_json, write_atomic
 from unshacklarr import sync as sonarr_sync  # the schedule shows the very downloads the sync will ask for
 from unshacklarr.backend import UnshackleError
@@ -2412,7 +2412,8 @@ def check_upgrades(now: datetime) -> list[str]:
                 if sonarr_sync.SETTINGS.get("upgrade_mode") == "add_track":
                     threading.Thread(target=add_or_download, args=(int(key), w["want"]), daemon=True).start()
                 else:
-                    run_sync([int(key)], replace=True, kind="upgrade")  # its import takes it off the list
+                    if isinstance(run_sync([int(key)], replace=True, kind="upgrade"), jobs.Refused):
+                        continue
                 started.append(w["label"])
     finally:
         try:
@@ -2431,19 +2432,189 @@ def check_upgrades(now: datetime) -> list[str]:
     return started
 
 
-def add_or_download(episode_id: int, want: str, anyway: bool = False) -> None:
+def normalize_audio_outcome(outcome: sonarr_sync.AudioAddOutcome | bool, episode_id: int) -> sonarr_sync.AudioAddOutcome:
+    if outcome is False:
+        return "fallback"
+    if outcome is True:
+        watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+        return "asked" if audio_confirmation_pending(watched, episode_id) else "added"
+    return outcome
+
+
+def try_add_audio(episode_id: int, want: str, anyway: bool = False) -> sonarr_sync.AudioAddOutcome:
     try:
-        if sonarr_sync.add_track(episode_id, want, anyway):
-            return
-    except Exception as e:  # anything unforeseen: the whole episode again, as before
+        if sonarr_sync.add_track is not sonarr_sync._durable_add_track:
+            return normalize_audio_outcome(sonarr_sync.add_track(episode_id, want, anyway), episode_id)
+        return sonarr_sync.add_track_outcome(episode_id, want, anyway)
+    except jobs.JobStoreError:
+        raise
+    except Exception as e:
         print(f"Add the audio: {type(e).__name__}: {e}", flush=True)
-    run_sync([episode_id], replace=True, kind="upgrade")
+        return "fallback"
 
 
-def add_audio_soon(episode_ids: list[int], lang: str) -> None:
-    """The audio added to the episodes' files in the background, one after the other (add_or_download: the whole
-    episode when it can't)."""
-    threading.Thread(target=lambda: [add_or_download(i, lang) for i in episode_ids], daemon=True).start()
+def add_or_download(episode_id: int, want: str, anyway: bool = False) -> None:
+    outcome = normalize_audio_outcome(try_add_audio(episode_id, want, anyway), episode_id)
+    if outcome not in ("added", "asked"):
+        run_sync([episode_id], replace=True, kind="upgrade")
+
+
+class AudioPass:
+    def __init__(self, work: Callable[[], None]) -> None:
+        self.pending: collections.deque[tuple[int, str, bool]] = collections.deque()
+        self.whole: dict[int, str] = {}
+        self.marker: dict = {"episodes": [], "stubs": {}, "closed": True}
+        self.thread = threading.Thread(target=work, daemon=True)
+
+
+audio_passes: dict[str, AudioPass] = {}
+
+
+def audio_confirmation_pending(watched: dict, episode_id: int) -> bool:
+    return bool((watched.get(str(episode_id)) or {}).get("asked"))
+
+
+def waiting_audio_child(records: tuple[jobs.DownstreamJob, ...], episode_id: int) -> tuple[jobs.DownstreamJob, jobs.JobChild] | None:
+    item_id = jobs.episode_item(None, episode_id).id
+    return next(((job, child) for job in records if job.state in jobs.ACTIVE_JOB_STATES
+                 and job.request.effective_options.get("kind") == "audio_add"
+                 for child in job.children if child.request.id == item_id and child.state == "waiting"), None)
+
+
+def durable_audio_question(owner: jobs.DownstreamJob, child: jobs.JobChild, watched: dict, episode_id: int) -> bool:
+    options = owner.request.options_for_item(child.request.id)
+    return (options.get("kind") == "audio_add" and options.get("anyway") is not True
+            and (options.get("asked") is True or audio_confirmation_pending(watched, episode_id)))
+
+
+def dismiss_audio_question(watched: dict, episode_id: int) -> None:
+    if watched.get(str(episode_id), {}).pop("asked", None) is not None:
+        write_atomic(sonarr_sync.UPGRADES_FILE, json.dumps(watched))
+    sonarr_sync.close_question(f"audio:{episode_id}")
+
+
+def add_audio_soon(episode_ids: list[int], lang: str, *, batch: str, anyway: bool = False) -> threading.Thread:
+    with sonarr_sync.jobs_lock:
+        return start_audio_pass(episode_ids, lang, batch=batch, anyway=anyway)
+
+
+def start_audio_pass(episode_ids: list[int], lang: str, *, batch: str, anyway: bool) -> threading.Thread:
+    """Start or extend a batch's audio pass with jobs_lock held."""
+    if existing := audio_passes.get(batch):
+        existing.pending.extend((episode_id, lang, anyway) for episode_id in episode_ids)
+        return existing.thread
+
+    store = sonarr_sync.job_store()
+
+    def release(*, handoff: bool = False) -> bool:
+        del audio_passes[batch]
+        others = [job for job in sonarr_sync.batch_jobs.pop(batch, []) if job is not audio.marker]
+        if others:
+            sonarr_sync.batch_jobs[batch] = others
+        with sonarr_sync.capacity_lock:
+            if others:
+                sonarr_sync.running_jobs[batch] = others[-1]
+            else:
+                sonarr_sync.running_jobs.pop(batch, None)
+                if handoff:
+                    sonarr_sync.reserved_starts.add(batch)
+        if not others and batch in sonarr_sync.job_order:
+            sonarr_sync.release_job(batch, keep_place=True)
+        return handoff and not others
+
+    def wait_for_pending_episode(episode_id: int) -> bool:
+        def pending() -> bool:
+            return sonarr_sync.durable_work_pending(batch, episode_id, None)
+
+        def paused() -> bool:
+            return batch in sonarr_sync.paused_jobs or sonarr_sync.pause_all_active
+
+        while True:
+            with sonarr_sync.slots:
+                sonarr_sync.slots.wait_for(lambda: not paused() or not pending())
+            with sonarr_sync.jobs_lock:
+                if not pending():
+                    return False
+                if not paused():
+                    return True
+
+    def work() -> None:
+        failures: dict[int, str] = {}
+        fallback_groups: dict[str, list[int]] = {}
+        reserved = False
+        try:
+            while True:
+                with sonarr_sync.jobs_lock:
+                    if not audio.pending:
+                        staged = store.stage_audio_fallback(batch, failures) if failures else []
+                        fallback = {episode_id: failures[episode_id] for episode_id in staged}
+                        fallback.update(audio.whole)
+                        for episode_id, language in fallback.items():
+                            fallback_groups.setdefault(language, []).append(episode_id)
+                        reserved = release(handoff=bool(fallback_groups))
+                        break
+                    episode_id, language, force_add = audio.pending.popleft()
+                if not wait_for_pending_episode(episode_id):
+                    continue
+                sonarr_sync.current.audio_batch = batch
+                try:
+                    outcome = try_add_audio(episode_id, language, force_add)
+                finally:
+                    del sonarr_sync.current.audio_batch
+                with sonarr_sync.upgrades_lock, sonarr_sync.jobs_lock:
+                    item_id = jobs.episode_item(None, episode_id).id
+                    outcome = normalize_audio_outcome(outcome, episode_id)
+                    if not force_add:
+                        record = store.get_job(batch)
+                        options = record.request.options_for_item(item_id) if record else {}
+                        if (options.get("asked") is True or options.get("kind") != "audio_add"
+                                or options.get("anyway") is True):
+                            continue
+                        if outcome == "asked":
+                            store.stage_audio_question(batch, episode_id, language)
+                            continue
+                    if outcome == "added":
+                        store.complete_child(batch, item_id)
+                    elif outcome == "fallback":
+                        failures[episode_id] = language
+        except jobs.JobStoreError as error:
+            print(f"Could not update the audio job: {no_credentials(error)}", flush=True)
+        finally:
+            with sonarr_sync.jobs_lock:
+                if audio_passes.get(batch) is audio:
+                    release()
+        previous = None
+        for language, ids in fallback_groups.items():
+            previous = launch_audio_fallback(batch, ids, audio=language, reserved=reserved, after=previous)
+            reserved = False
+
+    audio = AudioPass(work)
+    audio.pending.extend((episode_id, lang, anyway) for episode_id in episode_ids)
+    with sonarr_sync.capacity_lock:
+        sonarr_sync.reserved_starts.discard(batch)
+        sonarr_sync.running_jobs.setdefault(batch, audio.marker)
+        sonarr_sync.batch_jobs.setdefault(batch, []).append(audio.marker)
+        audio_passes[batch] = audio
+    try:
+        audio.thread.start()
+    except RuntimeError:
+        release()
+        raise
+    return audio.thread
+
+
+def launch_audio_fallback(batch: str, episode_ids: list[int], *, audio: str, reserved: bool,
+                          after: threading.Thread | None = None) -> threading.Thread | None:
+    worker = None
+    try:
+        worker = run_sync(episode_ids, replace=True, kind="upgrade", audio=audio, batch=batch,
+                          reserved_start=batch if reserved else None, after=after)
+        if isinstance(worker, jobs.Refused):
+            raise admission_refusal(worker)
+        return worker
+    finally:
+        if reserved and not isinstance(worker, threading.Thread):
+            sonarr_sync.release_reserved_start(batch)
 
 
 async def confirm_audio(request):
@@ -2452,18 +2623,65 @@ async def confirm_audio(request):
     choice = (await json_object(request)).get("choice")
     if choice not in ("add", "whole"):
         raise web.HTTPBadRequest(text="Choose to add the audio or to download the whole episode")
-    with sonarr_sync.upgrades_lock:
-        watched = read_json(sonarr_sync.UPGRADES_FILE, {})
-        w = watched.get(str(episode_id))
-        if not w or not w.pop("asked", None):
-            sonarr_sync.inbox_resolve(f"audio:{episode_id}")
-            raise web.HTTPNotFound(text="That episode no longer waits for an answer")
-        write_atomic(sonarr_sync.UPGRADES_FILE, json.dumps(watched))
-    sonarr_sync.inbox_resolve(f"audio:{episode_id}")
-    if choice == "add":
-        threading.Thread(target=add_or_download, args=(episode_id, w["want"], True), daemon=True).start()
-    else:
-        run_sync([episode_id], replace=True, kind="upgrade")
+
+    def answer():
+        store = sonarr_sync.job_store()
+        reserved = False
+        batch = None
+        want = ""
+        try:
+            with sonarr_sync.upgrades_lock:
+                with sonarr_sync.jobs_lock:
+                    waiting = waiting_audio_child(store.load(), episode_id)
+                    watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+                    if waiting is not None:
+                        owner, child = waiting
+                        if not durable_audio_question(owner, child, watched, episode_id):
+                            sonarr_sync.close_question(f"audio:{episode_id}")
+                            raise web.HTTPNotFound(text="That episode no longer waits for an answer")
+                        options = owner.request.options_for_item(child.request.id)
+                        want = options.get("audio") or owner.request.effective_options.get("audio")
+                        if not isinstance(want, str) or not (want := want.strip()):
+                            raise web.HTTPConflict(text="That episode no longer waits for an answer")
+                        batch = owner.id
+                        if batch not in sonarr_sync.running_jobs:
+                            if not sonarr_sync.reserve_start(batch, ASKED_AT_ONCE):
+                                raise admission_refusal(jobs.ADMISSION_CAPACITY_REFUSAL)
+                            reserved = True
+                        staged = (store.stage_audio_fallback(batch, [episode_id]) if choice == "whole"
+                                  else store.stage_confirmed_audio(batch, episode_id, want))
+                        if not staged:
+                            raise web.HTTPConflict(text="That episode no longer waits for an answer")
+                        dismiss_audio_question(watched, episode_id)
+                        if choice == "add":
+                            start_audio_pass([episode_id], want, batch=batch, anyway=True)
+                            reserved = False
+                            return
+                        if audio := audio_passes.get(batch):
+                            audio.whole[episode_id] = want
+                            return
+                if batch is None:
+                    if not audio_confirmation_pending(watched, episode_id):
+                        sonarr_sync.close_question(f"audio:{episode_id}")
+                        raise web.HTTPNotFound(text="That episode no longer waits for an answer")
+                    want = watched[str(episode_id)]["want"]
+                    if choice == "whole":
+                        result = run_sync([episode_id], replace=True, kind="upgrade", audio=want)
+                        if isinstance(result, jobs.Refused):
+                            raise admission_refusal(result)
+                    dismiss_audio_question(watched, episode_id)
+            if batch is not None:
+                launch_audio_fallback(batch, [episode_id], audio=want, reserved=reserved)
+                reserved = False
+            elif choice == "add":
+                threading.Thread(target=add_or_download, args=(episode_id, want, True), daemon=True).start()
+        except jobs.JobStoreError:
+            raise admission_refusal(jobs.ADMISSION_PERSISTENCE_FAILURE) from None
+        finally:
+            if reserved and batch is not None:
+                sonarr_sync.release_reserved_start(batch)
+
+    await asyncio.to_thread(answer)
     return web.json_response({"ok": True})
 
 
@@ -2503,7 +2721,9 @@ async def watch_releases():
                     if (run is None or not run.is_alive()) and not await asyncio.to_thread(burst_failed, episode_id, name):  # the previous try is over
                         if sonarr_sync.SETTINGS.get("download_window_bursts") and not sonarr_sync.in_download_window():
                             continue  # chosen in Automation: the release-time tries keep to the window too
-                        burst_runs[(name, episode_id)] = run_sync([episode_id], kind="burst", sonarr=name)
+                        thread = run_sync([episode_id], kind="burst", sonarr=name)
+                        if isinstance(thread, threading.Thread):
+                            burst_runs[(name, episode_id)] = thread
         except Exception as e:  # Sonarr down for a moment: try again next round
             print(f"Release watch: {e}", flush=True)
         await asyncio.sleep(float(sonarr_sync.SETTINGS["burst_every_seconds"]))
@@ -3508,7 +3728,8 @@ async def stop_run(request):
     if not RUN_ID.fullmatch(run_id):
         raise web.HTTPBadRequest(text=UNKNOWN_DOWNLOAD)
     try:
-        card = json.loads((sonarr_sync.RUNS_DIR / f"{run_id}.json").read_text())
+        path = sonarr_sync.RUNS_DIR / f"{run_id}.json"
+        card = json.loads(await asyncio.to_thread(path.read_text))
     except (OSError, ValueError):
         card = {}
     job_id = card.get("job_id")
@@ -3516,9 +3737,7 @@ async def stop_run(request):
         raise web.HTTPConflict(text="This download has already finished. Reload the page to see its result.")
     # marked whatever it does now: it ends where it waits for a slot, or before its next download reaches serve
     # (between two tries, a later episode of its job, a fallback try)
-    with sonarr_sync.slots:
-        sonarr_sync.stop_waiting.add(run_id)
-        sonarr_sync.slots.notify_all()
+    await asyncio.to_thread(sonarr_sync.stop_waiting_runs, [run_id])
     if not job_id or (card.get("live") or {}).get("status") in sonarr_sync.TERMINAL:  # no job, or an ended try's
         return web.json_response({"stopping": True})
     backend = sonarr_sync.backend_named(card.get("backend"))
@@ -3537,33 +3756,143 @@ async def stop_run(request):
 
 async def stop_job(request):
     """Stop a job: the one downloading is cancelled and its queued episodes are, as each one's cross does;
-    one being joined, named or imported finishes (half an import in Sonarr is worse than one more episode).
-    Nothing marks the job itself: an episode can be queued again in it."""
+    one being joined, named or imported finishes (half an import in Sonarr is worse than one more episode)."""
     batch = request.match_info["batch"]
     if not BATCH_ID.fullmatch(batch):
         raise web.HTTPBadRequest(text=UNKNOWN_JOB)
-    sonarr_sync.pause_job(batch, False)  # a paused job stops too: its loop wakes to skip what was cancelled
+    await asyncio.to_thread(sonarr_sync.pause_job, batch, True)
     for episode_id, card in list(sonarr_sync.waiting.items()):
-        if card.get("batch") == batch and (taken := sonarr_sync.take_out(episode_id)):
+        if card.get("batch") == batch and (taken := await asyncio.to_thread(sonarr_sync.take_out, episode_id)):
             await asyncio.to_thread(sonarr_sync.cancel_queued, taken)
     cancelled = 0
-    for c in await asyncio.to_thread(run_cards):
-        if c.get("batch") == batch and c["outcome"] == "running" and c.get("job_id") and c.get("step") in ("queued", "downloading"):
+    active_attempts: set[str] = set()
+    failed_attempts: dict[str, web.HTTPBadGateway] = {}
+    failed_items: set[str] = set()
+    cards = [card for card in await asyncio.to_thread(run_cards)
+             if card.get("batch") == batch and card["outcome"] == "running" and not card.get("waiting")]
+    stoppable = [card for card in cards if not card.get("job_id") or card.get("step") in ("queued", "downloading")]
+    active_items = {jobs.episode_item(card.get("instance"), card["episodeId"]).id for card in stoppable if card.get("episodeId")}
+    for c in cards:
+        if c.get("job_id"):
+            active_attempts.add(c["job_id"])
+            if c.get("step") not in ("queued", "downloading"):
+                continue
             try:
-                await asyncio.to_thread(sonarr_sync.backend_named(c.get("backend")).cancel, c["job_id"])
-            except UnshackleError as e:
-                raise web.HTTPBadGateway(text=no_credentials(e))
-            cancelled += 1
+                await asyncio.to_thread(cancel_stop_attempt, c.get("backend"), c["job_id"])
+            except web.HTTPBadGateway as error:
+                failed_attempts[c["job_id"]] = error
+                if c.get("episodeId"):
+                    failed_items.add(jobs.episode_item(c.get("instance"), c["episodeId"]).id)
+            else:
+                cancelled += 1
+    cancelled += await asyncio.to_thread(stop_durable_children, batch, active_items, active_attempts,
+                                         failed_attempts, failed_items)
+    if failed_attempts:
+        raise next(iter(failed_attempts.values()))
+    await asyncio.to_thread(sonarr_sync.stop_waiting_runs, [card["id"] for card in stoppable])
+    await asyncio.to_thread(sonarr_sync.pause_job, batch, False)
     return web.json_response({"cancelled": cancelled})
+
+
+def cancel_stop_attempt(backend_name: str | None, attempt_id: str) -> None:
+    backend = sonarr_sync.backend_named(backend_name)
+    try:
+        backend.cancel(attempt_id)
+    except UnshackleError as error:
+        if error.status == 404:
+            return
+        try:
+            status = backend.job(attempt_id).get("status")
+            if status in ("completed", "failed", "cancelled"):
+                return
+        except UnshackleError as probe_error:
+            if probe_error.status == 404:
+                return
+        raise web.HTTPBadGateway(text=no_credentials(error) or STOP_UNCONFIRMED) from error
+
+
+STOP_UNCONFIRMED = "Unshackle did not confirm the download stopped"
+
+
+def finish_stopped_child(store: jobs.JobStore, record: jobs.DownstreamJob, child: jobs.JobChild, *, stopped: bool) -> None:
+    finish = store.stop_child if stopped else store.cancel_child
+    episode_id = child.request.sonarr_episode_id
+    if episode_id is None or record.request.effective_options.get("kind") != "audio_add":
+        finish(record.id, child.id)
+        return
+    with sonarr_sync.upgrades_lock, sonarr_sync.jobs_lock:
+        updated = finish(record.id, child.id)
+        watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+        if durable_audio_question(updated, child, watched, episode_id):
+            dismiss_audio_question(watched, episode_id)
+
+
+def stop_durable_children(batch: str, active_items: set[str], active_attempts: set[str],
+                          failed_attempts: dict[str, web.HTTPBadGateway], failed_items: set[str]) -> int:
+    store = sonarr_sync.job_store()
+    record = store.get_job(batch)
+    if not record or record.state not in jobs.ACTIVE_JOB_STATES:
+        return 0
+    cancelled = 0
+    for child in record.children:
+        if child.state not in jobs.ACTIVE_CHILD_STATES:
+            continue
+        if attempt := child.attempt_job_id:
+            if attempt in active_attempts:
+                continue
+            name = child.attempt_backend
+            if name is None and sonarr_sync.RUNS_DIR.exists():
+                name = next((card.get("backend") for card in cards_on_disk() if card.get("job_id") == attempt), None)
+            cancel_stop_attempt(name, attempt)
+            finish_stopped_child(store, record, child, stopped=True)
+            cancelled += 1
+        elif submission := child.submission:
+            observed = sonarr_sync.recover_submission(submission)
+            if observed.status == "unreachable":
+                raise web.HTTPBadGateway(text=STOP_UNCONFIRMED)
+            if (attempt := observed.attempt_id) and observed.status in ("queued", "downloading"):
+                if attempt in failed_attempts:
+                    store.start_child_attempt(batch, child.id, attempt, state=observed.status, backend=submission.backend)
+                    continue
+                if attempt not in active_attempts:
+                    try:
+                        cancel_stop_attempt(submission.backend, attempt)
+                    except web.HTTPBadGateway:
+                        store.start_child_attempt(batch, child.id, attempt, state=observed.status, backend=submission.backend)
+                        raise
+                    cancelled += 1
+            if child.request.id in failed_items:
+                continue
+            finish_stopped_child(store, record, child, stopped=True)
+        else:
+            finish_stopped_child(store, record, child, stopped=child.request.id in active_items)
+    return cancelled
+
+
+def unqueue_audio_question(episode_id: int) -> bool:
+    store = sonarr_sync.job_store()
+    with sonarr_sync.upgrades_lock, sonarr_sync.jobs_lock:
+        waiting = waiting_audio_child(store.load(), episode_id)
+        if waiting is None:
+            return False
+        owner, child = waiting
+        watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+        if not durable_audio_question(owner, child, watched, episode_id):
+            return False
+        store.cancel_child(owner.id, child.id)
+        dismiss_audio_question(watched, episode_id)
+        return True
 
 
 async def unqueue(request):
     """Take an episode out of its job's queue: it is skipped when its turn comes."""
     episode_id = int(request.match_info["episode_id"])
-    card = sonarr_sync.take_out(episode_id)
+    card = await asyncio.to_thread(sonarr_sync.take_out, episode_id)
     if card is None:
-        raise web.HTTPConflict(text="This episode has already started")
-    await asyncio.to_thread(sonarr_sync.cancel_queued, card)
+        if not await asyncio.to_thread(unqueue_audio_question, episode_id):
+            raise web.HTTPConflict(text="This episode has already started")
+    else:
+        await asyncio.to_thread(sonarr_sync.cancel_queued, card)
     return web.json_response({"unqueued": episode_id})
 
 
@@ -3589,23 +3918,39 @@ async def job_options(request):
     batch = request.match_info["batch"]
     if not BATCH_ID.fullmatch(batch):
         raise web.HTTPBadRequest(text=UNKNOWN_JOB)
-    shown = lambda o: {k: masked_options((o or {}).get(k)) for k in ("options", "service_options")}  # a proxy's credentials masked
+    def shown(overrides: object) -> dict:
+        source = overrides if isinstance(overrides, dict) else {}
+        return {key: masked_options(source.get(key)) for key in ("options", "service_options")}
+
+    store = await asyncio.to_thread(sonarr_sync.job_store)
+    job = await asyncio.to_thread(store.get_job, batch)
+    stored = job.request.runtime_options().get("options") if job else None
     if request.method == "GET":  # with the options its episodes have without them, for the dialog to start from
-        return web.json_response({**shown(sonarr_sync.job_options.get(batch)), "base": shown(await asyncio.to_thread(job_base_options, batch))})
-    if batch not in sonarr_sync.running_jobs:
+        return web.json_response({**shown(stored if job else sonarr_sync.job_options.get(batch)), "base": shown(await asyncio.to_thread(job_base_options, batch))})
+    if (job and job.state not in jobs.ACTIVE_JOB_STATES) or (not job and batch not in sonarr_sync.running_jobs):
         raise web.HTTPConflict(text=JOB_OVER)
     body = await json_object(request)
-    service, was = str(body.get("service") or ""), sonarr_sync.job_options.get(batch) or {}
+    service = str(body.get("service") or "")
+    was = (stored if isinstance(stored, dict) else sonarr_sync.job_options.get(batch)) or {}
     known = await asyncio.to_thread(known_services)
     opts = check_options(real_options(body.get("options") if isinstance(body.get("options"), dict) else {}, was.get("options")),
                          options.dl_specs(), "this job")
     own = check_options(real_options(body.get("service_options") if isinstance(body.get("service_options"), dict) else {},
                                      was.get("service_options")), (known or {}).get(service) if known is not None else None, "this job", free=True)
-    sonarr_sync.job_options[batch] = {"options": opts, "service_options": own}
-    if not opts and not own:
-        sonarr_sync.job_options.pop(batch, None)
+    override = {"options": opts, "service_options": own}
+    def update():
+        with sonarr_sync.jobs_lock:
+            if job:
+                store.set_job_options(batch, override if opts or own else None)
+            if opts or own:
+                sonarr_sync.job_options[batch] = override
+            else:
+                sonarr_sync.job_options.pop(batch, None)
+            return shown(sonarr_sync.job_options.get(batch))
+
+    updated = await asyncio.to_thread(update)
     print(f"Job {batch}: its own options for the episodes still to come", flush=True)
-    return web.json_response(shown(sonarr_sync.job_options.get(batch)))
+    return web.json_response(updated)
 
 
 async def pause_job(request):
@@ -3613,10 +3958,17 @@ async def pause_job(request):
     batch = request.match_info["batch"]
     if not BATCH_ID.fullmatch(batch):
         raise web.HTTPBadRequest(text=UNKNOWN_JOB)
-    if batch not in sonarr_sync.running_jobs:
+    job = await asyncio.to_thread(lambda: sonarr_sync.job_store().get_job(batch))
+    if (job and job.state not in jobs.ACTIVE_JOB_STATES) or (not job and batch not in sonarr_sync.running_jobs):
         raise web.HTTPConflict(text=JOB_OVER)
-    sonarr_sync.pause_job(batch, request.match_info["action"] == "pause")
+    await asyncio.to_thread(sonarr_sync.pause_job, batch, request.match_info["action"] == "pause")
     return web.json_response({"paused": batch in sonarr_sync.paused_jobs})
+
+
+async def pause_all_jobs(request):
+    paused = request.path == "/api/jobs/pause-all"
+    await asyncio.to_thread(sonarr_sync.pause_all if paused else sonarr_sync.resume_all)
+    return web.json_response({"paused": paused})
 
 
 async def join_job(batch: str, episode_id: int, replace: bool = False, sonarr: str = "", first: bool = False) -> bool:
@@ -3650,19 +4002,27 @@ async def requeue(request):
         raise web.HTTPBadRequest(text=UNKNOWN_JOB)
     card = sonarr_sync.RUNS_DIR / f"{run_id}.json"
     try:
-        cancelled = json.loads(card.read_text())
+        cancelled = json.loads(await asyncio.to_thread(card.read_text))
     except (OSError, ValueError):
         raise web.HTTPConflict(text="This episode is no longer cancelled. Reload the page to see its latest state.")
     if cancelled.get("outcome") != "cancelled" or cancelled.get("episodeId") != episode_id or cancelled.get("batch") != batch:
         raise web.HTTPConflict(text="This episode is no longer cancelled. Reload the page to see its latest state.")
-    card.unlink(missing_ok=True)  # queued again: its "cancelled" card goes
     replace = cancelled.get("replace") is True  # picked with Replace anyway: it still replaces
     sonarr = cancelled.get("instance") if isinstance(cancelled.get("instance"), str) else ""
     proxy = cancelled.get("proxy_override") if isinstance(cancelled.get("proxy_override"), str) else ""  # and its own proxy
     video = cancelled.get("video_override") if isinstance(cancelled.get("video_override"), dict) else None  # codec, height
     audio = cancelled.get("audio_override") if isinstance(cancelled.get("audio_override"), str) else ""  # audio language
+    store = await asyncio.to_thread(sonarr_sync.job_store)
+    if await asyncio.to_thread(store.get_job, batch):
+        try:
+            await asyncio.to_thread(store.requeue_cancelled, batch, jobs.episode_item(sonarr or None, episode_id).id)
+        except jobs.JobStoreError as error:
+            if not isinstance(error.__cause__, ValueError):
+                raise
+            raise web.HTTPConflict(text="This episode is no longer cancelled. Reload the page to see its latest state.") from None
+    await asyncio.to_thread(card.unlink, missing_ok=True)
     if not await join_job(batch, episode_id, replace, sonarr):  # its job took its last episode: it starts on its own, in that job
-        run_sync([episode_id], kind="manual", batch=batch, **({"replace": True} if replace else {}), **({"proxy": proxy} if proxy else {}),
+        await run_sync_http([episode_id], kind="manual", batch=batch, **({"replace": True} if replace else {}), **({"proxy": proxy} if proxy else {}),
                  **({"video": video} if video else {}), **({"audio": audio} if audio else {}), **({"sonarr": sonarr} if sonarr else {}))
     return web.json_response({"queued": episode_id})
 
@@ -3772,13 +4132,31 @@ async def delete_job(request):
     batch = request.match_info["batch"]
     if not BATCH_ID.fullmatch(batch):
         raise web.HTTPBadRequest(text=UNKNOWN_JOB)
-    if any(c.get("batch") == batch for c in sonarr_sync.waiting.values()) or \
+    record = await asyncio.to_thread(lambda: sonarr_sync.job_store().get_job(batch))
+    if (record and record.state in jobs.ACTIVE_JOB_STATES) or any(c.get("batch") == batch for c in sonarr_sync.waiting.values()) or \
             any(c.get("batch") == batch and c["outcome"] == "running" for c in await asyncio.to_thread(run_cards)):
         raise web.HTTPConflict(text="This job is still going on: stop it first")
     deleted = await asyncio.to_thread(forget_runs, lambda c: c.get("batch") != batch)
     if not deleted:
         raise web.HTTPNotFound(text="This job is no longer in the history. Reload the page to see the current history.")
+    if record and record.request.effective_options.get("kind") == "audio_add":
+        await asyncio.to_thread(dismiss_deleted_audio_questions, record.id)
     return web.json_response({"deleted": deleted})
+
+
+def dismiss_deleted_audio_questions(batch: str) -> None:
+    with sonarr_sync.upgrades_lock, sonarr_sync.jobs_lock:
+        records = sonarr_sync.job_store().load()
+        record = next((job for job in records if job.id == batch), None)
+        if record is None or record.state in jobs.ACTIVE_JOB_STATES:
+            return
+        watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+        for child in record.children:
+            if (child.state in ("cancelled", "stopped")
+                    and (episode_id := child.request.sonarr_episode_id) is not None
+                    and waiting_audio_child(records, episode_id) is None
+                    and durable_audio_question(record, child, watched, episode_id)):
+                dismiss_audio_question(watched, episode_id)
 
 
 async def clear_runs(request):
@@ -4096,32 +4474,91 @@ def running() -> bool:
 ASKED_AT_ONCE = 20  # downloads asked by hand or by the API and not over yet: each is a thread
 
 
-def room_for_one_more() -> None:
-    """Refuse a download asked on top of too many still going: a thread each, a client in a loop would pile them up."""
-    sync_threads[:] = [t for t in sync_threads if t.is_alive()]
-    if len(sync_threads) >= ASKED_AT_ONCE:
-        raise web.HTTPTooManyRequests(text="Too many downloads requested at once: wait for some to finish")
+def fail_unstarted_downloads(batch: str, episode_ids: list[int], sonarr: str, cause: str, error_code: str) -> None:
+    store = sonarr_sync.job_store()
+    items = {jobs.episode_item(sonarr or None, episode_id).id for episode_id in episode_ids}
+    failure = jobs.classify_failure(cause, error_code=error_code)
+    with sonarr_sync.jobs_lock:
+        if store.get_job(batch) is None:
+            return
+        updated = store.fail_unstarted_children(batch, items, failure)
+        if updated.state in jobs.TERMINAL_JOB_STATES and batch not in sonarr_sync.running_jobs:
+            sonarr_sync.paused_jobs.discard(batch)
+            sonarr_sync.job_options.pop(batch, None)
+            sonarr_sync.release_job(batch)
+        elif updated.state == "paused":
+            sonarr_sync.paused_jobs.add(batch)
 
 
 def run_sync(episode_ids: list[int] | None = None, replace: bool = False, kind: str = "manual", numbering: dict | None = None,
              batch: str | None = None, sonarr: str = "", proxy: str = "", video: dict | None = None, audio: str = "",
-             restored: tuple[str, int] | None = None) -> threading.Thread:
+             *, after: threading.Thread | None = None, reserved_start: str | None = None) -> threading.Thread | jobs.Refused | None:
     """A sync in the background: every missing episode, or the ones given. Each episode has
     its own lock, so these runs never download the same one twice."""
+    if episode_ids and not batch and kind in ("manual", "retry", "upgrade"):
+        overrides: dict[str, object] = {}
+        if proxy:
+            overrides["proxy"] = proxy
+        if video:
+            overrides["video"] = video
+        if audio:
+            overrides["audio"] = audio
+        store = sonarr_sync.job_store()
+        try:
+            sonarr_sync.ensure_durable_store_migrated(store)
+            request = download_request(episode_ids, sonarr, kind, replace, numbering, **overrides)
+            if reserved_start is None:
+                result = admit_download(store, request, jobs.generate_job_id())
+            else:
+                result = store.admit(request, job_id=reserved_start)
+        except jobs.LegacyQueueConversionError:
+            result = jobs.ADMISSION_MIGRATION_REFUSAL
+        except jobs.JobStoreError:
+            result = jobs.ADMISSION_PERSISTENCE_FAILURE
+        if isinstance(result, jobs.Refused):
+            print(f"Download job refused: {result.message}", flush=True)
+            return result
+        if isinstance(result, jobs.AlreadyQueued):
+            return None
+        batch = result.job_id
+
+    if batch:
+        if sonarr_sync.pause_all_active:
+            with sonarr_sync.jobs_lock:
+                sonarr_sync.paused_jobs.add(batch)
+        sonarr_sync.number_job(batch, kind == "retry")
+
     def work():
         global last_sync
         try:
+            if after is not None:
+                after.join()
             sonarr_sync.main(episode_ids, replace=replace, kind=kind, numbering=numbering, batch=batch, sonarr=sonarr, proxy=proxy, video=video,
-                              audio=audio, restored=restored)
-        except Exception as e:  # notified already; the page shows the history
-            print(f"Sync stopped: {type(e).__name__}: {e}", flush=True)
+                              audio=audio)
+        except Exception as e:
+            cause = no_credentials(e)
+            print(f"Sync stopped: {type(e).__name__}: {cause}", flush=True)
+            if batch and episode_ids:
+                try:
+                    fail_unstarted_downloads(batch, episode_ids, sonarr, cause, getattr(e, "error_code", ""))
+                except jobs.JobStoreError as error:
+                    print(f"Could not record download startup failure: {no_credentials(error)}", flush=True)
         finally:
+            if batch:
+                sonarr_sync.release_reserved_start(batch)
             last_sync = datetime.now(timezone.utc)
             clear_sonarr_series_cache()
 
     thread = threading.Thread(target=work, daemon=True)
-    thread.start()
-    sync_threads.append(thread)
+    try:
+        thread.start()
+    except RuntimeError:
+        if batch:
+            sonarr_sync.release_reserved_start(batch)
+        raise
+    with sonarr_sync.capacity_lock:
+        sync_threads[:] = [t for t in sync_threads if t.is_alive()]
+        sync_threads.append(thread)
     if episode_ids is None:
         whole_syncs.append(thread)
     return thread
@@ -5418,39 +5855,413 @@ def cdm_refusal(ids: list[int]) -> str:
                  if p["service"] in lacking and not sonarr_sync.stacked(p, config)[0].get("--cdm")), "")
 
 
+ADMISSION_TIMEOUT = 10.0
+ADMISSION_ERRORS: dict[jobs.RefusalCode, tuple[type[web.HTTPException], str]] = {
+    "invalid_request": (web.HTTPBadRequest, "Invalid download request"),
+    "active_failed_child": (web.HTTPConflict, "Retry the failed item in Activity"),
+    "partial_overlap": (web.HTTPConflict, "Episodes already belong to an active job"),
+    "retry_conflict": (web.HTTPConflict, "Review the job in Activity"),
+    "persistence_failed": (web.HTTPServiceUnavailable, "The download job could not be saved"),
+    "reconciliation_failed": (web.HTTPServiceUnavailable, "The download job could not be confirmed"),
+    "timeout": (web.HTTPGatewayTimeout, "The download request timed out"),
+    "capacity_full": (web.HTTPTooManyRequests, "Too many downloads requested at once"),
+    "legacy_queue_invalid": (web.HTTPServiceUnavailable, "Could not restore the legacy download queue"),
+}
+
+
+def admission_refusal(result: jobs.Refused) -> web.HTTPException:
+    headers = {"X-Admission-Outcome": result.outcome, "X-Admission-Code": result.code}
+    if result.job_id:
+        headers["X-Admission-Job-Id"] = result.job_id
+    if result.child_id:
+        headers["X-Admission-Child-Id"] = result.child_id
+    error, fallback = ADMISSION_ERRORS[result.code]
+    return error(text=result.message or fallback, headers=headers)
+
+
+def download_request(ids: list[int], sonarr_name: str, kind: str, replace: bool, numbering: dict | None,
+                     **overrides: object) -> jobs.NormalizedJobRequest:
+    items = tuple(jobs.episode_item(sonarr_name or None, episode_id) for episode_id in dict.fromkeys(ids))
+    effective: dict[str, object] = {"kind": kind, **overrides}
+    if kind != "audio_add":
+        effective["replace"] = replace
+    if numbering is not None:
+        effective["numbering"] = numbering
+    return jobs.NormalizedJobRequest(None, None, items, effective, sonarr_name or None)
+
+
+def admit_download(store: jobs.JobStore, request: jobs.NormalizedJobRequest, candidate: str, *,
+                   now: datetime | None = None, deadline: float | None = None,
+                   cancel_event: threading.Event | None = None,
+                   check_new_job: Callable[[], None] | None = None) -> jobs.AdmissionResult:
+    refusal = None
+    if check_new_job is not None:
+        if prior := store.check_admission(request):
+            return prior
+        try:
+            check_new_job()
+        except web.HTTPException as error:
+            refusal = error
+
+    def refuse_new_job() -> None:
+        if refusal is not None:
+            raise refusal
+
+    return store.admit(request, job_id=candidate, now=now, deadline=deadline, cancel_event=cancel_event,
+                       reserve_slot=lambda: sonarr_sync.reserve_start(candidate, ASKED_AT_ONCE),
+                       release_slot=lambda: sonarr_sync.release_reserved_start(candidate),
+                       before_write=refuse_new_job if refusal is not None else None)
+
+
+def start_admitted_download(result: jobs.Added, ids: list[int], **options) -> None:
+    thread = None
+    try:
+        if options.get("kind") == "audio_add":
+            thread = add_audio_soon(ids, options["audio"], batch=result.job_id)
+        else:
+            thread = run_sync(ids, batch=result.job_id, **options)
+        if isinstance(thread, jobs.Refused):
+            raise admission_refusal(thread)
+    finally:
+        if not isinstance(thread, threading.Thread):
+            sonarr_sync.release_reserved_start(result.job_id)
+
+
+async def request_admission(store: jobs.JobStore, normalized: jobs.NormalizedJobRequest, batch: str,
+                            ids: list[int], *, check_new_job: Callable[[], None], **options) -> jobs.AdmissionResult:
+    started_at = datetime.now(timezone.utc)
+    candidate = batch or jobs.generate_job_id(started_at)
+    cancelled = threading.Event()
+    deadline = time.monotonic() + ADMISSION_TIMEOUT
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(admit_download, store, normalized, candidate, now=started_at,
+                              deadline=deadline, cancel_event=cancelled, check_new_job=check_new_job),
+            timeout=ADMISSION_TIMEOUT,
+        )
+    except (asyncio.TimeoutError, TimeoutError, requests.Timeout):
+        cancelled.set()
+        result = await asyncio.to_thread(store.reconcile_admission, normalized, job_id=candidate, not_before=started_at)
+    except asyncio.CancelledError:
+        cancelled.set()
+        result = await asyncio.to_thread(store.reconcile_admission, normalized, job_id=candidate, not_before=started_at)
+        if isinstance(result, jobs.Added):
+            await asyncio.to_thread(start_admitted_download, result, ids, **options)
+        raise
+    if isinstance(result, jobs.Added):
+        await asyncio.to_thread(start_admitted_download, result, ids, **options)
+    return result
+
+
+async def run_sync_http(ids: list[int], **options) -> None:
+    result = await asyncio.to_thread(run_sync, ids, **options)
+    if isinstance(result, jobs.Refused):
+        raise admission_refusal(result)
+
+
+_durable_run_sync = run_sync
+_durable_add_audio_soon = add_audio_soon
+
+
+def v1_download_request(ids: list[int], options: dict) -> jobs.NormalizedJobRequest:
+    overrides = {key: options[key] for key in ("proxy", "video", "audio") if key in options}
+    return download_request(ids, options.get("sonarr", ""), options.get("kind", "manual"),
+                            options.get("replace", False), options.get("numbering"), **overrides)
+
+
+async def admit_v1_download(ids: list[int], check_new_job: Callable[[], None], **options) -> dict[str, str]:
+    normalized = v1_download_request(ids, options)
+    try:
+        store = await asyncio.to_thread(sonarr_sync.job_store)
+        await asyncio.to_thread(sonarr_sync.ensure_durable_store_migrated, store)
+        if run_sync is _durable_run_sync:
+            result = await request_admission(store, normalized, "", ids, check_new_job=check_new_job, **options)
+        else:
+            result = await asyncio.to_thread(store.check_admission, normalized)
+            if result is None:
+                await asyncio.to_thread(check_new_job)
+                result = await asyncio.to_thread(run_sync, ids, **options)
+    except jobs.LegacyQueueConversionError:
+        raise admission_refusal(jobs.ADMISSION_MIGRATION_REFUSAL) from None
+    except jobs.JobStoreError:
+        raise admission_refusal(jobs.ADMISSION_PERSISTENCE_FAILURE) from None
+    if isinstance(result, jobs.Refused):
+        raise admission_refusal(result)
+    if isinstance(result, (jobs.Added, jobs.AlreadyQueued)):
+        return {"outcome": result.outcome, "job_id": result.job_id}
+    return {}
+
+
+def admit_v1_grouped_downloads(groups: list[tuple[list[int], dict]], check_new_job: Callable[[], None],
+                               deadline: float, cancelled: threading.Event,
+                               audio_add: tuple[list[int], str] | None = None) -> dict:
+    if audio_add is not None and add_audio_soon is _durable_add_audio_soon:
+        ids, audio = audio_add
+        groups = [*groups, (ids, {"kind": "audio_add", "audio": audio})]
+        audio_add = None
+    requests = [v1_download_request(ids, options) for ids, options in groups]
+    results: list[jobs.Added | jobs.AlreadyQueued] = []
+    pending: set[str] = set()
+    audio_batch = f"audio-{secrets.token_hex(16)}" if audio_add else None
+
+    def check(records: tuple[jobs.DownstreamJob, ...]) -> list[jobs.AlreadyQueued | None]:
+        active = [record for record in records if record.state in jobs.ACTIVE_JOB_STATES]
+        prior = []
+        for request in requests:
+            result = jobs._existing_admission(active, request)
+            if isinstance(result, jobs.Refused):
+                raise admission_refusal(result)
+            prior.append(result)
+        return prior
+
+    refusal = None
+
+    def merge(document: jobs.StoreDocument) -> jobs.StoreDocument:
+        results.clear()
+        records = list(document.jobs)
+        identifiers = {record.id for record in records}
+        timestamp = datetime.now(timezone.utc)
+        for request, prior in zip(requests, check(document.jobs)):
+            if prior is not None:
+                results.append(prior)
+                continue
+            identifier = jobs.generate_job_id(timestamp, identifiers)
+            identifiers.add(identifier)
+            children = tuple(jobs.JobChild(f"{identifier}:{item.id}", item) for item in request.items)
+            state = "paused" if document.paused_all else "waiting"
+            records.append(jobs.DownstreamJob(jobs.SCHEMA_VERSION, identifier, request, children,
+                                              state, timestamp, timestamp))
+            results.append(jobs.Added(identifier))
+        return document._replace(jobs=tuple(records))
+
+    def reserve() -> None:
+        if refusal is not None:
+            raise refusal
+        slots = {result.job_id for result in results if isinstance(result, jobs.Added)}
+        if audio_batch is not None:
+            slots.add(audio_batch)
+        with sonarr_sync.capacity_lock:
+            occupied = len(sonarr_sync.running_jobs) + len(sonarr_sync.reserved_starts)
+            if occupied + len(slots) > ASKED_AT_ONCE or slots & sonarr_sync.reserved_starts:
+                raise admission_refusal(jobs.ADMISSION_CAPACITY_REFUSAL)
+            if cancelled.is_set() or time.monotonic() >= deadline:
+                raise admission_refusal(jobs.ADMISSION_TIMEOUT_REFUSAL)
+            sonarr_sync.reserved_starts.update(slots)
+            pending.update(slots)
+
+    try:
+        store = sonarr_sync.job_store() if requests else None
+        if store is not None:
+            snapshot = sonarr_sync.ensure_durable_store_migrated(store)
+            results.extend(result for result in check(snapshot) if result is not None)
+        if audio_add or len(results) != len(requests):
+            try:
+                check_new_job()
+            except web.HTTPException as error:
+                refusal = error
+        with sonarr_sync.jobs_lock:
+            if store is not None and len(results) != len(requests):
+                store._update(merge, before_write=reserve)
+            if audio_batch is not None and audio_batch not in pending:
+                reserve()
+        for (ids, options), result in zip(groups, results):
+            if isinstance(result, jobs.Added):
+                pending.remove(result.job_id)
+                start_admitted_download(result, ids, **options)
+        if audio_add is not None and audio_batch is not None:
+            add_audio_soon(*audio_add, batch=audio_batch)
+    except jobs.LegacyQueueConversionError:
+        raise admission_refusal(jobs.ADMISSION_MIGRATION_REFUSAL) from None
+    except jobs.JobStoreError:
+        raise admission_refusal(jobs.ADMISSION_PERSISTENCE_FAILURE) from None
+    finally:
+        for job_id in pending:
+            sonarr_sync.release_reserved_start(job_id)
+
+    if len(results) <= 1:
+        return {"outcome": results[0].outcome, "job_id": results[0].job_id} if results else {}
+    return {"outcome": "added" if any(isinstance(result, jobs.Added) for result in results) else "already_queued",
+            "job_ids": [result.job_id for result in results],
+            "jobs": [{"outcome": result.outcome, "job_id": result.job_id} for result in results]}
+
+
+async def admit_v1_audio_groups(groups: list[tuple[list[int], dict]], check_new_job: Callable[[], None],
+                                audio_add: tuple[list[int], str] | None = None) -> dict:
+    durable = run_sync is _durable_run_sync and add_audio_soon is _durable_add_audio_soon
+    if audio_add or (len(groups) > 1 and run_sync is _durable_run_sync):
+        cancelled = threading.Event()
+        deadline = time.monotonic() + ADMISSION_TIMEOUT
+        operation = asyncio.create_task(asyncio.to_thread(admit_v1_grouped_downloads, groups, check_new_job,
+                                                           deadline, cancelled, audio_add))
+        try:
+            result = await asyncio.wait_for(asyncio.shield(operation), ADMISSION_TIMEOUT)
+        except asyncio.TimeoutError:
+            cancelled.set()
+            result = await operation
+        except asyncio.CancelledError:
+            cancelled.set()
+            with suppress(web.HTTPException):
+                await operation
+            raise
+        return result if durable else {}
+    results = [await admit_v1_download(ids, check_new_job, **options) for ids, options in groups]
+    return results[0] if len(results) == 1 else {}
+
+
 async def download(request):
+    try:
+        return await _download(request)
+    except web.HTTPException as error:
+        error.text = no_credentials(error.text or error.reason)
+        error.headers.setdefault("X-Admission-Outcome", "refused")
+        error.headers.setdefault("X-Admission-Code", {
+            400: "invalid_request", 409: "still_on_serve", 429: "capacity", 502: "upstream_unavailable",
+        }.get(error.status, "refused"))
+        raise
+    except jobs.LegacyQueueConversionError:
+        raise admission_refusal(jobs.ADMISSION_MIGRATION_REFUSAL) from None
+    except jobs.JobStoreError:
+        raise admission_refusal(jobs.ADMISSION_PERSISTENCE_FAILURE) from None
+    except (requests.RequestException, UnshackleError) as error:
+        raise web.HTTPBadGateway(text=no_credentials(error) or "Unshackle could not be reached",
+                                 headers={"X-Admission-Outcome": "refused", "X-Admission-Code": "upstream_unavailable"}) from error
+
+
+async def _download(request):
     body = await json_object(request)
-    ids = body.get("episodeIds") or []
-    if not ids or not all(isinstance(i, int) and i > 0 for i in ids):
+    ids = body.get("episodeIds")
+    if not isinstance(ids, list) or not ids or not all(type(i) is int and i > 0 for i in ids):
         raise web.HTTPBadRequest(text="Pick at least one episode")
+    ids = list(dict.fromkeys(ids))
+    raw_numbering = body.get("numbering")
+    if raw_numbering is not None and (not isinstance(raw_numbering, dict) or any(
+        key in raw_numbering and not isinstance(raw_numbering[key], dict) for key in ("season_map", "episode_map")
+    )):
+        raise web.HTTPBadRequest(text="Download numbering must be an object with episode and season maps")
+    try:
+        numbering = check_numbering(raw_numbering, "this download") if raw_numbering is not None else None
+    except OverflowError as error:
+        raise web.HTTPBadRequest(text="Download numbering must contain finite whole numbers") from error
     replace = body.get("replace") is True
-    # For this download only: numbering and file names that stand in for the series' own, not saved
-    numbering = check_numbering(body["numbering"], "this download") if isinstance(body.get("numbering"), dict) else None
-    print(f"Download asked for {len(ids)} episode{'s' if len(ids) > 1 else ''}{', replacing files on disk' if replace else ''}"
-          f"{', with its own numbering' if numbering is not None else ''}", flush=True)
-    batch = str(body.get("batch") or "")  # a retry from a job: it stays in that job
-    if batch and not BATCH_ID.fullmatch(batch):
+    batch = body.get("batch", "")
+    if not isinstance(batch, str) or (batch and not BATCH_ID.fullmatch(batch)):
         raise web.HTTPBadRequest(text=UNKNOWN_JOB)
-    inst = sonarr_named(str(body.get("sonarr") or ""))  # episodes picked in another Sonarr: its ids, its ladder
-    if why := await asyncio.to_thread(on_sonarr, inst, cdm_refusal, ids):
-        raise web.HTTPBadRequest(text=why)
-    if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries
-        if numbering is None:
-            numbering = await asyncio.to_thread(retried_numbering, ids, batch, inst["name"] if inst else "")
-        replace = replace or await asyncio.to_thread(retried_replace, ids, batch, inst["name"] if inst else "")
-    audio = await asyncio.to_thread(retried_audio, ids, batch, inst["name"] if inst else "") if body.get("retry") is True else ""
-    if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
-        raise web.HTTPConflict(text=why)
-    if batch and not inst:  # the job still runs: in its queue (retries next, in order), one download at a time
-        first = body.get("retry") is True  # each put next: the last one first, so they run in the order picked
-        left = [i for i in (ids[::-1] if first else ids) if not await join_job(batch, i, replace, first=first)]  # main Sonarr's ids
-        if not left:
-            return web.json_response({"running": True})
-        ids = left[::-1] if first else left
-    room_for_one_more()
-    run_sync(ids, replace=replace, kind="retry" if body.get("retry") is True else "manual", numbering=numbering, batch=batch or None,
-             sonarr=inst["name"] if inst else "", **({"audio": audio} if audio else {}))
-    return web.json_response({"running": True})
+    sonarr_name = body.get("sonarr", "")
+    if not isinstance(sonarr_name, str):
+        raise web.HTTPBadRequest(text="Choose a Sonarr instance by name")
+    inst = sonarr_named(sonarr_name)
+
+    def check_new_job() -> None:
+        if why := on_sonarr(inst, cdm_refusal, ids):
+            raise web.HTTPBadRequest(text=why)
+        if why := still_on_serve(ids, sonarr_name):
+            raise web.HTTPConflict(text=why)
+
+    retry = body.get("retry") is True
+    if retry and numbering is None:
+        numbering = await asyncio.to_thread(retried_numbering, ids, batch, sonarr_name)
+    if retry and not replace:
+        replace = await asyncio.to_thread(retried_replace, ids, batch, sonarr_name)
+    audio = await asyncio.to_thread(retried_audio, ids, batch, sonarr_name) if retry else ""
+    kind = "retry" if retry else "manual"
+    normalized = download_request(ids, sonarr_name, kind, replace, numbering, **({"audio": audio} if audio else {}))
+    store = await asyncio.to_thread(sonarr_sync.job_store)
+    await asyncio.to_thread(sonarr_sync.ensure_durable_store_migrated, store)
+    previous = await asyncio.to_thread(store.get_job, batch) if batch else None
+    if retry and previous:
+        if jobs.activity_retry_duplicate(previous, normalized):
+            return web.json_response({"running": True, "outcome": "already_queued", "job_id": batch})
+        await asyncio.to_thread(check_new_job)
+        task = asyncio.create_task(retry_download(store, normalized, batch, ids, replace, numbering, sonarr_name, audio))
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            await asyncio.gather(task, return_exceptions=True)
+            raise
+
+    result = await request_admission(store, normalized, batch if previous is None else "", ids,
+                                     check_new_job=check_new_job,
+                                     replace=replace, kind=kind, numbering=numbering, sonarr=sonarr_name, audio=audio)
+    if isinstance(result, jobs.Refused):
+        raise admission_refusal(result)
+    return web.json_response({"running": True, "outcome": result.outcome, "job_id": result.job_id})
+
+
+async def retry_download(store: jobs.JobStore, normalized: jobs.NormalizedJobRequest, batch: str, ids: list[int],
+                         replace: bool, numbering: dict | None, sonarr_name: str, audio: str) -> web.Response:
+    staged = await asyncio.to_thread(stage_activity_retry, store, batch, normalized)
+    if isinstance(staged, jobs.AlreadyQueued):
+        return web.json_response({"running": True, "outcome": staged.outcome, "job_id": batch})
+    reserved, before, updated = staged
+    unstarted = {item.id for item in normalized.items}
+    try:
+        remaining = []
+        for i in reversed(ids):
+            if await join_job(batch, i, replace, sonarr_name, first=True):
+                unstarted.discard(jobs.episode_item(sonarr_name or None, i).id)
+            else:
+                remaining.append(i)
+        if remaining:
+            if not reserved:
+                reserved = await asyncio.to_thread(reserve_activity_retry, batch)
+            reserved = False
+            await asyncio.to_thread(start_admitted_download, jobs.Added(batch), list(reversed(remaining)),
+                                    replace=replace, kind="retry", numbering=numbering, sonarr=sonarr_name, audio=audio)
+    except Exception:
+        await asyncio.to_thread(rollback_activity_retry, store, before, updated, unstarted)
+        raise
+    finally:
+        if reserved:
+            sonarr_sync.release_reserved_start(batch)
+    return web.json_response({"running": True, "outcome": "added", "job_id": batch})
+
+
+def reserve_activity_retry(batch: str) -> bool:
+    with sonarr_sync.jobs_lock:
+        if batch in sonarr_sync.running_jobs:
+            return False
+        if not sonarr_sync.reserve_start(batch, ASKED_AT_ONCE):
+            raise admission_refusal(jobs.ADMISSION_CAPACITY_REFUSAL)
+        return True
+
+
+def stage_activity_retry(store: jobs.JobStore, batch: str, normalized: jobs.NormalizedJobRequest
+                         ) -> tuple[bool, jobs.DownstreamJob, jobs.DownstreamJob] | jobs.AlreadyQueued:
+    reserved = False
+
+    def reserve() -> None:
+        nonlocal reserved
+        if batch not in sonarr_sync.running_jobs:
+            if not sonarr_sync.reserve_start(batch, ASKED_AT_ONCE):
+                raise admission_refusal(jobs.ADMISSION_CAPACITY_REFUSAL)
+            reserved = True
+
+    with sonarr_sync.jobs_lock:
+        try:
+            staged = store.stage_activity_retry(batch, normalized, reserve=reserve)
+        except Exception as error:
+            if reserved:
+                sonarr_sync.release_reserved_start(batch)
+            if not isinstance(error, jobs.JobStoreError) or not isinstance(error.__cause__, ValueError):
+                raise
+            raise admission_refusal(jobs.Refused("retry_conflict",
+                "Only failed items in this job can be retried. Reload Activity to see their current state.", batch)) from None
+        if isinstance(staged, jobs.AlreadyQueued):
+            return staged
+        if isinstance(staged, jobs.Refused):
+            raise admission_refusal(staged)
+        before, updated = staged
+        if updated.state == "paused":
+            sonarr_sync.paused_jobs.add(batch)
+        return reserved, before, updated
+
+
+def rollback_activity_retry(store: jobs.JobStore, before: jobs.DownstreamJob,
+                            staged: jobs.DownstreamJob, item_ids: set[str]) -> None:
+    with sonarr_sync.jobs_lock:
+        restored = store.rollback_activity_retry(before, staged, item_ids)
+        if restored is not None and restored.state in jobs.TERMINAL_JOB_STATES:
+            sonarr_sync.paused_jobs.discard(restored.id)
 
 
 MISSING_SERIES_TTL = 15.0  # statistics fresh enough to skip episode fetches for complete series
@@ -6195,7 +7006,10 @@ def cards_on_disk() -> list[dict]:
     written whole and renamed in, which changes it), and always within 2 s of a change: a coarse clock
     may not tell two saves apart. The page and the job terminal ask for them every few seconds."""
     global cards_read
-    stamp = sonarr_sync.RUNS_DIR.stat().st_mtime_ns
+    try:
+        stamp = sonarr_sync.RUNS_DIR.stat().st_mtime_ns
+    except FileNotFoundError:
+        return []
     if stamp != cards_read[0] or time.time_ns() - stamp < 2_000_000_000:
         cards = []
         for path in sorted(sonarr_sync.RUNS_DIR.glob("*.json"), reverse=True):
@@ -6520,7 +7334,7 @@ async def send_log(ws, run_id: str) -> None:
         await asyncio.sleep(0.25)
 
 
-BATCH_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{6}")
+BATCH_ID = jobs.BATCH_ID_PATTERN
 
 
 async def terminal(request):
@@ -6918,43 +7732,49 @@ async def v1_start_download(request):
         raise web.HTTPBadRequest(text='Give "episodeIds", or "tvdbId" and "episodes" such as ["S01E02"]')
     if len(ids) > 100:
         raise web.HTTPBadRequest(text="At most 100 episodes at a time")
-    if why := await asyncio.to_thread(on_sonarr, inst, cdm_refusal, ids):
-        raise web.HTTPBadRequest(text=why)
+    sonarr_name = inst["name"] if inst else ""
+
+    @functools.cache
+    def check_new_job() -> None:
+        if why := on_sonarr(inst, cdm_refusal, ids):
+            raise web.HTTPBadRequest(text=no_credentials(why))
+        if why := still_on_serve(ids, sonarr_name):
+            raise web.HTTPConflict(text=no_credentials(why))
+
     numbering = None
     if body.get("retry") is True:  # the same numbering, and Replace anyway, as the attempt it retries: as the page's Retry
-        if not (alike := await asyncio.to_thread(retried_alike, ids, inst["name"] if inst else "")):
+        if not (alike := await asyncio.to_thread(retried_alike, ids, sonarr_name)):
             raise web.HTTPBadRequest(text="These episodes were last tried with different numbering, Replace anyway, or audio language. Retry them separately.")
         numbering, replace, audio = alike[0], replace or alike[1], audio or alike[2]
-    if why := await asyncio.to_thread(still_on_serve, ids, inst["name"] if inst else ""):
-        raise web.HTTPConflict(text=why)
-    room_for_one_more()
-    common = {**({"kind": "retry"} if body.get("retry") is True else {}), **({"sonarr": inst["name"]} if inst else {}),
+    common = {**({"kind": "retry"} if body.get("retry") is True else {}), **({"sonarr": sonarr_name} if inst else {}),
               **({"proxy": proxy} if proxy else {}), **({"video": video} if video else {}),
               **({"numbering": numbering} if numbering is not None else {})}
     if not audio:
-        run_sync(ids, **common, **({"replace": True} if replace else {}))
-        return web.json_response({"queued": len(ids)})
+        result = await admit_v1_download(ids, check_new_job, **common, **({"replace": True} if replace else {}))
+        return web.json_response({"queued": len(ids), **result})
     # that language just came on the service: DownStream decides per episode from the file Sonarr has
     eps = await asyncio.to_thread(on_sonarr, inst, lambda: sonarr_sync.sonarr_get("episode", episodeIds=ids, includeSubresources="episodeFile"))
     kinds = {e["id"]: file_speaks(e, audio) for e in eps}
     fresh, again, lacking = ([i for i in ids if kinds.get(i) is k] for k in (None, True, False))
     common["audio"] = audio  # each download asks it first, the series' own after it, and accepts it
+    groups = []
     if fresh:
-        run_sync(fresh, **common)
+        groups.append((fresh, common))
     if again:
-        run_sync(again, **common, replace=True)
-    if lacking:  # the audio upgrade setting: the track added to each file, or the episodes again, in one job
-        if sonarr_sync.SETTINGS.get("upgrade_mode") == "add_track" and not inst and not common.get("video") and not proxy:
-            add_audio_soon(lacking, audio)
-        else:
-            run_sync(lacking, **common, replace=True, **({} if body.get("retry") is True else {"kind": "upgrade"}))
-    return web.json_response({"queued": len(ids), "downloaded": len(fresh), "replaced": len(again), "audio_added": len(lacking)})
+        groups.append((again, {**common, "replace": True}))
+    add_track = lacking and sonarr_sync.SETTINGS.get("upgrade_mode") == "add_track" and not inst and not video and not proxy
+    if lacking and not add_track:
+        kind = "retry" if body.get("retry") is True else "upgrade"
+        groups.append((lacking, {**common, "replace": True, "kind": kind}))
+    admission = await admit_v1_audio_groups(groups, check_new_job, (lacking, audio) if add_track else None)
+    return web.json_response({"queued": len(ids), "downloaded": len(fresh), "replaced": len(again), "audio_added": len(lacking),
+                              **admission})
 
 
 async def v1_stop(request):
     """Stop a download: one running is cancelled, one still queued leaves the queue."""
     if m := re.fullmatch(r"waiting-(\d+)", request.match_info["run_id"]):
-        card = sonarr_sync.take_out(int(m[1]))
+        card = await asyncio.to_thread(sonarr_sync.take_out, int(m[1]))
         if card is None:
             raise web.HTTPConflict(text="This download has already started")
         await asyncio.to_thread(sonarr_sync.cancel_queued, card)
@@ -7366,54 +8186,127 @@ async def security_headers(request, response):
 
 
 def resume_queue() -> int:
-    """The jobs a restart stopped, queued again in the order they were picked, a paused one still paused."""
+    store = sonarr_sync.job_store()
+    backends: dict[str, str] | None = None
+
+    def probe(_job: jobs.DownstreamJob, child: jobs.JobChild) -> jobs.AttemptObservation:
+        nonlocal backends
+        if backends is None:
+            backends = {}
+            for card in cards_on_disk():
+                entry = card.get("unconfirmed_job") or card
+                if entry.get("job_id"):
+                    backends.setdefault(entry["job_id"], entry.get("backend") or "")
+        return sonarr_sync.probe_attempt(child, backends.get(child.attempt_job_id or ""))
+
     try:
-        jobs = json.loads(sonarr_sync.QUEUE_FILE.read_text())
-    except (OSError, ValueError):
+        records = sonarr_sync.ensure_durable_store_migrated(store)
+        if any(child.attempt_job_id or child.submission or child.state in ("queued", "downloading", "interrupted")
+               for record in records if record.state in jobs.ACTIVE_JOB_STATES for child in record.children):
+            records = store.reconcile_startup(probe)
+        sonarr_sync.pause_all_active, held = store.pause_state()
+        sonarr_sync.paused_jobs.update(held)
+    except (jobs.LegacyQueueConversionError, jobs.JobStoreError) as error:
+        print(f"Could not restore the download queue: {no_credentials(error)}", flush=True)
         return 0
-    n = 0
-    # one entry per sync of a job; the release before wrote one per job, a dict: read as a job of one sync
-    syncs = [(batch, place, job) for batch, entries in (sorted(jobs.items()) if isinstance(jobs, dict) else [])
-             for place, job in enumerate([entries] if isinstance(entries, dict) else entries if isinstance(entries, list) else [])
-             if isinstance(job, dict)]
-    for batch, place, job in syncs:
-        ids = [i for i in job.get("episodes") or [] if isinstance(i, int) and i > 0]
-        if not ids or not BATCH_ID.fullmatch(batch):
+
+    count = 0
+    grouped_jobs = []
+    watched = None
+    answered_audio: set[int] = set()
+    for record in records:
+        if record.state not in jobs.ACTIVE_JOB_STATES:
             continue
-        key = (batch, place)
-        try:  # its own numbering, keys as the sync reads them (JSON made the season numbers text)
-            numbering = check_numbering(job["numbering"], f"job {batch}") if isinstance(job.get("numbering"), dict) else None
-        except web.HTTPBadRequest as e:  # a damaged entry: not downloaded by the series' numbering, kept in the file
-            print(f"Job {batch} not picked up again: {e.text}", flush=True)
+        if record.state == "paused" or sonarr_sync.pause_all_active:
+            sonarr_sync.paused_jobs.add(record.id)
+        effective = record.request.runtime_options()
+        if isinstance(override := effective.get("options"), dict):
+            sonarr_sync.job_options[record.id] = override
+        per_item = effective.pop("item_options", {})
+        groups: list[tuple[dict, list[int]]] = []
+        for child in record.children:
+            if child.state not in jobs.ACTIVE_CHILD_STATES or (episode_id := child.request.sonarr_episode_id) is None:
+                continue
+            override = per_item.get(child.request.id) if isinstance(per_item, dict) else None
+            group = {"sonarr": record.request.sonarr, **(override if isinstance(override, dict) else effective)}
+            if effective.get("kind") == "audio_add":
+                if group.get("asked") is True:
+                    continue
+                if watched is None:
+                    with sonarr_sync.upgrades_lock:
+                        watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+                if audio_confirmation_pending(watched, episode_id):
+                    if group.get("kind") == "audio_add" and group.get("anyway") is not True:
+                        continue
+                    if group.get("kind") == "upgrade" or group.get("anyway") is True:
+                        answered_audio.add(episode_id)
+            if groups and groups[-1][0] == group:
+                groups[-1][1].append(episode_id)
+            else:
+                groups.append((group, [episode_id]))
+        if groups:
+            first_kind = groups[0][0].get("kind")
+            if first_kind != "audio_add":
+                sonarr_sync.number_job(record.id, first_kind == "retry")
+            grouped_jobs.append((record.id, groups))
+    if answered_audio:
+        with sonarr_sync.upgrades_lock:
+            watched = read_json(sonarr_sync.UPGRADES_FILE, {})
+            for episode_id in answered_audio:
+                (watched.get(str(episode_id)) or {}).pop("asked", None)
+            write_atomic(sonarr_sync.UPGRADES_FILE, json.dumps(watched))
+        for episode_id in answered_audio:
+            sonarr_sync.close_question(f"audio:{episode_id}")
+    for batch, groups in grouped_jobs:
+        previous = None
+        audio_groups = [(group, ids) for group, ids in groups if group.get("kind") == "audio_add"]
+        if audio_groups:
             with sonarr_sync.jobs_lock:
-                sonarr_sync.restoring[key] = (None, job)
-            continue
-        if job.get("paused"):
-            sonarr_sync.paused_jobs.add(batch)
-        if isinstance(job.get("options"), dict):
-            sonarr_sync.job_options[batch] = job["options"]
-        print(f"Picking up job {batch} again: {len(ids)} episode{'s' if len(ids) > 1 else ''}{' (paused)' if job.get('paused') else ''}", flush=True)
-        sonarr_sync.restoring[key] = (None, job)  # kept in the file until it runs; before it starts, as it may run at once
-        thread = run_sync(list(dict.fromkeys(ids)), replace=job.get("replace") is True, kind=job.get("kind") or "manual",
-                          numbering=numbering, batch=batch, sonarr=job.get("sonarr") or "", proxy=job.get("proxy") or "",
-                          video=job.get("video"), audio=job.get("audio") or "", restored=key)
-        with sonarr_sync.jobs_lock:
-            if key in sonarr_sync.restoring:  # not running yet: its thread, so save_queue can tell it never started
-                sonarr_sync.restoring[key] = (thread, job)
-        n += len(ids)
-    return n
+                if batch not in sonarr_sync.running_jobs and sonarr_sync.reserve_start(batch, ASKED_AT_ONCE):
+                    try:
+                        for group, ids in audio_groups:
+                            previous = start_audio_pass(ids, group["audio"], batch=batch, anyway=group.get("anyway") is True)
+                            count += len(ids)
+                        whole_group = {"sonarr": None, "kind": "upgrade", "replace": True}
+                        remaining_groups = []
+                        for group, ids in groups:
+                            language = group.get("audio") or ""
+                            if group == whole_group or group == {**whole_group, "audio": language}:
+                                audio_passes[batch].whole.update(dict.fromkeys(ids, language))
+                                count += len(ids)
+                            else:
+                                remaining_groups.append((group, ids))
+                        groups = remaining_groups
+                    finally:
+                        sonarr_sync.release_reserved_start(batch)
+        for group, ids in groups:
+            if group.get("kind") == "audio_add":
+                continue
+            if previous is not None:
+                started = run_sync(ids, replace=group.get("replace") is True, kind=group.get("kind") or "manual",
+                                   numbering=group.get("numbering"), batch=batch, sonarr=group.get("sonarr") or "",
+                                   proxy=group.get("proxy") or "", video=group.get("video"), audio=group.get("audio") or "",
+                                   after=previous)
+            else:
+                started = run_sync(ids, replace=group.get("replace") is True, kind=group.get("kind") or "manual",
+                                   numbering=group.get("numbering"), batch=batch, sonarr=group.get("sonarr") or "",
+                                   proxy=group.get("proxy") or "", video=group.get("video"), audio=group.get("audio") or "")
+            previous = started if isinstance(started, threading.Thread) else None
+            count += len(ids)
+    return count
+
+
+async def restore_queue(_app):
+    await asyncio.to_thread(resume_queue)
 
 
 async def watch_queue():
-    """The jobs' queue kept on disk every few seconds, so a restart (an update) loses no episode still to come."""
-    await asyncio.to_thread(resume_queue)
-    await asyncio.sleep(30)  # the jobs picked up have built their queue again: not written empty meanwhile
     last = None
     while True:
         try:
             last = await asyncio.to_thread(sonarr_sync.save_queue, last)
-        except OSError as e:
-            print(f"Could not keep the queue: {e}", flush=True)
+        except (OSError, jobs.LegacyQueueConversionError) as e:
+            print(f"Could not keep the queue: {no_credentials(e)}", flush=True)
         await asyncio.sleep(5)
 
 
@@ -7456,6 +8349,7 @@ app.cleanup_ctx.append(background(watch_service_lists))
 app.cleanup_ctx.append(background(watch_service_checks))
 app.cleanup_ctx.append(background(watch_updates))
 app.cleanup_ctx.append(background(watch_backups))
+app.on_startup.append(restore_queue)
 app.cleanup_ctx.append(background(watch_queue))
 app.add_routes([
     web.get("/", index),
@@ -7542,6 +8436,8 @@ app.add_routes([
     web.get("/api/inbox", inbox),
     web.post(r"/api/inbox/{action:read|clear}", inbox_action),
     web.post(r"/api/runs/{run_id}/stop", stop_run),
+    web.post("/api/jobs/pause-all", pause_all_jobs),
+    web.post("/api/jobs/resume-all", pause_all_jobs),
     web.post(r"/api/jobs/{batch}/stop", stop_job),
     web.delete(r"/api/jobs/{batch}", delete_job),
     web.post(r"/api/jobs/{batch}/{action:pause|resume}", pause_job),

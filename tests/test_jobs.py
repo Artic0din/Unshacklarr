@@ -207,7 +207,8 @@ def test_store_keeps_a_concurrent_save_after_rename(store: jobs.JobStore, monkey
         assert store.save([newer]) == (newer,)
 
     monkeypatch.setattr(os, "replace", save_after_replace)
-    assert store.save([first]) == (first,)
+    with pytest.raises(jobs.JobStoreError):
+        store.save([first])
     assert store.load() == (newer,)
 
 
@@ -611,7 +612,7 @@ def test_legacy_numbering_matches_resaved_queue(source: Path, store: jobs.JobSto
     entry = {"episodes": [3], "numbering": {"episode_offset": True, "season_offset": 2.0, "file_name": 7}}
     source.write_text(json.dumps({BATCH: entry}))
     monkeypatch.setattr(sync, "QUEUE_FILE", source)
-    monkeypatch.setattr(sync, "restoring", {})
+    monkeypatch.setattr(sync, "JOBS_FILE", store.path)
     monkeypatch.setattr(sync, "batch_jobs", {})
     started: list[object] = []
     monkeypatch.setattr(web, "run_sync", lambda ids, **kwargs: started.append(kwargs["numbering"]))
@@ -619,8 +620,8 @@ def test_legacy_numbering_matches_resaved_queue(source: Path, store: jobs.JobSto
     assert web.resume_queue() == 1
     assert started == [expected]
     sync.save_queue()
-    assert json.loads(source.read_bytes()) == {BATCH: [entry]}
-    job, = jobs.convert_legacy_queue_file(source, store)
+    assert json.loads(source.read_bytes()) == {BATCH: entry}
+    job, = store.load()
     assert job.request.effective_options["numbering"] == expected
 
 
@@ -902,7 +903,19 @@ def test_staging_keeps_an_interleaved_save(source: Path, store: jobs.JobStore, m
     assert source.read_bytes() == original
 
 
-def test_legacy_option_edit_keeps_staged_ids(source: Path, store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_legacy_option_edit_keeps_staged_ids(source: Path, store: jobs.JobStore) -> None:
+    staged = jobs.convert_legacy_queue_file(source, store)
+    options = {"options": {"--a-lang": "en"}, "service_options": {}}
+    source.write_text(json.dumps({**LEGACY, BATCH: {**LEGACY[BATCH], "options": options}}))
+
+    updated, later = jobs.convert_legacy_queue_file(source, store)
+    assert later == staged[1] and staged[0].id == updated.id == BATCH
+    assert [child.id for child in updated.children] == [child.id for child in staged[0].children]
+    assert updated.request.effective_options["options"] == options
+    assert json.loads(store.path.read_bytes())["staged_job_ids"] == [BATCH, LATER_BATCH]
+
+
+def test_live_option_edit_preserves_migrated_job_and_child_ids(source: Path, store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("UNSHACKLARR_DATA", str(source.parent))
     from unshacklarr import sync, web
 
@@ -913,7 +926,9 @@ def test_legacy_option_edit_keeps_staged_ids(source: Path, store: jobs.JobStore,
     assert not started
     assert web.resume_queue() == 3 and started == [([3, 4], True), ([7], False)]
     sync.save_queue()
-    assert json.loads(sync.QUEUE_FILE.read_bytes()) == {batch: [entry] for batch, entry in LEGACY.items()}
+    assert sync.QUEUE_FILE.read_bytes() == OLD_QUEUE
+    document = json.loads(store.path.read_bytes())
+    assert "staged_job_ids" not in document and "staged_baselines" not in document
     assert store.load() == staged
 
     monkeypatch.setattr(web, "known_services", lambda: None)
@@ -923,7 +938,312 @@ def test_legacy_option_edit_keeps_staged_ids(source: Path, store: jobs.JobStore,
     request = SimpleNamespace(method="POST", match_info={"batch": BATCH}, json=AsyncMock(return_value=body))
     assert asyncio.run(web.job_options(request)).status == 200
     sync.save_queue()
-    updated, later = jobs.convert_legacy_queue_file(source, store)
+    updated, later = store.migrate_legacy_queue(source)
     assert later == staged[1] and staged[0].id == updated.id == BATCH
     assert [child.id for child in updated.children] == [child.id for child in staged[0].children]
     assert updated.request.effective_options["options"] == {**body, "service_options": {}}
+
+
+def test_durable_admission_outcomes(store: jobs.JobStore) -> None:
+    assert store.admit(REQUEST, job_id=BATCH, now=CREATED).outcome == "added"
+    assert store.admit(REQUEST).outcome == "already_queued"
+    overlap = replace(REQUEST, effective_options={"replace": True})
+    refusal = store.admit(overlap)
+    assert isinstance(refusal, jobs.Refused) and refusal.code == "partial_overlap"
+    store.complete_child(BATCH, ITEM.id)
+    assert store.admit(overlap).outcome == "added"
+
+
+def test_live_migration_ignores_legacy_after_cutover(source: Path, store: jobs.JobStore) -> None:
+    source.write_bytes(OLD_QUEUE)
+    records = store.migrate_legacy_queue(source, converted_at=CONVERTED)
+    assert source.read_bytes() == OLD_QUEUE
+    source.write_bytes(b"broken")
+    assert store.migrate_legacy_queue(source) == records
+
+
+def test_live_migration_reads_queue_after_empty_staging(source: Path, store: jobs.JobStore) -> None:
+    source.write_text("{}")
+    assert jobs.convert_legacy_queue_file(source, store) == ()
+    assert store.path.is_file()
+    source.write_text(json.dumps({BATCH: LEGACY[BATCH]}))
+
+    migrated, = store.migrate_legacy_queue(source, converted_at=CONVERTED)
+    assert migrated.id == BATCH
+    assert [child.request.sonarr_episode_id for child in migrated.children] == [3, 4]
+    source.write_text(json.dumps({LATER_BATCH: LEGACY[LATER_BATCH]}))
+    assert jobs.JobStore(store.path).migrate_legacy_queue(source) == (migrated,)
+
+
+def test_missing_legacy_source_promotes_staged_records_and_keeps_pause(
+    source: Path, store: jobs.JobStore,
+) -> None:
+    first, later = jobs.convert_legacy_queue_file(source, store)
+    store.set_job_paused(later.id, True)
+    store.pause_all()
+    paused_first = store.get_job(first.id)
+    assert paused_first is not None
+    store.save([paused_first])
+    staged = json.loads(store.path.read_bytes())
+    assert staged["staged_job_ids"] == [first.id]
+    assert set(staged["staged_baselines"]) == {first.id}
+    assert "paused_job_ids" not in staged and staged["paused_all"] is True
+
+    source.unlink()
+    assert store.migrate_legacy_queue(source) == (paused_first,)
+    assert store.pause_state() == (True, ())
+    live = json.loads(store.path.read_bytes())
+    assert "staged_job_ids" not in live and "staged_baselines" not in live
+
+
+def test_missing_attempt_is_recovered_once(store: jobs.JobStore) -> None:
+    store.admit(REQUEST, job_id=BATCH, now=CREATED)
+    for attempt in ("first", "second"):
+        store.start_child_attempt(BATCH, ITEM.id, attempt)
+        records = store.reconcile_startup(lambda job, child: "missing")
+    child = records[0].children[0]
+    assert (child.state, child.interruption_count, child.attempt_job_id) == ("failed", 2, None)
+
+
+@pytest.mark.parametrize("document", [
+    b'{"schema_version": 1, "jobs": [], "jobs": []}',
+    b'{"schema_version": 1, "jobs": [], "paused_all": 1}',
+])
+def test_durable_store_rejects_ambiguous_documents(store: jobs.JobStore, document: bytes) -> None:
+    store.path.write_bytes(document)
+    with pytest.raises(jobs.JobStoreError):
+        store.load()
+    assert store.path.read_bytes() == document
+
+
+def test_active_failure_points_to_failed_child_and_retry_preserves_terminal_siblings(store: jobs.JobStore) -> None:
+    request = jobs.NormalizedJobRequest(None, None, tuple(jobs.episode_item(None, index) for index in range(1, 6)), {})
+    assert store.admit(request, job_id=BATCH) == jobs.Added(BATCH)
+    one, two, three, four, five = request.items
+    store.complete_child(BATCH, one.id)
+    store.cancel_child(BATCH, two.id)
+    store.fail_child(BATCH, three.id, SHARED_FAILURE)
+    failed = store.fail_child(BATCH, four.id, jobs.FailureClassification("child", "mux"))
+    assert failed.state == "paused"
+    refusal = store.admit(replace(request, items=(three,)))
+    assert isinstance(refusal, jobs.Refused)
+    assert (refusal.code, refusal.job_id, refusal.child_id) == ("active_failed_child", BATCH, failed.children[2].id)
+    retried = store.retry_item(BATCH, three.id)
+    assert [child.state for child in retried.children] == ["completed", "cancelled", "waiting", "failed", "waiting"]
+    retried = store.retry_failed(BATCH)
+    assert [child.state for child in retried.children] == ["completed", "cancelled", "waiting", "waiting", "waiting"]
+    assert retried.state == "paused"
+    for item in (three, four, five):
+        finished = store.complete_child(BATCH, item.id)
+    assert finished.state == "completed_with_errors"
+    assert isinstance(store.admit(request), jobs.Added)
+
+
+def test_retry_failed_refuses_completed_child_of_another_active_job(store: jobs.JobStore) -> None:
+    first, second = (jobs.episode_item(None, episode_id) for episode_id in (1, 2))
+    request = jobs.NormalizedJobRequest(None, None, (first,), {})
+    assert store.admit(request, job_id=BATCH) == jobs.Added(BATCH)
+    failed = store.fail_child(BATCH, first.id, jobs.FailureClassification("child", "download"))
+    assert store.admit(replace(request, items=(first, second)), job_id=LATER_BATCH) == jobs.Added(LATER_BATCH)
+    active = store.complete_child(LATER_BATCH, first.id)
+    assert [child.state for child in active.children] == ["completed", "waiting"]
+
+    with pytest.raises(jobs.JobStoreError, match="Cannot save job store"):
+        store.retry_failed(BATCH)
+    assert store.load() == (failed, active)
+
+
+def test_startup_observes_attempts_without_rewriting_unchanged_records(store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert store.admit(REQUEST, job_id=BATCH) == jobs.Added(BATCH)
+    queued = store.start_child_attempt(BATCH, ITEM.id, "serve-job")
+    assert queued.state == "running"
+    with monkeypatch.context() as patch:
+        patch.setattr(jobs, "write_atomic", lambda *args, **kwargs: pytest.fail("Should avoid writing unchanged records"))
+        assert store.reconcile_startup(lambda job, child: "unreachable") == (queued,)
+        assert store.reconcile_startup(lambda job, child: "queued") == (queued,)
+    observed, = store.reconcile_startup(lambda job, child: "completed")
+    assert observed.children[0].state == "downloading"
+    assert observed.children[0].attempt_job_id == "serve-job"
+    assert store.complete_child(BATCH, ITEM.id).state == "completed"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX directory sync")
+def test_failed_migration_sync_restores_staged_destination(source: Path, store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    jobs.convert_legacy_queue_file(source, store)
+    staged = store.path.read_bytes()
+    original = source.read_bytes()
+
+    sync = jobs._fsync_directory_fd
+
+    def fail_sync(fd: int) -> None:
+        if store.path.read_bytes() != staged:
+            raise OSError("directory sync failed")
+        sync(fd)
+
+    monkeypatch.setattr(jobs, "_fsync_directory_fd", fail_sync)
+    with pytest.raises(jobs.JobStoreError):
+        store.migrate_legacy_queue(source)
+    assert store.path.read_bytes() == staged
+    assert source.read_bytes() == original
+
+
+@pytest.mark.parametrize(("reason", "scope", "code"), [
+    ("Login failed", "shared", "provider_access"),
+    ("No CDM", "shared", "cdm_route"),
+    ("proxy check failed", "shared", "proxy"),
+    ("No space left on device", "shared", "storage"),
+    ("Permission denied writing downloads", "shared", "output_path"),
+    ("this is another episode, by its title", "child", "title"),
+    ("list-tracks failed", "child", "manifest"),
+    ("Widevine rejected the licence", "child", "licence"),
+    ("mp4decrypt failed", "child", "decrypt"),
+    ("mkvmerge failed", "child", "mux"),
+    ("ffprobe failed", "child", "decode"),
+])
+def test_download_failure_classification(reason: str, scope: str, code: str) -> None:
+    classified = jobs.classify_failure(reason)
+    assert (classified.scope, classified.code) == (scope, code)
+
+
+def test_files_403_do_not_pause_the_parent() -> None:
+    result = jobs.classify_failure("403 download failed (authentication required)", error_code="FILES_REFUSED")
+    assert result == jobs.FailureClassification("child", "download")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX directory sync")
+@pytest.mark.parametrize("existing", [False, True])
+def test_review_admission_rolls_back_after_rename(store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch,
+                                                existing: bool) -> None:
+    if existing:
+        store.save([JOB])
+    prior = store.path.read_bytes() if existing else None
+
+    sync = jobs._fsync_directory_fd
+
+    def fail_sync(fd: int) -> None:
+        if store.path.exists() and store.path.read_bytes() != prior:
+            raise OSError("directory sync failed")
+        sync(fd)
+
+    monkeypatch.setattr(jobs, "_fsync_directory_fd", fail_sync)
+    other = replace(REQUEST, items=(jobs.episode_item(None, 42),))
+    assert store.admit(other) == jobs.ADMISSION_PERSISTENCE_FAILURE
+    assert (store.path.read_bytes() if store.path.exists() else None) == prior
+
+
+@pytest.mark.parametrize("unreadable", [False, True])
+def test_review_mutation_rolls_back_after_failed_readback(store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch,
+                                                          unreadable: bool) -> None:
+    store.admit(REQUEST, job_id=BATCH)
+    original = store.path.read_bytes()
+    read = jobs._read_bytes
+    calls = 0
+
+    def read_once_incorrectly(target: Path) -> bytes | None:
+        nonlocal calls
+        calls += 1
+        if unreadable and calls >= 3:
+            raise OSError("read-back unavailable")
+        return b"invalid read-back" if calls == 3 else read(target)
+
+    monkeypatch.setattr(jobs, "_read_bytes", read_once_incorrectly)
+    with pytest.raises(jobs.JobStoreError):
+        store.complete_child(BATCH, ITEM.id)
+    assert store.path.read_bytes() == original
+
+
+def test_review_completed_item_still_belongs_to_active_parent(store: jobs.JobStore) -> None:
+    request = replace(REQUEST, items=(ITEM, jobs.episode_item(None, 4)))
+    store.admit(request, job_id=BATCH)
+    store.complete_child(BATCH, ITEM.id)
+    assert store.admit(request) == jobs.AlreadyQueued(BATCH)
+    overlap = store.admit(REQUEST)
+    assert isinstance(overlap, jobs.Refused) and overlap.code == "partial_overlap"
+
+
+def test_review_legacy_queue_rejects_duplicate_json_keys() -> None:
+    with pytest.raises(jobs.LegacyQueueConversionError):
+        jobs.convert_legacy_queue(f'{{"{BATCH}":{{"episodes":[3],"episodes":[4]}}}}')
+
+
+def test_review_explicit_pause_survives_running_child(store: jobs.JobStore) -> None:
+    request = replace(REQUEST, items=(ITEM, jobs.episode_item(None, 4)))
+    store.admit(request, job_id=BATCH)
+    store.start_child_attempt(BATCH, ITEM.id, "attempt")
+    store.set_job_paused(BATCH, True)
+    assert store.mark_child_downloading(BATCH, ITEM.id).state == "running"
+    store = jobs.JobStore(store.path)
+    finished = store.complete_child(BATCH, ITEM.id)
+    assert finished.state == "paused"
+    assert json.loads(store.path.read_bytes())["paused_job_ids"] == [BATCH]
+    store.resume_all()
+    assert "paused_job_ids" not in json.loads(store.path.read_bytes())
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX directory sync")
+@pytest.mark.parametrize(("operation", "fallback"), [
+    ("admit", "empty"), ("admit", "in_place"), ("admit", "replace"),
+    ("admit", "backup"), ("pause", "replace"),
+])
+def test_admission_double_fault_never_leaves_candidate(
+    store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch, operation: str, fallback: str,
+) -> None:
+    if fallback != "empty":
+        assert store.admit(REQUEST, job_id=BATCH) == jobs.Added(BATCH)
+    prior = store.load()
+    original = store.path.read_bytes() if prior else None
+    write = jobs.write_atomic
+    sync = jobs._fsync_directory_fd
+    candidate_written = False
+
+    def fail_rollback(target: Path, data: str | bytes, *, mode: int) -> None:
+        nonlocal candidate_written
+        if data == original:
+            raise OSError("atomic rollback failed")
+        write(target, data, mode=mode)
+        if target == store.path:
+            candidate_written = True
+
+    def fail_sync(fd: int) -> None:
+        if candidate_written:
+            raise OSError("directory sync failed")
+        sync(fd)
+
+    opened = Path.open
+
+    def open_target(path: Path, mode: str = "r", *args: object, **kwargs: object):
+        if path == store.path and mode == "r+b" and fallback != "in_place":
+            raise OSError("in-place rollback failed")
+        return opened(path, mode)
+
+    backup = store.path.with_name(f"{store.path.name}.bak")
+    atomic_replace = os.replace
+
+    def fail_backup_replace(source: str | Path, target: str | Path) -> None:
+        if Path(source) == backup and Path(target) == store.path:
+            raise OSError("backup rename failed")
+        atomic_replace(source, target)
+
+    monkeypatch.setattr(jobs, "_fsync_directory_fd", fail_sync)
+    monkeypatch.setattr(jobs, "write_atomic", fail_rollback)
+    monkeypatch.setattr(Path, "open", open_target)
+    if fallback == "backup":
+        monkeypatch.setattr(os, "replace", fail_backup_replace)
+
+    other = replace(REQUEST, items=(jobs.episode_item(None, 42),))
+    if operation == "admit":
+        assert store.admit(other) == jobs.ADMISSION_PERSISTENCE_FAILURE
+    else:
+        with pytest.raises(jobs.JobStoreError):
+            store.pause_all()
+    assert store.load() == prior
+    assert jobs.JobStore(store.path).load() == prior
+    if fallback == "backup":
+        assert not store.path.exists() and backup.read_bytes() == original
+        monkeypatch.undo()
+        assert isinstance(store.admit(other), jobs.Added)
+        assert jobs.JobStore(store.path).load()[0] == prior[0] and not backup.exists()
+    elif prior:
+        assert store.path.read_bytes() == original and not backup.exists()
+    else:
+        assert not store.path.exists() and not backup.exists()

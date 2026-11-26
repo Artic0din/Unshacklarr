@@ -4159,12 +4159,19 @@ def test_a_download_asked_in_one_audio_language_asks_it_first_and_accepts_it(tmp
 
     def download(payload, run=None):
         downloads.append(payload)
-        queued.extend([c.get("audio_override") for c in sync.waiting.values()] + [e.get("audio") for jobs in sync.queue_snapshot().values() for e in jobs])
+        queued.extend(c.get("audio_override") for c in sync.waiting.values())
+        if run and (job := sync.job_store().get_job(run.card.get("batch"))):
+            if any(child.state == "waiting" and child.request.sonarr_episode_id != run.card["episodeId"] for child in job.children):
+                queued.append(job.request.runtime_options().get("audio"))
         out = Path(payload["output_dir"])
         out.mkdir(parents=True, exist_ok=True)
         (out / "Show.mkv").touch()
     monkeypatch.setattr(sync, "run_job_retrying", download)
-    sync.sync(config, {}, [episode(111, 2, 5), episode(111, 2, 6)], manual=True, kind="manual", audio="fr")
+    from unshacklarr import jobs
+    selected = [episode(111, 2, n) for n in (5, 6)]
+    request = jobs.NormalizedJobRequest(None, None, tuple(jobs.episode_item(None, ep["id"]) for ep in selected), {"audio": "fr"})
+    added = sync.job_store().admit(request)
+    sync.sync(config, {}, selected, manual=True, kind="manual", audio="fr", batch=added.job_id)
     assert [d["a_lang"] for d in downloads] == [["fr", "en"]] * 2
     assert accepted == [["fr", "en"]] * 2
     assert queued == ["fr", "fr"]  # the queued card and the job on disk keep it, for a queue again and a restart
@@ -4574,7 +4581,6 @@ def test_episodes_catch_up_and_download_name_another_sonarr(tmp_path, monkeypatc
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: asked.append(("cdm", (web.sonarr_sync.instance() or {}).get("name"))) or "")
     started = []
     monkeypatch.setattr(web, "run_sync", lambda ids, **kw: started.append(kw.get("sonarr")))
-    monkeypatch.setattr(web, "room_for_one_more", lambda: None)
     web.app._middlewares = type(web.app._middlewares)([web.same_origin_only])  # logged in, for this test
     h = {"X-Unshackle": "1"}
 
@@ -6726,96 +6732,50 @@ def test_a_ladder_picks_a_language_every_part_of_the_episode_has(tmp_path, monke
     assert [d.get("a_lang") for d in downloads] == [["en"]]
 
 
-def test_a_job_queued_with_an_empty_numbering_keeps_it_across_a_restart(tmp_path, monkeypatch):
-    # numbering {} sets the series' season maps and offsets aside; dropped from queue.json, they would apply again
+@pytest.mark.parametrize("numbering", [None, {}])
+def test_migrated_numbering_survives_second_restart(tmp_path, monkeypatch, numbering):
     sync = load(tmp_path, monkeypatch)
-    stub = object()
-    monkeypatch.setitem(sync.batch_jobs, "J", [{"episodes": [{"id": 5}], "stubs": {5: stub}, "numbering": {}, "kind": "manual"}])
-    monkeypatch.setitem(sync.waiting, 5, stub)
-    assert sync.queue_snapshot()["J"][0]["numbering"] == {}
-    monkeypatch.setitem(sync.batch_jobs, "J", [{"episodes": [{"id": 5}], "stubs": {5: stub}, "kind": "manual"}])
-    assert "numbering" not in sync.queue_snapshot()["J"][0]  # none given: the series' own, as before
+    batch = "20261021-121217-33d6d0"
+    entry = {"episodes": [5], "kind": "manual"}
+    if numbering is not None:
+        entry["numbering"] = numbering
+    legacy = json.dumps({batch: entry})
+    sync.QUEUE_FILE.write_text(legacy)
+    records = sync.job_store().migrate_legacy_queue(sync.QUEUE_FILE)
+    assert records[0].request.runtime_options().get("numbering") == numbering
+    assert sync.save_queue() == sync.JOBS_FILE.read_text()
+    assert sync.QUEUE_FILE.read_text() == legacy
+    assert sync.job_store().migrate_legacy_queue(sync.QUEUE_FILE) == records
 
 
-def test_a_sync_still_to_start_after_a_restart_is_saved_with_its_jobs_live_pause_and_options(tmp_path, monkeypatch):
-    # One sync of the job resumed, another could not start: resuming the job or changing its options must not be
-    # undone by the waiting one's old pause and options at the next restart
+@pytest.mark.parametrize("paused, extra", [(True, {"replace": True, "numbering": {}}), (False, {"kind": "manual"})])
+def test_saved_job_keeps_pause_and_options_across_restart(tmp_path, monkeypatch, paused, extra):
     sync = load(tmp_path, monkeypatch)
-    entry = {"episodes": [7], "paused": True, "options": {"options": {"--a-lang": ["fr"]}}, "replace": True, "numbering": {}}
-    monkeypatch.setitem(sync.restoring, ("B", 1), (None, entry))
-    monkeypatch.setitem(sync.batch_jobs, "B", [{"episodes": [], "stubs": {}}])  # the job's other sync, running
-    monkeypatch.setitem(sync.job_options, "B", {"options": {"--a-lang": ["de"]}})  # changed since, and resumed
+    batch = "20261021-121217-33d6d0"
+    entry = {"episodes": [7], "paused": paused, "options": {"options": {"--a-lang": ["fr"]}}, **extra}
+    legacy = json.dumps({batch: [entry]})
+    sync.QUEUE_FILE.write_text(legacy)
+    store = sync.job_store()
+    store.migrate_legacy_queue(sync.QUEUE_FILE)
+    sync.pause_job(batch, not paused)
+    override = {"options": {"--a-lang": ["de"]}}
+    store.set_job_options(batch, override)
     sync.save_queue()
-    saved = {"episodes": [7], "paused": False, "options": {"options": {"--a-lang": ["de"]}}, "replace": True, "numbering": {}}
-    assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [saved]}
-    sync.batch_jobs.pop("B")  # the running sync over: the waiting one keeps what the job had last
-    sync.save_queue()
-    assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [saved]}
+    job, = store.migrate_legacy_queue(sync.QUEUE_FILE)
+    assert job.state == ("waiting" if paused else "paused")
+    assert job.request.runtime_options()["options"] == override
+    assert job.children[0].request.sonarr_episode_id == 7
+    assert sync.QUEUE_FILE.read_text() == legacy
 
 
-def test_a_sync_still_to_start_keeps_a_pause_and_options_given_just_before_the_jobs_last_sync_ended(tmp_path, monkeypatch):
-    # Paused and set to German, then the job's running sync ends before the next save: the sync that could not
-    # start must not come back after a restart unpaused and in French
+def test_a_worker_starting_during_save_cannot_drop_its_job(tmp_path, monkeypatch):
     sync = load(tmp_path, monkeypatch)
-    entry = {"episodes": [7], "paused": False, "options": {"options": {"--a-lang": ["fr"]}}, "kind": "manual"}
-    monkeypatch.setitem(sync.restoring, ("B", 1), (None, entry))
-    monkeypatch.setitem(sync.job_options, "B", {"options": {"--a-lang": ["fr"]}})
-
-    def run_episodes(*a, **k):  # while it downloads, after the last save
-        sync.pause_job("B", True)
-        sync.job_options["B"] = {"options": {"--a-lang": ["de"]}}
-        return 0
-
-    monkeypatch.setattr(sync, "run_episodes", run_episodes)
-    sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
-    sync.save_queue()
-    assert json.loads(sync.QUEUE_FILE.read_text()) == {"B": [{**entry, "paused": True, "options": {"options": {"--a-lang": ["de"]}}}]}
-
-
-def test_a_pause_given_before_the_jobs_last_running_sync_ends_holds_for_a_sync_of_it_still_starting(tmp_path, monkeypatch):
-    # Two syncs of a job picked up after a restart: one ends, paused, while the other still fetches its episodes. The
-    # other must start paused, not download its queue without the job being resumed
-    sync = load(tmp_path, monkeypatch)
-    monkeypatch.setitem(sync.restoring, ("B", 1), (None, {"episodes": [7], "kind": "manual"}))
-    seen = []
-    monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: sync.pause_job("B", True) or 0)
-    sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
-    monkeypatch.setattr(sync, "run_episodes", lambda *a, **k: seen.append("B" in sync.paused_jobs) or 0)
-    try:
-        sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B", restored=("B", 1))
-        assert seen == [True]
-        assert "B" not in sync.paused_jobs  # the job's last sync over: nothing left to pause
-    finally:
-        sync.paused_jobs.discard("B")
-
-
-def test_a_sync_picked_up_again_starting_while_the_queue_is_saved_is_not_left_out(tmp_path, monkeypatch):
-    # It starts between the running jobs and the waiting ones being read: one read for both, or it is in neither
-    sync = load(tmp_path, monkeypatch)
-    lock, started = threading.Lock(), []
-    stub, job = object(), {"episodes": [{"id": 7}], "stubs": {}}
-
-    class Lock:
-        def __enter__(self):
-            lock.acquire()
-
-        def __exit__(self, *exc):
-            lock.release()
-            if not started:  # the sync picked up again takes its place in the jobs right after the first read
-                started.append(True)
-                with lock:
-                    job["stubs"][7] = sync.waiting[7] = stub
-                    sync.batch_jobs["B"] = [job]
-                    sync.restoring.pop(("B", 0))
-
-    monkeypatch.setattr(sync, "jobs_lock", Lock())
-    monkeypatch.setitem(sync.restoring, ("B", 0), (None, {"episodes": [7], "kind": "manual"}))
-    try:
-        sync.save_queue()
-        assert [e["episodes"] for e in json.loads(sync.QUEUE_FILE.read_text())["B"]] == [[7]]
-    finally:
-        sync.batch_jobs.pop("B", None)
-        sync.waiting.pop(7, None)
+    batch = "20261021-121217-33d6d0"
+    sync.QUEUE_FILE.write_text(json.dumps({batch: [{"episodes": [7], "kind": "manual"}]}))
+    record, = sync.job_store().migrate_legacy_queue(sync.QUEUE_FILE)
+    sync.batch_jobs[batch] = [{"episodes": [{"id": 7}], "stubs": {}}]
+    assert sync.save_queue() == sync.JOBS_FILE.read_text()
+    assert sync.job_store().load() == (record,)
 
 
 def test_a_paused_job_stays_paused_and_running_while_another_sync_of_it_still_downloads(tmp_path, monkeypatch):
@@ -6844,10 +6804,6 @@ def test_a_jobs_own_options_stay_while_another_sync_of_it_still_downloads(tmp_pa
     sync.sync(sync.read_file(), {}, [], manual=True, kind="retry", batch="B")
     assert sync.job_options.get("B") == {"options": {"--a-lang": ["fr"]}}
     sync.batch_jobs.pop("B")  # the job's own sync gone: one more sync of it is then the last
-    sync.restoring[("B", 1)] = (None, {"episodes": [5]})  # unless a sync of it picked up after a restart has yet to start
-    sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
-    assert sync.job_options.get("B") == {"options": {"--a-lang": ["fr"]}}
-    sync.restoring.clear()
     sync.sync(sync.read_file(), {}, [], manual=True, kind="manual", batch="B")
     assert "B" not in sync.job_options
 
@@ -7497,3 +7453,516 @@ def test_history_cleanup_never_deletes_a_run_still_going(tmp_path, monkeypatch):
     sync.prune_runs()
     assert sorted(p.name for p in sync.RUNS_DIR.iterdir()) == sorted(
         f"{i}.{ext}" for i in (ids[0], ids[2], ids[3]) for ext in ("json", "log"))
+
+
+def test_durable_pause_all_round_trip(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    store = sync.job_store()
+    for identifier in (2, 1):
+        store.admit(jobs.NormalizedJobRequest(None, None, (jobs.episode_item(None, identifier),), {}),
+                    job_id=str(identifier))
+    sync.pause_all()
+    assert [job.state for job in store.load()] == ["paused", "paused"]
+    sync.resume_all()
+    assert sorted(sync.job_order, key=sync.job_order.__getitem__) == ["2", "1"]
+    assert [job.state for job in store.load()] == ["waiting", "waiting"]
+
+
+@pytest.mark.parametrize(("status_code", "answer", "confirmed"), [
+    (202, {"job_id": "attempt-1"}, True),
+    (202, {}, False),
+    (400, {"error": "request refused"}, False),
+    (503, {"error": "serve unavailable"}, False),
+])
+@responses.activate
+def test_download_wire_response_controls_attempt_persistence(tmp_path, monkeypatch, status_code, answer, confirmed):
+    from unshacklarr import jobs
+    from unshacklarr.backend import Unshackle
+
+    sync = load(tmp_path, monkeypatch)
+    batch = "20261021-121217-33d6d0"
+    ep = episode(111, 2, 5)
+    item = jobs.episode_item(None, ep["id"])
+    store = sync.job_store()
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {}), job_id=batch)
+    backend = Unshackle(tmp_path)
+    backend.configure({"unshackle_url": SERVE})
+    responses.get(f"{SERVE}/api/services", json={})
+    responses.post(f"{SERVE}/api/download", json=answer, status=status_code)
+    run = sync.EpisodeRun(ep, {"service": "RTLP"}, "manual", batch=batch)
+    if confirmed:
+        def result(_request):
+            child = store.get_job(batch).children[0]
+            assert child.attempt_job_id == "attempt-1"
+            assert child.state == "queued"
+            return 200, {}, '{"status":"completed","output_files":["file.mkv"]}'
+
+        responses.add_callback(responses.GET, f"{SERVE}/api/download/jobs/attempt-1", callback=result)
+        assert sync.follow_job(backend, {"service": "RTLP"}, run, poll=0) == ["file.mkv"]
+        run.finish("downloaded")
+        assert store.get_job(batch).state == "completed"
+    else:
+        with pytest.raises(sync.UnshackleError) as refusal:
+            sync.follow_job(backend, {"service": "RTLP"}, run, poll=0)
+        assert str(refusal.value).strip()
+        assert store.get_job(batch).children[0].attempt_job_id is None
+        run.finish("failed", str(refusal.value))
+
+
+@pytest.mark.parametrize("failure", [
+    "Login failed", "No CDM configured", "proxy check failed", "No space left on device",
+    "Permission denied writing downloads",
+])
+def test_shared_failure_holds_sibling_before_next_episode(tmp_path, monkeypatch, failure):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    batch = "20261021-121217-33d6d0"
+    episodes = [episode(111, 2, number) for number in (5, 6)]
+    items = tuple(jobs.episode_item(None, ep["id"]) for ep in episodes)
+    store = sync.job_store()
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {}), job_id=batch)
+    pending = sync.job_episodes(episodes, batch)
+    run = sync.EpisodeRun(next(pending), {"service": "RTLP"}, "manual", batch=batch)
+    run.finish("failed", failure)
+    assert store.get_job(batch).state == "paused"
+    assert batch in sync.paused_jobs
+
+    class WaitingForResume(Exception):
+        pass
+
+    def wait(_seconds):
+        raise WaitingForResume
+
+    monkeypatch.setattr(sync.time, "sleep", wait)
+    with pytest.raises(WaitingForResume):
+        next(pending)
+    assert store.get_job(batch).children[1].attempt_job_id is None
+
+
+def test_child_local_failure_allows_next_episode(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    batch = "20261021-121217-33d6d0"
+    episodes = [episode(111, 2, number) for number in (5, 6)]
+    items = tuple(jobs.episode_item(None, ep["id"]) for ep in episodes)
+    store = sync.job_store()
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {}), job_id=batch)
+    pending = sync.job_episodes(episodes, batch)
+    sync.EpisodeRun(next(pending), {"service": "RTLP"}, "manual", batch=batch).finish("failed", "mkvmerge failed")
+    assert next(pending) == episodes[1]
+    sync.EpisodeRun(episodes[1], {"service": "RTLP"}, "manual", batch=batch).finish("downloaded")
+    assert store.get_job(batch).state == "completed_with_errors"
+
+
+@pytest.mark.parametrize(("existing", "interruptions", "reject", "downloads", "state"), [
+    (True, 0, False, 0, "completed"),
+    (False, 0, False, 1, "completed"),
+    (False, 1, False, 0, "failed"),
+    (False, 0, True, 1, "failed"),
+])
+def test_worker_recovers_only_one_missing_serve_attempt(tmp_path, monkeypatch, existing, interruptions, reject, downloads, state):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    ep = episode(111, 2, 5)
+    batch = "20261021-121217-33d6d0"
+    item = jobs.episode_item(None, ep["id"])
+    request = jobs.NormalizedJobRequest(None, None, (item,), {})
+    child = jobs.JobChild(f"{batch}:{item.id}", item, "queued", "old-attempt", interruptions)
+    now = datetime.now(timezone.utc)
+    store = sync.job_store()
+    store.save([jobs.DownstreamJob(jobs.SCHEMA_VERSION, batch, request, (child,), "running", now, now)])
+    out = sync.episode_folder(ep)
+    offered = []
+
+    def make_output():
+        out.mkdir(exist_ok=True)
+        (out / "file.mkv").touch()
+
+    class Serve:
+        name = ""
+
+        def download(self, payload):
+            offered.append(payload)
+            if reject:
+                raise sync.UnshackleError("502 Bad Gateway")
+            make_output()
+            return "new-attempt"
+
+        def job(self, attempt_id):
+            if attempt_id == "old-attempt" and not existing:
+                error = sync.UnshackleError("Job not found")
+                error.status = 404
+                raise error
+            return {"status": "completed", "output_files": ["file.mkv"]}
+
+    if existing:
+        make_output()
+    serve = Serve()
+    monkeypatch.setattr(sync, "backend_named", lambda _name: serve)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: serve)
+    monkeypatch.setattr(sync, "download_request", lambda *args, **kwargs: {
+        "service": "RTLP", "title_id": "show", "output_dir": str(out), "wanted": ["S02E05"],
+    })
+    for operation in ("wrong_number", "apply_ladder", "free_space_problem", "library_space_problem",
+                      "finalize", "check_audio", "check_subs", "lacks_preferred", "import_episode",
+                      "note_upgrade", "after_download", "notify_series", "setup_of", "by_title", "fallback_show"):
+        monkeypatch.setattr(sync, operation, lambda *args, **kwargs: None)
+    sync.sync(sync.read_file(), {}, [ep], manual=True, batch=batch, kind="manual")
+    updated = store.get_job(batch).children[0]
+    assert (len(offered), updated.state, updated.attempt_job_id) == (downloads, state, None)
+    assert updated.interruption_count == (interruptions if existing else interruptions + 1)
+
+
+def test_review_retry_stopped_preserves_intentionally_cancelled_sibling(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    batch = "20261021-121217-33d6d0"
+    ep, other = [episode(111, 2, n) for n in (5, 6)]
+    items = tuple(jobs.episode_item(None, entry["id"]) for entry in (ep, other))
+    store = sync.job_store()
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {}), job_id=batch)
+    store.cancel_child(batch, items[1].id)
+    sync.EpisodeRun(ep, {"service": "RTLP"}, "manual", batch=batch).finish("stopped")
+    assert [child.state for child in store.retry_failed(batch).children] == ["waiting", "cancelled"]
+
+
+def test_review_startup_classifies_authentication_and_pauses_siblings(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    items = tuple(jobs.episode_item(None, i) for i in (1, 2))
+    store = sync.job_store()
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {}), job_id="batch")
+    store.start_child_attempt("batch", items[0].id, "attempt")
+    backend = SimpleNamespace(job=lambda attempt: {"status": "failed", "error_code": "AUTH_FAILED"})
+    monkeypatch.setattr(sync, "backend_named", lambda name: backend)
+    job, = store.reconcile_startup(lambda _job, child: sync.probe_attempt(child))
+    assert job.children[0].failure == jobs.FailureClassification("shared", "provider_access")
+    assert job.state == "paused"
+
+
+def test_review_resume_all_preserves_retry_priority(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    store = sync.job_store()
+    for i in (1, 2):
+        store.admit(jobs.NormalizedJobRequest(None, None, (jobs.episode_item(None, i),), {}), job_id=str(i))
+    sync.number_job("2", retry=True)
+    order = sync.job_order["2"]
+    sync.pause_all()
+    sync.resume_all()
+    assert sync.job_order["2"] == order < sync.job_order["1"]
+
+
+def test_review_download_slot_observes_settings_on_wake(tmp_path, monkeypatch):
+    sync = load(tmp_path, monkeypatch)
+    sync.SETTINGS["downloads_at_once"] = 1
+    result = threading.Event()
+    waiting = threading.Event()
+    original_wait = sync.slots.wait
+
+    def wait(timeout=None):
+        waiting.set()
+        return original_wait(timeout)
+
+    monkeypatch.setattr(sync.slots, "wait", wait)
+
+    def second():
+        with sync.download_slot("serve"):
+            result.set()
+
+    with sync.download_slot("serve"):
+        thread = threading.Thread(target=second)
+        thread.start()
+        assert waiting.wait(2)
+        with sync.slots:
+            sync.SETTINGS["downloads_at_once"] = 2
+            sync.slots.notify_all()
+        acquired = result.wait(0.5)
+    thread.join(2)
+    assert acquired
+
+
+@pytest.mark.parametrize("condition", ["unreachable", "auth_failed", "episode_busy", "lost_reply"])
+def test_review_worker_resolves_existing_work(tmp_path, monkeypatch, condition):
+    from types import SimpleNamespace
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    ep = episode(111, 2, 5)
+    batch = "20261021-121217-33d6d0"
+    item = jobs.episode_item(None, ep["id"])
+    store = sync.job_store()
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {}), job_id=batch)
+    out = sync.episode_folder(ep)
+    payload = {"service": "RTLP", "title_id": "show", "wanted": ["S02E05"], "output_dir": str(out)}
+    offered = []
+    pause_seen, lock_waiting = threading.Event(), threading.Event()
+
+    def submit(request):
+        offered.append(request)
+        if condition == "lost_reply":
+            raise KeyboardInterrupt
+        out.mkdir(exist_ok=True)
+        (out / "file.mkv").touch()
+        return "new-attempt"
+
+    def serve_job(attempt):
+        if condition == "unreachable" and not pause_seen.is_set():
+            raise sync.UnshackleError("unreachable")
+        return {"status": "completed", "output_files": ["file.mkv"]}
+
+    backend = SimpleNamespace(name="", job=serve_job, download=submit)
+    monkeypatch.setattr(sync, "backend_named", lambda _name: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+    monkeypatch.setattr(sync, "download_request", lambda *a, **kw: payload)
+    for operation in ("wrong_number", "apply_ladder", "free_space_problem", "library_space_problem",
+                      "finalize", "check_audio", "check_subs", "lacks_preferred", "import_episode",
+                      "note_upgrade", "after_download", "notify_series", "setup_of", "by_title", "fallback_show"):
+        monkeypatch.setattr(sync, operation, lambda *args, **kwargs: None)
+
+    if condition == "lost_reply":
+        run = sync.EpisodeRun(ep, {"service": "RTLP"}, "manual", batch=batch)
+        with pytest.raises(KeyboardInterrupt):
+            sync.follow_job(backend, payload, run, poll=0)
+        out.mkdir(exist_ok=True)
+        (out / "file.mkv").touch()
+        backend.jobs = lambda: [{"job_id": "old-attempt", "created_time": datetime.now(timezone.utc).isoformat(),
+                                 "status": "completed", "service": "RTLP", "title_id": "show"}]
+        backend.job = lambda attempt: {**serve_job(attempt), "parameters": payload}
+
+    if condition in ("unreachable", "auth_failed"):
+        store.start_child_attempt(batch, item.id, "old-attempt")
+        out.mkdir(exist_ok=True)
+        (out / "file.mkv").touch()
+
+    pause = sync.pause_job
+
+    def signal_pause(batch, held):
+        pause(batch, held)
+        if held:
+            pause_seen.set()
+
+    monkeypatch.setattr(sync, "pause_job", signal_pause)
+    if condition == "auth_failed":
+        def fail(*a, **kw):
+            raise sync.JobFailed("Worker failed", cause="Sign in again", error_code="AUTH_FAILED")
+
+        monkeypatch.setattr(sync, "run_job_retrying", fail)
+
+    def work():
+        sync.sync(sync.read_file(), {}, [ep], manual=True, batch=batch, kind="manual")
+
+    if condition == "episode_busy":
+        from contextlib import contextmanager
+        episode_lock = sync.episode_lock
+
+        @contextmanager
+        def locked(path, *a, **kw):
+            lock_waiting.set()
+            with episode_lock(path, *a, **kw) as acquired:
+                yield acquired
+
+        with episode_lock(out):
+            monkeypatch.setattr(sync, "episode_lock", locked)
+            worker = threading.Thread(target=work, daemon=True)
+            worker.start()
+            assert lock_waiting.wait(2)
+            worker.join(0.1)
+        worker.join(2)
+    elif condition == "unreachable":
+        worker = threading.Thread(target=work, daemon=True)
+        worker.start()
+        assert pause_seen.wait(2)
+        sync.pause_job(batch, False)
+        worker.join(2)
+        assert not worker.is_alive()
+    else:
+        work()
+
+    child = store.get_job(batch).children[0]
+    if condition == "auth_failed":
+        assert child.failure == jobs.FailureClassification("shared", "provider_access")
+        cards = [json.loads(path.read_text()) for path in sync.RUNS_DIR.glob("*.json")]
+        assert any(card.get("cause") == "Sign in again" for card in cards)
+    else:
+        assert child.state == "completed"
+    assert len(offered) == (1 if condition in ("episode_busy", "lost_reply") else 0)
+
+
+@pytest.mark.parametrize("action", ["pause_all", "resume_all"])
+def test_review_pause_controls_preserve_legacy_migration(tmp_path, monkeypatch, action):
+    sync = load(tmp_path, monkeypatch)
+    sync.pause_all_active = action == "resume_all"
+    sync.QUEUE_FILE.write_text("invalid queue")
+    getattr(sync, action)()
+    assert sync.pause_all_active == (action == "pause_all")
+    assert not sync.JOBS_FILE.exists()
+    batch = "20261021-121217-33d6d0"
+    sync.QUEUE_FILE.write_text(json.dumps({batch: {"episodes": [205], "kind": "manual"}}))
+    getattr(sync, action)()
+    job, = sync.job_store().load()
+    assert job.id == batch
+    assert job.state == ("paused" if action == "pause_all" else "waiting")
+
+
+def test_review_recovery_adopts_a_unique_attempt_with_clock_skew(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    store = sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    item = jobs.episode_item(None, 205)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {}), job_id=batch)
+    now = datetime.now(timezone.utc)
+    submission = jobs.Submission("", "RTLP", "show", str(tmp_path), ("S02E05",), now)
+    store.set_child_submission(batch, item.id, submission)
+    parameters = {"wanted": ["S02E05"], "output_dir": str(tmp_path)}
+    attempts = [{"job_id": "old", "service": "RTLP", "title_id": "show",
+                 "created_time": (now - timedelta(minutes=2)).isoformat()},
+                {"job_id": "matching", "service": "RTLP", "title_id": "show",
+                 "created_time": (now - timedelta(seconds=1)).isoformat()}]
+    backend = SimpleNamespace(jobs=lambda: attempts, job=lambda _: {"status": "queued", "parameters": parameters})
+    monkeypatch.setattr(sync, "backend_named", lambda _: backend)
+    child = store.get_job(batch).children[0]
+    recovered, = store.reconcile_startup(lambda _, entry: sync.probe_attempt(entry))
+    adopted, = recovered.children
+    assert (adopted.state, adopted.attempt_job_id, adopted.submission) == ("queued", "matching", None)
+    attempts.append({**attempts[-1], "job_id": "ambiguous"})
+    assert sync.probe_attempt(child).status == "unreachable"
+
+
+@pytest.mark.parametrize("ranked", [True, False])
+def test_review_retry_priority_after_resume_all(tmp_path, monkeypatch, ranked):
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    store = sync.job_store()
+    for episode_id, kind in ((1, "manual"), (2, "retry")):
+        request = jobs.NormalizedJobRequest(None, None, (jobs.episode_item(None, episode_id),), {"kind": kind})
+        store.admit(request, job_id=kind)
+    sync.number_job("manual")
+    if ranked:
+        sync.number_job("retry", retry=True)
+        prior = sync.job_order["retry"]
+        sync.pause_job("retry", True)
+    sync.resume_all()
+    assert sync.job_order["retry"] < sync.job_order["manual"]
+    if ranked:
+        assert sync.job_order["retry"] == prior
+
+
+def test_review_resumed_files_refused_keeps_trace_in_log(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    store = sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    ep = episode(111, 2, 5)
+    items = (jobs.episode_item(None, ep["id"]), jobs.episode_item(None, 206))
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {}), job_id=batch)
+    child = store.start_child_attempt(batch, items[0].id, "attempt").children[0]
+    monkeypatch.setattr(sync, "backend_named", lambda _: SimpleNamespace(job=lambda _: {"status": "downloading"}))
+    cause = "Download worker failed: 403 authentication required"
+    trace = "Traceback sample\nhttps://user:fixture@provider.invalid/"
+
+    def fail(*args, **kwargs):
+        raise sync.JobFailed(trace, cause=cause, error_code="AUTH_FAILED")
+
+    monkeypatch.setattr(sync, "run_job_retrying", fail)
+    run = sync.EpisodeRun(ep, {"service": "RTLP"}, "manual", batch=batch)
+    assert sync.resume_durable_attempt(run, batch, child, "") == "finished"
+    log = (sync.RUNS_DIR / f"{run.id}.log").read_text()
+    assert run.card["cause"] == cause
+    assert "Traceback sample" not in run.card["detail"]
+    assert "Traceback sample" in log and "fixture" not in log
+    updated = store.get_job(batch)
+    assert updated.children[0].failure == jobs.FailureClassification("child", "download")
+    assert updated.state == "waiting"
+
+
+def test_review_recovered_files_refused_does_not_hold_siblings(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    store = sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    ep = episode(111, 2, 5)
+    items = (jobs.episode_item(None, ep["id"]), jobs.episode_item(None, 206))
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {}), job_id=batch)
+    store.start_child_attempt(batch, items[0].id, "attempt")
+    backend = SimpleNamespace(job=lambda _: {"status": "failed", "error_code": "AUTH_FAILED",
+                                             "error_message": "Download worker failed: 403 authentication required"})
+    monkeypatch.setattr(sync, "backend_named", lambda _: backend)
+    recovered, = store.reconcile_startup(lambda _, child: sync.probe_attempt(child))
+    assert recovered.children[0].failure == jobs.FailureClassification("child", "download")
+    assert recovered.state == "waiting"
+
+
+def test_review_pending_submission_pause_releases_only_download_slot(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unshacklarr import jobs
+
+    sync = load(tmp_path, monkeypatch)
+    sync.SETTINGS["downloads_at_once"] = 1
+    store = sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    ep = episode(111, 2, 5)
+    item = jobs.episode_item(None, ep["id"])
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {}), job_id=batch)
+    now = datetime.now(timezone.utc)
+    store.set_child_submission(batch, item.id, jobs.Submission("", "RTLP", "show", str(tmp_path), ("S02E05",), now))
+    parked, reachable, second_slot = (threading.Event() for _ in range(3))
+    followed = []
+
+    def attempts():
+        if not reachable.is_set():
+            raise sync.UnshackleError("Serve unavailable")
+        return [{"job_id": "pending", "service": "RTLP", "title_id": "show", "created_time": now.isoformat()}]
+
+    backend = SimpleNamespace(name="", jobs=attempts, job=lambda _: {
+        "status": "queued", "parameters": {"wanted": ["S02E05"], "output_dir": str(tmp_path)},
+    })
+    monkeypatch.setattr(sync, "backend_named", lambda _: backend)
+    monkeypatch.setattr(sync, "run_job", lambda *a, job_id=None: followed.append(job_id))
+    await_resume = sync.await_job_resume
+
+    def signal_resume_wait(run, batch):
+        parked.set()
+        return await_resume(run, batch)
+
+    monkeypatch.setattr(sync, "await_job_resume", signal_resume_wait)
+    run = sync.EpisodeRun(ep, {"service": "RTLP"}, "manual", batch=batch)
+    worker = threading.Thread(target=sync.run_job_retrying, args=({}, run), daemon=True)
+
+    def other_download():
+        with sync.download_slot(""):
+            second_slot.set()
+
+    other = threading.Thread(target=other_download, daemon=True)
+    worker.start()
+    try:
+        assert parked.wait(2)
+        other.start()
+        progressed = second_slot.wait(1)
+    finally:
+        reachable.set()
+        sync.pause_job(batch, False)
+        worker.join(2)
+        sync.release_job(batch)
+        if other.ident is not None:
+            other.join(2)
+        run.finish("downloaded")
+    assert progressed
+    assert followed == ["pending"]
