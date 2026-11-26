@@ -4,7 +4,9 @@ import importlib
 import json
 import re
 import sys
+import threading
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 import responses
@@ -4255,7 +4257,13 @@ def test_a_retry_asks_the_service_what_its_attempt_asked(tmp_path, monkeypatch):
             card["numbering"] = numbering
         (web.sonarr_sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps(card))
     asked = []
-    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: asked.append((ids, kw.get("numbering"))))
+    def run(ids, **kwargs):
+        asked.append((ids, kwargs.get("numbering")))
+        store = web.sonarr_sync.job_store()
+        job = store.get_job(kwargs["batch"])
+        store.complete_child(job.id, job.children[0].id)
+
+    monkeypatch.setattr(web, "run_sync", run)
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
 
     async def go():
@@ -7070,7 +7078,8 @@ def test_the_bell_answers_for_audio_from_another_source(tmp_path, monkeypatch):
     monkeypatch.setattr(sync, "inbox_resolve", lambda key: None)
     started, threads = [], []
     monkeypatch.setattr(web, "run_sync", lambda ids, **kw: started.append((ids, kw)))
-    monkeypatch.setattr(web.threading, "Thread", lambda target, args, daemon: type("T", (), {"start": lambda self: threads.append(args)})())
+    monkeypatch.setattr(web, "threading", SimpleNamespace(
+        Thread=lambda target, args, daemon: SimpleNamespace(start=lambda: threads.append(args))))
 
     class Request:
         def __init__(self, choice): self.match_info, self.choice = {"episode_id": "205"}, choice
@@ -7083,7 +7092,7 @@ def test_the_bell_answers_for_audio_from_another_source(tmp_path, monkeypatch):
     assert _raises(lambda: asyncio.run(web.confirm_audio(Request("whole"))))  # answered already: nothing waits
     sync.UPGRADES_FILE.write_text(json.dumps({"205": {"want": "fr", "asked": "x"}}))
     asyncio.run(web.confirm_audio(Request("whole")))
-    assert started == [([205], {"replace": True, "kind": "upgrade"})]
+    assert started == [([205], {"replace": True, "kind": "upgrade", "audio": "fr"})]
 
 
 def test_a_flat_brand_page_is_matched_by_title_and_offered_no_season_map(tmp_path, monkeypatch):
@@ -7993,7 +8002,7 @@ def test_the_api_takes_the_services_own_numbering_and_decides_the_audio_upgrade(
     monkeypatch.setattr(web.sonarr_sync, "sonarr_get", sonarr_get)
     started, added = [], []
     monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append((ids, k.get("replace", False), k.get("kind"))))
-    monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang: added.extend((i, lang) for i in ids))
+    monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang, *, batch: added.extend((i, lang) for i in ids))
     found, missing = web.sonarr_codes_of_service(74796, ["S04E05", "S04E06", "S04E07", "S09E09"])
     assert found == {"S04E05": "S17E45", "S04E06": "S17E46", "S04E07": "S17E47"} and missing == ["S09E09"]
     # its numbering changed since that listing: the listing's S04E05 = S17E45 no longer holds, only the numbering does
@@ -8063,17 +8072,14 @@ def test_a_jobs_queue_is_kept_on_disk_and_picked_up_after_a_restart(tmp_path, mo
     import unshacklarr.web
     sync = importlib.reload(unshacklarr.sync)
     web = importlib.reload(unshacklarr.web)
-    eps = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "series": {"title": "Smallville", "tvdbId": 1}} for n in (1, 2, 3, 4)]
-    job = {"episodes": eps, "stubs": {}, "closed": False, "replace": False, "kind": "manual", "sonarr": "", "proxy": "", "video": None, "numbering": None}
-    for ep in eps[2:]:  # 1 done, 2 downloading, 3 and 4 queued
-        sync.waiting[ep["id"]] = job["stubs"][ep["id"]] = sync.queued_card(ep, {"service": "NF"}, "manual", "20261018-194616-f77846")
-    sync.running_jobs["20261018-194616-f77846"] = job
-    sync.batch_jobs["20261018-194616-f77846"] = [job]
-    sync.paused_jobs.add("20261018-194616-f77846")
+    legacy = {"20261018-194616-f77846": [{"episodes": [3, 4], "paused": True, "kind": "manual"}]}
+    sync.QUEUE_FILE.write_text(json.dumps(legacy))
     sync.save_queue()
-    assert json.loads(sync.QUEUE_FILE.read_text()) == {"20261018-194616-f77846": [{"episodes": [3, 4], "paused": True, "kind": "manual"}]}
+    assert json.loads(sync.QUEUE_FILE.read_text()) == legacy
+    record, = sync.job_store().load()
+    assert [child.request.sonarr_episode_id for child in record.children] == [3, 4]
+    assert record.state == "paused"
 
-    sync.running_jobs.clear(); sync.batch_jobs.clear(); sync.waiting.clear(); sync.paused_jobs.clear()  # a restart
     started = []
     monkeypatch.setattr(web, "run_sync", lambda ids, **kw: started.append((ids, kw["batch"], kw["kind"])))
     assert web.resume_queue() == 2
@@ -8148,7 +8154,8 @@ def test_a_job_that_could_not_be_picked_up_again_is_kept_for_the_next_start(tmp_
     web.resume_queue()
     assert asked == [[3, 4]]  # each episode once
     sync.save_queue()
-    assert json.loads(sync.QUEUE_FILE.read_text()) == {"20261021-121217-33d6d0": [entry]}  # not written empty: kept
+    assert json.loads(sync.QUEUE_FILE.read_text()) == {"20261021-121217-33d6d0": entry}
+    assert web.resume_queue() == 2 and asked == [[3, 4], [3, 4]]
     monkeypatch.setattr(sync, "sonarr_get", lambda path, **kw: [{"id": i, "seriesId": 1, "seasonNumber": 1, "episodeNumber": i} for i in kw["episodeIds"]])
     assert [e["id"] for e in sync.chosen_episodes([5, 5, 6])] == [5, 6]
 
@@ -8346,69 +8353,42 @@ box.run().then(() => console.log(JSON.stringify(shown["#svc-defaults"].flatMap(t
 
 
 def test_a_job_picked_up_again_that_runs_at_once_is_not_kept_for_the_next_start(tmp_path, monkeypatch):
-    # Its worker reaches sync() and takes it out of `restoring` before run_sync returns: it must stay out, or
-    # save_queue keeps the finished job in the file and every later start downloads it again
-    monkeypatch.setenv("UNSHACKLARR_DATA", str(tmp_path))
-    import threading
-    import unshacklarr.sync
-    import unshacklarr.web
-    sync = importlib.reload(unshacklarr.sync)
-    web = importlib.reload(unshacklarr.web)
-    sync.QUEUE_FILE.write_text(json.dumps({"20261021-121217-33d6d0": {"episodes": [3], "kind": "manual"}}))
-    def run_sync(ids, restored=None, **kw):  # the worker gets its turn before this returns
-        with sync.jobs_lock:
-            sync.restoring.pop(restored, None)
-        t = threading.Thread(target=lambda: None); t.start(); t.join()
-        return t
-    monkeypatch.setattr(web, "run_sync", run_sync)
-    web.resume_queue()
-    assert sync.restoring == {}
-    sync.save_queue()
-    assert json.loads(sync.QUEUE_FILE.read_text()) == {}
-
-
-def test_a_restart_while_a_retry_of_a_job_runs_keeps_every_queued_episode_of_the_job(tmp_path, monkeypatch):
-    # A retry with another Replace runs beside its job under the same batch: the job's own queue is saved too,
-    # while the retry runs and once it ended first, and each is picked up again with its own settings
-    import threading
-    import time
     web = reloaded_web(tmp_path, monkeypatch)
     sync = web.sonarr_sync
     batch = "20261021-121217-33d6d0"
-    eps = [{"id": n, "seasonNumber": 1, "episodeNumber": n, "series": {"title": "Smallville", "tvdbId": 1}} for n in (1, 2, 3, 4, 9)]
-    config = {"series": {1: {"service": "NF"}}}
-    go = {"manual": threading.Event(), "retry": threading.Event()}
-    monkeypatch.setattr(sync, "run_episodes", lambda config, settings, episodes, manual, replace, kind, *a: go[kind].wait(10) and 0)
+    legacy = json.dumps({batch: {"episodes": [3], "kind": "manual"}})
+    sync.QUEUE_FILE.write_text(legacy)
 
-    def start(episodes, **kw):
-        before = sync.running_jobs.get(batch)
-        thread = threading.Thread(target=sync.sync, args=(config, {}, episodes), kwargs={"manual": True, "batch": batch, **kw})
-        thread.start()
-        while sync.running_jobs.get(batch) is before:  # registered under the batch
-            time.sleep(0.01)
-        return thread
+    def run_sync(ids, **kwargs):
+        record = sync.job_store().get_job(kwargs["batch"])
+        sync.job_store().complete_child(record.id, record.children[0].id)
 
-    job = start(eps[:4], kind="manual", proxy="nordvpn:fr")
-    sync.waiting.pop(1)  # episode 1 downloading: queued are 2, 3 and 4
-    retry = start(eps[4:], kind="retry", replace=True)  # another Replace: a sync of its own under the batch
+    monkeypatch.setattr(web, "run_sync", run_sync)
+    assert web.resume_queue() == 1
     sync.save_queue()
-    both = sync.QUEUE_FILE.read_text()
-    assert json.loads(both) == {batch: [{"episodes": [2, 3, 4], "paused": False, "kind": "manual", "proxy": "nordvpn:fr"},
-                                        {"episodes": [9], "paused": False, "replace": True, "kind": "retry"}]}
-    go["retry"].set(); retry.join()  # the retry ends first
-    sync.save_queue()
-    alone = sync.QUEUE_FILE.read_text()
-    assert json.loads(alone) == {batch: [{"episodes": [2, 3, 4], "paused": False, "kind": "manual", "proxy": "nordvpn:fr"}]}
-    go["manual"].set(); job.join()
+    assert web.resume_queue() == 0
+    assert sync.QUEUE_FILE.read_text() == legacy
 
-    for text, expected in ((both, [([2, 3, 4], False, "manual", "nordvpn:fr"), ([9], True, "retry", "")]),
-                           (alone, [([2, 3, 4], False, "manual", "nordvpn:fr")])):
-        web = reloaded_web(tmp_path, monkeypatch)  # a restart
-        web.sonarr_sync.QUEUE_FILE.write_text(text)
-        started = []
-        monkeypatch.setattr(web, "run_sync", lambda ids, **kw: started.append((ids, kw["replace"], kw["kind"], kw["proxy"])))
-        web.resume_queue()
-        assert started == expected  # every episode once, each with its own settings
+
+def test_a_restart_while_a_retry_of_a_job_runs_keeps_every_queued_episode_of_the_job(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    batch = "20261021-121217-33d6d0"
+    legacy = {batch: [{"episodes": [2, 3, 4], "paused": False, "kind": "manual", "proxy": "nordvpn:fr"},
+                      {"episodes": [9], "paused": False, "replace": True, "kind": "retry"}]}
+    sync.QUEUE_FILE.write_text(json.dumps(legacy))
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kw: started.append((ids, kw["replace"], kw["kind"], kw["proxy"])))
+    assert web.resume_queue() == 4
+    assert started == [([2, 3, 4], False, "manual", "nordvpn:fr"), ([9], True, "retry", "")]
+    parent, = sync.job_store().load()
+    sync.job_store().complete_child(parent.id, parent.children[-1].id)
+    sync.save_queue()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == legacy
+    started.clear()
+    assert web.resume_queue() == 3
+    assert started == [([2, 3, 4], False, "manual", "nordvpn:fr")]
+    assert [child.id for child in sync.job_store().load()[0].children] == [child.id for child in parent.children]
 
 
 def test_a_queue_file_written_by_the_previous_release_loads_whole_and_is_saved_in_the_new_layout(tmp_path, monkeypatch):
@@ -8438,7 +8418,10 @@ def test_a_queue_file_written_by_the_previous_release_loads_whole_and_is_saved_i
     assert sync.paused_jobs == {"20261021-121217-33d6d0"}
     assert sync.job_options == {"20261021-121217-33d6d0": {"options": {"--a-lang": ["fr"]}}}
     sync.save_queue()
-    assert json.loads(sync.QUEUE_FILE.read_text()) == {batch: [entry] for batch, entry in old.items()}
+    assert json.loads(sync.QUEUE_FILE.read_text()) == old
+    records = sync.job_store().load()
+    assert web.resume_queue() == 3
+    assert sync.job_store().load() == records
 
 
 def test_an_episode_watched_from_languages_is_watched_on_its_seasons_own_page(tmp_path, monkeypatch):
@@ -8480,7 +8463,7 @@ def test_an_audio_request_for_many_episodes_starts_one_download_not_one_each(tmp
     monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
     started, added = [], []
     monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append(list(ids)))
-    monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang: added.append(list(ids)))
+    monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang, *, batch: added.append(list(ids)))
 
     async def go():
         async with TestClient(TestServer(web.app)) as browser:
@@ -8494,6 +8477,7 @@ def test_an_audio_request_for_many_episodes_starts_one_download_not_one_each(tmp
             started.clear()
             assert (await browser.post("/api/v1/downloads", headers={"X-Api-Key": key}, json=body)).status == 200
             assert added == [list(range(1, 31))] and not started
+            assert not web.sonarr_sync.reserved_starts
     asyncio.run(go())
 
 
@@ -8540,18 +8524,22 @@ def test_an_audio_request_asks_every_download_it_starts_in_that_language(tmp_pat
     asyncio.run(go())
 
 
-def test_a_retry_keeps_the_audio_language_of_the_attempt_it_retries(monkeypatch):
+def test_a_retry_keeps_the_audio_language_of_the_attempt_it_retries(tmp_path, monkeypatch):
     # Asked in French, failed, then retried from Activity once its job was over: the retry asks French again
-    import asyncio
-    from unshacklarr import web
+    web = reloaded_web(tmp_path, monkeypatch)
     cards = [{"episodeId": 5, "audio_override": "fr"}, {"episodeId": 6}]
     monkeypatch.setattr(web, "cards_on_disk", lambda: cards)
-    monkeypatch.setattr(web.sonarr_sync.RUNS_DIR.__class__, "exists", lambda self: True)
+    web.sonarr_sync.RUNS_DIR.mkdir()
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
     monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
-    monkeypatch.setattr(web, "room_for_one_more", lambda: None)
     started = []
-    monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append((list(ids), k.get("audio", ""))))
+    def run(ids, **kwargs):
+        started.append((list(ids), kwargs.get("audio", "")))
+        store = web.sonarr_sync.job_store()
+        job = store.get_job(kwargs["batch"])
+        store.complete_child(job.id, job.children[0].id)
+
+    monkeypatch.setattr(web, "run_sync", run)
 
     class Request:
         def __init__(self, body): self.body = body
@@ -8561,16 +8549,14 @@ def test_a_retry_keeps_the_audio_language_of_the_attempt_it_retries(monkeypatch)
     assert started == [([5], "fr"), ([6], ""), ([5], "")]
 
 
-def test_a_retry_keeps_the_season_map_of_the_attempt_it_retries(monkeypatch):
+def test_a_retry_keeps_the_season_map_of_the_attempt_it_retries(tmp_path, monkeypatch):
     # The card's numbering comes back from JSON with its season numbers as text: the retry must still map S02 to S01
-    import asyncio
-    from unshacklarr import web
+    web = reloaded_web(tmp_path, monkeypatch)
     cards = [{"episodeId": 5, "numbering": {"season_map": {"2": 1}}}]
     monkeypatch.setattr(web, "cards_on_disk", lambda: cards)
-    monkeypatch.setattr(web.sonarr_sync.RUNS_DIR.__class__, "exists", lambda self: True)
+    web.sonarr_sync.RUNS_DIR.mkdir()
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
     monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
-    monkeypatch.setattr(web, "room_for_one_more", lambda: None)
     started = []
     monkeypatch.setattr(web, "run_sync", lambda ids, **k: started.append(k["numbering"]))
 
@@ -8582,28 +8568,36 @@ def test_a_retry_keeps_the_season_map_of_the_attempt_it_retries(monkeypatch):
     assert web.sonarr_sync.service_episode(started[0], 2, 5) == "S01E05"
 
 
-def test_episodes_added_to_a_running_job_keep_their_order(monkeypatch):
-    # Added at the end, they go in as picked; retries go in next, each before the one after it, so last first
-    import asyncio
-    from unshacklarr import web
-    queue = []
+def test_failed_episodes_retried_in_an_active_job_keep_their_order(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+    web = reloaded_web(tmp_path, monkeypatch)
+    batch = "20261012-070357-6b5682"
+    store = web.sonarr_sync.job_store()
+    normalized = web.download_request([1, 2, 3, 4], "", "manual", False, None)
+    store.admit(normalized, job_id=batch)
+    for item in normalized.items[:3]:
+        store.fail_child(batch, item.id, jobs.FailureClassification("child", "title"))
+    web.sonarr_sync.running_jobs[batch] = {}
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    queued = []
 
-    async def join(batch, episode_id, replace=False, sonarr="", first=False):
-        queue.insert(0, episode_id) if first else queue.append(episode_id)  # as add_to_job puts it in the queue
+    async def join(job_id, episode_id, replace=False, sonarr="", first=False):
+        assert job_id == batch and first
+        queued.insert(0, episode_id)
         return True
+
     monkeypatch.setattr(web, "join_job", join)
     monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
     monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
-    monkeypatch.setattr(web, "retried_numbering", lambda ids, batch, instance: None)
-    monkeypatch.setattr(web, "retried_replace", lambda ids, batch, instance: False)
 
     class Request:
-        def __init__(self, body): self.body = body
-        async def json(self): return self.body
-    for retry in (False, True):
-        queue.clear()
-        asyncio.run(web.download(Request({"episodeIds": [1, 2, 3], "batch": "20261012-070357-6b5682", "retry": retry})))
-        assert queue == [1, 2, 3], retry
+        async def json(self):
+            return {"episodeIds": [1, 2, 3], "batch": batch, "retry": True}
+
+    answer = asyncio.run(web.download(Request()))
+    assert json.loads(answer.text) == {"running": True, "outcome": "added", "job_id": batch}
+    assert queued == [1, 2, 3]
+    assert [child.state for child in store.get_job(batch).children] == ["waiting"] * 4
 
 
 def test_the_unwritable_files_check_stops_walking_at_its_limit(monkeypatch):
@@ -8697,12 +8691,14 @@ def test_a_queued_jobs_own_season_map_is_read_back_as_the_sync_reads_it(tmp_path
     # a damaged numbering: not downloaded, and still in the file after the next save
     got.clear()
     damaged = {"20261021-121218-44d6d0": {"episodes": [4], "kind": "manual", "numbering": {"episode_offset": "x"}}}
+    sync.JOBS_FILE.unlink()
     sync.QUEUE_FILE.write_text(json.dumps(damaged))
-    web.resume_queue()
+    assert web.resume_queue() == 0
     assert got == {}
-    sync.save_queue()
-    kept = json.loads(sync.QUEUE_FILE.read_text())
-    assert kept["20261021-121218-44d6d0"] == [damaged["20261021-121218-44d6d0"]]
+    with pytest.raises(sync.jobs.LegacyQueueConversionError):
+        sync.save_queue()
+    assert not sync.JOBS_FILE.exists()
+    assert json.loads(sync.QUEUE_FILE.read_text()) == damaged
 
 
 def test_a_queued_episode_taken_out_is_never_handed_to_the_job_loop_as_well(tmp_path, monkeypatch):
@@ -9606,6 +9602,2304 @@ def test_interface_audit_error_messages_and_legacy_backup_names(tmp_path, monkey
     assert web.BACKUP_NAME.match("unshacklarr-2026-10-06-0900.yaml")
     assert "Reload the page" in web.UNKNOWN_JOB and "Reload the page" in web.JOB_OVER and "Reload the page" in web.UNKNOWN_DOWNLOAD
     assert "sign in" in web.ALREADY_SET_UP.lower() and "startup log" in web.WRONG_SETUP_CODE
+
+
+def test_download_admits_once_before_starting_worker(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    started = []
+
+    def run(ids, *, batch, **kwargs):
+        record, = web.sonarr_sync.job_store().load()
+        assert record.id == batch
+        assert [child.request.sonarr_episode_id for child in record.children] == ids == [2, 1]
+        assert all(child.attempt_job_id is None for child in record.children)
+        started.append(batch)
+
+    monkeypatch.setattr(web, "run_sync", run)
+
+    class Request:
+        async def json(self):
+            return {"episodeIds": [2, 1, 2]}
+
+    async def check():
+        added = json.loads((await web.download(Request())).text)
+        duplicate = json.loads((await web.download(Request())).text)
+        assert started == [added["job_id"]]
+        assert added == {"running": True, "outcome": "added", "job_id": started[0]}
+        assert duplicate == {**added, "outcome": "already_queued"}
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize(("persisted", "corrupt", "expected"), [
+    (True, False, "added"), (False, False, "timeout"), (False, True, "reconciliation_failed"),
+])
+def test_admission_timeout_reconciles_with_durable_request(tmp_path, monkeypatch, persisted, corrupt, expected):
+    from unshacklarr import jobs
+    web = reloaded_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **kwargs: started.append(kwargs["batch"]))
+    admit = jobs.JobStore.admit
+
+    def lost_response(store, request, **kwargs):
+        if persisted:
+            assert isinstance(admit(store, request, **kwargs), jobs.Added)
+        elif corrupt:
+            store.path.write_text("corrupt")
+        raise TimeoutError
+
+    monkeypatch.setattr(jobs.JobStore, "admit", lost_response)
+
+    class Request:
+        async def json(self):
+            return {"episodeIds": [1]}
+
+    if persisted:
+        response = asyncio.run(web.download(Request()))
+        assert json.loads(response.text) == {"running": True, "outcome": expected, "job_id": started[0]}
+        assert len(started) == 1
+    else:
+        with pytest.raises(web.web.HTTPException) as refusal:
+            asyncio.run(web.download(Request()))
+        assert refusal.value.headers["X-Admission-Code"] == expected
+        assert refusal.value.headers["X-Admission-Outcome"] == "refused"
+        assert refusal.value.text and started == []
+
+
+def test_admission_refuses_invalid_episode_ids_and_redacts_upstream_error(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "run_sync", lambda *args, **kwargs: pytest.fail("Refusal started a worker"))
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "Cannot access https://alice:fixture@provider.invalid/title")
+
+    class Request:
+        def __init__(self, ids):
+            self.ids = ids
+
+        async def json(self):
+            return {"episodeIds": self.ids}
+
+    for value in (1, "1", [True], [0], [], [1]):
+        with pytest.raises(web.web.HTTPBadRequest) as refusal:
+            asyncio.run(web.download(Request(value)))
+        assert refusal.value.text
+        assert "fixture" not in refusal.value.text
+        assert refusal.value.headers["X-Admission-Outcome"] == "refused"
+    assert not web.sonarr_sync.JOBS_FILE.exists()
+
+
+def review_download_setup(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    monkeypatch.setattr(web, "still_on_serve", lambda ids, name: "")
+    return web
+
+
+def review_download_request(*ids):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(json=AsyncMock(return_value={"episodeIds": list(ids)}))
+
+
+def test_review_timeout_cannot_leave_a_late_job(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    entered, release, reconciling = threading.Event(), threading.Event(), threading.Event()
+    read = jobs._read_bytes
+    reconcile = jobs.JobStore.reconcile_admission
+    reads = 0
+    monkeypatch.setattr(web, "ADMISSION_TIMEOUT", 0.05)
+    monkeypatch.setattr(web, "run_sync", lambda *args, **kw: pytest.fail("Worker started"))
+
+    def blocked_before_write(path):
+        nonlocal reads
+        raw = read(path)
+        reads += 1
+        if reads == 2:
+            entered.set()
+            assert release.wait(2)
+        return raw
+
+    def reconcile_after_timeout(store, normalized, **kwargs):
+        reconciling.set()
+        return reconcile(store, normalized, **kwargs)
+
+    monkeypatch.setattr(jobs, "_read_bytes", blocked_before_write)
+    monkeypatch.setattr(jobs.JobStore, "reconcile_admission", reconcile_after_timeout)
+
+    async def request():
+        task = asyncio.create_task(web.download(review_download_request(1)))
+        try:
+            assert await asyncio.to_thread(entered.wait, 2)
+            assert await asyncio.to_thread(reconciling.wait, 2)
+            completed_while_locked = task.done()
+        finally:
+            release.set()
+        with pytest.raises(web.web.HTTPGatewayTimeout):
+            await task
+        assert not completed_while_locked
+
+    asyncio.run(request())
+    assert web.sonarr_sync.job_store().load() == ()
+
+
+def test_review_capacity_reserves_last_slot_and_allows_duplicate(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    limit = web.ASKED_AT_ONCE
+    sync.running_jobs.update({str(i): {} for i in range(limit - 1)})
+    entered, release = threading.Event(), threading.Event()
+    started = []
+
+    def start(ids, *, batch, **kw):
+        started.append(ids)
+        if ids == [1]:
+            entered.set()
+            assert release.wait(2)
+        with sync.jobs_lock:
+            sync.running_jobs[batch] = {}
+
+    monkeypatch.setattr(web, "run_sync", start)
+
+    async def request():
+        first = asyncio.create_task(web.download(review_download_request(1)))
+        try:
+            assert await asyncio.to_thread(entered.wait, 2)
+            with pytest.raises(web.web.HTTPTooManyRequests):
+                await web.download(review_download_request(2))
+        finally:
+            release.set()
+            await first
+        assert started == [[1]]
+        duplicate = await web.download(review_download_request(1))
+        assert json.loads(duplicate.text)["outcome"] == "already_queued"
+
+    asyncio.run(request())
+    assert len(jobs.JobStore(sync.JOBS_FILE).load()) == 1
+
+
+def test_review_invalid_migration_refuses_http_and_background(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    original = b"invalid queue"
+    sync.QUEUE_FILE.write_bytes(original)
+    monkeypatch.setattr(sync, "main", lambda *a, **kw: pytest.fail("Worker started"))
+    with pytest.raises(web.web.HTTPServiceUnavailable) as refusal:
+        asyncio.run(web.download(review_download_request(1)))
+    assert refusal.value.headers["X-Admission-Outcome"] == "refused" and refusal.value.text
+    assert isinstance(web.run_sync([1], kind="upgrade"), jobs.Refused)
+    assert not sync.JOBS_FILE.exists() and sync.QUEUE_FILE.read_bytes() == original
+
+
+def test_review_background_run_migrates_before_admitting(tmp_path, monkeypatch):
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    batch = "20261021-121217-33d6d0"
+    sync.QUEUE_FILE.write_text(json.dumps({batch: {"episodes": [7], "kind": "manual"}}))
+    monkeypatch.setattr(sync, "main", lambda *a, **kw: None)
+    thread = web.run_sync([1])
+    assert isinstance(thread, threading.Thread)
+    thread.join()
+    assert [job.children[0].request.sonarr_episode_id for job in sync.job_store().load()] == [7, 1]
+
+
+def test_review_stop_marks_a_parked_run(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    web = reloaded_web(tmp_path, monkeypatch)
+    batch = "20261021-121217-33d6d0"
+    run_id = "parked"
+    monkeypatch.setattr(web, "run_cards", lambda: [
+        {"id": run_id, "batch": batch, "outcome": "running", "step": "queued"},
+    ])
+    asyncio.run(web.stop_job(SimpleNamespace(match_info={"batch": batch})))
+    assert run_id in web.sonarr_sync.stop_waiting
+
+
+def test_review_unqueue_does_store_work_off_the_event_loop(tmp_path, monkeypatch):
+    web = reloaded_web(tmp_path, monkeypatch)
+    caller = threading.get_ident()
+
+    def take_out(episode_id):
+        assert threading.get_ident() != caller
+        return {"episodeId": episode_id}
+
+    monkeypatch.setattr(web.sonarr_sync, "take_out", take_out)
+    monkeypatch.setattr(web.sonarr_sync, "cancel_queued", lambda card: None)
+    request = SimpleNamespace(match_info={"episode_id": "1"})
+    assert asyncio.run(web.unqueue(request)).status == 200
+
+
+@pytest.mark.parametrize(("case", "expected"), [
+    ("exact", "already_queued"), ("overlap", "partial_overlap"),
+    ("failed", "active_failed_child"), ("new", "still_on_serve"),
+])
+@pytest.mark.parametrize("gate", ["serve", "cdm"])
+def test_review_durable_admission_precedes_new_job_checks(tmp_path, monkeypatch, case, expected, gate):
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    store = web.sonarr_sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    request = web.download_request([1, 2], "", "manual", False, None)
+    assert store.admit(request, job_id=batch, paused=True) == jobs.Added(batch)
+    if case == "failed":
+        store.fail_child(batch, request.items[0].id, jobs.FailureClassification("child", "download"))
+    checks = []
+
+    def refuse(ids, *_):
+        checks.append(ids)
+        return "Serve has an unconfirmed attempt" if gate == "serve" else "Provider has no CDM"
+
+    monkeypatch.setattr(web, "still_on_serve" if gate == "serve" else "cdm_refusal", refuse)
+    monkeypatch.setattr(web, "run_sync", lambda *a, **kw: pytest.fail("Worker started"))
+    ids = {"exact": [1, 2], "overlap": [2, 3], "failed": [1], "new": [3]}[case]
+    if expected == "already_queued":
+        response = asyncio.run(web.download(review_download_request(*ids)))
+        assert response.status == 200
+        assert json.loads(response.text) == {"running": True, "outcome": expected, "job_id": batch}
+    else:
+        status = web.web.HTTPBadRequest if case == "new" and gate == "cdm" else web.web.HTTPConflict
+        with pytest.raises(status) as refusal:
+            asyncio.run(web.download(review_download_request(*ids)))
+        assert refusal.value.headers["X-Admission-Code"] == ("invalid_request" if status == web.web.HTTPBadRequest else expected)
+    assert checks == ([ids] if case == "new" else [])
+
+
+@pytest.mark.parametrize("case", ["added", "exact", "overlap", "failed", "no_cdm"])
+def test_v1_download_returns_durable_admission_before_checking_cdm(tmp_path, monkeypatch, case):
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    started = []
+    monkeypatch.setattr(sync, "main", lambda ids, **kwargs: started.append((ids, kwargs["batch"])))
+    if case != "added":
+        monkeypatch.setattr(web, "cdm_refusal", lambda ids: "Provider has no CDM")
+    if case in ("exact", "overlap", "failed"):
+        prior = web.download_request([1, 2], "", "manual", False, None)
+        assert store.admit(prior, job_id=batch, paused=True) == jobs.Added(batch)
+        if case == "failed":
+            store.fail_child(batch, prior.items[0].id, jobs.FailureClassification("child", "download"))
+    ids = {"added": [1, 2], "exact": [1, 2], "overlap": [2, 3], "failed": [1], "no_cdm": [3]}[case]
+    request = review_download_request(*ids)
+
+    if case in ("added", "exact"):
+        response = asyncio.run(web.v1_start_download(request))
+        assert response.status == 200
+        body = json.loads(response.text)
+        if case == "added":
+            record, = store.load()
+            for thread in web.sync_threads:
+                thread.join()
+            assert started == [(ids, record.id)]
+            assert body == {"queued": 2, "outcome": "added", "job_id": record.id}
+        else:
+            assert body == {"queued": 2, "outcome": "already_queued", "job_id": batch}
+            assert not started
+        return
+    error = web.web.HTTPBadRequest if case == "no_cdm" else web.web.HTTPConflict
+    with pytest.raises(error) as refusal:
+        asyncio.run(web.v1_start_download(request))
+    if case == "no_cdm":
+        assert refusal.value.text == "Provider has no CDM"
+        assert not store.load()
+    else:
+        codes = {"overlap": "partial_overlap", "failed": "active_failed_child"}
+        assert refusal.value.headers["X-Admission-Code"] == codes[case]
+    assert not started
+
+
+@pytest.fixture
+def grouped_v1_audio(tmp_path, monkeypatch):
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    episodes = [
+        {"id": 1, "hasFile": False},
+        {"id": 2, "hasFile": True, "episodeFile": {"mediaInfo": {"audioStreams": [{"language": "fre"}]}}},
+    ]
+    monkeypatch.setattr(sync, "sonarr_get", lambda *args, **kwargs: episodes)
+    workers = []
+    finished = threading.Event()
+
+    def work(ids, **options):
+        workers.append((ids, options["batch"]))
+        finished.wait()
+
+    monkeypatch.setattr(sync, "main", work)
+
+    def submit():
+        finished.clear()
+        request = review_download_request(1, 2)
+        request.json.return_value["audio"] = "fr"
+        try:
+            return asyncio.run(web.v1_start_download(request))
+        finally:
+            finished.set()
+            for thread in web.sync_threads:
+                thread.join()
+
+    return web, sync.job_store(), workers, submit
+
+
+@pytest.mark.parametrize("episode_ids", [(2,), (1, 2)], ids=["audio_only", "mixed"])
+def test_v1_add_track_refuses_when_all_requested_workers_do_not_fit(tmp_path, monkeypatch, episode_ids):
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    monkeypatch.setitem(sync.SETTINGS, "upgrade_mode", "add_track")
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    if len(episode_ids) == 1:
+        monkeypatch.setitem(sync.running_jobs, "occupied", {})
+    episodes = {1: {"id": 1, "hasFile": False}, 2: {"id": 2, "hasFile": True}}
+    monkeypatch.setattr(sync, "sonarr_get", lambda *args, **kwargs: [episodes[i] for i in episode_ids])
+    download_workers, audio_workers = [], []
+    monkeypatch.setattr(sync, "main", lambda ids, **options: download_workers.append(ids))
+    monkeypatch.setattr(web, "add_audio_soon", lambda ids, lang, **options: audio_workers.append((ids, lang)))
+    request = review_download_request(*episode_ids)
+    request.json.return_value["audio"] = "fr"
+
+    with pytest.raises(web.web.HTTPTooManyRequests) as refusal:
+        asyncio.run(web.v1_start_download(request))
+
+    assert refusal.value.headers["X-Admission-Code"] == "capacity_full"
+    assert store.load() == ()
+    assert not download_workers and not audio_workers
+    assert not sync.reserved_starts
+
+
+def test_v1_add_track_persists_before_acknowledgment_and_deduplicates(tmp_path, monkeypatch):
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    monkeypatch.setitem(sync.SETTINGS, "upgrade_mode", "add_track")
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    monkeypatch.setattr(sync, "sonarr_get", lambda *args, **kwargs: [{"id": 2, "hasFile": True}])
+    entered, finish, fallback = threading.Event(), threading.Event(), threading.Event()
+    workers = []
+
+    def add_track(episode_id, language, anyway):
+        workers.append(threading.current_thread())
+        entered.set()
+        assert finish.wait(2)
+        return False
+
+    monkeypatch.setattr(sync, "add_track", add_track)
+    monkeypatch.setattr(sync, "main", lambda ids, **options: fallback.set())
+
+    def submit():
+        request = review_download_request(2)
+        request.json.return_value["audio"] = "fr"
+        return asyncio.run(web.v1_start_download(request))
+
+    try:
+        response = submit()
+        assert response.status == 200
+        job, = store.load()
+        counts = {"queued": 1, "downloaded": 0, "replaced": 0, "audio_added": 1}
+        assert json.loads(response.text) == {**counts, "outcome": "added", "job_id": job.id}
+        assert job.request.effective_options == {"kind": "audio_add", "audio": "fr"}
+        assert entered.wait(2)
+        assert not sync.reserved_starts
+        assert len(sync.running_jobs) == 1
+        monkeypatch.setattr(web, "cdm_refusal", lambda ids: "Provider has no CDM")
+        assert json.loads(submit().text) == {**counts, "outcome": "already_queued", "job_id": job.id}
+    finally:
+        finish.set()
+        for worker in workers:
+            worker.join(2)
+
+    assert fallback.wait(2)
+    job, = store.load()
+    assert job.request.items[0].sonarr_episode_id == 2
+    assert job.request.runtime_options()["item_options"] == {
+        job.children[0].request.id: {"kind": "upgrade", "replace": True, "audio": "fr"}}
+
+
+def audio_confirmation_setup(tmp_path, monkeypatch, episode_id, watched_language):
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    episode = {"id": episode_id, "hasFile": True, "episodeFileId": 20, "seasonNumber": 1, "episodeNumber": episode_id,
+               "series": {"tvdbId": 7, "title": "Show"}}
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    monkeypatch.setitem(sync.SETTINGS, "upgrade_mode", "add_track")
+    monkeypatch.setitem(sync.SETTINGS, "add_track_other_source", "ask")
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [episode])
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST"}}})
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **_: (
+        {"path": "/tv/Show/episode.mkv", "sceneName": "Show.S01E02.OTHER.WEB-DL"}
+        if path == "episodefile/20" else [episode]))
+    if watched_language is not None:
+        sync.UPGRADES_FILE.write_text(json.dumps({str(episode_id): {"want": watched_language, "tvdb": 7}}))
+    return web
+
+
+@pytest.mark.parametrize("choice", ["add", "whole"])
+@pytest.mark.parametrize(("episode_id", "watched_language"), [(2, "fr"), (1, None), (2, "en")])
+def test_v1_audio_confirmation_survives_queue_restore(tmp_path, monkeypatch, choice, episode_id, watched_language):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    web = audio_confirmation_setup(tmp_path, monkeypatch, episode_id, watched_language)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    key = str(episode_id)
+    url = f"/api/audio-upgrade/{episode_id}"
+    attempted, audio_workers, downloads = [], [], []
+    asked, answered = threading.Event(), threading.Event()
+    add_track = sync.add_track
+    requested_tracks, imports = [], []
+    if watched_language == "en" and choice == "add":
+        library = tmp_path / "episode.mkv"
+        library.touch()
+        output = tmp_path / "audio-add"
+        monkeypatch.setattr(sync, "library_file", lambda _: library)
+        monkeypatch.setattr(sync, "episode_folder", lambda _: output)
+        monkeypatch.setattr(sync, "backend_for", lambda *_: SimpleNamespace(name="test"))
+        monkeypatch.setattr(sync, "download_request", lambda *_: {})
+        monkeypatch.setattr(sync, "duration_of", lambda _: 60.0)
+        monkeypatch.setattr(sync, "mkv_tracks", lambda _: [{"type": "audio", "id": 0}])
+        monkeypatch.setattr(sync, "notify", lambda *_: None)
+
+        def download_audio(payload, run):
+            requested_tracks.append(payload["a_lang"])
+            (output / "audio.mka").touch()
+
+        def join_audio(cmd, *args, **kwargs):
+            (output / "episode.mkv.part").touch()
+            return SimpleNamespace(returncode=0)
+
+        monkeypatch.setattr(sync, "run_job_retrying", download_audio)
+        monkeypatch.setattr(sync, "mkv_run", join_audio)
+        monkeypatch.setattr(sync, "import_episode", lambda ep, out, *, replace: imports.append((ep["id"], replace)))
+
+    def add_audio(episode_id, language, anyway):
+        attempted.append((episode_id, language, anyway))
+        audio_workers.append(threading.current_thread())
+        if anyway:
+            answered.set()
+            return add_track(episode_id, language, anyway) if watched_language == "en" else True
+        try:
+            return add_track(episode_id, language, anyway)
+        finally:
+            asked.set()
+
+    def download(ids, *, batch, kind, replace, audio, **options):
+        downloads.append((ids, batch, kind, replace, audio))
+        store.complete_child(batch, web.jobs.episode_item(None, ids[0]).id)
+
+    monkeypatch.setattr(sync, "add_track", add_audio)
+    monkeypatch.setattr(sync, "main", download)
+    app = web.web.Application()
+    app.router.add_post("/api/v1/downloads", web.v1_start_download)
+    app.router.add_post("/api/audio-upgrade/{episode_id}", web.confirm_audio)
+
+    async def scenario():
+        async with TestClient(TestServer(app)) as client:
+            body = {"episodeIds": [episode_id], "audio": "fr"}
+            response = await client.post("/api/v1/downloads", json=body)
+            assert response.status == 200
+            admitted = await response.json()
+            batch = admitted["job_id"]
+            assert await asyncio.to_thread(asked.wait, 5)
+            await asyncio.to_thread(audio_workers[0].join, 5)
+            assert not audio_workers[0].is_alive()
+            assert web.read_json(sync.UPGRADES_FILE, {}).get(key, {}).get("asked") or watched_language is None
+            job = store.get_job(batch)
+            assert job.children[0].state == "waiting"
+            if watched_language is None:
+                assert key not in web.read_json(sync.UPGRADES_FILE, {})
+                assert job.request.runtime_options()["item_options"][job.children[0].request.id] == {
+                    "kind": "audio_add", "audio": "fr", "asked": True}
+            assert job.state in web.jobs.ACTIVE_JOB_STATES
+            assert not sync.running_jobs and not sync.reserved_starts
+            repeat = await client.post("/api/v1/downloads", json=body)
+            assert repeat.status == 200
+            assert await repeat.json() == {**admitted, "outcome": "already_queued"}
+
+            assert await asyncio.to_thread(web.resume_queue) == 0
+            assert store.get_job(batch).children[0].state == "waiting"
+            assert attempted == [(episode_id, "fr", False)]
+            assert not sync.running_jobs and not sync.reserved_starts
+
+            sync.running_jobs["occupied"] = {}
+            try:
+                refused = await client.post(url, json={"choice": choice})
+                assert refused.status == 429
+                assert refused.headers["X-Admission-Code"] == "capacity_full"
+                if watched_language is not None:
+                    assert web.read_json(sync.UPGRADES_FILE, {})[key]["asked"]
+                assert store.get_job(batch) == job
+                assert not sync.reserved_starts
+            finally:
+                del sync.running_jobs["occupied"]
+
+            answer = await client.post(url, json={"choice": choice})
+            assert answer.status == 200
+            assert await answer.json() == {"ok": True}
+            if choice == "add":
+                assert await asyncio.to_thread(answered.wait, 5)
+            for worker in [*audio_workers, *web.sync_threads]:
+                await asyncio.to_thread(worker.join, 5)
+                assert not worker.is_alive()
+            finished, = store.load()
+            assert finished.id == batch
+            assert finished.children[0].id == job.children[0].id
+            assert finished.children[0].state == finished.state == "completed"
+            assert web.read_json(sync.UPGRADES_FILE, {}).get(key, {}) == (
+                {} if watched_language is None else {"want": watched_language, "tvdb": 7})
+            assert not sync.running_jobs and not sync.reserved_starts
+            if choice == "add":
+                assert attempted == [(episode_id, "fr", False), (episode_id, "fr", True)]
+                assert not downloads
+                if watched_language == "en":
+                    assert requested_tracks == [["fr"]]
+                    assert imports == [(episode_id, True)]
+            else:
+                assert attempted == [(episode_id, "fr", False)]
+                assert downloads == [([episode_id], batch, "upgrade", True, "fr")]
+                assert finished.request.options_for_item(finished.children[0].request.id) == {
+                    "kind": "upgrade", "replace": True, "audio": "fr"}
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("cancel", ["stop", "unqueue", "delete"])
+@pytest.mark.parametrize("watched_language", ["en", None])
+def test_v1_audio_cancellation_dismisses_confirmation(tmp_path, monkeypatch, cancel, watched_language):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    web = audio_confirmation_setup(tmp_path, monkeypatch, 1, watched_language)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    prompted = threading.Event()
+    workers = []
+    episode_lookup = sync.chosen_episodes
+
+    def find_episode(ids):
+        workers.append(threading.current_thread())
+        prompted.set()
+        return episode_lookup(ids)
+
+    monkeypatch.setattr(sync, "chosen_episodes", find_episode)
+    app = web.web.Application()
+    app.router.add_post("/api/v1/downloads", web.v1_start_download)
+    app.router.add_post("/api/audio-upgrade/{episode_id}", web.confirm_audio)
+    app.router.add_post("/api/jobs/{batch}/stop", web.stop_job)
+    app.router.add_post("/api/unqueue/{episode_id}", web.unqueue)
+    app.router.add_delete("/api/jobs/{batch}", web.delete_job)
+
+    async def scenario():
+        async with TestClient(TestServer(app)) as client:
+            response = await client.post("/api/v1/downloads", json={"episodeIds": [1], "audio": "fr"})
+            assert response.status == 200
+            batch = (await response.json())["job_id"]
+            assert await asyncio.to_thread(prompted.wait, 5)
+            await asyncio.to_thread(workers[0].join, 5)
+            assert not workers[0].is_alive()
+            action, = [i["action"] for i in web.read_json(sync.INBOX_FILE, {})["items"]]
+            assert action["id"] == "audio:1" and not action.get("done")
+
+            if cancel == "delete":
+                job = store.get_job(batch)
+                store.cancel_child(batch, job.children[0].id)
+                sync.RUNS_DIR.mkdir(exist_ok=True)
+                (sync.RUNS_DIR / "cancelled.json").write_text(json.dumps({
+                    "id": "cancelled", "batch": batch, "episodeId": 1, "outcome": "cancelled", "ended": "2026-11-26"}))
+                assert (await client.delete(f"/api/jobs/{batch}")).status == 200
+            else:
+                url = f"/api/jobs/{batch}/stop" if cancel == "stop" else "/api/unqueue/1"
+                assert (await client.post(url)).status == 200
+            child = store.get_job(batch).children[0]
+            assert child.state in ("cancelled", "stopped")
+            action, = [i["action"] for i in web.read_json(sync.INBOX_FILE, {})["items"]]
+            assert action["id"] == "audio:1" and action.get("done")
+            started = []
+            monkeypatch.setattr(web, "run_sync", lambda *args, **kwargs: started.append("whole"))
+            monkeypatch.setattr(sync, "add_track", lambda *args: started.append("add"))
+            for choice in ("whole", "add"):
+                response = await client.post("/api/audio-upgrade/1", json={"choice": choice})
+                assert response.status == 404
+                assert await response.text() == "That episode no longer waits for an answer"
+            assert not started
+            assert not web.read_json(sync.UPGRADES_FILE, {}).get("1", {}).get("asked")
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("choice", ["add", "whole"])
+@pytest.mark.parametrize("watched", [True, False])
+def test_v1_audio_confirmation_during_the_audio_pass(tmp_path, monkeypatch, choice, watched):
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    monkeypatch.setitem(sync.SETTINGS, "upgrade_mode", "add_track")
+    monkeypatch.setattr(sync, "sonarr_get", lambda *args, **kwargs: [{"id": i, "hasFile": True} for i in (1, 2)])
+    if watched:
+        sync.UPGRADES_FILE.write_text(json.dumps({"1": {"want": "fr"}}))
+    prompted, proceed = threading.Event(), threading.Event()
+    attempted, workers, downloaded = [], [], []
+
+    def add_track(episode_id, language, anyway):
+        attempted.append((episode_id, language, anyway))
+        if episode_id == 1 and not anyway:
+            workers.append(threading.current_thread())
+            episode = {"id": 1, "seasonNumber": 1, "episodeNumber": 1, "series": {"title": "Show"}}
+            sync.ask_audio(episode, {"service": "TEST"}, language, {"path": "/tv/episode.mkv"})
+            prompted.set()
+            assert proceed.wait(5)
+        return True
+
+    def download(ids, *, batch, kind, replace, audio, **options):
+        downloaded.append((ids, batch, kind, replace, audio))
+        for episode_id in ids:
+            store.complete_child(batch, web.jobs.episode_item(None, episode_id).id)
+
+    monkeypatch.setattr(sync, "add_track", add_track)
+    monkeypatch.setattr(sync, "main", download)
+    request = review_download_request(1, 2)
+    request.json.return_value["audio"] = "fr"
+    response = asyncio.run(web.v1_start_download(request))
+    batch = json.loads(response.text)["job_id"]
+    try:
+        assert prompted.wait(5)
+        request = SimpleNamespace(match_info={"episode_id": "1"}, json=AsyncMock(return_value={"choice": choice}))
+        assert asyncio.run(web.confirm_audio(request)).status == 200
+        job = store.get_job(batch)
+        assert job.children[0].state == "waiting"
+        options = {"kind": "audio_add", "audio": "fr", "anyway": True} if choice == "add" else {
+            "kind": "upgrade", "replace": True, "audio": "fr"}
+        assert job.request.runtime_options()["item_options"] == {job.children[0].request.id: options}
+        assert list(sync.running_jobs) == [batch]
+        assert not sync.reserved_starts
+    finally:
+        proceed.set()
+        for worker in workers:
+            worker.join(5)
+            assert not worker.is_alive()
+        for worker in web.sync_threads:
+            worker.join(5)
+            assert not worker.is_alive()
+
+    assert store.get_job(batch).state == "completed"
+    assert not sync.running_jobs and not sync.reserved_starts
+    if choice == "add":
+        assert attempted == [(1, "fr", False), (2, "fr", False), (1, "fr", True)]
+        assert not downloaded
+    else:
+        assert attempted == [(1, "fr", False), (2, "fr", False)]
+        assert downloaded == [([1], batch, "upgrade", True, "fr")]
+
+
+def test_confirm_watched_audio_whole_keeps_language_on_admission_and_restore(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    sync.UPGRADES_FILE.write_text(json.dumps({"1": {"want": "fr", "asked": True}}))
+    assert not sync.JOBS_FILE.exists()
+    worker = Mock()
+    monkeypatch.setattr(sync, "main", worker)
+    app = web.web.Application()
+    app.router.add_post("/api/audio-upgrade/{episode_id}", web.confirm_audio)
+
+    async def confirm():
+        async with TestClient(TestServer(app)) as client:
+            response = await client.post("/api/audio-upgrade/1", json={"choice": "whole"})
+            assert response.status == 200
+
+    asyncio.run(confirm())
+    for thread in web.sync_threads:
+        thread.join(5)
+        assert not thread.is_alive()
+    job, = store.load()
+    assert worker.call_count == 1 and worker.call_args.args == ([1],)
+    assert worker.call_args.kwargs["audio"] == "fr"
+    assert worker.call_args.kwargs["batch"] == job.id
+    assert job.request.runtime_options() == {"kind": "upgrade", "replace": True, "audio": "fr"}
+
+    restored = Mock(return_value=None)
+    monkeypatch.setattr(web, "run_sync", restored)
+    assert web.resume_queue() == 1
+    assert restored.call_count == 1 and restored.call_args.args == ([1],)
+    assert restored.call_args.kwargs["batch"] == job.id
+    assert restored.call_args.kwargs["kind"] == "upgrade"
+    assert restored.call_args.kwargs["audio"] == "fr"
+    assert "after" not in restored.call_args.kwargs
+
+
+def test_restore_audio_batch_runs_only_unblocked_and_confirmed_children(tmp_path, monkeypatch):
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    request = web.download_request([1, 2, 3, 4, 5], "", "audio_add", False, None, audio="fr")
+    batch = store.admit(request).job_id
+    assert store.stage_confirmed_audio(batch, 3, "fr")
+    assert store.stage_confirmed_audio(batch, 5, "de")
+    assert store.stage_audio_fallback(batch, [4, 5]) == [4, 5]
+    sync.UPGRADES_FILE.write_text(json.dumps({str(i): {"want": "en", "asked": "pending"} for i in (1, 3, 4, 5)}))
+    attempted, workers, downloaded = [], [], []
+    started = threading.Event()
+
+    def add_track(episode_id, language, anyway):
+        attempted.append((episode_id, language, anyway))
+        workers.append(threading.current_thread())
+        started.set()
+        return True
+
+    def download(ids, *, batch, kind, replace, audio, **options):
+        downloaded.append((ids, batch, kind, replace, audio))
+        for episode_id in ids:
+            store.complete_child(batch, web.jobs.episode_item(None, episode_id).id)
+
+    monkeypatch.setattr(sync, "add_track", add_track)
+    monkeypatch.setattr(sync, "main", download)
+    assert web.resume_queue() == 4
+    assert started.wait(5)
+    workers[0].join(5)
+    assert not workers[0].is_alive()
+    for worker in web.sync_threads:
+        worker.join(5)
+        assert not worker.is_alive()
+
+    job = store.get_job(batch)
+    assert [child.state for child in job.children] == ["waiting", "completed", "completed", "completed", "completed"]
+    assert attempted == [(2, "fr", False), (3, "fr", True)]
+    assert downloaded == [([4], batch, "upgrade", True, "fr"), ([5], batch, "upgrade", True, "de")]
+    assert web.read_json(sync.UPGRADES_FILE, {}) == {
+        "1": {"want": "en", "asked": "pending"}, "3": {"want": "en"}, "4": {"want": "en"}, "5": {"want": "en"}}
+    assert not sync.running_jobs and not sync.reserved_starts
+
+
+def test_v1_add_track_stop_cancels_pending_episodes_and_prevents_fallback(tmp_path, monkeypatch):
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    monkeypatch.setitem(sync.SETTINGS, "upgrade_mode", "add_track")
+    monkeypatch.setattr(sync, "sonarr_get", lambda *a, **kw: [{"id": i, "hasFile": True} for i in (1, 2)])
+    entered, release = threading.Event(), threading.Event()
+    attempted, fallback, workers = [], [], []
+
+    def add_track(episode_id, *_):
+        attempted.append(episode_id)
+        workers.append(threading.current_thread())
+        entered.set()
+        assert release.wait(5)
+        return False
+
+    monkeypatch.setattr(sync, "add_track", add_track)
+    monkeypatch.setattr(sync, "main", lambda ids, **kw: fallback.extend(ids))
+    sync.pause_all()
+    request = review_download_request(1, 2)
+    request.json.return_value["audio"] = "fr"
+    response = asyncio.run(web.v1_start_download(request))
+    batch = json.loads(response.text)["job_id"]
+    store = sync.job_store()
+    try:
+        assert store.get_job(batch).state == "paused"
+        assert not attempted
+        sync.resume_all()
+        assert entered.wait(5)
+        assert asyncio.run(web.stop_job(SimpleNamespace(match_info={"batch": batch}))).status == 200
+    finally:
+        release.set()
+        for worker in workers:
+            worker.join(5)
+            assert not worker.is_alive()
+    assert attempted == [1]
+    assert not fallback
+    assert store.get_job(batch).state == "cancelled"
+    assert not sync.running_jobs and not sync.reserved_starts
+
+
+@pytest.mark.parametrize("competing", [False, True], ids=["grouped", "competing-request"])
+def test_v1_add_track_hands_off_both_whole_episode_fallbacks(tmp_path, monkeypatch, competing):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    key = web.secrets.token_urlsafe()
+    config = web.read_config()
+    config["auth"].update(password=web.hash_password(key), api_key=hashlib.sha256(key.encode()).hexdigest())
+    web.write_config(config)
+    monkeypatch.setitem(sync.SETTINGS, "upgrade_mode", "add_track")
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    monkeypatch.setattr(sync, "sonarr_get", lambda *a, **kw: [{"id": i, "hasFile": True} for i in (1, 2)])
+    audio_started, entering_handoff, continue_handoff, finish_download = (threading.Event() for _ in range(4))
+    audio_attempts, audio_workers, downloads = [], [], []
+
+    def add_track(episode_id, language, anyway):
+        audio_attempts.append((episode_id, language, anyway))
+        audio_workers.append(threading.current_thread())
+        audio_started.set()
+        return False
+
+    def download(ids, *, batch, replace, audio, **options):
+        downloads.append((ids, batch, replace, audio))
+        entering_handoff.set()
+        assert continue_handoff.wait(5)
+        assert finish_download.wait(5)
+
+    monkeypatch.setattr(sync, "add_track", add_track)
+    monkeypatch.setattr(sync, "main", download)
+
+    async def submit():
+        async with TestClient(TestServer(web.app)) as client:
+            headers = {web.API_KEY_HEADER: key}
+            response = await client.post("/api/v1/downloads", json={"episodeIds": [1, 2], "audio": "fr"}, headers=headers)
+            assert response.status == 200
+            body = await response.json()
+            assert body == {"queued": 2, "downloaded": 0, "replaced": 0, "audio_added": 2,
+                            "outcome": "added", "job_id": store.load()[0].id}
+            assert await asyncio.to_thread(audio_started.wait, 5)
+            if competing:
+                assert await asyncio.to_thread(entering_handoff.wait, 5)
+                monkeypatch.setattr(web, "cdm_refusal", lambda ids: "Provider has no CDM")
+                repeat = await client.post("/api/v1/downloads", json={"episodeIds": [1, 2], "audio": "fr"}, headers=headers)
+                assert repeat.status == 200
+                assert await repeat.json() == {**body, "outcome": "already_queued"}
+                monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+                other = await client.post("/api/v1/downloads", json={"episodeIds": [3]}, headers=headers)
+                return other.status, other.headers.get("X-Admission-Code")
+
+    try:
+        try:
+            refusal = asyncio.run(submit())
+        finally:
+            continue_handoff.set()
+            if audio_workers:
+                audio_workers[0].join(5)
+                assert not audio_workers[0].is_alive()
+    finally:
+        finish_download.set()
+        for worker in web.sync_threads:
+            worker.join(5)
+            assert not worker.is_alive()
+
+    if competing:
+        assert refusal == (429, "capacity_full")
+    assert audio_attempts == [(1, "fr", False), (2, "fr", False)]
+    job, = store.load()
+    assert [child.request.sonarr_episode_id for child in job.children] == [1, 2]
+    assert job.request.runtime_options()["item_options"] == {
+        child.request.id: {"kind": "upgrade", "replace": True, "audio": "fr"} for child in job.children
+    }
+    assert downloads == [([1, 2], job.id, True, "fr")]
+    assert not sync.running_jobs and not sync.reserved_starts
+
+
+@pytest.mark.parametrize(("checkpoint", "waiting"), [("admission", [1, 2]), ("partial", [2]), ("handoff", [1, 2])])
+def test_v1_add_track_resumes_after_process_exit(tmp_path, monkeypatch, checkpoint, waiting):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    script = """
+import asyncio
+import os
+import sys
+import threading
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+from unshacklarr import sync, web
+
+checkpoint = sys.argv[1]
+acknowledged = threading.Event()
+sync.SETTINGS["upgrade_mode"] = "add_track"
+sync.sonarr_get = lambda *args, **kwargs: [{"id": i, "hasFile": True} for i in (1, 2)]
+web.cdm_refusal = lambda ids: ""
+web.still_on_serve = lambda ids, name: ""
+
+def add_track(episode_id, *_):
+    assert acknowledged.wait(5)
+    if checkpoint == "admission" or (checkpoint == "partial" and episode_id == 2):
+        os._exit(0)
+    return checkpoint == "partial"
+
+sync.add_track = add_track
+sync.main = lambda *args, **kwargs: os._exit(0)
+request = SimpleNamespace(json=AsyncMock(return_value={"episodeIds": [1, 2], "audio": "fr"}))
+response = asyncio.run(web.v1_start_download(request))
+assert response.status == 200
+print(response.text, flush=True)
+acknowledged.set()
+threading.Event().wait(5)
+raise AssertionError("Crash checkpoint did not run")
+"""
+    process = subprocess.run([sys.executable, "-c", script, checkpoint], capture_output=True, text=True, timeout=15)
+    assert process.returncode == 0, process.stdout + process.stderr
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    record, = store.load()
+    assert json.loads(process.stdout.splitlines()[0])["job_id"] == record.id
+    assert [child.request.sonarr_episode_id for child in record.children if child.state == "waiting"] == waiting
+    attempted, downloaded, imported, workers = [], [], [], []
+    finished = threading.Event()
+
+    def add_track(episode_id, language, _):
+        workers.append(threading.current_thread())
+        attempted.append((episode_id, language))
+        finished.set()
+        return True
+
+    def submit_download(payload):
+        downloaded.append(payload)
+        output = Path(payload["output_dir"])
+        output.mkdir(exist_ok=True)
+        (output / "episode.mkv").touch()
+        return f"download-{len(downloaded)}"
+
+    def download_request(show, _config, episode, out, _backend):
+        assert show["asked_audio"] == "fr"
+        return {"service": "TEST", "title_id": "show", "output_dir": str(out), "wanted": [episode]}
+
+    def list_tracks(method, path, **_):
+        assert (method, path) == ("POST", "/api/list-tracks")
+        return {"episodes": [{"audio": [{"language": "fr"}]}]}
+
+    backend = SimpleNamespace(name="", download=submit_download, call=list_tracks,
+                              job=lambda _: {"status": "completed", "output_files": ["episode.mkv"]})
+    episodes = [{"id": i, "seriesId": 7, "seasonNumber": 1, "episodeNumber": i, "hasFile": True,
+                 "series": {"tvdbId": 7, "title": "Show"}} for i in [1, 2]]
+    config = {"series": {7: {"service": "TEST", "title": "https://example.com/show"}}}
+    monkeypatch.setattr(sync, "read_file", lambda: config)
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep for ep in episodes if ep["id"] in ids])
+    monkeypatch.setattr(sync, "backend_named", lambda _: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_: backend)
+    monkeypatch.setattr(sync, "download_request", download_request)
+    monkeypatch.setattr(sync, "episode_folder", lambda ep: tmp_path / str(ep["id"]))
+    monkeypatch.setattr(sync, "import_episode", lambda ep, out, replace: imported.append((ep["id"], replace)))
+    for operation in ("apply_ladder", "free_space_problem", "library_space_problem", "finalize", "check_audio",
+                      "check_subs", "lacks_preferred", "note_upgrade", "after_download", "notify_series",
+                      "setup_of", "by_title", "fallback_show", "wrong_number"):
+        monkeypatch.setattr(sync, operation, lambda *args, **kwargs: None)
+
+    monkeypatch.setattr(sync, "add_track", add_track)
+    assert web.resume_queue() == len(waiting)
+    if checkpoint != "handoff":
+        assert finished.wait(5)
+    for worker in [*workers, *web.sync_threads]:
+        worker.join(5)
+        assert not worker.is_alive()
+    if checkpoint == "handoff":
+        assert [payload["wanted"] for payload in downloaded] == [["S01E01"], ["S01E02"]]
+        assert imported == [(1, True), (2, True)]
+        assert not attempted
+    else:
+        assert attempted == [(episode_id, "fr") for episode_id in waiting]
+        assert not downloaded
+    assert store.get_job(record.id).state == "completed"
+    assert not sync.running_jobs and not sync.reserved_starts
+
+
+@pytest.mark.parametrize("existing", [None, 1, 2])
+def test_v1_grouped_audio_returns_every_durable_outcome(grouped_v1_audio, monkeypatch, existing):
+    from unshacklarr import jobs
+
+    web, store, workers, submit = grouped_v1_audio
+    if existing is not None:
+        prior = web.download_request([existing], "", "manual", existing == 2, None, audio="fr")
+        assert isinstance(store.admit(prior), jobs.Added)
+        monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    counts = {"queued": 2, "downloaded": 1, "replaced": 1, "audio_added": 0}
+    response = submit()
+    assert response.status == 200
+    records = {job.request.items[0].sonarr_episode_id: job for job in store.load()}
+    assert set(records) == {1, 2}
+    job_ids = [records[episode].id for episode in (1, 2)]
+    assert json.loads(response.text) == {
+        **counts, "outcome": "added", "job_ids": job_ids,
+        "jobs": [{"outcome": "already_queued" if episode == existing else "added", "job_id": job_id}
+                 for episode, job_id in zip((1, 2), job_ids)],
+    }
+    assert sorted(workers) == [([episode], records[episode].id) for episode in (1, 2) if episode != existing]
+
+    def refuse_cdm(ids):
+        pytest.fail("Duplicate request checked CDM availability")
+
+    for cdm_refusal in (lambda ids: "Provider has no CDM", refuse_cdm):
+        monkeypatch.setattr(web, "cdm_refusal", cdm_refusal)
+        workers.clear()
+        response = submit()
+        assert response.status == 200
+        assert json.loads(response.text) == {
+            **counts, "outcome": "already_queued", "job_ids": job_ids,
+            "jobs": [{"outcome": "already_queued", "job_id": job_id} for job_id in job_ids],
+        }
+        assert store.load() == tuple(records.values())
+        assert not workers
+
+
+@pytest.mark.parametrize("case", ["partial_overlap", "active_failed_child", "capacity_full", "racing_overlap"])
+def test_v1_grouped_audio_refusal_does_not_partially_admit(grouped_v1_audio, monkeypatch, case):
+    from unshacklarr import jobs
+
+    web, store, workers, submit = grouped_v1_audio
+    competing = web.download_request([2, 3], "", "manual", True, None, audio="fr")
+    if case == "capacity_full":
+        monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    elif case == "racing_overlap":
+        def race(ids):
+            assert isinstance(store.admit(competing), jobs.Added)
+            return ""
+
+        monkeypatch.setattr(web, "cdm_refusal", race)
+    else:
+        result = store.admit(competing)
+        assert isinstance(result, jobs.Added)
+        if case == "active_failed_child":
+            store.fail_child(result.job_id, competing.items[0].id, jobs.FailureClassification("child", "download"))
+    before = store.load()
+
+    error = web.web.HTTPTooManyRequests if case == "capacity_full" else web.web.HTTPConflict
+    with pytest.raises(error) as refusal:
+        submit()
+    assert refusal.value.headers["X-Admission-Code"] == ("partial_overlap" if case == "racing_overlap" else case)
+    if case == "racing_overlap":
+        record, = store.load()
+        assert record.request == competing
+    else:
+        assert store.load() == before
+    assert not workers
+    assert not web.sonarr_sync.reserved_starts
+
+
+@pytest.mark.parametrize("activity", [False, True])
+def test_activity_retry_repeats_the_existing_admission(tmp_path, monkeypatch, activity):
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    store = web.sonarr_sync.job_store()
+    started = []
+    monkeypatch.setattr(web, "run_sync", lambda ids, **_: started.append(ids))
+    added = asyncio.run(web.download(review_download_request(1, 2)))
+    batch = json.loads(added.text)["job_id"]
+    store.fail_child(batch, jobs.episode_item(None, 1).id, jobs.FailureClassification("child", "manifest"))
+    retry = review_download_request(1)
+    retry.json.return_value.update(batch=batch, retry=True)
+    assert json.loads(asyncio.run(web.download(retry)).text)["outcome"] == "added"
+
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "Provider has no CDM")
+    response = asyncio.run(web.download(retry if activity else review_download_request(1, 2)))
+    assert response.status == 200
+    assert json.loads(response.text) == {"running": True, "outcome": "already_queued", "job_id": batch}
+
+    monkeypatch.setattr(web, "cdm_refusal", lambda ids: "")
+    retry.json.return_value["replace"] = True
+    with pytest.raises(web.web.HTTPConflict) as refusal:
+        asyncio.run(web.download(retry))
+    assert refusal.value.headers["X-Admission-Code"] == "retry_conflict"
+    store.complete_child(batch, jobs.episode_item(None, 1).id)
+    store.cancel_child(batch, jobs.episode_item(None, 2).id)
+    retry.json.return_value.pop("replace")
+    for ids in ([1], [2]):
+        retry.json.return_value["episodeIds"] = ids
+        with pytest.raises(web.web.HTTPConflict) as refusal:
+            asyncio.run(web.download(retry))
+        assert refusal.value.headers["X-Admission-Code"] == "retry_conflict"
+    assert started == [[1, 2], [1]]
+
+
+@pytest.mark.parametrize(("other_child_state", "code"), [
+    ("completed", "partial_overlap"), ("failed", "active_failed_child"),
+])
+def test_activity_retry_refuses_overlap_with_another_active_job(tmp_path, monkeypatch, other_child_state, code):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    batch, other = "20261021-121217-33d6d0", "20261021-121218-44d6d0"
+    first = jobs.episode_item(None, 1)
+    failure = jobs.FailureClassification("child", "download")
+    assert store.admit(web.download_request([1], "", "manual", False, None), job_id=batch) == jobs.Added(batch)
+    failed = store.fail_child(batch, first.id, failure)
+    assert store.admit(web.download_request([1, 2], "", "manual", False, None), job_id=other) == jobs.Added(other)
+    active = (store.complete_child(other, first.id) if other_child_state == "completed"
+              else store.fail_child(other, first.id, failure))
+    assert [child.state for child in active.children] == [other_child_state, "waiting"]
+    worker = Mock()
+    reserve = Mock(wraps=sync.reserve_start)
+    monkeypatch.setattr(web, "run_sync", worker)
+    monkeypatch.setattr(sync, "reserve_start", reserve)
+    app = web.web.Application()
+    app.router.add_post("/api/download", web.download)
+
+    async def retry():
+        async with TestClient(TestServer(app)) as client:
+            response = await client.post("/api/download", json={"episodeIds": [1], "batch": batch, "retry": True})
+            assert response.status == 409
+            assert response.headers["X-Admission-Code"] == code
+            assert other in await response.text()
+
+    asyncio.run(retry())
+    assert failed.children[0].state == "failed"
+    assert store.load() == (failed, active)
+    reserve.assert_not_called()
+    worker.assert_not_called()
+
+
+@pytest.mark.parametrize("route", ["stop_job", "job_options", "pause_job", "delete_job", "requeue", "download"])
+def test_review_http_constructs_job_store_off_loop(tmp_path, monkeypatch, route):
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    caller = threading.get_ident()
+    constructor_threads = []
+    job_store = sync.job_store
+    batch = "20261021-121217-33d6d0"
+    run_id = "20261021-121219-000001-111-S02E05"
+
+    def tracked_store():
+        constructor_threads.append(threading.get_ident())
+        return job_store()
+
+    monkeypatch.setattr(sync, "job_store", tracked_store)
+    monkeypatch.setattr(web, "run_sync", lambda *a, **kw: None)
+    monkeypatch.setattr(web, "forget_runs", lambda *a: 1)
+    sync.running_jobs[batch] = {}
+    sync.RUNS_DIR.mkdir(exist_ok=True)
+    (sync.RUNS_DIR / f"{run_id}.json").write_text(json.dumps({"id": run_id, "outcome": "cancelled", "episodeId": 1, "batch": batch}))
+    body = {"episodeIds": [1], "batch": batch, "run": run_id}
+    request = SimpleNamespace(match_info={"batch": batch, "episode_id": "1", "action": "pause"}, method="GET",
+                              json=AsyncMock(return_value=body))
+    assert asyncio.run(getattr(web, route)(request)).status == 200
+    assert constructor_threads and caller not in constructor_threads
+
+
+@pytest.mark.parametrize("lookup", ["matched", "missing", "unreachable"])
+def test_review_stop_resolves_submission_written_during_cancellation(tmp_path, monkeypatch, lookup):
+    from datetime import datetime, timezone
+
+    from unshacklarr import jobs
+
+    web = reloaded_web(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    request = web.download_request([1, 2], "", "manual", False, None)
+    store.admit(request, job_id=batch)
+    first, second = request.items
+    now = datetime.now(timezone.utc)
+    store.start_child_attempt(batch, first.id, "registered", backend="serve")
+    submission = jobs.Submission("serve", "RTLP", "show", str(tmp_path), ("S02E05",), now)
+    cancelled = []
+
+    def cancel(attempt_id):
+        cancelled.append(attempt_id)
+        if attempt_id == "registered":
+            store.stop_child(batch, first.id)
+            store.set_child_submission(batch, second.id, submission)
+
+    def attempts():
+        if lookup == "unreachable":
+            raise sync.UnshackleError("Serve unavailable")
+        if lookup == "missing":
+            return []
+        return [{"service": "RTLP", "title_id": "show", "job_id": "pending", "created_time": now.isoformat()}]
+
+    backend = SimpleNamespace(cancel=cancel, jobs=attempts, job=lambda _: {
+        "status": "queued", "parameters": {"wanted": ["S02E05"], "output_dir": str(tmp_path)},
+    })
+    monkeypatch.setattr(sync, "backend_named", lambda _: backend)
+    monkeypatch.setattr(web, "run_cards", lambda: [
+        {"id": "running", "batch": batch, "outcome": "running", "step": "downloading",
+         "episodeId": 1, "job_id": "registered", "backend": "serve"},
+    ])
+    stop = SimpleNamespace(match_info={"batch": batch})
+    if lookup == "unreachable":
+        with pytest.raises(web.web.HTTPBadGateway) as refusal:
+            asyncio.run(web.stop_job(stop))
+        assert refusal.value.text == "Unshackle did not confirm the download stopped"
+        assert cancelled == ["registered"]
+        updated = store.get_job(batch)
+        assert updated.children[1].submission == submission
+        assert batch in store.pause_state()[1]
+        return
+    response = asyncio.run(web.stop_job(stop))
+    assert response.status == 200
+    assert cancelled == (["registered", "pending"] if lookup == "matched" else ["registered"])
+    assert json.loads(response.text) == {"cancelled": len(cancelled)}
+    updated = store.get_job(batch)
+    assert [child.state for child in updated.children] == ["stopped", "stopped"]
+    assert all(child.submission is None for child in updated.children)
+
+
+@pytest.mark.parametrize("source", ["registered", "pending", "live_card"])
+@pytest.mark.parametrize("after_cancel", ["downloading", "unreachable", "completed", "gone"])
+def test_stop_preserves_attempt_until_cancellation_is_confirmed(tmp_path, monkeypatch, source, after_cancel):
+    from datetime import datetime, timezone
+
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    normalized = web.download_request([1], "", "manual", False, None)
+    store.admit(normalized, job_id=batch)
+    item, = normalized.items
+    now = datetime.now(timezone.utc)
+    if source == "pending":
+        store.set_child_submission(batch, item.id, jobs.Submission("serve", "RTLP", "show", str(tmp_path), ("S02E05",), now))
+    else:
+        store.start_child_attempt(batch, item.id, "remote", backend="serve")
+    cards = ([{"id": "running", "batch": batch, "outcome": "running", "step": "downloading",
+               "episodeId": 1, "job_id": "remote", "backend": "serve"}] if source == "live_card" else [])
+    monkeypatch.setattr(web, "run_cards", lambda: cards)
+    error = sync.UnshackleError("Cancel failed at https://alice:fixture@provider.invalid/download")
+    if after_cancel == "gone":
+        error.status = 404
+
+    def detail(_):
+        status = after_cancel if backend.cancel.called else "downloading"
+        if status == "unreachable":
+            raise sync.UnshackleError("Status unavailable")
+        return {"status": status, "parameters": {"wanted": ["S02E05"], "output_dir": str(tmp_path)}}
+
+    backend = SimpleNamespace(cancel=Mock(side_effect=error), jobs=lambda: [
+        {"service": "RTLP", "title_id": "show", "job_id": "remote", "created_time": now.isoformat()},
+    ], job=detail)
+    monkeypatch.setattr(sync, "backend_named", lambda _: backend)
+    stop = SimpleNamespace(match_info={"batch": batch})
+    if after_cancel in ("completed", "gone"):
+        response = asyncio.run(web.stop_job(stop))
+        assert response.status == 200 and json.loads(response.text) == {"cancelled": 1}
+        assert batch not in store.pause_state()[1]
+        if source != "live_card":
+            child, = store.get_job(batch).children
+            assert child.state == "stopped" and child.attempt_job_id is None and child.submission is None
+        backend.cancel.assert_called_once_with("remote")
+        return
+    with pytest.raises(web.web.HTTPBadGateway) as refusal:
+        asyncio.run(web.stop_job(stop))
+    assert refusal.value.content_type == "text/plain"
+    assert "Cancel failed" in refusal.value.text and "fixture" not in refusal.value.text
+    assert batch in store.pause_state()[1]
+    assert "running" not in sync.stop_waiting
+    after = jobs.JobStore(store.path).get_job(batch)
+    child, = after.children
+    assert child.state in ("queued", "downloading") and child.attempt_job_id == "remote"
+    assert child.attempt_backend == "serve" and child.submission is None
+    backend.cancel.assert_called_once_with("remote")
+
+    monkeypatch.setattr(web, "run_sync", lambda *a, **kw: pytest.fail("Retry started a duplicate"))
+    retry = review_download_request(1)
+    retry.json.return_value.update(batch=batch, retry=True)
+    with pytest.raises(web.web.HTTPConflict):
+        asyncio.run(web.download(retry))
+
+
+@pytest.mark.parametrize("concurrent_change", [False, True])
+def test_activity_retry_restores_child_when_worker_exits_and_capacity_is_claimed(tmp_path, monkeypatch, concurrent_change):
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    batch = "20261021-121217-33d6d0"
+    normalized = web.download_request([1, 2], "", "manual", False, None)
+    store.admit(normalized, job_id=batch)
+    first, second = normalized.items
+    before = store.fail_child(batch, first.id, jobs.FailureClassification("child", "manifest"))
+    sync.running_jobs[batch] = {}
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    monkeypatch.setattr(web, "run_sync", lambda *a, **kw: pytest.fail("Refusal started a worker"))
+
+    def chosen(_ids):
+        with sync.jobs_lock:
+            sync.running_jobs.pop(batch)
+            sync.running_jobs["other"] = {}
+        if concurrent_change:
+            store.complete_child(batch, second.id)
+        return [{"id": 1, "series": {"tvdbId": 7}}]
+
+    monkeypatch.setattr(sync, "chosen_episodes", chosen)
+    monkeypatch.setattr(web, "read_config", lambda: {"series": {7: {"service": "RTLP"}}})
+    retry = review_download_request(1)
+    retry.json.return_value.update(batch=batch, retry=True)
+
+    with pytest.raises(web.web.HTTPTooManyRequests) as refusal:
+        asyncio.run(web.download(retry))
+    assert refusal.value.headers["X-Admission-Code"] == "capacity_full"
+    after = jobs.JobStore(store.path).get_job(batch)
+    assert after.request == before.request and after.children[0] == before.children[0]
+    if concurrent_change:
+        assert after.children[1].state == "completed" and after.state == "completed_with_errors"
+    else:
+        assert after == before
+    assert sync.reserved_starts == set()
+
+
+def test_review_activity_retries_reserve_last_worker_slot(tmp_path, monkeypatch):
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    batches = [f"20261021-12121{i}-33d6d0" for i in (1, 2)]
+    for i, batch in enumerate(batches, 1):
+        request = web.download_request([i], "", "manual", False, None)
+        store.admit(request, job_id=batch)
+        store.fail_child(batch, request.items[0].id, jobs.FailureClassification("child", "download"))
+    entered, release = threading.Event(), threading.Event()
+    calls = []
+
+    def start(ids, **kwargs):
+        calls.append(ids)
+        if ids == [1]:
+            entered.set()
+            assert release.wait(2)
+
+    monkeypatch.setattr(web, "run_sync", start)
+
+    def retry(i):
+        return web.download(SimpleNamespace(json=AsyncMock(return_value={
+            "episodeIds": [i], "batch": batches[i - 1], "retry": True,
+        })))
+
+    async def check():
+        first = asyncio.create_task(retry(1))
+        try:
+            assert await asyncio.to_thread(entered.wait, 2)
+            with pytest.raises(web.web.HTTPTooManyRequests) as refusal:
+                await retry(2)
+            assert refusal.value.headers["X-Admission-Code"] == "capacity_full"
+        finally:
+            release.set()
+            assert (await first).status == 200
+
+    asyncio.run(check())
+    assert calls == [[1]]
+    assert store.get_job(batches[1]).state == "failed"
+    assert sync.reserved_starts == set()
+
+
+@pytest.mark.parametrize("retry", [False, True])
+def test_review_worker_setup_failure_ends_admission_and_releases_capacity(tmp_path, monkeypatch, capsys, retry):
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    monkeypatch.setattr(sync, "notify", lambda *a, **kw: None)
+
+    def unavailable(_ids):
+        raise web.requests.ConnectionError("Sonarr unavailable at https://user:fixture@sonarr.invalid")
+
+    monkeypatch.setattr(sync, "chosen_episodes", unavailable)
+
+    def download_and_wait(request):
+        response = asyncio.run(web.download(request))
+        for worker in web.sync_threads:
+            worker.join(2)
+            assert not worker.is_alive()
+        return json.loads(response.text)
+
+    first = download_and_wait(review_download_request(1, 2))
+    updated = store.get_job(first["job_id"])
+    assert updated.state == "failed"
+    assert [child.failure for child in updated.children] == [jobs.FailureClassification("child", "download")] * 2
+    assert sync.reserved_starts == set()
+    output = capsys.readouterr().out
+    assert "Sonarr unavailable" in output and "fixture" not in output
+    request = review_download_request(1, 2)
+    if retry:
+        request.json.return_value.update(batch=first["job_id"], retry=True)
+    second = download_and_wait(request)
+    assert second["outcome"] == "added"
+    assert (second["job_id"] == first["job_id"]) == retry
+    assert store.get_job(second["job_id"]).state == "failed"
+    assert sync.reserved_starts == set()
+
+
+def test_unconfirmed_attempt_resumes_in_place_and_when_workerless(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    sync.SETTINGS["downloads_at_once"] = 1
+    monkeypatch.setattr(sync, "POLL_MISSES", 1)
+    monkeypatch.setattr(sync, "SERVE_RETRY_AFTER", ())
+    monkeypatch.setattr(sync, "RETRY_AFTER", ())
+    monkeypatch.setattr(sync.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+
+    paused_with_unconfirmed = threading.Event()
+    resumed_after_pause = threading.Event()
+    downloads = []
+
+    class LiveBackend:
+        name = ""
+
+        def download(self, payload):
+            downloads.append(payload)
+            return "job-u1"
+
+        def job(self, job_id):
+            if not resumed_after_pause.is_set():
+                raise sync.UnshackleError("unshackle serve is unreachable")
+            return {"status": "completed", "output_files": []}
+
+        def cancel(self, job_id):
+            raise sync.UnshackleError("unshackle serve is unreachable")
+
+    backend = LiveBackend()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    ep = {"id": 1, "seriesId": 1, "seasonNumber": 1, "episodeNumber": 1, "hasFile": False,
+          "series": {"tvdbId": 1, "title": "Show", "path": "/tv/Show"}}
+    payload = {"service": "TEST", "title_id": "t", "wanted": ["S01E01"], "output_dir": str(sync.episode_folder(ep))}
+    batch = "20261021-121220-33d6d0"
+    item = jobs.episode_item(None, 1)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {}), job_id=batch)
+    run = sync.EpisodeRun(ep, {"service": "TEST"}, "manual", "S01E01", batch=batch)
+    worker_errors = []
+
+    pause = sync.pause_job
+
+    def observe_pause(target_batch, held):
+        pause(target_batch, held)
+        if target_batch == batch and held and "unconfirmed_job" in run.card:
+            paused_with_unconfirmed.set()
+
+    monkeypatch.setattr(sync, "pause_job", observe_pause)
+
+    def run_worker():
+        sync.running_jobs[batch] = {}
+        try:
+            sync.run_job_retrying(payload, run)
+            run.finish("downloaded")
+        except Exception as error:
+            worker_errors.append(error)
+            run.finish("failed", str(error))
+        finally:
+            sync.running_jobs.pop(batch, None)
+            sync.release_job(batch)
+
+    worker = threading.Thread(target=run_worker, daemon=True)
+
+    def make_app():
+        application = web.web.Application()
+        application.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        application.router.add_post("/api/jobs/resume-all", web.pause_all_jobs)
+        return application
+
+    async def drive_live():
+        async with TestClient(TestServer(make_app())) as client:
+            worker.start()
+            assert await asyncio.to_thread(paused_with_unconfirmed.wait, 5)
+            slot_free = threading.Event()
+
+            def take_slot():
+                with sync.download_slot(""):
+                    slot_free.set()
+
+            competitor = threading.Thread(target=take_slot, daemon=True)
+            competitor.start()
+            assert await asyncio.to_thread(slot_free.wait, 2)
+            competitor.join(2)
+            assert store.get_job(batch).state == "paused"
+            assert store.get_job(batch).children[0].attempt_job_id == "job-u1"
+            resumed_after_pause.set()
+            response = await client.post(f"/api/jobs/{batch}/resume")
+            assert response.status == 200
+            assert (await response.json()) == {"paused": False}
+
+    asyncio.run(drive_live())
+    worker.join(5)
+    assert not worker.is_alive()
+    assert not worker_errors
+    assert len(downloads) == 1
+    assert store.get_job(batch).state == "completed"
+
+    relaunched = []
+    started_workerless = threading.Event()
+
+    def track_launch(ids, **kwargs):
+        relaunched.append((ids, kwargs.get("batch")))
+        store.complete_child(kwargs["batch"], jobs.episode_item(None, ids[0]).id)
+        started_workerless.set()
+        return None
+
+    monkeypatch.setattr(web, "run_sync", track_launch)
+    for idx, use_resume_all in enumerate((False, True), 1):
+        workerless_batch = f"20261021-12122{idx}-33d6d0"
+        req = web.download_request([10 + idx], "", "manual", False, None)
+        store.admit(req, job_id=workerless_batch)
+        store.start_child_attempt(workerless_batch, req.items[0].id, f"job-workerless-{idx}", backend="")
+        sync.pause_job(workerless_batch, True)
+        assert store.get_job(workerless_batch).state == "paused"
+        assert workerless_batch not in sync.running_jobs
+
+        async def drive_workerless(route="/api/jobs/resume-all" if use_resume_all else f"/api/jobs/{workerless_batch}/resume"):
+            async with TestClient(TestServer(make_app())) as client:
+                resp = await client.post(route)
+                assert resp.status == 200
+
+        asyncio.run(drive_workerless())
+        assert started_workerless.wait(2)
+        started_workerless.clear()
+        assert store.get_job(workerless_batch).state == "completed"
+        assert sync.reserved_starts == set()
+
+    assert relaunched == [([11], "20261021-121221-33d6d0"), ([12], "20261021-121222-33d6d0")]
+
+
+def test_v1_audio_add_adopts_retained_attempt_through_resume_queue(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    library = tmp_path / "lib" / "Show" / "Season 01"
+    library.mkdir(parents=True)
+    (library / "Show - S01E05.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(
+        upgrade_mode="add_track",
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    ep = {"id": 5, "seriesId": 1, "episodeFileId": 9, "seasonNumber": 1, "episodeNumber": 5,
+          "series": {"tvdbId": 7, "title": "Show"}}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **_: {"path": "/tv/Show/Season 01/Show - S01E05.mkv", "sceneName": ""})
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync,
+        "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv")
+        else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    out = sync.episode_folder(ep)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "audio.mka").write_bytes(b"audio")
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"),
+        SimpleNamespace(returncode=0, stdout=""),
+    )[1])
+    imports = []
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+
+    downloads = []
+
+    class Serve:
+        name = ""
+        settings = {}
+
+        def download(self, payload):
+            downloads.append(payload)
+            return "unexpected-second-download"
+
+        def job(self, job_id):
+            return {"status": "completed", "output_files": [str(out / "audio.mka")]}
+
+        def jobs(self):
+            return []
+
+    serve = Serve()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: serve)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: serve)
+
+    batch = "20261021-121229-33d6d0"
+    item = jobs.episode_item(None, 5)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, item.id, "audio-retained-1", state="downloading", backend="")
+
+    assert web.resume_queue() == 1
+    assert batch in web.audio_passes
+    thread = web.audio_passes[batch].thread
+    thread.join(5)
+    assert not thread.is_alive()
+    assert not downloads
+    assert imports == [(5, True)]
+    assert store.get_job(batch).state == "completed"
+
+
+@pytest.mark.parametrize("kind", ["manual", "audio_add"])
+def test_single_job_resume_at_capacity_refuses_without_deadlock(tmp_path, monkeypatch, kind):
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    sync.running_jobs["occupant"] = {}
+    batch = "20261021-121230-33d6d0"
+    options = {"kind": "audio_add", "audio": "fr"} if kind == "audio_add" else {"kind": "manual"}
+    request = jobs.NormalizedJobRequest(None, None, (jobs.episode_item(None, 5),), options)
+    store.admit(request, job_id=batch)
+    sync.pause_job(batch, True)
+    assert store.get_job(batch).state == "paused"
+
+    started = []
+    if kind == "audio_add":
+        monkeypatch.setattr(web, "try_add_audio", lambda ep_id, lang, force: (started.append((ep_id, lang, force)), "added")[1])
+    else:
+        monkeypatch.setattr(web, "run_sync", lambda ids, **kw: (started.append((ids, kw.get("batch"))), store.complete_child(batch, request.items[0].id))[0] and None)
+
+    def make_app():
+        application = web.web.Application()
+        application.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        return application
+
+    async def drive():
+        async with TestClient(TestServer(make_app())) as client:
+            refused = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert refused.status == 429
+            assert refused.headers["X-Admission-Code"] == "capacity_full"
+            assert store.get_job(batch).state == "paused"
+            assert batch in sync.paused_jobs
+            assert not sync.reserved_starts
+            assert not started
+
+            sync.running_jobs.pop("occupant")
+            allowed = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert allowed.status == 200
+            assert await allowed.json() == {"paused": False}
+
+    asyncio.run(drive())
+    if kind == "audio_add" and (audio_pass := web.audio_passes.get(batch)) is not None:
+        audio_pass.thread.join(5)
+        assert not audio_pass.thread.is_alive()
+    assert started
+    assert store.get_job(batch).state == "completed"
+    assert not sync.reserved_starts
+
+
+def test_resume_all_launches_workerless_audio_add_at_asked_capacity(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    monkeypatch.setattr(web, "ASKED_AT_ONCE", 1)
+    sync.SETTINGS.update(
+        downloads_at_once=1,
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    library = tmp_path / "lib" / "Show" / "Season 01"
+    library.mkdir(parents=True)
+    (library / "Show - S01E05.mkv").write_bytes(b"video")
+    ep = {"id": 5, "seriesId": 1, "episodeFileId": 9, "seasonNumber": 1, "episodeNumber": 5,
+          "series": {"tvdbId": 7, "title": "Show"}}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **_: {"path": "/tv/Show/Season 01/Show - S01E05.mkv", "sceneName": ""})
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), SimpleNamespace(returncode=0, stdout="")
+    )[1])
+    imports = []
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+
+    out = sync.episode_folder(ep)
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "services": lambda self: [],
+        "dl_config": lambda self: {},
+        "jobs": lambda self: [],
+        "download": lambda self, payload: (out.mkdir(parents=True, exist_ok=True), (out / "audio.mka").write_bytes(b"audio"), "audio-job")[2],
+        "job": lambda self, job_id: {"status": "completed", "output_files": [str(out / "audio.mka")]},
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+
+    sync.running_jobs["occupant"] = {}
+    slot_held, slot_release = threading.Event(), threading.Event()
+
+    def occupy_slot():
+        with sync.download_slot(""):
+            slot_held.set()
+            assert slot_release.wait(5)
+
+    occupant = threading.Thread(target=occupy_slot, daemon=True)
+    occupant.start()
+    assert slot_held.wait(2)
+
+    batch = "20261021-121231-audio"
+    item = jobs.episode_item(None, 5)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    sync.pause_job(batch, True)
+
+    try:
+        async def resume_all():
+            from aiohttp.test_utils import TestClient, TestServer
+            app = web.web.Application()
+            app.router.add_post("/api/jobs/resume-all", web.pause_all_jobs)
+            async with TestClient(TestServer(app)) as client:
+                resp = await asyncio.wait_for(client.post("/api/jobs/resume-all"), timeout=3)
+                assert resp.status == 200
+                assert await resp.json() == {"paused": False}
+
+        asyncio.run(resume_all())
+        assert batch in web.audio_passes
+        thread = web.audio_passes[batch].thread
+        sync.running_jobs.pop("occupant", None)
+    finally:
+        slot_release.set()
+        occupant.join(2)
+
+    thread.join(5)
+    assert not thread.is_alive()
+    assert imports == [(5, True)]
+    assert store.get_job(batch).state == "completed"
+    assert not sync.reserved_starts
+
+
+@pytest.mark.parametrize("resume_all_first", [False, True])
+def test_concurrent_resume_and_resume_all_do_not_duplicate_worker(tmp_path, monkeypatch, resume_all_first):
+    from aiohttp.test_utils import TestClient, TestServer
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    ep = {"id": 5, "seriesId": 1, "seasonNumber": 1, "episodeNumber": 5, "hasFile": False,
+          "series": {"tvdbId": 7, "title": "Show", "path": "/tv/Show"}}
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    for operation in ("apply_ladder", "free_space_problem", "library_space_problem", "finalize", "check_audio",
+                      "check_subs", "lacks_preferred", "note_upgrade", "after_download", "notify_series",
+                      "setup_of", "by_title", "fallback_show", "wrong_number"):
+        monkeypatch.setattr(sync, operation, lambda *a, **kw: None)
+
+    out = sync.episode_folder(ep)
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "services": lambda self: [],
+        "dl_config": lambda self: {},
+        "jobs": lambda self: [],
+        "download": lambda self, payload: (out.mkdir(parents=True, exist_ok=True), (out / "Show.S01E05.mkv").write_bytes(b"video"), "job-1")[2],
+        "job": lambda self, job_id: {"status": "completed", "output_files": [str(out / "Show.S01E05.mkv")]},
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: None)
+
+    entered_chosen = threading.Event()
+    release_chosen = threading.Event()
+    chosen_calls = []
+
+    def slow_chosen(ids):
+        chosen_calls.append(list(ids))
+        entered_chosen.set()
+        assert release_chosen.wait(5)
+        return [ep]
+
+    monkeypatch.setattr(sync, "chosen_episodes", slow_chosen)
+
+    main_calls = 0
+    orig_main = sync.main
+
+    def track_main(*args, **kwargs):
+        nonlocal main_calls
+        main_calls += 1
+        return orig_main(*args, **kwargs)
+
+    monkeypatch.setattr(sync, "main", track_main)
+
+    batch = "20261021-121232-33d6d0"
+    request = jobs.NormalizedJobRequest(None, None, (jobs.episode_item(None, 5),), {"kind": "manual"})
+    store.admit(request, job_id=batch)
+    sync.pause_job(batch, True)
+
+    def make_app():
+        application = web.web.Application()
+        application.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        application.router.add_post("/api/jobs/resume-all", web.pause_all_jobs)
+        return application
+
+    async def drive():
+        async with TestClient(TestServer(make_app())) as client:
+            first_route = "/api/jobs/resume-all" if resume_all_first else f"/api/jobs/{batch}/resume"
+            second_route = f"/api/jobs/{batch}/resume" if resume_all_first else "/api/jobs/resume-all"
+            first = await asyncio.wait_for(client.post(first_route), timeout=3)
+            assert first.status == 200
+            assert await asyncio.to_thread(entered_chosen.wait, 5)
+            assert batch not in sync.running_jobs
+            assert batch in sync.reserved_starts
+            second = await asyncio.wait_for(client.post(second_route), timeout=3)
+            assert second.status == 200
+            release_chosen.set()
+
+    try:
+        asyncio.run(drive())
+    finally:
+        release_chosen.set()
+
+    for worker in list(web.sync_threads):
+        worker.join(5)
+        assert not worker.is_alive()
+    assert main_calls == 1
+    assert len(chosen_calls) == 1
+    assert store.get_job(batch).state == "completed"
+    assert not sync.reserved_starts
+
+
+def test_audio_add_retained_attempt_pauses_when_library_file_unavailable(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    library_file = tmp_path / "lib" / "Show" / "Season 01" / "Show - S01E05.mkv"
+    sync.SETTINGS.update(
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    ep = {"id": 5, "seriesId": 1, "episodeFileId": 9, "seasonNumber": 1, "episodeNumber": 5,
+          "series": {"tvdbId": 7, "title": "Show"}}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **_: {"path": "/tv/Show/Season 01/Show - S01E05.mkv", "sceneName": ""})
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), SimpleNamespace(returncode=0, stdout="")
+    )[1])
+    imports, downloads, polls = [], [], []
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+
+    out = sync.episode_folder(ep)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "audio.mka").write_bytes(b"audio")
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "download": lambda self, payload: downloads.append(payload) or "unexpected",
+        "job": lambda self, job_id: (polls.append(job_id), {"status": "completed", "output_files": [str(out / "audio.mka")]})[1],
+        "jobs": lambda self: [],
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+
+    paused_event = threading.Event()
+    real_pause = sync.pause_job
+
+    def observe_pause(target_batch, held):
+        real_pause(target_batch, held)
+        if target_batch == batch and held:
+            paused_event.set()
+
+    monkeypatch.setattr(sync, "pause_job", observe_pause)
+
+    batch = "20261021-121233-33d6d0"
+    item = jobs.episode_item(None, 5)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, item.id, "audio-retained-1", state="downloading", backend="")
+
+    assert web.resume_queue() == 1
+    assert paused_event.wait(5)
+    assert polls and set(polls) == {"audio-retained-1"}
+    before_resume_polls = len(polls)
+    assert batch in sync.paused_jobs
+    assert batch in store.pause_state()[1]
+    assert (out / "audio.mka").is_file()
+    assert not imports
+
+    library_file.parent.mkdir(parents=True, exist_ok=True)
+    library_file.write_bytes(b"video")
+
+    async def resume_after_mount():
+        from aiohttp.test_utils import TestClient, TestServer
+        app = web.web.Application()
+        app.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        async with TestClient(TestServer(app)) as client:
+            resp = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert resp.status == 200
+            assert await resp.json() == {"paused": False}
+
+    audio_pass = web.audio_passes[batch]
+    asyncio.run(resume_after_mount())
+    audio_pass.thread.join(5)
+    assert not audio_pass.thread.is_alive()
+    assert not downloads
+    assert len(polls) == before_resume_polls
+    assert imports == [(5, True)]
+    assert store.get_job(batch).state == "completed"
+
+
+def test_audio_add_retained_attempt_pauses_on_transient_sonarr_error(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    library = tmp_path / "lib" / "Show" / "Season 01"
+    library.mkdir(parents=True)
+    for ep_num in (5, 6):
+        (library / f"Show - S01E{ep_num:02}.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    episodes = {
+        ep_num: {"id": ep_num, "seriesId": 1, "episodeFileId": 8 + ep_num, "seasonNumber": 1, "episodeNumber": ep_num,
+                 "series": {"tvdbId": 7, "title": "Show"}}
+        for ep_num in (5, 6)
+    }
+    sonarr_ready = threading.Event()
+    paused_event = threading.Event()
+    real_pause = sync.pause_job
+
+    def observe_pause(target_batch, held):
+        real_pause(target_batch, held)
+        if target_batch == batch and held:
+            paused_event.set()
+
+    monkeypatch.setattr(sync, "pause_job", observe_pause)
+
+    def fetch_episodes(ids):
+        if not sonarr_ready.is_set():
+            raise web.requests.ConnectionError("sonarr down")
+        return [episodes[ep_id] for ep_id in ids]
+
+    monkeypatch.setattr(sync, "chosen_episodes", fetch_episodes)
+    monkeypatch.setattr(
+        sync,
+        "sonarr_get",
+        lambda path, **_: {"path": f"/tv/Show/Season 01/Show - S01E0{int(path.rsplit('/', 1)[1]) - 8:01}.mkv", "sceneName": ""},
+    )
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), SimpleNamespace(returncode=0, stdout="")
+    )[1])
+    imports, downloads = [], []
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: imports.append((e["id"], replace)))
+
+    out5 = sync.episode_folder(episodes[5])
+    out6 = sync.episode_folder(episodes[6])
+    out5.mkdir(parents=True, exist_ok=True)
+    (out5 / "audio.mka").write_bytes(b"audio")
+    backend = type("Serve", (), {
+        "name": "", "settings": {},
+        "services": lambda self: [],
+        "dl_config": lambda self: {},
+        "jobs": lambda self: [],
+        "download": lambda self, payload: (
+            downloads.append(payload),
+            Path(payload["output_dir"]).mkdir(parents=True, exist_ok=True),
+            (Path(payload["output_dir"]) / "audio.mka").write_bytes(b"audio"),
+            "audio-ep6",
+        )[3],
+        "job": lambda self, job_id: {
+            "status": "completed",
+            "output_files": [str((out5 if job_id == "audio-retained-2" else out6) / "audio.mka")],
+        },
+    })()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+
+    batch = "20261021-121234-33d6d0"
+    items = (jobs.episode_item(None, 5), jobs.episode_item(None, 6))
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, items[0].id, "audio-retained-2", state="downloading", backend="")
+
+    assert web.resume_queue() == 2
+    assert paused_event.wait(5)
+    assert batch in sync.paused_jobs
+    assert batch in store.pause_state()[1]
+    assert batch in web.audio_passes
+    audio_pass = web.audio_passes[batch]
+
+    sonarr_ready.set()
+
+    async def resume_after_sonarr():
+        from aiohttp.test_utils import TestClient, TestServer
+        app = web.web.Application()
+        app.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        async with TestClient(TestServer(app)) as client:
+            resp = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert resp.status == 200
+            assert await resp.json() == {"paused": False}
+
+    asyncio.run(resume_after_sonarr())
+    audio_pass.thread.join(5)
+    assert not audio_pass.thread.is_alive()
+    assert len(downloads) == 1 and downloads[0]["wanted"] == ["S01E06"]
+    assert imports == [(5, True), (6, True)]
+    assert store.get_job(batch).state == "completed"
+
+
+def test_audio_add_structural_fallback_clears_marked_mkv_and_completes_whole_download(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    ep = {"id": 5, "seriesId": 1, "episodeFileId": 0, "seasonNumber": 1, "episodeNumber": 5, "hasFile": False,
+          "series": {"tvdbId": 7, "title": "Show", "path": "/tv/Show"}}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [ep])
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    for operation in ("apply_ladder", "free_space_problem", "library_space_problem", "finalize", "check_audio",
+                      "check_subs", "lacks_preferred", "note_upgrade", "after_download", "notify_series",
+                      "setup_of", "by_title", "fallback_show", "wrong_number"):
+        monkeypatch.setattr(sync, operation, lambda *a, **kw: None)
+
+    out = sync.episode_folder(ep)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / sync.AUDIO_ADD).touch()
+    (out / "audio.mkv").write_bytes(b"audio-in-mkv")
+
+    cancelled, downloads, imports = [], [], []
+
+    class Serve:
+        name = ""
+        settings = {}
+
+        def services(self):
+            return []
+
+        def dl_config(self):
+            return {}
+
+        def jobs(self):
+            return []
+
+        def call(self, method, path, **_):
+            return {"episodes": [{"audio": [{"language": "fr"}]}]}
+
+        def job(self, job_id):
+            return {"status": "completed", "output_files": [str(out / "audio.mkv")]}
+
+        def cancel(self, job_id):
+            cancelled.append(job_id)
+
+        def download(self, payload):
+            downloads.append(payload)
+            target = Path(payload["output_dir"]) / "Show.S01E05.mkv"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"whole-video")
+            return "whole-job-1"
+
+    backend = Serve()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: (
+        sync.shutil.rmtree(folder, ignore_errors=True),
+        imports.append((e["id"], replace)),
+    ))
+
+    batch = "20261021-121236-33d6d0"
+    item = jobs.episode_item(None, 5)
+    store.admit(jobs.NormalizedJobRequest(None, None, (item,), {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, item.id, "audio-completed-mkv", state="downloading", backend="")
+
+    assert web.resume_queue() == 1
+    if (audio_pass := web.audio_passes.get(batch)) is not None:
+        audio_pass.thread.join(5)
+        assert not audio_pass.thread.is_alive()
+    for worker in list(web.sync_threads):
+        worker.join(5)
+        assert not worker.is_alive()
+
+    assert not cancelled
+    assert len(downloads) == 1
+    assert downloads[0].get("audio_only") is not True
+    assert downloads[0].get("wanted") == ["S01E05"]
+    assert imports == [(5, True)]
+    assert store.get_job(batch).state == "completed"
+
+
+def test_audio_add_structural_fallback_requeues_retained_attempt_after_unreachable_probe(tmp_path, monkeypatch):
+    from pathlib import Path
+    from unshacklarr import jobs
+
+    web = review_download_setup(tmp_path, monkeypatch)
+    sync = web.sonarr_sync
+    store = sync.job_store()
+    library = tmp_path / "lib" / "Show" / "Season 01"
+    library.mkdir(parents=True)
+    (library / "Show - S01E06.mkv").write_bytes(b"video")
+    sync.SETTINGS.update(
+        add_track_other_source="add",
+        library_sonarr_root="/tv",
+        library_local_root=str(tmp_path / "lib"),
+    )
+    ep5 = {"id": 5, "seriesId": 1, "episodeFileId": 0, "seasonNumber": 1, "episodeNumber": 5, "hasFile": False,
+           "series": {"tvdbId": 7, "title": "Show", "path": "/tv/Show"}}
+    ep6 = {"id": 6, "seriesId": 1, "episodeFileId": 14, "seasonNumber": 1, "episodeNumber": 6, "hasFile": True,
+           "series": {"tvdbId": 7, "title": "Show", "path": "/tv/Show"}}
+    episodes = {5: ep5, 6: ep6}
+    monkeypatch.setattr(sync, "chosen_episodes", lambda ids: [episodes[ep_id] for ep_id in ids])
+    monkeypatch.setattr(sync, "sonarr_get", lambda path, **_: {"path": "/tv/Show/Season 01/Show - S01E06.mkv", "sceneName": ""})
+    monkeypatch.setattr(sync, "read_file", lambda: {"series": {7: {"service": "TEST", "title": "Show"}}})
+    monkeypatch.setattr(sync, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(sync, "no_cdm", lambda *a, **kw: "")
+    monkeypatch.setattr(sync, "duration_of", lambda _path: 2400.0)
+    monkeypatch.setattr(
+        sync, "mkv_tracks",
+        lambda path: [{"id": 0, "type": "video", "properties": {"language": "und"}}]
+        if str(path).endswith(".mkv") else [{"id": 0, "type": "audio", "properties": {"language": "fre"}}],
+    )
+    monkeypatch.setattr(sync, "mkv_run", lambda cmd, *a, **kw: (
+        Path(cmd[cmd.index("-o") + 1]).write_bytes(b"joined"), SimpleNamespace(returncode=0, stdout="")
+    )[1])
+    for operation in ("apply_ladder", "free_space_problem", "library_space_problem", "finalize", "check_audio",
+                      "check_subs", "lacks_preferred", "note_upgrade", "after_download", "notify_series",
+                      "setup_of", "by_title", "fallback_show", "wrong_number"):
+        monkeypatch.setattr(sync, operation, lambda *a, **kw: None)
+
+    backend_ready = threading.Event()
+    paused_event = threading.Event()
+    pause_calls: list[bool] = []
+    real_pause = sync.pause_job
+
+    def observe_pause(target_batch, held):
+        if target_batch == batch:
+            if held:
+                assert list(web.audio_passes[batch].pending) == [(5, "fr", False), (6, "fr", False)]
+            pause_calls.append(held)
+        real_pause(target_batch, held)
+        if target_batch == batch and held:
+            paused_event.set()
+
+    monkeypatch.setattr(sync, "pause_job", observe_pause)
+
+    cancelled, downloads, imports = [], [], []
+    out5 = sync.episode_folder(ep5)
+    out6 = sync.episode_folder(ep6)
+
+    class Serve:
+        name = ""
+        settings = {}
+
+        def services(self):
+            return []
+
+        def dl_config(self):
+            return {}
+
+        def jobs(self):
+            return []
+
+        def call(self, method, path, **_):
+            return {"episodes": [{"audio": [{"language": "fr"}]}]}
+
+        def cancel(self, job_id):
+            cancelled.append(job_id)
+
+        def job(self, job_id):
+            if job_id == "old":
+                if not backend_ready.is_set():
+                    raise sync.UnshackleError("unshackle serve is unreachable")
+                return {"status": "downloading"}
+            if job_id == "ep6-audio":
+                return {"status": "completed", "output_files": [str(out6 / "audio.mka")]}
+            return {"status": "completed", "output_files": [str(out5 / "Show.S01E05.mkv")]}
+
+        def download(self, payload):
+            downloads.append(payload)
+            out = Path(payload["output_dir"])
+            out.mkdir(parents=True, exist_ok=True)
+            if payload.get("audio_only"):
+                (out / "audio.mka").write_bytes(b"audio")
+                return "ep6-audio"
+            (out / "Show.S01E05.mkv").write_bytes(b"whole-video")
+            return "ep5-whole"
+
+    backend = Serve()
+    monkeypatch.setattr(sync, "backend_named", lambda _name=None: backend)
+    monkeypatch.setattr(sync, "backend_for", lambda *_args: backend)
+    monkeypatch.setattr(sync, "import_episode", lambda e, folder, replace=False: (
+        sync.shutil.rmtree(folder, ignore_errors=True),
+        imports.append((e["id"], replace)),
+    ))
+
+    batch = "20261021-121237-33d6d0"
+    items = (jobs.episode_item(None, 5), jobs.episode_item(None, 6))
+    store.admit(jobs.NormalizedJobRequest(None, None, items, {"kind": "audio_add", "audio": "fr"}), job_id=batch)
+    store.start_child_attempt(batch, items[0].id, "old", state="downloading", backend="")
+
+    assert web.resume_queue() == 2
+    assert paused_event.wait(5)
+    assert batch in sync.paused_jobs
+    assert batch in store.pause_state()[1]
+    assert batch in web.audio_passes
+    audio_pass = web.audio_passes[batch]
+    child5 = store.get_job(batch).children[0]
+    assert (child5.state, child5.attempt_job_id) == ("downloading", "old")
+
+    backend_ready.set()
+
+    async def resume_after_backend():
+        from aiohttp.test_utils import TestClient, TestServer
+        app = web.web.Application()
+        app.router.add_post("/api/jobs/{batch}/{action:pause|resume}", web.pause_job)
+        async with TestClient(TestServer(app)) as client:
+            resp = await asyncio.wait_for(client.post(f"/api/jobs/{batch}/resume"), timeout=3)
+            assert resp.status == 200
+            assert await resp.json() == {"paused": False}
+
+    asyncio.run(resume_after_backend())
+    audio_pass.thread.join(5)
+    assert not audio_pass.thread.is_alive()
+    for worker in list(web.sync_threads):
+        worker.join(5)
+        assert not worker.is_alive()
+
+    assert pause_calls == [True, False]
+    assert cancelled == ["old"]
+    assert [(payload.get("wanted"), payload.get("audio_only") is True) for payload in downloads] == [
+        (["S01E06"], True),
+        (["S01E05"], False),
+    ]
+    assert imports == [(6, True), (5, True)]
+    assert store.get_job(batch).state == "completed"
 
 
 def _blank_cookie_http_cases(marker):
