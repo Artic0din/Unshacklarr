@@ -142,26 +142,25 @@ def _validate_text(text: str) -> None:
 def _json_expiry(cookie: dict, idx: int) -> int:
     if type(raw := cookie.get("expirationDate")) is int and 0 <= raw <= MAX_INTEGER_DATE and "expires" not in cookie and not cookie.get("session"):
         return raw
-    expiry = 0
+    expiry, session, allow_sentinel = 0, cookie.get("session") is True, cookie.get("session") is not False
     for key in ("expirationDate", "expires"):
         if (raw := cookie.get(key)) is None or raw == "":
             continue
         try:
             if isinstance(raw, bool) or not isinstance(raw, (str, Decimal, float, int)):
                 raise TypeError
-            if isinstance(raw, str) and not (TIMESTAMP.fullmatch(raw) or (cookie.get("session") is True and raw == "-1")):
+            if isinstance(raw, str) and not (TIMESTAMP.fullmatch(raw) or (allow_sentinel and raw == "-1")):
                 raise ValueError
             date = raw if isinstance(raw, Decimal) else Decimal(str(raw))
             if not date.is_finite() or (date and (date.adjusted() > 308 or date.copy_abs() > MAX_DATE)):
                 raise ValueError
         except (TypeError, ValueError, OverflowError, DecimalException):
             raise CookieError(f"Cookie #{idx}: expiry date is not a valid timestamp") from None
-        if cookie.get("session") is True and date not in (0, -1):
+        if (session and date not in (0, -1)) or (expiry and date == -1 and allow_sentinel):
             raise CookieError(f"Cookie #{idx}: session cookie cannot have an expiry date")
-        if date < 0 and not cookie.get("session"):
+        if date < 0 and not (allow_sentinel and date == -1):
             raise CookieError(f"Cookie #{idx}: expiry date must not be negative")
-        if date > 0 and not expiry:
-            expiry = max(1, int(date))
+        session, expiry = session or date == -1, expiry or (max(1, int(date)) if date > 0 else 0)
     return expiry
 
 def _load_json(text: str) -> list:

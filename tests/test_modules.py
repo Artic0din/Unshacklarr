@@ -1306,6 +1306,33 @@ def test_cookie_session_sentinels(expiry):
     assert parse(normalise(json.dumps([{**_JSON_COOKIE, "session": True, "expirationDate": expiry}])))[0]["expires"] == 0
 
 
+def test_cookie_playwright_session_sentinel(tmp_path):
+    storage = json.dumps({"cookies": [{**_JSON_COOKIE, "path": "/", "expires": -1,
+                                       "httpOnly": True, "secure": True, "sameSite": "Lax"}], "origins": []})
+    expected = normalise(from_json(storage))
+    cookie, = _load_cookie_jar(tmp_path, expected)
+    assert parse(expected)[0]["expires"] == 0 and (cookie.name, cookie.value, cookie.expires) == ("sid", _JSON_COOKIE["value"], 0)
+    save(tmp_path, "NF", "default", storage)
+    path = tmp_path / "NF" / "default.txt"
+    before = path.read_bytes()
+    assert before == expected.encode() and stat.S_IMODE(path.stat().st_mode) == 0o600
+    for variant in ({"expires": -1}, {"expires": -1.0}, {"expires": "-1"}, {"expirationDate": -1},
+                    {"session": None, "expires": -1}):
+        assert parse(normalise(json.dumps([{**_JSON_COOKIE, **variant}])))[0]["expires"] == 0
+    bad_cases = [({"session": False, "expires": -1}, "expiry date must not be negative"),
+                 ({"session": False, "expirationDate": -1}, "expiry date must not be negative"),
+                 ({"session": False, "expires": "-1"}, "expiry date is not a valid timestamp"),
+                 ({"expirationDate": 4102444800, "expires": -1}, "session cookie cannot have an expiry date"),
+                 ({"expirationDate": -1, "expires": 4102444800}, "session cookie cannot have an expiry date"),
+                 ({"expirationDate": 0.5, "expires": -1}, "session cookie cannot have an expiry date"),
+                 ({"expires": -2}, "expiry date must not be negative")]
+    for change, reason in bad_cases:
+        with pytest.raises(CookieError, match=f"^Cookie #1: {reason}$") as error:
+            save(tmp_path, "NF", "default", json.dumps([{**_JSON_COOKIE, **change}]))
+        assert _JSON_COOKIE["value"] not in str(error.value)
+    assert path.read_bytes() == before and stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
 @pytest.mark.parametrize("as_json", [False, True])
 def test_cookie_fractional_epoch_is_dated(as_json):
     old = {**_JSON_COOKIE, "expires": 0.5, "name": "old"}
